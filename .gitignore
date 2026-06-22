@@ -1,0 +1,15 @@
+# OS / 편집기
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# 로그 / 임시
+*.log
+*.tmp
+*.cache
+
+# 민감정보가 들어갈 수 있는 로컬 설정 (필요 시 config.local.php 로 분리)
+config.local.php
