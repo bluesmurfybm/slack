@@ -29,19 +29,6 @@ header('Pragma: no-cache');
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
   .head h1 { font-size:18px; font-weight:600; margin:0; display:flex; align-items:center; gap:10px; }
   .filters { display:flex; gap:8px; align-items:center; }   /* 제목 옆 오른쪽 정렬(부모 space-between) */
-  /* 다중선택 필터 드롭다운 */
-  .ms { position:relative; display:inline-block; }
-  .ms-btn { height:32px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; cursor:pointer; white-space:nowrap; }
-  .ms-btn.active { border-color:var(--info); color:var(--info); background:var(--info-bg); }
-  .ms-n { display:inline-block; min-width:16px; text-align:center; background:var(--info); color:#fff; border-radius:8px; font-size:11px; padding:0 5px; margin-left:2px; }
-  .ms-ar { color:var(--muted); font-size:10px; }
-  .ms-menu { position:absolute; z-index:50; top:36px; right:0; left:auto; min-width:170px; max-height:320px; overflow-y:auto;
-             background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px; box-shadow:0 6px 22px rgba(0,0,0,.18); }
-  .ms-menu[hidden] { display:none; }
-  .ms-item { display:flex; align-items:center; gap:8px; padding:5px 7px; border-radius:6px; font-size:13px; cursor:pointer; white-space:nowrap; }
-  .ms-item:hover { background:var(--bg2); }
-  .ms-item input { width:15px; height:15px; margin:0; cursor:pointer; }
-  .ms-empty { font-size:12px; color:var(--muted); padding:6px 7px; }
   .toolbar { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:14px; flex-wrap:wrap; }
   .badge { font-size:12px; color:var(--info); background:var(--info-bg); padding:2px 10px; border-radius:8px; }
   .who { font-size:12px; color:var(--muted); }
@@ -49,6 +36,17 @@ header('Pragma: no-cache');
   input,button,select { height:32px; padding:0 10px; }
   button { cursor:pointer; }
   button.primary { background:var(--info); color:#fff; border-color:var(--info); }
+  /* 다중 선택 드롭다운(진행상태) */
+  .ms { position:relative; display:inline-block; }
+  .ms-btn { height:32px; padding:0 26px 0 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; cursor:pointer; white-space:nowrap; }
+  .ms-btn.on { border-color:var(--info); color:var(--info); background:var(--info-bg); }
+  .ms-caret { position:absolute; right:9px; top:50%; transform:translateY(-50%); font-size:10px; color:var(--muted); }
+  .ms-menu { display:none; position:absolute; z-index:50; top:36px; left:0; min-width:190px; max-height:300px; overflow-y:auto;
+             background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:4px; box-shadow:0 6px 20px rgba(0,0,0,.18); }
+  .ms.open .ms-menu { display:block; }
+  .ms-opt { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .ms-opt:hover { background:var(--bg2); }
+  .ms-opt input { appearance:auto; -webkit-appearance:checkbox; width:15px; height:15px; padding:0; margin:0; flex:none; cursor:pointer; }
   .listhead { display:flex; align-items:center; gap:10px; padding:9px 16px; border:1px solid var(--line); border-bottom:0; border-radius:12px 12px 0 0; background:var(--bg2); font-size:12px; color:var(--muted); }
   #selInfo { user-select:none; }
   .listbox { border:1px solid var(--line); border-radius:0 0 12px 12px; overflow:hidden; background:var(--bg); }
@@ -80,8 +78,7 @@ header('Pragma: no-cache');
   .detail { padding:16px 20px 20px; border-bottom:1px solid var(--line); background:var(--bg2); }
   .detail.with-cmts { display:flex; gap:20px; align-items:flex-start; }
   .detail-main { flex:1; min-width:0; }
-  .detail-cmts { flex:none; width:380px; max-width:90%; min-width:280px; display:flex; flex-direction:column;
-                 resize:horizontal; overflow:auto;
+  .detail-cmts { flex:none; width:380px; max-width:42%; display:flex; flex-direction:column;
                  background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
   @media (max-width:760px){ .detail.with-cmts{ flex-direction:column; } .detail-cmts{ width:100%; max-width:100%; } }
   .cmtToggle.on { background:var(--info-bg); color:var(--info); border-color:var(--info); }
@@ -107,7 +104,7 @@ header('Pragma: no-cache');
   /* 댓글 패널 (우측, 고정 높이 + 스크롤) */
   .cmts-title { font-size:12px; font-weight:600; color:var(--muted); margin-bottom:8px; display:flex; align-items:center; gap:6px; flex:none; }
   .cmts-n { background:var(--info-bg); color:var(--info); border-radius:9px; padding:0 7px; font-size:11px; }
-  .cmts { display:flex; flex-direction:column; overflow-y:auto; resize:vertical; height:360px; max-height:85vh; min-height:80px; padding-right:4px; }
+  .cmts { display:flex; flex-direction:column; overflow-y:auto; max-height:442px; min-height:60px; padding-right:4px; }
   /* 각 댓글 = 컴팩트 한 줄형 */
   .cmt { display:flex; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); }
   .cmt:last-child { border-bottom:0; }
@@ -135,10 +132,13 @@ header('Pragma: no-cache');
   <div class="head">
     <h1>📥 유지보수 요청 <span class="badge" id="count"></span></h1>
     <div class="filters">
-      <div class="ms" id="msPriority"></div>
-      <div class="ms" id="msTeam"></div>
-      <div class="ms" id="msStatus"></div>
-      <div class="ms" id="msAsg"></div>
+      <select id="fPriority"><option value="">우선순위</option></select>
+      <select id="fTeam"><option value="">담당팀</option></select>
+      <div class="ms" id="fStatusMs">
+        <button type="button" class="ms-btn" id="fStatusBtn"><span id="fStatusLbl">진행상태</span><span class="ms-caret">▾</span></button>
+        <div class="ms-menu" id="fStatusMenu"></div>
+      </div>
+      <select id="fAsg"><option value="">담당자</option></select>
       <button id="reset" type="button">필터 초기화</button>
     </div>
   </div>
@@ -147,13 +147,13 @@ header('Pragma: no-cache');
     <input id="search" type="text" placeholder="검색…" style="width:120px;">
     <button id="readSel" type="button">선택 읽음</button>
     <button id="unreadSel" type="button">선택 안읽음</button>
-    <button id="toggleUn" type="button">미지정 리스트 표시</button>
+    <button id="toggleUn" type="button">미지정 숨기기</button>
     <a href="difficulty.php"><button type="button">⭐ 난이도 분석</button></a>
     <button id="sync">동기화</button>
     <a href="logout.php"><button type="button">로그아웃</button></a>
   </div>
   <div class="cols">
-    <div class="col" id="unpanel" style="display:none">
+    <div class="col" id="unpanel">
       <div class="listhead"><b>미지정 담당자</b> <span id="uncount"></span></div>
       <div id="unlist" class="listbox"></div>
     </div>
@@ -198,11 +198,12 @@ const TEAM = {
 };
 function teamColor(s){ return TEAM[s] || {bg:"#eceff1", fg:"#455a64"}; }
 let DATA = [], openId = null, filter = "";
-let fpri = new Set(), fteam = new Set(), fstat = new Set(), fasg = new Set();   // 헤더 다중선택 필터(Set)
+let fpri = "", fteam = "", fasg = "";   // 헤더 셀렉트 필터
+let fstat = [];                         // 진행상태: 다중 선택(배열)
 let selected = new Set();                // 체크박스 선택 항목
-let splitOn = false;                      // 미지정 리스트 2분할 표시 여부
+let splitOn = true;                       // 미지정 리스트 2분할 표시 여부(기본 표시)
 let cmtCache = {};                        // 레코드별 댓글 캐시(렌더 깜빡임 방지)
-let showCmts = false;                     // 상세에서 댓글 패널(우측) 표시 여부
+let showCmts = true;                      // 상세에서 댓글 패널(우측) 표시 여부(기본 표시)
 
 function pal(s){ return PALETTE[s] || PALETTE["기타"]; }
 function pad2(n){ return n<10 ? "0"+n : ""+n; }
@@ -219,8 +220,6 @@ function fmtDT(ts){     // yyyy.mm.dd hh:mm
 function fmtYmd(s){ return (s||"").replace(/-/g,"."); }   // "2026-06-17" -> "2026.06.17"
 function esc(s){ return (s??"").toString().replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
 function escAttr(s){ return esc(s).replace(/"/g,"&quot;"); }
-/* Slack 은 텍스트의 & < > 를 &amp; &lt; &gt; 로 인코딩해 보냄. esc() 후 이중 이스케이프된 걸 1단계 복원 */
-function unslack(s){ return s.replace(/&amp;(amp|lt|gt|quot|#39|#x27);/g,"&$1;"); }
 /* 자주 쓰는 Slack 이모지 :shortcode: → 유니코드 */
 const EMOJI = {
   smile:"😄",smiley:"😃",grinning:"😀",grin:"😁",joy:"😂",rofl:"🤣",sweat_smile:"😅",laughing:"😆",satisfied:"😆",
@@ -255,11 +254,11 @@ const EMOJI = {
 function mrkdwn(t){
   if(!t) return '';
   var ph=[]; var stash=function(h){ ph.push(h); return ''+(ph.length-1)+''; };
-  t = t.replace(/```([\s\S]*?)```/g,function(m,c){ return stash('<pre>'+unslack(esc(c.replace(/^\n|\n$/g,'')))+'</pre>'); });
-  t = t.replace(/`([^`\n]+)`/g,function(m,c){ return stash('<code>'+unslack(esc(c))+'</code>'); });
-  t = t.replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g,function(m,u,l){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(l))+'</a>'); });
-  t = t.replace(/<(https?:\/\/[^>]+)>/g,function(m,u){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u))+'</a>'); });
-  t = unslack(esc(t));
+  t = t.replace(/```([\s\S]*?)```/g,function(m,c){ return stash('<pre>'+esc(c.replace(/^\n|\n$/g,''))+'</pre>'); });
+  t = t.replace(/`([^`\n]+)`/g,function(m,c){ return stash('<code>'+esc(c)+'</code>'); });
+  t = t.replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g,function(m,u,l){ return stash('<a href="'+escAttr(u)+'" target="_blank" rel="noopener">'+esc(l)+'</a>'); });
+  t = t.replace(/<(https?:\/\/[^>]+)>/g,function(m,u){ return stash('<a href="'+escAttr(u)+'" target="_blank" rel="noopener">'+esc(u)+'</a>'); });
+  t = esc(t);
   t = t.replace(/\*(?!\s)([^*\n]+?)\*/g,'<b>$1</b>');
   t = t.replace(/_(?!\s)([^_\n]+?)_/g,'<i>$1</i>');
   t = t.replace(/~(?!\s)([^~\n]+?)~/g,'<s>$1</s>');
@@ -280,14 +279,15 @@ function wrapSel(ta, pre, post){
 }
 function snip(b){ return (b||"").replace(/\s+/g," ").trim().slice(0,90); }
 
-function matchBase(r){   // 담당자 외 공통 필터 (검색/우선순위/담당팀/진행상태). Set 이 비면 미적용, 있으면 포함(OR)
+function matchBase(r, withStatus){   // 공통 필터 (검색/우선순위/담당팀 + 선택적으로 진행상태)
   return (!filter || (r.title + r.body + r.req + r.asg).toLowerCase().includes(filter)) &&
-         (!fpri.size  || fpri.has(r.priority)) &&
-         (!fteam.size || fteam.has(r.team)) &&
-         (!fstat.size || fstat.has(r.status));
+         (!fpri  || r.priority === fpri) &&
+         (!fteam || r.team === fteam) &&
+         (withStatus === false || fstat.length === 0 || fstat.includes(r.status));
 }
-function filteredItems(){   return DATA.filter(r => matchBase(r) && (!fasg.size || fasg.has(r.asg))); }
-function unassignedItems(){ return DATA.filter(r => matchBase(r) && (!r.asg || r.asg === '—')); }
+function filteredItems(){   return DATA.filter(r => matchBase(r, true) && (!fasg || r.asg === fasg)); }
+// 미지정 패널: 담당자·진행상태 필터는 적용하지 않음(항상 미지정 + 상태 '등록'만)
+function unassignedItems(){ return DATA.filter(r => matchBase(r, false) && (!r.asg || r.asg === '—') && r.status === '등록'); }
 
 function rowHtml(r){
   const p = pal(r.status), open = openId === r.id, unread = !r.is_read;
@@ -298,8 +298,8 @@ function rowHtml(r){
       <div class="names">${esc(r.req||'—')}${r.asg && r.asg!=='—' ? `, ${esc(r.asg)}` : ''}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px">
-          ${r.priority?`<span class="st" style="flex:none;background:${priColor(r.priority).bg};color:${priColor(r.priority).fg}">${esc(r.priority)}</span>`:''}
           <span class="title">${esc(r.title)}</span>
+          ${r.priority?`<span class="st" style="background:${priColor(r.priority).bg};color:${priColor(r.priority).fg}">${esc(r.priority)}</span>`:''}
           ${r.status?`<span class="st" style="background:${p.bg};color:${p.fg}">${esc(r.status)}</span>`:''}
           ${r.team?`<span class="st" style="background:${teamColor(r.team).bg};color:${teamColor(r.team).fg}">${esc(r.team)}</span>`:''}
           ${r.locked?'<span class="lock">✎수정됨</span>':''}
@@ -442,11 +442,12 @@ function bindRows(box){
       const opening = (openId !== id);
       openId = opening ? id : null;
       if(opening){
-        showCmts = false;                 // 새 항목 열면 댓글 패널은 닫힌 상태로 시작
+        showCmts = true;                  // 새 항목 열면 댓글 패널을 기본으로 표시
         const r = DATA.find(x=>x.id===id);
         if(r && !r.is_read) markRead(id, 1, false);
       }
       render();
+      if(opening && showCmts) loadComments(id);   // 열 때 최신 댓글 자동 로드
     });
   });
   box.querySelectorAll(".cmtToggle").forEach(el=>{
@@ -519,19 +520,6 @@ function paint(box, items){
   bindRows(box);
 }
 
-/* ---------- 댓글 영역 크기 조절(드래그) + 크기 기억 ---------- */
-const CMT_W_KEY="slackapi_cmt_w", CMT_H_KEY="slackapi_cmt_h";
-function applyCmtSize(){
-  const panel=document.querySelector(".detail-cmts");
-  if(!panel) return;                       // 댓글 패널이 열려있을 때만
-  const list=panel.querySelector(".cmts");
-  const w=localStorage.getItem(CMT_W_KEY); if(w) panel.style.width=w+"px";
-  const h=localStorage.getItem(CMT_H_KEY); if(list&&h) list.style.height=h+"px";
-  // 드래그로 크기 바꾸면(마우스 놓을 때) 기록
-  panel.addEventListener("mouseup",()=>localStorage.setItem(CMT_W_KEY, Math.round(panel.getBoundingClientRect().width)));
-  if(list) list.addEventListener("mouseup",()=>localStorage.setItem(CMT_H_KEY, Math.round(list.getBoundingClientRect().height)));
-}
-
 function render(){
   const items = filteredItems();
   document.getElementById("count").textContent = items.length + "건";
@@ -544,7 +532,6 @@ function render(){
     document.getElementById("uncount").textContent = un.length + "건";
     paint(document.getElementById("unlist"), un);
   }
-  applyCmtSize();   // 댓글 영역 사용자 지정 크기 복원
 }
 
 /* 선택 항목 일괄 읽음/안읽음 */
@@ -574,52 +561,52 @@ function markRead(id, read, doRender){
   if(doRender) render();
 }
 
-/* ---------- 헤더 다중선택 필터 드롭다운 ---------- */
-const MS = [
-  { id:'msPriority', label:'우선순위', set:()=>fpri,  values:()=>Object.keys(PRIORITY) },
-  { id:'msTeam',     label:'담당팀',   set:()=>fteam, values:()=>Object.keys(TEAM) },
-  { id:'msStatus',   label:'진행상태', set:()=>fstat, values:()=>Object.keys(PALETTE).filter(k=>k!=="기타") },
-  { id:'msAsg',      label:'담당자',   set:()=>fasg,  values:()=>[...new Set(DATA.map(r=>r.asg).filter(v=>v && v!=="—"))].sort() },
-];
-function closeAllMS(){ document.querySelectorAll(".ms-menu").forEach(m=>m.hidden=true); }
-function msBtnInner(cfg){ const n=cfg.set().size; return `${esc(cfg.label)}${n?` <span class="ms-n">${n}</span>`:''} <span class="ms-ar">▾</span>`; }
-function updateMSBtn(cfg){
-  const btn=document.querySelector("#"+cfg.id+" .ms-btn"); if(!btn) return;
-  btn.innerHTML=msBtnInner(cfg); btn.classList.toggle("active", cfg.set().size>0);
+/* ---------- 헤더 필터 셀렉트 옵션 채우기 (고정 목록: 상수 기반) ---------- */
+function selOptions(label, values, cur){
+  return `<option value="">${label}</option>` +
+    values.map(x=>`<option${x===cur?' selected':''}>${esc(x)}</option>`).join("");
 }
-function buildMS(cfg){
-  const cont=document.getElementById(cfg.id); if(!cont) return;
-  const set=cfg.set(), vals=cfg.values();
-  cont.innerHTML =
-    `<button type="button" class="ms-btn${set.size?' active':''}">${msBtnInner(cfg)}</button>`+
-    `<div class="ms-menu" hidden>`+
-      (vals.length ? vals.map(v=>`<label class="ms-item"><input type="checkbox" value="${escAttr(v)}" ${set.has(v)?'checked':''}><span>${esc(v)}</span></label>`).join("")
-                   : '<div class="ms-empty">항목 없음</div>')+
-    `</div>`;
-  const btn=cont.querySelector(".ms-btn"), menu=cont.querySelector(".ms-menu");
-  btn.addEventListener("click", e=>{ e.stopPropagation(); const willOpen=menu.hidden; closeAllMS(); menu.hidden=!willOpen; });
-  menu.addEventListener("click", e=>e.stopPropagation());
-  menu.querySelectorAll("input").forEach(inp=>inp.addEventListener("change", ()=>{
-    if(inp.checked) cfg.set().add(inp.value); else cfg.set().delete(inp.value);
-    updateMSBtn(cfg); saveFilters(); openId=null; render();
-  }));
+function fillFilters(){
+  document.getElementById("fPriority").innerHTML = selOptions("우선순위", Object.keys(PRIORITY), fpri);
+  document.getElementById("fTeam").innerHTML     = selOptions("담당팀",   Object.keys(TEAM),     fteam);
+  fillStatusMenu();
 }
-function buildAllMS(){ MS.forEach(buildMS); }
-document.addEventListener("click", closeAllMS);   // 바깥 클릭 시 메뉴 닫기
+/* 진행상태 다중 선택 드롭다운 */
+function statusValues(){ return Object.keys(PALETTE).filter(k=>k!=="기타"); }
+function updateStatusBtn(){
+  document.getElementById("fStatusLbl").textContent = fstat.length ? `진행상태 ${fstat.length}` : "진행상태";
+  document.getElementById("fStatusBtn").classList.toggle("on", fstat.length>0);
+}
+function fillStatusMenu(){
+  document.getElementById("fStatusMenu").innerHTML = statusValues().map(v=>
+    `<label class="ms-opt"><input type="checkbox" value="${escAttr(v)}"${fstat.includes(v)?' checked':''}><span>${esc(v)}</span></label>`
+  ).join("");
+  document.querySelectorAll("#fStatusMenu input").forEach(cb=>{
+    cb.addEventListener("change", ()=>{
+      if(cb.checked){ if(!fstat.includes(cb.value)) fstat.push(cb.value); }
+      else { fstat = fstat.filter(x=>x!==cb.value); }
+      updateStatusBtn(); saveFilters(); openId=null; render();
+    });
+  });
+  updateStatusBtn();
+}
+function fillAsg(){   // 담당자는 데이터 기반(동적), 선택값 유지
+  const vals = [...new Set(DATA.map(r=>r.asg).filter(v=>v && v!=="—"))].sort();
+  document.getElementById("fAsg").innerHTML = selOptions("담당자", vals, fasg);
+}
 
 /* ---------- 필터 상태 저장/복원 (새로고침에도 유지) ---------- */
 const FILTER_KEY = "slackapi_filters";
 function saveFilters(){
   localStorage.setItem(FILTER_KEY, JSON.stringify({
-    fpri:[...fpri], fteam:[...fteam], fstat:[...fstat], fasg:[...fasg],
-    search: document.getElementById("search").value
+    fpri, fteam, fstat, fasg, search: document.getElementById("search").value
   }));
 }
 function restoreFilters(){
   let s = {};
   try { s = JSON.parse(localStorage.getItem(FILTER_KEY) || "{}"); } catch(e){}
-  const toSet = v => new Set(Array.isArray(v) ? v : (v ? [v] : []));   // 구버전(문자열) 호환
-  fpri = toSet(s.fpri); fteam = toSet(s.fteam); fstat = toSet(s.fstat); fasg = toSet(s.fasg);
+  fpri = s.fpri || ""; fteam = s.fteam || ""; fasg = s.fasg || "";
+  fstat = Array.isArray(s.fstat) ? s.fstat : (s.fstat ? [s.fstat] : []);   // 구버전(문자열) 호환
   const sv = s.search || "";
   document.getElementById("search").value = sv;
   filter = sv.toLowerCase().trim();
@@ -635,7 +622,7 @@ async function load(){
       return;
     }
     DATA = json.rows || [];
-    buildAllMS();   // 담당자 옵션 등 갱신(데이터 기반), 선택값 유지
+    fillAsg();   // 담당자 옵션 갱신(데이터 기반)
     render();
     document.getElementById("updated").textContent = "마지막 갱신: " + new Date().toLocaleTimeString("ko-KR");
   } catch(e){
@@ -661,11 +648,16 @@ document.getElementById("sync").addEventListener("click", async ()=>{
 });
 
 document.getElementById("search").addEventListener("input",e=>{ filter=e.target.value.toLowerCase().trim(); saveFilters(); openId=null; render(); });
+document.getElementById("fPriority").addEventListener("change",e=>{ fpri=e.target.value; saveFilters(); openId=null; render(); });
+document.getElementById("fTeam").addEventListener("change",e=>{ fteam=e.target.value; saveFilters(); openId=null; render(); });
+document.getElementById("fStatusBtn").addEventListener("click", e=>{ e.stopPropagation(); document.getElementById("fStatusMs").classList.toggle("open"); });
+document.addEventListener("click", e=>{ const ms=document.getElementById("fStatusMs"); if(ms && !ms.contains(e.target)) ms.classList.remove("open"); });
+document.getElementById("fAsg").addEventListener("change",e=>{ fasg=e.target.value; saveFilters(); openId=null; render(); });
 document.getElementById("reset").addEventListener("click",()=>{
-  fpri = new Set(); fteam = new Set(); fstat = new Set(); fasg = new Set(); filter = "";
+  fpri = fteam = fasg = ""; fstat = []; filter = "";
   document.getElementById("search").value = "";
-  saveFilters();        // 비운 상태 저장
-  buildAllMS();         // 버튼 카운트/체크 초기화
+  saveFilters();              // 비운 상태 저장
+  fillFilters(); fillAsg();   // 셀렉트 선택값도 "전체"로 복원(진행상태 체크 해제 포함)
   openId = null; render();
 });
 document.getElementById("readSel").addEventListener("click",()=>bulkRead(1));
@@ -705,7 +697,7 @@ async function bgSync(){
 setInterval(bgSync, 60000);   // 60초마다 백그라운드 동기화
 
 restoreFilters();  // 새로고침 전 필터 복원 (localStorage)
-buildAllMS();      // 헤더 다중선택 필터 생성 — 복원된 선택값 반영
+fillFilters();     // 헤더 셀렉트 옵션(고정 목록) 1회 생성 — 복원된 선택값 반영
 load();
 pollStatus();          // 기준값 즉시 설정
 bgSync().then(load);   // 진입 즉시 동기화 → 완료되면 화면 1회 갱신(최신 반영)

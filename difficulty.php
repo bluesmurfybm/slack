@@ -34,19 +34,6 @@ header('Pragma: no-cache');
   input,button,select { font-family:inherit; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; height:32px; padding:0 10px; }
   button { cursor:pointer; }
   a.btn { text-decoration:none; }
-  /* 다중선택 필터 드롭다운 */
-  .ms { position:relative; display:inline-block; }
-  .ms-btn { height:32px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; cursor:pointer; white-space:nowrap; }
-  .ms-btn.active { border-color:var(--info); color:var(--info); background:var(--info-bg); }
-  .ms-n { display:inline-block; min-width:16px; text-align:center; background:var(--info); color:#fff; border-radius:8px; font-size:11px; padding:0 5px; margin-left:2px; }
-  .ms-ar { color:var(--muted); font-size:10px; }
-  .ms-menu { position:absolute; z-index:50; top:36px; right:0; left:auto; min-width:170px; max-height:320px; overflow-y:auto;
-             background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px; box-shadow:0 6px 22px rgba(0,0,0,.18); }
-  .ms-menu[hidden] { display:none; }
-  .ms-item { display:flex; align-items:center; gap:8px; padding:5px 7px; border-radius:6px; font-size:13px; cursor:pointer; white-space:nowrap; }
-  .ms-item:hover { background:var(--bg2); }
-  .ms-item input { width:15px; height:15px; margin:0; cursor:pointer; }
-  .ms-empty { font-size:12px; color:var(--muted); padding:6px 7px; }
   /* 난이도 요약 막대 */
   .summary { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
   .scard { flex:1; min-width:120px; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; cursor:pointer; }
@@ -85,8 +72,8 @@ header('Pragma: no-cache');
   <div class="head">
     <h1>⭐ 유지보수 난이도 분석 <span class="badge" id="count"></span></h1>
     <div style="display:flex;gap:8px;align-items:center">
-      <div class="ms" id="msTeam"></div>
-      <div class="ms" id="msStatus"></div>
+      <select id="fTeam"><option value="">담당팀</option></select>
+      <select id="fStatus"><option value="">진행상태</option></select>
       <input id="search" type="text" placeholder="검색…" style="width:140px;">
     </div>
   </div>
@@ -130,11 +117,9 @@ const TEAM = {"블루소프트":{bg:"#e6f1fb",fg:"#0c447c"},"와이오즈":{bg:"
 function pal(s){ return PALETTE[s]||PALETTE["기타"]; }
 function teamColor(s){ return TEAM[s]||{bg:"#eceff1",fg:"#455a64"}; }
 
-let DATA=[], filter="", fteam=new Set(), fstat=new Set(), openId=null, fLevel=0;
+let DATA=[], filter="", fteam="", fstat="", openId=null, fLevel=0;
 
 function esc(s){ return (s??"").toString().replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
-function escAttr(s){ return esc(s).replace(/"/g,"&quot;"); }
-function unslack(s){ return s.replace(/&amp;(amp|lt|gt|quot|#39|#x27);/g,"&$1;"); }  // Slack 인코딩 이중 이스케이프 복원
 function pad2(n){ return n<10?"0"+n:""+n; }
 function fmtDate(ts){ if(!ts) return ""; const d=new Date(ts*1000); return d.getFullYear()+"."+pad2(d.getMonth()+1)+"."+pad2(d.getDate()); }
 function stars(n){ return "★★★★★".slice(0,n)+"☆☆☆☆☆".slice(0,5-n); }
@@ -163,8 +148,8 @@ function difficultyOf(r){
 
 function matchBase(r){
   return (!filter || (r.title+r.body+r.req+r.asg).toLowerCase().includes(filter)) &&
-         (!fteam.size || fteam.has(r.team)) &&
-         (!fstat.size || fstat.has(r.status));
+         (!fteam || r.team===fteam) &&
+         (!fstat || r.status===fstat);
 }
 
 function rowHtml(r){
@@ -185,7 +170,7 @@ function rowHtml(r){
   return html + `
     <div class="detail">
       <div class="why"><b>난이도 ${stars(d.lvl)} (${LEVELS[d.lvl].name}) · 합계 ${d.score}점</b><br>${sigHtml}</div>
-      <div class="body-card">${unslack(esc(r.body||'(본문 없음)'))}</div>
+      <div class="body-card">${esc(r.body||'(본문 없음)')}</div>
       <div class="links">
         ${r.momo?`<a href="${esc(r.momo)}" target="_blank" rel="noopener">모모 이슈</a>`:''}
         ${r.lms?`<a href="${esc(r.lms)}" target="_blank" rel="noopener">LMS 링크</a>`:''}
@@ -234,41 +219,22 @@ function bindCards(){
   });
 }
 
-/* ---------- 헤더 다중선택 필터 드롭다운 ---------- */
-const MS = [
-  { id:'msTeam',   label:'담당팀',   set:()=>fteam, values:()=>[...new Set(DATA.map(r=>r.team).filter(Boolean))].sort() },
-  { id:'msStatus', label:'진행상태', set:()=>fstat, values:()=>[...new Set(DATA.map(r=>r.status).filter(Boolean))].sort() },
-];
-function closeAllMS(){ document.querySelectorAll(".ms-menu").forEach(m=>m.hidden=true); }
-function msBtnInner(cfg){ const n=cfg.set().size; return `${esc(cfg.label)}${n?` <span class="ms-n">${n}</span>`:''} <span class="ms-ar">▾</span>`; }
-function updateMSBtn(cfg){
-  const btn=document.querySelector("#"+cfg.id+" .ms-btn"); if(!btn) return;
-  btn.innerHTML=msBtnInner(cfg); btn.classList.toggle("active", cfg.set().size>0);
+function selOptions(label, values, cur){
+  return `<option value="">${label}</option>`+values.map(x=>`<option${x===cur?' selected':''}>${esc(x)}</option>`).join("");
 }
-function buildMS(cfg){
-  const cont=document.getElementById(cfg.id); if(!cont) return;
-  const set=cfg.set(), vals=cfg.values();
-  cont.innerHTML =
-    `<button type="button" class="ms-btn${set.size?' active':''}">${msBtnInner(cfg)}</button>`+
-    `<div class="ms-menu" hidden>`+
-      (vals.length ? vals.map(v=>`<label class="ms-item"><input type="checkbox" value="${escAttr(v)}" ${set.has(v)?'checked':''}><span>${esc(v)}</span></label>`).join("")
-                   : '<div class="ms-empty">항목 없음</div>')+
-    `</div>`;
-  const btn=cont.querySelector(".ms-btn"), menu=cont.querySelector(".ms-menu");
-  btn.addEventListener("click", e=>{ e.stopPropagation(); const willOpen=menu.hidden; closeAllMS(); menu.hidden=!willOpen; });
-  menu.addEventListener("click", e=>e.stopPropagation());
-  menu.querySelectorAll("input").forEach(inp=>inp.addEventListener("change", ()=>{
-    if(inp.checked) cfg.set().add(inp.value); else cfg.set().delete(inp.value);
-    updateMSBtn(cfg); openId=null; render();
-  }));
+function fillFilters(){
+  const teams = [...new Set(DATA.map(r=>r.team).filter(Boolean))].sort();
+  const stats = [...new Set(DATA.map(r=>r.status).filter(Boolean))].sort();
+  document.getElementById("fTeam").innerHTML   = selOptions("담당팀", teams, fteam);
+  document.getElementById("fStatus").innerHTML = selOptions("진행상태", stats, fstat);
 }
-function buildAllMS(){ MS.forEach(buildMS); }
-document.addEventListener("click", closeAllMS);   // 바깥 클릭 시 메뉴 닫기
 
 document.getElementById("search").addEventListener("input",e=>{ filter=e.target.value.toLowerCase().trim(); openId=null; render(); });
+document.getElementById("fTeam").addEventListener("change",e=>{ fteam=e.target.value; openId=null; render(); });
+document.getElementById("fStatus").addEventListener("change",e=>{ fstat=e.target.value; openId=null; render(); });
 document.getElementById("reset").addEventListener("click",()=>{
-  filter=""; fteam=new Set(); fstat=new Set(); fLevel=0; document.getElementById("search").value="";
-  buildAllMS(); openId=null; render();
+  filter=fteam=fstat=""; fLevel=0; document.getElementById("search").value="";
+  fillFilters(); openId=null; render();
 });
 
 async function load(){
@@ -278,7 +244,7 @@ async function load(){
     if(json.error){ document.getElementById("board").innerHTML='<div class="err">에러: '+esc(json.error)+'</div>'; return; }
     DATA = json.rows||[];
     DATA.forEach(r=>r._diff = difficultyOf(r));   // 난이도 1회 계산(데이터 갱신 시 재계산)
-    buildAllMS(); render();
+    fillFilters(); render();
     document.getElementById("updated").textContent = "마지막 갱신: "+new Date().toLocaleTimeString("ko-KR");
   }catch(e){ document.getElementById("board").innerHTML='<div class="err">불러오기 실패</div>'; }
 }
