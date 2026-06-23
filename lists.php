@@ -335,7 +335,6 @@ function rowHtml(r){
           ${r.momo?`<a href="${esc(r.momo)}" target="_blank" rel="noopener">모모 이슈</a>`:''}
           ${r.lms?`<a href="${esc(r.lms)}" target="_blank" rel="noopener">LMS 링크</a>`:''}
           <button type="button" class="rdBtn" data-id="${esc(r.id)}" data-read="${r.is_read?0:1}">${r.is_read?'안읽음으로':'읽음으로'}</button>
-          <button type="button" class="doPin" data-id="${esc(r.id)}" data-pin="${r.is_pinned?0:1}">${r.is_pinned?'📌 고정 해제':'📌 상단 고정'}</button>
           <button type="button" class="cmtToggle ${showCmts?'on':''}">💬 댓글${r.cmt_count>0?` ${r.cmt_count}`:''}${showCmts?' 닫기':''}</button>
         </div>
       </div>
