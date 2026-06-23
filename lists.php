@@ -63,10 +63,15 @@ header('Pragma: no-cache');
   .chk:checked { background:#16a34a; border-color:#16a34a; }
   .chk:checked::after { content:""; position:absolute; left:5px; top:2px; width:4px; height:8px;
          border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
-  .dot { flex:none; width:10px; text-align:center; font-size:9px; color:#35d36f; }
+  /* 고정(핀) */
+  .pinBtn { flex:none; cursor:pointer; font-size:14px; line-height:1; opacity:.22; filter:grayscale(1); user-select:none; }
+  .pinBtn:hover { opacity:.7; }
+  .pinBtn.on { opacity:1; filter:none; }
+  .row.pinned, .row.pinned.unread { box-shadow: inset 3px 0 0 #f5a623; }   /* 좌측 금색 띠로 고정 표시(안읽음보다 우선) */
   /* 안읽음: 제목 굵게 / 읽음: 보통+흐리게 */
   .row.unread .title { font-weight:700; }
   .row.unread .names { font-weight:700; color:var(--txt); }
+  .row.unread { box-shadow: inset 3px 0 0 #50b86fc4; }   /* 안읽음: 좌측 파란 띠로 구분 */
   .row.read .title { font-weight:400; color:var(--muted); }
   .row.read { background:var(--bg2); }
   .names { flex:none; width:96px; font-size:11px; font-weight:500; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -174,7 +179,7 @@ const PALETTE = {
   "등록":            {bg:"#eef0f2", fg:"#555c66"},
   "공수산정요청":    {bg:"#faeeda", fg:"#633806"},
   "진행중":          {bg:"#9b7d55", fg:"#ffefdb"},
-  "확인요청(검토완료)":     {bg:"#e0f2f1", fg:"#00695c"},
+  "확인요청(검토완료)":     {bg:"#e7d2bb", fg:"#683d00"},
   "확인요청(개발서버반영)": {bg:"#e0f2f1", fg:"#00695c"},
   "확인요청(운영서버반영)": {bg:"#e0f2f1", fg:"#00695c"},
   "운영배포요청":    {bg:"#fff0e0", fg:"#a85b00"},
@@ -292,9 +297,9 @@ function unassignedItems(){ return DATA.filter(r => matchBase(r) && (!r.asg || r
 function rowHtml(r){
   const p = pal(r.status), open = openId === r.id, unread = !r.is_read;
   const row = `
-    <div class="row${unread?' unread':' read'}" data-id="${esc(r.id)}" ${open?'style="background:var(--bg2)"':''}>
+    <div class="row${unread?' unread':' read'}${r.is_pinned?' pinned':''}" data-id="${esc(r.id)}" ${open?'style="background:var(--bg2)"':''}>
       <input type="checkbox" class="chk" data-id="${esc(r.id)}" ${selected.has(r.id)?'checked':''}>
-      <div class="dot">${unread?'●':''}</div>
+      <div class="pinBtn doPin${r.is_pinned?' on':''}" data-id="${esc(r.id)}" data-pin="${r.is_pinned?0:1}" title="${r.is_pinned?'고정 해제':'상단 고정'}">📌</div>
       <div class="names">${esc(r.req||'—')}${r.asg && r.asg!=='—' ? `, ${esc(r.asg)}` : ''}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px">
@@ -330,6 +335,7 @@ function rowHtml(r){
           ${r.momo?`<a href="${esc(r.momo)}" target="_blank" rel="noopener">모모 이슈</a>`:''}
           ${r.lms?`<a href="${esc(r.lms)}" target="_blank" rel="noopener">LMS 링크</a>`:''}
           <button type="button" class="rdBtn" data-id="${esc(r.id)}" data-read="${r.is_read?0:1}">${r.is_read?'안읽음으로':'읽음으로'}</button>
+          <button type="button" class="doPin" data-id="${esc(r.id)}" data-pin="${r.is_pinned?0:1}">${r.is_pinned?'📌 고정 해제':'📌 상단 고정'}</button>
           <button type="button" class="cmtToggle ${showCmts?'on':''}">💬 댓글${r.cmt_count>0?` ${r.cmt_count}`:''}${showCmts?' 닫기':''}</button>
         </div>
       </div>
@@ -460,6 +466,9 @@ function bindRows(box){
   box.querySelectorAll(".rdBtn").forEach(el=>{
     el.addEventListener("click",(e)=>{ e.stopPropagation(); markRead(el.dataset.id, +el.dataset.read, true); });
   });
+  box.querySelectorAll(".doPin").forEach(el=>{
+    el.addEventListener("click",(e)=>{ e.stopPropagation(); markPin(el.dataset.id, +el.dataset.pin); });
+  });
   box.querySelectorAll(".copyLink").forEach(el=>{
     el.addEventListener("click", async e=>{
       e.stopPropagation();
@@ -574,6 +583,22 @@ function markRead(id, read, doRender){
   if(doRender) render();
 }
 
+/* 고정 우선 정렬: 고정 → 안읽음 → 최신순 (data.php ORDER BY 와 동일) */
+function sortData(){
+  DATA.sort((a,b)=> (b.is_pinned-a.is_pinned) || (a.is_read-b.is_read) || (b.created-a.created));
+}
+/* 고정/해제: 로컬 즉시 반영 + 재정렬(상단 이동) + 서버 저장 */
+function markPin(id, pin){
+  const r = DATA.find(x=>x.id===id);
+  if(r) r.is_pinned = pin ? 1 : 0;
+  fetch("pin.php", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({request_id:id, pin})
+  }).catch(()=>{});
+  sortData();
+  render();
+}
+
 /* ---------- 헤더 다중선택 필터 드롭다운 ---------- */
 const MS = [
   { id:'msPriority', label:'우선순위', set:()=>fpri,  values:()=>Object.keys(PRIORITY) },
@@ -635,6 +660,7 @@ async function load(){
       return;
     }
     DATA = json.rows || [];
+    sortData();     // 고정 우선 정렬(서버 정렬과 동일하게 보정)
     buildAllMS();   // 담당자 옵션 등 갱신(데이터 기반), 선택값 유지
     render();
     document.getElementById("updated").textContent = "마지막 갱신: " + new Date().toLocaleTimeString("ko-KR");

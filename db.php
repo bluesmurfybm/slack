@@ -93,6 +93,17 @@ function db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+    // 5) 사용자별 고정 상태 (행 존재 = 고정). 고정 항목은 목록 최상단 출력
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `user_pins` (
+            `user_id`    VARCHAR(32) NOT NULL COMMENT '고정한 사용자 Slack ID',
+            `request_id` VARCHAR(32) NOT NULL COMMENT 'requests.id',
+            `pinned_at`  DATETIME    NOT NULL,
+            PRIMARY KEY (`user_id`, `request_id`),
+            KEY `idx_user` (`user_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
     return $pdo;
 }
 

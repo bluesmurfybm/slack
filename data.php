@@ -16,12 +16,14 @@ try {
         SELECT r.id, r.title, r.body, r.momo, r.lms, r.req_id, r.req, r.asg_id, r.asg,
                r.status_id, r.status, r.priority_id, r.priority, r.team_id, r.team, r.cmt_count,
                r.`eta`, r.`date`, r.`done`, r.created, r.updated, r.locked, r.edited_by, r.synced_at, r.updated_at,
-               (rd.request_id IS NOT NULL) AS is_read
+               (rd.request_id IS NOT NULL) AS is_read,
+               (pn.request_id IS NOT NULL) AS is_pinned
         FROM requests r
         LEFT JOIN user_reads rd ON rd.request_id = r.id AND rd.user_id = :uid
-        ORDER BY is_read ASC, r.created DESC
+        LEFT JOIN user_pins  pn ON pn.request_id = r.id AND pn.user_id = :uidp
+        ORDER BY is_pinned DESC, is_read ASC, r.created DESC
     ");
-    $stmt->execute([':uid' => $uid]);
+    $stmt->execute([':uid' => $uid, ':uidp' => $uid]);
     $rows = $stmt->fetchAll();
 
     // 숫자형 캐스팅
@@ -30,6 +32,7 @@ try {
         $r['updated']   = (int)$r['updated'];
         $r['locked']    = (int)$r['locked'];
         $r['is_read']   = (int)$r['is_read'];
+        $r['is_pinned'] = (int)$r['is_pinned'];
         $r['cmt_count'] = (int)$r['cmt_count'];
     }
     unset($r);
