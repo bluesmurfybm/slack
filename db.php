@@ -104,6 +104,17 @@ function db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+    // 6) 사용자별 숨김 상태 (행 존재 = 숨김). 기본 목록에서 제외, '숨김 보기'로만 표시
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `user_hides` (
+            `user_id`    VARCHAR(32) NOT NULL COMMENT '숨긴 사용자 Slack ID',
+            `request_id` VARCHAR(32) NOT NULL COMMENT 'requests.id',
+            `hidden_at`  DATETIME    NOT NULL,
+            PRIMARY KEY (`user_id`, `request_id`),
+            KEY `idx_user` (`user_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
     return $pdo;
 }
 
