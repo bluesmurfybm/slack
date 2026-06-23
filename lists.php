@@ -152,13 +152,13 @@ header('Pragma: no-cache');
     <input id="search" type="text" placeholder="검색…" style="width:120px;">
     <button id="readSel" type="button">선택 읽음</button>
     <button id="unreadSel" type="button">선택 안읽음</button>
-    <button id="toggleUn" type="button">미지정 리스트 표시</button>
+    <button id="toggleUn" type="button">미지정 숨기기</button>
     <a href="difficulty.php"><button type="button">⭐ 난이도 분석</button></a>
     <button id="sync">동기화</button>
     <a href="logout.php"><button type="button">로그아웃</button></a>
   </div>
   <div class="cols">
-    <div class="col" id="unpanel" style="display:none">
+    <div class="col" id="unpanel">
       <div class="listhead"><b>미지정 담당자</b> <span id="uncount"></span></div>
       <div id="unlist" class="listbox"></div>
     </div>
@@ -205,9 +205,9 @@ function teamColor(s){ return TEAM[s] || {bg:"#eceff1", fg:"#455a64"}; }
 let DATA = [], openId = null, filter = "";
 let fpri = new Set(), fteam = new Set(), fstat = new Set(), fasg = new Set();   // 헤더 다중선택 필터(Set)
 let selected = new Set();                // 체크박스 선택 항목
-let splitOn = false;                      // 미지정 리스트 2분할 표시 여부
+let splitOn = true;                       // 미지정 리스트 2분할 표시 여부(기본 표시)
 let cmtCache = {};                        // 레코드별 댓글 캐시(렌더 깜빡임 방지)
-let showCmts = false;                     // 상세에서 댓글 패널(우측) 표시 여부
+let showCmts = true;                      // 상세에서 댓글 패널(우측) 표시 여부(기본 표시)
 
 function pal(s){ return PALETTE[s] || PALETTE["기타"]; }
 function pad2(n){ return n<10 ? "0"+n : ""+n; }
@@ -285,14 +285,15 @@ function wrapSel(ta, pre, post){
 }
 function snip(b){ return (b||"").replace(/\s+/g," ").trim().slice(0,90); }
 
-function matchBase(r){   // 담당자 외 공통 필터 (검색/우선순위/담당팀/진행상태). Set 이 비면 미적용, 있으면 포함(OR)
+function matchBase(r, withStatus){   // 공통 필터 (검색/우선순위/담당팀 + 선택적으로 진행상태). Set 이 비면 미적용, 있으면 포함(OR)
   return (!filter || (r.title + r.body + r.req + r.asg).toLowerCase().includes(filter)) &&
          (!fpri.size  || fpri.has(r.priority)) &&
          (!fteam.size || fteam.has(r.team)) &&
-         (!fstat.size || fstat.has(r.status));
+         (withStatus === false || !fstat.size || fstat.has(r.status));
 }
-function filteredItems(){   return DATA.filter(r => matchBase(r) && (!fasg.size || fasg.has(r.asg))); }
-function unassignedItems(){ return DATA.filter(r => matchBase(r) && (!r.asg || r.asg === '—')); }
+function filteredItems(){   return DATA.filter(r => matchBase(r, true) && (!fasg.size || fasg.has(r.asg))); }
+// 미지정 패널: 담당자·진행상태 필터는 적용하지 않음(항상 미지정 + 상태 '등록'만)
+function unassignedItems(){ return DATA.filter(r => matchBase(r, false) && (!r.asg || r.asg === '—') && r.status === '등록'); }
 
 function rowHtml(r){
   const p = pal(r.status), open = openId === r.id, unread = !r.is_read;
@@ -448,11 +449,12 @@ function bindRows(box){
       const opening = (openId !== id);
       openId = opening ? id : null;
       if(opening){
-        showCmts = false;                 // 새 항목 열면 댓글 패널은 닫힌 상태로 시작
+        showCmts = true;                  // 새 항목 열면 댓글 패널을 기본으로 표시
         const r = DATA.find(x=>x.id===id);
         if(r && !r.is_read) markRead(id, 1, false);
       }
       render();
+      if(opening && showCmts) loadComments(id);   // 열 때 최신 댓글 자동 로드
     });
   });
   box.querySelectorAll(".cmtToggle").forEach(el=>{
