@@ -2,6 +2,7 @@
 require_once __DIR__ . '/auth.php';
 require_login();
 $me = current_user();
+session_release();   // 세션 잠금 즉시 해제(서브 AJAX 동시요청 경합 방지)
 $cfg = require __DIR__ . '/config.php';
 $listUrl = $cfg['list_url'] ?? '';
 

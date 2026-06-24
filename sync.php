@@ -14,6 +14,7 @@ $isCli = (PHP_SAPI === 'cli');
 if (!$isCli) {
     require_once __DIR__ . '/auth.php';
     require_login();
+    session_release();   // 세션 잠금 즉시 해제(느린 Slack 동기화 동안 경합 방지)
     header('Content-Type: application/json; charset=utf-8');
 }
 

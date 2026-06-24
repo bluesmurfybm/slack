@@ -8,6 +8,7 @@
 require_once __DIR__ . '/auth.php';
 require_login();
 $me = current_user();
+session_release();   // 세션 잠금 즉시 해제
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');

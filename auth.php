@@ -6,6 +6,13 @@
  */
 
 if (session_status() === PHP_SESSION_NONE) {
+    // 세션 저장 경로를 앱 전용 폴더로 (기본 c:/wamp64/tmp 권한 문제 회피).
+    // Apache 프로세스가 직접 생성·소유하므로 읽기/쓰기 권한이 일관됨.
+    $sessDir = __DIR__ . '/.sessions';
+    if (!is_dir($sessDir)) @mkdir($sessDir, 0777, true);
+    if (is_dir($sessDir) && is_writable($sessDir)) {
+        session_save_path($sessDir);   // 쓰기 가능할 때만 변경, 아니면 기본 경로 유지
+    }
     session_start();
 }
 
@@ -18,6 +25,16 @@ function require_login() {
         header('Location: login.php');
         exit;
     }
+}
+
+/**
+ * 세션 잠금 즉시 해제 (읽기 전용 엔드포인트용).
+ *  - PHP 는 요청 내내 세션 파일을 독점 잠금하므로, 느린 Slack 호출 동안
+ *    다른 동시 요청이 같은 세션을 못 열어 Permission denied(공유 위반)가 남.
+ *  - 세션을 더 쓰지 않을 시점에 호출하면 $_SESSION 은 그대로 읽을 수 있고 잠금만 풀림.
+ */
+function session_release() {
+    if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
 }
 
 /** 로그인한 사용자의 개인 Slack 토큰 (댓글 작성 등 본인 명의 write-back 용) */

@@ -8,6 +8,7 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/db.php';
 require_login();
+session_release();   // 세션 잠금 즉시 해제(5초 폴링 경합 방지)
 
 header('Content-Type: application/json; charset=utf-8');
 

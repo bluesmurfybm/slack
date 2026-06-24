@@ -11,5 +11,8 @@ Thumbs.db
 *.tmp
 *.cache
 
+# 세션 저장 폴더 (런타임 생성)
+.sessions/
+
 # 민감정보가 들어갈 수 있는 로컬 설정 (필요 시 config.local.php 로 분리)
 config.local.php

@@ -9,6 +9,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/slack_lib.php';
 require_login();
+session_release();   // 세션 잠금 즉시 해제(느린 Slack 호출 동안 경합 방지)
 
 header('Content-Type: application/json; charset=utf-8');
 
