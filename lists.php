@@ -133,10 +133,14 @@ header('Pragma: no-cache');
   .cmt-tb { display:flex; gap:3px; }
   .cmt-tb .tb { width:26px; height:24px; padding:0; font-size:11px; color:var(--muted); display:flex; align-items:center; justify-content:center; }
   .cmt-tb .tb:hover { border-color:var(--info); color:var(--info); }
-  .cmt-input { width:100%; resize:vertical; min-height:34px; line-height:1.5; padding:6px 9px;
-               border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-family:inherit; font-size:12.5px; }
-  .cmt-prev { font-size:12.5px; line-height:1.5; color:var(--txt); background:var(--bg2); border:1px dashed var(--line);
-              border-radius:8px; padding:6px 9px; word-break:break-word; }
+  /* 리치 에디터: 입력하면서 서식이 바로 보이는 단일 입력창 */
+  .cmt-input { width:100%; min-height:54px; max-height:220px; overflow-y:auto; line-height:1.5; padding:6px 9px;
+               border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-family:inherit; font-size:12.5px;
+               text-align:left; word-break:break-word; }
+  .cmt-input:focus { outline:none; border-color:var(--info); }
+  .cmt-input:empty:before { content:attr(data-ph); color:var(--hint); pointer-events:none; }
+  .cmt-input code { background:var(--bg2); border:1px solid var(--line); border-radius:4px; padding:0 4px; font-family:Consolas,monospace; font-size:12px; }
+  .cmt-input a { color:var(--info); }
   .cmt-actions { display:flex; justify-content:flex-end; }
   .cmt-send { height:30px; font-size:12px; background:var(--info); color:#fff; border-color:var(--info); }
 </style>
@@ -283,13 +287,34 @@ function mrkdwn(t){
   return t;
 }
 /* 텍스트영역 선택영역을 pre/post 로 감싸기 */
-function wrapSel(ta, pre, post){
-  if(!ta) return;
-  const s=ta.selectionStart, e=ta.selectionEnd, v=ta.value, sel=v.slice(s,e);
-  ta.value = v.slice(0,s)+pre+sel+post+v.slice(e);
-  ta.focus();
-  ta.selectionStart = s+pre.length; ta.selectionEnd = e+pre.length+sel.length;
-  ta.dispatchEvent(new Event("input"));
+/* 리치 에디터(contenteditable) HTML → Slack mrkdwn 텍스트로 변환 (전송용) */
+function htmlToMrkdwn(root){
+  function walk(node){
+    let out="";
+    node.childNodes.forEach(n=>{
+      if(n.nodeType===3){ out += n.nodeValue; return; }      // 텍스트
+      if(n.nodeType!==1) return;
+      const tag=n.tagName.toLowerCase(), inner=walk(n);
+      if(tag==="b"||tag==="strong")           out += "*"+inner+"*";
+      else if(tag==="i"||tag==="em")          out += "_"+inner+"_";
+      else if(tag==="s"||tag==="strike"||tag==="del") out += "~"+inner+"~";
+      else if(tag==="code")                   out += "`"+inner+"`";
+      else if(tag==="a"){ const h=n.getAttribute("href")||""; out += h ? (h===inner ? "<"+h+">" : "<"+h+"|"+inner+">") : inner; }
+      else if(tag==="br")                     out += "\n";
+      else if(tag==="div"||tag==="p")         out += (out && !out.endsWith("\n") ? "\n" : "") + inner;
+      else if(tag==="span"){                  // CSS 서식 폴백
+        const fw=n.style.fontWeight, fs=n.style.fontStyle, td=(n.style.textDecoration||n.style.textDecorationLine||"");
+        let s=inner;
+        if(fw==="bold"||parseInt(fw,10)>=600) s="*"+s+"*";
+        if(fs==="italic") s="_"+s+"_";
+        if(/line-through/.test(td)) s="~"+s+"~";
+        out += s;
+      }
+      else out += inner;
+    });
+    return out;
+  }
+  return walk(root);
 }
 function snip(b){ return (b||"").replace(/\s+/g," ").trim().slice(0,90); }
 
@@ -361,8 +386,7 @@ function rowHtml(r){
             <button type="button" class="tb" data-id="${esc(r.id)}" data-act="code" title="코드">&lt;/&gt;</button>
             <button type="button" class="tb" data-id="${esc(r.id)}" data-act="link" title="링크">🔗</button>
           </div>
-          <textarea class="cmt-input" id="cin-${esc(r.id)}" rows="2" placeholder="댓글 입력… (본인 명의로 등록)"></textarea>
-          <div class="cmt-prev" id="cprev-${esc(r.id)}" style="display:none"></div>
+          <div class="cmt-input" id="cin-${esc(r.id)}" contenteditable="true" data-ph="댓글 입력… (Ctrl+Enter 전송)"></div>
           <div class="cmt-actions"><button type="button" class="cmt-send" data-id="${esc(r.id)}">작성</button></div>
         </div>
       </div>`:''}
@@ -433,8 +457,8 @@ async function loadComments(id){
   if(box) box.innerHTML = cmtHtml(cmtCache[id]);
 }
 async function postComment(id){
-  const ta = document.getElementById("cin-"+id);
-  const text = ta ? ta.value.trim() : "";
+  const ed = document.getElementById("cin-"+id);
+  const text = ed ? htmlToMrkdwn(ed).trim() : "";
   if(!text) return;
   const btn = document.querySelector('.cmt-send[data-id="'+id+'"]');
   if(btn){ btn.disabled = true; btn.textContent = "작성 중…"; }
@@ -444,8 +468,7 @@ async function postComment(id){
       body: JSON.stringify({request_id:id, text})
     })).json();
     if(!j.ok) throw new Error(j.error || "실패");
-    if(ta) ta.value = "";
-    const prev=document.getElementById("cprev-"+id); if(prev){ prev.style.display="none"; prev.innerHTML=""; }
+    if(ed) ed.innerHTML = "";
     await loadComments(id);   // 작성 후 최신 댓글 다시 로드
   }catch(err){ alert("댓글 작성 실패: " + err.message); }
   finally{ if(btn){ btn.disabled = false; btn.textContent = "작성"; } }
@@ -514,21 +537,22 @@ function bindRows(box){
   });
   box.querySelectorAll(".cmt-input").forEach(el=>{
     el.addEventListener("click", e=>e.stopPropagation());
-    el.addEventListener("input", e=>{
-      const id=el.id.replace("cin-",""), prev=document.getElementById("cprev-"+id);
-      const v=el.value.trim();
-      if(prev){ if(v){ prev.style.display=""; prev.innerHTML=mrkdwn(v); } else { prev.style.display="none"; prev.innerHTML=""; } }
+    el.addEventListener("keydown", e=>{   // Ctrl/Cmd+Enter 전송
+      if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){ e.preventDefault(); postComment(el.id.replace("cin-","")); }
     });
   });
   box.querySelectorAll(".tb").forEach(el=>{
+    el.addEventListener("mousedown", e=>e.preventDefault());   // 클릭해도 에디터 선택 유지
     el.addEventListener("click", e=>{
       e.stopPropagation();
-      const ta=document.getElementById("cin-"+el.dataset.id), a=el.dataset.act;
-      if(a==="b") wrapSel(ta,"*","*");
-      else if(a==="i") wrapSel(ta,"_","_");
-      else if(a==="s") wrapSel(ta,"~","~");
-      else if(a==="code") wrapSel(ta,"`","`");
-      else if(a==="link"){ const u=prompt("링크 URL:"); if(u) wrapSel(ta,"<"+u+"|",">"); }
+      const ed=document.getElementById("cin-"+el.dataset.id), a=el.dataset.act;
+      if(!ed) return; ed.focus();
+      try{ document.execCommand('styleWithCSS', false, null); }catch(_){}
+      if(a==="b") document.execCommand('bold');
+      else if(a==="i") document.execCommand('italic');
+      else if(a==="s") document.execCommand('strikeThrough');
+      else if(a==="code"){ const t=(window.getSelection().toString()||'코드'); document.execCommand('insertHTML', false, '<code>'+t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</code>'); }
+      else if(a==="link"){ const u=prompt("링크 URL:"); if(u) document.execCommand('createLink', false, u); }
     });
   });
   box.querySelectorAll(".cmt-send").forEach(el=>{
@@ -677,6 +701,20 @@ function restoreFilters(){
   filter = sv.toLowerCase().trim();
 }
 
+/* ---------- 뷰 토글(미지정 분할/숨김 보기) 저장·복원 ---------- */
+const VIEW_KEY = "slackapi_view";
+function saveView(){ localStorage.setItem(VIEW_KEY, JSON.stringify({ splitOn, showHidden })); }
+function restoreView(){
+  let v = {};
+  try { v = JSON.parse(localStorage.getItem(VIEW_KEY) || "{}"); } catch(e){}
+  if(typeof v.splitOn === "boolean")    splitOn = v.splitOn;
+  if(typeof v.showHidden === "boolean") showHidden = v.showHidden;
+  // 버튼/패널 UI 에 반영 (toggleHidden 텍스트+개수는 render() 에서 갱신)
+  document.getElementById("unpanel").style.display = splitOn ? "" : "none";
+  document.getElementById("toggleUn").textContent  = splitOn ? "미지정 숨기기" : "미지정 리스트 표시";
+  document.getElementById("toggleHidden").classList.toggle("primary", showHidden);
+}
+
 /* ---------- 데이터 로드 / 동기화 ---------- */
 async function load(){
   try {
@@ -727,11 +765,13 @@ document.getElementById("toggleUn").addEventListener("click",()=>{
   splitOn = !splitOn;
   document.getElementById("unpanel").style.display = splitOn ? "" : "none";
   document.getElementById("toggleUn").textContent = splitOn ? "미지정 숨기기" : "미지정 리스트 표시";
+  saveView();
   render();
 });
 document.getElementById("toggleHidden").addEventListener("click",()=>{
   showHidden = !showHidden;
   document.getElementById("toggleHidden").classList.toggle("primary", showHidden);
+  saveView();
   openId = null; render();
 });
 document.getElementById("selAll").addEventListener("change", e=>{
@@ -763,6 +803,7 @@ async function bgSync(){
 setInterval(bgSync, 60000);   // 60초마다 백그라운드 동기화
 
 restoreFilters();  // 새로고침 전 필터 복원 (localStorage)
+restoreView();     // 미지정 분할/숨김 보기 토글 상태 복원
 buildAllMS();      // 헤더 다중선택 필터 생성 — 복원된 선택값 반영
 load();
 pollStatus();          // 기준값 즉시 설정
