@@ -807,6 +807,33 @@ function detectAndNotify(){
 // 첫 클릭(사용자 제스처) 때 알림 권한 요청 (브라우저 정책상 제스처 필요)
 document.addEventListener("click", ()=>{ if("Notification" in window && Notification.permission==="default") Notification.requestPermission(); }, {once:true});
 
+/* ---------- 첨부 썸네일 프리페치 (백그라운드·저동시성) ----------
+   목록 로드 후 유휴 시간에 이미지 썸네일을 미리 받아 file.php 디스크 캐시 +
+   브라우저 캐시를 워밍한다. 상세를 열 때 이미 캐시돼 즉시 표시됨. */
+const _prefetched = new Set();
+function prefetchThumbs(){
+  const urls = [];
+  DATA.forEach(r=>{
+    (r.attachments||[]).forEach(f=>{
+      if(f.is_image && f.thumb && !_prefetched.has(f.thumb)){
+        _prefetched.add(f.thumb);
+        urls.push("file.php?u="+encodeURIComponent(f.thumb));
+      }
+    });
+  });
+  if(!urls.length) return;
+  let i = 0; const CONC = 4;                 // 동시 4개까지만(서버·네트워크 부담 최소화)
+  const next = ()=>{
+    if(i >= urls.length) return;
+    const img = new Image();
+    img.onload = img.onerror = next;         // 하나 끝나면 다음 장
+    try{ img.fetchPriority = "low"; }catch(_){}
+    img.src = urls[i++];
+  };
+  for(let k=0; k<CONC; k++) next();
+}
+const _idle = window.requestIdleCallback || (cb=>setTimeout(cb, 300));
+
 /* ---------- 데이터 로드 / 동기화 ---------- */
 async function load(){
   try {
@@ -821,6 +848,7 @@ async function load(){
     detectAndNotify();   // 새 요청/새 댓글 브라우저 알림
     buildAllMS();   // 담당자 옵션 등 갱신(데이터 기반), 선택값 유지
     render();
+    _idle(prefetchThumbs);   // 유휴 시간에 첨부 썸네일 미리 로드(캐시 워밍)
     document.getElementById("updated").textContent = "마지막 갱신: " + new Date().toLocaleTimeString("ko-KR");
   } catch(e){
     document.getElementById("list").innerHTML = '<div class="err">불러오기 실패</div>';

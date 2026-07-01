@@ -18,6 +18,37 @@ if ($tok === '' || strpos($u, 'https://files.slack.com/') !== 0) {
     exit('bad request');
 }
 
+/*
+ * 디스크 캐시: Slack 파일은 URL(파일 ID) 기준으로 내용이 불변이므로
+ * 한 번 받아두면 영구 재사용 가능. 다음 요청부터는 Slack 을 거치지 않고
+ * 로컬 파일에서 즉시 스트리밍 → 초기 이미지 로딩 대폭 개선.
+ */
+$cacheDir = __DIR__ . '/.filecache';
+if (!is_dir($cacheDir)) { @mkdir($cacheDir, 0777, true); }
+$key       = hash('sha256', $u);
+$cacheFile = $cacheDir . '/' . $key;         // 바이트
+$metaFile  = $cacheFile . '.type';           // content-type
+
+$serveFromCache = function ($data, $ctype) use ($u) {
+    header('Content-Type: ' . ($ctype ?: 'application/octet-stream'));
+    // 불변 콘텐츠 → 브라우저도 장기 캐시
+    header('Cache-Control: private, max-age=604800, immutable');
+    if (!empty($_GET['dl'])) {
+        $name = isset($_GET['name']) ? preg_replace('/[\r\n"\\\\\/]+/', '_', $_GET['name']) : 'download';
+        header('Content-Disposition: attachment; filename="' . $name . '"; filename*=UTF-8\'\'' . rawurlencode($_GET['name'] ?? $name));
+    }
+    header('Content-Length: ' . strlen($data));
+    echo $data;
+};
+
+// 캐시 적중 시 Slack 을 거치지 않고 즉시 응답
+if (is_file($cacheFile) && filesize($cacheFile) > 0) {
+    $data  = file_get_contents($cacheFile);
+    $ctype = is_file($metaFile) ? trim((string)file_get_contents($metaFile)) : '';
+    $serveFromCache($data, $ctype);
+    exit;
+}
+
 $ch = curl_init($u);
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
@@ -44,12 +75,11 @@ if (stripos((string)$ctype, 'text/html') !== false) {
        . "Slack 앱 OAuth & Permissions → User Token Scopes 에 files:read 추가 후 재설치·재로그인 하세요.");
 }
 
-header('Content-Type: ' . ($ctype ?: 'application/octet-stream'));
-header('Cache-Control: private, max-age=3600');
-// 다운로드 모드: 파일명 지정해 첨부로 내려받기
-if (!empty($_GET['dl'])) {
-    $name = isset($_GET['name']) ? preg_replace('/[\r\n"\\\\\/]+/', '_', $_GET['name']) : 'download';
-    header('Content-Disposition: attachment; filename="' . $name . '"; filename*=UTF-8\'\'' . rawurlencode($_GET['name'] ?? $name));
-    header('Content-Length: ' . strlen($data));
+// 다음 요청부터 Slack 을 거치지 않도록 디스크에 저장(원자적 기록)
+$tmp = $cacheFile . '.' . getmypid() . '.part';
+if (@file_put_contents($tmp, $data) !== false) {
+    @rename($tmp, $cacheFile);
+    @file_put_contents($metaFile, (string)$ctype);
 }
-echo $data;
+
+$serveFromCache($data, $ctype);
