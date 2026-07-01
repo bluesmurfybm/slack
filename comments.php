@@ -69,7 +69,7 @@ try {
             if (($m['ts'] ?? '') === $anchor) continue;                       // 스레드 루트
             if (($m['subtype'] ?? '') === 'list_record_comment') continue;    // 시스템(댓글추가 알림)
             if (($m['user'] ?? '') === 'USLACKBOT') continue;
-            if (trim($m['text'] ?? '') === '') continue;
+            if (trim($m['text'] ?? '') === '' && empty($m['files'])) continue;   // 텍스트 없어도 첨부 있으면 표시
             $msgs[] = $m;
             if (!empty($m['user'])) $uids[] = $m['user'];
             // 멘션 사용자도 실명 변환 위해 수집
@@ -90,10 +90,24 @@ try {
     $comments = [];
     foreach ($msgs as $m) {
         $uid = $m['user'] ?? null;
+        // 첨부 파일(이미지 등) 추출 — 실제 다운로드는 file.php 프록시가 토큰으로 대신 받음
+        $files = [];
+        foreach (($m['files'] ?? []) as $f) {
+            $mime = $f['mimetype'] ?? '';
+            $url  = $f['url_private'] ?? '';
+            if ($url === '') continue;
+            $files[] = [
+                'name'     => $f['name'] ?? 'file',
+                'is_image' => strpos($mime, 'image/') === 0,
+                'url'      => $url,
+                'thumb'    => $f['thumb_360'] ?? ($f['thumb_480'] ?? ($f['thumb_240'] ?? $url)),
+            ];
+        }
         $comments[] = [
             'author_name' => $uid && isset($names[$uid]) ? $names[$uid] : ($uid ?: 'Slack'),
-            'body'        => $fmt($m['text']),
+            'body'        => $fmt($m['text'] ?? ''),
             'created_at'  => date('Y-m-d H:i', (int)floor((float)$m['ts'])),
+            'files'       => $files,
         ];
     }
     echo json_encode(['comments' => $comments], JSON_UNESCAPED_UNICODE);

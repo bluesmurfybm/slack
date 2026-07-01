@@ -128,6 +128,10 @@ header('Pragma: no-cache');
   .cmt-h b { font-weight:600; font-size:12px; }
   .cmt-t { color:var(--hint); margin-left:6px; font-size:10px; }
   .cmt-b { font-size:12.5px; line-height:1.5; white-space:normal; word-break:break-word; color:var(--txt); margin-top:1px; }
+  /* 댓글 첨부 */
+  .cmt-files { display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; }
+  .cmt-img { max-width:180px; max-height:180px; border-radius:6px; border:1px solid var(--line); display:block; object-fit:cover; background:var(--bg2); }
+  .cmt-filedl { font-size:12px; color:var(--info); text-decoration:none; border:1px solid var(--line); border-radius:6px; padding:3px 8px; }
   .cmt-loading,.cmt-empty { font-size:12px; color:var(--hint); padding:8px 0; }
   .cmt-form { flex:none; display:flex; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
   .cmt-tb { display:flex; gap:3px; }
@@ -443,7 +447,11 @@ function cmtHtml(list){
       <div class="cmt-av" style="background:${col.bg};color:${col.fg}">${esc(cmtInitial(c.author_name))}</div>
       <div class="cmt-bub">
         <div class="cmt-h"><b style="color:${col.fg}">${esc(c.author_name)}</b><span class="cmt-t">${esc(c.created_at)}</span></div>
-        <div class="cmt-b">${mrkdwn(c.body)}</div>
+        ${c.body ? `<div class="cmt-b">${mrkdwn(c.body)}</div>` : ''}
+        ${(c.files&&c.files.length) ? `<div class="cmt-files">${c.files.map(f=>f.is_image
+            ? `<a href="file.php?u=${encodeURIComponent(f.url)}" target="_blank" rel="noopener"><img class="cmt-img" src="file.php?u=${encodeURIComponent(f.thumb)}" alt="${escAttr(f.name)}" loading="lazy"></a>`
+            : `<a class="cmt-filedl" href="file.php?u=${encodeURIComponent(f.url)}" target="_blank" rel="noopener">📎 ${esc(f.name)}</a>`
+          ).join("")}</div>` : ''}
       </div>
     </div>`;
   }).join("");
@@ -584,6 +592,9 @@ function render(){
   document.getElementById("count").textContent = items.length + "건";
   const hc = DATA.filter(r=>r.is_hidden).length;   // 숨김 개수 → 토글 버튼에 표시
   document.getElementById("toggleHidden").textContent = (showHidden?"숨김 가리기":"숨김 보기") + (hc?` (${hc})`:"");
+  // 탭 제목 배지: 안읽음 개수(숨김 제외)
+  const uc = DATA.filter(r=>!r.is_read && !r.is_hidden).length;
+  document.title = (uc>0 ? `(${uc}) ` : "") + "유지보수 요청";
   document.getElementById("selAll").checked = items.length>0 && items.every(r=>selected.has(r.id));
   document.getElementById("selInfo").textContent = selected.size>0 ? `${selected.size}개 선택됨` : "전체 선택";
   paint(document.getElementById("list"), items);
@@ -715,6 +726,27 @@ function restoreView(){
   document.getElementById("toggleHidden").classList.toggle("primary", showHidden);
 }
 
+/* ---------- 브라우저 알림 ---------- */
+let prevSeen = null;   // id -> cmt_count 스냅샷 (새 요청/새 댓글 비교용)
+function notify(title, body){
+  if(!("Notification" in window) || Notification.permission!=="granted") return;
+  try{ const n=new Notification(title, {body, tag:"slackapi", renotify:true}); n.onclick=()=>{ window.focus(); n.close(); }; }catch(e){}
+}
+function detectAndNotify(){
+  const cur = new Map(DATA.map(r=>[r.id, r.cmt_count]));
+  if(prevSeen){   // 최초 로드는 기준값만 잡고 알림 안 함
+    const fresh = DATA.filter(r=>!prevSeen.has(r.id) && !r.is_hidden);
+    const newc  = DATA.filter(r=>prevSeen.has(r.id) && r.cmt_count > prevSeen.get(r.id) && !r.is_hidden);
+    if(fresh.length===1) notify("🆕 새 유지보수 요청", fresh[0].title);
+    else if(fresh.length>1) notify("🆕 새 유지보수 요청", fresh.length+"건 등록됨");
+    if(newc.length===1) notify("💬 새 댓글", newc[0].title);
+    else if(newc.length>1) notify("💬 새 댓글", newc.length+"건에 댓글");
+  }
+  prevSeen = cur;
+}
+// 첫 클릭(사용자 제스처) 때 알림 권한 요청 (브라우저 정책상 제스처 필요)
+document.addEventListener("click", ()=>{ if("Notification" in window && Notification.permission==="default") Notification.requestPermission(); }, {once:true});
+
 /* ---------- 데이터 로드 / 동기화 ---------- */
 async function load(){
   try {
@@ -726,6 +758,7 @@ async function load(){
     }
     DATA = json.rows || [];
     sortData();     // 고정 우선 정렬(서버 정렬과 동일하게 보정)
+    detectAndNotify();   // 새 요청/새 댓글 브라우저 알림
     buildAllMS();   // 담당자 옵션 등 갱신(데이터 기반), 선택값 유지
     render();
     document.getElementById("updated").textContent = "마지막 갱신: " + new Date().toLocaleTimeString("ko-KR");
