@@ -142,6 +142,21 @@ header('Pragma: no-cache');
               border:1px solid var(--line); border-radius:8px; padding:6px 10px; background:var(--bg2); }
   .att-file:hover { border-color:#1a73e8; color:#1a73e8; }
   .att-file .sz { color:var(--hint); font-size:11px; }
+  .cmt-img { cursor:zoom-in; }
+  /* 이미지 라이트박스(모달 슬라이드) */
+  #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.86); z-index:9999; display:none; align-items:center; justify-content:center; }
+  #lightbox.open { display:flex; }
+  #lightbox .lb-stage { display:flex; flex-direction:column; align-items:center; gap:12px; }
+  #lb-img { max-width:92vw; max-height:82vh; object-fit:contain; border-radius:6px; box-shadow:0 10px 44px rgba(0,0,0,.55); background:#111; }
+  #lightbox .lb-bar { display:flex; align-items:center; gap:16px; color:#e8e8e8; font-size:13px; max-width:92vw; }
+  #lightbox .lb-bar #lb-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #lightbox .lb-bar a { color:#7db4ff; text-decoration:none; font-weight:600; white-space:nowrap; }
+  .lb-btn { position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.14); color:#fff;
+            border:none; font-size:36px; line-height:1; width:54px; height:70px; border-radius:10px; cursor:pointer; }
+  .lb-btn:hover { background:rgba(255,255,255,.28); }
+  #lb-prev { left:22px; } #lb-next { right:22px; }
+  #lb-close { position:absolute; top:16px; right:22px; background:none; border:none; color:#fff; font-size:32px; line-height:1; cursor:pointer; }
+  #lb-count { min-width:52px; text-align:center; color:#bbb; }
   .cmt-loading,.cmt-empty { font-size:12px; color:var(--hint); padding:8px 0; }
   .cmt-form { flex:none; display:flex; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
   .cmt-tb { display:flex; gap:3px; }
@@ -461,7 +476,8 @@ function attHtml(list){
   if(!list || !list.length) return "";
   const items = list.map(f=>{
     if(f.is_image && f.thumb){
-      return `<a href="file.php?u=${encodeURIComponent(f.url)}" target="_blank" rel="noopener" title="${escAttr(f.name)}"><img class="att-img" src="file.php?u=${encodeURIComponent(f.thumb)}" alt="${escAttr(f.name)}" loading="lazy"></a>`;
+      const dlA = `file.php?u=${encodeURIComponent(f.download||f.url)}&dl=1&name=${encodeURIComponent(f.name)}`;
+      return `<img class="att-img lb" src="file.php?u=${encodeURIComponent(f.thumb)}" data-full="file.php?u=${encodeURIComponent(f.url)}" data-dl="${escAttr(dlA)}" data-name="${escAttr(f.name)}" alt="${escAttr(f.name)}" loading="lazy" title="${escAttr(f.name)}">`;
     }
     const dl = `file.php?u=${encodeURIComponent(f.download||f.url)}&dl=1&name=${encodeURIComponent(f.name)}`;
     return `<a class="att-file" href="${dl}" rel="noopener">📎 <span>${esc(f.name)}</span>${f.size?`<span class="sz">${fmtSize(f.size)}</span>`:""}</a>`;
@@ -479,8 +495,8 @@ function cmtHtml(list){
         <div class="cmt-h"><b style="color:${col.fg}">${esc(c.author_name)}</b><span class="cmt-t">${esc(c.created_at)}</span></div>
         ${c.body ? `<div class="cmt-b">${mrkdwn(c.body)}</div>` : ''}
         ${(c.files&&c.files.length) ? `<div class="cmt-files">${c.files.map(f=>f.is_image
-            ? `<a href="file.php?u=${encodeURIComponent(f.url)}" target="_blank" rel="noopener"><img class="cmt-img" src="file.php?u=${encodeURIComponent(f.thumb)}" alt="${escAttr(f.name)}" loading="lazy"></a>`
-            : `<a class="cmt-filedl" href="file.php?u=${encodeURIComponent(f.url)}" target="_blank" rel="noopener">📎 ${esc(f.name)}</a>`
+            ? `<img class="cmt-img lb" src="file.php?u=${encodeURIComponent(f.thumb)}" data-full="file.php?u=${encodeURIComponent(f.url)}" data-dl="file.php?u=${encodeURIComponent(f.url)}&dl=1&name=${encodeURIComponent(f.name)}" data-name="${escAttr(f.name)}" alt="${escAttr(f.name)}" loading="lazy" title="${escAttr(f.name)}">`
+            : `<a class="cmt-filedl" href="file.php?u=${encodeURIComponent(f.url)}&dl=1&name=${encodeURIComponent(f.name)}" rel="noopener">📎 ${esc(f.name)}</a>`
           ).join("")}</div>` : ''}
       </div>
     </div>`;
@@ -492,7 +508,7 @@ async function loadComments(id){
     cmtCache[id] = j.comments || [];
   }catch(e){ cmtCache[id] = []; }
   const box = document.getElementById("cmts-"+id);
-  if(box) box.innerHTML = cmtHtml(cmtCache[id]);
+  if(box){ box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box); }
 }
 async function postComment(id){
   const ed = document.getElementById("cin-"+id);
@@ -595,6 +611,20 @@ function bindRows(box){
   });
   box.querySelectorAll(".cmt-send").forEach(el=>{
     el.addEventListener("click", e=>{ e.stopPropagation(); postComment(el.dataset.id); });
+  });
+  bindLightbox(box);
+}
+
+/* 이미지 클릭 → 라이트박스 열기 (같은 묶음 내 이미지들로 슬라이드) */
+function bindLightbox(scope){
+  scope.querySelectorAll("img.lb").forEach(el=>{
+    el.addEventListener("click", e=>{
+      e.stopPropagation();
+      const group = el.closest(".atts-list, .cmt-files") || scope;
+      const nodes = [...group.querySelectorAll("img.lb")];
+      const imgs = nodes.map(x=>({ full:x.dataset.full, name:x.dataset.name||"", dl:x.dataset.dl||x.dataset.full }));
+      lbOpen(imgs, Math.max(0, nodes.indexOf(el)));
+    });
   });
 }
 
@@ -864,6 +894,45 @@ async function bgSync(){
   // 결과 반영은 pollStatus 가 changed_at 변화를 감지해 자동 처리
 }
 setInterval(bgSync, 60000);   // 60초마다 백그라운드 동기화
+
+/* ===== 이미지 라이트박스(모달 슬라이드) ===== */
+document.body.insertAdjacentHTML("beforeend", `
+  <div id="lightbox" role="dialog" aria-modal="true">
+    <button id="lb-close" title="닫기 (Esc)">✕</button>
+    <button class="lb-btn" id="lb-prev" title="이전 (←)">‹</button>
+    <button class="lb-btn" id="lb-next" title="다음 (→)">›</button>
+    <div class="lb-stage">
+      <img id="lb-img" src="" alt="">
+      <div class="lb-bar"><span id="lb-count"></span><span id="lb-name"></span><a id="lb-dl" href="#" title="원본 다운로드">⬇ 다운로드</a></div>
+    </div>
+  </div>`);
+let lbImgs=[], lbIdx=0;
+const _lb=()=>document.getElementById("lightbox");
+function lbOpen(imgs, idx){ lbImgs=imgs||[]; lbIdx=idx||0; if(!lbImgs.length) return; lbRender(); _lb().classList.add("open"); }
+function lbRender(){
+  const c=lbImgs[lbIdx]; if(!c) return;
+  const img=document.getElementById("lb-img"); img.src=c.full; img.alt=c.name||"";
+  document.getElementById("lb-count").textContent = lbImgs.length>1 ? ((lbIdx+1)+" / "+lbImgs.length) : "";
+  document.getElementById("lb-name").textContent = c.name||"";
+  document.getElementById("lb-dl").href = c.dl||c.full;
+  const multi=lbImgs.length>1;
+  document.getElementById("lb-prev").style.display = multi?"":"none";
+  document.getElementById("lb-next").style.display = multi?"":"none";
+}
+function lbNav(d){ if(lbImgs.length<2) return; lbIdx=(lbIdx+d+lbImgs.length)%lbImgs.length; lbRender(); }
+function lbClose(){ _lb().classList.remove("open"); }
+document.getElementById("lb-prev").addEventListener("click", e=>{ e.stopPropagation(); lbNav(-1); });
+document.getElementById("lb-next").addEventListener("click", e=>{ e.stopPropagation(); lbNav(1); });
+document.getElementById("lb-close").addEventListener("click", e=>{ e.stopPropagation(); lbClose(); });
+document.getElementById("lb-dl").addEventListener("click", e=>e.stopPropagation());
+document.getElementById("lb-img").addEventListener("click", e=>e.stopPropagation());
+_lb().addEventListener("click", e=>{ if(e.target.id==="lightbox") lbClose(); });
+document.addEventListener("keydown", e=>{
+  if(!_lb().classList.contains("open")) return;
+  if(e.key==="Escape") lbClose();
+  else if(e.key==="ArrowLeft") lbNav(-1);
+  else if(e.key==="ArrowRight") lbNav(1);
+});
 
 restoreFilters();  // 새로고침 전 필터 복원 (localStorage)
 restoreView();     // 미지정 분할/숨김 보기 토글 상태 복원
