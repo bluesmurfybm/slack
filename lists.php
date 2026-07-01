@@ -107,7 +107,8 @@ header('Pragma: no-cache');
   .body-card { font-size:13px; line-height:1.75; white-space:normal; word-break:break-word; color:var(--txt);
                background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
   /* 서식 렌더 공통 */
-  .body-card a, .cmt-b a { color:var(--info); }
+  .body-card a, .cmt-b a { color:#1a73e8; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
+  .body-card a:hover, .cmt-b a:hover { color:#0b57d0; }
   .body-card code, .cmt-b code { background:var(--bg2); border:1px solid var(--line); border-radius:4px; padding:0 4px; font-family:Consolas,monospace; font-size:12px; }
   .body-card pre, .cmt-b pre { background:var(--bg2); border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin:6px 0; overflow:auto; font-family:Consolas,monospace; font-size:12px; white-space:pre-wrap; }
   .links { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; align-items:center; }
@@ -132,6 +133,15 @@ header('Pragma: no-cache');
   .cmt-files { display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; }
   .cmt-img { max-width:180px; max-height:180px; border-radius:6px; border:1px solid var(--line); display:block; object-fit:cover; background:var(--bg2); }
   .cmt-filedl { font-size:12px; color:var(--info); text-decoration:none; border:1px solid var(--line); border-radius:6px; padding:3px 8px; }
+  /* 상세 본문 첨부파일 */
+  .atts { margin-top:10px; }
+  .atts-title { font-size:12px; font-weight:700; color:var(--muted); margin-bottom:6px; }
+  .atts-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .att-img { max-width:200px; max-height:200px; border-radius:8px; border:1px solid var(--line); display:block; object-fit:cover; background:var(--bg2); cursor:zoom-in; }
+  .att-file { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--txt); text-decoration:none;
+              border:1px solid var(--line); border-radius:8px; padding:6px 10px; background:var(--bg2); }
+  .att-file:hover { border-color:#1a73e8; color:#1a73e8; }
+  .att-file .sz { color:var(--hint); font-size:11px; }
   .cmt-loading,.cmt-empty { font-size:12px; color:var(--hint); padding:8px 0; }
   .cmt-form { flex:none; display:flex; flex-direction:column; gap:5px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); }
   .cmt-tb { display:flex; gap:3px; }
@@ -280,6 +290,12 @@ function mrkdwn(t){
   t = t.replace(/`([^`\n]+)`/g,function(m,c){ return stash('<code>'+unslack(esc(c))+'</code>'); });
   t = t.replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g,function(m,u,l){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(l))+'</a>'); });
   t = t.replace(/<(https?:\/\/[^>]+)>/g,function(m,u){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u))+'</a>'); });
+  // 마크업 없이 그대로 붙여넣은 URL 도 클릭 가능하게 (끝 문장부호는 링크에서 제외)
+  t = t.replace(/https?:\/\/[^\s<>]+/g,function(u){
+    // 끝의 문장부호 + 마크다운 마커(* _ ~ `)는 링크에서 제외(볼드/기울임 닫기와 충돌 방지)
+    var tail=''; var mt=u.match(/[*_~`)\]}.,;:!?]+$/); if(mt){ tail=mt[0]; u=u.slice(0,-tail.length); }
+    return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u))+'</a>')+tail;
+  });
   t = unslack(esc(t));
   t = t.replace(/\*(?!\s)([^*\n]+?)\*/g,'<b>$1</b>');
   t = t.replace(/_(?!\s)([^_\n]+?)_/g,'<i>$1</i>');
@@ -369,6 +385,7 @@ function rowHtml(r){
           ${r.edited_by?metaItem('최종수정', r.edited_by):''}
         </div>
         <div class="body-card">${mrkdwn(r.body)}</div>
+        ${attHtml(r.attachments)}
         <div class="links">
           ${LIST_URL?`<button type="button" class="slack-link copyLink" data-url="${esc(LIST_URL)}?record_id=${esc(r.id)}">링크 복사</button>`:''}
           ${r.momo?`<a href="${esc(r.momo)}" target="_blank" rel="noopener">모모 이슈</a>`:''}
@@ -437,6 +454,19 @@ function authorColor(name){            // 작성자 이름 → 고유 색상(HSL
   for(let i=0;i<s.length;i++) h=(h*31 + s.charCodeAt(i))>>>0;
   const hue=h%360;
   return { bg:`hsl(${hue} 68% 92%)`, fg:`hsl(${hue} 45% 35%)` };
+}
+function fmtSize(n){ if(!n) return ""; if(n<1024) return n+"B"; if(n<1048576) return Math.round(n/1024)+"KB"; return (n/1048576).toFixed(1)+"MB"; }
+/* 상세 본문 첨부파일: 이미지는 썸네일 미리보기(클릭 원본), 그 외는 다운로드 링크 */
+function attHtml(list){
+  if(!list || !list.length) return "";
+  const items = list.map(f=>{
+    if(f.is_image && f.thumb){
+      return `<a href="file.php?u=${encodeURIComponent(f.url)}" target="_blank" rel="noopener" title="${escAttr(f.name)}"><img class="att-img" src="file.php?u=${encodeURIComponent(f.thumb)}" alt="${escAttr(f.name)}" loading="lazy"></a>`;
+    }
+    const dl = `file.php?u=${encodeURIComponent(f.download||f.url)}&dl=1&name=${encodeURIComponent(f.name)}`;
+    return `<a class="att-file" href="${dl}" rel="noopener">📎 <span>${esc(f.name)}</span>${f.size?`<span class="sz">${fmtSize(f.size)}</span>`:""}</a>`;
+  }).join("");
+  return `<div class="atts"><div class="atts-title">📎 첨부파일 ${list.length}</div><div class="atts-list">${items}</div></div>`;
 }
 function cmtHtml(list){
   if(!list || !list.length) return '<div class="cmt-empty">아직 댓글이 없습니다.</div>';

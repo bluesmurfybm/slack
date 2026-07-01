@@ -63,10 +63,10 @@ foreach ($pdo->query("SELECT id FROM requests WHERE locked = 1") as $r) {
 $insertSql = "
     INSERT INTO requests
         (id, title, body, momo, lms, req_id, req, asg_id, asg, status_id, status, priority_id, priority, team_id, team,
-         `eta`, `date`, `done`, created, updated, synced_at)
+         `eta`, `date`, `done`, attachments, created, updated, synced_at)
     VALUES
         (:id, :title, :body, :momo, :lms, :req_id, :req, :asg_id, :asg, :status_id, :status, :priority_id, :priority, :team_id, :team,
-         :eta, :date, :done, :created, :updated, :synced_at)
+         :eta, :date, :done, :attachments, :created, :updated, :synced_at)
     ON DUPLICATE KEY UPDATE
         title=VALUES(title), body=VALUES(body), momo=VALUES(momo), lms=VALUES(lms),
         req_id=VALUES(req_id), req=VALUES(req), asg_id=VALUES(asg_id), asg=VALUES(asg),
@@ -74,6 +74,7 @@ $insertSql = "
         priority_id=VALUES(priority_id), priority=VALUES(priority),
         team_id=VALUES(team_id), team=VALUES(team),
         `eta`=VALUES(`eta`), `date`=VALUES(`date`), `done`=VALUES(`done`),
+        attachments=VALUES(attachments),
         updated=VALUES(updated), synced_at=VALUES(synced_at)
 ";
 $stmt = $pdo->prepare($insertSql);
@@ -110,6 +111,7 @@ foreach ($data['rows'] as $row) {
         ':eta'       => $row['eta'] ?: null,
         ':date'      => $row['date'] ?: null,
         ':done'      => $row['done'] ?: null,
+        ':attachments' => $row['attachments'] ?? null,
         ':created'   => $row['created'],
         ':updated'   => $row['updated'],
         ':synced_at' => $now,

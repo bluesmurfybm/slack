@@ -17,6 +17,7 @@ try {
         SELECT r.id, r.title, r.body, r.momo, r.lms, r.req_id, r.req, r.asg_id, r.asg,
                r.status_id, r.status, r.priority_id, r.priority, r.team_id, r.team, r.cmt_count,
                r.`eta`, r.`date`, r.`done`, r.created, r.updated, r.locked, r.edited_by, r.synced_at, r.updated_at,
+               r.ai_stars, r.ai_reason, r.ai_conf, r.attachments,
                (rd.request_id IS NOT NULL) AS is_read,
                (pn.request_id IS NOT NULL) AS is_pinned,
                (hd.request_id IS NOT NULL) AS is_hidden
@@ -38,6 +39,8 @@ try {
         $r['is_pinned'] = (int)$r['is_pinned'];
         $r['is_hidden'] = (int)$r['is_hidden'];
         $r['cmt_count'] = (int)$r['cmt_count'];
+        $r['ai_stars']  = $r['ai_stars'] !== null ? (int)$r['ai_stars'] : null;
+        $r['attachments'] = $r['attachments'] ? (json_decode($r['attachments'], true) ?: []) : [];
     }
     unset($r);
 

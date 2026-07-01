@@ -46,4 +46,10 @@ if (stripos((string)$ctype, 'text/html') !== false) {
 
 header('Content-Type: ' . ($ctype ?: 'application/octet-stream'));
 header('Cache-Control: private, max-age=3600');
+// 다운로드 모드: 파일명 지정해 첨부로 내려받기
+if (!empty($_GET['dl'])) {
+    $name = isset($_GET['name']) ? preg_replace('/[\r\n"\\\\\/]+/', '_', $_GET['name']) : 'download';
+    header('Content-Disposition: attachment; filename="' . $name . '"; filename*=UTF-8\'\'' . rawurlencode($_GET['name'] ?? $name));
+    header('Content-Length: ' . strlen($data));
+}
 echo $data;

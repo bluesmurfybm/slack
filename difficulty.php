@@ -104,14 +104,28 @@ header('Pragma: no-cache');
 
 <script>
 /* ===================== 난이도 규칙 (여기만 고치면 튜닝됨) =====================
- * 제목+본문에서 키워드를 찾아 점수를 합산하고, 담당팀/본문길이로 보정 후 1~5 별점으로 매핑.
- * pts 가 클수록 어려운 작업. easy 는 단순 운영성 작업이라 음수.
+ * 947건 AI 채점 라벨에서 "키워드별 평균 별점"을 뽑아 가중치로 역산한 데이터 기반 규칙.
+ * 기본 3점(보통)에서 시작해 제목+본문 키워드 가중치를 합산(각 키워드 1회) 후 반올림·1~5 클램프.
+ * pts = (해당 키워드 포함 요청들의 평균별점 - 3) 근사값. easy 작업일수록 큰 음수.
+ * 새 요청은 이 규칙으로 자동 채점되고, AI 채점값(ai_stars)이 있으면 그게 우선 적용됨.
  */
 const RULES = [
-  { pts:+3, label:"고난도(연동/개발)", words:["학사연동","연동","마이그레이션","이관","정합성","무한로딩","코어","커스터마이징","커스텀","대규모"] },
-  { pts:+2, label:"버그/복구/개선",    words:["복구","개발","개선","오류","에러","버그","불가","실패","안됨","안 됨","증상","현상","export","엑스포트","익스포트","변환","성적부","카테고리","동기화","검토","장애","깨짐","누락"] },
-  { pts:+1, label:"조사/규칙확인",      words:["규칙","권한","설정","표기","표시","뷰테이블","로그","가능여부","추출","모듈","데이터","집계","통계"] },
-  { pts:-2, label:"단순 운영작업",      words:["링크 생성","링크생성","로고","문구","텍스트","이미지","폐강","변경 요청","변경요청","삭제 요청","삭제요청","추출요청"] },
+  // ★5 급 핵심 고난도 (평균 3.8~4.1)
+  { pts:+1.5, label:"핵심 고난도",   words:["무한로딩","무한 로딩","정합성","마이그레이션"] },
+  // ★4 급: 복구·보안·DB오류·이관 (평균 3.5~4.0)
+  { pts:+1.0, label:"복구/보안/DB",  words:["복구","취약점","xss","asm","데이터베이스 쓰기","데이터베이스 읽기","db 쓰기","db 읽기","이관"] },
+  { pts:+0.7, label:"연동/배치/개발", words:["배치","크론","스케줄러","세션","동기화","신규 개발","챗봇","장바구니","합반","인코딩","변환","장애","뷰 생성","view 생성","커스터마이징","코어","대규모"] },
+  // 버그·오류류 (평균 3.3~3.7)
+  { pts:+0.4, label:"버그/오류",     words:["실패","오류","에러","버그","안됨","안 됨","불가","증상","현상","깨짐","누락","멈춤","튕김","api","성적부","플레이어"] },
+  // 약한 상향 (평균 3.0~3.3)
+  { pts:+0.2, label:"조사/검토",     words:["export","엑스포트","유사도","개선","조사","검토","집계","통계","권한","진도","재생","sso","500","504"] },
+  { pts:+0.1, label:"경미",          words:["로그","연동","데이터","모듈","가능여부","가능 여부"] },
+  // 단순 운영성 (평균 2.3~2.7) → 하향
+  { pts:-0.35, label:"단순 수정",    words:["수정","추가"] },
+  { pts:-1.0, label:"양식/문구/추출", words:["문구","팝업","추출","수료증","uuid","양식 추가","이수증","언어팩","일괄 변경","일괄변경","메뉴명"] },
+  // 매우 단순 (평균 1.0~1.9)
+  { pts:-1.6, label:"단순 운영작업",  words:["학사연동 지원","학사연동지원","삭제 요청","삭제요청","로고","배너","이미지 변경","파비콘","사이트명","전화번호","다운로드 링크"] },
+  { pts:-2.5, label:"단순 생성/치환", words:["링크 생성","링크생성","링크 변경","링크변경","문구 수정","문구수정","매뉴얼"] },
 ];
 const LEVELS = {
   5:{name:"매우 어려움", desc:"연동·개발·정합성 복구"},
@@ -142,23 +156,27 @@ function stars(n){ return "★★★★★".slice(0,n)+"☆☆☆☆☆".slice(0
 
 /* 핵심: 한 요청의 난이도 점수/별점/근거 계산 */
 function difficultyOf(r){
-  const text = ((r.title||"")+" "+(r.body||""));
-  let score = 0;
+  const text = ((r.title||"")+" "+(r.body||"")).toLowerCase();
+  let sum = 0;               // 기본 3점(보통) 대비 가감치 합
   const signals = [];
   RULES.forEach(rule=>{
     rule.words.forEach(w=>{
-      if(text.includes(w)){ score += rule.pts; signals.push({w, pts:rule.pts}); }
+      if(text.includes(w.toLowerCase())){ sum += rule.pts; signals.push({w, pts:rule.pts}); }
     });
   });
-  // 보정: 시스템개발팀(개발성) +1, 본문 길이(맥락 복잡도)
-  if(r.team==="시스템개발"){ score+=1; signals.push({w:"담당팀:시스템개발", pts:1}); }
+  // 미세 보정: 시스템개발팀(개발성) 소폭 상향, 본문 길이(맥락 복잡도)
+  if(r.team==="시스템개발"){ sum+=0.3; signals.push({w:"담당팀:시스템개발", pts:0.3}); }
   const blen = (r.body||"").length;
-  if(blen>=800){ score+=2; signals.push({w:"본문 매우 김", pts:2}); }
-  else if(blen>=400){ score+=1; signals.push({w:"본문 김", pts:1}); }
+  if(blen>=1200){ sum+=0.5; signals.push({w:"본문 매우 김", pts:0.5}); }
+  else if(blen>=600){ sum+=0.25; signals.push({w:"본문 김", pts:0.25}); }
 
-  // 점수 → 별점 매핑
-  let lvl;
-  if(score<=0) lvl=1; else if(score<=2) lvl=2; else if(score<=4) lvl=3; else if(score<=6) lvl=4; else lvl=5;
+  // 상·하한 클램프(장문/키워드 과다로 인한 과대·과소 채점 방지)
+  if(sum>1.4) sum=1.4; else if(sum<-2.2) sum=-2.2;
+
+  // 기본 3점 + 가감치 → 반올림 → 1~5 클램프
+  let lvl = Math.round(3 + sum);
+  if(lvl>5) lvl=5; else if(lvl<1) lvl=1;
+  const score = Math.round((3+sum)*10)/10;   // 표시용(소수1자리)
   return { score, lvl, signals };
 }
 
@@ -168,11 +186,15 @@ function matchBase(r){
          (!fstat.size || fstat.has(r.status));
 }
 
+/* 표시 난이도: AI 채점값 우선, 없으면 규칙기반 */
+function lvlOf(r){ return r.ai_stars ? r.ai_stars : r._diff.lvl; }
+const AITAG = '<span style="font-size:9px;background:var(--info-bg);color:var(--info);border-radius:4px;padding:0 4px;margin-left:3px;vertical-align:middle">AI</span>';
+
 function rowHtml(r){
-  const d=r._diff, open=openId===r.id;
+  const d=r._diff, lv=lvlOf(r), ai=!!r.ai_stars, open=openId===r.id;
   let html = `
     <div class="row" data-id="${esc(r.id)}">
-      <div class="rstars" title="${d.score}점">${stars(d.lvl)}</div>
+      <div class="rstars" title="${ai?('AI 채점 · 신뢰도 '+esc(r.ai_conf||'')):(d.score+'점(규칙)')}">${stars(lv)}${ai?AITAG:''}</div>
       <div class="names">${esc(r.req||'—')}</div>
       <div class="title">${esc(r.title)}</div>
       ${r.team?`<span class="st" style="background:${teamColor(r.team).bg};color:${teamColor(r.team).fg}">${esc(r.team)}</span>`:''}
@@ -180,12 +202,14 @@ function rowHtml(r){
       <div class="date">${fmtDate(r.created)}</div>
     </div>`;
   if(!open) return html;
-  const sigHtml = d.signals.length
-    ? d.signals.map(s=>`<span class="sig">${esc(s.w)} ${s.pts>0?'+':''}${s.pts}</span>`).join("")
-    : '<span class="sig">특이 키워드 없음</span>';
+  const why = ai
+    ? `<b>🤖 AI 난이도 ${stars(lv)} (${LEVELS[lv].name}) · 신뢰도 ${esc(r.ai_conf||'-')}</b><br><span class="sig">${esc(r.ai_reason||'')}</span>`
+    : `<b>난이도 ${stars(d.lvl)} (${LEVELS[d.lvl].name}) · 규칙 ${d.score}점</b><br>${
+        d.signals.length ? d.signals.map(s=>`<span class="sig">${esc(s.w)} ${s.pts>0?'+':''}${s.pts}</span>`).join("")
+                         : '<span class="sig">특이 키워드 없음</span>'}`;
   return html + `
     <div class="detail">
-      <div class="why"><b>난이도 ${stars(d.lvl)} (${LEVELS[d.lvl].name}) · 합계 ${d.score}점</b><br>${sigHtml}</div>
+      <div class="why">${why}</div>
       <div class="body-card">${unslack(esc(r.body||'(본문 없음)'))}</div>
       <div class="links">
         ${r.momo?`<a href="${esc(r.momo)}" target="_blank" rel="noopener">모모 이슈</a>`:''}
@@ -195,12 +219,12 @@ function rowHtml(r){
 }
 
 function render(){
-  const items = DATA.filter(matchBase).filter(r=>!fLevel || r._diff.lvl===fLevel);
+  const items = DATA.filter(matchBase).filter(r=>!fLevel || lvlOf(r)===fLevel);
   document.getElementById("count").textContent = items.length+"건";
 
-  // 요약 카드 (필터 무시한 전체 분포는 별도로? → 현재 필터 기준 분포)
+  // 요약 카드 (현재 필터 기준 분포, AI 우선 별점)
   const dist = {1:0,2:0,3:0,4:0,5:0};
-  DATA.filter(matchBase).forEach(r=>dist[r._diff.lvl]++);
+  DATA.filter(matchBase).forEach(r=>dist[lvlOf(r)]++);
   document.getElementById("summary").innerHTML = [5,4,3,2,1].map(lv=>`
     <div class="scard ${fLevel===lv?'active':''}" data-lv="${lv}">
       <div class="lv">${stars(lv)}</div>
@@ -213,7 +237,7 @@ function render(){
   if(!items.length){ board.innerHTML='<div class="err">표시할 항목이 없습니다.</div>'; bindCards(); return; }
   let html="";
   for(let lv=5; lv>=1; lv--){
-    const g = items.filter(r=>r._diff.lvl===lv).sort((a,b)=> (b._diff.score-a._diff.score) || (b.created-a.created));
+    const g = items.filter(r=>lvlOf(r)===lv).sort((a,b)=> (b.created-a.created));
     if(!g.length) continue;
     html += `<div class="group">
       <div class="ghead"><span class="stars">${stars(lv)}</span><span class="gname">${LEVELS[lv].name}</span><span class="gcnt">${g.length}건 · ${LEVELS[lv].desc}</span></div>
@@ -283,6 +307,7 @@ async function load(){
     document.getElementById("updated").textContent = "마지막 갱신: "+new Date().toLocaleTimeString("ko-KR");
   }catch(e){ document.getElementById("board").innerHTML='<div class="err">불러오기 실패</div>'; }
 }
+
 load();
 </script>
 </body>

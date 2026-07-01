@@ -73,6 +73,25 @@ function db() {
         $pdo->exec("ALTER TABLE `requests` ADD COLUMN `eta` DATE NULL AFTER `cmt_count`");
     }
 
+    // 난이도 채점 캐시 컬럼 (채점 결과 저장 · 있으면 difficulty.php 에서 규칙기반보다 우선 표시)
+    $aiCols = [
+        'ai_stars'     => "TINYINT UNSIGNED NULL COMMENT '난이도 별 1~5'",
+        'ai_reason'    => "VARCHAR(300) NULL COMMENT '난이도 근거'",
+        'ai_conf'      => "VARCHAR(10) NULL COMMENT '신뢰도 high/medium/low'",
+        'ai_hash'      => "CHAR(32) NULL COMMENT '채점 시점 제목+본문+팀 해시(변경 감지)'",
+        'ai_scored_at' => "DATETIME NULL COMMENT '채점 시각'",
+    ];
+    // 첨부파일 JSON 캐시 (Slack Lists attachment 필드의 파일 정보: 이름/URL/썸네일 등)
+    $aiCols['attachments'] = "MEDIUMTEXT NULL COMMENT '첨부파일 JSON 배열'";
+    foreach ($aiCols as $col => $def) {
+        $c = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
+                            WHERE TABLE_SCHEMA=? AND TABLE_NAME='requests' AND COLUMN_NAME=?");
+        $c->execute([$dbName, $col]);
+        if (!$c->fetchColumn()) {
+            $pdo->exec("ALTER TABLE `requests` ADD COLUMN `$col` $def");
+        }
+    }
+
     // 3) 동기화 워터마크 저장 (증분 동기화용)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `sync_meta` (

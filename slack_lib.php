@@ -17,6 +17,7 @@ const SLACK_COL = [
     'lms'      => 'Col08D95DP1EV',
     'date'     => 'Col08D95FV00Z',
     'done'     => 'Col08M7L9963A',
+    'attach'   => 'Col08CPRE07V4',   // 첨부파일 (파일ID 배열)
 ];
 
 /**
@@ -50,16 +51,28 @@ function slackSelectMaps($token, $listId, $sampleRecordId) {
 
 function slackGet($method, $token, $params) {
     $url = "https://slack.com/api/$method?" . http_build_query($params);
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token],
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_SSL_VERIFYPEER => false,
-    ]);
-    $res = json_decode(curl_exec($ch), true);
-    curl_close($ch);
-    return $res;
+    for ($try = 0; $try < 4; $try++) {
+        $retryAfter = 0;
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token],
+            CURLOPT_TIMEOUT        => 20,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$retryAfter) {
+                if (stripos($h, 'Retry-After:') === 0) $retryAfter = (int)trim(substr($h, 12));
+                return strlen($h);
+            },
+        ]);
+        $body = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($code == 429) { sleep($retryAfter > 0 ? $retryAfter : (1 << $try)); continue; }  // rate limit: 대기 후 재시도
+        $res = json_decode($body, true);
+        if (is_array($res)) return $res;          // 정상(ok=true) 또는 실제 에러(ok=false) 그대로 반환
+        sleep(1 << $try);                          // 빈/비정상 응답 → 백오프 후 재시도
+    }
+    return ['ok' => false, 'error' => 'ratelimited'];
 }
 
 function slackPost($method, $token, $fields) {
@@ -154,6 +167,129 @@ function slackFieldText($f)   { return isset($f['text']) ? $f['text'] : (isset($
 function slackFieldUser($f)   { return isset($f['user'][0])   ? $f['user'][0]   : null; }
 function slackFieldSelect($f) { return isset($f['select'][0]) ? $f['select'][0] : null; }
 function slackFieldDate($f)   { return isset($f['date'][0])   ? $f['date'][0]   : null; }
+function slackFieldAttach($f) { return isset($f['attachment']) && is_array($f['attachment']) ? $f['attachment'] : []; }
+
+/**
+ * 파일 ID 목록을 files.info 로 해석해 [fileId => {name,mime,size,is_image,url,download,thumb,permalink}] 반환.
+ * 파일 메타/URL 은 사실상 불변이므로 영구 캐시(파일 삭제 시에만 stale, 무시 가능).
+ */
+function slackResolveFiles($token, $fileIds) {
+    $cacheFile = sys_get_temp_dir() . '/slack_files_cache.json';
+    $cache = [];
+    if (is_file($cacheFile)) { $j = json_decode(file_get_contents($cacheFile), true); if (is_array($j)) $cache = $j; }
+    $missing = array_diff(array_unique(array_filter($fileIds)), array_keys($cache));
+    $changed = false; $sinceSave = 0;
+    foreach ($missing as $fid) {
+        $r = slackGet('files.info', $token, ['file' => $fid]);
+        if (!empty($r['ok']) && isset($r['file'])) {
+            $fl = $r['file'];
+            $mime = $fl['mimetype'] ?? '';
+            $cache[$fid] = [
+                'name'      => $fl['name'] ?? ($fl['title'] ?? $fid),
+                'mime'      => $mime,
+                'size'      => (int)($fl['size'] ?? 0),
+                'is_image'  => (strpos($mime, 'image/') === 0),
+                'url'       => $fl['url_private'] ?? '',
+                'download'  => $fl['url_private_download'] ?? ($fl['url_private'] ?? ''),
+                'thumb'     => $fl['thumb_360'] ?? ($fl['thumb_160'] ?? ($fl['url_private'] ?? '')),
+                'permalink' => $fl['permalink'] ?? '',
+            ];
+        } else {
+            // 삭제/접근불가 파일도 캐시(재조회 방지). 이름만 남김.
+            $cache[$fid] = ['name' => $fid, 'mime' => '', 'size' => 0, 'is_image' => false,
+                            'url' => '', 'download' => '', 'thumb' => '', 'permalink' => '', 'gone' => true];
+        }
+        $changed = true;
+        if (++$sinceSave >= 25) { @file_put_contents($cacheFile, json_encode($cache, JSON_UNESCAPED_UNICODE)); $sinceSave = 0; }  // 증분 저장(중단 대비)
+    }
+    if ($changed) @file_put_contents($cacheFile, json_encode($cache, JSON_UNESCAPED_UNICODE));
+    return $cache;
+}
+
+/* =========================================================================
+ * rich_text → Slack mrkdwn 복원 (링크 URL 보존)
+ * Lists 필드의 flat 'text' 는 하이퍼링크 URL 을 잃는다. 필드의 'rich_text'(블록 구조)를
+ * 파싱해 링크를 <url|표시텍스트> 형태로 복원한다. 다만 평문 재구성이 원본 'text' 와
+ * 정확히 일치할 때만 사용(불일치 시 안전하게 flat 'text' 폴백) → 절대 본문을 훼손하지 않음.
+ * ========================================================================= */
+function slackRtRoman($n){ $m=['i','ii','iii','iv','v','vi','vii','viii','ix','x','xi','xii']; return $m[$n-1] ?? (string)$n; }
+function slackRtStyle($x, $st){
+    if (!is_array($st)) return $x;
+    if (empty($st['code']) && empty($st['strike']) && empty($st['italic']) && empty($st['bold'])) return $x;
+    preg_match('/^(\s*)([\s\S]*?)(\s*)$/u', $x, $mm);   // 스타일 마커 밖으로 앞뒤 공백 이동
+    $lead = $mm[1] ?? ''; $core = $mm[2] ?? $x; $trail = $mm[3] ?? '';
+    if ($core === '') return $x;
+    if (!empty($st['code'])) return $lead.'`'.$core.'`'.$trail;
+    if (!empty($st['strike'])) $core = '~'.$core.'~';
+    if (!empty($st['italic'])) $core = '_'.$core.'_';
+    if (!empty($st['bold']))   $core = '*'.$core.'*';
+    return $lead.$core.$trail;
+}
+function slackRtEls($els, &$md, &$pl){
+    foreach ($els as $e) {
+        $t = $e['type'] ?? '';
+        if ($t === 'link') {
+            $u = $e['url'] ?? '';
+            $lbl = (isset($e['text']) && $e['text'] !== '') ? $e['text'] : $u;
+            $isHttp = (stripos($u, 'http://') === 0 || stripos($u, 'https://') === 0);
+            $md .= ($isHttp && empty($e['style']['unlink']))
+                 ? ('<' . $u . ($lbl !== $u ? '|' . $lbl : '') . '>')   // 클릭 가능한 링크
+                 : $lbl;                                                 // mailto/unlink → 평문
+            $pl .= $lbl;
+        } elseif ($t === 'emoji') { $x = ':'.($e['name'] ?? '').':'; $md .= $x; $pl .= $x; }
+        elseif ($t === 'user')  { $x = $e['text'] ?? ('<@'.($e['user_id'] ?? '').'>'); $md .= $x; $pl .= $x; }
+        else { $x = $e['text'] ?? ''; $s = slackRtStyle($x, $e['style'] ?? null); $md .= $s; $pl .= $s; }
+    }
+}
+function slackRtBlock($b, &$md, &$pl, &$st){
+    $t = $b['type'] ?? '';
+    if ($t === 'rich_text_section') { $st['ord'] = 0; slackRtEls($b['elements'] ?? [], $md, $pl); }
+    elseif ($t === 'rich_text_list') {
+        $style = $b['style'] ?? 'bullet'; $indent = (int)($b['indent'] ?? 0);
+        $q = ((int)($b['border'] ?? 0) >= 1) ? '> ' : '';          // border → 인용 리스트
+        $bul = $indent >= 2 ? '▪︎' : ($indent === 1 ? '◦' : '•');
+        $items = $b['elements'] ?? []; $n = count($items);
+        foreach ($items as $k => $sec) {
+            if ($style === 'ordered') {
+                if ($indent === 0) { $st['ord'] = ($st['ord'] ?? 0) + 1; $mark = $st['ord']; }   // 1. 2. 3.
+                elseif ($indent === 1) { $mark = chr(97 + ($k % 26)); }                          // a. b. c.
+                else { $mark = slackRtRoman($k + 1); }                                           // i. ii.
+                $pre = $q . str_repeat('    ', $indent) . $mark . '. ';
+            } else { $pre = $q . str_repeat('    ', $indent) . $bul . ' '; }
+            $sm = ''; $sp = ''; slackRtEls($sec['elements'] ?? [], $sm, $sp);
+            $md .= $pre . $sm; $pl .= $pre . $sp;
+            if ($k < $n - 1) { $md .= "\n"; $pl .= "\n"; }
+        }
+    }
+    elseif ($t === 'rich_text_preformatted') { $st['ord']=0; $sm=''; $sp=''; slackRtEls($b['elements'] ?? [], $sm, $sp); $md .= '```'.$sm.'```'; $pl .= '```'.$sm.'```'; }
+    elseif ($t === 'rich_text_quote') { $st['ord']=0; $sm=''; $sp=''; slackRtEls($b['elements'] ?? [], $sm, $sp); $md .= preg_replace('/^/m','> ',$sm); $pl .= preg_replace('/^/m','> ',$sp); }
+    else { slackRtEls($b['elements'] ?? [], $md, $pl); }
+}
+function slackRtParse($blocks){
+    $real = [];   // 최상위 type=rich_text 래퍼를 펼쳐 실제 블록만 모음
+    foreach ($blocks as $b) {
+        if (($b['type'] ?? '') === 'rich_text') { foreach ($b['elements'] ?? [] as $c) $real[] = $c; }
+        else $real[] = $b;
+    }
+    $md = ''; $pl = ''; $st = ['ord' => 0];
+    foreach ($real as $b) {
+        $bm = ''; $bp = ''; slackRtBlock($b, $bm, $bp, $st);
+        if ($pl !== '') {   // 블록 사이 개행 하나 보장
+            $prevNL = substr($pl, -1) === "\n";
+            $nextNL = ($bp !== '' && $bp[0] === "\n");
+            if (!$prevNL && !$nextNL) { $md .= "\n"; $pl .= "\n"; }
+        }
+        $md .= $bm; $pl .= $bp;
+    }
+    return [$md, $pl];
+}
+/** body 필드: 링크 보존 mrkdwn (평문 재구성이 원본 text 와 일치할 때만, 아니면 text 폴백) */
+function slackFieldBody($f){
+    $text = slackFieldText($f);
+    if (empty($f['rich_text']) || !is_array($f['rich_text'])) return $text;
+    list($md, $pl) = slackRtParse($f['rich_text']);
+    return (rtrim($pl) === rtrim($text)) ? $md : $text;
+}
 
 /**
  * Slack Lists 항목을 정규화된 행 배열로 변환.
@@ -168,6 +304,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0) {
 
     $rows = [];
     $userIds = [];
+    $allFileIds = [];
     $scanned = 0;
     $maxUpdated = 0;
     foreach ($data['items'] as $item) {
@@ -184,10 +321,14 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0) {
         $userIds[] = $reqId;
         $userIds[] = $asgId;
 
+        $fileIds = isset($m[SLACK_COL['attach']]) ? slackFieldAttach($m[SLACK_COL['attach']]) : [];
+        foreach ($fileIds as $fid) $allFileIds[] = $fid;
+
         $rows[] = [
+            '_fileIds'    => $fileIds,
             'id'          => isset($item['id']) ? $item['id'] : '',
             'title'       => isset($m[SLACK_COL['title']]) ? slackFieldText($m[SLACK_COL['title']]) : '(제목 없음)',
-            'body'        => isset($m[SLACK_COL['body']])  ? slackFieldText($m[SLACK_COL['body']])  : '',
+            'body'        => isset($m[SLACK_COL['body']])  ? slackFieldBody($m[SLACK_COL['body']])  : '',
             'momo'        => isset($m[SLACK_COL['momo']])  ? slackFieldText($m[SLACK_COL['momo']])  : '',
             'lms'         => isset($m[SLACK_COL['lms']])   ? slackFieldText($m[SLACK_COL['lms']])   : '',
             'req_id'      => $reqId,
@@ -211,12 +352,18 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0) {
     $teamMap     = $sel[SLACK_COL['team']]     ?? [];
 
     $names = slackResolveUsers($token, $userIds);
+    $files = slackResolveFiles($token, $allFileIds);   // 파일ID → 메타(영구 캐시)
     foreach ($rows as $i => $r) {
         $rows[$i]['req']      = $r['req_id'] ? (isset($names[$r['req_id']]) ? $names[$r['req_id']] : $r['req_id']) : '—';
         $rows[$i]['asg']      = $r['asg_id'] ? (isset($names[$r['asg_id']]) ? $names[$r['asg_id']] : $r['asg_id']) : '—';
         $rows[$i]['status']   = $r['status_id']   ? ($statusMap[$r['status_id']]     ?? $r['status_id'])   : '';
         $rows[$i]['priority'] = $r['priority_id'] ? ($priorityMap[$r['priority_id']] ?? $r['priority_id']) : '';
         $rows[$i]['team']     = $r['team_id']     ? ($teamMap[$r['team_id']]         ?? $r['team_id'])     : '';
+        // 첨부: 파일ID → 메타 배열(존재하는 것만), JSON 저장용
+        $atts = [];
+        foreach ($r['_fileIds'] as $fid) { if (isset($files[$fid]) && empty($files[$fid]['gone'])) $atts[] = $files[$fid]; }
+        $rows[$i]['attachments'] = $atts ? json_encode($atts, JSON_UNESCAPED_UNICODE) : null;
+        unset($rows[$i]['_fileIds']);
     }
 
     usort($rows, function($a, $b) { return $b['created'] - $a['created']; });
