@@ -52,6 +52,10 @@ header('Pragma: no-cache');
   button.primary { background:var(--info); color:#fff; border-color:var(--info); }
   .listhead { display:flex; align-items:center; gap:10px; padding:9px 16px; border:1px solid var(--line); border-bottom:0; border-radius:12px 12px 0 0; background:var(--bg2); font-size:12px; color:var(--muted); }
   #selInfo { user-select:none; }
+  /* 선택 액션(항목 체크 시에만 표시) */
+  .sel-actions { display:inline-flex; align-items:center; gap:6px; margin-left:6px; padding-left:10px; border-left:1px solid var(--line); }
+  .sel-actions[hidden] { display:none; }
+  .sel-actions button { height:24px; padding:0 10px; font-size:12px; }
   .listbox { border:1px solid var(--line); border-radius:0 0 12px 12px; overflow:hidden; background:var(--bg); }
   .cols { display:flex; gap:16px; align-items:flex-start; }
   .col { flex:1; min-width:0; }
@@ -179,23 +183,21 @@ header('Pragma: no-cache');
   <div class="head">
     <h1>📥 유지보수 요청 <span class="badge" id="count"></span></h1>
     <div class="filters">
-      <div class="ms" id="msPriority"></div>
-      <div class="ms" id="msTeam"></div>
-      <div class="ms" id="msStatus"></div>
-      <div class="ms" id="msAsg"></div>
-      <button id="reset" type="button">필터 초기화</button>
+      <button id="toggleUn" type="button">미지정 숨기기</button>
+      <button id="toggleHidden" type="button">숨김 보기</button>
+      <a href="difficulty.php"><button type="button">⭐ 난이도 분석</button></a>
+      <button id="sync">동기화</button>
+      <a href="logout.php"><button type="button">로그아웃</button></a>
     </div>
   </div>
   <div class="toolbar">
     <span class="who"><?= htmlspecialchars($me['name'], ENT_QUOTES) ?> 님</span>
     <input id="search" type="text" placeholder="검색…" style="width:120px;">
-    <button id="readSel" type="button">선택 읽음</button>
-    <button id="unreadSel" type="button">선택 안읽음</button>
-    <button id="toggleUn" type="button">미지정 숨기기</button>
-    <button id="toggleHidden" type="button">숨김 보기</button>
-    <a href="difficulty.php"><button type="button">⭐ 난이도 분석</button></a>
-    <button id="sync">동기화</button>
-    <a href="logout.php"><button type="button">로그아웃</button></a>
+    <div class="ms" id="msPriority"></div>
+    <div class="ms" id="msTeam"></div>
+    <div class="ms" id="msStatus"></div>
+    <div class="ms" id="msAsg"></div>
+    <button id="reset" type="button">필터 초기화</button>
   </div>
   <div class="cols">
     <div class="col" id="unpanel">
@@ -206,6 +208,11 @@ header('Pragma: no-cache');
       <div class="listhead">
         <input type="checkbox" id="selAll" class="chk">
         <span id="selInfo">전체 선택</span>
+        <span id="selActions" class="sel-actions" hidden>
+          <button id="readSel" type="button" class="primary">읽음</button>
+          <button id="unreadSel" type="button">안읽음</button>
+          <button id="clearSel" type="button">선택 해제</button>
+        </span>
       </div>
       <div id="list" class="listbox">불러오는 중…</div>
     </div>
@@ -575,6 +582,7 @@ function bindRows(box){
     el.addEventListener("change", e=>{
       if(e.target.checked) selected.add(e.target.dataset.id);
       else selected.delete(e.target.dataset.id);
+      updateSelUI();   // 체크 즉시 액션 버튼 노출/숨김
     });
   });
   box.querySelectorAll(".edit-status").forEach(el=>{
@@ -647,6 +655,17 @@ function applyCmtSize(){
   if(list) list.addEventListener("mouseup",()=>localStorage.setItem(CMT_H_KEY, Math.round(list.getBoundingClientRect().height)));
 }
 
+/* 선택 UI만 갱신(리스트 재렌더 없이) — 체크 즉시 액션 버튼 노출 */
+function updateSelUI(items){
+  items = items || filteredItems();
+  const selAll = document.getElementById("selAll");
+  if(selAll) selAll.checked = items.length>0 && items.every(r=>selected.has(r.id));
+  const info = document.getElementById("selInfo");
+  if(info) info.textContent = selected.size>0 ? `${selected.size}개 선택됨` : "전체 선택";
+  const acts = document.getElementById("selActions");
+  if(acts) acts.hidden = selected.size === 0;
+}
+
 function render(){
   const items = filteredItems();
   document.getElementById("count").textContent = items.length + "건";
@@ -655,8 +674,7 @@ function render(){
   // 탭 제목 배지: 안읽음 개수(숨김 제외)
   const uc = DATA.filter(r=>!r.is_read && !r.is_hidden).length;
   document.title = (uc>0 ? `(${uc}) ` : "") + "유지보수 요청";
-  document.getElementById("selAll").checked = items.length>0 && items.every(r=>selected.has(r.id));
-  document.getElementById("selInfo").textContent = selected.size>0 ? `${selected.size}개 선택됨` : "전체 선택";
+  updateSelUI(items);   // 선택 개수/액션 버튼/전체선택 체크 상태 갱신
   paint(document.getElementById("list"), items);
 
   if(splitOn){                                  // 미지정 패널(좌측)
@@ -882,6 +900,7 @@ document.getElementById("reset").addEventListener("click",()=>{
 });
 document.getElementById("readSel").addEventListener("click",()=>bulkRead(1));
 document.getElementById("unreadSel").addEventListener("click",()=>bulkRead(0));
+document.getElementById("clearSel").addEventListener("click",()=>{ selected.clear(); render(); });
 document.getElementById("toggleUn").addEventListener("click",()=>{
   splitOn = !splitOn;
   document.getElementById("unpanel").style.display = splitOn ? "" : "none";
