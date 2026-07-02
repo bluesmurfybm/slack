@@ -151,13 +151,22 @@ header('Pragma: no-cache');
   #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.86); z-index:9999; display:none; align-items:center; justify-content:center; }
   #lightbox.open { display:flex; }
   #lightbox .lb-stage { display:flex; flex-direction:column; align-items:center; gap:12px; }
-  #lb-img { max-width:92vw; max-height:82vh; object-fit:contain; border-radius:6px; box-shadow:0 10px 44px rgba(0,0,0,.55); background:#111; }
+  #lb-img { max-width:92vw; max-height:82vh; object-fit:contain; border-radius:6px; box-shadow:0 10px 44px rgba(0,0,0,.55); background:#111;
+            transform-origin:center center; transition:transform .12s ease; cursor:zoom-in; will-change:transform; }
+  #lb-img.zoomed { cursor:grab; }
+  #lb-img.dragging { cursor:grabbing; transition:none; }
+  /* 줌 컨트롤 */
+  #lightbox .lb-zoom { display:flex; align-items:center; gap:6px; }
+  #lightbox .lb-zoom button { background:rgba(255,255,255,.14); color:#fff; border:none; width:30px; height:28px;
+                              border-radius:7px; font-size:16px; line-height:1; cursor:pointer; }
+  #lightbox .lb-zoom button:hover { background:rgba(255,255,255,.28); }
+  #lightbox .lb-zoom #lb-zval { min-width:48px; text-align:center; color:#bbb; font-size:12px; }
   #lightbox .lb-bar { display:flex; align-items:center; gap:16px; color:#e8e8e8; font-size:13px; max-width:92vw; }
   #lightbox .lb-bar #lb-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #lightbox .lb-bar a { color:#7db4ff; text-decoration:none; font-weight:600; white-space:nowrap; }
-  .lb-btn { position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.14); color:#fff;
+  .lb-btn {z-index: 1; position:absolute; top:50%; transform:translateY(-50%); background:rgba(0,0,0,.14); color:#fff;
             border:none; font-size:36px; line-height:1; width:54px; height:70px; border-radius:10px; cursor:pointer; }
-  .lb-btn:hover { background:rgba(255,255,255,.28); }
+  .lb-btn:hover { background:rgba(0,0,0,.28); }
   #lb-prev { left:22px; } #lb-next { right:22px; }
   #lb-close { position:absolute; top:16px; right:22px; background:none; border:none; color:#fff; font-size:32px; line-height:1; cursor:pointer; }
   #lb-count { min-width:52px; text-align:center; color:#bbb; }
@@ -950,7 +959,14 @@ document.body.insertAdjacentHTML("beforeend", `
     <button class="lb-btn" id="lb-next" title="다음 (→)">›</button>
     <div class="lb-stage">
       <img id="lb-img" src="" alt="">
-      <div class="lb-bar"><span id="lb-count"></span><span id="lb-name"></span><a id="lb-dl" href="#" title="원본 다운로드">⬇ 다운로드</a></div>
+      <div class="lb-bar"><span id="lb-count"></span><span id="lb-name"></span>
+        <span class="lb-zoom">
+          <button id="lb-zout" type="button" title="축소 (−)">−</button>
+          <span id="lb-zval">100%</span>
+          <button id="lb-zin" type="button" title="확대 (+)">＋</button>
+          <button id="lb-zreset" type="button" title="원본 크기 (0)">⤢</button>
+        </span>
+        <a id="lb-dl" href="#" title="원본 다운로드">⬇ 다운로드</a></div>
     </div>
   </div>`);
 let lbImgs=[], lbIdx=0;
@@ -965,6 +981,7 @@ function lbRender(){
   const multi=lbImgs.length>1;
   document.getElementById("lb-prev").style.display = multi?"":"none";
   document.getElementById("lb-next").style.display = multi?"":"none";
+  lbZoomReset();   // 새 이미지로 바뀌면 확대 상태 초기화
 }
 function lbNav(d){ if(lbImgs.length<2) return; lbIdx=(lbIdx+d+lbImgs.length)%lbImgs.length; lbRender(); }
 function lbClose(){ _lb().classList.remove("open"); }
@@ -974,11 +991,68 @@ document.getElementById("lb-close").addEventListener("click", e=>{ e.stopPropaga
 document.getElementById("lb-dl").addEventListener("click", e=>e.stopPropagation());
 document.getElementById("lb-img").addEventListener("click", e=>e.stopPropagation());
 _lb().addEventListener("click", e=>{ if(e.target.id==="lightbox") lbClose(); });
+
+/* ---- 라이트박스 확대/축소 + 패닝 ---- */
+let lbScale=1, lbTx=0, lbTy=0, lbDrag=null;
+const LB_MIN=1, LB_MAX=8;
+function lbImg(){ return document.getElementById("lb-img"); }
+function lbApply(){
+  const img=lbImg();
+  img.style.transform = `translate(${lbTx}px, ${lbTy}px) scale(${lbScale})`;
+  img.classList.toggle("zoomed", lbScale>1);
+  const zv=document.getElementById("lb-zval"); if(zv) zv.textContent = Math.round(lbScale*100)+"%";
+}
+function lbZoomReset(){ lbScale=1; lbTx=0; lbTy=0; lbApply(); }
+function lbZoomAt(newScale, cx, cy){                 // 커서(cx,cy) 지점을 기준으로 확대/축소
+  newScale = Math.min(LB_MAX, Math.max(LB_MIN, newScale));
+  const rect=lbImg().getBoundingClientRect();
+  const layoutCX=rect.left+rect.width/2-lbTx, layoutCY=rect.top+rect.height/2-lbTy;   // 변형 전 중심
+  const relX=cx-layoutCX, relY=cy-layoutCY, k=newScale/lbScale;
+  lbTx = relX - (relX - lbTx)*k;
+  lbTy = relY - (relY - lbTy)*k;
+  lbScale = newScale;
+  if(lbScale<=LB_MIN){ lbTx=0; lbTy=0; }             // 100% 로 돌아오면 위치도 초기화
+  lbApply();
+}
+function lbZoomStep(factor){                          // 버튼/키: 화면 중앙 기준
+  const rect=lbImg().getBoundingClientRect();
+  lbZoomAt(lbScale*factor, rect.left+rect.width/2, rect.top+rect.height/2);
+}
+// 마우스 휠 확대/축소(커서 기준)
+lbImg().addEventListener("wheel", e=>{
+  e.preventDefault(); e.stopPropagation();
+  lbZoomAt(lbScale*(e.deltaY<0 ? 1.15 : 1/1.15), e.clientX, e.clientY);
+}, {passive:false});
+// 더블클릭: 1x ↔ 2x 토글
+lbImg().addEventListener("dblclick", e=>{
+  e.preventDefault(); e.stopPropagation();
+  if(lbScale>1) lbZoomReset(); else lbZoomAt(2, e.clientX, e.clientY);
+});
+// 확대 상태에서 드래그로 이동(pan)
+lbImg().addEventListener("mousedown", e=>{
+  if(lbScale<=1) return;
+  e.preventDefault();
+  lbDrag={x:e.clientX, y:e.clientY, tx:lbTx, ty:lbTy};
+  lbImg().classList.add("dragging");
+});
+window.addEventListener("mousemove", e=>{
+  if(!lbDrag) return;
+  lbTx=lbDrag.tx+(e.clientX-lbDrag.x); lbTy=lbDrag.ty+(e.clientY-lbDrag.y); lbApply();
+});
+window.addEventListener("mouseup", ()=>{ if(lbDrag){ lbDrag=null; lbImg().classList.remove("dragging"); } });
+// 줌 버튼
+document.getElementById("lb-zin").addEventListener("click", e=>{ e.stopPropagation(); lbZoomStep(1.25); });
+document.getElementById("lb-zout").addEventListener("click", e=>{ e.stopPropagation(); lbZoomStep(1/1.25); });
+document.getElementById("lb-zreset").addEventListener("click", e=>{ e.stopPropagation(); lbZoomReset(); });
+
 document.addEventListener("keydown", e=>{
   if(!_lb().classList.contains("open")) return;
   if(e.key==="Escape") lbClose();
   else if(e.key==="ArrowLeft") lbNav(-1);
   else if(e.key==="ArrowRight") lbNav(1);
+  else if(e.key==="+"||e.key==="=") { e.preventDefault(); lbZoomStep(1.25); }
+  else if(e.key==="-"||e.key==="_") { e.preventDefault(); lbZoomStep(1/1.25); }
+  else if(e.key==="0") lbZoomReset();
 });
 
 restoreFilters();  // 새로고침 전 필터 복원 (localStorage)
