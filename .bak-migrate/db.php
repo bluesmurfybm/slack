@@ -92,20 +92,6 @@ function db() {
         }
     }
 
-    // 여러 리스트 통합용: list_id/board 컬럼 + 기존 데이터 블루소프트로 백필
-    foreach (['list_id' => "VARCHAR(32) NULL COMMENT 'Slack 리스트 ID'",
-              'board'   => "VARCHAR(40) NOT NULL DEFAULT '' COMMENT '리스트 구분(블루소프트/와이오즈)'"] as $col => $def) {
-        $c = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
-                            WHERE TABLE_SCHEMA=? AND TABLE_NAME='requests' AND COLUMN_NAME=?");
-        $c->execute([$dbName, $col]);
-        if (!$c->fetchColumn()) {
-            $pdo->exec("ALTER TABLE `requests` ADD COLUMN `$col` $def");
-        }
-    }
-    // 백필: board 미설정 기존 행 = 블루소프트(현행 리스트)
-    $blueId = $cfg['list_id'];
-    $pdo->prepare("UPDATE requests SET list_id=?, board='블루소프트' WHERE board='' OR board IS NULL")->execute([$blueId]);
-
     // 3) 동기화 워터마크 저장 (증분 동기화용)
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `sync_meta` (
@@ -207,6 +193,47 @@ function db() {
             KEY `idx_assignee` (`assignee`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+
+    // 9) [테스트] 여러 리스트 통합 보관 (블루소프트 + 와이오즈). 운영 requests 와 분리.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `requests_test` (
+            `list_id`    VARCHAR(32)   NOT NULL COMMENT 'Slack 리스트 ID',
+            `board`      VARCHAR(40)   NOT NULL DEFAULT '' COMMENT '리스트 구분 라벨(블루소프트/와이오즈)',
+            `id`         VARCHAR(32)   NOT NULL COMMENT 'Slack 항목 ID',
+            `title`      VARCHAR(500)  NOT NULL DEFAULT '',
+            `body`       MEDIUMTEXT    NULL,
+            `momo`       VARCHAR(500)  NOT NULL DEFAULT '',
+            `lms`        VARCHAR(500)  NOT NULL DEFAULT '',
+            `req_id`     VARCHAR(32)   NULL,
+            `req`        VARCHAR(120)  NOT NULL DEFAULT '—',
+            `asg_id`     VARCHAR(32)   NULL,
+            `asg`        VARCHAR(120)  NOT NULL DEFAULT '—',
+            `status_id`  VARCHAR(32)   NULL,
+            `status`     VARCHAR(60)   NOT NULL DEFAULT '',
+            `priority_id` VARCHAR(32)  NULL,
+            `priority`   VARCHAR(40)   NOT NULL DEFAULT '',
+            `team_id`    VARCHAR(32)   NULL,
+            `team`       VARCHAR(60)   NOT NULL DEFAULT '',
+            `eta`        DATE          NULL,
+            `date`       DATE          NULL,
+            `done`       DATE          NULL,
+            `attachments` MEDIUMTEXT   NULL,
+            `cmt_count`  INT UNSIGNED  NOT NULL DEFAULT 0 COMMENT '댓글 수',
+            `created`    INT UNSIGNED  NOT NULL DEFAULT 0,
+            `updated`    INT UNSIGNED  NOT NULL DEFAULT 0,
+            `synced_at`  DATETIME      NULL,
+            PRIMARY KEY (`list_id`, `id`),
+            KEY `idx_board`   (`board`),
+            KEY `idx_created` (`created`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+    // 기존 requests_test 마이그레이션: cmt_count 없으면 추가
+    $hasCmtT = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
+                              WHERE TABLE_SCHEMA=? AND TABLE_NAME='requests_test' AND COLUMN_NAME='cmt_count'");
+    $hasCmtT->execute([$dbName]);
+    if (!$hasCmtT->fetchColumn()) {
+        $pdo->exec("ALTER TABLE `requests_test` ADD COLUMN `cmt_count` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `attachments`");
+    }
 
     return $pdo;
 }

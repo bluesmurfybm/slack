@@ -13,7 +13,21 @@ if (session_status() === PHP_SESSION_NONE) {
     if (is_dir($sessDir) && is_writable($sessDir)) {
         session_save_path($sessDir);   // 쓰기 가능할 때만 변경, 아니면 기본 경로 유지
     }
+    // 로그인 상태를 로그아웃 전까지 유지 (30일 슬라이딩 만료 — 방문할 때마다 갱신).
+    // slackAPI 전용(.sessions 별도 경로)이라 다른 사이트 세션엔 영향 없음.
+    $SESS_LIFETIME = 60 * 60 * 24 * 30;   // 30일
+    ini_set('session.gc_maxlifetime', $SESS_LIFETIME);   // 서버측 세션파일 만료도 동일하게 연장
+    session_set_cookie_params(['lifetime' => $SESS_LIFETIME, 'path' => '/']);
     session_start();
+    // 방문 시마다 쿠키 만료 갱신 → 계속 사용하면 로그아웃 전까지 유지
+    if (isset($_COOKIE[session_name()]) && !empty($_SESSION['slack_user'])) {
+        setcookie(session_name(), session_id(), [
+            'expires'  => time() + $SESS_LIFETIME,
+            'path'     => '/',
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
 }
 
 function current_user() {
@@ -82,5 +96,9 @@ function login_with_token($token) {
 
 function logout() {
     $_SESSION = [];
+    // 유지용 장기 쿠키도 삭제
+    if (isset($_COOKIE[session_name()])) {
+        setcookie(session_name(), '', ['expires' => time() - 42000, 'path' => '/']);
+    }
     if (session_status() === PHP_SESSION_ACTIVE) session_destroy();
 }

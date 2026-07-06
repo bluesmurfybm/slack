@@ -14,7 +14,7 @@ try {
     $uid  = current_user()['id'];
     // 현재 사용자 읽음 여부(is_read) 조인 + 안읽음 우선, 그다음 최신순
     $stmt = $pdo->prepare("
-        SELECT r.id, r.board, r.list_id, r.title, r.body, r.momo, r.lms, r.req_id, r.req, r.asg_id, r.asg,
+        SELECT r.id, r.title, r.body, r.momo, r.lms, r.req_id, r.req, r.asg_id, r.asg,
                r.status_id, r.status, r.priority_id, r.priority, r.team_id, r.team, r.cmt_count,
                r.`eta`, r.`date`, r.`done`, r.created, r.updated, r.locked, r.edited_by, r.synced_at, r.updated_at,
                r.ai_stars, r.ai_reason, r.ai_conf, r.attachments,

@@ -1,11 +1,10 @@
 <?php
 /**
- * Slack Lists → DB 증분 동기화.
- *  - items.list 는 created순 정렬이라 API 페이지네이션은 전체를 받지만,
- *    updated_timestamp 가 마지막 동기화 이후인 항목만 DB upsert (이름변환 비용 절감)
- *  - locked=1(로컬 수정) 항목은 보존
- *  전체 재스캔: ?full=1 (브라우저) 또는 CLI 인자 full
- *  호출: 브라우저(로그인 필요) 또는 CLI
+ * Slack Lists → DB 증분 동기화 (여러 리스트 통합: boards.php).
+ *  - 리스트별 증분 워터마크(list_updated_max_<listId>)
+ *  - locked=1(로컬 수정) 보존, 변경 항목은 user_reads 삭제(안읽음 복귀)
+ *  - 보드별 댓글 채널 스캔으로 cmt_count 갱신
+ *  전체 재스캔: ?full=1 또는 CLI 인자 full
  */
 require_once __DIR__ . '/slack_lib.php';
 require_once __DIR__ . '/db.php';
@@ -14,150 +13,129 @@ $isCli = (PHP_SAPI === 'cli');
 if (!$isCli) {
     require_once __DIR__ . '/auth.php';
     require_login();
-    session_release();   // 세션 잠금 즉시 해제(느린 Slack 동기화 동안 경합 방지)
+    session_release();
     header('Content-Type: application/json; charset=utf-8');
 }
 
-// 전체 재스캔 여부
-$full = $isCli
-    ? (isset($argv[1]) && $argv[1] === 'full')
-    : (isset($_GET['full']) && $_GET['full'] == '1');
+$full = $isCli ? (isset($argv[1]) && $argv[1] === 'full') : (isset($_GET['full']) && $_GET['full'] == '1');
 
-// 중복 실행 방지 잠금 (스케줄러 + 페이지 트리거 + 수동 버튼이 겹치지 않게)
 $lockFp = fopen(sys_get_temp_dir() . '/slackapi_sync.lock', 'c');
 if (!$lockFp || !flock($lockFp, LOCK_EX | LOCK_NB)) {
-    $msg = ['ok' => true, 'skipped' => 'locked'];   // 이미 다른 동기화 진행 중
-    echo $isCli ? "이미 동기화 진행 중 → 스킵\n" : json_encode($msg, JSON_UNESCAPED_UNICODE);
+    $m = ['ok' => true, 'skipped' => 'locked'];
+    echo $isCli ? "이미 동기화 진행 중 → 스킵\n" : json_encode($m, JSON_UNESCAPED_UNICODE);
     exit;
 }
-// $lockFp 는 스크립트 종료 시 자동 해제
 
-$cfg = require __DIR__ . '/config.php';
-$pdo = db();
-$now = date('Y-m-d H:i:s');
-
-// Slack 호출 토큰: 웹은 로그인 사용자 토큰(세션), CLI는 환경변수 SLACK_TOKEN
-$token = $isCli ? (getenv('SLACK_TOKEN') ?: '') : current_token();
+$cfg    = require __DIR__ . '/config.php';
+$boards = require __DIR__ . '/boards.php';
+$pdo    = db();
+$now    = date('Y-m-d H:i:s');
+$token  = $isCli ? (getenv('SLACK_TOKEN') ?: '') : current_token();
 if (!$token) {
     echo $isCli
-        ? "토큰 없음: 환경변수 SLACK_TOKEN 을 설정해 실행하세요 (예: SLACK_TOKEN=xoxp-... php sync.php)\n"
+        ? "토큰 없음: SLACK_TOKEN 환경변수 설정 후 실행\n"
         : json_encode(['ok' => false, 'error' => '로그인 토큰이 없습니다. 다시 로그인하세요.'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
-// ===== 리스트(레코드) 증분 동기화 =====
-$listSince = $full ? 0 : (int)meta_get('list_updated_max', 0);
-$data = slackFetchRows($token, $cfg['list_id'], $listSince);
-
-if (isset($data['error'])) {
-    echo json_encode(['ok' => false, 'error' => $data['error']], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-// locked 된 ID 목록 (로컬 수정 보존 대상)
 $locked = [];
-foreach ($pdo->query("SELECT id FROM requests WHERE locked = 1") as $r) {
-    $locked[$r['id']] = true;
-}
+foreach ($pdo->query("SELECT id FROM requests WHERE locked = 1") as $r) $locked[$r['id']] = true;
 
 $insertSql = "
     INSERT INTO requests
-        (id, title, body, momo, lms, req_id, req, asg_id, asg, status_id, status, priority_id, priority, team_id, team,
-         `eta`, `date`, `done`, attachments, created, updated, synced_at)
+        (id, list_id, board, title, body, momo, lms, req_id, req, asg_id, asg, status_id, status,
+         priority_id, priority, team_id, team, `eta`, `date`, `done`, attachments, created, updated, synced_at)
     VALUES
-        (:id, :title, :body, :momo, :lms, :req_id, :req, :asg_id, :asg, :status_id, :status, :priority_id, :priority, :team_id, :team,
-         :eta, :date, :done, :attachments, :created, :updated, :synced_at)
+        (:id,:list_id,:board,:title,:body,:momo,:lms,:req_id,:req,:asg_id,:asg,:status_id,:status,
+         :priority_id,:priority,:team_id,:team,:eta,:date,:done,:attachments,:created,:updated,:synced_at)
     ON DUPLICATE KEY UPDATE
-        title=VALUES(title), body=VALUES(body), momo=VALUES(momo), lms=VALUES(lms),
-        req_id=VALUES(req_id), req=VALUES(req), asg_id=VALUES(asg_id), asg=VALUES(asg),
-        status_id=VALUES(status_id), status=VALUES(status),
-        priority_id=VALUES(priority_id), priority=VALUES(priority),
-        team_id=VALUES(team_id), team=VALUES(team),
+        list_id=VALUES(list_id), board=VALUES(board), title=VALUES(title), body=VALUES(body),
+        momo=VALUES(momo), lms=VALUES(lms), req_id=VALUES(req_id), req=VALUES(req),
+        asg_id=VALUES(asg_id), asg=VALUES(asg), status_id=VALUES(status_id), status=VALUES(status),
+        priority_id=VALUES(priority_id), priority=VALUES(priority), team_id=VALUES(team_id), team=VALUES(team),
         `eta`=VALUES(`eta`), `date`=VALUES(`date`), `done`=VALUES(`done`),
-        attachments=VALUES(attachments),
-        updated=VALUES(updated), synced_at=VALUES(synced_at)
+        attachments=VALUES(attachments), updated=VALUES(updated), synced_at=VALUES(synced_at)
 ";
-$stmt = $pdo->prepare($insertSql);
+$stmt     = $pdo->prepare($insertSql);
 $prevStmt = $pdo->prepare("SELECT `updated` FROM requests WHERE id = ?");
 
-$inserted = 0; $updated = 0; $skipped = 0;
-$changedIds = [];   // 실제 갱신된 항목 → 읽음 기록 초기화(다시 안읽음) 대상
-foreach ($data['rows'] as $row) {
-    if (isset($locked[$row['id']])) { $skipped++; continue; }
+$inserted = 0; $updated = 0; $skipped = 0; $scanned = 0;
+$changedIds = []; $errors = [];
 
-    // 실제 변경 판정: 신규거나, Slack updated_timestamp 가 저장값보다 클 때만 '변경'
-    $prevStmt->execute([$row['id']]);
-    $prev = $prevStmt->fetchColumn();           // 없으면 false
-    if ($prev === false)                 { $inserted++; }
-    elseif ((int)$row['updated'] > (int)$prev) { $updated++; $changedIds[] = $row['id']; }
-    // else: 경계 항목 등 실제 변화 없음 → 카운트 안 함(upsert는 synced_at 갱신 위해 그대로 수행)
+foreach ($boards as $listId => $b) {
+    $since = $full ? 0 : (int)meta_get('list_updated_max_' . $listId, 0);
+    $data  = slackFetchRows($token, $listId, $since, $b['col']);
+    if (isset($data['error'])) { $errors[$b['label']] = $data['error']; continue; }
+    $scanned += $data['scanned'] ?? count($data['rows']);
 
-    $stmt->execute([
-        ':id'        => $row['id'],
-        ':title'     => $row['title'],
-        ':body'      => $row['body'],
-        ':momo'      => $row['momo'],
-        ':lms'       => $row['lms'],
-        ':req_id'    => $row['req_id'],
-        ':req'       => $row['req'],
-        ':asg_id'    => $row['asg_id'],
-        ':asg'       => $row['asg'],
-        ':status_id'   => $row['status_id'],
-        ':status'      => $row['status'],
-        ':priority_id' => $row['priority_id'],
-        ':priority'    => $row['priority'],
-        ':team_id'     => $row['team_id'],
-        ':team'        => $row['team'],
-        ':eta'       => $row['eta'] ?: null,
-        ':date'      => $row['date'] ?: null,
-        ':done'      => $row['done'] ?: null,
-        ':attachments' => $row['attachments'] ?? null,
-        ':created'   => $row['created'],
-        ':updated'   => $row['updated'],
-        ':synced_at' => $now,
-    ]);
+    foreach ($data['rows'] as $row) {
+        // 제목 없는 항목 제외 (보드 설정)
+        if (!empty($b['skip_empty_title'])) {
+            $t = trim((string)$row['title']);
+            if ($t === '' || $t === '(제목 없음)') continue;
+        }
+        // 고객사(momo 슬롯 캡처) → 제목 앞 [고객사], momo 슬롯은 비움
+        if (!empty($b['title_customer'])) {
+            $cust = trim((string)($row['momo'] ?? ''));
+            if ($cust !== '') $row['title'] = '[' . $cust . '] ' . $row['title'];
+            $row['momo'] = '';
+        }
+
+        if (isset($locked[$row['id']])) { $skipped++; continue; }
+
+        $prevStmt->execute([$row['id']]);
+        $prev = $prevStmt->fetchColumn();
+        if ($prev === false)                       { $inserted++; }
+        elseif ((int)$row['updated'] > (int)$prev) { $updated++; $changedIds[] = $row['id']; }
+
+        $stmt->execute([
+            ':id' => $row['id'], ':list_id' => $listId, ':board' => $b['label'],
+            ':title' => $row['title'], ':body' => $row['body'], ':momo' => $row['momo'], ':lms' => $row['lms'],
+            ':req_id' => $row['req_id'], ':req' => $row['req'], ':asg_id' => $row['asg_id'], ':asg' => $row['asg'],
+            ':status_id' => $row['status_id'], ':status' => $row['status'],
+            ':priority_id' => $row['priority_id'], ':priority' => $row['priority'],
+            ':team_id' => $row['team_id'], ':team' => $row['team'],
+            ':eta' => $row['eta'] ?: null, ':date' => $row['date'] ?: null, ':done' => $row['done'] ?: null,
+            ':attachments' => $row['attachments'] ?? null,
+            ':created' => $row['created'], ':updated' => $row['updated'], ':synced_at' => $now,
+        ]);
+    }
+    if (!empty($data['maxUpdated'])) meta_set('list_updated_max_' . $listId, $data['maxUpdated']);
 }
-// 다음 증분 기준 = 이번에 본 최대 updated_timestamp
-if (!empty($data['maxUpdated'])) meta_set('list_updated_max', $data['maxUpdated']);
 
-// 갱신된 항목은 모든 사용자에게 다시 '안읽음'으로 (읽음 기록 삭제)
+// 변경 항목 → 모든 사용자 안읽음 복귀
 if ($changedIds) {
     $ph = implode(',', array_fill(0, count($changedIds), '?'));
     $pdo->prepare("DELETE FROM user_reads WHERE request_id IN ($ph)")->execute($changedIds);
 }
 
-// 댓글 수 스캔 (비용 큼) — 전체동기화이거나 마지막 스캔 5분 경과 시에만
-$cmtCh = $cfg['comment_channel'] ?? '';
-if ($cmtCh !== '' && ($full || (time() - (int)meta_get('cmt_scan_at', 0)) >= 300)) {
-    $cc = slackCommentCounts($token, $cmtCh);
-    if (empty($cc['error'])) {
-        $pdo->exec("UPDATE requests SET cmt_count = 0");
+// 댓글 수 스캔 (보드별 채널) — 전체이거나 5분 경과 시
+if ($full || (time() - (int)meta_get('cmt_scan_at', 0)) >= 300) {
+    $anyCmt = false;
+    foreach ($boards as $listId => $b) {
+        $chn = $b['comment_channel']; if ($chn === '') continue;
+        $cc = slackCommentCounts($token, $chn);
+        if (!empty($cc['error'])) { $errors['댓글수:' . $b['label']] = $cc['error']; continue; }
+        $pdo->prepare("UPDATE requests SET cmt_count = 0 WHERE list_id = ?")->execute([$listId]);
         $cu = $pdo->prepare("UPDATE requests SET cmt_count = ? WHERE id = ?");
         foreach ($cc['counts'] as $rid => $n) { if ($n > 0) $cu->execute([$n, $rid]); }
-        meta_set('cmt_scan_at', time());
-        meta_set('data_changed_at', time());   // 댓글 수 변동 → 화면 새로고침 트리거
+        $anyCmt = true;
     }
+    if ($anyCmt) { meta_set('cmt_scan_at', time()); meta_set('data_changed_at', time()); }
 }
 
-// 완료시각 기록. 실제 변경이 있을 때만 data_changed_at 갱신(화면 자동 새로고침 트리거)
 $completed = time();
 meta_set('last_synced_at', $completed);
 if (($inserted + $updated) > 0) meta_set('data_changed_at', $completed);
 
-$result = [
-    'ok'       => true,
-    'mode'     => $full ? 'full' : 'incremental',
-    'scanned'  => isset($data['scanned']) ? $data['scanned'] : count($data['rows']),
-    'changed'  => $inserted + $updated,   // 실제 변경(신규+갱신) 건수
-    'inserted' => $inserted,
-    'updated'  => $updated,
-    'skipped'  => $skipped,   // 로컬 수정 보존
-    'synced_at'=> $now,
-];
+$result = ['ok' => true, 'mode' => $full ? 'full' : 'incremental', 'scanned' => $scanned,
+           'changed' => $inserted + $updated, 'inserted' => $inserted, 'updated' => $updated,
+           'skipped' => $skipped, 'errors' => $errors, 'synced_at' => $now];
 
 if ($isCli) {
-    echo "[{$result['mode']}] 스캔 {$result['scanned']}건 중 변경 {$result['changed']}건 "
-       . "(신규 {$inserted}, 갱신 {$updated}, 보존 {$skipped})\n";
+    echo "[{$result['mode']}] 스캔 {$scanned} 변경 " . ($inserted + $updated)
+       . " (신규 {$inserted} 갱신 {$updated} 보존 {$skipped})"
+       . ($errors ? " 오류:" . json_encode($errors, JSON_UNESCAPED_UNICODE) : "") . "\n";
 } else {
     echo json_encode($result, JSON_UNESCAPED_UNICODE);
 }

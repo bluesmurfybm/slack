@@ -450,7 +450,7 @@ async function load(){
     const res = await fetch("data.php",{cache:"no-store"});
     const json = await res.json();
     if(json.error){ document.getElementById("board").innerHTML='<div class="err">에러: '+esc(json.error)+'</div>'; return; }
-    DATA = (json.rows||[]).filter(r => r.board === '블루소프트' || !r.board);   // 난이도·배정은 블루소프트만
+    DATA = json.rows||[];
     DATA.forEach(r=>r._diff = difficultyOf(r));   // 난이도 1회 계산(데이터 갱신 시 재계산)
     await loadAssignments();                       // 로컬 배정 로드
     buildAllMS(); renderAssignPanel(); render();

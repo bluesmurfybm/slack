@@ -298,7 +298,8 @@ function slackFieldBody($f){
  * @param int $sinceUpdated 0이면 전체, >0이면 updated_timestamp 가 이 값 이상인 항목만 처리(증분)
  * @return array ['rows'=>[...], 'scanned'=>int, 'maxUpdated'=>int] 또는 ['error'=>'...']
  */
-function slackFetchRows($token, $listId, $sinceUpdated = 0) {
+function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
+    $COL = $colMap ?: SLACK_COL;   // 리스트별 컬럼 매핑(미지정 시 기본=블루소프트)
     $data = slackFetchItems($token, $listId);
     if (isset($data['error'])) return $data;
 
@@ -316,29 +317,29 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0) {
 
         $m = slackIndexFields(isset($item['fields']) ? $item['fields'] : []);
 
-        $reqId = isset($m[SLACK_COL['req']]) ? slackFieldUser($m[SLACK_COL['req']]) : null;
-        $asgId = isset($m[SLACK_COL['asg']]) ? slackFieldUser($m[SLACK_COL['asg']]) : null;
+        $reqId = isset($m[$COL['req']]) ? slackFieldUser($m[$COL['req']]) : null;
+        $asgId = isset($m[$COL['asg']]) ? slackFieldUser($m[$COL['asg']]) : null;
         $userIds[] = $reqId;
         $userIds[] = $asgId;
 
-        $fileIds = isset($m[SLACK_COL['attach']]) ? slackFieldAttach($m[SLACK_COL['attach']]) : [];
+        $fileIds = isset($m[$COL['attach']]) ? slackFieldAttach($m[$COL['attach']]) : [];
         foreach ($fileIds as $fid) $allFileIds[] = $fid;
 
         $rows[] = [
             '_fileIds'    => $fileIds,
             'id'          => isset($item['id']) ? $item['id'] : '',
-            'title'       => isset($m[SLACK_COL['title']]) ? slackFieldText($m[SLACK_COL['title']]) : '(제목 없음)',
-            'body'        => isset($m[SLACK_COL['body']])  ? slackFieldBody($m[SLACK_COL['body']])  : '',
-            'momo'        => isset($m[SLACK_COL['momo']])  ? slackFieldText($m[SLACK_COL['momo']])  : '',
-            'lms'         => isset($m[SLACK_COL['lms']])   ? slackFieldText($m[SLACK_COL['lms']])   : '',
+            'title'       => isset($m[$COL['title']]) ? slackFieldText($m[$COL['title']]) : '(제목 없음)',
+            'body'        => isset($m[$COL['body']])  ? slackFieldBody($m[$COL['body']])  : '',
+            'momo'        => isset($m[$COL['momo']])  ? slackFieldText($m[$COL['momo']])  : '',
+            'lms'         => isset($m[$COL['lms']])   ? slackFieldText($m[$COL['lms']])   : '',
             'req_id'      => $reqId,
             'asg_id'      => $asgId,
-            'status_id'   => isset($m[SLACK_COL['status']])   ? slackFieldSelect($m[SLACK_COL['status']])   : null,
-            'priority_id' => isset($m[SLACK_COL['priority']]) ? slackFieldSelect($m[SLACK_COL['priority']]) : null,
-            'team_id'     => isset($m[SLACK_COL['team']])     ? slackFieldSelect($m[SLACK_COL['team']])     : null,
-            'date'        => isset($m[SLACK_COL['date']]) ? slackFieldDate($m[SLACK_COL['date']]) : null,
-            'done'        => isset($m[SLACK_COL['done']]) ? slackFieldDate($m[SLACK_COL['done']]) : null,
-            'eta'         => isset($m[SLACK_COL['eta']])  ? slackFieldDate($m[SLACK_COL['eta']])  : null,
+            'status_id'   => isset($m[$COL['status']])   ? slackFieldSelect($m[$COL['status']])   : null,
+            'priority_id' => isset($m[$COL['priority']]) ? slackFieldSelect($m[$COL['priority']]) : null,
+            'team_id'     => isset($m[$COL['team']])     ? slackFieldSelect($m[$COL['team']])     : null,
+            'date'        => isset($m[$COL['date']]) ? slackFieldDate($m[$COL['date']]) : null,
+            'done'        => isset($m[$COL['done']]) ? slackFieldDate($m[$COL['done']]) : null,
+            'eta'         => isset($m[$COL['eta']])  ? slackFieldDate($m[$COL['eta']])  : null,
             'created'     => isset($item['date_created']) ? (int)$item['date_created'] : 0,
             'updated'     => isset($item['updated_timestamp']) ? (int)$item['updated_timestamp'] : 0,
         ];
@@ -347,9 +348,9 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0) {
     // select 옵션 라벨 맵 (스키마에서 동적). 샘플 레코드 = 첫 아이템
     $sampleId = isset($data['items'][0]['id']) ? $data['items'][0]['id'] : null;
     $sel = slackSelectMaps($token, $listId, $sampleId);
-    $statusMap   = $sel[SLACK_COL['status']]   ?? [];
-    $priorityMap = $sel[SLACK_COL['priority']] ?? [];
-    $teamMap     = $sel[SLACK_COL['team']]     ?? [];
+    $statusMap   = $sel[$COL['status']]   ?? [];
+    $priorityMap = $sel[$COL['priority']] ?? [];
+    $teamMap     = $sel[$COL['team']]     ?? [];
 
     $names = slackResolveUsers($token, $userIds);
     $files = slackResolveFiles($token, $allFileIds);   // 파일ID → 메타(영구 캐시)

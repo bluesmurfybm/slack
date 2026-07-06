@@ -43,8 +43,6 @@ header('Pragma: no-cache');
   .ms-item:hover { background:var(--bg2); }
   .ms-item input { width:15px; height:15px; margin:0; cursor:pointer; }
   .ms-empty { font-size:12px; color:var(--muted); padding:6px 7px; }
-  .ms-sec { font-size:11px; font-weight:700; color:var(--info); padding:6px 7px 2px; border-top:1px solid var(--line); margin-top:2px; }
-  .ms-sec:first-child { border-top:0; margin-top:0; }
   .toolbar { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:14px; flex-wrap:wrap; }
   .badge { font-size:12px; color:var(--info); background:var(--info-bg); padding:2px 10px; border-radius:8px; }
   .who { font-size:12px; color:var(--muted); }
@@ -63,16 +61,6 @@ header('Pragma: no-cache');
   .col { flex:1; min-width:0; }
   .row { display:flex; align-items:center; gap:12px; padding:11px 16px; cursor:pointer; border-bottom:1px solid var(--line); }
   .row:hover { background:var(--bg2); }
-  /* 리스트(board) 구분 원형 뱃지 (요청자 이름 오른쪽, 전체 탭에서만) */
-  .bdot { flex:none; display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
-          border-radius:50%; font-size:12px; font-weight:700; }
-  .bdot.b { background:#6aa8ec; color:#fff; }   /* 블루소프트 = B (연한 파랑) */
-  .bdot.w { background:#5cc08a; color:#fff; }   /* 와이오즈 = W (연한 초록) */
-  /* 상단 리스트 탭 */
-  .btabs { display:flex; gap:8px; margin:0 auto 0 0; flex-wrap:wrap; }   /* 좌측 정렬(우측은 기존 필터) */
-  .btab { height:34px; padding:0 16px; border:1px solid var(--line); border-radius:18px; background:var(--bg); color:var(--muted); font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
-  .btab.on { border-color:var(--info); color:var(--info); background:var(--info-bg); font-weight:600; }
-  .btab-n { font-size:11px; background:var(--info); color:#fff; border-radius:9px; padding:0 6px; }
   /* 커스텀 체크박스 (둥근 초록 체크) */
   .chk { flex:none; appearance:none; -webkit-appearance:none; width:18px; height:18px; margin:0; padding:0;
          border:1.5px solid var(--line); border-radius:5px; background:var(--bg); cursor:pointer; position:relative; transition:all .12s; }
@@ -239,7 +227,6 @@ header('Pragma: no-cache');
     </div>
   </div>
   <div class="toolbar">
-    <div class="btabs" id="btabs"></div>
     <span class="who"><?= htmlspecialchars($me['name'], ENT_QUOTES) ?> 님</span>
     <input id="search" type="text" placeholder="검색…" style="width:120px;">
     <div class="ms" id="msPriority"></div>
@@ -296,15 +283,10 @@ const PALETTE = {
   "완료":            {bg:"#e4f3e7", fg:"#1b5e20"},
   "보류":            {bg:"#f1efe8", fg:"#6b6b6b"},
   "처리불가":        {bg:"#f3e6e6", fg:"#9b2c2c"},
-  "시작 전":         {bg:"#eef0f2", fg:"#555c66"},
-  "상세설명필요":     {bg:"#e6f1fb", fg:"#0c447c"},
-  "재확인필요":       {bg:"#faeeda", fg:"#633806"},
-  "작업불가":         {bg:"#f3e6e6", fg:"#9b2c2c"},
   "기타":            {bg:"#f1efe8", fg:"#444441"}
 };
 const PRIORITY = {
   "긴급": {bg:"#fbe4e4", fg:"#b91c1c"},
-  "중요": {bg:"#fff0e0", fg:"#a85b00"},
   "일반": {bg:"#e6f1fb", fg:"#0c447c"}
 };
 function priColor(s){ return PRIORITY[s] || PRIORITY["일반"]; }
@@ -318,13 +300,7 @@ const TEAM = {
 };
 function teamColor(s){ return TEAM[s] || {bg:"#eceff1", fg:"#455a64"}; }
 let DATA = [], openId = null, filter = "";
-let fboardTab = "all";   // 상단 리스트 탭 (all/블루소프트/와이오즈)
-const BOARDS_F = ["블루소프트","와이오즈"];
-const BOARD_LABEL = { "블루소프트":"유비온", "와이오즈":"와이오즈" };   // 화면 표시용(내부값은 유지)
-function boardLabel(b){ return BOARD_LABEL[b] || b; }
-// 보드별 독립 필터: 블루소프트/와이오즈 값이 달라 각자 체크·적용
-function emptyFilt(){ return {"블루소프트":new Set(), "와이오즈":new Set()}; }
-let FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+let fpri = new Set(), fteam = new Set(), fstat = new Set(), fasg = new Set();   // 헤더 다중선택 필터(Set)
 let selected = new Set();                // 체크박스 선택 항목
 let splitOn = true;                       // 미지정 리스트 2분할 표시 여부(기본 표시)
 let cmtCache = {};                        // 레코드별 댓글 캐시(렌더 깜빡임 방지)
@@ -434,20 +410,16 @@ function htmlToMrkdwn(root){
 }
 function snip(b){ return (b||"").replace(/\s+/g," ").trim().slice(0,90); }
 
-/* 보드별 독립 필터 통과 여부: 해당 보드의 그 차원 Set 이 비면 미적용, 있으면 포함(OR) */
-function selPass(dim, field, r){ const s = FILT[dim][r.board]; return !s || s.size === 0 || s.has(r[field]); }
-function matchBase(r, withStatus){   // 검색 + (보드별)우선순위/담당팀 + 선택적으로 진행상태
+function matchBase(r, withStatus){   // 공통 필터 (검색/우선순위/담당팀 + 선택적으로 진행상태). Set 이 비면 미적용, 있으면 포함(OR)
   return (!filter || (r.title + r.body + r.req + r.asg).toLowerCase().includes(filter)) &&
-         (fboardTab === "all" || r.board === fboardTab) &&
-         selPass('priority','priority', r) &&
-         selPass('team','team', r) &&
-         (withStatus === false || selPass('status','status', r));
+         (!fpri.size  || fpri.has(r.priority)) &&
+         (!fteam.size || fteam.has(r.team)) &&
+         (withStatus === false || !fstat.size || fstat.has(r.status));
 }
 function visible(r){ return showHidden || !r.is_hidden; }   // 숨김 항목은 '숨김 보기'에서만
-function filteredItems(){   return DATA.filter(r => visible(r) && matchBase(r, true) && selPass('asg','asg', r)); }
+function filteredItems(){   return DATA.filter(r => visible(r) && matchBase(r, true) && (!fasg.size || fasg.has(r.asg))); }
 // 미지정 패널: 담당자·진행상태 필터는 적용하지 않음(항상 미지정 + 상태 '등록'만)
-const INIT_STATUS = { "블루소프트":"등록", "와이오즈":"시작 전" };   // 보드별 '미지정 대상' 초기상태
-function unassignedItems(){ return DATA.filter(r => visible(r) && matchBase(r, false) && (!r.asg || r.asg === '—') && r.status === (INIT_STATUS[r.board] || '등록')); }
+function unassignedItems(){ return DATA.filter(r => visible(r) && matchBase(r, false) && (!r.asg || r.asg === '—') && r.status === '등록'); }
 
 function rowHtml(r){
   const p = pal(r.status), open = openId === r.id, unread = !r.is_read;
@@ -456,7 +428,6 @@ function rowHtml(r){
       <input type="checkbox" class="chk" data-id="${esc(r.id)}" ${selected.has(r.id)?'checked':''}>
       <div class="pinBtn doPin${r.is_pinned?' on':''}" data-id="${esc(r.id)}" data-pin="${r.is_pinned?0:1}" title="${r.is_pinned?'고정 해제':'상단 고정'}">📌</div>
       <div class="names">${esc(r.req||'—')}${r.asg && r.asg!=='—' ? `, ${esc(r.asg)}` : ''}</div>
-      ${fboardTab==="all" && r.board ? `<span class="bdot ${r.board==='와이오즈'?'w':'b'}" title="${esc(boardLabel(r.board))}">${r.board==='와이오즈'?'W':'U'}</span>` : ''}
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px">
           ${r.priority?`<span class="st" style="flex:none;background:${priColor(r.priority).bg};color:${priColor(r.priority).fg}">${esc(r.priority)}</span>`:''}
@@ -477,10 +448,10 @@ function rowHtml(r){
     <div class="detail${showCmts?' with-cmts':''}">
       <div class="detail-main">
         <div class="meta">
-          <div class="mi"><span class="ml">진행상태</span><select class="edit-status" data-id="${esc(r.id)}">${statusEditOptions(r.status, r.board)}</select></div>
+          <div class="mi"><span class="ml">진행상태</span><select class="edit-status" data-id="${esc(r.id)}">${statusEditOptions(r.status)}</select></div>
           <div class="mi"><span class="ml">담당자</span><select class="edit-asg" data-id="${esc(r.id)}">${asgEditOptions(r.asg_id)}</select></div>
           ${metaItem('요청일', r.date?fmtYmd(r.date):fmtDate(r.created))}
-          ${r.board!=="와이오즈"?`<div class="mi"><span class="ml">예상완료일</span><input type="date" class="edit-eta" data-id="${esc(r.id)}" value="${esc(r.eta||'')}"></div>`:''}
+          <div class="mi"><span class="ml">예상완료일</span><input type="date" class="edit-eta" data-id="${esc(r.id)}" value="${esc(r.eta||'')}"></div>
           ${r.done?metaItem('완료일', fmtYmd(r.done)):''}
           ${metaItem('갱신', fmtDT(r.updated))}
           ${r.edited_by?metaItem('최종수정', r.edited_by):''}
@@ -518,13 +489,9 @@ function rowHtml(r){
 function metaItem(label, val){
   return `<div class="mi"><span class="ml">${esc(label)}</span><span class="mv">${esc(val)}</span></div>`;
 }
-/* 진행상태 옵션은 리스트(board)마다 다름 */
-const BLUE_STATUS = ["등록","공수산정요청","진행중","확인요청(검토완료)","확인요청(개발서버반영)","확인요청(운영서버반영)","운영배포요청","완료","보류","처리불가"];
-const YOZ_STATUS  = ["시작 전","진행중","완료","보류","상세설명필요","작업불가","재확인필요"];
-function statusEditOptions(cur, board){
-  let list = (board === "와이오즈") ? YOZ_STATUS : BLUE_STATUS;
-  if(cur && !list.includes(cur)) list = [cur, ...list];   // 현재값이 목록에 없으면 유지
-  return list.map(s=>`<option${s===cur?' selected':''}>${esc(s)}</option>`).join("");
+function statusEditOptions(cur){
+  return Object.keys(PALETTE).filter(k=>k!=="기타")
+    .map(s=>`<option${s===cur?' selected':''}>${esc(s)}</option>`).join("");
 }
 function asgUsers(){   // 데이터에서 distinct 담당자 {id:name}
   const m={};
@@ -749,23 +716,9 @@ function updateSelUI(items){
   if(acts) acts.hidden = selected.size === 0;
 }
 
-/* 상단 리스트 탭 (전체/블루소프트/와이오즈) */
-function renderBTabs(){
-  const counts = { all: DATA.length };
-  DATA.forEach(r=>counts[r.board] = (counts[r.board]||0) + 1);
-  const tabs = [["all","전체"], ["블루소프트","유비온"], ["와이오즈","와이오즈"]];
-  const box = document.getElementById("btabs");
-  if(!box) return;
-  box.innerHTML = tabs.map(([v,l])=>
-    `<button type="button" class="btab${v===fboardTab?' on':''}" data-b="${escAttr(v)}">${esc(l)} <span class="btab-n">${counts[v]||0}</span></button>`).join("");
-  box.querySelectorAll(".btab").forEach(t=>t.addEventListener("click", ()=>{
-    fboardTab = t.dataset.b; saveFilters(); openId = null; buildAllMS(); render();
-  }));
-}
 function render(){
   const items = filteredItems();
   document.getElementById("count").textContent = items.length + "건";
-  renderBTabs();
   const hc = DATA.filter(r=>r.is_hidden).length;   // 숨김 개수 → 토글 버튼에 표시
   document.getElementById("toggleHidden").textContent = (showHidden?"숨김 가리기":"숨김 보기") + (hc?` (${hc})`:"");
   // 탭 제목 배지: 안읽음 개수(숨김 제외)
@@ -836,49 +789,33 @@ function markHide(id, hide){
   render();
 }
 
-/* ---------- 헤더 다중선택 필터 드롭다운 (보드별 섹션) ---------- */
+/* ---------- 헤더 다중선택 필터 드롭다운 ---------- */
 const MS = [
-  { id:'msPriority', label:'우선순위', dim:'priority', field:'priority' },
-  { id:'msTeam',     label:'담당팀',   dim:'team',     field:'team' },
-  { id:'msStatus',   label:'진행상태', dim:'status',   field:'status' },
-  { id:'msAsg',      label:'담당자',   dim:'asg',      field:'asg' },
+  { id:'msPriority', label:'우선순위', set:()=>fpri,  values:()=>Object.keys(PRIORITY) },
+  { id:'msTeam',     label:'담당팀',   set:()=>fteam, values:()=>Object.keys(TEAM) },
+  { id:'msStatus',   label:'진행상태', set:()=>fstat, values:()=>Object.keys(PALETTE).filter(k=>k!=="기타") },
+  { id:'msAsg',      label:'담당자',   set:()=>fasg,  values:()=>[...new Set(DATA.map(r=>r.asg).filter(v=>v && v!=="—"))].sort() },
 ];
-// 진행상태·우선순위는 보드별 고정 목록(기존 방식 유지), 담당팀·담당자는 데이터 기반
-const CANON = {
-  priority: { "블루소프트":["긴급","일반"], "와이오즈":["긴급","중요","일반"] },
-  status:   { "블루소프트":BLUE_STATUS,       "와이오즈":YOZ_STATUS },
-};
-function dimValues(field, board){
-  if(CANON[field] && CANON[field][board]) return CANON[field][board];   // 고정 목록
-  return [...new Set(DATA.filter(r=>r.board===board).map(r=>r[field]).filter(v=>v && v!=="—"))].sort((a,b)=>a.localeCompare(b,'ko'));
-}
-function dimSelCount(dim){ return FILT[dim]["블루소프트"].size + FILT[dim]["와이오즈"].size; }
 function closeAllMS(){ document.querySelectorAll(".ms-menu").forEach(m=>m.hidden=true); }
-function msBtnInner(cfg){ const n=dimSelCount(cfg.dim); return `${esc(cfg.label)}${n?` <span class="ms-n">${n}</span>`:''} <span class="ms-ar">▾</span>`; }
+function msBtnInner(cfg){ const n=cfg.set().size; return `${esc(cfg.label)}${n?` <span class="ms-n">${n}</span>`:''} <span class="ms-ar">▾</span>`; }
 function updateMSBtn(cfg){
   const btn=document.querySelector("#"+cfg.id+" .ms-btn"); if(!btn) return;
-  btn.innerHTML=msBtnInner(cfg); btn.classList.toggle("active", dimSelCount(cfg.dim)>0);
+  btn.innerHTML=msBtnInner(cfg); btn.classList.toggle("active", cfg.set().size>0);
 }
 function buildMS(cfg){
   const cont=document.getElementById(cfg.id); if(!cont) return;
-  let menu="";
-  const boards = (fboardTab === "all") ? BOARDS_F : [fboardTab];   // 활성 탭의 보드 섹션만
-  boards.forEach(board=>{
-    const set=FILT[cfg.dim][board], vals=dimValues(cfg.field, board);
-    menu += `<div class="ms-sec">${esc(boardLabel(board))}</div>`;
-    menu += vals.length
-      ? vals.map(v=>`<label class="ms-item"><input type="checkbox" data-b="${escAttr(board)}" value="${escAttr(v)}" ${set.has(v)?'checked':''}><span>${esc(v)}</span></label>`).join("")
-      : '<div class="ms-empty">항목 없음</div>';
-  });
+  const set=cfg.set(), vals=cfg.values();
   cont.innerHTML =
-    `<button type="button" class="ms-btn${dimSelCount(cfg.dim)?' active':''}">${msBtnInner(cfg)}</button>`+
-    `<div class="ms-menu" hidden>${menu}</div>`;
-  const btn=cont.querySelector(".ms-btn"), menuEl=cont.querySelector(".ms-menu");
-  btn.addEventListener("click", e=>{ e.stopPropagation(); const willOpen=menuEl.hidden; closeAllMS(); menuEl.hidden=!willOpen; });
-  menuEl.addEventListener("click", e=>e.stopPropagation());
-  menuEl.querySelectorAll("input").forEach(inp=>inp.addEventListener("change", ()=>{
-    const set=FILT[cfg.dim][inp.dataset.b];
-    if(inp.checked) set.add(inp.value); else set.delete(inp.value);
+    `<button type="button" class="ms-btn${set.size?' active':''}">${msBtnInner(cfg)}</button>`+
+    `<div class="ms-menu" hidden>`+
+      (vals.length ? vals.map(v=>`<label class="ms-item"><input type="checkbox" value="${escAttr(v)}" ${set.has(v)?'checked':''}><span>${esc(v)}</span></label>`).join("")
+                   : '<div class="ms-empty">항목 없음</div>')+
+    `</div>`;
+  const btn=cont.querySelector(".ms-btn"), menu=cont.querySelector(".ms-menu");
+  btn.addEventListener("click", e=>{ e.stopPropagation(); const willOpen=menu.hidden; closeAllMS(); menu.hidden=!willOpen; });
+  menu.addEventListener("click", e=>e.stopPropagation());
+  menu.querySelectorAll("input").forEach(inp=>inp.addEventListener("change", ()=>{
+    if(inp.checked) cfg.set().add(inp.value); else cfg.set().delete(inp.value);
     updateMSBtn(cfg); saveFilters(); openId=null; render();
   }));
 }
@@ -886,25 +823,18 @@ function buildAllMS(){ MS.forEach(buildMS); }
 document.addEventListener("click", closeAllMS);   // 바깥 클릭 시 메뉴 닫기
 
 /* ---------- 필터 상태 저장/복원 (새로고침에도 유지) ---------- */
-const FILTER_KEY = "slackapi_filters";   // 운영 lists.php 와 별도 키
-const _DIMS = ["priority","team","status","asg"];
+const FILTER_KEY = "slackapi_filters";
 function saveFilters(){
-  const dump={}; _DIMS.forEach(d=>dump[d]={"블루소프트":[...FILT[d]["블루소프트"]], "와이오즈":[...FILT[d]["와이오즈"]]});
-  localStorage.setItem(FILTER_KEY, JSON.stringify({ filt:dump, fboardTab, search: document.getElementById("search").value }));
+  localStorage.setItem(FILTER_KEY, JSON.stringify({
+    fpri:[...fpri], fteam:[...fteam], fstat:[...fstat], fasg:[...fasg],
+    search: document.getElementById("search").value
+  }));
 }
 function restoreFilters(){
   let s = {};
   try { s = JSON.parse(localStorage.getItem(FILTER_KEY) || "{}"); } catch(e){}
-  const f = s.filt || {};
-  _DIMS.forEach(d=>{ FILT[d] = {"블루소프트":new Set((f[d]&&f[d]["블루소프트"])||[]), "와이오즈":new Set((f[d]&&f[d]["와이오즈"])||[])}; });
-  // 구버전(단일 Set: fpri/fteam/fstat/fasg) 저장값 → 블루소프트 필터로 이관(기존 선택 유지)
-  if(!s.filt && (s.fpri||s.fteam||s.fstat||s.fasg)){
-    FILT.priority["블루소프트"] = new Set(s.fpri||[]);
-    FILT.team["블루소프트"]     = new Set(s.fteam||[]);
-    FILT.status["블루소프트"]   = new Set(s.fstat||[]);
-    FILT.asg["블루소프트"]      = new Set(s.fasg||[]);
-  }
-  fboardTab = s.fboardTab || "all";
+  const toSet = v => new Set(Array.isArray(v) ? v : (v ? [v] : []));   // 구버전(문자열) 호환
+  fpri = toSet(s.fpri); fteam = toSet(s.fteam); fstat = toSet(s.fstat); fasg = toSet(s.fasg);
   const sv = s.search || "";
   document.getElementById("search").value = sv;
   filter = sv.toLowerCase().trim();
@@ -1003,9 +933,8 @@ document.getElementById("sync").addEventListener("click", async ()=>{
     if(j.skipped === 'locked'){
       alert("다른 동기화가 진행 중입니다. 잠시 후 자동 반영됩니다.");
     } else {
-      let msg = `동기화 완료 (${j.mode==='full'?'전체':'증분'})\n스캔 ${j.scanned} · 변경 ${j.changed}건 (신규 ${j.inserted} · 갱신 ${j.updated} · 보존 ${j.skipped})`;
-      if(j.errors && Object.keys(j.errors).length) msg += "\n⚠️ " + Object.keys(j.errors).map(k=>`${k}(${j.errors[k]})`).join(", ");
-      alert(msg);
+      alert(`동기화 완료 (${j.mode==='full'?'전체':'증분'})\n`
+        + `스캔 ${j.scanned} · 변경 ${j.changed}건 (신규 ${j.inserted} · 갱신 ${j.updated} · 보존 ${j.skipped})`);
     }
   }catch(err){ alert("동기화 실패: " + err.message); }
   finally{ btn.disabled = false; btn.textContent = "동기화"; }
@@ -1013,8 +942,7 @@ document.getElementById("sync").addEventListener("click", async ()=>{
 
 document.getElementById("search").addEventListener("input",e=>{ filter=e.target.value.toLowerCase().trim(); saveFilters(); openId=null; render(); });
 document.getElementById("reset").addEventListener("click",()=>{
-  FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
-  fboardTab = "all"; filter = "";
+  fpri = new Set(); fteam = new Set(); fstat = new Set(); fasg = new Set(); filter = "";
   document.getElementById("search").value = "";
   saveFilters();        // 비운 상태 저장
   buildAllMS();         // 버튼 카운트/체크 초기화
