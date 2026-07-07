@@ -59,7 +59,7 @@ $insertSql = "
 $stmt     = $pdo->prepare($insertSql);
 $prevStmt = $pdo->prepare("SELECT `updated` FROM requests WHERE id = ?");
 
-$inserted = 0; $updated = 0; $skipped = 0; $scanned = 0;
+$inserted = 0; $updated = 0; $skipped = 0; $scanned = 0; $deleted = 0; $archivedNow = 0;
 $changedIds = []; $errors = [];
 
 foreach ($boards as $listId => $b) {
@@ -100,7 +100,38 @@ foreach ($boards as $listId => $b) {
             ':created' => $row['created'], ':updated' => $row['updated'], ':synced_at' => $now,
         ]);
     }
+    // 라이브에서 빠진 항목 처리 (allIds 비면 안전상 스킵 = 전체삭제 방지)
+    if (!empty($data['allIds'])) {
+        $liveSet = array_flip($data['allIds']);
+        // 보관 해제되어 라이브로 돌아온 항목 → archived=0
+        $ph = implode(',', array_fill(0, count($data['allIds']), '?'));
+        $pdo->prepare("UPDATE requests SET archived=0 WHERE list_id=? AND archived=1 AND id IN ($ph)")
+            ->execute(array_merge([$listId], $data['allIds']));
+        // '비보관'인데 라이브에 없는 항목만 검사 → 보관이면 표시, 진짜 삭제면 제거
+        $cands = [];
+        foreach ($pdo->query("SELECT id FROM requests WHERE list_id=" . $pdo->quote($listId) . " AND archived=0") as $r) {
+            if (!isset($liveSet[$r['id']])) $cands[] = $r['id'];
+        }
+        foreach ($cands as $rid) {
+            $info = slackGet('slackLists.items.info', $token, ['list_id' => $listId, 'id' => $rid]);
+            $rec  = $info['record'] ?? $info['item'] ?? [];
+            if (!empty($info['ok']) && !empty($rec['archived'])) {
+                $pdo->prepare("UPDATE requests SET archived=1 WHERE id=?")->execute([$rid]);
+                $archivedNow++;
+            } else {
+                $pdo->prepare("DELETE FROM requests WHERE id=?")->execute([$rid]);
+                $deleted++;
+            }
+        }
+    }
     if (!empty($data['maxUpdated'])) meta_set('list_updated_max_' . $listId, $data['maxUpdated']);
+}
+
+// 삭제된 항목의 사용자 상태(읽음/고정/숨김/배정) 고아 행 정리
+if ($deleted > 0) {
+    foreach (['user_reads', 'user_pins', 'user_hides', 'local_assignments'] as $t) {
+        $pdo->exec("DELETE FROM `$t` WHERE request_id NOT IN (SELECT id FROM requests)");
+    }
 }
 
 // 변경 항목 → 모든 사용자 안읽음 복귀
@@ -126,15 +157,15 @@ if ($full || (time() - (int)meta_get('cmt_scan_at', 0)) >= 300) {
 
 $completed = time();
 meta_set('last_synced_at', $completed);
-if (($inserted + $updated) > 0) meta_set('data_changed_at', $completed);
+if (($inserted + $updated + $deleted) > 0) meta_set('data_changed_at', $completed);
 
 $result = ['ok' => true, 'mode' => $full ? 'full' : 'incremental', 'scanned' => $scanned,
            'changed' => $inserted + $updated, 'inserted' => $inserted, 'updated' => $updated,
-           'skipped' => $skipped, 'errors' => $errors, 'synced_at' => $now];
+           'deleted' => $deleted, 'archived' => $archivedNow, 'skipped' => $skipped, 'errors' => $errors, 'synced_at' => $now];
 
 if ($isCli) {
     echo "[{$result['mode']}] 스캔 {$scanned} 변경 " . ($inserted + $updated)
-       . " (신규 {$inserted} 갱신 {$updated} 보존 {$skipped})"
+       . " (신규 {$inserted} 갱신 {$updated} 삭제 {$deleted} 보존 {$skipped})"
        . ($errors ? " 오류:" . json_encode($errors, JSON_UNESCAPED_UNICODE) : "") . "\n";
 } else {
     echo json_encode($result, JSON_UNESCAPED_UNICODE);

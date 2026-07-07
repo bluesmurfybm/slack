@@ -30,10 +30,11 @@ if (isset($in['ids']) && is_array($in['ids'])) {
     try {
         $pdo = db();
         if ($read) {
+            $uname = $user['name'] ?? null;
             $rows = []; $params = [];
-            foreach ($ids as $id) { $rows[] = '(?,?,?)'; array_push($params, $user['id'], $id, date('Y-m-d H:i:s')); }
-            $sql = "INSERT INTO user_reads (user_id, request_id, read_at) VALUES " . implode(',', $rows)
-                 . " ON DUPLICATE KEY UPDATE read_at = VALUES(read_at)";
+            foreach ($ids as $id) { $rows[] = '(?,?,?,?)'; array_push($params, $user['id'], $uname, $id, date('Y-m-d H:i:s')); }
+            $sql = "INSERT INTO user_reads (user_id, user_name, request_id, read_at) VALUES " . implode(',', $rows)
+                 . " ON DUPLICATE KEY UPDATE user_name = VALUES(user_name), read_at = VALUES(read_at)";
             $pdo->prepare($sql)->execute($params);
         } else {
             $ph = implode(',', array_fill(0, count($ids), '?'));
@@ -57,10 +58,10 @@ if ($rid === '') {
 try {
     $pdo = db();
     if ($read) {
-        $st = $pdo->prepare("INSERT INTO user_reads (user_id, request_id, read_at)
-                             VALUES (?, ?, ?)
-                             ON DUPLICATE KEY UPDATE read_at = VALUES(read_at)");
-        $st->execute([$user['id'], $rid, date('Y-m-d H:i:s')]);
+        $st = $pdo->prepare("INSERT INTO user_reads (user_id, user_name, request_id, read_at)
+                             VALUES (?, ?, ?, ?)
+                             ON DUPLICATE KEY UPDATE user_name = VALUES(user_name), read_at = VALUES(read_at)");
+        $st->execute([$user['id'], $user['name'] ?? null, $rid, date('Y-m-d H:i:s')]);
     } else {
         $st = $pdo->prepare("DELETE FROM user_reads WHERE user_id = ? AND request_id = ?");
         $st->execute([$user['id'], $rid]);

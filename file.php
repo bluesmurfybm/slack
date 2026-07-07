@@ -30,14 +30,34 @@ $cacheFile = $cacheDir . '/' . $key;         // 바이트
 $metaFile  = $cacheFile . '.type';           // content-type
 
 $serveFromCache = function ($data, $ctype) use ($u) {
+    $len = strlen($data);
     header('Content-Type: ' . ($ctype ?: 'application/octet-stream'));
     // 불변 콘텐츠 → 브라우저도 장기 캐시
     header('Cache-Control: private, max-age=604800, immutable');
-    if (!empty($_GET['dl'])) {
+    header('Accept-Ranges: bytes');          // 동영상 탐색(seek) 지원 알림
+    $isDl = !empty($_GET['dl']);
+    if ($isDl) {
         $name = isset($_GET['name']) ? preg_replace('/[\r\n"\\\\\/]+/', '_', $_GET['name']) : 'download';
         header('Content-Disposition: attachment; filename="' . $name . '"; filename*=UTF-8\'\'' . rawurlencode($_GET['name'] ?? $name));
     }
-    header('Content-Length: ' . strlen($data));
+    // Range 요청(동영상 seek/부분 로드) 처리 — 다운로드가 아닐 때만
+    $range = $_SERVER['HTTP_RANGE'] ?? '';
+    if (!$isDl && $range !== '' && preg_match('/bytes=(\d*)-(\d*)/', $range, $m)) {
+        $start = ($m[1] === '') ? 0 : (int)$m[1];
+        $end   = ($m[2] === '') ? $len - 1 : (int)$m[2];
+        if ($start > $end || $start >= $len) {
+            http_response_code(416);
+            header('Content-Range: bytes */' . $len);
+            return;
+        }
+        $end = min($end, $len - 1);
+        http_response_code(206);
+        header('Content-Range: bytes ' . $start . '-' . $end . '/' . $len);
+        header('Content-Length: ' . ($end - $start + 1));
+        echo substr($data, $start, $end - $start + 1);
+        return;
+    }
+    header('Content-Length: ' . $len);
     echo $data;
 };
 

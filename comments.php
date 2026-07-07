@@ -86,7 +86,8 @@ try {
         foreach (($m['files'] ?? []) as $f) {
             $url = $f['url_private'] ?? ''; if ($url === '') continue;
             $files[] = ['name' => $f['name'] ?? 'file', 'is_image' => strpos($f['mimetype'] ?? '', 'image/') === 0,
-                        'url' => $url, 'thumb' => $f['thumb_360'] ?? ($f['thumb_480'] ?? ($f['thumb_240'] ?? $url))];
+                        'url' => $url, 'thumb' => $f['thumb_360'] ?? ($f['thumb_480'] ?? ($f['thumb_240'] ?? $url)),
+                        'thumb_pdf' => $f['thumb_pdf'] ?? '', 'thumb_video' => $f['thumb_video'] ?? '', 'mp4' => $f['mp4'] ?? ''];
         }
         $comments[] = ['author_name' => $uid && isset($names[$uid]) ? $names[$uid] : ($uid ?: 'Slack'),
                        'body' => $fmt($m['text'] ?? ''), 'created_at' => date('Y-m-d H:i', (int)floor((float)$m['ts'])),

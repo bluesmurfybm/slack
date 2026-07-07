@@ -91,9 +91,11 @@ function slackPost($method, $token, $fields) {
 
 /** 레코드의 댓글 스레드 앵커 ts 찾기 (date_created 주변 시간창). 없으면 null. */
 function slackFindRecordThread($token, $channel, $created, $rid) {
+    // Slack 이 레코드 생성 후 앵커 메시지를 채널에 올리기까지 수~수십 초 지연될 수 있어
+    // 창을 넉넉히 잡는다(예: +5s 만으론 +13s 뒤 올라온 메시지를 놓쳐 댓글이 안 보임).
     $h = slackGet('conversations.history', $token, [
-        'channel' => $channel, 'oldest' => $created - 2, 'latest' => $created + 5,
-        'inclusive' => true, 'limit' => 50,
+        'channel' => $channel, 'oldest' => $created - 5, 'latest' => $created + 120,
+        'inclusive' => true, 'limit' => 100,
     ]);
     foreach (($h['messages'] ?? []) as $m) {
         if (strpos(json_encode($m), $rid) !== false) return $m['ts'];
@@ -174,7 +176,8 @@ function slackFieldAttach($f) { return isset($f['attachment']) && is_array($f['a
  * 파일 메타/URL 은 사실상 불변이므로 영구 캐시(파일 삭제 시에만 stale, 무시 가능).
  */
 function slackResolveFiles($token, $fileIds) {
-    $cacheFile = sys_get_temp_dir() . '/slack_files_cache.json';
+    // v2: pdf/office/동영상 미리보기 필드(thumb_pdf/thumb_video/mp4) 추가 → 캐시 버전업으로 재해석 유도
+    $cacheFile = sys_get_temp_dir() . '/slack_files_cache_v2.json';
     $cache = [];
     if (is_file($cacheFile)) { $j = json_decode(file_get_contents($cacheFile), true); if (is_array($j)) $cache = $j; }
     $missing = array_diff(array_unique(array_filter($fileIds)), array_keys($cache));
@@ -192,12 +195,16 @@ function slackResolveFiles($token, $fileIds) {
                 'url'       => $fl['url_private'] ?? '',
                 'download'  => $fl['url_private_download'] ?? ($fl['url_private'] ?? ''),
                 'thumb'     => $fl['thumb_360'] ?? ($fl['thumb_160'] ?? ($fl['url_private'] ?? '')),
+                'thumb_pdf'   => $fl['thumb_pdf'] ?? '',     // pdf/xlsx/office 첫 페이지 이미지
+                'thumb_video' => $fl['thumb_video'] ?? '',   // 동영상 포스터
+                'mp4'         => $fl['mp4'] ?? '',            // 브라우저 재생용 변환본
                 'permalink' => $fl['permalink'] ?? '',
             ];
         } else {
             // 삭제/접근불가 파일도 캐시(재조회 방지). 이름만 남김.
             $cache[$fid] = ['name' => $fid, 'mime' => '', 'size' => 0, 'is_image' => false,
-                            'url' => '', 'download' => '', 'thumb' => '', 'permalink' => '', 'gone' => true];
+                            'url' => '', 'download' => '', 'thumb' => '', 'thumb_pdf' => '',
+                            'thumb_video' => '', 'mp4' => '', 'permalink' => '', 'gone' => true];
         }
         $changed = true;
         if (++$sinceSave >= 25) { @file_put_contents($cacheFile, json_encode($cache, JSON_UNESCAPED_UNICODE)); $sinceSave = 0; }  // 증분 저장(중단 대비)
@@ -306,10 +313,12 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
     $rows = [];
     $userIds = [];
     $allFileIds = [];
+    $allIds = [];        // 리스트의 전체 라이브 항목 id (삭제 감지용, since 필터와 무관)
     $scanned = 0;
     $maxUpdated = 0;
     foreach ($data['items'] as $item) {
         $scanned++;
+        if (isset($item['id']) && $item['id'] !== '') $allIds[] = $item['id'];
         $upd = isset($item['updated_timestamp']) ? (int)$item['updated_timestamp'] : 0;
         if ($upd > $maxUpdated) $maxUpdated = $upd;
         // 증분: 마지막 동기화 이후 변경된 항목만 처리 (이름변환 비용 절감)
@@ -368,7 +377,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
     }
 
     usort($rows, function($a, $b) { return $b['created'] - $a['created']; });
-    return ['rows' => array_values($rows), 'scanned' => $scanned, 'maxUpdated' => $maxUpdated];
+    return ['rows' => array_values($rows), 'scanned' => $scanned, 'maxUpdated' => $maxUpdated, 'allIds' => $allIds];
 }
 
 /**

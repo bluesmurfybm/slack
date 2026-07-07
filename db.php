@@ -92,9 +92,10 @@ function db() {
         }
     }
 
-    // 여러 리스트 통합용: list_id/board 컬럼 + 기존 데이터 블루소프트로 백필
-    foreach (['list_id' => "VARCHAR(32) NULL COMMENT 'Slack 리스트 ID'",
-              'board'   => "VARCHAR(40) NOT NULL DEFAULT '' COMMENT '리스트 구분(블루소프트/와이오즈)'"] as $col => $def) {
+    // 여러 리스트 통합용: list_id/board/archived 컬럼 + 기존 데이터 블루소프트로 백필
+    foreach (['list_id'  => "VARCHAR(32) NULL COMMENT 'Slack 리스트 ID'",
+              'board'    => "VARCHAR(40) NOT NULL DEFAULT '' COMMENT '리스트 구분(블루소프트/와이오즈)'",
+              'archived' => "TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1=보관(archived)'"] as $col => $def) {
         $c = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
                             WHERE TABLE_SCHEMA=? AND TABLE_NAME='requests' AND COLUMN_NAME=?");
         $c->execute([$dbName, $col]);
@@ -118,13 +119,21 @@ function db() {
     // 4) 사용자별 읽음 상태 (행 존재 = 읽음). reads 는 예약어라 user_reads 사용
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `user_reads` (
-            `user_id`    VARCHAR(32) NOT NULL COMMENT '읽은 사용자 Slack ID',
-            `request_id` VARCHAR(32) NOT NULL COMMENT 'requests.id',
-            `read_at`    DATETIME    NOT NULL,
+            `user_id`    VARCHAR(32)  NOT NULL COMMENT '읽은 사용자 Slack ID',
+            `user_name`  VARCHAR(120) NULL COMMENT '읽은 사용자 이름',
+            `request_id` VARCHAR(32)  NOT NULL COMMENT 'requests.id',
+            `read_at`    DATETIME     NOT NULL,
             PRIMARY KEY (`user_id`, `request_id`),
             KEY `idx_user` (`user_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+    // 기존 user_reads 마이그레이션: user_name 없으면 추가
+    $hasUN = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
+                            WHERE TABLE_SCHEMA=? AND TABLE_NAME='user_reads' AND COLUMN_NAME='user_name'");
+    $hasUN->execute([$dbName]);
+    if (!$hasUN->fetchColumn()) {
+        $pdo->exec("ALTER TABLE `user_reads` ADD COLUMN `user_name` VARCHAR(120) NULL COMMENT '읽은 사용자 이름' AFTER `user_id`");
+    }
 
     // 5) 사용자별 고정 상태 (행 존재 = 고정). 고정 항목은 목록 최상단 출력
     $pdo->exec("
