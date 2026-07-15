@@ -157,6 +157,17 @@ function db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+    // 6-1) 사용자별 설정(key-value). 필터 세트(프리셋) 등 브라우저 무관 저장용
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `user_prefs` (
+            `user_id`    VARCHAR(32)  NOT NULL COMMENT '사용자 Slack ID',
+            `pref_key`   VARCHAR(64)  NOT NULL COMMENT '설정 키 (예: filter_presets)',
+            `pref_value` MEDIUMTEXT   NULL     COMMENT 'JSON 값',
+            `updated_at` DATETIME     NOT NULL,
+            PRIMARY KEY (`user_id`, `pref_key`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
     // 7) 대학 사이트 목록 (버전별 개발/운영 링크) — 검색·관리용
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `schools` (

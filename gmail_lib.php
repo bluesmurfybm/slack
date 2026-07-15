@@ -68,6 +68,17 @@ function gmail_ensure_table() {
             KEY `idx_acct_seen`  (`account`, `seen`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+    // 보낸편지함 헤더 캐시 — 대화 카운트/병합용 (본문 없음, 목록에는 안 나옴)
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `gmail_sent` (
+            `account` VARCHAR(190)    NOT NULL DEFAULT '',
+            `uid`     INT UNSIGNED    NOT NULL COMMENT '보낸편지함 IMAP UID (INBOX 와 별개 공간)',
+            `thrid`   BIGINT UNSIGNED NULL COMMENT 'Gmail 대화 ID(X-GM-THRID)',
+            `udate`   INT UNSIGNED    NOT NULL DEFAULT 0,
+            PRIMARY KEY (`account`, `uid`),
+            KEY `idx_acct_thrid` (`account`, `thrid`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
     // 기존 설치본(단일 계정, PK=uid) 마이그레이션: account 컬럼 추가 + 데이터/메타 백필
     $cfg = require __DIR__ . '/config.php';
     $has = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
@@ -149,13 +160,34 @@ function gmail_label_colors() {
     return gmail_cfg()['label_colors'] ?? [];
 }
 
+/** charset → UTF-8 안전 변환.
+ *  한국 메일의 옛 별칭(ks_c_5601-1987 = CP949 등)은 mbstring 이 몰라서 PHP8 에선
+ *  ValueError 예외로 동기화 전체가 죽는다 → 별칭 매핑 + 실패 시 폴백으로 방어. */
+function gmail_to_utf8($raw, $cs) {
+    $cs = strtoupper(trim((string)$cs));
+    static $alias = [
+        'KS_C_5601-1987' => 'CP949', 'KS_C_5601-1989' => 'CP949', 'KSC5601' => 'CP949',
+        'X-WINDOWS-949' => 'CP949', 'WINDOWS-949' => 'CP949', 'KS_C_5601' => 'CP949',
+        'DEFAULT' => 'UTF-8', '' => 'UTF-8', 'ANSI_X3.4-1968' => 'US-ASCII',
+    ];
+    if (isset($alias[$cs])) $cs = $alias[$cs];
+    if ($cs === 'UTF-8' || $cs === 'US-ASCII') return $raw;
+    try {
+        $out = mb_convert_encoding($raw, 'UTF-8', $cs);
+        return ($out === false || $out === null) ? $raw : $out;
+    } catch (Throwable $e) {
+        // 미지의 인코딩: 한글 메일 가능성이 높으니 CP949 한 번 더 시도 → 안 되면 원문 유지
+        try { return mb_convert_encoding($raw, 'UTF-8', 'CP949'); } catch (Throwable $e2) { return $raw; }
+    }
+}
+
 /** MIME 인코딩 헤더(제목/보낸사람) → UTF-8 */
 function gmail_dec_header($s) {
     if ($s === null || $s === '') return '';
     $out = '';
     foreach (imap_mime_header_decode($s) as $p) {
         $cs = ($p->charset === 'default') ? 'UTF-8' : $p->charset;
-        $out .= (strtoupper($cs) === 'UTF-8') ? $p->text : (@mb_convert_encoding($p->text, 'UTF-8', $cs) ?: $p->text);
+        $out .= gmail_to_utf8($p->text, $cs);
     }
     return $out;
 }
@@ -180,8 +212,7 @@ function gmail_extract($imap, $msgno) {
     $plain = ''; $html = ''; $atts = []; $inline = [];
     $budget = 8 * 1024 * 1024;                             // inline 이미지 총량 제한(DB MEDIUMTEXT 보호)
     $toUtf8 = function ($raw, $struct) {
-        $cs = gmail_part_charset($struct);
-        return (strtoupper($cs) === 'UTF-8') ? $raw : (@mb_convert_encoding($raw, 'UTF-8', $cs) ?: $raw);
+        return gmail_to_utf8($raw, gmail_part_charset($struct));   // 별칭/미지 charset 안전 처리
     };
     if (empty($struct->parts)) {
         $raw = $toUtf8(gmail_dec_body(imap_body($imap, $msgno, FT_PEEK), $struct->encoding ?? 0), $struct);
@@ -325,7 +356,10 @@ function gmail_sanitize_html($html) {
 }
 
 /* ================= Gmail SMTP 발송 (답장용, ssl 소켓 — 앱 비밀번호 재사용) ================= */
-function gmail_smtp_send(array $to, array $cc, $subject, $text, array $extraHeaders = []) {
+/** SMTP 발송. $html 을 주면 Gmail 처럼 multipart/alternative(텍스트+HTML)로 보냄.
+ *  $inlines = [['cid'=>..,'mime'=>..,'data'=>바이트], ...] → multipart/related 인라인 이미지(cid: 참조).
+ *  $fromName: From 표시 이름 (로그인 사용자별) — 빈값이면 config 의 gmail.name, 그것도 없으면 주소만. */
+function gmail_smtp_send(array $to, array $cc, $subject, $text, array $extraHeaders = [], $html = '', array $inlines = [], $fromName = '') {
     $g = gmail_cfg();
     $user = $g['user'];
     $pass = str_replace(' ', '', (string)$g['pass']);
@@ -350,15 +384,40 @@ function gmail_smtp_send(array $to, array $cc, $subject, $text, array $extraHead
     $send('MAIL FROM:<' . $user . '>'); $expect(250, 'MAIL FROM');
     foreach (array_unique(array_merge($to, $cc)) as $rcpt) { $send('RCPT TO:<' . $rcpt . '>'); $expect(250, 'RCPT'); }
     $send('DATA'); $expect(354, 'DATA');
-    $hdr = ['From: ' . $user, 'To: ' . implode(', ', $to)];
+    // From 표시 이름 (Gmail 식 "이름 <주소>"). 호출자 지정 > config gmail.name > 주소만 (기존 동작)
+    $fromName = trim((string)$fromName) !== '' ? trim((string)$fromName) : trim((string)($g['name'] ?? ''));
+    $from = $fromName !== '' ? '=?UTF-8?B?' . base64_encode($fromName) . '?= <' . $user . '>' : $user;
+    $hdr = ['From: ' . $from, 'To: ' . implode(', ', $to)];
     if ($cc) $hdr[] = 'Cc: ' . implode(', ', $cc);
     $hdr[] = 'Subject: =?UTF-8?B?' . base64_encode($subject) . '?=';
     $hdr[] = 'Date: ' . date('r');
     $hdr[] = 'MIME-Version: 1.0';
-    $hdr[] = 'Content-Type: text/plain; charset=UTF-8';
-    $hdr[] = 'Content-Transfer-Encoding: base64';          // base64 본문 → dot-stuffing 불필요
+    $b64 = fn($s) => chunk_split(base64_encode($s), 76, "\r\n");   // base64 본문 → dot-stuffing 불필요
+    if ($html === '') {                                    // 기존 그대로: 순수 텍스트
+        $hdr[] = 'Content-Type: text/plain; charset=UTF-8';
+        $hdr[] = 'Content-Transfer-Encoding: base64';
+        $body = $b64($text);
+    } else {                                               // Gmail 식: 텍스트+HTML 대안, 인라인 이미지는 related
+        $bAlt = 'alt_' . bin2hex(random_bytes(8));
+        $alt = "--$bAlt\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . $b64($text)
+             . "--$bAlt\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . $b64($html)
+             . "--$bAlt--\r\n";
+        if ($inlines) {
+            $bRel = 'rel_' . bin2hex(random_bytes(8));
+            $hdr[] = 'Content-Type: multipart/related; boundary="' . $bRel . '"';
+            $body = "--$bRel\r\nContent-Type: multipart/alternative; boundary=\"$bAlt\"\r\n\r\n" . $alt;
+            foreach ($inlines as $im) {
+                $body .= "--$bRel\r\nContent-Type: " . $im['mime'] . "\r\nContent-Transfer-Encoding: base64\r\n"
+                       . "Content-ID: <" . $im['cid'] . ">\r\nContent-Disposition: inline\r\n\r\n" . $b64($im['data']);
+            }
+            $body .= "--$bRel--\r\n";
+        } else {
+            $hdr[] = 'Content-Type: multipart/alternative; boundary="' . $bAlt . '"';
+            $body = $alt;
+        }
+    }
     foreach ($extraHeaders as $k => $v) if ($v !== '') $hdr[] = $k . ': ' . $v;
-    fwrite($fp, implode("\r\n", $hdr) . "\r\n\r\n" . chunk_split(base64_encode($text), 76, "\r\n") . ".\r\n");
+    fwrite($fp, implode("\r\n", $hdr) . "\r\n\r\n" . $body . ".\r\n");
     $expect(250, 'BODY');
     $send('QUIT');
     @fclose($fp);
@@ -511,5 +570,40 @@ class GmailRaw {
         $enc = imap_utf8_to_mutf7($label);
         $r = $this->cmd('UID STORE ' . (int)$uid . ' ' . ($add ? '+' : '-') . 'X-GM-LABELS (' . $this->q($enc) . ')');
         return $r['ok'];
+    }
+
+    /** SPECIAL-USE 시스템 폴더 찾기 (예: '\Sent' → '[Gmail]/보낸편지함') — 계정 언어 무관, mutf7 이름 반환 */
+    public function specialFolder($attr) {
+        $r = $this->cmd('LIST "" "[Gmail]/%"');
+        foreach ($r['lines'] as $l) {
+            if (!preg_match('/^\* LIST \(([^)]*)\) "." (.+)$/', $l, $m)) continue;
+            if (stripos($m[1], $attr) === false) continue;
+            $name = trim($m[2]);
+            if ($name !== '' && $name[0] === '"') $name = stripcslashes(substr($name, 1, -1));
+            return $name;
+        }
+        return null;
+    }
+
+    /** 다른 메일함(mutf7)을 읽기전용으로 선택. 이후 UID 명령은 그 메일함 기준이 됨에 주의 */
+    public function examine($mailbox) {
+        return $this->cmd('EXAMINE ' . $this->q($mailbox))['ok'];
+    }
+
+    /** 다른 메일함(mutf7)을 읽기전용 선택 후 대화 검색 */
+    public function searchThreadIn($mailbox, $thrid) {
+        if (!$this->examine($mailbox)) return [];
+        return $this->searchThread($thrid);
+    }
+
+    /** UID 집합의 X-GM-MSGID 맵 → [uid => msgid] (메일함 간 동일 메일 판별용 전역 ID) */
+    public function msgidMap($uidSet) {
+        if ($uidSet === '') return [];
+        $r = $this->cmd('UID FETCH ' . $uidSet . ' (X-GM-MSGID)');
+        $map = [];
+        foreach ($r['lines'] as $l) {
+            if (preg_match('/UID (\d+)/', $l, $u) && preg_match('/X-GM-MSGID (\d+)/', $l, $g)) $map[(int)$u[1]] = $g[1];
+        }
+        return $map;
     }
 }

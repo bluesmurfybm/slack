@@ -32,6 +32,46 @@ function expand_thread_uids($pdo, $acct, array $uids) {
     return array_values(array_unique($uids));
 }
 
+/** 대화의 보낸편지함 사본 조회 (INBOX 사본과 X-GM-MSGID 로 중복 제거) — 표시 전용, DB 저장 안 함.
+ *  동기화는 INBOX 만 읽으므로 내가 보낸/전달한 메일은 여기서 실시간으로 합쳐야 Gmail 대화와 같아짐.
+ *  uid=0 으로 반환 → 뷰어 JS 가 첨부 링크/읽음 등 INBOX uid 기반 동작을 건너뜀. */
+function gmail_sent_in_thread($thrid, array $inboxMails) {
+    $raw = new GmailRaw();
+    $inboxSet = implode(',', array_map(fn($m) => (int)$m['uid'], $inboxMails));
+    $inboxIds = $raw->msgidMap($inboxSet);                 // 현재 선택함(INBOX) 기준 — EXAMINE 전에 조회
+    $sentMb = $raw->specialFolder('\\Sent');
+    $uids = $sentMb ? $raw->searchThreadIn($sentMb, $thrid) : [];
+    $ids = $uids ? $raw->msgidMap(implode(',', $uids)) : [];
+    $raw->close();
+    $dup = array_flip(array_map('strval', $inboxIds));
+    $need = array_values(array_filter($uids, fn($u) => !isset($dup[(string)($ids[$u] ?? '')])));
+    if (!$need) return [];
+    $g = gmail_cfg();
+    $im = @imap_open($g['host'] . $sentMb, $g['user'], str_replace(' ', '', (string)$g['pass']), 0, 1);
+    if (!$im) return [];
+    $out = [];
+    foreach (array_slice($need, 0, 30) as $u) {            // 안전 상한 (비정상적으로 긴 대화 보호)
+        $msgno = imap_msgno($im, $u);
+        if ($msgno < 1) continue;
+        $ov = imap_fetch_overview($im, (string)$u, FT_UID)[0] ?? null;
+        [$plain, $html, $atts] = gmail_extract($im, $msgno);
+        $disp = $ov ? gmail_dec_header($ov->from ?? '') : (string)($g['user'] ?? '');
+        // 이름 없이 주소만 있는 옛 발송분 → config 의 표시 이름으로 보정 (Gmail 처럼 이름 표시)
+        if ($disp !== '' && strpos($disp, '<') === false && trim((string)($g['name'] ?? '')) !== '') {
+            $disp = $g['name'] . ' <' . $disp . '>';
+        }
+        $out[] = ['uid' => 0,
+            'subject' => $ov ? gmail_dec_header($ov->subject ?? '') : '',
+            'sender' => $disp,
+            'udate' => (int)($ov->udate ?? 0), 'seen' => 1,
+            'body' => gmail_body_text($plain, $html),
+            'body_html' => ($html !== '') ? gmail_sanitize_html($html) : '',
+            'atts' => json_encode($atts, JSON_UNESCAPED_UNICODE)];
+    }
+    imap_close($im);
+    return $out;
+}
+
 /* ---------- 첨부파일 스트리밍: ?att=<uid>&i=<idx>&name=&dl=1 ----------
    첨부는 이름만 DB 에 있으므로 바이트는 IMAP 파트에서 즉시 받아 전달. */
 if (isset($_GET['att'])) {
@@ -111,6 +151,35 @@ if (isset($_GET['replyinfo'])) {
     exit;
 }
 
+/* ---------- 연락처 자동완성: ?contacts=<검색어> — 받은 메일 보낸사람 풀에서 이름/주소 매칭 (최근 순) ---------- */
+if (isset($_GET['contacts'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    $q = trim((string)$_GET['contacts']);
+    $out = [];
+    if ($q !== '' && mb_strlen($q) <= 60) {
+        $like = '%' . addcslashes($q, '\\%_') . '%';
+        $st = $pdo->prepare("SELECT sender, MAX(udate) mu FROM gmail_mails
+                             WHERE account = ? AND sender LIKE ? ESCAPE '\\\\'
+                             GROUP BY sender ORDER BY mu DESC LIMIT 40");
+        $st->execute([gmail_owner(), $like]);
+        $seen = [];                                        // email 기준 dedupe — 이름 있는 변형 우선
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $s = (string)$r['sender'];
+            if (preg_match('/^\s*(.*?)\s*<([^>]+)>\s*$/', $s, $m)) { $name = trim($m[1], " \t\"'"); $email = strtolower(trim($m[2])); }
+            else { $name = ''; $email = strtolower(trim($s)); }
+            if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) continue;
+            if (isset($seen[$email])) {
+                if ($seen[$email]['name'] === '' && $name !== '') $seen[$email]['name'] = $name;
+                continue;
+            }
+            $seen[$email] = ['name' => $name, 'email' => $email];
+        }
+        $out = array_slice(array_values($seen), 0, 8);
+    }
+    echo json_encode(['ok' => true, 'contacts' => $out], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 /* ---------- 답장/전체답장 발송: POST ?reply=1 {uid, mode, text, to[], cc[]} ---------- */
 if (isset($_GET['reply']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json; charset=utf-8');
@@ -134,17 +203,40 @@ if (isset($_GET['reply']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
         };
         if (isset($in['to'])) { $to = $clean($in['to']); $cc = $clean($in['cc'] ?? []); }
         if (!$to) throw new RuntimeException('받는사람이 없습니다.');
-        // 원문 인용 (Gmail 형식)
+        // 원문 인용 (Gmail 형식: 텍스트 파트는 > 인용, HTML 파트는 blockquote + 원문 HTML 그대로)
         $me = gmail_owner();
-        $st = $pdo->prepare("SELECT sender, udate, body FROM gmail_mails WHERE account = ? AND uid = ?");
+        $st = $pdo->prepare("SELECT sender, udate, body, body_html FROM gmail_mails WHERE account = ? AND uid = ?");
         $st->execute([$me, $uid]);
         $orig = $st->fetch(PDO::FETCH_ASSOC) ?: [];
         $quote = '';
+        $attr = $orig ? date('Y년 n월 j일 H:i', (int)$orig['udate']) . ', ' . $orig['sender'] . ' 님이 작성:' : '';
         if (!empty($orig['body'])) {
-            $quote = "\n\n" . date('Y년 n월 j일 H:i', (int)$orig['udate']) . ', ' . $orig['sender'] . " 님이 작성:\n"
+            $quote = "\n\n" . $attr . "\n"
                    . '> ' . str_replace("\n", "\n> ", trim($orig['body']));
         }
-        gmail_smtp_send($to, $cc, $subject, $text . $quote, $extra);
+        // HTML 본문: 입력 텍스트 + 원문 HTML 인용. 원문의 data: 인라인 이미지는 cid 첨부로 변환 (Gmail 이 data: 이미지를 차단하므로)
+        $qhtml = trim((string)($orig['body_html'] ?? ''));
+        if ($qhtml === '' && !empty($orig['body'])) $qhtml = nl2br(htmlspecialchars(trim($orig['body']), ENT_QUOTES, 'UTF-8'));
+        $inlines = [];
+        if ($qhtml !== '') {
+            $qhtml = preg_replace_callback('/src\s*=\s*(["\'])data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+\/=\s]+?)\1/i',
+                function ($m) use (&$inlines) {
+                    $bytes = base64_decode(preg_replace('/\s+/', '', $m[3]), true);
+                    if ($bytes === false) return $m[0];
+                    $cid = 'inl' . (count($inlines) + 1) . '.' . substr(md5($bytes), 0, 12) . '@slackapi';
+                    $inlines[] = ['cid' => $cid, 'mime' => strtolower($m[2]), 'data' => $bytes];
+                    return 'src="cid:' . $cid . '"';
+                }, $qhtml);
+        }
+        $html = '<div>' . nl2br(htmlspecialchars($text, ENT_QUOTES, 'UTF-8')) . '</div>'
+              . ($qhtml !== ''
+                 ? '<br><div class="gmail_quote">' . htmlspecialchars($attr, ENT_QUOTES, 'UTF-8')
+                   . '<br><blockquote class="gmail_quote" style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex">'
+                   . $qhtml . '</blockquote></div>'
+                 : '');
+        // From 표시 이름 = 로그인한 사용자의 Slack 실명 (공용 Gmail 계정이라도 보낸 사람은 본인 이름으로)
+        $fromName = trim((string)(current_user()['name'] ?? ''));
+        gmail_smtp_send($to, $cc, $subject, $text . $quote, $extra, $html, $inlines, $fromName);
         echo json_encode(['ok' => true, 'to' => $to, 'cc' => $cc], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
@@ -159,6 +251,7 @@ if (isset($_GET['ping'])) {
         'ok' => true,
         'changed' => (int)gmeta_get('gmail_changed_at', 0),
         'sync_age' => time() - (int)strtotime((string)gmeta_get('gmail_last_sync', '2000-01-01')),
+        'watch_age' => time() - (int)gmeta_get('gmail_watch_beat', 0),   // IDLE 데몬 생존 신호 경과
     ]);
     exit;
 }
@@ -322,6 +415,11 @@ if (isset($_GET['thread'])) {
                 imap_close($im);
             } elseif ($needB) { echo json_encode(['ok' => false, 'error' => $err]); exit; }
         }
+        // 내가 보낸/전달한 메일(보낸편지함 사본)도 대화에 포함 — Gmail 대화 화면과 동일
+        if ($thrid) {
+            try { $mails = array_merge($mails, gmail_sent_in_thread($thrid, $mails)); } catch (Throwable $e) { /* 실패해도 받은 메일은 표시 */ }
+            usort($mails, fn($a, $b) => (int)$a['udate'] <=> (int)$b['udate']);
+        }
         $out = ['ok' => true, 'subject' => $mails ? $mails[0]['subject'] : '', 'mails' => []];
         foreach ($mails as $m) {
             $out['mails'][] = ['uid' => (int)$m['uid'], 'sender' => $m['sender'],
@@ -420,27 +518,60 @@ $q->execute(array_merge([$acct], $fp));
 $unreadCnt = (int)$q->fetchColumn();
 $pages     = max(1, (int)ceil($count / $perPage));
 if ($page > $pages - 1) $page = $pages - 1;
-$order = $unreadFirst ? "(x.unread > 0) DESC, x.last_udate DESC" : "x.last_udate DESC";
+$order = $unreadFirst ? "(unread > 0) DESC, last_udate DESC" : "last_udate DESC";
 $pdo->exec("SET SESSION group_concat_max_len = 8192");     // 참여자 목록 잘림 방지
-// 대표 = 처음 보낸 원본 메일(제목·본문), 날짜/정렬 = 대화의 최신 활동 시각 (Gmail 동일)
-$st = $pdo->prepare("
-    SELECT m.uid, m.subject, m.sender, m.body, m.labels, x.cnt, x.unread, x.senders, x.has_att, x.starred,
-           x.last_udate AS udate,
-           CASE WHEN x.unread > 0 THEN 0 ELSE 1 END AS seen
-    FROM (
-        SELECT $G AS g, COUNT(*) AS cnt, SUM(seen = 0) AS unread, MAX(udate) AS last_udate,
-               MAX(CASE WHEN atts IS NOT NULL AND atts <> '[]' THEN 1 ELSE 0 END) AS has_att,
-               MAX(flagged) AS starred,
-               GROUP_CONCAT(DISTINCT sender ORDER BY udate SEPARATOR '||') AS senders,
-               MIN(CONCAT(LPAD(udate, 10, '0'), LPAD(uid, 10, '0'))) AS mk   -- 대화의 첫 메일
-        FROM gmail_mails WHERE account = ?$flt GROUP BY g
-    ) x
-    JOIN gmail_mails m
-      ON m.account = ? AND CONCAT(LPAD(m.udate, 10, '0'), LPAD(m.uid, 10, '0')) = x.mk
-    ORDER BY $order
-    LIMIT " . (int)$perPage . " OFFSET " . (int)($page * $perPage));
-$st->execute(array_merge([$acct], $fp, [$acct]));
-$rows = $st->fetchAll(PDO::FETCH_ASSOC);
+/* 목록 조회 2단계 (전체 그룹 풀집계 + 문자열키 조인은 44k 행에서 수 초 → 페이지 분량만 집계):
+   ① 정렬 키만 가볍게 그룹핑해 이번 페이지의 대화 키 N개 확보
+   ② 그 대화들만 풀 집계 + 대표(첫 메일)는 mk 에서 uid 를 풀어 PK 로 직조회 */
+$rows = [];
+$q = $pdo->prepare("SELECT $G AS g, MAX(udate) AS last_udate, SUM(seen = 0) AS unread
+                    FROM gmail_mails WHERE account = ?$flt
+                    GROUP BY g ORDER BY $order
+                    LIMIT " . (int)$perPage . " OFFSET " . (int)($page * $perPage));
+$q->execute(array_merge([$acct], $fp));
+$gs = array_column($q->fetchAll(PDO::FETCH_ASSOC), 'g');
+if ($gs) {
+    $ph = implode(',', array_fill(0, count($gs), '?'));
+    // ② 해당 대화들만 집계 (thrid 인덱스 + 싱글턴은 uid PK) — 대표 = 처음 보낸 원본 메일, 날짜/정렬 = 최신 활동 (Gmail 동일)
+    $st = $pdo->prepare("
+        SELECT x.g, x.cnt + COALESCE(sc.scnt, 0) AS cnt,   -- 대화 수 = 받은 메일 + 내가 보낸 메일 (Gmail 동일)
+               x.unread, x.senders, x.has_att, x.starred, x.last_udate AS udate, x.mk,
+               CASE WHEN x.unread > 0 THEN 0 ELSE 1 END AS seen
+        FROM (
+            SELECT $G AS g, COUNT(*) AS cnt, SUM(seen = 0) AS unread, MAX(udate) AS last_udate,
+                   MAX(CASE WHEN atts IS NOT NULL AND atts <> '[]' THEN 1 ELSE 0 END) AS has_att,
+                   MAX(flagged) AS starred,
+                   GROUP_CONCAT(DISTINCT sender ORDER BY udate SEPARATOR '||') AS senders,
+                   MIN(CONCAT(LPAD(udate, 10, '0'), LPAD(uid, 10, '0'))) AS mk   -- 대화의 첫 메일
+            FROM gmail_mails
+            WHERE account = ?$flt AND (thrid IN ($ph) OR uid IN ($ph))
+            GROUP BY g HAVING g IN ($ph)
+        ) x
+        LEFT JOIN (SELECT thrid, COUNT(*) AS scnt FROM gmail_sent WHERE account = ? AND thrid IN ($ph) GROUP BY thrid) sc
+          ON sc.thrid = x.g");
+    $st->execute(array_merge([$acct], $fp, $gs, $gs, $gs, [$acct], $gs));
+    $agg = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $agg[$r['g']] = $r;
+    // 대표 메일: mk = LPAD(udate)·LPAD(uid) → 뒤 10자리가 uid (PK 직조회)
+    $repUids = array_values(array_unique(array_map(fn($r) => (int)substr($r['mk'], 10), $agg)));
+    $reps = [];
+    if ($repUids) {
+        $ph2 = implode(',', array_fill(0, count($repUids), '?'));
+        $r2 = $pdo->prepare("SELECT uid, subject, sender, body, labels FROM gmail_mails WHERE account = ? AND uid IN ($ph2)");
+        $r2->execute(array_merge([$acct], $repUids));
+        foreach ($r2->fetchAll(PDO::FETCH_ASSOC) as $m) $reps[(int)$m['uid']] = $m;
+    }
+    foreach ($gs as $g) {                                  // ①의 정렬 순서 유지
+        if (!isset($agg[$g])) continue;
+        $a = $agg[$g];
+        $m = $reps[(int)substr($a['mk'], 10)] ?? null;
+        if (!$m) continue;
+        $rows[] = ['uid' => $m['uid'], 'subject' => $m['subject'], 'sender' => $m['sender'],
+                   'body' => $m['body'], 'labels' => $m['labels'], 'cnt' => $a['cnt'],
+                   'unread' => $a['unread'], 'senders' => $a['senders'], 'has_att' => $a['has_att'],
+                   'starred' => $a['starred'], 'udate' => $a['udate'], 'seen' => $a['seen']];
+    }
+}
 
 $lastSync = gmeta_get('gmail_last_sync', '없음');
 $backfillLeft = (int)gmeta_get('gmail_backfill_next', '-1');   // -1=아직 시작 안 함, 0=완료
@@ -550,7 +681,7 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
       <span class="dot"></span>
       <span class="sender" title="<?= e($pdisp) ?>"><?= e($pdisp) ?><?= (int)$m['cnt'] > 1 ? ' <b class="cnt">' . (int)$m['cnt'] . '</b>' : '' ?></span>
       <span class="subj"><?php foreach ($chips as $ch) { [$bg, $fg] = label_color($ch);
-        echo '<span class="lchip" style="background:' . e($bg) . ';color:' . e($fg) . '">' . e($ch) . '</span>'; } ?><?= e(subject_base($m['subject'])) ?><?= $snip !== '' ? '<span class="snip"> - ' . e($snip) . '</span>' : '' ?></span>
+        echo '<span class="lchip" style="--c:' . e($bg) . ';--t:' . e($fg) . '">' . e($ch) . '</span>'; } ?><?= e(subject_base($m['subject'])) ?><?= $snip !== '' ? '<span class="snip"> - ' . e($snip) . '</span>' : '' ?></span>
       <?= !empty($m['has_att']) ? '<span class="clip" title="첨부파일 있음"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg></span>' : '' ?>
       <span class="date"><?= e(fmt_date($m['udate'])) ?></span>
     </div>
@@ -564,6 +695,7 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
 <html lang="ko"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gmail 가져오기 테스트</title>
+<script>(function(){var t=localStorage.getItem("ui_theme");if(!t&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.classList.add(t);})();</script>
 <style>
   :root { --line:#e0e3e7; --hint:#8a9099; --bg2:#f6f8fc; --read:#f2f6fc; --ink:#1f1f1f; --sub:#5f6368; }
   * { box-sizing:border-box; }
@@ -584,9 +716,13 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
   .mail-h .star { flex:none; font-size:16px; color:#c4c7cb; cursor:pointer; line-height:1; }
   .mail-h .star:hover { color:#f4b400; }
   .mail.starred .star { color:#f4b400; }
-  /* 목록 라벨 칩 */
+  /* 목록 라벨 칩 (--c=배경, --t=글자 — 다크 모드에서 color-mix 로 자동 변환) */
   .lchip { display:inline-block; font-size:11px; border-radius:4px; padding:1px 7px; margin-right:6px;
-           vertical-align:1px; font-weight:600; white-space:nowrap; }
+           vertical-align:1px; font-weight:600; white-space:nowrap;
+           background:var(--c,#eee); color:var(--t,#333); }
+  html.dark .lchip { background:color-mix(in srgb, var(--c,#8ab4f8) 35%, #16181c);
+                     color:color-mix(in srgb, var(--t,#e8eaed) 30%, #fff);
+                     box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--c,#8ab4f8) 45%, #16181c); }
   /* 섹션 헤더 (읽지 않음 / 기타) */
   .sect { padding:9px 18px 7px; font-size:12px; font-weight:700; color:#5f6368; background:#fafbfe;
           border-bottom:1px solid #eceff3; }
@@ -680,6 +816,14 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
                           font:13px -apple-system,"Malgun Gothic",sans-serif; color:#202124; }
   .compose .c-row input:focus { outline:none; border-color:#1a73e8; }
   .compose .c-row input:disabled { background:var(--bg2); color:#9aa0a6; }
+  /* 받는사람/참조 연락처 자동완성 (Gmail 식) */
+  .addr-menu { position:fixed; z-index:10005; max-width:420px; background:var(--bg); border:1px solid var(--line);
+               border-radius:10px; padding:4px; box-shadow:0 6px 22px rgba(0,0,0,.18); }
+  .addr-menu .ai { display:flex; align-items:center; gap:8px; padding:7px 11px; border-radius:7px; font-size:13px;
+                   cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .addr-menu .ai b { font-weight:600; }
+  .addr-menu .ai .ae { color:var(--muted); font-size:12px; }
+  .addr-menu .ai.on, .addr-menu .ai:hover { background:var(--info-bg, #e6f1fb); }
   .compose { display:flex; flex-direction:column; gap:8px; padding:0 20px 16px; }
   .compose textarea { width:100%; min-height:110px; border:1px solid var(--line); border-radius:10px; padding:10px 12px;
                       font:13px/1.6 -apple-system,"Malgun Gothic",sans-serif; resize:vertical; }
@@ -711,6 +855,44 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
   #glb-bar button:hover { background:rgba(255,255,255,.3); }
   #glb-bar #glb-zv { min-width:46px; text-align:center; color:#ccc; font-size:12px; }
   #glb-bar a { color:#8ab4f8; font-size:13px; text-decoration:none; font-weight:600; margin-left:4px; }
+  /* 데몬 상태 표시등 */
+  #daemonDot { font-size:11px; vertical-align:2px; color:#9aa0a6; cursor:default; }
+  /* ===== 다크 모드 (🌓 토글 / OS 설정 따름) ===== */
+  html.dark { --line:#3a3d42; --hint:#9aa0a6; --bg2:#1b1e22; --read:#22262b; --ink:#e8eaed; --sub:#9aa0a6; }
+  html.dark body { background:var(--bg2); color:var(--ink); }
+  html.dark header { background:#202124; border-color:#3a3d42; box-shadow:0 1px 2px rgba(0,0,0,.6); }
+  html.dark .hsearch input { background:#303134; border-color:transparent; color:#e8eaed; }
+  html.dark .hsearch input:focus { background:#3a3d42; border-color:#5f6368; box-shadow:none; }
+  html.dark header .toggle { background:#303134; color:#bdc1c6; border-color:#3c4043; }
+  html.dark header .toggle.on { background:#0c2740; color:#8ab4f8; border-color:#8ab4f8; }
+  html.dark #syncbar { background:#3a3115; border-color:#5c4d1e; color:#fdd663; }
+  html.dark .maillist { background:#202124; border-color:#3a3d42; box-shadow:none; }
+  html.dark .mail { border-color:#2c2f33; }
+  html.dark .mail-h { background:var(--read); }
+  html.dark .mail.unread .mail-h, html.dark .mail.open .mail-h { background:#202124; }
+  html.dark .mail-h:hover { box-shadow:inset 1px 0 0 #3c4043, inset -1px 0 0 #3c4043, 0 1px 3px rgba(0,0,0,.6); }
+  html.dark .mail.unread .sender, html.dark .mail.unread .subj, html.dark .mail.unread .date { color:#e8eaed; }
+  html.dark .mail.open { border-color:#3a3d42; box-shadow:0 2px 10px rgba(0,0,0,.5); }
+  html.dark .sect { background:#26282c; border-color:#2c2f33; }
+  html.dark .mail-b { background:#202124; border-color:#3a3d42; }
+  html.dark .det-subj, html.dark .det-who b, html.dark .mail-text { color:#e8eaed; }
+  html.dark .msg, html.dark .atts, html.dark .labels { border-color:#2c2f33; }
+  html.dark .att-pill { background:#303134; color:#bdc1c6; border-color:#3c4043; }
+  html.dark a.att-pill:hover { background:#0c2740; }
+  html.dark .chip.sys { background:#3c4043; color:#9aa0a6; }
+  html.dark .labels select { background:#303134; color:#bdc1c6; border-color:#3c4043; }
+  html.dark .q-toggle { background:#3c4043; border-color:#5f6368; color:#bdc1c6; }
+  html.dark .pager a, html.dark .pager span.cur { background:#303134; border-color:#3c4043; color:#8ab4f8; }
+  html.dark .pager .cur { background:#0c2740; border-color:#8ab4f8; color:#e8eaed; }
+  html.dark .pager .disabled { color:#5f6368; background:transparent; border-color:#2c2f33; }
+  html.dark .pager input { background:#303134; color:#e8eaed; border-color:#3c4043; }
+  html.dark .compose textarea, html.dark .compose .c-row input { background:#303134; color:#e8eaed; border-color:#3c4043; }
+  html.dark .compose .c-row input:disabled { background:#26282c; color:#5f6368; }
+  html.dark .c-cancel, html.dark .reply-btn, html.dark .exp-all { background:#303134; color:#bdc1c6; border-color:#3c4043; }
+  html.dark .reply-btn:hover, html.dark .exp-all:hover { background:#0c2740; color:#8ab4f8; border-color:#8ab4f8; }
+  html.dark .mail-load, html.dark .empty, html.dark .snippet { color:#9aa0a6; }
+  html.dark .err { background:#3a1d1c; border-color:#5c2b28; color:#f28b82; }
+  html.dark .mail-frame { background:#fff; }   /* 메일 원문(iframe)은 가독성 위해 밝게 유지 */
   /* 첨부/라벨 */
   .atts { display:flex; gap:8px; flex-wrap:wrap; padding:12px 20px; border-top:1px solid #f1f3f4; }
   .att-pill { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:16px;
@@ -718,9 +900,13 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
   .att-pill .pill-ic { display:inline-flex; align-items:center; color:#5f6368; }
   .labels { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; padding:10px 20px 14px; border-top:1px solid #f1f3f4; margin:0; }
   .labels .lb-t { color:var(--hint); }
-  .chip { display:inline-flex; align-items:center; gap:4px; background:#e8f0fe; color:#1a56b8; border-radius:12px; padding:2px 9px; }
+  .chip { display:inline-flex; align-items:center; gap:4px; border-radius:12px; padding:2px 9px;
+          background:var(--c,#e8f0fe); color:var(--t,#1a56b8); }
+  html.dark .chip { background:color-mix(in srgb, var(--c,#8ab4f8) 30%, #16181c);
+                    color:color-mix(in srgb, var(--t,#8ab4f8) 35%, #fff); }
   .chip.sys { background:#f1f3f4; color:#5f6368; }
-  .chip button { border:none; background:none; color:#1a56b8; cursor:pointer; font-size:13px; line-height:1; padding:0; }
+  html.dark .chip.sys { background:#3c4043; color:#bdc1c6; }
+  .chip button { border:none; background:none; color:inherit; cursor:pointer; font-size:13px; line-height:1; padding:0; }
   .chip button:hover { color:#c00; }
   .labels select { border:1px solid var(--line); border-radius:8px; padding:2px 6px; font-size:12px; color:#555; max-width:160px; }
   .labels .lb-busy { color:var(--hint); }
@@ -743,7 +929,7 @@ $mkUrl = function (array $over) use ($keepArr) {
 };
 ?>
 <header>
-  <h1>📧 Gmail</h1>
+  <h1>📧 Gmail <span id="daemonDot" title="실시간 감시 상태 확인 중…">●</span></h1>
   <form class="hsearch" method="get">
     <?php foreach ($keepArr as $k => $v) if ($k !== 'q') echo '<input type="hidden" name="' . e($k) . '" value="' . e($v) . '">'; ?>
     <input type="search" name="q" value="<?= e($qF) ?>" placeholder="메일 검색 (제목·보낸사람·본문)">
@@ -769,11 +955,20 @@ $mkUrl = function (array $over) use ($keepArr) {
   <a class="toggle<?= $starF ? ' on' : '' ?>" href="<?= e($mkUrl(['star' => $starF ? null : 1])) ?>" title="별표 대화만 보기"><?= $starF ? '★ 별표만' : '☆ 별표' ?></a>
   <a class="toggle<?= $unreadFirst ? ' on' : '' ?>" href="<?= e($mkUrl(['unread' => $unreadFirst ? 0 : 1])) ?>"><?= $unreadFirst ? '🔵 안읽음 우선' : '⚪ 안읽음 우선' ?></a>
   <button id="syncbtn" class="toggle" type="button" title="새 메일·읽음 변경만 DB 에 반영">🔄 동기화</button>
+  <button id="themeBtn" class="toggle" type="button" title="다크/라이트 전환">🌓</button>
 </header>
 <script>
 const BASE_QS = <?= json_encode(($x = array_filter($keepArr, fn($k) => $k !== 'label', ARRAY_FILTER_USE_KEY)) ? '&' . http_build_query($x) : '') ?>;
 document.getElementById("labelsel").addEventListener("change", function(){
   location.href = "?p=1" + BASE_QS + (this.value ? "&label=" + encodeURIComponent(this.value) : "");
+});
+document.getElementById("themeBtn").addEventListener("click", function(){
+  const el = document.documentElement;
+  const isDark = el.classList.contains("dark")
+    || (!el.classList.contains("light") && matchMedia("(prefers-color-scheme: dark)").matches);
+  el.classList.remove("dark","light");
+  el.classList.add(isDark ? "light" : "dark");
+  localStorage.setItem("ui_theme", isDark ? "light" : "dark");
 });
 document.getElementById("psel").addEventListener("change", function(){
   const sp = new URLSearchParams(location.search);
@@ -925,6 +1120,57 @@ function buildMsg(m, expanded){
 /* 대화 전체 렌더: 제목 1회 + 시간순. 마지막(최신) 메일만 펼치고 나머지는 접힘 */
 /* 인라인 답장 작성창 (Gmail 식) */
 const MY_ACCT = <?= json_encode($acct, JSON_UNESCAPED_UNICODE) ?>;
+/* 받는사람/참조 자동완성 (Gmail 식): 마지막 쉼표 뒤 토큰으로 연락처 검색 → 선택 시 주소 삽입 */
+function bindAddrAuto(inp){
+  let menu = null, items = [], active = 0, timer = null;
+  const close = () => { if (menu) { menu.remove(); menu = null; } items = []; };
+  const token = () => { const p = inp.value.split(","); return p[p.length - 1].trim(); };
+  const pick = i => {
+    const c = items[i]; if (!c) return;
+    const p = inp.value.split(",");
+    p[p.length - 1] = " " + c.email;
+    inp.value = p.join(",").replace(/^\s+/, "") + ", ";
+    close(); inp.focus();
+  };
+  const show = list => {
+    close();
+    if (!list.length) return;
+    items = list; active = 0;
+    menu = document.createElement("div"); menu.className = "addr-menu";
+    list.forEach((c, i) => {
+      const d = document.createElement("div"); d.className = "ai" + (i === 0 ? " on" : "");
+      d.innerHTML = (c.name ? '<b></b> ' : '') + '<span class="ae"></span>';
+      if (c.name) d.querySelector("b").textContent = c.name;
+      d.querySelector(".ae").textContent = c.email;
+      d.addEventListener("mousedown", e => { e.preventDefault(); pick(i); });
+      menu.appendChild(d);
+    });
+    const r = inp.getBoundingClientRect();
+    menu.style.left = r.left + "px"; menu.style.top = (r.bottom + 4) + "px"; menu.style.minWidth = r.width + "px";
+    document.body.appendChild(menu);
+  };
+  inp.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = token();
+    if (q.length < 1) { close(); return; }
+    timer = setTimeout(async () => {
+      try {
+        const j = await (await fetch("?contacts=" + encodeURIComponent(q))).json();
+        if (document.activeElement === inp && token() === q) show(j.contacts || []);
+      } catch (e) { close(); }
+    }, 180);
+  });
+  inp.addEventListener("keydown", e => {
+    if (!menu) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      active = (active + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+      menu.querySelectorAll(".ai").forEach((el, i) => el.classList.toggle("on", i === active));
+    } else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pick(active); }
+    else if (e.key === "Escape") close();
+  });
+  inp.addEventListener("blur", () => setTimeout(close, 150));   // 클릭 선택 여유
+}
 function openCompose(body, foot, lastMail, mode){
   const old = body.querySelector(".compose"); if (old) old.remove();
   const c = document.createElement("div"); c.className = "compose";
@@ -942,6 +1188,7 @@ function openCompose(body, foot, lastMail, mode){
   };
   const toInp = mkRow("받는사람", "불러오는 중…");
   const ccInp = mkRow("참조", "");
+  bindAddrAuto(toInp); bindAddrAuto(ccInp);   // Gmail 식 연락처 자동완성
   (async () => {
     try {
       const j = await (await fetch("?replyinfo=" + lastMail.uid + "&mode=" + mode)).json();
@@ -1029,8 +1276,8 @@ function buildThread(mail, body, j){
   }
   body.appendChild(h);
   boxes.forEach(b => body.appendChild(b));
-  // 답장/전체답장 (대상: 대화의 마지막 메일 — Gmail 동일)
-  const last = j.mails[j.mails.length - 1];
+  // 답장/전체답장 (대상: 대화의 마지막 메일 — Gmail 동일. 보낸편지함 사본(uid 없음)은 답장 헤더 조회 불가 → 마지막 INBOX 메일로)
+  const last = [...j.mails].reverse().find(m => m.uid) || j.mails[j.mails.length - 1];
   const foot = document.createElement("div"); foot.className = "reply-bar";
   const ICONS = {                                          // Gmail 스타일 reply / reply_all
     reply: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-10z"/></svg>',
@@ -1114,9 +1361,8 @@ function renderLabels(mail, box, labels, all){
     c.textContent = l.system ? (SYS_NAME[l.name] || l.name) : l.name;
     if (!l.system) {                                       // 사용자 라벨: Gmail 색 매핑 적용 + 제거 가능
       const [bg, fg] = labelColor(l.name);
-      c.style.background = bg; c.style.color = fg;
+      c.style.setProperty("--c", bg); c.style.setProperty("--t", fg);   // 다크 모드에서 CSS 가 자동 변환
       const x = document.createElement("button"); x.textContent = "✕"; x.title = "라벨 제거";
-      x.style.color = fg;
       x.addEventListener("click", () => setLabel(mail, box, l.name, false, all));
       c.appendChild(x);
     }
@@ -1323,6 +1569,13 @@ setInterval(async () => {
   try {
     const j = await (await fetch("?ping=1", {cache: "no-store"})).json();
     if (!j.ok) return;
+    // 실시간 감시(IDLE 데몬) 상태 표시등: 재-IDLE 주기(4분) 이내 신호 = 정상
+    const dot = document.getElementById("daemonDot");
+    if (dot) {
+      const ok = j.watch_age < 330;
+      dot.style.color = ok ? "#1e8e3e" : "#d93025";
+      dot.title = ok ? `실시간 감시 정상 (${j.watch_age}초 전 신호)` : `실시간 감시 끊김 — 3분 폴백으로 동작 중 (gmail_watch 확인)`;
+    }
     if (j.changed > lastChanged) {
       lastChanged = j.changed;
       const busy = document.querySelector(".mail.open") || document.querySelector(".compose");
@@ -1336,6 +1589,6 @@ setInterval(async () => {
     // 감시 데몬이 안 돌고 있으면(마지막 동기화가 오래됨) 브라우저가 3분마다 대신 동기화
     if (j.sync_age > 180) sync();
   } catch (e) { /* 다음 ping 에서 재시도 */ }
-}, 5000);
+}, 2000);   // 2초마다 상태 확인 (DB 1행, ~1ms)
 </script>
 </body></html>

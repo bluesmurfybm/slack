@@ -125,6 +125,44 @@ foreach ($boards as $listId => $b) {
         }
     }
     if (!empty($data['maxUpdated'])) meta_set('list_updated_max_' . $listId, $data['maxUpdated']);
+
+    // ---- 보관 항목 동기화: archived=true 로 직접 나열 → 누락 원천 차단 ----
+    // (기존 방식은 "라이브였다가 사라진" 항목만 감지 → DB 에 없던 보관 항목은 영영 누락됐음)
+    $sinceA = $full ? 0 : (int)meta_get('list_arch_updated_max_' . $listId, 0);
+    $dataA = slackFetchRows($token, $listId, $sinceA, $b['col'], true);
+    if (isset($dataA['error'])) { $errors[$b['label'] . '(보관)'] = $dataA['error']; continue; }
+    $archIds = [];
+    foreach ($dataA['rows'] as $row) {
+        if (!empty($b['skip_empty_title'])) {
+            $t = trim((string)$row['title']);
+            if ($t === '' || $t === '(제목 없음)') continue;
+        }
+        if (!empty($b['title_customer'])) {
+            $cust = trim((string)($row['momo'] ?? ''));
+            if ($cust !== '') $row['title'] = '[' . $cust . '] ' . $row['title'];
+            $row['momo'] = '';
+        }
+        if (isset($locked[$row['id']])) continue;
+        $prevStmt->execute([$row['id']]);
+        if ($prevStmt->fetchColumn() === false) $archivedNow++;
+        $stmt->execute([
+            ':id' => $row['id'], ':list_id' => $listId, ':board' => $b['label'],
+            ':title' => $row['title'], ':body' => $row['body'], ':momo' => $row['momo'], ':lms' => $row['lms'],
+            ':req_id' => $row['req_id'], ':req' => $row['req'], ':asg_id' => $row['asg_id'], ':asg' => $row['asg'],
+            ':status_id' => $row['status_id'], ':status' => $row['status'],
+            ':priority_id' => $row['priority_id'], ':priority' => $row['priority'],
+            ':team_id' => $row['team_id'], ':team' => $row['team'],
+            ':eta' => $row['eta'] ?: null, ':date' => $row['date'] ?: null, ':done' => $row['done'] ?: null,
+            ':attachments' => $row['attachments'] ?? null,
+            ':created' => $row['created'], ':updated' => $row['updated'], ':synced_at' => $now,
+        ]);
+        $archIds[] = $row['id'];
+    }
+    if ($archIds) {                                        // 방금 upsert 한 항목들 보관 표시
+        $ph = implode(',', array_fill(0, count($archIds), '?'));
+        $pdo->prepare("UPDATE requests SET archived=1 WHERE id IN ($ph)")->execute($archIds);
+    }
+    if (!empty($dataA['maxUpdated'])) meta_set('list_arch_updated_max_' . $listId, $dataA['maxUpdated']);
 }
 
 // 삭제된 항목의 사용자 상태(읽음/고정/숨김/배정) 고아 행 정리

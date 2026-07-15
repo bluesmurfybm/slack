@@ -13,6 +13,11 @@ header('Content-Type: text/html; charset=utf-8');
 <html lang="ko"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>업무 허브</title>
+<script>(function(){var t=localStorage.getItem("ui_theme");if(!t&&matchMedia("(prefers-color-scheme: dark)").matches)t="dark";if(t)document.documentElement.classList.add(t);})();</script>
+<style>
+  html.dark body { background:#1b1e22; }
+  html.dark #switch button { background:#303134; border-color:#3c4043; color:#e8eaed; }
+</style>
 <style>
   * { box-sizing:border-box; }
   html, body { height:100%; }

@@ -30,7 +30,11 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
   .head h1{font-size:18px;margin:0;} .tag{font-size:11px;background:#fff0e0;color:#a85b00;border-radius:6px;padding:2px 8px;}
   a.back{font-size:13px;color:var(--info);text-decoration:none;}
   input,button,select,textarea{font-family:inherit;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--txt);font-size:13px;}
-  input,button,select{height:34px;padding:0 10px;} button{cursor:pointer;} button.primary{background:var(--info);color:#fff;border-color:var(--info);}
+  input,button,select{height:34px;padding:0 10px;}
+  /* 모든 버튼: 아이콘/텍스트 수직·수평 가운데 정렬 */
+  button{cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}
+  button[hidden]{display:none !important;}
+  button.primary{background:var(--info);color:#fff;border-color:var(--info);}
   .panel{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
   .row1{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
   .row1 label{font-size:12px;color:var(--muted);}
@@ -67,7 +71,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
   .body-card pre,.cmt-b pre{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:6px 0;overflow:auto;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap;}
   .body-card blockquote,.cmt-b blockquote{margin:4px 0;padding:1px 0 1px 12px;border-left:4px solid var(--hint);color:var(--txt);}
   .dlinks{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;}
-  .dlinks a{font-size:12px;text-decoration:none;color:var(--info);background:var(--bg);border:1px solid var(--line);padding:7px 11px;border-radius:8px;}
+  .dlinks a,.dlinks button{font-size:12px;text-decoration:none;color:var(--info);background:var(--bg);border:1px solid var(--line);padding:7px 11px;border-radius:8px;}
   .dlinks .slack-link{color:#fff;background:#4a154b;border-color:#4a154b;}
   .cmts-title{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
   .cmts-n{background:var(--info-bg);color:var(--info);border-radius:9px;padding:0 7px;font-size:11px;}
@@ -87,6 +91,8 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
   .rsnip{font-size:12px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
   .chip{font-size:10px;padding:1px 7px;border-radius:8px;white-space:nowrap;}
   .c-blue{background:#e6f1fb;color:#0c447c;} .c-yoz{background:#e0f2f1;color:#00695c;} .c-arch{background:#e5e7eb;color:#4b5563;}
+  .mention{background:var(--info-bg);color:var(--info);border-radius:4px;padding:0 3px;font-weight:600;}
+  .cemoji{width:16px;height:16px;vertical-align:-3px;}
   .rmeta{flex:none;font-size:11px;color:var(--muted);white-space:nowrap;} .rlink{flex:none;font-size:11px;color:#4a154b;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 8px;}
   .empty{padding:24px;text-align:center;color:var(--muted);}
 </style>
@@ -120,23 +126,49 @@ function boardChip(b,arch){ const c=b==='와이오즈'?'c-yoz':'c-blue', l=b==='
 const escAttr = escA;
 function unslack(s){ return s.replace(/&amp;(amp|lt|gt|quot|#39|#x27);/g,"&$1;"); }
 const EMOJI = {smile:"😄",smiley:"😃",grinning:"😀",grin:"😁",joy:"😂",rofl:"🤣",sweat_smile:"😅",laughing:"😆",wink:"😉",blush:"😊",slightly_smiling_face:"🙂",yum:"😋",sunglasses:"😎",heart_eyes:"😍",thinking_face:"🤔",hugging_face:"🤗",neutral_face:"😐",smirk:"😏",unamused:"😒",roll_eyes:"🙄",sweat:"😓",pensive:"😔",confused:"😕",worried:"😟",disappointed:"😞",tired_face:"😫",weary:"😩",cry:"😢",sob:"😭",angry:"😠",rage:"😡",scream:"😱",flushed:"😳",open_mouth:"😮",sleeping:"😴",zzz:"💤","+1":"👍",thumbsup:"👍","-1":"👎",thumbsdown:"👎",ok_hand:"👌",punch:"👊",fist:"✊",v:"✌️",wave:"👋",raised_hands:"🙌",pray:"🙏",clap:"👏",muscle:"💪",point_up:"☝️",point_down:"👇",point_left:"👈",point_right:"👉",bow:"🙇",see_no_evil:"🙈",heart:"❤️",broken_heart:"💔",blue_heart:"💙",fire:"🔥",star:"⭐",sparkles:"✨",zap:"⚡",boom:"💥",tada:"🎉","100":"💯",white_check_mark:"✅",heavy_check_mark:"✔️",x:"❌",o:"⭕",warning:"⚠️",exclamation:"❗",question:"❓",bulb:"💡",rocket:"🚀",eyes:"👀",ok:"🆗","new":"🆕",hourglass:"⏳",alarm_clock:"⏰",calendar:"📅",memo:"📝",pencil2:"✏️",pushpin:"📌",paperclip:"📎",link:"🔗",mag:"🔍",lock:"🔒",key:"🔑",bell:"🔔",email:"✉️",computer:"💻",hammer:"🔨",wrench:"🔧",gear:"⚙️",package:"📦",chart_with_upwards_trend:"📈",bar_chart:"📊",clipboard:"📋",coffee:"☕",check:"✔️",robot_face:"🤖",speech_balloon:"💬"};
+const MENTION_NAMES = {};
+/* 커스텀 이모지 맵 (lists.php 와 동일 소스) — 페이지 로드 시 미리 받아둠 */
+let _EM = null;
+(async()=>{ try{ _EM = await (await fetch("emoji_meta.php")).json(); }catch(e){ _EM = {custom:{}}; } })();
+/* 미해석 멘션(@…)을 user_info.php 로 lazy 해석 — lists.php 와 동일 */
+async function resolveMentions(scope){
+  const els=[...(scope||document).querySelectorAll('.mention[data-unres]')];
+  if(!els.length) return;
+  const ids=[...new Set(els.map(e=>e.dataset.uid))];
+  try{
+    const j = await (await fetch("user_info.php?ids="+ids.join(","))).json();
+    Object.assign(MENTION_NAMES, j.users||{});
+    els.forEach(e=>{ const n=MENTION_NAMES[e.dataset.uid]; if(n){ e.textContent="@"+n; e.removeAttribute("data-unres"); } });
+  }catch(e){ /* 다음 렌더에서 재시도 */ }
+}
 function mrkdwn(t){
   if(!t) return '';
-  var ph=[]; var stash=function(h){ ph.push(h); return ''+(ph.length-1)+''; };
+  var ph=[]; var stash=function(h){ ph.push(h); return ''+(ph.length-1)+''; };
   t = t.replace(/```([\s\S]*?)```/g,function(m,c){ return stash('<pre>'+unslack(esc(c.replace(/^\n|\n$/g,'')))+'</pre>'); });
   t = t.replace(/`([^`\n]+)`/g,function(m,c){ return stash('<code>'+unslack(esc(c))+'</code>'); });
-  t = t.replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g,function(m,u,l){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(l))+'</a>'); });
-  t = t.replace(/<(https?:\/\/[^>]+)>/g,function(m,u){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u))+'</a>'); });
+  t = t.replace(/<((?:https?:\/\/|tel:|mailto:)[^|>]+)\|([^>]+)>/g,function(m,u,l){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(l))+'</a>'); });
+  t = t.replace(/<((?:https?:\/\/|tel:|mailto:)[^>]+)>/g,function(m,u){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u.replace(/^(?:tel|mailto):/,'')))+'</a>'); });
   t = t.replace(/https?:\/\/[^\s<>]+/g,function(u){ var tail=''; var mt=u.match(/[*_~`)\]}.,;:!?]+$/); if(mt){ tail=mt[0]; u=u.slice(0,-tail.length); } return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u))+'</a>')+tail; });
+  // @멘션: <@UID> → 파란 멘션 배지. 이름 미해석분은 표시 후 lazy 해석 (lists.php 와 동일)
+  t = t.replace(/<@([UW][A-Z0-9]+)>/g,function(m,id){
+    var nm = MENTION_NAMES[id];
+    return stash('<span class="mention" data-uid="'+escAttr(id)+'"'+(nm?'':' data-unres="1"')+'>@'+esc(nm||'…')+'</span>');
+  });
   t = unslack(esc(t));
-  t = t.replace(/\*(?!\s)([^*\n]+?)\*/g,'<b>$1</b>');
-  t = t.replace(/_(?!\s)([^_\n]+?)_/g,'<i>$1</i>');
-  t = t.replace(/~(?!\s)([^~\n]+?)~/g,'<s>$1</s>');
+  // Slack 처럼 "단어 경계" 에서만 서식 적용 (식별자 중간 _ / * 보호)
+  t = t.replace(/(?<![\w가-힣*])\*(?!\s)([^*\n]+?)\*(?!\w)/g,'<b>$1</b>');
+  t = t.replace(/(?<![\w가-힣_])_(?!\s)([^_\n]+?)_(?!\w)/g,'<i>$1</i>');
+  t = t.replace(/(?<![\w가-힣~])~(?!\s)([^~\n]+?)~(?!\w)/g,'<s>$1</s>');
   t = t.replace(/:skin-tone-[2-6]:/g,'');
-  t = t.replace(/:([a-z0-9_+-]+):/g,function(m,n){ return EMOJI[n]||m; });
+  // 표준 맵 → 커스텀 이미지(emoji_meta) → 미해석은 원문 유지 (lists.php 와 동일)
+  t = t.replace(/:([a-z0-9_+가-힣-]+):/g,function(m,n){
+    if(EMOJI[n]) return EMOJI[n];
+    var u=(_EM && _EM.custom || {})[n];
+    return u ? '<img class="cemoji" src="'+escAttr(u)+'" alt=":'+escAttr(n)+':">' : m;
+  });
   t = quoteBlocks(t);
   t = t.replace(/\n/g,'<br>');
-  t = t.replace(/(\d+)/g,function(m,i){ return ph[+i]; });
+  t = t.replace(/(\d+)/g,function(m,i){ return ph[+i]; });
   return t;
 }
 function quoteBlocks(txt){
@@ -179,7 +211,7 @@ pickInput.addEventListener("input",()=>{
   const q=pickInput.value.trim().toLowerCase();
   if(!q){ pickMenu.hidden=true; return; }
   const m=ITEMS.filter(it=>(it.title||"").toLowerCase().includes(q)).slice(0,20);
-  pickMenu.innerHTML = m.length ? m.map(it=>`<div class="pk" data-id="${escA(it.id)}">${it.archived?'🗄 ':''}${esc(it.title)}</div>`).join("") : '<div class="pk" style="color:var(--hint)">결과 없음</div>';
+  pickMenu.innerHTML = m.length ? m.map(it=>`<div class="pk" data-id="${escA(it.id)}">${it.archived?'🗄️ ':''}${esc(it.title)}</div>`).join("") : '<div class="pk" style="color:var(--hint)">결과 없음</div>';
   pickMenu.hidden=false;
   pickMenu.querySelectorAll(".pk[data-id]").forEach(el=>el.addEventListener("click",()=>{ pickInput.value=""; pickMenu.hidden=true; findById(el.dataset.id); }));
 });
@@ -243,11 +275,11 @@ async function toggleDetail(id){
           ${metaItem('요청자', r.req||'—')}
           ${metaItem('담당자', (r.asg && r.asg!=='—')?r.asg:'미지정')}
           ${metaItem('요청일', fmtCreated(r.created))}
-          ${r.archived?`<div class="mi"><span class="mv">🗄 보관</span></div>`:''}
+          ${r.archived?`<div class="mi"><span class="mv">🗄️ 보관</span></div>`:''}
         </div>
         <div class="body-card">${mrkdwn(r.body||r.snip||'(내용 없음)')}</div>
         <div class="dlinks">
-          ${LIST_URL?`<a class="slack-link" href="${escA(LIST_URL)}?record_id=${escA(id)}" target="_blank" rel="noopener">🔗 Slack에서 열기</a>`:''}
+          ${LIST_URL?`<button type="button" class="slack-link copyLink" data-url="${escA(LIST_URL)}?record_id=${escA(id)}">링크 복사</button>`:''}
         </div>
       </div>
       <div class="detail-cmts">
@@ -255,11 +287,22 @@ async function toggleDetail(id){
         <div class="cmts" id="scmts-${escA(id)}"><div class="cmt-loading">댓글 불러오는 중…</div></div>
       </div>
     </div>`;
+  // 링크 복사 (lists.php 와 동일 동작)
+  d.querySelectorAll(".copyLink").forEach(el=>el.addEventListener("click", async e=>{
+    e.stopPropagation();
+    const url = el.dataset.url, old = el.textContent;
+    try{ await navigator.clipboard.writeText(url); }
+    catch(_){ const ta=document.createElement("textarea"); ta.value=url; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+    el.textContent = "복사됨!";
+    setTimeout(()=>{ el.textContent = old; }, 1200);
+  }));
+  resolveMentions(d);                                        // 본문 멘션 이름 해석
   try{
     const j=await (await fetch("comments.php?request_id="+encodeURIComponent(id),{cache:"no-store"})).json();
     const cs=j.comments||[];
+    Object.assign(MENTION_NAMES, j.users||{});               // 댓글 멘션 이름 맵 병합
     const box=document.getElementById("scmts-"+id);
-    if(box){ box.innerHTML=cmtHtml(cs); box.scrollTop=box.scrollHeight; }
+    if(box){ box.innerHTML=cmtHtml(cs); box.scrollTop=box.scrollHeight; resolveMentions(box); }
     const tt=d.querySelector(".cmts-title");
     if(tt) tt.innerHTML='💬 댓글'+(cs.length?` <span class="cmts-n">${cs.length}</span>`:'');
   }catch(e){ const box=document.getElementById("scmts-"+id); if(box) box.innerHTML='<div class="cmt-empty">댓글 로드 실패</div>'; }

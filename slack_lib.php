@@ -115,12 +115,13 @@ function slackUpdateCell($token, $listId, $rowId, $columnId, $valueKey, array $v
     return slackPost('slackLists.items.update', $token, ['list_id' => $listId, 'cells' => $cells]);
 }
 
-function slackFetchItems($token, $listId) {
+function slackFetchItems($token, $listId, $archived = false) {
     $items = [];
     $cursor = null;
     do {
         // limit 을 크게 잡아 페이지(=HTTP 왕복) 수를 최소화 (100→1000: 약 4배 빠름)
         $params = ['list_id' => $listId, 'limit' => 1000];
+        if ($archived) $params['archived'] = 'true';   // 보관 항목만 나열 (items.list 지원 확인됨)
         if ($cursor) $params['cursor'] = $cursor;
         $res = slackGet('slackLists.items.list', $token, $params);
         if (empty($res['ok'])) {
@@ -318,9 +319,9 @@ function slackFieldBody($f){
  * @param int $sinceUpdated 0이면 전체, >0이면 updated_timestamp 가 이 값 이상인 항목만 처리(증분)
  * @return array ['rows'=>[...], 'scanned'=>int, 'maxUpdated'=>int] 또는 ['error'=>'...']
  */
-function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
+function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null, $archived = false) {
     $COL = $colMap ?: SLACK_COL;   // 리스트별 컬럼 매핑(미지정 시 기본=블루소프트)
-    $data = slackFetchItems($token, $listId);
+    $data = slackFetchItems($token, $listId, $archived);
     if (isset($data['error'])) return $data;
 
     $rows = [];

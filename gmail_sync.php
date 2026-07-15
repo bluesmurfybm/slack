@@ -23,6 +23,12 @@ const GMAIL_CHUNK = 1000;
 function gmail_sync_pass() {
     $t0 = microtime(true);
     $out = ['ok' => false, 'added' => 0, 'flag_updated' => 0, 'backfill_remaining' => 0];
+    // 동시 실행 방지 (데몬 + 브라우저 폴백 + 수동이 겹치면 DB 데드락)
+    $lock = @fopen(sys_get_temp_dir() . '/gmail_sync.lock', 'c');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+        return ['ok' => true, 'added' => 0, 'flag_updated' => 0, 'backfill_remaining' => 0,
+                'skipped' => '다른 동기화 진행 중', 'took' => 0];
+    }
     try {
         gmail_ensure_table();
         [$im, $err] = gmail_open();
@@ -198,9 +204,14 @@ function gmail_sync_pass() {
                 } catch (Throwable $e) { /* 예열 실패는 치명적이지 않음 */ }
             }
         }
+        // ---- 보낸편지함 헤더 동기화 (대화 카운트/병합용 — 실패해도 INBOX 동기화에는 영향 없음) ----
+        if (($out['backfill_remaining'] ?? 0) === 0) {
+            try { $out['sent_added'] = gmail_sync_sent($pdo, $acct); }
+            catch (Throwable $e) { $out['sent_err'] = $e->getMessage(); }
+        }
         gmeta_set('gmail_last_sync', date('Y-m-d H:i:s'));
         // 변경 마커: 브라우저의 가벼운 ping 이 이 값으로 실시간 갱신 여부 판단
-        if (($out['added'] + $out['flag_updated'] + (int)($out['deleted'] ?? 0)) > 0) {
+        if (($out['added'] + $out['flag_updated'] + (int)($out['deleted'] ?? 0) + (int)($out['sent_added'] ?? 0)) > 0) {
             gmeta_set('gmail_changed_at', (string)time());
         }
         $out['ok'] = true;
@@ -210,8 +221,60 @@ function gmail_sync_pass() {
     } catch (Throwable $e) {
         $out['error'] = $e->getMessage();
     }
+    flock($lock, LOCK_UN);
+    fclose($lock);
     $out['took'] = round(microtime(true) - $t0, 1);
     return $out;
+}
+
+/** 보낸편지함 헤더(uid/thrid/udate)만 증분 동기화 → gmail_sent.
+ *  목록의 대화 카운트에 내가 보낸 메일을 포함시키기 위한 것 (본문·목록 노출 없음). */
+function gmail_sync_sent($pdo, $acct) {
+    $g = gmail_cfg();
+    $mb = (string)gmeta_get('gmail_sent_folder', '');
+    if ($mb === '') {                                      // 폴더명 탐색(\Sent 속성) 후 캐시 — 계정 언어 무관
+        $raw = new GmailRaw();
+        $mb = (string)$raw->specialFolder('\\Sent');
+        $raw->close();
+        if ($mb === '') return 0;
+        gmeta_set('gmail_sent_folder', $mb);
+    }
+    $im = @imap_open($g['host'] . $mb, $g['user'], str_replace(' ', '', (string)$g['pass']), 0, 1);
+    if (!$im) { gmeta_set('gmail_sent_folder', ''); return 0; }   // 폴더 변경 등 → 다음 패스에 재탐색
+    $st = imap_status($im, $g['host'] . $mb, SA_UIDVALIDITY);
+    $uv = (string)($st->uidvalidity ?? '');
+    if ($uv !== '' && gmeta_get('gmail_sent_uidvalidity') !== $uv) {
+        if (gmeta_get('gmail_sent_uidvalidity') !== null) {
+            $pdo->prepare("DELETE FROM gmail_sent WHERE account = ?")->execute([$acct]);
+            gmeta_set('gmail_sent_last_uid', '0');
+        }
+        gmeta_set('gmail_sent_uidvalidity', $uv);
+    }
+    $last = (int)gmeta_get('gmail_sent_last_uid', '0');
+    $ovs = imap_fetch_overview($im, ($last + 1) . ':*', FT_UID) ?: [];
+    imap_close($im);
+    // "N:*" 은 N 초과분이 없어도 마지막 1건을 돌려줌 → 실제 신규만
+    $new = array_values(array_filter($ovs, fn($o) => (int)($o->uid ?? 0) > $last));
+    if (!$new) return 0;
+    $uids = array_map(fn($o) => (int)$o->uid, $new);
+    $thr = [];
+    try {                                                  // thrid 는 raw IMAP 으로 일괄 (1커맨드)
+        $raw = new GmailRaw();
+        if ($raw->examine($mb)) $thr = $raw->thridMap(implode(',', $uids));
+        $raw->close();
+    } catch (Throwable $e) { /* 실패 시 thrid=NULL 로 저장 — 해당 건만 카운트에서 빠짐 */ }
+    $ins = $pdo->prepare("INSERT INTO gmail_sent (account, uid, thrid, udate) VALUES (?, ?, ?, ?)
+                          ON DUPLICATE KEY UPDATE thrid = VALUES(thrid), udate = VALUES(udate)");
+    $max = $last;
+    $pdo->beginTransaction();
+    foreach ($new as $o) {
+        $u = (int)$o->uid;
+        $ins->execute([$acct, $u, $thr[$u] ?? null, (int)($o->udate ?? 0)]);
+        if ($u > $max) $max = $u;
+    }
+    $pdo->commit();
+    gmeta_set('gmail_sent_last_uid', (string)$max);
+    return count($new);
 }
 
 if (defined('GMAIL_SYNC_LIB_ONLY')) return;   // gmail_watch.php 등이 함수만 쓸 때
