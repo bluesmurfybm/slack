@@ -15,4 +15,19 @@ Thumbs.db
 .sessions/
 
 # 민감정보가 들어갈 수 있는 로컬 설정 (필요 시 config.local.php 로 분리)
+config.php
 config.local.php
+sso_secret.key
+
+# book(도서구매신청) 로컬 전용 설정/데이터
+book/config_local.py
+book/kakao_keys.json
+book/book.db
+__pycache__/
+*.pyc
+
+# 로컬 작업관련 문서 (book/ 등 하위 폴더 포함, 모든 md 문서)
+_info
+*.md
+# 단, 루트 readme.md는 다른 개발자를 위한 프로젝트 현황 문서라 공유되어야 함
+!/readme.md

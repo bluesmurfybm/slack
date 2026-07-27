@@ -1,5 +1,6 @@
 <?php
-require_once __DIR__ . '/auth.php';
+$__bwBase = '../';   // slack/ 하위 폴더 페이지 — require_login()/header.php 리다이렉트 경로 계산용
+require_once __DIR__ . '/../auth.php';
 require_login();
 $me = current_user();
 session_release();
@@ -11,63 +12,20 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>학교 사이트 관리</title>
-<style>
-  :root { --bg:#fff; --bg2:#f6f7f8; --line:#e3e5e8; --txt:#1f2328; --muted:#6e7781; --hint:#8b949e; --info:#0c447c; --info-bg:#e6f1fb; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#1a1d21; --bg2:#222529; --line:#383a3f; --txt:#e8e8e8; --muted:#9aa0a6; --hint:#6b7177; --info:#85b7eb; --info-bg:#0c2740; }
-  }
-  * { box-sizing:border-box; }
-  body { font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; background:var(--bg2); color:var(--txt); margin:0; padding:24px; }
-  .wrap { max-width:1100px; margin:0 auto; }
-  .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
-  .head h1 { font-size:18px; font-weight:600; margin:0; display:flex; align-items:center; gap:10px; }
-  .badge { font-size:12px; color:var(--info); background:var(--info-bg); padding:2px 10px; border-radius:8px; }
-  a.back { font-size:13px; color:var(--info); text-decoration:none; }
-  input,button,select { font-family:inherit; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; height:34px; padding:0 10px; }
-  button { cursor:pointer; }
-  button.primary { background:var(--info); color:#fff; border-color:var(--info); }
-  /* 입력 폼 */
-  .form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:var(--bg); border:1px solid var(--line);
-          border-radius:12px; padding:12px 14px; margin-bottom:14px; }
-  .form .fname { flex:1; min-width:150px; }
-  .form .fdev, .form .fops { flex:2; min-width:200px; }
-  .form .fmode { font-size:13px; color:var(--muted); font-weight:600; margin-right:2px; }
-  .form .fchk { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--muted); white-space:nowrap; }
-  .form .fchk input { width:16px; height:16px; }
-  /* 필터 */
-  .tools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
-  .chip { height:30px; padding:0 12px; border:1px solid var(--line); border-radius:16px; background:var(--bg); color:var(--muted); font-size:13px; cursor:pointer; }
-  .chip.on { background:var(--info-bg); border-color:var(--info); color:var(--info); font-weight:600; }
-  .spacer { flex:1; }
-  /* 테이블 */
-  .box { background:var(--bg); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
-  th { background:var(--bg2); color:var(--muted); font-weight:600; font-size:12px; position:sticky; top:0; }
-  tr:last-child td { border-bottom:0; }
-  td.name { font-weight:500; }
-  .vtag { font-size:11px; color:var(--info); background:var(--info-bg); border-radius:8px; padding:1px 7px; }
-  td a.link { color:var(--info); text-decoration:none; word-break:break-all; }
-  td a.link:hover { text-decoration:underline; }
-  .muted { color:var(--hint); }
-  td.act { white-space:nowrap; text-align:right; }
-  td.act button { height:28px; padding:0 12px; font-size:12px; margin-left:6px; vertical-align:middle; }
-  td.act button:first-child { margin-left:0; }
-  td.act .del:hover { border-color:#e24b4a; color:#e24b4a; }
-  .tgl { height:28px; padding:0 14px; font-size:12px; border-radius:14px; background:var(--bg2); color:var(--muted);
-         display:inline-flex; align-items:center; justify-content:center; line-height:1; vertical-align:middle;
-         white-space:nowrap; min-width:60px; }
-  .tgl.on { background:#e4f3e7; border-color:#bfe3c6; color:#1b5e20; font-weight:600; }
-  tr.off { opacity:.55; }
-  tr.off td.name { text-decoration:line-through; }
-  .empty { padding:28px; text-align:center; color:var(--muted); }
-</style>
+<link rel="icon" href="../../styles/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="../styles/header.css">
+<link rel="stylesheet" href="../styles/schools_admin.css">
 </head>
 <body>
+<?php include __DIR__ . '/../header.php'; ?>
 <div class="wrap">
   <div class="head">
     <h1>⚙ 학교 사이트 관리 <span class="badge" id="count"></span></h1>
-    <div><span class="muted" style="font-size:12px;margin-right:12px"><?= htmlspecialchars($me['name'], ENT_QUOTES) ?> 님</span><a class="back" href="lists.php">← 목록으로</a></div>
+    <div><span class="muted" style="font-size:12px;margin-right:12px"><?= htmlspecialchars($me['name'], ENT_QUOTES) ?> 님</span><a class="back" href="../lists.php">← 목록으로</a></div>
   </div>
 
   <div class="form">

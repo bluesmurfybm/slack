@@ -2,8 +2,9 @@
 /**
  * 요청 카테고리 빈도 차트. 로그인 필요. category_api.php 집계 사용.
  */
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/db.php';
+$__bwBase = '../';   // slack/ 하위 폴더 페이지 — require_login()/header.php 리다이렉트 경로 계산용
+require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../db.php';
 require_login();
 session_release();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -14,42 +15,20 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>요청 카테고리 분석</title>
-<style>
-  :root { --bg:#fff; --bg2:#f6f7f8; --line:#e3e5e8; --txt:#1f2328; --muted:#6e7781; --hint:#8b949e; --info:#0c447c; }
-  @media (prefers-color-scheme: dark){ :root{ --bg:#1a1d21; --bg2:#222529; --line:#383a3f; --txt:#e8e8e8; --muted:#9aa0a6; --hint:#6b7177; --info:#85b7eb; } }
-  *{box-sizing:border-box;} body{font-family:-apple-system,"Malgun Gothic",sans-serif;background:var(--bg2);color:var(--txt);margin:0;padding:24px;}
-  .wrap{max-width:920px;margin:0 auto;}
-  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
-  .head h1{font-size:18px;margin:0;} .tag{font-size:11px;background:#fff0e0;color:#a85b00;border-radius:6px;padding:2px 8px;}
-  a.back{font-size:13px;color:var(--info);text-decoration:none;}
-  .bar-btn,select{font-family:inherit;height:32px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--txt);font-size:13px;padding:0 12px;cursor:pointer;}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
-  .seg button{border:0;background:var(--bg);color:var(--muted);height:32px;padding:0 14px;font-size:13px;cursor:pointer;border-right:1px solid var(--line);}
-  .seg button:last-child{border-right:0;} .seg button.on{background:var(--info);color:#fff;}
-  .panel{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:18px 20px;}
-  .sub{font-size:13px;color:var(--muted);margin-bottom:16px;}
-  .rowc{display:flex;align-items:center;gap:12px;margin-bottom:12px;cursor:pointer;}
-  .lab{flex:none;width:150px;font-size:13px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .track{flex:1;background:var(--bg2);border-radius:6px;height:26px;position:relative;overflow:hidden;}
-  .fill{height:100%;border-radius:6px;transition:width .5s cubic-bezier(.2,.8,.2,1);min-width:2px;}
-  .val{flex:none;width:110px;font-size:12px;color:var(--muted);white-space:nowrap;}
-  .val b{color:var(--txt);font-size:13px;}
-  .drill{margin:0 0 14px 162px;padding:12px 14px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;}
-  .drill[hidden]{display:none;} .drill .dh{font-size:11px;color:var(--hint);margin-bottom:8px;}
-  .subrow{display:flex;align-items:center;gap:10px;margin-bottom:7px;}
-  .slab{flex:none;width:120px;font-size:12px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .strack{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:5px;height:18px;overflow:hidden;}
-  .sfill{height:100%;transition:width .45s cubic-bezier(.2,.8,.2,1);min-width:2px;}
-  .sval{flex:none;width:88px;font-size:11px;color:var(--muted);} .sval b{color:var(--txt);}
-  .samp{margin:1px 0 8px 130px;font-size:11px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .empty{padding:24px;text-align:center;color:var(--muted);}
-</style>
+<link rel="icon" href="../../styles/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="../styles/header.css">
+<link rel="stylesheet" href="../styles/category.css">
 </head>
 <body>
+<?php include __DIR__ . '/../header.php'; ?>
 <div class="wrap">
   <div class="head">
     <h1>📊 요청 카테고리 분석</h1>
-    <a class="back" href="lists.php">← 목록으로</a>
+    <a class="back" href="../lists.php">← 목록으로</a>
   </div>
   <div class="panel">
     <div class="head" style="margin-bottom:14px;">

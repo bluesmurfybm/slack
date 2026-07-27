@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>도서구매신청</title>
+<link rel="icon" href="styles/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbit&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="styles/style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-in">
+    <a class="logo" id="hdrBrand" href="#" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iwork</a>
+    <div class="top-right">
+      <div class="user-menu" id="hdrUserMenu">
+        <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
+          <span class="avatar" id="hdrAvatar"></span>
+          <span class="nm" id="hdrName"></span>
+          <span class="user-caret">▾</span>
+        </div>
+        <div class="dd-menu" id="hdrUserDd">
+          <a href="#" id="dd-mypage">👤 마이페이지</a>
+          <div class="dd-sep"></div>
+          <div class="dd-label">업무 시스템</div>
+          <a href="#" id="dd-slack">📥 업무현황판</a>
+          <div class="dd-sep"></div>
+          <a href="#" id="dd-logout">🚪 로그아웃</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<header class="site">
+  <div class="site-inner">
+    <div class="brand">
+      <span class="eyebrow">사내 도서 구매 · Book Requests</span>
+      <h1>도서구매신청</h1>
+    </div>
+    <button class="btn-new" onclick="openForm()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      신청
+    </button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="toolbar">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="q" type="text" placeholder="도서명" oninput="render()">
+    </div>
+    <div class="year-select">
+      <select id="yearSel" onchange="onYear(this.value)"></select>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+  </div>
+
+  <div class="picker applicant-filter" id="applicantFilter"></div>
+
+  <div class="ledger-head">
+    <span class="title" id="ledgerTitle">2026년 신청 목록</span>
+    <span class="count" id="ledgerCount"></span>
+  </div>
+  <ul class="list" id="list"></ul>
+  <div class="applicant-total" id="applicantTotal">
+    <span class="t-label" id="applicantTotalLabel"></span>
+    <span class="t-sum" id="applicantTotalSum"></span>
+  </div>
+</div>
+
+<div class="overlay" id="overlay" onclick="if(event.target===this)closeForm()">
+  <div class="sheet">
+    <div class="sheet-head">
+      <div><span class="k">신규 신청</span><h2>도서 구매 신청서</h2></div>
+      <button class="x" onclick="closeForm()">×</button>
+    </div>
+    <div class="sheet-body">
+      <div class="field">
+        <label>신청자</label>
+        <div class="picker" id="picker"></div>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label>신청일</label>
+          <input id="f-date" type="date">
+        </div>
+        <div class="field">
+          <label>구분</label>
+          <div class="seg" id="seg">
+            <button type="button" data-v="직무관련" onclick="setGubun(this)">직무관련</button>
+            <button type="button" data-v="직무무관" class="on" onclick="setGubun(this)">직무무관</button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>도서명</label>
+        <input id="f-title" type="text" placeholder="도서명" oninput="onTitleInput()" autocomplete="off">
+        <div class="booksearch" id="booksearch"></div>
+      </div>
+      <div class="dup" id="dup">
+        <div class="h">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+          이미 신청된 책이에요
+        </div>
+        <ul id="dup-list"></ul>
+      </div>
+      <div class="two">
+        <div class="field"><label>저자</label><input id="f-author" type="text" placeholder="저자명"></div>
+        <div class="field"><label>출판사</label><input id="f-pub" type="text" placeholder="출판사"></div>
+      </div>
+      <div class="field">
+        <label>도서단가 (원)</label>
+        <input id="f-price" type="text" inputmode="numeric" placeholder="" oninput="formatPriceInput(this)">
+        <div class="notice" id="price-notice">도서단가 50%가 지원됩니다</div>
+      </div>
+      <div class="field">
+        <label>비고</label>
+        <textarea id="f-note" placeholder=""></textarea>
+      </div>
+    </div>
+    <div class="sheet-foot">
+      <button class="btn-ghost" onclick="closeForm()">취소</button>
+      <button class="btn-submit" onclick="submitForm()">신청 등록</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="confirmOverlay" onclick="if(event.target===this)closeConfirm()">
+  <div class="cdialog">
+    <h3>신청 삭제</h3>
+    <p id="confirmText"></p>
+    <div class="row-btn">
+      <button class="btn-ghost" onclick="closeConfirm()">취소</button>
+      <button class="btn-danger" onclick="doDelete()">삭제</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SEED = [{"year": 2026, "date": "2026-06-01", "applicant": "유승인", "gubun": "직무무관", "title": "우리들의 비밀 온실", "author": "나미키 도", "publisher": "놀", "price": 13500, "done": true, "note": "주문처: 예스24", "id": 1}, {"year": 2026, "date": "2026-06-10", "applicant": "김호영", "gubun": "직무무관", "title": "창조적 시선", "author": "김정운", "publisher": "arte", "price": 97200, "done": true, "note": "주문처: 예스24", "id": 2}, {"year": 2026, "date": "2026-06-10", "applicant": "유승인", "gubun": "직무무관", "title": "숫따니빠따", "author": "일아", "publisher": "불광출판사", "price": 17100, "done": true, "note": "주문처: 예스24", "id": 3}, {"year": 2026, "date": "2026-06-10", "applicant": "유승인", "gubun": "직무무관", "title": "공중그네", "author": "오쿠다 히데오", "publisher": "은행나무", "price": 15300, "done": true, "note": "주문처: 예스24", "id": 4}, {"year": 2026, "date": "2026-07-02", "applicant": "김아랑", "gubun": "직무무관", "title": "우리는 가장 밝은 밤에 헤어졌다", "author": null, "publisher": null, "price": null, "done": false, "note": "", "id": 5}, {"year": 2025, "date": "2025-01-18", "applicant": "조성훈", "gubun": "직무관련", "title": "사실은 이것도 디자인입니다", "author": "김성연", "publisher": "한빛미디어", "price": 17100, "done": true, "note": "교보문구에서 주문", "id": 6}, {"year": 2025, "date": "2025-02-04", "applicant": "이진화", "gubun": "직무무관", "title": "자기 앞의 생", "author": "에밀 아자르", "publisher": "문학동네", "price": 14400, "done": true, "note": "알라딘에서 주문", "id": 7}, {"year": 2025, "date": "2025-07-02", "applicant": "유병문", "gubun": "직무무관", "title": "한 스푼의 시간", "author": "구병모", "publisher": "위즈덤하우스", "price": 13320, "done": true, "note": "알라딘에서 주문", "id": 8}, {"year": 2025, "date": "2025-07-02", "applicant": "유병문", "gubun": "직무무관", "title": "피그말리온 아이들", "author": "구병모", "publisher": "창비", "price": 11700, "done": true, "note": "알라딘에서 주문", "id": 9}, {"year": 2025, "date": "2025-09-05", "applicant": "김아랑", "gubun": "직무무관", "title": "오시 하나, 내 멋대로 산다", "author": "우치다테 마키코", "publisher": "서교책방", "price": 16020, "done": true, "note": "알라딘에서 주문", "id": 10}, {"year": 2025, "date": "2025-11-11", "applicant": "김호영", "gubun": "직무관련", "title": "트렌드 코리아 2026", "author": "김난도 외 11명", "publisher": "미래의창", "price": 18000, "done": true, "note": "알라딘에서 주문", "id": 11}, {"year": 2025, "date": "2025-11-24", "applicant": "유병문", "gubun": "직무무관", "title": "머니 트렌드 2026", "author": "김도윤 외 7명", "publisher": "북모먼트", "price": null, "done": true, "note": "YES24에서 주문", "id": 12}, {"year": 2025, "date": "2025-11-24", "applicant": "유병문", "gubun": "직무무관", "title": "절창", "author": "구병모", "publisher": "문학동네", "price": 16200, "done": true, "note": "YES24에서 주문", "id": 13}, {"year": 2024, "date": "2024-03-07", "applicant": "김호영", "gubun": "직무관련", "title": "UX/UI의 10가지 심리학 법칙", "author": "존 야블론스키 저자(글)  | 이미령 번역", "publisher": "책만", "price": 14400, "done": true, "note": "구입처: 알라딘", "id": 14}, {"year": 2024, "date": "2024-06-24", "applicant": "유승인", "gubun": "직무무관", "title": "삼체 1~3 세트 - 전3권 (출간 10주년 기념 특별판 양장)", "author": "류츠신 (지은이),이현아,허유영 (옮긴이)", "publisher": "자음과모음", "price": 53070, "done": true, "note": "구입처: 11번가 책방골목", "id": 15}, {"year": 2024, "date": "2024-07-03", "applicant": "박화랑", "gubun": "직무무관", "title": "AI 사피엔스: 전혀 다른 세상의 인류", "author": "최재붕 저자(글)", "publisher": "쌤앤파커스", "price": 19800, "done": true, "note": "구입처: 알라딘", "id": 16}, {"year": 2024, "date": "2024-07-03", "applicant": "박화랑", "gubun": "직무무관", "title": "포노사피엔스 : 스마트폰이 낳은 신인류", "author": "최재붕 저자(글)", "publisher": "쌤앤파커스", "price": 15120, "done": true, "note": "구입처: 알라딘", "id": 17}, {"year": 2024, "date": "2024-07-18", "applicant": "김태주", "gubun": "직무무관", "title": "느리게 나이 드는 습관 + 당신도 느리게 나이 들 수 있습니다", "author": "정희원 저", "publisher": "더퀘스트", "price": 32220, "done": true, "note": "https://www.yes24.com/Product/Goods/124408728", "id": 18}, {"year": 2024, "date": "2024-10-15", "applicant": "이진화", "gubun": "직무무관", "title": "채식주의자", "author": "한강", "publisher": "창비", "price": 13500, "done": true, "note": "구입처: 알라딘", "id": 19}, {"year": 2024, "date": "2024-10-15", "applicant": "이진화", "gubun": "직무무관", "title": "작별하지 않는다", "author": "한강", "publisher": "문학동네", "price": 15120, "done": true, "note": "구입처: 알라딘", "id": 20}, {"year": 2024, "date": "2024-10-15", "applicant": "이진화", "gubun": "직무무관", "title": "흰", "author": "한강", "publisher": "문학동네", "price": 13050, "done": true, "note": "구입처: 알라딘", "id": 21}, {"year": 2024, "date": "2024-10-15", "applicant": "유병문", "gubun": "직무무관", "title": "트랜드 코리아 2025", "author": "김난도/전미영/최지혜 등", "publisher": "미래의창", "price": 18000, "done": true, "note": "구입처: 알라딘", "id": 22}, {"year": 2023, "date": "2023-01-10", "applicant": "이상벽", "gubun": "직무무관", "title": "공간의 미래", "author": "유현준", "publisher": "을유문화사", "price": 14400, "done": true, "note": "구매처: 알라딘", "id": 23}, {"year": 2023, "date": "2023-01-10", "applicant": " 김아랑", "gubun": "직무무관", "title": "열린 어둠", "author": "렌조 미키히코(번역 - 양윤옥)", "publisher": "모모", "price": 15120, "done": true, "note": "구매처: 알라딘", "id": 24}, {"year": 2023, "date": "2023-01-18", "applicant": "진소현", "gubun": "직무무관", "title": "씽킹101", "author": "안우경", "publisher": "흐름출판", "price": 18900, "done": true, "note": "구매처: 알라딘", "id": 25}, {"year": 2023, "date": "2023-03-30", "applicant": "이진화", "gubun": "직무무관", "title": "내가 틀릴수도있습니다", "author": "비욘 나티코 린데블라드", "publisher": "다산초당", "price": 14400, "done": true, "note": "구매처: 알라딘", "id": 26}, {"year": 2023, "date": "2023-05-08", "applicant": "김태주", "gubun": "직무무관", "title": "사이보그가 되다", "author": "김초엽,김원영", "publisher": "사계절", "price": 15220, "done": true, "note": "구매처: 알라딘", "id": 27}, {"year": 2023, "date": "2023-05-08", "applicant": "김태주", "gubun": "직무무관", "title": "우리가 빛의 속도로 갈 수 없다면", "author": "김초엽", "publisher": "출판허블\n", "price": 12600, "done": true, "note": "구매처: 알라딘", "id": 28}, {"year": 2023, "date": "2023-05-08", "applicant": "김태주", "gubun": "직무무관", "title": "고통은 나눌 수 있는가", "author": "엄기호", "publisher": "나무연필", "price": 14110, "done": true, "note": "구매처: 알라딘", "id": 29}, {"year": 2023, "date": "2023-05-08", "applicant": "김태주", "gubun": "직무무관", "title": "더 좋은 삶을 위한 철학 (천사와 악마 사이 더 나은 선택을 위한 안내서)", "author": "마이클 슈어", "publisher": "김영사", "price": 16200, "done": true, "note": "구매처: 알라딘", "id": 30}, {"year": 2023, "date": "2023-05-11", "applicant": "진소현", "gubun": "직무무관", "title": "세이노의 가르침", "author": "세이노", "publisher": "데이원", "price": 6480, "done": true, "note": "구매처: 알라딘", "id": 31}, {"year": 2023, "date": "2023-05-11", "applicant": "이승민", "gubun": "직무무관", "title": "시간과 물에 대하여", "author": "안드리 스나이르 마그나손", "publisher": "북하우스", "price": 9300, "done": true, "note": "구매처: 알라딘", "id": 32}, {"year": 2023, "date": "2023-05-17", "applicant": "이승민", "gubun": "직무무관", "title": "선량한 차별주의자", "author": "김지혜", "publisher": "창비", "price": 13500, "done": true, "note": "구매처: 알라딘", "id": 33}, {"year": 2023, "date": "2023-05-17", "applicant": "이승민", "gubun": "직무무관", "title": "우리의 불행은 당연하지 않습니다", "author": "김누리", "publisher": "해냄", "price": 10280, "done": true, "note": "구매처: 알라딘", "id": 34}, {"year": 2023, "date": "2023-07-03", "applicant": "조성훈", "gubun": "직무무관", "title": "평균의 종말", "author": "토드 로즈", "publisher": "21세기북스", "price": 14400, "done": true, "note": "구매처: 알라딘", "id": 35}, {"year": 2023, "date": "2023-08-21", "applicant": "유병문", "gubun": "직무무관", "title": "EBS 다큐프라임 자본주의", "author": "EBS 자본주의 제작팀", "publisher": "가나출판사", "price": 15300, "done": true, "note": "구매처: 알라딘", "id": 36}, {"year": 2023, "date": "2023-09-21", "applicant": "이진화", "gubun": "직무관련", "title": "2023 ADsP 데이터 분석 준전문가 ", "author": "윤종식", "publisher": "데이터에듀", "price": 27900, "done": true, "note": "구매처 : 알라딘", "id": 37}, {"year": 2023, "date": "2023-10-04", "applicant": "유병문", "gubun": "직무무관", "title": "도시와 그 불확실한 벽", "author": "무라카미 하루키", "publisher": "문학동네", "price": 17550, "done": true, "note": "구매처 : 알라딘", "id": 38}, {"year": 2023, "date": "2023-10-04", "applicant": "유병문", "gubun": "직무무관", "title": "트렌드 코리아 2024", "author": "김난도,전미영,최지혜,이수진,권정윤", "publisher": "미래의창", "price": 17100, "done": true, "note": "구매처 : 알라딘", "id": 39}, {"year": 2023, "date": "2023-10-18", "applicant": "김아랑", "gubun": "직무무관", "title": "눈부신 안부", "author": "백수린", "publisher": "문학동네", "price": 14400, "done": true, "note": "구매처 : 알라딘", "id": 40}, {"year": 2023, "date": "2023-10-18", "applicant": "김아랑", "gubun": "직무무관", "title": "로터스 택시에는 특별한 손님이 탑니다", "author": "가토 겐", "publisher": "필름(Feelm)", "price": 15300, "done": true, "note": "구매처 : 알라딘", "id": 41}, {"year": 2023, "date": "2023-10-18", "applicant": "김아랑", "gubun": "직무무관", "title": "너무나 많은 여름이", "author": "김연수", "publisher": "레제", "price": 14400, "done": true, "note": "구매처 : 알라딘", "id": 42}, {"year": 2023, "date": "2023-10-18", "applicant": "김아랑", "gubun": "직무무관", "title": "아버지에게 갔었어", "author": "신경숙", "publisher": "창비", "price": 12600, "done": true, "note": "구매처 : 알라딘", "id": 43}, {"year": 2023, "date": "2023-10-18", "applicant": "김아랑", "gubun": "직무무관", "title": "엄마를 부탁해", "author": "신경숙", "publisher": "창비", "price": 13500, "done": true, "note": "구매처 : 알라딘", "id": 44}, {"year": 2023, "date": "2023-10-18", "applicant": "김아랑", "gubun": "직무무관", "title": "모리와 함께한 화요일", "author": "미치 앨봄", "publisher": "살림", "price": 13500, "done": true, "note": "구매처 : 알라딘", "id": 45}, {"year": 2023, "date": "2023-10-19", "applicant": "안정민", "gubun": "직무무관", "title": "불편한 편의점", "author": "김호연", "publisher": "나무옆의자", "price": 14000, "done": true, "note": "구매처 : 알라딘", "id": 46}, {"year": 2023, "date": "2023-10-19", "applicant": "안정민", "gubun": "직무무관", "title": "미켈란젤로", "author": "질 네레", "publisher": "마로니에북스", "price": 19800, "done": true, "note": "구매처 : 알라딘", "id": 47}, {"year": 2023, "date": "2023-10-19", "applicant": "안정민", "gubun": "직무무관", "title": "빈센트 반 고흐", "author": "인고 발터", "publisher": "마로니에북스", "price": 19800, "done": true, "note": "구매처 : 알라딘", "id": 48}, {"year": 2023, "date": "2023-10-26", "applicant": "이진화", "gubun": "직무무관", "title": "인문학을 좋아하는 사람들을 위한 불교수업", "author": "김사업", "publisher": "불광출판사", "price": 16200, "done": true, "note": "구매처 : 알라딘", "id": 49}, {"year": 2023, "date": "2023-10-27", "applicant": "이진화", "gubun": "직무무관", "title": "가짜 노동", "author": "데니스 뇌르마르크,아네르스 포그 옌센", "publisher": "자음과모음", "price": 15120, "done": true, "note": "구매처 : 알라딘", "id": 50}, {"year": 2023, "date": "2023-11-03", "applicant": "이승민", "gubun": "직무무관", "title": "사는게뭐라고", "author": "사노요코", "publisher": "마음산책", "price": 10800, "done": true, "note": "구매처 : 알라딘", "id": 51}, {"year": 2023, "date": "2023-11-03", "applicant": "이승민", "gubun": "직무무관", "title": "살아남은아이", "author": "한종선, 전규찬, 박래군", "publisher": "이리", "price": 13050, "done": true, "note": "구매처 : 알라딘", "id": 52}, {"year": 2023, "date": "2023-11-03", "applicant": "이승민", "gubun": "직무무관", "title": "침묵의봄", "author": "레이첼 카슨", "publisher": "에코르브르", "price": 16200, "done": true, "note": "구매처 : 알라딘", "id": 53}, {"year": 2023, "date": "2023-11-03", "applicant": "이승민", "gubun": "직무무관", "title": "백년동안의고독", "author": "가브리엘 가르시아 마르케스", "publisher": "문화사상사", "price": 11520, "done": true, "note": "구매처 : 알라딘", "id": 54}, {"year": 2023, "date": "2023-11-03", "applicant": "이진화", "gubun": "직무무관", "title": "모순", "author": "양귀자", "publisher": "쓰다", "price": 11700, "done": true, "note": "구매처 : 알라딘", "id": 55}, {"year": 2023, "date": "2023-11-03", "applicant": "이진화", "gubun": "직무관련", "title": "개발자로 살아남기", "author": "박종천", "publisher": "골든래빗", "price": 16200, "done": true, "note": "구매처 : 알라딘", "id": 56}, {"year": 2023, "date": "2023-11-30", "applicant": "김호영", "gubun": "직무관련", "title": "월간 디자인", "author": "디자인편집부", "publisher": "디자인하우스", "price": 14250, "done": true, "note": "구매처 : 알라딘", "id": 57}, {"year": 2023, "date": "2023-11-30", "applicant": "김호영", "gubun": "직무관련", "title": "MIT 테크놀로지 리뷰 코리아", "author": "MIT 테크놀로지 리뷰 편집팀", "publisher": "디지털 인사이트", "price": 17100, "done": true, "note": "구매처 : 알라딘", "id": 58}, {"year": 2023, "date": "2023-11-30", "applicant": "김호영", "gubun": "직무관련", "title": "디지털인사이트", "author": "웹스미디어", "publisher": "디엠케이글로벌", "price": 16200, "done": true, "note": "구매처 : 알라딘", "id": 59}, {"year": 2023, "date": "2023-12-26", "applicant": "유병문", "gubun": "직무무관", "title": "나미야 잡화점의 기적", "author": "히가시노 게이고", "publisher": "현대문학", "price": 13050, "done": true, "note": "구매처 : 알라딘", "id": 60}, {"year": 2022, "date": "2022-01-07", "applicant": "김호영", "gubun": "직무무관", "title": "감성 표현력", "author": "김기수, 박희동", "publisher": "상상예찬", "price": 11700, "done": true, "note": "", "id": 61}, {"year": 2022, "date": "2022-01-17", "applicant": "김호영", "gubun": "직무관련", "title": "사회구성주의로의 초대", "author": "Kenneth J. Gergen 저 / 한유리 역", "publisher": "박영스토리", "price": 19000, "done": true, "note": "", "id": 62}, {"year": 2022, "date": "2022-01-17", "applicant": "김호영", "gubun": "직무관련", "title": "NFT 사용설명서", "author": "맷 포트나우, 큐해리슨 테리 저/남경보 역", "publisher": "여의도책방", "price": 16200, "done": true, "note": "", "id": 63}, {"year": 2022, "date": "2022-01-17", "applicant": "김호영", "gubun": "직무관련", "title": "메타버스 FOR 에듀테크", "author": "변문경, 박찬, 김병석, 이정훈", "publisher": "다빈치books", "price": 22500, "done": true, "note": "", "id": 64}, {"year": 2022, "date": "2022-01-17", "applicant": "김호영", "gubun": "직무관련", "title": "메타버스가 만드는 가상경제 시대가 온다", "author": "최형욱", "publisher": "한스미디어", "price": 15300, "done": true, "note": "", "id": 65}, {"year": 2022, "date": "2022-01-17", "applicant": "김호영", "gubun": "직무관련", "title": "한경무크 한 권으로 마스터하는 메타버스 2022", "author": "한국경제신문 특별취재팀", "publisher": "한국경제신문사(한경비피)", "price": 16200, "done": true, "note": "", "id": 66}, {"year": 2022, "date": "2022-01-19", "applicant": "김아랑", "gubun": "직무무관", "title": "나쁜 기억 지우개", "author": "이정현", "publisher": "떠오름", "price": 13950, "done": true, "note": "", "id": 67}, {"year": 2022, "date": "2022-01-19", "applicant": "김아랑", "gubun": "직무무관", "title": "불편한 편의점", "author": "김호연", "publisher": "나무옆의자", "price": 12600, "done": true, "note": "", "id": 68}, {"year": 2022, "date": "2022-01-19", "applicant": "김아랑", "gubun": "직무무관", "title": "공공연한 고양이", "author": "최은영, 조남주, 정용준, 이나경, 강지영, 박민정, 김선영, 김멜라, 양원영, 조예은", "publisher": "자음과모음", "price": 11700, "done": true, "note": "", "id": 69}, {"year": 2022, "date": "2022-01-19", "applicant": "유병문", "gubun": "직무무관", "title": "내 손을 놓아줘", "author": "에드워드 독스 지음, 박산호", "publisher": "달의시간", "price": 16000, "done": true, "note": "", "id": 70}, {"year": 2022, "date": "2022-01-19", "applicant": "이진화", "gubun": "직무무관", "title": "소년이 온다", "author": "한강", "publisher": "창비", "price": 12600, "done": true, "note": "", "id": 71}, {"year": 2022, "date": "2022-01-20", "applicant": "이진화", "gubun": "직무무관", "title": "소피의 세계", "author": "요슈타인 가아더", "publisher": "현암사", "price": 24300, "done": true, "note": "", "id": 72}, {"year": 2022, "date": "2022-01-20", "applicant": "유병문", "gubun": "직무무관", "title": "물고기는 존재하지 않는다", "author": "룰루 밀러", "publisher": "곰출판", "price": 15300, "done": true, "note": "", "id": 73}, {"year": 2022, "date": "2022-02-13", "applicant": "김호영", "gubun": "직무무관", "title": "수학자의 아침", "author": "김소연", "publisher": "문학과지성사", "price": 8100, "done": true, "note": "", "id": 74}, {"year": 2022, "date": "2022-02-13", "applicant": "김호영", "gubun": "직무무관", "title": "마음사전", "author": "김소연", "publisher": " 마음산책", "price": 10800, "done": true, "note": "", "id": 75}, {"year": 2022, "date": "2022-02-14", "applicant": "김지안", "gubun": "직무무관", "title": "봄이다,살아보자", "author": "나태주", "publisher": "한겨레출판", "price": 13500, "done": true, "note": "", "id": 76}, {"year": 2022, "date": "2022-02-14", "applicant": "김지안", "gubun": "직무무관", "title": "가난해지지 않는 마음", "author": "양다솔", "publisher": "놀(다산북스)", "price": 13320, "done": true, "note": "", "id": 77}, {"year": 2022, "date": "2022-02-14", "applicant": "김지안", "gubun": "직무무관", "title": "크루아상 사러 가는 아침", "author": "필리프 들레름 /고봉만옮김", "publisher": "문학과지성사", "price": 10800, "done": true, "note": "", "id": 78}, {"year": 2022, "date": "2022-02-15", "applicant": "김아랑", "gubun": "직무무관", "title": "달러구트 꿈 백화점(이미예 장편소설,100만부 기념 합본호 Gift Edition)", "author": "이미예", "publisher": "팩토리나인", "price": 21600, "done": true, "note": "", "id": 79}, {"year": 2022, "date": "2022-02-15", "applicant": "김아랑", "gubun": "직무무관", "title": "어서 오세요, 휴남동 서점입니다", "author": "황보름", "publisher": "클레이하우스", "price": 13500, "done": true, "note": "", "id": 80}, {"year": 2022, "date": "2022-02-15", "applicant": "김아랑", "gubun": "직무무관", "title": "칵테일, 러브, 좀비", "author": "조예은", "publisher": "안전가옥", "price": 9000, "done": true, "note": "", "id": 81}, {"year": 2022, "date": "2022-02-16", "applicant": "유병문", "gubun": "직무무관", "title": "방구석 미술관", "author": "조원재", "publisher": "블랙피쉬", "price": 15100, "done": true, "note": "", "id": 82}, {"year": 2022, "date": "2022-02-16", "applicant": "유병문", "gubun": "직무무관", "title": "데미안", "author": "헤르만 헤세 / 변학수", "publisher": "미래지식", "price": 7200, "done": true, "note": "", "id": 83}, {"year": 2022, "date": "2022-02-22", "applicant": "김지안", "gubun": "직무무관", "title": "혼자점심먹는 사람을 위한 시집", "author": "강혜빈외", "publisher": "한겨레출판사", "price": 10800, "done": true, "note": "", "id": 84}, {"year": 2022, "date": "2022-02-22", "applicant": "김지안", "gubun": "직무무관", "title": "올리브키터리지+다시,올리브세트", "author": "엘리자베스 스트라우트", "publisher": "문학동네", "price": 27720, "done": true, "note": "", "id": 85}, {"year": 2022, "date": "2022-02-22", "applicant": "김지안", "gubun": "직무무관", "title": "요즘사는맛 - 먹고 사는 일에 누구보다 진심인 작가들의 일상 속 음식 이야기", "author": "김겨울외", "publisher": "위즈덤하우스", "price": 14400, "done": true, "note": "", "id": 86}, {"year": 2022, "date": "2022-03-29", "applicant": "이진화", "gubun": "직무관련", "title": "Clean Code 클린 코드", "author": " 로버트 C. 마틴 ( 역자 박재호, 이해영 )", "publisher": "인사이트", "price": 29700, "done": true, "note": "", "id": 87}, {"year": 2022, "date": "2022-04-07", "applicant": "이진화", "gubun": "직무무관", "title": "지능의 함정", "author": "데이비드 롭슨", "publisher": "김영사", "price": 16020, "done": true, "note": "", "id": 88}, {"year": 2022, "date": "2022-04-07", "applicant": "김아랑", "gubun": "직무무관", "title": "테라피스트", "author": "B. A. 패리스(박설영 역)", "publisher": "모모", "price": 14400, "done": true, "note": "", "id": 89}, {"year": 2022, "date": "2022-05-06", "applicant": "김래연", "gubun": "직무무관", "title": "컬러愛 물들다 이야기로 읽는 다채로운 색채의 세상", "author": "밥 햄블리", "publisher": "리드리드출판", "price": 15120, "done": true, "note": "", "id": 90}, {"year": 2022, "date": "2022-07-28", "applicant": "김래연", "gubun": "직무무관", "title": "세 번째 위기, 세 번째 기회 ", "author": "박병창", "publisher": "베가북스", "price": 16200, "done": true, "note": "", "id": 91}, {"year": 2022, "date": "2022-08-12", "applicant": "김래연", "gubun": "직무무관", "title": "마음은 단단하게 인생은 유연하게", "author": "정두영", "publisher": "더퀘스트", "price": 15480, "done": true, "note": "", "id": 92}, {"year": 2022, "date": "2022-08-23", "applicant": "김래연", "gubun": "직무무관", "title": "꽃말의 탄생", "author": "샐리쿨타드", "publisher": "동양북스", "price": 19500, "done": true, "note": "", "id": 93}, {"year": 2022, "date": "2022-08-23", "applicant": "김래연", "gubun": "직무무관", "title": "오늘부터 IT를 시작합니다 ", "author": "고코더", "publisher": "한빛미디어", "price": 18000, "done": true, "note": "", "id": 94}, {"year": 2022, "date": "2022-08-23", "applicant": "김래연", "gubun": "직무무관", "title": "마음챙김 미술관", "author": "김소울", "publisher": "타인의사유", "price": 16800, "done": true, "note": "", "id": 95}, {"year": 2022, "date": "2022-08-24", "applicant": "안정민", "gubun": "직무무관", "title": "파친코 1", "author": "이민진", "publisher": "인플루엔셜", "price": 14220, "done": true, "note": "", "id": 96}, {"year": 2022, "date": "2022-08-24", "applicant": "안정민", "gubun": "직무무관", "title": "파친코 2", "author": "이민진", "publisher": "인플루엔셜", "price": 14220, "done": true, "note": "", "id": 97}, {"year": 2022, "date": "2022-08-25", "applicant": "김태주", "gubun": "직무무관", "title": "잠자는 죽음을 깨워 길을 물었다", "author": "닐 올리버", "publisher": "윌북", "price": 16920, "done": true, "note": "", "id": 98}, {"year": 2022, "date": "2022-08-25", "applicant": "김태주", "gubun": "직무관련", "title": "고객을 끌어오는 구글 애널리틱스4", "author": "문준영(피터)", "publisher": "한빛미디어", "price": 27000, "done": true, "note": "", "id": 99}, {"year": 2022, "date": "2022-08-25", "applicant": "김태주", "gubun": "직무관련", "title": "그림으로 이해하는 AWS 구조와 기술 : AWS, 쉽고 재미있게 시작하자!", "author": " 오가사와라 시게타카", "publisher": "길벗", "price": 16200, "done": true, "note": "AWS 비용 최적화 바이블 : 핀옵스를 위한 최적의 기술 활용부터 운영 노하우까지", "id": 100}, {"year": 2022, "date": "2022-08-25", "applicant": "김태주", "gubun": "직무무관", "title": "예술과 중력가속도", "author": "배명훈", "publisher": "북하우스", "price": 12600, "done": true, "note": "", "id": 101}, {"year": 2022, "date": "2022-08-25", "applicant": "김태주", "gubun": "직무무관", "title": "안녕, 인공존재!", "author": "배명훈", "publisher": "북하우스", "price": 11700, "done": true, "note": "", "id": 102}, {"year": 2022, "date": "2022-08-25", "applicant": "김태주", "gubun": "직무무관", "title": "다정한 것이 살아남는다", "author": "브라이언 헤어, 버네사 우즈", "publisher": "디플롯 ", "price": 19800, "done": true, "note": "", "id": 103}, {"year": 2022, "date": "2022-08-29", "applicant": "안정민", "gubun": "직무무관", "title": "생각 하나 바꿨을 뿐인데", "author": "나이토 요시히토", "publisher": "아이템하우스", "price": 14850, "done": true, "note": "", "id": 104}, {"year": 2022, "date": "2022-09-14", "applicant": "이진화", "gubun": "직무무관", "title": "역행자", "author": "자청", "publisher": "웅진지식하우스", "price": 15750, "done": true, "note": "", "id": 105}, {"year": 2022, "date": "2022-09-16", "applicant": "이진화", "gubun": "직무무관", "title": "불편한 편의점2 ", "author": "김호연", "publisher": "나무옆의자", "price": 12600, "done": true, "note": "", "id": 106}, {"year": 2022, "date": "2022-09-16", "applicant": "유병문", "gubun": "직무무관", "title": "문명1", "author": "베르나르 베르베르", "publisher": "열린책들", "price": 13320, "done": true, "note": "", "id": 107}, {"year": 2022, "date": "2022-09-16", "applicant": "유병문", "gubun": "직무무관", "title": "문명2", "author": "베르나르 베르베르", "publisher": "열린책들", "price": 13320, "done": true, "note": "", "id": 108}, {"year": 2022, "date": "2022-11-04", "applicant": "김호영", "gubun": "직무관련", "title": "애자일 조직은 이렇게 일합니다", "author": "스티브 매코널", "publisher": "인사이트(insight)", "price": 18000, "done": true, "note": "", "id": 109}, {"year": 2022, "date": "2022-11-17", "applicant": "이상벽", "gubun": "직무관련", "title": "개발자의 글쓰기", "author": "김철수", "publisher": "위키북스", "price": 16200, "done": true, "note": "", "id": 110}, {"year": 2022, "date": "2022-11-17", "applicant": "이상벽", "gubun": "직무무관", "title": "딥워크", "author": "칼 뉴포트", "publisher": "민음사 ", "price": 13500, "done": true, "note": "", "id": 111}, {"year": 2022, "date": "2022-11-17", "applicant": "이승민", "gubun": "직무무관", "title": "작은땅의 야수들", "author": "김주혜", "publisher": "다산책방", "price": 16200, "done": true, "note": "", "id": 112}, {"year": 2022, "date": "2022-11-17", "applicant": "이승민", "gubun": "직무무관", "title": "아버지의 해방일지", "author": "정지아", "publisher": "창비", "price": 13500, "done": true, "note": "", "id": 113}, {"year": 2022, "date": "2022-12-31", "applicant": "안정민", "gubun": "직무무관", "title": "어른의 인생 수업", "author": "성지연", "publisher": "인물과사상사", "price": 16200, "done": true, "note": "", "id": 114}, {"year": 2021, "date": "2021-01-27", "applicant": "김호영", "gubun": "직무무관", "title": "사피엔스: 그래픽 히스토리 Vol.1 인류의 탄생", "author": "유발 하라리", "publisher": "김영사", "price": 16020, "done": true, "note": "", "id": 115}, {"year": 2021, "date": "2021-01-28", "applicant": "김지안", "gubun": "직무무관", "title": "눈의 시", "author": "아주라 다고스티노", "publisher": "오후의소묘", "price": 14400, "done": true, "note": "", "id": 116}, {"year": 2021, "date": "2021-01-28", "applicant": "김지안", "gubun": "직무무관", "title": "너무 시끄러운 고독", "author": "보후밀 흐라발", "publisher": "문학동네", "price": 10800, "done": true, "note": "", "id": 117}, {"year": 2021, "date": "2021-01-28", "applicant": "김지안", "gubun": "직무무관", "title": "사피엔스 ", "author": "유발하라리", "publisher": "김영사", "price": 19800, "done": true, "note": "", "id": 118}, {"year": 2021, "date": "2021-11-01", "applicant": "김호영", "gubun": "직무관련", "title": "메타버스의 시대 : 미래의 부와 기회를 선점하는 7대 메가트렌드", "author": "이시한", "publisher": "다산북스", "price": 15300, "done": true, "note": "", "id": 119}, {"year": 2021, "date": "2021-11-01", "applicant": "김호영", "gubun": "직무관련", "title": "메타버스 새로운 기회 : 디지털 지구, 경제와 투자의 기준이 바뀐다", "author": "김상균,신병호 저", "publisher": "베가북스", "price": 16920, "done": true, "note": "", "id": 120}, {"year": 2021, "date": "2021-12-01", "applicant": "김래연", "gubun": "직무관련", "title": "트렌드 코리아 2022", "author": "김난도,전미영", "publisher": "미래의창", "price": 16200, "done": true, "note": "", "id": 121}, {"year": 2020, "date": "2020-06-11", "applicant": "김태주", "gubun": "직무관련", "title": "맛있는 디자인 프리미어 프로 CC 2020 쉽게 배워 제대로 써먹는 유튜브 영상 편집", "author": "김덕영, 심수진, 윤성우", "publisher": "한빛미디어", "price": 21600, "done": true, "note": "", "id": 122}, {"year": 2020, "date": "2020-06-11", "applicant": "김태주", "gubun": "직무무관", "title": "글의 품격", "author": "이기주", "publisher": "황소북스", "price": 13050, "done": true, "note": "", "id": 123}, {"year": 2020, "date": "2020-07-02", "applicant": "김호영", "gubun": "직무관련", "title": "대시보드 설계와 데이터 시각화", "author": "스티브 웩슬러, 제프리 섀퍼, 앤디 코트그리브 저/최윤석 역", "publisher": "책만", "price": 29700, "done": true, "note": "(시급)사업 관련 필요 ", "id": 124}, {"year": 2020, "date": "2020-11-13", "applicant": "김호영", "gubun": "직무무관", "title": "한 권으로 끝내는 자산관리 노하우", "author": "삼성생명 WM사업부", "publisher": "새로운 제안", "price": 12150, "done": true, "note": "", "id": 125}, {"year": 2020, "date": "2020-12-30", "applicant": "김래연", "gubun": "직무무관", "title": "트렌드 코리아 2021", "author": "김난도", "publisher": "미래의창", "price": 16200, "done": true, "note": "", "id": 126}, {"year": 2020, "date": "2020-12-30", "applicant": "김래연", "gubun": "직무관련", "title": "디자이너의 생각법", "author": "이상인", "publisher": "가나출판사", "price": 13500, "done": true, "note": "", "id": 127}];
+
+const APPLICANTS=["김호영","박성철","안정민","조성훈","진소현","김태주","김지안","김아랑","박화랑","유병문","유승인","이한재","이준영"];
+const USER_COLORS={
+  "김호영":{bg:"#F5D9D4",fg:"#A8392B"},"박성철":{bg:"#F7E0CC",fg:"#B0642A"},
+  "안정민":{bg:"#F4E8C6",fg:"#94741C"},"조성훈":{bg:"#E7ECCB",fg:"#6C782C"},
+  "진소현":{bg:"#D5E7D1",fg:"#3B6B40"},"김태주":{bg:"#CEE8E0",fg:"#2C6D62"},
+  "김지안":{bg:"#D1E4EE",fg:"#2A6184"},"김아랑":{bg:"#D8DCF0",fg:"#3A46A0"},
+  "박화랑":{bg:"#E3D9F0",fg:"#68429F"},"유병문":{bg:"#EED7EC",fg:"#883C84"},
+  "유승인":{bg:"#F3D7E1",fg:"#A83964"},"이한재":{bg:"#E6DCD0",fg:"#78593B"},
+  "이준영":{bg:"#DBDFE3",fg:"#485663"}
+};
+function colorFor(name){
+  if(USER_COLORS[name]) return USER_COLORS[name];
+  let h=0; for(const ch of (name||"?")) h=(h*31+ch.charCodeAt(0))%360;
+  return {bg:`hsl(${h},32%,87%)`,fg:`hsl(${h},42%,33%)`};
+}
+
+const CURRENT_YEAR=2026;
+let data=SEED.slice();
+let activeYear=CURRENT_YEAR;
+let gubun="직무무관";
+let pickApplicant="";
+let editingId=null;
+let pendingDelete=null;
+let filterApplicant="";
+let lastBookResults=[];
+let searchT=null;
+let pickedThumbnail="";
+let lastEditBookResults=[];
+let editSearchT=null;
+let editPickedThumbnail="";
+let serverMode=false;
+const API="/api/requests";
+const ADMIN_EMAIL="jian@bluesoft.co.kr";
+let me={name:"",email:""};
+
+/* 세션이 끊긴 채(만료 등) API를 호출하면 401 — 데모모드로 빠지지 말고 포털 로그인으로 돌려보낸다.
+   book "/" 자체가 서버에서 로그인 여부를 확인하므로 이동만 시키면 됨. */
+async function authedFetch(url,opts){
+  const r=await fetch(url,opts);
+  if(r.status===401){ location.href="/"; throw new Error("unauthenticated"); }
+  return r;
+}
+let YEARS=[...new Set(data.map(d=>d.year))].sort((a,b)=>b-a);
+
+const normTitle=t=>(t||"").replace(/\s+/g,"").toLowerCase();
+const fmt=n=>n==null?"—":n.toLocaleString("ko-KR");
+const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function shortDate(ds){if(!ds)return "—";const p=ds.split("-");return `${parseInt(p[1])}월${parseInt(p[2])}일`;}
+function displayPrice(d){return d.price==null?null:(d.gubun==="직무관련"?Math.round(d.price/2):d.price);}
+function formatPriceInput(el){const digits=el.value.replace(/[^\d]/g,"");el.value=digits?Number(digits).toLocaleString("ko-KR"):"";}
+function parsePriceInput(v){const digits=(v||"").replace(/[^\d]/g,"");return digits?parseInt(digits):null;}
+
+function buildApplicantFilter(){
+  document.getElementById("applicantFilter").innerHTML=APPLICANTS.map(n=>{
+    const c=colorFor(n), on=n===filterApplicant;
+    const cnt=data.filter(d=>d.applicant===n&&(activeYear==="all"||d.year===activeYear)).length;
+    const style=on?`background:${c.fg};color:#fff;border-color:${c.fg}`:`background:${c.bg};color:${c.fg};border-color:transparent`;
+    return `<span class="pchip" style="${style}" onclick="filterByApplicant('${n}')">${n} (${cnt})</span>`;
+  }).join("");
+}
+function filterByApplicant(n){filterApplicant=(filterApplicant===n)?"":n;render();}
+
+function buildYearSelect(){
+  const sel=document.getElementById("yearSel");
+  sel.innerHTML=`<option value="all">전체 연도</option>`+YEARS.map(y=>`<option value="${y}">${y}년</option>`).join("");
+  sel.value=String(activeYear);
+}
+function onYear(v){activeYear=(v==="all")?"all":parseInt(v);editingId=null;render();}
+
+function render(){
+  buildApplicantFilter();
+  const raw=document.getElementById("q").value.trim();
+  const q=normTitle(raw);
+  let rows=data.slice();
+  if(q){
+    rows=rows.filter(d=>normTitle(d.title).includes(q));
+    document.getElementById("ledgerTitle").textContent=`"${raw}" 검색 결과`;
+  }else{
+    if(activeYear!=="all") rows=rows.filter(d=>d.year===activeYear);
+    document.getElementById("ledgerTitle").textContent=activeYear==="all"?"전체 신청 목록":activeYear+"년 신청 목록";
+  }
+  if(filterApplicant) rows=rows.filter(d=>d.applicant===filterApplicant);
+  rows.sort((a,b)=>(b.date||"").localeCompare(a.date||"")||b.id-a.id);
+  document.getElementById("ledgerCount").textContent=`${rows.length}건`;
+
+  const totalEl=document.getElementById("applicantTotal");
+  if(filterApplicant){
+    const sum=rows.reduce((s,d)=>s+(displayPrice(d)||0),0);
+    document.getElementById("applicantTotalLabel").textContent=`${filterApplicant}님 합계`;
+    document.getElementById("applicantTotalSum").textContent=`${fmt(sum)}원`;
+    totalEl.style.display="flex";
+  }else{
+    totalEl.style.display="none";
+  }
+
+  const list=document.getElementById("list");
+  if(!rows.length){
+    list.innerHTML=`<div class="empty"><div class="big">신청 내역이 없어요</div><div>상단의 <b>신청</b> 버튼으로 도서를 신청해 보세요.</div></div>`;
+    return;
+  }
+  list.innerHTML=rows.map(d=> d.id===editingId ? editRow(d) : viewRow(d)).join("");
+}
+
+function viewRow(d){
+  const c=colorFor(d.applicant), rel=d.gubun==="직무관련";
+  const isAdmin=me.email===ADMIN_EMAIL;
+  const isOwner=d.applicant_email && me.email && d.applicant_email===me.email;
+  const status=d.done
+    ? (isAdmin ? `<span class="status-done" onclick="toggle(${d.id})" title="클릭하면 취소">✓ 완료</span>`
+               : `<span class="status-done" title="완료 처리는 관리자만 가능합니다">✓ 완료</span>`)
+    : (isAdmin ? `<label class="status-check" onclick="toggle(${d.id})" title="처리완료로 표시"><span class="box"></span></label>`
+               : `<label class="status-check" title="완료 처리는 관리자만 가능합니다"><span class="box"></span></label>`);
+  const actions=(isAdmin||isOwner)
+    ? `<button class="act" onclick="startEdit(${d.id})">수정</button>
+       <button class="act del" onclick="askDelete(${d.id})">삭제</button>`
+    : "";
+  const href=d.kyobo_url
+    || `https://search.kyobobook.co.kr/search?keyword=${encodeURIComponent((d.title||"")+(d.author?" "+d.author:""))}`;
+  const thumb=d.thumbnail
+    ? `<img src="${esc(d.thumbnail)}" alt="">`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
+  return `<li class="row">
+    <div class="r-main">
+      <div class="r-main-flex">
+        <div class="r-thumb">${thumb}</div>
+        <div class="r-text">
+          <div class="r-top">
+            <span class="ubadge" style="background:${c.bg};color:${c.fg}">${esc(d.applicant)||"미지정"}</span>
+            <span class="gubun-pill ${rel?"rel":"unrel"}">${d.gubun||"미분류"}</span>
+            <span class="r-date">${shortDate(d.date)}</span>
+          </div>
+          <a class="bk-title" href="${href}" target="_blank" rel="noopener"
+             title="${d.kyobo_url?"교보문고 상품페이지":"교보문고 검색"}">${esc(d.title)}</a>
+          <div class="bk-sub">${esc(d.author)||"저자 미상"} · ${esc(d.publisher)||"출판사 미상"}</div>
+          ${d.note?`<div class="note-line">${esc(d.note)}</div>`:""}
+        </div>
+      </div>
+    </div>
+    <div class="r-rail">
+      <div class="r-price">${fmt(displayPrice(d))}<span class="won">원</span></div>
+      ${rel?`<div class="price-sub">단가 50% 지원</div>`:""}
+      <div class="r-status">${status}</div>
+      <div class="r-actions">${actions}</div>
+    </div>
+  </li>`;
+}
+
+function editRow(d){
+  const c=colorFor(d.applicant);
+  return `<li class="row">
+    <div class="r-main">
+      <div class="r-top">
+        <span class="ubadge" style="background:${c.bg};color:${c.fg}">${esc(d.applicant)||"미지정"}</span>
+        <span class="r-date">${shortDate(d.date)}</span>
+      </div>
+      <input id="ed-title" class="ef title" value="${esc(d.title)}" placeholder="도서명" oninput="onEditTitleInput()" autocomplete="off">
+      <div class="booksearch" id="ed-booksearch"></div>
+      <div class="egrid">
+        <input id="ed-author" class="ef" value="${esc(d.author)}" placeholder="저자">
+        <input id="ed-pub" class="ef" value="${esc(d.publisher)}" placeholder="출판사">
+      </div>
+      <div class="egrid">
+        <select id="ed-gubun" class="ef">
+          <option value="직무관련" ${d.gubun==="직무관련"?"selected":""}>직무관련</option>
+          <option value="직무무관" ${d.gubun==="직무무관"?"selected":""}>직무무관</option>
+        </select>
+        <input id="ed-price" class="ef" type="text" inputmode="numeric" value="${d.price==null?"":d.price.toLocaleString("ko-KR")}" placeholder="단가" oninput="formatPriceInput(this)">
+      </div>
+      <input id="ed-note" class="ef ef-note" value="${esc(d.note)}" placeholder="비고">
+      <input id="ed-kyobo" class="ef ef-note" value="${esc(d.kyobo_url)}" placeholder="교보문고 링크(비우면 자동 검색)">
+    </div>
+    <div class="r-rail">
+      <div class="r-actions">
+        <button class="act save" onclick="saveEdit(${d.id})">저장</button>
+        <button class="act" onclick="cancelEdit()">취소</button>
+      </div>
+    </div>
+  </li>`;
+}
+
+async function toggle(id){const d=data.find(x=>x.id===id);if(!d)return;const nv=!d.done;d.done=nv;render();
+  if(serverMode){try{const r=await authedFetch(`${API}/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({done:nv})});if(!r.ok)throw 0;}catch(e){d.done=!nv;render();showToast("저장 실패 — 서버 연결 확인");return;}}
+  showToast(nv?`"${d.title}" 처리완료`:`"${d.title}" 미처리로 취소`);}
+
+function startEdit(id){
+  editingId=id;
+  const d=data.find(x=>x.id===id);
+  editPickedThumbnail=d?(d.thumbnail||""):"";
+  render();
+}
+function cancelEdit(){editingId=null;render();}
+async function saveEdit(id){
+  const d=data.find(x=>x.id===id);if(!d)return;
+  const t=document.getElementById("ed-title").value.trim();
+  if(!t){showToast("도서명을 입력해 주세요");return;}
+  const patch={title:t,
+    author:document.getElementById("ed-author").value.trim(),
+    publisher:document.getElementById("ed-pub").value.trim(),
+    gubun:document.getElementById("ed-gubun").value,
+    price:parsePriceInput(document.getElementById("ed-price").value),
+    note:document.getElementById("ed-note").value.trim(),
+    thumbnail:editPickedThumbnail||null};
+  const y=document.getElementById("ed-kyobo").value.trim();
+  if(y!==(d.kyobo_url||"")) patch.kyobo_url=y;
+  Object.assign(d,patch);editingId=null;render();
+  if(serverMode){
+    try{
+      const r=await authedFetch(`${API}/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch)});
+      if(!r.ok)throw 0;
+      const saved=await r.json();
+      Object.assign(d,saved);render();
+    }catch(e){showToast("저장 실패 — 서버 연결 확인");return;}
+  }
+  showToast("수정 완료");
+}
+
+function askDelete(id){
+  const d=data.find(x=>x.id===id);if(!d)return;
+  pendingDelete=id;
+  document.getElementById("confirmText").textContent=`"${d.title}" 신청을 삭제할까요? 되돌릴 수 없어요.`;
+  document.getElementById("confirmOverlay").classList.add("open");
+}
+function closeConfirm(){pendingDelete=null;document.getElementById("confirmOverlay").classList.remove("open");}
+async function doDelete(){
+  const id=pendingDelete;closeConfirm();
+  if(id==null)return;
+  const d=data.find(x=>x.id===id);
+  data=data.filter(x=>x.id!==id);
+  if(editingId===id)editingId=null;
+  render();showToast(d?`"${d.title}" 삭제됨`:"삭제됨");
+  if(serverMode){try{const r=await authedFetch(`${API}/${id}`,{method:"DELETE"});if(!r.ok)throw 0;}catch(e){showToast("삭제 실패 — 서버 연결 확인");}}
+}
+
+function openForm(){
+  document.getElementById("overlay").classList.add("open");
+  const t=new Date();
+  document.getElementById("f-date").value=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`;
+}
+function closeForm(){
+  document.getElementById("overlay").classList.remove("open");
+  ["f-title","f-author","f-pub","f-price","f-note"].forEach(i=>document.getElementById(i).value="");
+  document.getElementById("dup").classList.remove("show");
+  document.getElementById("price-notice").classList.remove("show");
+  document.getElementById("booksearch").classList.remove("show");
+  document.getElementById("booksearch").innerHTML="";
+  pickedThumbnail="";
+  gubun="직무무관";
+  [...document.querySelectorAll("#seg button")].forEach(b=>b.classList.toggle("on",b.dataset.v==="직무무관"));
+  buildPicker();
+}
+function setGubun(btn){
+  gubun=btn.dataset.v;
+  [...document.querySelectorAll("#seg button")].forEach(b=>b.classList.remove("on"));
+  btn.classList.add("on");
+  document.getElementById("price-notice").classList.toggle("show",gubun==="직무관련");
+}
+
+function buildPicker(){
+  // 신청자는 항상 로그인한 본인 — 다른 사람으로 바꿀 수 없다(서버도 동일하게 강제).
+  pickApplicant=me.name;
+  const c=me.color||colorFor(me.name).fg;
+  document.getElementById("picker").innerHTML=
+    `<span class="pchip" style="background:${c};color:#fff;border-color:${c};cursor:default">${esc(me.name)||"본인 정보 확인 중"}</span>`;
+}
+
+function checkDup(){
+  const t=normTitle(document.getElementById("f-title").value);
+  const box=document.getElementById("dup"),ul=document.getElementById("dup-list");
+  if(t.length<2){box.classList.remove("show");return;}
+  const hits=data.filter(d=>normTitle(d.title)===t).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  if(!hits.length){box.classList.remove("show");return;}
+  ul.innerHTML=hits.map(h=>`<li><b>${esc(h.title)}</b> <span class="who">— ${h.year}년 ${shortDate(h.date)} · ${esc(h.applicant)}님 신청 · ${h.done?"처리완료":"미처리"}</span></li>`).join("");
+  box.classList.add("show");
+}
+
+function onTitleInput(){
+  checkDup();
+  pickedThumbnail="";
+  clearTimeout(searchT);
+  const q=document.getElementById("f-title").value.trim();
+  const box=document.getElementById("booksearch");
+  if(!serverMode || q.length<2){box.classList.remove("show");box.innerHTML="";return;}
+  searchT=setTimeout(()=>searchBooks(q),400);
+}
+
+async function searchBooks(q){
+  const box=document.getElementById("booksearch");
+  try{
+    const r=await authedFetch(`/api/booksearch?q=${encodeURIComponent(q)}`);
+    if(!r.ok)throw 0;
+    lastBookResults=await r.json();
+    if(!lastBookResults.length){box.classList.remove("show");box.innerHTML="";return;}
+    box.innerHTML=lastBookResults.map((b,i)=>`<div class="bs-item" onclick="pickBook(${i})">
+      <div class="bs-thumb">${b.thumbnail?`<img src="${esc(b.thumbnail)}" alt="">`:""}</div>
+      <div class="bs-text">
+        <div class="bs-title">${esc(b.title)}</div>
+        <div class="bs-sub">${esc(b.author)||"저자 미상"} · ${esc(b.publisher)||"출판사 미상"}${b.price?` · ${fmt(b.price)}원`:""}</div>
+      </div>
+    </div>`).join("");
+    box.classList.add("show");
+  }catch(e){box.classList.remove("show");box.innerHTML="";}
+}
+
+function pickBook(i){
+  const b=lastBookResults[i];
+  if(!b)return;
+  document.getElementById("f-title").value=b.title;
+  document.getElementById("f-author").value=b.author||"";
+  document.getElementById("f-pub").value=b.publisher||"";
+  if(b.price) document.getElementById("f-price").value=b.price.toLocaleString("ko-KR");
+  pickedThumbnail=b.thumbnail||"";
+  document.getElementById("booksearch").classList.remove("show");
+  checkDup();
+}
+
+function onEditTitleInput(){
+  editPickedThumbnail="";
+  clearTimeout(editSearchT);
+  const q=document.getElementById("ed-title").value.trim();
+  const box=document.getElementById("ed-booksearch");
+  if(!serverMode || q.length<2){box.classList.remove("show");box.innerHTML="";return;}
+  editSearchT=setTimeout(()=>searchEditBooks(q),400);
+}
+
+async function searchEditBooks(q){
+  const box=document.getElementById("ed-booksearch");
+  try{
+    const r=await authedFetch(`/api/booksearch?q=${encodeURIComponent(q)}`);
+    if(!r.ok)throw 0;
+    lastEditBookResults=await r.json();
+    if(!lastEditBookResults.length){box.classList.remove("show");box.innerHTML="";return;}
+    box.innerHTML=lastEditBookResults.map((b,i)=>`<div class="bs-item" onclick="pickEditBook(${i})">
+      <div class="bs-thumb">${b.thumbnail?`<img src="${esc(b.thumbnail)}" alt="">`:""}</div>
+      <div class="bs-text">
+        <div class="bs-title">${esc(b.title)}</div>
+        <div class="bs-sub">${esc(b.author)||"저자 미상"} · ${esc(b.publisher)||"출판사 미상"}${b.price?` · ${fmt(b.price)}원`:""}</div>
+      </div>
+    </div>`).join("");
+    box.classList.add("show");
+  }catch(e){box.classList.remove("show");box.innerHTML="";}
+}
+
+function pickEditBook(i){
+  const b=lastEditBookResults[i];
+  if(!b)return;
+  document.getElementById("ed-title").value=b.title;
+  document.getElementById("ed-author").value=b.author||"";
+  document.getElementById("ed-pub").value=b.publisher||"";
+  if(b.price) document.getElementById("ed-price").value=b.price.toLocaleString("ko-KR");
+  editPickedThumbnail=b.thumbnail||"";
+  document.getElementById("ed-booksearch").classList.remove("show");
+}
+
+async function submitForm(){
+  const title=document.getElementById("f-title").value.trim();
+  if(!pickApplicant){showToast("신청자를 선택해 주세요");return;}
+  if(!title){showToast("도서명을 입력해 주세요");return;}
+  const dv=document.getElementById("f-date").value||new Date().toISOString().slice(0,10);
+  const payload={applicant:pickApplicant,date:dv,gubun,title,
+    author:document.getElementById("f-author").value.trim(),
+    publisher:document.getElementById("f-pub").value.trim(),
+    price:parsePriceInput(document.getElementById("f-price").value),
+    note:document.getElementById("f-note").value.trim(),
+    thumbnail:pickedThumbnail||null};
+  let rec;
+  if(serverMode){
+    try{const r=await authedFetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      if(!r.ok)throw 0; rec=await r.json();}
+    catch(e){showToast("등록 실패 — 서버 연결 확인");return;}
+  }else{
+    rec={...payload,id:Math.max(0,...data.map(d=>d.id))+1,year:parseInt(dv.slice(0,4)),done:false};
+  }
+  data.push(rec);
+  if(!YEARS.includes(rec.year)){YEARS.push(rec.year);YEARS.sort((a,b)=>b-a);}
+  closeForm();
+  document.getElementById("q").value="";
+  activeYear=rec.year; editingId=null;
+  buildYearSelect();render();
+  showToast(`"${title}" 신청 등록 완료`);
+}
+
+let toastT;
+function showToast(m){const el=document.getElementById("toast");el.textContent=m;el.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("show"),2200);}
+
+async function loadWhoami(){
+  try{
+    const r=await fetch("/api/whoami");
+    const who=await r.json();
+    me={name:who.name||"",email:who.email||"",color:who.color||""};
+    const portalUrl=(who.portal_url||"").replace(/\/+$/,"");
+    document.getElementById("hdrBrand").href=portalUrl||"#";
+    document.getElementById("dd-mypage").href=portalUrl?`${portalUrl}/?view=profile`:"#";
+    document.getElementById("dd-slack").href=who.slack_url||"#";
+    document.getElementById("dd-logout").href=portalUrl?`${portalUrl}/api/logout.php`:"#";
+    document.getElementById("hdrName").textContent=me.name;
+    const av=document.getElementById("hdrAvatar");
+    av.textContent=me.name.slice(0,1);
+    av.style.background=me.color||colorFor(me.name).fg;
+  }catch(e){ me={name:"",email:"",color:""}; }
+}
+
+function toggleUserMenu(e){
+  if(e) e.stopPropagation();
+  document.getElementById("hdrUserMenu").classList.toggle("open");
+}
+document.addEventListener("click",(e)=>{
+  const um=document.getElementById("hdrUserMenu");
+  if(um && !um.contains(e.target)) um.classList.remove("open");
+});
+
+async function loadData(){
+  try{
+    const r=await authedFetch(API);
+    if(!r.ok)throw 0;
+    data=await r.json();serverMode=true;
+  }catch(e){
+    if(e && e.message==="unauthenticated") return; // 이미 포털로 이동 중
+    data=SEED.slice();serverMode=false;
+    showToast("데모 모드 — 서버 없이 실행 중 (변경사항 저장 안 됨)");
+  }
+  YEARS=[...new Set(data.map(d=>d.year))].sort((a,b)=>b-a);
+  buildYearSelect();render();
+}
+
+(async function(){
+  await loadWhoami();
+  buildPicker();
+  buildApplicantFilter();
+  document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeForm();closeConfirm();}});
+  loadData();
+})();
+</script>
+</body>
+</html>

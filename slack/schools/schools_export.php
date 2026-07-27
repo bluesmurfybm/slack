@@ -6,7 +6,7 @@
  *     clone 받은 사용자가 동일한 데이터로 자동 시딩됨.
  *   사용:  php schools_export.php
  */
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/../db.php';
 
 $rows = db()->query("SELECT name, ver, dev, ops, active FROM schools ORDER BY ver+0, name")->fetchAll(PDO::FETCH_ASSOC);
 foreach ($rows as &$r) { $r['active'] = (int)$r['active']; }

@@ -7,8 +7,8 @@
  *  - GET ?scope=all|active|archived  &from=YYYY-MM-DD  &to=YYYY-MM-DD
  *  - 반환: {ok, scope, from, to, total, categories:[{key,label,count,pct,subs:[{label,count,pct,samples[]}]}]}
  */
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../db.php';
 require_login();
 session_release();
 header('Content-Type: application/json; charset=utf-8');

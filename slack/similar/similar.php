@@ -4,12 +4,13 @@
  *  - 기존 항목 검색·선택하거나 텍스트를 붙여넣어 유사(중복 의심) 항목을 보여줌 (보관 포함).
  *  - 유사도 계산은 similar_api.php (IDF 가중).
  */
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/db.php';
+$__bwBase = '../';   // slack/ 하위 폴더 페이지 — require_login()/header.php 리다이렉트 경로 계산용
+require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../db.php';
 require_login();
 $me = current_user();
 session_release();
-$listUrl = (require __DIR__ . '/config.php')['list_url'] ?? '';
+$listUrl = (require __DIR__ . '/../config.php')['list_url'] ?? '';
 // 피커용 경량 목록 (id/제목/보드/보관)
 $items = db()->query("SELECT id, title, board, archived FROM requests ORDER BY created DESC")->fetchAll(PDO::FETCH_ASSOC);
 foreach ($items as &$it) { $it['archived'] = (int)$it['archived']; } unset($it);
@@ -21,79 +22,18 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>유사 요청 찾기</title>
-<style>
-  :root { --bg:#fff; --bg2:#f6f7f8; --line:#e3e5e8; --txt:#1f2328; --muted:#6e7781; --hint:#8b949e; --info:#0c447c; --info-bg:#e6f1fb; }
-  @media (prefers-color-scheme: dark){ :root{ --bg:#1a1d21; --bg2:#222529; --line:#383a3f; --txt:#e8e8e8; --muted:#9aa0a6; --hint:#6b7177; --info:#85b7eb; --info-bg:#0c2740; } }
-  *{box-sizing:border-box;} body{font-family:-apple-system,"Malgun Gothic",sans-serif;background:var(--bg2);color:var(--txt);margin:0;padding:24px;}
-  .wrap{max-width:1000px;margin:0 auto;}
-  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
-  .head h1{font-size:18px;margin:0;} .tag{font-size:11px;background:#fff0e0;color:#a85b00;border-radius:6px;padding:2px 8px;}
-  a.back{font-size:13px;color:var(--info);text-decoration:none;}
-  input,button,select,textarea{font-family:inherit;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--txt);font-size:13px;}
-  input,button,select{height:34px;padding:0 10px;} button{cursor:pointer;} button.primary{background:var(--info);color:#fff;border-color:var(--info);}
-  .panel{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;}
-  .row1{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px;}
-  .row1 label{font-size:12px;color:var(--muted);}
-  #pick{position:relative;flex:1;min-width:220px;}
-  #pickInput{width:100%;}
-  #pickMenu{position:absolute;z-index:30;top:36px;left:0;right:0;max-height:300px;overflow-y:auto;background:var(--bg);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 22px rgba(0,0,0,.18);padding:4px;}
-  #pickMenu[hidden]{display:none;} .pk{padding:6px 9px;border-radius:6px;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .pk:hover{background:var(--info-bg);}
-  textarea{width:100%;min-height:70px;padding:8px 10px;line-height:1.5;}
-  .self{font-size:13px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;}
-  .self b{color:var(--txt);}
-  .res{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg);}
-  .r{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;}
-  .rwrap:last-child .r{border-bottom:0;} .r:hover{background:var(--bg2);}
-  .rcaret{flex:none;color:var(--hint);font-size:12px;transition:transform .15s;}
-  .rwrap.open .rcaret{transform:rotate(180deg);}
-  .rwrap.open .r{background:var(--bg2);}
-  .rdetail{display:none;container-type:inline-size;} .rwrap.open .rdetail{display:block;}
-  /* ===== lists.php 상세/댓글 UI 이식 ===== */
-  .detail{padding:16px 20px 20px;border-bottom:1px solid var(--line);background:var(--bg2);}
-  .rwrap:last-child .detail{border-bottom:0;}
-  .detail.with-cmts{display:flex;gap:20px;align-items:flex-start;}
-  .detail-main{flex:1;min-width:0;}
-  .detail-cmts{flex:none;width:380px;max-width:90%;min-width:280px;display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
-  @container (max-width:900px){ .detail.with-cmts{flex-direction:column;} .detail-cmts{width:100%;max-width:100%;} }
-  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px;}
-  .mi{display:flex;align-items:center;gap:6px;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:4px 10px;}
-  .ml{color:var(--hint);} .mv{color:var(--txt);font-weight:500;}
-  .st{font-size:11px;padding:2px 9px;border-radius:8px;white-space:nowrap;}
-  .body-card{font-size:13px;line-height:1.75;white-space:normal;word-break:break-word;color:var(--txt);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
-  .body-card a,.cmt-b a{color:#1a73e8;font-weight:600;text-decoration:underline;text-underline-offset:2px;}
-  .body-card a:hover,.cmt-b a:hover{color:#0b57d0;}
-  .body-card code,.cmt-b code{background:var(--bg2);border:1px solid var(--line);border-radius:4px;padding:0 4px;font-family:Consolas,monospace;font-size:12px;}
-  .body-card pre,.cmt-b pre{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:6px 0;overflow:auto;font-family:Consolas,monospace;font-size:12px;white-space:pre-wrap;}
-  .body-card blockquote,.cmt-b blockquote{margin:4px 0;padding:1px 0 1px 12px;border-left:4px solid var(--hint);color:var(--txt);}
-  .dlinks{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;}
-  .dlinks a{font-size:12px;text-decoration:none;color:var(--info);background:var(--bg);border:1px solid var(--line);padding:7px 11px;border-radius:8px;}
-  .dlinks .slack-link{color:#fff;background:#4a154b;border-color:#4a154b;}
-  .cmts-title{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
-  .cmts-n{background:var(--info-bg);color:var(--info);border-radius:9px;padding:0 7px;font-size:11px;}
-  .cmts{display:flex;flex-direction:column;overflow-y:auto;max-height:60vh;padding-right:4px;}
-  .cmt{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);}
-  .cmt:last-child{border-bottom:0;}
-  .cmt-av{flex:none;width:20px;height:20px;margin-top:1px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;}
-  .cmt-bub{flex:1;min-width:0;}
-  .cmt-h b{font-weight:600;font-size:12px;} .cmt-t{color:var(--hint);margin-left:6px;font-size:10px;}
-  .cmt-b{font-size:12.5px;line-height:1.5;white-space:normal;word-break:break-word;color:var(--txt);margin-top:1px;}
-  .cmt-files{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px;}
-  .cmt-img{max-width:180px;max-height:180px;border-radius:6px;border:1px solid var(--line);display:block;object-fit:cover;background:var(--bg2);cursor:zoom-in;}
-  .cmt-filedl{font-size:12px;color:var(--info);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 8px;}
-  .cmt-loading,.cmt-empty{font-size:12px;color:var(--hint);padding:8px 0;}
-  .sc{flex:none;width:52px;font-weight:700;font-size:13px;color:var(--info);text-align:right;}
-  .rmain{flex:1;min-width:0;} .rt{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .rsnip{font-size:12px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
-  .chip{font-size:10px;padding:1px 7px;border-radius:8px;white-space:nowrap;}
-  .c-blue{background:#e6f1fb;color:#0c447c;} .c-yoz{background:#e0f2f1;color:#00695c;} .c-arch{background:#e5e7eb;color:#4b5563;}
-  .rmeta{flex:none;font-size:11px;color:var(--muted);white-space:nowrap;} .rlink{flex:none;font-size:11px;color:#4a154b;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 8px;}
-  .empty{padding:24px;text-align:center;color:var(--muted);}
-</style>
+<link rel="icon" href="../../styles/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="../styles/header.css">
+<link rel="stylesheet" href="../styles/similar.css">
 </head>
 <body>
+<?php include __DIR__ . '/../header.php'; ?>
 <div class="wrap">
-  <div class="head"><h1>🔍 유사 요청 찾기</h1><a class="back" href="lists.php">← 목록으로</a></div>
+  <div class="head"><h1>🔍 유사 요청 찾기</h1><a class="back" href="../lists.php">← 목록으로</a></div>
 
   <div class="panel">
     <div class="row1">
@@ -165,8 +105,8 @@ function cmtHtml(list){
         <div class="cmt-h"><b style="color:${col.fg}">${esc(c.author_name)}</b><span class="cmt-t">${esc(c.created_at)}</span></div>
         ${c.body?`<div class="cmt-b">${mrkdwn(c.body)}</div>`:''}
         ${(c.files&&c.files.length)?`<div class="cmt-files">${c.files.map(f=>f.is_image
-          ? `<a href="file.php?u=${encodeURIComponent(f.url)}" target="_blank" rel="noopener"><img class="cmt-img" src="file.php?u=${encodeURIComponent(f.thumb||f.url)}" alt="${escAttr(f.name)}" title="${escAttr(f.name)}" loading="lazy"></a>`
-          : `<a class="cmt-filedl" href="file.php?u=${encodeURIComponent(f.url)}&dl=1&name=${encodeURIComponent(f.name)}" rel="noopener">📎 ${esc(f.name)}</a>`
+          ? `<a href="../file.php?u=${encodeURIComponent(f.url)}" target="_blank" rel="noopener"><img class="cmt-img" src="../file.php?u=${encodeURIComponent(f.thumb||f.url)}" alt="${escAttr(f.name)}" title="${escAttr(f.name)}" loading="lazy"></a>`
+          : `<a class="cmt-filedl" href="../file.php?u=${encodeURIComponent(f.url)}&dl=1&name=${encodeURIComponent(f.name)}" rel="noopener">📎 ${esc(f.name)}</a>`
         ).join("")}</div>`:''}
       </div>
     </div>`;
@@ -256,7 +196,7 @@ async function toggleDetail(id){
       </div>
     </div>`;
   try{
-    const j=await (await fetch("comments.php?request_id="+encodeURIComponent(id),{cache:"no-store"})).json();
+    const j=await (await fetch("../comments.php?request_id="+encodeURIComponent(id),{cache:"no-store"})).json();
     const cs=j.comments||[];
     const box=document.getElementById("scmts-"+id);
     if(box){ box.innerHTML=cmtHtml(cs); box.scrollTop=box.scrollHeight; }

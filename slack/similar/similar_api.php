@@ -5,8 +5,8 @@
  *  - 제목 유사 0.6 + 전체 0.4
  *  GET ?id=Rec...  또는  ?q=<텍스트>   &min=0.15  &limit=30
  */
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../db.php';
 require_login();
 session_release();
 header('Content-Type: application/json; charset=utf-8');

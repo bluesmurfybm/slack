@@ -5,11 +5,12 @@
  *  - 별점은 클라이언트에서 실시간 계산 (DB/스키마 변경 없음). 동기화되면 자동 재계산.
  *  - 읽기 전용 분석 보드 (수정/댓글 없음). lists.php 에서 "난이도 분석" 버튼으로 진입.
  */
-require_once __DIR__ . '/auth.php';
+$__bwBase = '../';   // slack/ 하위 폴더 페이지 — require_login()/header.php 리다이렉트 경로 계산용
+require_once __DIR__ . '/../auth.php';
 require_login();
 $me = current_user();
 session_release();   // 세션 잠금 즉시 해제
-$cfg = require __DIR__ . '/config.php';
+$cfg = require __DIR__ . '/../config.php';
 $listUrl = $cfg['list_url'] ?? '';   // Slack 리스트 permalink (링크 복사용)
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -21,90 +22,16 @@ header('Pragma: no-cache');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>유지보수 난이도 분석</title>
-<style>
-  :root { --bg:#fff; --bg2:#f6f7f8; --line:#e3e5e8; --txt:#1f2328; --muted:#6e7781; --hint:#8b949e; --info:#0c447c; --info-bg:#e6f1fb; --star:#f5a623; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#1a1d21; --bg2:#222529; --line:#383a3f; --txt:#e8e8e8; --muted:#9aa0a6; --hint:#6b7177; --info:#85b7eb; --info-bg:#0c2740; --star:#f5b942; }
-  }
-  * { box-sizing:border-box; }
-  body { font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; background:var(--bg2); color:var(--txt); margin:0; padding:24px; }
-  .wrap { width:100%; max-width:1500px; margin:0 auto; }
-  .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
-  .head h1 { font-size:18px; font-weight:600; margin:0; display:flex; align-items:center; gap:10px; }
-  .badge { font-size:12px; color:var(--info); background:var(--info-bg); padding:2px 10px; border-radius:8px; }
-  .toolbar { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:14px; flex-wrap:wrap; }
-  .who { font-size:12px; color:var(--muted); margin-right:auto; }
-  input,button,select { font-family:inherit; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; height:32px; padding:0 10px; }
-  button { cursor:pointer; }
-  a.btn { text-decoration:none; }
-  /* 다중선택 필터 드롭다운 */
-  .ms { position:relative; display:inline-block; }
-  .ms-btn { height:32px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; cursor:pointer; white-space:nowrap; }
-  .ms-btn.active { border-color:var(--info); color:var(--info); background:var(--info-bg); }
-  .ms-n { display:inline-block; min-width:16px; text-align:center; background:var(--info); color:#fff; border-radius:8px; font-size:11px; padding:0 5px; margin-left:2px; }
-  .ms-ar { color:var(--muted); font-size:10px; }
-  .ms-menu { position:absolute; z-index:50; top:36px; right:0; left:auto; min-width:170px; max-height:320px; overflow-y:auto;
-             background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px; box-shadow:0 6px 22px rgba(0,0,0,.18); }
-  .ms-menu[hidden] { display:none; }
-  .ms-item { display:flex; align-items:center; gap:8px; padding:5px 7px; border-radius:6px; font-size:13px; cursor:pointer; white-space:nowrap; }
-  .ms-item:hover { background:var(--bg2); }
-  .ms-item input { width:15px; height:15px; margin:0; cursor:pointer; }
-  .ms-empty { font-size:12px; color:var(--muted); padding:6px 7px; }
-  /* 난이도 요약 막대 */
-  .summary { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
-  .scard { flex:1; min-width:120px; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; cursor:pointer; }
-  .scard.active { border-color:var(--info); box-shadow:0 0 0 1px var(--info) inset; }
-  .scard .lv { font-size:13px; color:var(--star); letter-spacing:1px; }
-  .scard .lb { font-size:11px; color:var(--muted); margin-top:2px; }
-  .scard .ct { font-size:20px; font-weight:700; margin-top:4px; }
-  /* 그룹 */
-  .group { margin-bottom:18px; }
-  .ghead { display:flex; align-items:center; gap:10px; padding:8px 4px; font-size:14px; font-weight:600; }
-  .ghead .stars { color:var(--star); letter-spacing:2px; font-size:16px; }
-  .ghead .gname { color:var(--txt); }
-  .ghead .gcnt { font-size:12px; color:var(--muted); font-weight:400; }
-  .listbox { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--bg); }
-  .row { display:flex; align-items:center; gap:12px; padding:11px 16px; cursor:pointer; border-bottom:1px solid var(--line); }
-  .row:last-child { border-bottom:0; }
-  .row:hover { background:var(--bg2); }
-  .rstars { flex:none; width:84px; color:var(--star); letter-spacing:1px; font-size:13px; white-space:nowrap; }
-  .names { flex:none; width:140px; font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .title { flex:1; min-width:0; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .st { font-size:11px; padding:2px 9px; border-radius:8px; white-space:nowrap; }
-  .date { font-size:12px; color:var(--hint); flex:none; white-space:nowrap; }
-  .detail { padding:14px 18px 18px; border-bottom:1px solid var(--line); background:var(--bg2); }
-  .why { font-size:12px; color:var(--muted); background:var(--bg); border:1px dashed var(--line); border-radius:8px; padding:8px 11px; margin-bottom:12px; }
-  .why b { color:var(--txt); }
-  .why .sig { display:inline-block; background:var(--info-bg); color:var(--info); border-radius:6px; padding:1px 7px; margin:2px 3px 0 0; font-size:11px; }
-  .body-card { font-size:13px; line-height:1.7; white-space:pre-wrap; word-break:break-word; color:var(--txt); background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
-  .links { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
-  .links a { font-size:12px; text-decoration:none; color:var(--info); border:1px solid var(--line); padding:5px 11px; border-radius:8px; }
-  #updated { font-size:12px; color:var(--hint); margin:10px 2px 0; }
-  .err { color:#e24b4a; padding:16px; }
-  /* 담당자 자동 배정 패널 */
-  .assignpanel { background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:14px; }
-  .ap-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .ap-head b { font-size:14px; }
-  #ap-info { font-size:12px; color:var(--muted); margin-right:auto; }
-  .ap-head button { height:30px; }
-  .ap-head .primary { background:var(--info); color:#fff; border-color:var(--info); }
-  #ap-load { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
-  .ap-user { font-size:12px; color:var(--muted); background:var(--bg2); border:1px solid var(--line); border-radius:8px; padding:4px 9px; }
-  .ap-user b { color:var(--txt); }
-  .ap-user.free { border-color:#bfe3c6; }
-  .ap-add { color:#1b5e20; font-weight:700; }
-  .ap-rtitle { font-size:12px; color:var(--muted); margin:12px 0 6px; }
-  .ap-list { max-height:340px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; }
-  .ap-row { display:flex; align-items:center; gap:10px; padding:6px 10px; border-bottom:1px solid var(--line); }
-  .ap-row:last-child { border-bottom:0; }
-  .ap-t { flex:1; min-width:0; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .ap-sel { height:28px; padding:0 8px; }
-  .ap-copy { height:28px; padding:0 10px; font-size:12px; white-space:nowrap; color:#4a154b; border-color:#d9c3da; }
-  .ap-copy:hover { background:#f3e9f3; }
-  .asg-chip { font-size:11px; padding:2px 9px; border-radius:8px; white-space:nowrap; background:#e6f1fb; color:#0c447c; }
-</style>
+<link rel="icon" href="../../styles/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="../styles/header.css">
+<link rel="stylesheet" href="../styles/difficulty.css">
 </head>
 <body>
+<?php include __DIR__ . '/../header.php'; ?>
 <div class="wrap">
   <div class="head">
     <h1>⭐ 유지보수 난이도 분석 <span class="badge" id="count"></span></h1>
@@ -117,7 +44,7 @@ header('Pragma: no-cache');
   <div class="toolbar">
     <span class="who"><?= htmlspecialchars($me['name'], ENT_QUOTES) ?> 님 · 별 많을수록 어려움(★5 기준)</span>
     <button id="reset" type="button">필터 초기화</button>
-    <a class="btn" href="lists.php"><button type="button">← 요청 목록</button></a>
+    <a class="btn" href="../lists.php"><button type="button">← 요청 목록</button></a>
   </div>
 
   <div class="assignpanel">
@@ -344,7 +271,7 @@ document.getElementById("reset").addEventListener("click",()=>{
 
 /* ===================== 담당자 자동 배정 ===================== */
 async function loadAssignments(){
-  try{ LOCAL = (await (await fetch("assign.php",{cache:"no-store"})).json()).assignments || {}; }
+  try{ LOCAL = (await (await fetch("../assign.php",{cache:"no-store"})).json()).assignments || {}; }
   catch(e){ LOCAL = {}; }
 }
 /* 미지정 대상: Slack 담당자 없음 + 진행상태 '등록' + 로컬 배정도 아직 없음 */
@@ -424,7 +351,7 @@ document.getElementById("ap-save").addEventListener("click", async ()=>{
   if(!PREVIEW || !PREVIEW.length) return;
   const btn=document.getElementById("ap-save"); btn.disabled=true;
   try{
-    const j = await (await fetch("assign.php",{method:"POST",headers:{"Content-Type":"application/json"},
+    const j = await (await fetch("../assign.php",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({action:"save", items:PREVIEW.map(p=>({request_id:p.id, assignee:p.assignee}))})})).json();
     if(!j.ok) throw new Error(j.error||"실패");
     await loadAssignments(); PREVIEW=null;
@@ -437,7 +364,7 @@ document.getElementById("ap-save").addEventListener("click", async ()=>{
 document.getElementById("ap-clear").addEventListener("click", async ()=>{
   if(!confirm("저장된 로컬 배정을 모두 초기화할까요?")) return;
   try{
-    const j = await (await fetch("assign.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"clear_all"})})).json();
+    const j = await (await fetch("../assign.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"clear_all"})})).json();
     if(!j.ok) throw new Error(j.error||"실패");
     await loadAssignments(); PREVIEW=null;
     document.getElementById("ap-save").style.display="none";
@@ -447,7 +374,7 @@ document.getElementById("ap-clear").addEventListener("click", async ()=>{
 
 async function load(){
   try{
-    const res = await fetch("data.php",{cache:"no-store"});
+    const res = await fetch("../data.php",{cache:"no-store"});
     const json = await res.json();
     if(json.error){ document.getElementById("board").innerHTML='<div class="err">에러: '+esc(json.error)+'</div>'; return; }
     DATA = (json.rows||[]).filter(r => r.board === '블루소프트' || !r.board);   // 난이도·배정은 블루소프트만

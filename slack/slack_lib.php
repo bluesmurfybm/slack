@@ -91,15 +91,21 @@ function slackPost($method, $token, $fields) {
 
 /** 레코드의 댓글 스레드 앵커 ts 찾기 (date_created 주변 시간창). 없으면 null. */
 function slackFindRecordThread($token, $channel, $created, $rid) {
-    // Slack 이 레코드 생성 후 앵커 메시지를 채널에 올리기까지 수~수십 초 지연될 수 있어
-    // 창을 넉넉히 잡는다(예: +5s 만으론 +13s 뒤 올라온 메시지를 놓쳐 댓글이 안 보임).
-    $h = slackGet('conversations.history', $token, [
-        'channel' => $channel, 'oldest' => $created - 5, 'latest' => $created + 120,
-        'inclusive' => true, 'limit' => 100,
-    ]);
-    foreach (($h['messages'] ?? []) as $m) {
-        if (strpos(json_encode($m), $rid) !== false) return $m['ts'];
-    }
+    // 앵커("A comment was added")는 레코드 생성 시점이 아니라 "첫 댓글이 달린 시각"에 생기므로
+    // 생성보다 수 분~수 일 뒤일 수 있다(예: +232s). 창을 넓게(생성~+14일) 잡고, 창 안 메시지가
+    // 많으면 페이지네이션으로 모두 훑는다. 댓글 없는 레코드에선 보통 1콜로 끝난다(저volume 채널).
+    $cursor = null; $pg = 0;
+    do {
+        $p = ['channel' => $channel, 'oldest' => $created - 5, 'latest' => $created + 14 * 86400,
+              'inclusive' => true, 'limit' => 200];
+        if ($cursor) $p['cursor'] = $cursor;
+        $h = slackGet('conversations.history', $token, $p);
+        if (empty($h['ok'])) break;
+        foreach (($h['messages'] ?? []) as $m) {
+            if (strpos(json_encode($m), $rid) !== false) return $m['ts'];
+        }
+        $cursor = $h['response_metadata']['next_cursor'] ?? null;
+    } while ($cursor && ++$pg < 12);
     return null;
 }
 
@@ -201,10 +207,17 @@ function slackResolveFiles($token, $fileIds) {
                 'permalink' => $fl['permalink'] ?? '',
             ];
         } else {
-            // 삭제/접근불가 파일도 캐시(재조회 방지). 이름만 남김.
-            $cache[$fid] = ['name' => $fid, 'mime' => '', 'size' => 0, 'is_image' => false,
-                            'url' => '', 'download' => '', 'thumb' => '', 'thumb_pdf' => '',
-                            'thumb_video' => '', 'mp4' => '', 'permalink' => '', 'gone' => true];
+            // 확실히 사라진 파일만 gone 으로 캐시(재조회 방지).
+            // rate limit/일시 오류를 gone 으로 영구 캐시하면 멀쩡한 첨부가 계속 안 보이는 버그가 됨
+            // → 일시 오류는 캐시하지 않고 다음 동기화 때 재시도.
+            $err = $r['error'] ?? '';
+            if (in_array($err, ['file_not_found', 'file_deleted'], true)) {
+                $cache[$fid] = ['name' => $fid, 'mime' => '', 'size' => 0, 'is_image' => false,
+                                'url' => '', 'download' => '', 'thumb' => '', 'thumb_pdf' => '',
+                                'thumb_video' => '', 'mp4' => '', 'permalink' => '', 'gone' => true];
+            } else {
+                continue;   // 캐시 안 함 (다음 기회에 재해석)
+            }
         }
         $changed = true;
         if (++$sinceSave >= 25) { @file_put_contents($cacheFile, json_encode($cache, JSON_UNESCAPED_UNICODE)); $sinceSave = 0; }  // 증분 저장(중단 대비)

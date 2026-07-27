@@ -4,8 +4,8 @@
  *  GET                → 전체 목록 JSON
  *  POST {action:create/update/delete, ...} → 추가/수정/삭제
  */
-require_once __DIR__ . '/auth.php';
-require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../db.php';
 require_login();
 session_release();
 header('Content-Type: application/json; charset=utf-8');
