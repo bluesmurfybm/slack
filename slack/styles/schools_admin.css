@@ -11,7 +11,7 @@
   .form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:var(--bg); border:1px solid var(--line);
           border-radius:12px; padding:12px 14px; margin-bottom:14px; }
   .form .fname { flex:1; min-width:150px; }
-  .form .fdev, .form .fops { flex:2; min-width:200px; }
+  .form .fdev, .form .fops, .form .flog { flex:2; min-width:200px; }
   .form .fmode { font-size:13px; color:var(--muted); font-weight:600; margin-right:2px; }
   .form .fchk { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--muted); white-space:nowrap; }
   .form .fchk input { width:16px; height:16px; }

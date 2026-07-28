@@ -37,6 +37,36 @@ try {
     $list = $st->fetchColumn() ?: ($cfg['list_id'] ?? '');
     $col  = $boards[$list]['col'] ?? SLACK_COL;
 
+    // ===== 동시 편집 방지(compare-and-set): 저장 직전 Slack 현재값과 사용자가 본 값(expect) 비교 =====
+    // 다른 사람이 먼저 바꿨으면(현재값 ≠ expect) 덮어쓰지 않고 최신값을 돌려줌 → 중복/충돌 처리 방지
+    $expect = array_key_exists('expect', $in) ? trim((string)$in['expect']) : null;
+    if ($expect !== null && ($field === 'status' || $field === 'asg')) {
+        $info = slackGet('slackLists.items.info', $tok, ['list_id' => $list, 'id' => $rid]);
+        if (!empty($info['ok']) && isset($info['record']['fields'])) {
+            $mm = slackIndexFields($info['record']['fields']);
+            if ($field === 'status') {
+                $sel = slackSelectMaps($tok, $list, $rid);
+                $map = $sel[$col['status']] ?? [];
+                $curId = isset($mm[$col['status']]) ? slackFieldSelect($mm[$col['status']]) : null;
+                $curLabel = ($curId !== null) ? ($map[$curId] ?? '') : '';
+                if ($curLabel !== $expect) {
+                    $pdo->prepare("UPDATE requests SET status_id=?, status=? WHERE id=?")->execute([$curId, $curLabel, $rid]);
+                    echo json_encode(['ok' => false, 'conflict' => true, 'field' => 'status', 'current' => $curLabel, 'current_id' => $curId], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+            } else { // asg
+                $curAsg = isset($mm[$col['asg']]) ? slackFieldUser($mm[$col['asg']]) : null;
+                if ((string)($curAsg ?? '') !== $expect) {
+                    $nm = '—';
+                    if ($curAsg) { $names = slackResolveUsers($tok, [$curAsg]); $nm = $names[$curAsg] ?? $curAsg; }
+                    $pdo->prepare("UPDATE requests SET asg_id=?, asg=? WHERE id=?")->execute([$curAsg, $nm, $rid]);
+                    echo json_encode(['ok' => false, 'conflict' => true, 'field' => 'asg', 'current' => $nm, 'current_id' => $curAsg], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+            }
+        }
+    }
+
     if ($field === 'status') {
         $sel   = slackSelectMaps($tok, $list, $rid);
         $map   = $sel[$col['status']] ?? [];

@@ -17,7 +17,7 @@ try {
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
         // 기본은 사용중(active=1)만. 관리 페이지는 ?all=1 로 미사용 포함 전체 조회
         $where = isset($_GET['all']) ? '' : ' WHERE active=1';
-        $rows = $pdo->query("SELECT id, name, ver, dev, ops, active FROM schools{$where} ORDER BY ver, name")->fetchAll();
+        $rows = $pdo->query("SELECT id, name, ver, dev, ops, `log`, active FROM schools{$where} ORDER BY ver, name")->fetchAll();
         foreach ($rows as &$r) { $r['id'] = (int)$r['id']; $r['active'] = (int)$r['active']; }
         echo json_encode(['ok' => true, 'rows' => $rows], JSON_UNESCAPED_UNICODE);
         exit;
@@ -29,21 +29,22 @@ try {
     $ver    = trim($in['ver']  ?? '');
     $dev    = trim($in['dev']  ?? '');
     $ops    = trim($in['ops']  ?? '');
+    $log    = trim($in['log']  ?? '');
     $active = isset($in['active']) ? (int)!!$in['active'] : 1;
     $id     = (int)($in['id']  ?? 0);
 
     if ($action === 'create') {
         if ($name === '') throw new Exception('대학명을 입력하세요.');
-        $st = $pdo->prepare("INSERT INTO schools (name, ver, dev, ops, active, created_at, updated_at)
-                             VALUES (?, ?, ?, ?, ?, NOW(), NOW())");
-        $st->execute([$name, $ver, $dev, $ops, $active]);
+        $st = $pdo->prepare("INSERT INTO schools (name, ver, dev, ops, `log`, active, created_at, updated_at)
+                             VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())");
+        $st->execute([$name, $ver, $dev, $ops, $log, $active]);
         echo json_encode(['ok' => true, 'id' => (int)$pdo->lastInsertId()]);
 
     } elseif ($action === 'update') {
         if ($id <= 0)      throw new Exception('잘못된 id');
         if ($name === '')  throw new Exception('대학명을 입력하세요.');
-        $st = $pdo->prepare("UPDATE schools SET name=?, ver=?, dev=?, ops=?, active=?, updated_at=NOW() WHERE id=?");
-        $st->execute([$name, $ver, $dev, $ops, $active, $id]);
+        $st = $pdo->prepare("UPDATE schools SET name=?, ver=?, dev=?, ops=?, `log`=?, active=?, updated_at=NOW() WHERE id=?");
+        $st->execute([$name, $ver, $dev, $ops, $log, $active, $id]);
         echo json_encode(['ok' => true]);
 
     } elseif ($action === 'toggle') {

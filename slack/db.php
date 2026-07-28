@@ -116,15 +116,16 @@ function db() {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `user_reads` (
             `user_id`    VARCHAR(32)  NOT NULL COMMENT '읽은 사용자 Slack ID',
-            `user_name`  VARCHAR(120) NULL COMMENT '읽은 사용자 이름',
             `request_id` VARCHAR(32)  NOT NULL COMMENT 'requests.id',
             `read_at`    DATETIME     NOT NULL,
             PRIMARY KEY (`user_id`, `request_id`),
             KEY `idx_user` (`user_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
-    // 기존 user_reads 마이그레이션: user_name 없으면 추가
-    add_column_if_missing($pdo, "ALTER TABLE `user_reads` ADD COLUMN `user_name` VARCHAR(120) NULL COMMENT '읽은 사용자 이름' AFTER `user_id`");
+    // 기존 user_reads 마이그레이션: user_name 컬럼 있으면 제거(더 이상 사용 안 함)
+    $hasUN = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='user_reads' AND COLUMN_NAME='user_name'");
+    $hasUN->execute();
+    if ($hasUN->fetchColumn()) $pdo->exec("ALTER TABLE `user_reads` DROP COLUMN `user_name`");
 
     // 5) 사용자별 고정 상태 (행 존재 = 고정). 고정 항목은 목록 최상단 출력
     $pdo->exec("
@@ -148,6 +149,17 @@ function db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+    // 6-1) 사용자별 설정(key-value). 필터 세트(프리셋)·화면 설정 등 브라우저 무관 저장용
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `user_prefs` (
+            `user_id`    VARCHAR(32)  NOT NULL COMMENT '사용자 Slack ID',
+            `pref_key`   VARCHAR(64)  NOT NULL COMMENT '설정 키 (예: filter_presets)',
+            `pref_value` MEDIUMTEXT   NULL     COMMENT 'JSON 값',
+            `updated_at` DATETIME     NOT NULL,
+            PRIMARY KEY (`user_id`, `pref_key`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
     // 7) 대학 사이트 목록 (버전별 개발/운영 링크) — 검색·관리용
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `schools` (
@@ -156,6 +168,7 @@ function db() {
             `ver`        VARCHAR(20)  NOT NULL DEFAULT '' COMMENT '버전(3.5/3.9/4.5 등)',
             `dev`        VARCHAR(500) NOT NULL DEFAULT '' COMMENT '개발 URL',
             `ops`        VARCHAR(500) NOT NULL DEFAULT '' COMMENT '운영 URL',
+            `log`        VARCHAR(500) NOT NULL DEFAULT '' COMMENT '로그 관리 URL',
             `active`     TINYINT(1)   NOT NULL DEFAULT 1 COMMENT '1=사용,0=미사용',
             `created_at` DATETIME     NULL,
             `updated_at` DATETIME     NULL,
@@ -164,8 +177,9 @@ function db() {
             KEY `idx_name` (`name`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
-    // 기존 설치본 마이그레이션: active 컬럼 없으면 추가
+    // 기존 설치본 마이그레이션: active / log 컬럼 없으면 추가
     add_column_if_missing($pdo, "ALTER TABLE `schools` ADD COLUMN `active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `ops`");
+    add_column_if_missing($pdo, "ALTER TABLE `schools` ADD COLUMN `log` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '로그 관리 URL' AFTER `ops`");
 
     // schools 최초 자동 시딩: git clone 후 첫 실행 시 seed 파일로 채움 (DB당 1회만)
     if ($pdo->query("SELECT v FROM sync_meta WHERE k='schools_seeded'")->fetchColumn() === false) {
