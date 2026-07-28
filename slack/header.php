@@ -34,7 +34,6 @@ if (!preg_match('#^[a-z][a-z0-9+.-]*://#i', $__bwBookUrl)) {
           <div class="dd-sep"></div>
           <div class="dd-label">업무 시스템</div>
           <a href="<?= htmlspecialchars($__bwBookUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">📚 도서구매신청</a>
-          <a href="<?= $__bwBase ?>lists.php">📥 업무현황판</a>
           <div class="dd-sep"></div>
           <a href="<?= $__bwBase ?>logout.php">🚪 로그아웃</a>
         </div>
