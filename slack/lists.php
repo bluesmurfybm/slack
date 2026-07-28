@@ -17,6 +17,7 @@ header('Pragma: no-cache');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>유지보수 요청</title>
+<script>(function(){var t=localStorage.getItem("ui_theme");if(t)document.documentElement.classList.add(t);})();</script>
 <link rel="icon" href="../styles/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,11 +32,18 @@ header('Pragma: no-cache');
 <div class="wrap">
   <div class="head">
     <h1>📥 유지보수 요청 <span class="badge" id="count"></span></h1>
+    <span id="clock" title="현재 시각"></span>
+    <span id="daemonDot" class="tip" data-tip="동기화 상태 확인 중…">●</span>
     <div class="filters iconbar">
-      <button id="toggleUn" type="button" class="txtbtn">미지정 숨기기</button>
-      <button id="toggleArch" type="button" class="txtbtn">🗄 보관 보기</button>
+      <button id="dueBtn" type="button" class="txtbtn dueBtn" hidden title="예상완료일 초과 항목만 보기">⚠️ 지연 <span id="dueCnt">0</span></button>
+      <button id="toggleUn" type="button" class="txtbtn iconable" title="미지정 숨기기"><span class="bico">👥</span><span class="btxt">미지정 숨기기</span></button>
+      <button id="toggleArch" type="button" class="txtbtn iconable" title="보관 보기"><span class="bico">🗄️</span><span class="btxt">보관 보기</span></button>
       <button id="toggleHidden" type="button" class="tip" data-tip="숨김 보기"><span class="ico" id="hidIco">🙈</span><span class="cnt" id="hidCnt"></span></button>
       <button id="schoolBtn" type="button" class="tip" data-tip="학교 검색">🏫</button>
+      <div class="dropdown" id="recentDd">
+        <button type="button" class="ddBtn tip" data-tip="최근 본 항목" id="recentBtn">🕘<span class="caret">▾</span></button>
+        <div class="ddmenu" id="recentMenu"></div>
+      </div>
       <div class="dropdown" id="analyzeDd">
         <button type="button" class="ddBtn tip" data-tip="분석 도구" id="analyzeBtn">📈<span class="caret">▾</span></button>
         <div class="ddmenu">
@@ -45,6 +53,8 @@ header('Pragma: no-cache');
         </div>
       </div>
       <button id="sync" class="tip" data-tip="동기화"><span class="ico">🔄</span></button>
+      <button id="themeBtn" type="button" class="tip" data-tip="다크/라이트 전환">🌓</button>
+      <a href="logout.php" id="logoutBtn"><button type="button" class="tip" data-tip="로그아웃"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M17.7 7.3a8 8 0 1 1-11.4 0"/></svg></button></a>
     </div>
   </div>
   <div class="toolbar">
@@ -56,6 +66,55 @@ header('Pragma: no-cache');
     <div class="ms" id="msStatus"></div>
     <div class="ms" id="msAsg"></div>
     <button id="reset" type="button">필터 초기화</button>
+    <span class="preset-box">
+      <button id="presetToggle" type="button" class="preset-toggle" title="필터 세트 저장·불러오기" aria-label="필터 세트"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <span class="preset-wrap" id="presetWrap" hidden>
+        <div class="pw-head"><span class="ic">⚙️</span> 설정</div>
+        <div class="pw-sec">
+          <div class="pw-title">필터 설정</div>
+          <div class="pw-row">
+            <select id="presetSel" title="저장된 필터 세트 적용"><option value="">필터 선택</option></select>
+            <button id="presetSave" type="button" title="현재 필터 조합을 세트로 저장">＋저장</button>
+            <button id="presetDel" type="button" class="preset-del" title="선택한 세트 삭제" hidden>🗑</button>
+          </div>
+        </div>
+        <div class="pw-sec">
+          <div class="pw-title">헤더 버튼 <span class="pw-hint">클릭=표시, 드래그=순서</span></div>
+          <div class="pw-toggles" id="hdrToggles"></div>
+        </div>
+        <div class="pw-sec">
+          <label class="pw-line"><input type="checkbox" id="uiCompact"> 컴팩트 모드</label>
+          <label class="pw-line"><span>정렬</span>
+            <select id="uiSort">
+              <option value="unread">안읽음 우선 + 최신순</option>
+              <option value="recent">최신순</option>
+              <option value="priority">우선순위(긴급 먼저)</option>
+              <option value="due">마감 임박순</option>
+              <option value="diff">난이도(어려운순)</option>
+            </select>
+          </label>
+          <label class="pw-line"><span>자동 새로고침</span>
+            <select id="uiRefresh">
+              <option value="30000">30초</option>
+              <option value="60000">1분</option>
+              <option value="300000">5분</option>
+              <option value="0">끄기</option>
+            </select>
+          </label>
+          <label class="pw-line"><span>글자 크기</span>
+            <select id="uiFont">
+              <option value="sm">작게</option>
+              <option value="md">보통</option>
+              <option value="lg">크게</option>
+            </select>
+          </label>
+          <label class="pw-line"><input type="checkbox" id="uiAutoRead"> 열면 자동 읽음 처리</label>
+          <label class="pw-line"><input type="checkbox" id="uiAsgLink"> 담당자: 유비온·와이오즈 동일 선택</label>
+          <div class="pw-subtitle">목록 컬럼 표시</div>
+          <div class="pw-toggles" id="colToggles"></div>
+        </div>
+      </span>
+    </span>
   </div>
   <div class="cols">
     <div class="col" id="unpanel">
@@ -82,7 +141,7 @@ header('Pragma: no-cache');
 <div id="schoolModal" class="sm-overlay" hidden>
   <div class="sm-box">
     <div class="sm-head"><span>🏫 학교 사이트 검색 <span class="sm-count" id="smCount"></span></span>
-      <span><a href="schools/schools_admin.php" target="_blank" rel="noopener" class="sm-manage">⚙ 관리</a><button id="smClose" class="sm-x" type="button">✕</button></span></div>
+      <span><a href="schools_admin.php" target="_blank" rel="noopener" class="sm-manage">⚙️ 관리</a><button id="smClose" class="sm-x" type="button">✕</button></span></div>
     <div class="sm-tools">
       <input id="smSearch" type="text" placeholder="대학명 검색…">
       <div class="sm-vers" id="smVers"></div>
@@ -94,6 +153,7 @@ header('Pragma: no-cache');
 <script>
 const LIST_URL = <?= json_encode($listUrl) ?>;
 const ME = <?= json_encode($me['name']) ?>;   // 낙관적 댓글 표시용 본인 이름
+const ME_ID = <?= json_encode($me['id'] ?? '') ?>;   // 사용자별 로컬 저장 키용
 let SCHOOLS = null;   // schools.php(DB)에서 최초 조회 후 캐시
 const PALETTE = {
   "등록":            {bg:"#eef0f2", fg:"#555c66"},
@@ -189,26 +249,63 @@ const EMOJI = {
   smiling_imp:"😈",ghost:"👻",skull:"💀",alien:"👽",robot_face:"🤖",
   raising_hand:"🙋",man_bowing:"🙇‍♂️",woman_bowing:"🙇‍♀️",speech_balloon:"💬",thought_balloon:"💭"
 };
+/* 멘션 ID → 이름 맵 (DATA 의 요청자/담당자로 시드, 댓글 응답·lazy 해석으로 보강) */
+const MENTION_NAMES = {};
+function mnSeed(){
+  DATA.forEach(r=>{
+    if(r.req_id && r.req && r.req!=="—") MENTION_NAMES[r.req_id]=r.req;
+    if(r.asg_id && r.asg && r.asg!=="—") MENTION_NAMES[r.asg_id]=r.asg;
+  });
+}
+/* 이름 미해석 멘션(…) 을 서버에서 일괄 해석해 채움 */
+async function resolveMentions(scope){
+  const els=[...(scope||document).querySelectorAll('.mention[data-unres]')];
+  if(!els.length) return;
+  const ids=[...new Set(els.map(e=>e.dataset.uid))];
+  try{
+    const j = await (await fetch("user_info.php?ids="+ids.join(","))).json();
+    Object.assign(MENTION_NAMES, j.users||{});
+    els.forEach(e=>{ const n=MENTION_NAMES[e.dataset.uid]; if(n){ e.textContent="@"+n; e.removeAttribute("data-unres"); } });
+  }catch(e){ /* 다음 렌더에서 재시도 */ }
+}
+/* 아이콘+텍스트 버튼 라벨 세팅 (좁은 화면에선 CSS 가 텍스트를 숨기고 아이콘만 표시) */
+function setBtnLabel(id, icon, text){
+  const b = document.getElementById(id);
+  if(!b) return;
+  b.innerHTML = '<span class="bico">'+icon+'</span><span class="btxt">'+esc(text)+'</span>';
+  b.title = text;
+}
 /* Slack mrkdwn → HTML (굵게/기울임/취소선/코드/코드블록/링크/줄바꿈) */
 function mrkdwn(t){
   if(!t) return '';
   var ph=[]; var stash=function(h){ ph.push(h); return ''+(ph.length-1)+''; };
   t = t.replace(/```([\s\S]*?)```/g,function(m,c){ return stash('<pre>'+unslack(esc(c.replace(/^\n|\n$/g,'')))+'</pre>'); });
   t = t.replace(/`([^`\n]+)`/g,function(m,c){ return stash('<code>'+unslack(esc(c))+'</code>'); });
-  t = t.replace(/<(https?:\/\/[^|>]+)\|([^>]+)>/g,function(m,u,l){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(l))+'</a>'); });
-  t = t.replace(/<(https?:\/\/[^>]+)>/g,function(m,u){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u))+'</a>'); });
+  t = t.replace(/<((?:https?:\/\/|tel:|mailto:)[^|>]+)\|([^>]+)>/g,function(m,u,l){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(l))+'</a>'); });
+  t = t.replace(/<((?:https?:\/\/|tel:|mailto:)[^>]+)>/g,function(m,u){ return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u.replace(/^(?:tel|mailto):/,'')))+'</a>'); });
   // 마크업 없이 그대로 붙여넣은 URL 도 클릭 가능하게 (끝 문장부호는 링크에서 제외)
   t = t.replace(/https?:\/\/[^\s<>]+/g,function(u){
     // 끝의 문장부호 + 마크다운 마커(* _ ~ `)는 링크에서 제외(볼드/기울임 닫기와 충돌 방지)
     var tail=''; var mt=u.match(/[*_~`)\]}.,;:!?]+$/); if(mt){ tail=mt[0]; u=u.slice(0,-tail.length); }
     return stash('<a href="'+unslack(escAttr(u))+'" target="_blank" rel="noopener">'+unslack(esc(u))+'</a>')+tail;
   });
+  // @멘션: <@UID> → 파란 멘션 배지 (클릭 = 프로필 팝업). 이름 미해석분은 표시 후 lazy 해석
+  t = t.replace(/<@([UW][A-Z0-9]+)>/g,function(m,id){
+    var nm = MENTION_NAMES[id];
+    return stash('<span class="mention m-view" data-uid="'+escAttr(id)+'"'+(nm?'':' data-unres="1"')+'>@'+esc(nm||'…')+'</span>');
+  });
   t = unslack(esc(t));
-  t = t.replace(/\*(?!\s)([^*\n]+?)\*/g,'<b>$1</b>');
-  t = t.replace(/_(?!\s)([^_\n]+?)_/g,'<i>$1</i>');
-  t = t.replace(/~(?!\s)([^~\n]+?)~/g,'<s>$1</s>');
+  // Slack 처럼 "단어 경계" 에서만 서식 적용 — 식별자 중간의 _ / * (예: set_course_add_v2)가 서식으로 먹히지 않게
+  t = t.replace(/(?<![\w가-힣*])\*(?!\s)([^*\n]+?)\*(?!\w)/g,'<b>$1</b>');
+  t = t.replace(/(?<![\w가-힣_])_(?!\s)([^_\n]+?)_(?!\w)/g,'<i>$1</i>');
+  t = t.replace(/(?<![\w가-힣~])~(?!\s)([^~\n]+?)~(?!\w)/g,'<s>$1</s>');
   t = t.replace(/:skin-tone-[2-6]:/g,'');
-  t = t.replace(/:([a-z0-9_+-]+):/g,function(m,n){ return EMOJI[n]||m; });
+  // 표준 맵 → 커스텀 이미지(emoji_meta) → 미해석은 원문 유지 (반응 칩 emjHtml 과 동일 소스)
+  t = t.replace(/:([a-z0-9_+가-힣-]+):/g,function(m,n){
+    if(EMOJI[n]) return EMOJI[n];
+    var u=(_EM && _EM.custom || {})[n];
+    return u ? '<img class="cemoji" src="'+escAttr(u)+'" alt=":'+escAttr(n)+':">' : m;
+  });
   t = quoteBlocks(t);
   t = t.replace(/\n/g,'<br>');
   t = t.replace(/(\d+)/g,function(m,i){ return ph[+i]; });
@@ -316,7 +413,17 @@ function matchBase(r, withStatus){   // 검색 + (보드별)우선순위/담당�
          (withStatus === false || selPass('status','status', r));
 }
 function visible(r){ return showHidden || !r.is_hidden; }   // 숨김 항목은 '숨김 보기'에서만
-function filteredItems(){   return DATA.filter(r => visible(r) && matchBase(r, true) && selPass('asg','asg', r)); }
+/* 예상완료일(eta) 초과 일수. 완료/보관/미설정이면 0 */
+let dueOnly = false;
+function overdueDays(r){
+  if(!r.eta || r.done || r.archived) return 0;
+  if((r.status||"").includes("완료")) return 0;
+  if((r.status||"").includes("확인요청")) return 0;   // 확인요청 = 처리 끝나고 회신 대기 → 지연 아님
+  const d=new Date(), t=d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());
+  if(r.eta >= t) return 0;
+  return Math.max(1, Math.round((new Date(t) - new Date(r.eta)) / 86400000));
+}
+function filteredItems(){   return DATA.filter(r => visible(r) && matchBase(r, true) && selPass('asg','asg', r) && (!dueOnly || overdueDays(r) > 0)); }
 // 미지정 패널: 담당자·진행상태 필터는 적용하지 않음(항상 미지정 + 상태 '등록'만)
 const INIT_STATUS = { "블루소프트":"등록", "와이오즈":"시작 전" };   // 보드별 '미지정 대상' 초기상태
 function unassignedItems(){ return DATA.filter(r => visible(r) && matchBase(r, false) && (!r.asg || r.asg === '—') && r.status === (INIT_STATUS[r.board] || '등록')); }
@@ -331,19 +438,19 @@ function rowHtml(r){
       ${!archivedMode && fboardTab==="all" && r.board ? `<span class="bdot ${r.board==='와이오즈'?'w':'b'}" title="${esc(boardLabel(r.board))}">${r.board==='와이오즈'?'W':'U'}</span>` : ''}
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px">
-          ${r.priority?`<span class="st" style="flex:none;background:${priColor(r.priority).bg};color:${priColor(r.priority).fg}">${esc(r.priority)}</span>`:''}
-          <span class="title">${esc(r.title)}</span>
-          ${r.status?`<span class="st" style="background:${p.bg};color:${p.fg}">${esc(r.status)}</span>`:''}
-          ${r.team?`<span class="st" style="background:${teamColor(r.team).bg};color:${teamColor(r.team).fg}">${esc(r.team)}</span>`:''}
-          ${r.archived?'<span class="st" style="background:#e5e7eb;color:#4b5563">🗄 보관</span>':''}
-          ${r.locked?'<span class="lock">✎수정됨</span>':''}
+          ${r.priority?`<span class="st col-pri" style="flex:none;background:${priColor(r.priority).bg};color:${priColor(r.priority).fg}">${esc(r.priority)}</span>`:''}
+          <span class="twrap"><span class="title">${esc(r.title)}</span><button type="button" class="copyTitle tip" data-tip="제목복사" data-id="${esc(r.id)}" data-list="${esc(r.list_id||'')}" data-title="${escAttr(r.title)}">📋</button></span>
+          ${r.status?`<span class="st col-status" style="background:${p.bg};color:${p.fg}">${esc(r.status)}</span>`:''}
+          ${r.team?`<span class="st col-team" style="background:${teamColor(r.team).bg};color:${teamColor(r.team).fg}">${esc(r.team)}</span>`:''}
+          ${r.archived?'<span class="st" style="background:#e5e7eb;color:#4b5563">🗄️ 보관</span>':''}
+          ${r.locked?'<span class="lock">✏️수정됨</span>':''}
         </div>
         <div class="snipline">
           ${r.cmt_count>0?`<span class="cmtcnt">💬 +${r.cmt_count}</span>`:''}
           <div class="snip">${esc(snip(r.body))}</div>
         </div>
       </div>
-      <div class="date">${fmtDate(r.created)}</div>
+      <div class="date">${(od=>od?`<span class="due" title="예상완료일 ${esc(r.eta||'')} — ${od}일 초과">⚠️ D+${od}</span> `:"")(overdueDays(r))}${fmtDate(r.created)}</div>
     </div>`;
   if(!open) return row;
   return row + `
@@ -368,9 +475,9 @@ function rowHtml(r){
           ${LIST_URL?`<button type="button" class="slack-link copyLink" data-url="${esc(LIST_URL)}?record_id=${esc(r.id)}">링크 복사</button>`:''}
           ${r.momo?`<a href="${esc(r.momo)}" target="_blank" rel="noopener">모모 이슈</a>`:''}
           ${r.lms?`<a href="${esc(r.lms)}" target="_blank" rel="noopener">LMS 링크</a>`:''}
-          <a href="similar/similar.php?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">🔍 유사 이력</a>
+          <a href="similar.php?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">🔍 유사 이력</a>
           <button type="button" class="rdBtn" data-id="${esc(r.id)}" data-read="${r.is_read?0:1}">${r.is_read?'안읽음으로':'읽음으로'}</button>
-          <button type="button" class="doHide" data-id="${esc(r.id)}" data-hide="${r.is_hidden?0:1}">${r.is_hidden?'👁 숨김 해제':'🙈 숨기기'}</button>
+          <button type="button" class="doHide" data-id="${esc(r.id)}" data-hide="${r.is_hidden?0:1}">${r.is_hidden?'👁️ 숨김 해제':'🙈 숨기기'}</button>
           <button type="button" class="cmtToggle ${showCmts?'on':''}">💬 댓글${r.cmt_count>0?` ${r.cmt_count}`:''}${showCmts?' 닫기':''}</button>
         </div>
       </div>
@@ -416,11 +523,24 @@ function asgEditOptions(curId){
   return h;
 }
 async function updateField(id, field, value){
+  const r0 = DATA.find(x=>x.id===id);
+  // 사용자가 '본' 값(변경 전) — 서버가 Slack 현재값과 비교해 동시편집 감지
+  const expect = r0 ? (field==="status" ? (r0.status||"") : field==="asg" ? (r0.asg_id||"") : (r0.eta||"")) : "";
   try{
     const j = await (await fetch("update.php", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({request_id:id, field, value})
+      body: JSON.stringify({request_id:id, field, value, expect})
     })).json();
+    if(j.conflict){                              // 다른 사람이 먼저 변경함 → 덮어쓰지 않고 최신값 반영
+      const r = DATA.find(x=>x.id===id);
+      if(r){
+        if(field==="status"){ r.status=j.current; r.status_id=j.current_id; }
+        else if(field==="asg"){ r.asg_id=j.current_id||null; r.asg=j.current; }
+      }
+      render();
+      alert("⚠️ 다른 사람이 이미 변경했습니다.\n현재 값: " + (j.current || "—") + "\n\n최신 상태로 갱신했습니다. 그래도 바꾸려면 다시 선택하세요.");
+      return;
+    }
     if(!j.ok) throw new Error(j.error || "실패");
     const r = DATA.find(x=>x.id===id);
     if(r){
@@ -510,18 +630,196 @@ function cmtHtml(list){
         <div class="cmt-h"><b style="color:${col.fg}">${esc(c.author_name)}</b><span class="cmt-t">${esc(c.created_at)}</span></div>
         ${c.body ? `<div class="cmt-b">${mrkdwn(c.body)}</div>` : ''}
         ${(c.files&&c.files.length) ? `<div class="cmt-files">${c.files.map(f=>fileHtml(f, "cmt-img")).join("")}</div>` : ''}
+        ${reactHtml(c)}
       </div>
     </div>`;
   }).join("");
+}
+/* 댓글 이모지 반응: 칩(내가 누른 건 강조) + ➕ 추가 피커. 클릭 = Slack 반응 토글
+   피커 목록은 사용자 토큰 기준: 자주 사용(내 반응 이력 집계) + 워크스페이스 커스텀 이모지 */
+const QUICK_REACTS_DEFAULT = ["white_check_mark","+1","pray","joy","heart","eyes","tada"];
+let _EM = null;                                            // {frequent:[], custom:{name:url}}
+async function emojiMeta(){
+  if(_EM) return _EM;
+  try{ _EM = await (await fetch("emoji_meta.php")).json(); }catch(e){ _EM = {frequent:[], custom:{}}; }
+  if(!_EM || !_EM.ok) _EM = {frequent:[], custom:{}};
+  return _EM;
+}
+emojiMeta();   // 페이지 로드 시 미리 받아두기 (커스텀 이모지 칩 렌더용)
+/* 최근 사용 반응 (사용자별 로컬 저장) — 방금 누른 이모지가 자주 사용 목록 맨 앞에 즉시 반영.
+   서버 집계(reactions.list, 1시간 캐시)와 합쳐서 Slack 의 '자주 사용' 갱신 감각을 재현 */
+const RECENT_KEY = "slackapi_recent_reacts_" + (ME_ID || "me");
+function recentReacts(){
+  try{ return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); }catch(e){ return []; }
+}
+function pushRecentReact(name){
+  const list = [name, ...recentReacts().filter(n => n !== name)].slice(0, 20);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+}
+/* 스코프 부족 공통 안내 */
+function scopeAlert(){
+  alert("Slack 앱 권한(스코프)이 부족해 이 기능을 사용할 수 없습니다.\n\n"
+      + "관리자에게 요청하거나 아래 절차로 추가해 주세요:\n"
+      + "1. api.slack.com/apps → 앱 선택\n"
+      + "2. OAuth & Permissions → User Token Scopes 에 추가\n"
+      + "   • reactions:write  (이모지 반응 남기기)\n"
+      + "   • emoji:read       (커스텀 이모지 표시)\n"
+      + "3. Reinstall to Workspace → 발급된 새 토큰으로 재로그인");
+}
+/* 이모지 이름 → 표시 HTML (표준 맵 → 커스텀 이미지 → 이름 배지 폴백)
+   이미지 URL 이 없는 커스텀(emoji:read 스코프 전)은 :name: 대신 작은 이름 배지로 깔끔하게 */
+function emjHtml(n){
+  if(EMOJI[n]) return EMOJI[n];
+  const u = (_EM && _EM.custom || {})[n];
+  if(u) return `<img class="cemoji" src="${escAttr(u)}" alt=":${escAttr(n)}:">`;
+  const short = n.length > 8 ? n.slice(0,7)+"…" : n;
+  return `<span class="ename" title=":${escAttr(n)}:">${esc(short)}</span>`;
+}
+function reactHtml(c){
+  if(!c.ts) return '';
+  // 모든 댓글에 hover 툴바 (자주 사용 3개 + 피커, Slack 식). 반응 있으면 하단 칩 줄도 함께.
+  const freq=[...new Set([...recentReacts(), ...((_EM&&_EM.frequent)||[]), ...QUICK_REACTS_DEFAULT])].slice(0,3);
+  const hov = `<div class="cmt-hov" data-ts="${escAttr(c.ts)}">`
+    + freq.map(n=>`<button type="button" class="qr" data-name="${escAttr(n)}" title=":${escAttr(n)}:">${emjHtml(n)}</button>`).join("")
+    + `<button type="button" class="qr qr-add" title="반응 추가">☺<i class="pp">+</i></button></div>`;
+  if(!(c.reactions||[]).length) return hov;
+  const chips=(c.reactions||[]).map(r=>
+    `<button type="button" class="rct${r.me?' me':''}" data-ts="${escAttr(c.ts)}" data-name="${escAttr(r.name)}" data-me="${r.me?1:0}" data-who="${escAttr(JSON.stringify(r.who||[]))}" data-count="${r.count}">${emjHtml(r.name)} <span class="rc">${r.count}</span></button>`
+  ).join("");
+  return hov + `<div class="rcts">${chips}<button type="button" class="rct-add" data-ts="${escAttr(c.ts)}" title="반응 추가">☺<i class="pp">+</i></button></div>`;
+}
+/* Slack 식 반응 툴팁: 큰 이모지 + "OOO님이 :name: 이모티콘으로 반응했습니다." */
+function _rtip(){ let el=document.getElementById("rtip"); if(!el){ el=document.createElement("div"); el.id="rtip"; el.hidden=true; document.body.appendChild(el); } return el; }
+function showReactTip(el){
+  const name=el.dataset.name, count=+el.dataset.count||0;
+  let who=[]; try{ who=JSON.parse(el.dataset.who||"[]"); }catch(e){}
+  const more=Math.max(0, count-who.length);
+  let names;
+  if(!who.length) names = count+"명";
+  else if(more>0) names = who.join(", ")+" 외 "+more+"명";
+  else if(who.length>1) names = who.slice(0,-1).join(", ")+" 및 "+who[who.length-1];
+  else names = who[0];
+  const tip=_rtip();
+  tip.innerHTML = `<div class="rt-emj">${emjHtml(name)}</div>`
+    + `<div class="rt-txt"><b>${esc(names)}</b>님이 :${esc(name)}: 이모티콘으로 반응했습니다.</div>`;
+  tip.hidden=false;
+  const r=el.getBoundingClientRect();
+  tip.style.left=Math.max(8, Math.min(r.left + r.width/2 - tip.offsetWidth/2, innerWidth - tip.offsetWidth - 8))+"px";
+  tip.style.top=(r.top - tip.offsetHeight - 8 > 4 ? r.top - tip.offsetHeight - 8 : r.bottom + 8)+"px";
+}
+function hideReactTip(){ const t=document.getElementById("rtip"); if(t) t.hidden=true; }
+function bindReacts(box, id){
+  box.querySelectorAll(".rct").forEach(el=>{
+    el.addEventListener("mouseenter", ()=>showReactTip(el));
+    el.addEventListener("mouseleave", hideReactTip);
+    el.addEventListener("click", async e=>{
+      hideReactTip();
+      e.stopPropagation();
+      const on = el.dataset.me !== "1";
+      // 낙관적 표시
+      el.dataset.me = on ? "1" : "0";
+      el.classList.toggle("me", on);
+      const parts = el.textContent.trim().split(" ");
+      const n = Math.max(0, parseInt(parts.pop()||"0") + (on?1:-1));
+      el.textContent = parts.join(" ") + " " + n;
+      if(n === 0) el.remove();
+      try{
+        const j = await (await fetch("react.php", {method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({request_id:id, ts:el.dataset.ts, name:el.dataset.name, on})})).json();
+        if(!j.ok){ String(j.error||"").includes("missing_scope") ? scopeAlert() : alert("반응 실패: " + (j.error||"?")); }
+        else if(on) pushRecentReact(el.dataset.name);      // 자주 사용 목록 즉시 갱신
+      }catch(e){}
+      loadComments(id);   // 서버 기준 재동기화
+    });
+  });
+  box.querySelectorAll(".rct-add").forEach(el=>{
+    el.addEventListener("click", e=>{ e.stopPropagation(); openReactPicker(el, id, el.dataset.ts); });
+  });
+  // 반응 없는 댓글의 hover 툴바: 자주 사용 3개(바로 반응) + 피커
+  box.querySelectorAll(".cmt-hov").forEach(hv=>{
+    const ts = hv.dataset.ts;
+    hv.querySelectorAll(".qr:not(.qr-add)").forEach(b=>b.addEventListener("click", async e=>{
+      e.stopPropagation();
+      try{
+        const j = await (await fetch("react.php", {method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({request_id:id, ts, name:b.dataset.name, on:true})})).json();
+        if(!j.ok){
+          const err = String(j.error||"");
+          if(err.includes("missing_scope")) scopeAlert();
+          else if(!err.includes("already_reacted")) alert("반응 실패: " + (j.error||"?"));   // 이미 반응한 건 조용히 무시
+        }
+        else pushRecentReact(b.dataset.name);              // 자주 사용 목록 즉시 갱신
+      }catch(e){}
+      loadComments(id);   // 서버 기준 재동기화
+    }));
+    const add = hv.querySelector(".qr-add");
+    if(add) add.addEventListener("click", e=>{ e.stopPropagation(); openReactPicker(add, id, ts); });
+  });
+}
+/* 반응 피커: 자주 사용(사용자별) + 검색(표준+커스텀) + 커스텀 전체 */
+async function openReactPicker(anchor, id, ts){
+  const old=document.getElementById("rctMenu"); if(old) old.remove();
+  const meta = await emojiMeta();
+  const menu=document.createElement("div"); menu.id="rctMenu";
+  // 자주 사용 = 로컬 최근 사용(즉시 갱신) + 서버 집계(내 반응 이력) + 기본값, 중복 제거
+  const freq = [...new Set([...recentReacts(), ...(meta.frequent||[]), ...QUICK_REACTS_DEFAULT])].slice(0,16);
+  const customNames = Object.keys(meta.custom||{});
+  const btn = n => `<button type="button" class="re" data-name="${escAttr(n)}" title=":${escAttr(n)}:">${emjHtml(n)}</button>`;
+  menu.innerHTML =
+    (meta.custom_missing_scope ? `<div class="rm-warn">⚠️ 커스텀 이모지 표시는 Slack 앱에 <b>emoji:read</b> 스코프 추가 후 재로그인이 필요합니다. <a href="javascript:void(0)" class="rm-warn-more">방법 보기</a></div>` : "")
+    + `<input type="text" class="rm-q" placeholder="이모지 검색…">`
+    + `<div class="rm-body">`
+    +   `<div class="rm-sec">자주 사용</div><div class="rm-grid">${freq.map(btn).join("")}</div>`
+    +   (customNames.length ? `<div class="rm-sec">커스텀 (${customNames.length})</div><div class="rm-grid rm-custom">${customNames.slice(0,120).map(btn).join("")}</div>` : "")
+    + `</div>`;
+  document.body.appendChild(menu);
+  const r=anchor.getBoundingClientRect();
+  menu.style.left=Math.min(r.left, innerWidth-menu.offsetWidth-10)+"px";
+  menu.style.top=(r.top - menu.offsetHeight - 6 > 0 ? r.top - menu.offsetHeight - 6 : r.bottom + 6)+"px";
+  const send = async name => {
+    menu.remove();
+    try{
+      const j = await (await fetch("react.php", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({request_id:id, ts, name, on:true})})).json();
+      if(!j.ok){ String(j.error||"").includes("missing_scope") ? scopeAlert() : alert("반응 실패: " + (j.error||"?")); }
+      else pushRecentReact(name);                          // 자주 사용 목록 즉시 갱신
+    }catch(e){}
+    loadComments(id);
+  };
+  const bindBtns = scope => scope.querySelectorAll(".re").forEach(b=>b.addEventListener("click", ev=>{ ev.stopPropagation(); send(b.dataset.name); }));
+  bindBtns(menu);
+  const warnMore = menu.querySelector(".rm-warn-more");
+  if(warnMore) warnMore.addEventListener("click", ev=>{ ev.stopPropagation(); scopeAlert(); });
+  // 검색: 표준 EMOJI 이름 + 커스텀 이름 통합
+  const q = menu.querySelector(".rm-q");
+  q.addEventListener("input", ()=>{
+    const body = menu.querySelector(".rm-body");
+    const kw = q.value.trim().toLowerCase();
+    if(!kw){
+      body.innerHTML = `<div class="rm-sec">자주 사용</div><div class="rm-grid">${freq.map(btn).join("")}</div>`
+        + (customNames.length ? `<div class="rm-sec">커스텀 (${customNames.length})</div><div class="rm-grid rm-custom">${customNames.slice(0,120).map(btn).join("")}</div>` : "");
+    } else {
+      const std = Object.keys(EMOJI).filter(n=>n.includes(kw)).slice(0,40);
+      const cus = customNames.filter(n=>n.includes(kw)).slice(0,60);
+      body.innerHTML = `<div class="rm-grid">${std.concat(cus).map(btn).join("") || '<div class="rm-none">검색 결과 없음</div>'}</div>`;
+    }
+    bindBtns(body);
+  });
+  q.focus();
+  const close=ev=>{ if(!menu.contains(ev.target)){ menu.remove(); document.removeEventListener("mousedown",close);} };
+  document.addEventListener("mousedown", close);
 }
 async function loadComments(id){
   try{
     const j = await (await fetch("comments.php?request_id="+encodeURIComponent(id), {cache:"no-store"})).json();
     cmtCache[id] = j.comments || [];
+    Object.assign(MENTION_NAMES, j.users || {});   // 댓글 멘션 이름 맵 병합
   }catch(e){ cmtCache[id] = []; }
   const box = document.getElementById("cmts-"+id);
   if(box){
     box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box);
+    bindReacts(box, id);                                    // 이모지 반응 토글
+    resolveMentions(box);                                   // 댓글 멘션 이름 해석
     box.scrollTop = box.scrollHeight;                       // 최신 댓글(맨 아래) 바로 보이게
     setTimeout(()=>{ box.scrollTop = box.scrollHeight; }, 150);   // 이미지 로드 등 늦은 레이아웃 보정
   }
@@ -536,7 +834,7 @@ async function postComment(id){
   if(ed) ed.innerHTML = "";
   cmtCache[id] = cmtCache[id] || [];
   cmtCache[id].push({ author_name: ME, body: text, created_at: _nowStr(), files: [] });
-  if(box){ box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box); box.scrollTop = box.scrollHeight; }
+  if(box){ box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box); bindReacts(box, id); box.scrollTop = box.scrollHeight; }
   // 실제 전송은 백그라운드 → 완료되면 Slack 기준으로 재동기화
   try{
     const j = await (await fetch("comments.php", {
@@ -551,6 +849,17 @@ async function postComment(id){
   }
 }
 
+/* 상세 열 때 해당 항목의 진행상태/담당자/완료예정일을 Slack 최신값으로 새로고침(동시편집 대비) */
+async function refreshItem(id){
+  try{
+    const j = await (await fetch("itemfresh.php?id="+encodeURIComponent(id), {cache:"no-store"})).json();
+    if(!j.ok) return;
+    const r = DATA.find(x=>x.id===id); if(!r) return;
+    const changed = (r.status!==j.status) || ((r.asg_id||"")!==(j.asg_id||"")) || ((r.eta||"")!==(j.eta||""));
+    r.status=j.status; r.status_id=j.status_id; r.asg_id=j.asg_id||null; r.asg=j.asg; r.eta=j.eta||null;
+    if(changed && openId===id) render();   // 값이 바뀌었고 아직 열려 있으면 상세 갱신
+  }catch(e){ /* 무시 */ }
+}
 function bindRows(box){
   box.querySelectorAll(".row").forEach(el=>{
     el.addEventListener("click",()=>{
@@ -559,7 +868,9 @@ function bindRows(box){
       openId = opening ? id : null;
       if(opening){
         const r = DATA.find(x=>x.id===id);   // 댓글 패널 상태는 마지막 값 유지(showCmts)
-        if(r && !r.is_read) markRead(id, 1, false);
+        if(r && !r.is_read && loadUi().autoRead!==false) markRead(id, 1, false);   // 설정: 열면 자동 읽음
+        pushRecent(r);   // 최근 본 항목 기록
+        if(!archivedMode) refreshItem(id);   // 진행상태/담당자 최신값으로 갱신(동시편집 대비)
       }
       render();
       if(opening && showCmts) loadComments(id);   // 열 때 최신 댓글 자동 로드
@@ -590,6 +901,19 @@ function bindRows(box){
       try{ await navigator.clipboard.writeText(url); }
       catch(_){ const ta=document.createElement("textarea"); ta.value=url; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
       el.textContent = "복사됨!";
+      setTimeout(()=>{ el.textContent = old; }, 1200);
+    });
+  });
+  // 제목+슬랙링크 복사 (보드별 list_id 로 permalink 구성)
+  box.querySelectorAll(".copyTitle").forEach(el=>{
+    el.addEventListener("click", async e=>{
+      e.stopPropagation();
+      const base = el.dataset.list ? LIST_URL.replace(/[^\/]+$/, el.dataset.list) : LIST_URL;
+      const text = el.dataset.title + "\n" + base + "?record_id=" + el.dataset.id;
+      try{ await navigator.clipboard.writeText(text); }
+      catch(_){ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+      const old = el.textContent;
+      el.textContent = "✅";
       setTimeout(()=>{ el.textContent = old; }, 1200);
     });
   });
@@ -665,6 +989,7 @@ function paint(box, items){
   if(items.length === 0){ box.innerHTML = '<div class="err">표시할 항목이 없습니다.</div>'; return; }
   box.innerHTML = items.map(rowHtml).join("");
   bindRows(box);
+  resolveMentions(box);   // 본문 멘션 이름 해석
 }
 
 /* ---------- 댓글 영역 크기 조절(드래그) + 크기 기억 ---------- */
@@ -707,13 +1032,22 @@ function renderBTabs(){
   box.innerHTML = tabs.map(([v,l])=>
     `<button type="button" class="btab${v===fboardTab?' on':''}" data-b="${escAttr(v)}">${esc(l)} <span class="btab-n">${counts[v]||0}</span></button>`).join("");
   box.querySelectorAll(".btab").forEach(t=>t.addEventListener("click", ()=>{
-    fboardTab = t.dataset.b; saveFilters(); openId = null; buildAllMS();
+    fboardTab = t.dataset.b; clearPresetSel(); saveFilters(); openId = null; buildAllMS();
     if(archivedMode) loadArchived(0); else render();
   }));
 }
 function render(){
+  mnSeed();   // 멘션 이름 맵 최신화
   const items = filteredItems();
   document.getElementById("count").textContent = items.length + "건";
+  // 마감 지연 배지 (활성 목록 기준, 숨김 제외)
+  const dueN = DATA.filter(r=>!r.is_hidden && overdueDays(r)>0).length;
+  const dueBtn = document.getElementById("dueBtn");
+  if(dueBtn){
+    dueBtn.hidden = dueN===0 && !dueOnly;
+    document.getElementById("dueCnt").textContent = dueN;
+    dueBtn.classList.toggle("on", dueOnly);
+  }
   renderBTabs();
   const hc = DATA.filter(r=>r.is_hidden).length;   // 숨김 개수 → 토글 버튼에 표시
   document.getElementById("toggleHidden").dataset.tip = (showHidden?"숨김 가리기":"숨김 보기") + (hc?` (${hc})`:"");
@@ -760,9 +1094,18 @@ function markRead(id, read, doRender){
   if(doRender) render();
 }
 
-/* 고정 우선 정렬: 고정 → 안읽음 → 최신순 (data.php ORDER BY 와 동일) */
+/* 정렬: 고정은 항상 최상단, 그 다음 사용자 지정 정렬(설정) */
 function sortData(){
-  DATA.sort((a,b)=> (b.is_pinned-a.is_pinned) || (a.is_read-b.is_read) || (b.created-a.created));
+  const mode = (loadUi().sort) || "unread";
+  const recent = (a,b)=> b.created - a.created;
+  DATA.sort((a,b)=>{
+    if(a.is_pinned!==b.is_pinned) return b.is_pinned - a.is_pinned;   // 고정 먼저
+    if(mode==="recent")   return recent(a,b);
+    if(mode==="priority"){ const pa=(a.priority==="긴급")?0:1, pb=(b.priority==="긴급")?0:1; return (pa-pb) || recent(a,b); }
+    if(mode==="due"){      const oa=overdueDays(a), ob=overdueDays(b); return (ob-oa) || recent(a,b); }
+    if(mode==="diff"){     const da=a.ai_stars||0, db=b.ai_stars||0; return (db-da) || recent(a,b); }
+    return (a.is_read - b.is_read) || recent(a,b);   // 기본: 안읽음 우선 + 최신순
+  });
 }
 /* 고정/해제: 로컬 즉시 반영 + 재정렬(상단 이동) + 서버 저장 */
 function markPin(id, pin){
@@ -788,6 +1131,8 @@ function markHide(id, hide){
 }
 
 /* ---------- 헤더 다중선택 필터 드롭다운 (보드별 섹션) ---------- */
+let asgLink = false;   // 담당자 '양쪽 보드 동일 적용' — 설정(uiprefs)에서 제어. applyUi() 에서 최신화
+
 const MS = [
   { id:'msPriority', label:'우선순위', dim:'priority', field:'priority' },
   { id:'msTeam',     label:'담당팀',   dim:'team',     field:'team' },
@@ -827,9 +1172,17 @@ function buildMS(cfg){
   const btn=cont.querySelector(".ms-btn"), menuEl=cont.querySelector(".ms-menu");
   btn.addEventListener("click", e=>{ e.stopPropagation(); const willOpen=menuEl.hidden; closeAllMS(); menuEl.hidden=!willOpen; });
   menuEl.addEventListener("click", e=>e.stopPropagation());
-  menuEl.querySelectorAll("input").forEach(inp=>inp.addEventListener("change", ()=>{
-    const set=FILT[cfg.dim][inp.dataset.b];
-    if(inp.checked) set.add(inp.value); else set.delete(inp.value);
+  // 항목 체크박스(data-b) 변경
+  menuEl.querySelectorAll("input[data-b]").forEach(inp=>inp.addEventListener("change", ()=>{
+    const val=inp.value;
+    if(cfg.dim==='asg' && asgLink){                 // 동일 적용: 양쪽 보드에 함께 반영
+      BOARDS_F.forEach(b=>{ const s=FILT.asg[b]; if(inp.checked) s.add(val); else s.delete(val); });
+      menuEl.querySelectorAll("input[data-b]").forEach(o=>{ if(o.value===val) o.checked=inp.checked; });  // 반대편 체크박스도 시각 반영
+    } else {
+      const set=FILT[cfg.dim][inp.dataset.b];
+      if(inp.checked) set.add(inp.value); else set.delete(inp.value);
+    }
+    clearPresetSel();   // 수동 변경 → 프리셋 선택 해제
     updateMSBtn(cfg); saveFilters(); openId=null; render();
   }));
 }
@@ -841,7 +1194,40 @@ const FILTER_KEY = "slackapi_filters";   // 운영 lists.php 와 별도 키
 const _DIMS = ["priority","team","status","asg"];
 function saveFilters(){
   const dump={}; _DIMS.forEach(d=>dump[d]={"블루소프트":[...FILT[d]["블루소프트"]], "와이오즈":[...FILT[d]["와이오즈"]]});
-  localStorage.setItem(FILTER_KEY, JSON.stringify({ filt:dump, fboardTab, search: document.getElementById("search").value }));
+  const state = { filt:dump, fboardTab, search: document.getElementById("search").value, ts: Date.now() };
+  localStorage.setItem(FILTER_KEY, JSON.stringify(state));   // 캐시(즉시·동기 → 새로고침 복원의 정본)
+  pushFiltersToServer(state);                                // DB(사용자별) — 브라우저 바뀌어도 유지
+}
+let _filtPushTimer=null, _filtPending=null;
+function pushFiltersToServer(state){   // 잦은 호출(키 입력 등) 방지용 디바운스
+  _filtPending = state;
+  clearTimeout(_filtPushTimer);
+  _filtPushTimer = setTimeout(()=>{
+    fetch("prefs.php", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({key:"filters", value:_filtPending})}).catch(()=>{});
+    _filtPending = null;
+  }, 700);
+}
+/* 새로고침/이탈 직전, 대기 중인 DB 저장을 확실히 전송(디바운스 유실 방지) */
+function flushFilters(){
+  if(!_filtPending) return;
+  clearTimeout(_filtPushTimer);
+  try{ navigator.sendBeacon("prefs.php", new Blob([JSON.stringify({key:"filters", value:_filtPending})], {type:"application/json"})); }catch(e){}
+  _filtPending = null;
+}
+window.addEventListener("pagehide", flushFilters);
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="hidden") flushFilters(); });
+/* 진입 시 DB에서 내 필터 선택을 받아 적용. DB가 로컬보다 최신일 때만 채택(새로고침 시 로컬 우선). */
+async function syncFiltersFromServer(){
+  try{
+    let localTs = 0; try{ localTs = (JSON.parse(localStorage.getItem(FILTER_KEY)||"{}").ts)||0; }catch(e){}
+    const j = await (await fetch("prefs.php?key=filters", {cache:"no-store"})).json();
+    if(!j || !j.ok) return;
+    if(j.value && j.value.filt){
+      if((j.value.ts||0) > localTs) applyFilterState(j.value);   // DB가 더 최신(다른 브라우저에서 변경)일 때만 채택
+    } else {
+      saveFilters();                                             // 서버 비었으면 현재값을 DB로 이관
+    }
+  }catch(e){}
 }
 function restoreFilters(){
   let s = {};
@@ -861,6 +1247,285 @@ function restoreFilters(){
   filter = sv.toLowerCase().trim();
 }
 
+/* ---------- 필터 세트(프리셋): 여러 필터 조합을 이름 붙여 저장 → 선택 시 한 번에 적용 ---------- */
+const PRESET_KEY = "slackapi_filter_presets_" + (ME_ID || "me");   // 로컬 캐시(빠른 표시용). 실제 저장소는 DB(prefs.php)
+function loadPresets(){ try{ return JSON.parse(localStorage.getItem(PRESET_KEY)||"[]")||[]; }catch(e){ return []; } }
+function storePresets(list){
+  localStorage.setItem(PRESET_KEY, JSON.stringify(list));   // 캐시 갱신(즉시 반영)
+  // DB에 사용자별 저장 → 브라우저/기기 바뀌어도 유지
+  fetch("prefs.php", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({key:"filter_presets", value:list})}).catch(()=>{});
+}
+/* 서버(DB)에서 내 프리셋을 받아 캐시에 반영. 서버가 비어있고 로컬에만 있으면 1회 이관. */
+async function syncPresetsFromServer(){
+  try{
+    const j = await (await fetch("prefs.php?key=filter_presets", {cache:"no-store"})).json();
+    if(!j || !j.ok) return;
+    if(Array.isArray(j.value)){
+      localStorage.setItem(PRESET_KEY, JSON.stringify(j.value));   // 서버값을 정본으로 채택
+    } else if(j.value == null){
+      const local = loadPresets();
+      if(local.length) storePresets(local);   // 서버 비었고 로컬에 있으면 DB로 이관
+    }
+    renderPresetSelect();
+  }catch(e){}
+}
+/* 현재 필터 상태 스냅샷(= saveFilters 가 저장하는 것과 동일 형태) */
+function currentFilterState(){
+  const dump={}; _DIMS.forEach(d=>dump[d]={"블루소프트":[...FILT[d]["블루소프트"]], "와이오즈":[...FILT[d]["와이오즈"]]});
+  return { filt:dump, fboardTab, search: document.getElementById("search").value };
+}
+/* 스냅샷을 현재 필터에 적용(모든 차원+보드탭+검색 동시 반영) */
+function applyFilterState(st){
+  const f = st.filt || {};
+  _DIMS.forEach(d=>{ FILT[d] = {"블루소프트":new Set((f[d]&&f[d]["블루소프트"])||[]), "와이오즈":new Set((f[d]&&f[d]["와이오즈"])||[])}; });
+  fboardTab = st.fboardTab || "all";
+  const sv = st.search || "";
+  document.getElementById("search").value = sv;
+  document.getElementById("searchClear").hidden = !sv;
+  filter = sv.toLowerCase().trim();
+  openId = null;
+  saveFilters();      // 적용값을 현재 상태로 저장(새로고침에도 유지)
+  buildAllMS();       // 필터 버튼/체크 갱신(보드탭 반영)
+  render();           // renderBTabs() 로 보드탭 활성표시까지 갱신
+}
+/* 선택된 프리셋(드롭다운 값)도 새로고침에 유지 — 이름으로 저장(순서 바뀌어도 안전) */
+const PRESET_SEL_KEY = "slackapi_preset_sel_" + (ME_ID || "me");
+function saveSelectedPreset(name){ try{ localStorage.setItem(PRESET_SEL_KEY, name||""); }catch(e){} }
+function loadSelectedPreset(){ try{ return localStorage.getItem(PRESET_SEL_KEY)||""; }catch(e){ return ""; } }
+/* 수동으로 필터를 바꾸면 프리셋 선택 표시 해제(더 이상 그 프리셋이 아님) */
+function clearPresetSel(){
+  saveSelectedPreset("");
+  const sel=document.getElementById("presetSel");
+  if(sel){ sel.value=""; const d=document.getElementById("presetDel"); if(d) d.hidden=true; }
+}
+function renderPresetSelect(selectIdx){
+  const list = loadPresets();
+  const sel = document.getElementById("presetSel");
+  sel.innerHTML = `<option value="">필터 선택</option>` + list.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join("");
+  let idx = "";
+  if(selectIdx!==undefined && selectIdx!=="" && +selectIdx < list.length){
+    idx = String(selectIdx);
+  } else {                                   // 저장해 둔 선택 프리셋 이름으로 복원
+    const nm = loadSelectedPreset();
+    const found = nm ? list.findIndex(p=>p.name===nm) : -1;
+    idx = found>=0 ? String(found) : "";
+  }
+  sel.value = idx;
+  saveSelectedPreset(idx==="" ? "" : (list[+idx] && list[+idx].name));
+  document.getElementById("presetDel").hidden = (sel.value==="");
+}
+/* 진입 시 저장된 프리셋이 선택돼 있으면 그 필터를 그대로 적용 */
+function applySelectedPresetOnLoad(){
+  const nm = loadSelectedPreset(); if(!nm) return;
+  const p = loadPresets().find(x=>x.name===nm);
+  if(p){ applyFilterState(p.state); saveSelectedPreset(nm); renderPresetSelect(); }
+}
+
+/* ---------- 헤더 버튼 표시/숨김 (DB 사용자별 저장 + 로컬 캐시) ---------- */
+const HDRBTN_KEY = "slackapi_hdrbtns_" + (ME_ID || "me");
+const HEADER_BTNS = [
+  {id:"dueBtn",       label:"지연"},
+  {id:"toggleUn",     label:"미지정"},
+  {id:"toggleArch",   label:"보관"},
+  {id:"toggleHidden", label:"숨김"},
+  {id:"recentDd",     label:"최근"},
+  {id:"schoolBtn",    label:"학교"},
+  {id:"analyzeDd",    label:"분석"},
+  {id:"sync",         label:"동기화"},
+  {id:"themeBtn",     label:"테마"},
+  {id:"logoutBtn",    label:"로그아웃"},
+];
+const HDR_IDS = HEADER_BTNS.map(b=>b.id);
+const HDR_LABEL = {}; HEADER_BTNS.forEach(b=>HDR_LABEL[b.id]=b.label);
+function loadHdrRaw(){ try{ return JSON.parse(localStorage.getItem(HDRBTN_KEY)||"{}")||{}; }catch(e){ return {}; } }
+/* 저장 포맷: {order:[id...], hidden:{id:true}}  (구포맷 {id:false} 도 호환) */
+function loadHdr(){
+  const raw = loadHdrRaw();
+  let hidden = {};
+  if(raw.hidden && typeof raw.hidden==="object") hidden = {...raw.hidden};
+  else for(const k in raw){ if(raw[k]===false) hidden[k]=true; }   // 구포맷 이관
+  let order = Array.isArray(raw.order) ? raw.order.filter(id=>HDR_IDS.includes(id)) : [];
+  HDR_IDS.forEach(id=>{ if(!order.includes(id)) order.push(id); });   // 누락분은 기본 순서로 뒤에 추가
+  return { order, hidden };
+}
+function saveHdr(state){
+  localStorage.setItem(HDRBTN_KEY, JSON.stringify(state));   // 캐시(즉시)
+  fetch("prefs.php", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({key:"hdrbtns", value:state})}).catch(()=>{});  // DB(사용자별)
+}
+/* 표시/숨김 + 실제 헤더 버튼 순서 재배치 */
+function applyHdrBtns(){
+  const st=loadHdr(), bar=document.querySelector(".filters.iconbar");
+  st.order.forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.style.display = st.hidden[id] ? "none" : "";
+    if(bar && el.parentNode===bar) bar.appendChild(el);   // order 순서대로 뒤에 재배치
+  });
+}
+function buildHdrToggles(){
+  const st=loadHdr(), box=document.getElementById("hdrToggles"); if(!box) return;
+  box.innerHTML = st.order.map(id=>`<button type="button" class="pw-tg${st.hidden[id]?'':' on'}" data-id="${id}" draggable="true">${esc(HDR_LABEL[id]||id)}</button>`).join("");
+  box.querySelectorAll(".pw-tg").forEach(el=>{
+    el.addEventListener("click", e=>{           // 클릭 = 표시/숨김 토글
+      e.stopPropagation();
+      const id=el.dataset.id, s=loadHdr();
+      if(s.hidden[id]) delete s.hidden[id]; else s.hidden[id]=true;
+      saveHdr(s); el.classList.toggle("on", !s.hidden[id]); applyHdrBtns();
+    });
+    el.addEventListener("dragstart", e=>{ e.stopPropagation(); e.dataTransfer.setData("text/plain", el.dataset.id); e.dataTransfer.effectAllowed="move"; el.classList.add("drag"); });
+    el.addEventListener("dragend", ()=>el.classList.remove("drag"));
+    el.addEventListener("dragover", e=>{ e.preventDefault(); e.dataTransfer.dropEffect="move"; });
+    el.addEventListener("drop", e=>{            // 드롭 = 순서 변경
+      e.preventDefault(); e.stopPropagation();
+      const from=e.dataTransfer.getData("text/plain"), to=el.dataset.id;
+      if(!from || from===to) return;
+      const s=loadHdr(); const arr=s.order;
+      arr.splice(arr.indexOf(from), 1);
+      arr.splice(arr.indexOf(to), 0, from);      // from 을 to 앞자리에 삽입
+      saveHdr(s); buildHdrToggles(); applyHdrBtns();
+    });
+  });
+}
+async function syncHdrBtnsFromServer(){
+  try{
+    const j = await (await fetch("prefs.php?key=hdrbtns", {cache:"no-store"})).json();
+    if(!j || !j.ok) return;
+    if(j.value && typeof j.value==="object" && (Array.isArray(j.value.order) || (j.value.hidden && typeof j.value.hidden==="object") || Object.keys(j.value).length)){
+      localStorage.setItem(HDRBTN_KEY, JSON.stringify(j.value));   // 서버값 채택
+      applyHdrBtns(); buildHdrToggles();
+    } else {
+      const raw=loadHdrRaw(); if(Object.keys(raw).length) saveHdr(loadHdr());   // 서버 비었으면 로컬 이관(정규화)
+    }
+  }catch(e){}
+}
+
+/* ---------- 화면 설정: 컴팩트/정렬/자동새로고침 (DB 사용자별) ---------- */
+const UIPREF_KEY = "slackapi_uipref_" + (ME_ID || "me");
+const UI_DEFAULT = { compact:false, sort:"unread", refresh:60000, font:"md", autoRead:true, asgLink:false, cols:{} };
+const LIST_COLS = [
+  {id:"pri",    label:"우선순위"},
+  {id:"status", label:"상태"},
+  {id:"team",   label:"담당팀"},
+  {id:"date",   label:"날짜"},
+  {id:"snip",   label:"본문요약"},
+];
+function loadUi(){ let s={}; try{ s=JSON.parse(localStorage.getItem(UIPREF_KEY)||"{}")||{}; }catch(e){} return {...UI_DEFAULT, ...s, cols:{...(s.cols||{})}}; }
+function saveUi(s){
+  localStorage.setItem(UIPREF_KEY, JSON.stringify(s));
+  fetch("prefs.php", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({key:"uiprefs", value:s})}).catch(()=>{});
+}
+let _refreshTimer=null;
+function refreshTick(){
+  bgSync();                                // 데몬 정체 시 폴백 서버 동기화
+  if(openId || archivedMode) return;       // 상세 열림/보관 모드에선 목록 갱신 보류
+  const y = window.scrollY;                // 스크롤 위치 보존
+  Promise.resolve(load()).then(()=>window.scrollTo(0, y)).catch(()=>{});
+}
+function setRefreshInterval(ms){
+  if(_refreshTimer){ clearInterval(_refreshTimer); _refreshTimer=null; }
+  ms = +ms||0;
+  if(ms>0) _refreshTimer = setInterval(refreshTick, ms);   // 주기마다 목록 자동 새로고침
+}
+function applyUi(){
+  const u=loadUi();
+  const wrap=document.querySelector(".wrap"); if(!wrap){ setRefreshInterval(u.refresh); return; }
+  wrap.classList.toggle("compact", !!u.compact);
+  wrap.classList.remove("fs-sm","fs-lg");
+  if(u.font==="sm") wrap.classList.add("fs-sm"); else if(u.font==="lg") wrap.classList.add("fs-lg");
+  LIST_COLS.forEach(c=> wrap.classList.toggle("hide-"+c.id, u.cols && u.cols[c.id]===false));
+  asgLink = !!u.asgLink;   // 담당자 양쪽 보드 동일 적용
+  setRefreshInterval(u.refresh);
+}
+function buildUiControls(){
+  const u=loadUi();
+  const c=document.getElementById("uiCompact");
+  if(c){ c.checked=!!u.compact; c.onchange=()=>{ const s=loadUi(); s.compact=c.checked; saveUi(s); applyUi(); }; }
+  const so=document.getElementById("uiSort");
+  if(so){ so.value=u.sort; so.onclick=e=>e.stopPropagation(); so.onchange=()=>{ const s=loadUi(); s.sort=so.value; saveUi(s); sortData(); openId=null; render(); }; }
+  const rf=document.getElementById("uiRefresh");
+  if(rf){ rf.value=String(u.refresh); rf.onclick=e=>e.stopPropagation(); rf.onchange=()=>{ const s=loadUi(); s.refresh=+rf.value; saveUi(s); setRefreshInterval(s.refresh); }; }
+  const ft=document.getElementById("uiFont");
+  if(ft){ ft.value=u.font; ft.onclick=e=>e.stopPropagation(); ft.onchange=()=>{ const s=loadUi(); s.font=ft.value; saveUi(s); applyUi(); }; }
+  const ar=document.getElementById("uiAutoRead");
+  if(ar){ ar.checked=(u.autoRead!==false); ar.onchange=()=>{ const s=loadUi(); s.autoRead=ar.checked; saveUi(s); }; }
+  const al=document.getElementById("uiAsgLink");
+  if(al){ al.checked=!!u.asgLink; al.onchange=()=>{
+    const s=loadUi(); s.asgLink=al.checked; saveUi(s); asgLink=al.checked;
+    if(asgLink){                                   // 켤 때: 현재 담당자 선택을 양쪽 보드 합집합으로 통일
+      const union=new Set([...FILT.asg["블루소프트"], ...FILT.asg["와이오즈"]]);
+      FILT.asg["블루소프트"]=new Set(union); FILT.asg["와이오즈"]=new Set(union);
+      clearPresetSel(); saveFilters();
+    }
+    buildAllMS(); openId=null; render();
+  }; }
+  buildColToggles();
+}
+function buildColToggles(){
+  const u=loadUi(), box=document.getElementById("colToggles"); if(!box) return;
+  box.innerHTML = LIST_COLS.map(c=>`<button type="button" class="pw-tg${(u.cols&&u.cols[c.id]===false)?'':' on'}" data-col="${c.id}">${esc(c.label)}</button>`).join("");
+  box.querySelectorAll(".pw-tg").forEach(el=>el.addEventListener("click", e=>{
+    e.stopPropagation();
+    const id=el.dataset.col, s=loadUi(); s.cols=s.cols||{};
+    if(s.cols[id]!==false) s.cols[id]=false; else delete s.cols[id];   // 토글(표시↔숨김)
+    saveUi(s); el.classList.toggle("on", s.cols[id]!==false); applyUi();
+  }));
+}
+async function syncUiFromServer(){
+  try{
+    const j = await (await fetch("prefs.php?key=uiprefs", {cache:"no-store"})).json();
+    if(!j || !j.ok) return;
+    if(j.value && typeof j.value==="object" && Object.keys(j.value).length){
+      localStorage.setItem(UIPREF_KEY, JSON.stringify({...UI_DEFAULT, ...j.value}));   // 서버값 채택
+      applyUi(); buildUiControls(); sortData(); render();
+    } else {
+      const raw=(()=>{try{return JSON.parse(localStorage.getItem(UIPREF_KEY)||"{}");}catch(e){return {};}})();
+      if(Object.keys(raw).length) saveUi(loadUi());   // 서버 비었으면 로컬 이관
+    }
+  }catch(e){}
+}
+function initPresets(){
+  renderPresetSelect();          // 캐시로 즉시 표시(+저장된 선택 복원)
+  applySelectedPresetOnLoad();   // 선택돼 있던 프리셋의 필터를 그대로 적용
+  syncPresetsFromServer();       // DB(사용자별)와 동기화 → 브라우저 바뀌어도 유지
+  applyHdrBtns(); buildHdrToggles(); syncHdrBtnsFromServer();   // 헤더 버튼 표시/숨김(DB 사용자별)
+  applyUi(); buildUiControls(); syncUiFromServer();             // 화면 설정(컴팩트/정렬/새로고침, DB 사용자별)
+  // 톱니 버튼 클릭 시에만 세트 팝오버 표시
+  const pToggle=document.getElementById("presetToggle"), pWrap=document.getElementById("presetWrap");
+  pToggle.addEventListener("click", e=>{
+    e.stopPropagation();
+    const willOpen = pWrap.hidden;
+    closeAllMS();                 // 다른 다중선택 메뉴는 닫기
+    pWrap.hidden = !willOpen;
+    pToggle.classList.toggle("on", willOpen);
+  });
+  pWrap.addEventListener("click", e=>e.stopPropagation());   // 팝오버 내부 클릭은 유지
+  document.addEventListener("click", ()=>{ pWrap.hidden=true; pToggle.classList.remove("on"); });  // 바깥 클릭 닫기
+  document.getElementById("presetSel").addEventListener("change", e=>{
+    const i = e.target.value;
+    document.getElementById("presetDel").hidden = (i==="");
+    if(i===""){ saveSelectedPreset(""); return; }
+    const p = loadPresets()[+i];
+    if(p){ saveSelectedPreset(p.name); applyFilterState(p.state); }
+  });
+  document.getElementById("presetSave").addEventListener("click", ()=>{
+    const name = (prompt("필터 이름:", "") || "").trim();
+    if(!name) return;
+    const list = loadPresets();
+    const ex = list.findIndex(p=>p.name===name);
+    if(ex>=0){ if(!confirm(`"${name}" 세트를 덮어쓸까요?`)) return; list[ex].state = currentFilterState(); }
+    else list.push({ name, state: currentFilterState() });
+    storePresets(list);
+    saveSelectedPreset(name);                       // 저장한 세트를 선택 상태로
+    renderPresetSelect(ex>=0 ? ex : list.length-1);
+  });
+  document.getElementById("presetDel").addEventListener("click", ()=>{
+    const sel = document.getElementById("presetSel"), i = sel.value;
+    if(i==="") return;
+    const list = loadPresets(), p = list[+i];
+    if(!p || !confirm(`"${p.name}" 세트를 삭제할까요?`)) return;
+    list.splice(+i, 1); storePresets(list); saveSelectedPreset(""); renderPresetSelect();
+  });
+}
+
 /* ---------- 뷰 토글(미지정 분할/숨김 보기) 저장·복원 ---------- */
 const VIEW_KEY = "slackapi_view";
 function saveView(){ localStorage.setItem(VIEW_KEY, JSON.stringify({ splitOn, showHidden, showCmts, archivedMode, archPageSize })); }
@@ -874,11 +1539,11 @@ function restoreView(){
   if(v.archPageSize === 'all' || typeof v.archPageSize === 'number') archPageSize = v.archPageSize;
   // 버튼/패널 UI 에 반영 (toggleHidden 텍스트+개수는 render() 에서 갱신)
   document.getElementById("unpanel").style.display = (splitOn && !archivedMode) ? "" : "none";
-  document.getElementById("toggleUn").textContent  = splitOn ? "미지정 숨기기" : "미지정 리스트 표시";
+  setBtnLabel("toggleUn", "👥", splitOn ? "미지정 숨기기" : "미지정 리스트 표시");
   document.getElementById("toggleHidden").classList.toggle("primary", showHidden);
   const ab=document.getElementById("toggleArch");
   ab.classList.toggle("primary", archivedMode);
-  ab.textContent = archivedMode ? "🗄 보관 닫기" : "🗄 보관 보기";
+  setBtnLabel("toggleArch", "🗄️", archivedMode ? "보관 닫기" : "보관 보기");
 }
 
 /* ---------- 브라우저 알림 ---------- */
@@ -959,6 +1624,52 @@ async function load(){
   document.addEventListener("click", e=>{ if(!dd.contains(e.target)) dd.classList.remove("open"); });
 })();
 
+/* ---------- 최근 본 항목 ---------- */
+const RECENTV_KEY = "slackapi_recentview_" + (ME_ID || "me");
+function loadRecent(){ try{ return JSON.parse(localStorage.getItem(RECENTV_KEY)||"[]")||[]; }catch(e){ return []; } }
+function pushRecent(r){
+  if(!r) return;
+  let list = loadRecent().filter(x=>x.id!==r.id);
+  list.unshift({ id:r.id, title:r.title, board:r.board });
+  localStorage.setItem(RECENTV_KEY, JSON.stringify(list.slice(0,15)));   // 최근 15개
+  buildRecentMenu();
+}
+function buildRecentMenu(){
+  const box=document.getElementById("recentMenu"); if(!box) return;
+  const list=loadRecent();
+  box.innerHTML = list.length
+    ? list.map(x=>`<a href="#" class="recent-item" data-id="${escAttr(x.id)}" title="${escAttr(x.title||x.id)}">${esc(x.title||x.id)}</a>`).join("")
+        + `<a href="#" class="recent-clear" style="color:var(--hint);border-top:1px solid var(--line);margin-top:4px">🧹 기록 지우기</a>`
+    : `<div style="padding:10px 12px;font-size:12px;color:var(--hint)">최근 본 항목 없음</div>`;
+  box.querySelectorAll(".recent-item").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); e.stopPropagation(); openRecent(a.dataset.id); }));
+  const cl=box.querySelector(".recent-clear");
+  if(cl) cl.addEventListener("click", e=>{ e.preventDefault(); e.stopPropagation(); localStorage.setItem(RECENTV_KEY,"[]"); buildRecentMenu(); });
+}
+function openRecent(id){
+  document.getElementById("recentDd").classList.remove("open");
+  const r = DATA.find(x=>x.id===id);
+  if(!r){ alert("목록에 없는 항목입니다. 동기화 후 다시 시도하세요."); return; }
+  openId = id;
+  // 현재 필터/탭/검색에 안 보이면 필터를 풀어 강제로 보이게
+  if(!filteredItems().some(x=>x.id===id)){
+    FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+    fboardTab="all"; filter=""; dueOnly=false;
+    document.getElementById("search").value=""; document.getElementById("searchClear").hidden=true;
+    if(r.is_hidden) showHidden = true;   // 숨김 항목이면 숨김 보기 켜기
+    clearPresetSel(); saveFilters(); buildAllMS();
+  }
+  if(r && !r.is_read && loadUi().autoRead!==false) markRead(id, 1, false);
+  render();
+  if(showCmts) loadComments(id);
+  setTimeout(()=>{ const el=document.querySelector('.row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]'); if(el) el.scrollIntoView({behavior:"smooth", block:"center"}); }, 60);
+}
+(function(){
+  const dd=document.getElementById("recentDd");
+  document.getElementById("recentBtn").addEventListener("click", e=>{ e.stopPropagation(); buildRecentMenu(); dd.classList.toggle("open"); });
+  document.addEventListener("click", e=>{ if(!dd.contains(e.target)) dd.classList.remove("open"); });
+  buildRecentMenu();
+})();
+
 document.getElementById("sync").addEventListener("click", async ()=>{
   const btn = document.getElementById("sync"); btn.disabled = true; btn.classList.add("syncing"); btn.dataset.tip = "동기화 중…";
   try{
@@ -980,11 +1691,13 @@ document.getElementById("sync").addEventListener("click", async ()=>{
 document.getElementById("search").addEventListener("input",e=>{
   filter=e.target.value.toLowerCase().trim();
   document.getElementById("searchClear").hidden = !e.target.value;
+  clearPresetSel();   // 수동 검색 → 프리셋 선택 해제
   saveFilters(); openId=null; render();
 });
 document.getElementById("searchClear").addEventListener("click",()=>{
   const s=document.getElementById("search");
   s.value=""; filter=""; document.getElementById("searchClear").hidden=true;
+  clearPresetSel();
   saveFilters(); openId=null; render(); s.focus();
 });
 document.getElementById("reset").addEventListener("click",()=>{
@@ -994,6 +1707,7 @@ document.getElementById("reset").addEventListener("click",()=>{
   document.getElementById("searchClear").hidden = true;
   saveFilters();        // 비운 상태 저장
   buildAllMS();         // 버튼 카운트/체크 초기화
+  clearPresetSel();     // 프리셋 선택 해제(저장값 포함)
   openId = null; render();
 });
 document.getElementById("readSel").addEventListener("click",()=>bulkRead(1));
@@ -1002,7 +1716,7 @@ document.getElementById("clearSel").addEventListener("click",()=>{ selected.clea
 document.getElementById("toggleUn").addEventListener("click",()=>{
   splitOn = !splitOn;
   document.getElementById("unpanel").style.display = splitOn ? "" : "none";
-  document.getElementById("toggleUn").textContent = splitOn ? "미지정 숨기기" : "미지정 리스트 표시";
+  setBtnLabel("toggleUn", "👥", splitOn ? "미지정 숨기기" : "미지정 리스트 표시");
   saveView();
   render();
 });
@@ -1017,7 +1731,7 @@ document.getElementById("toggleArch").addEventListener("click",()=>{
   archivedMode = !archivedMode;
   const b=document.getElementById("toggleArch");
   b.classList.toggle("primary", archivedMode);
-  b.textContent = archivedMode ? "🗄 보관 닫기" : "🗄 보관 보기";
+  setBtnLabel("toggleArch", "🗄️", archivedMode ? "보관 닫기" : "보관 보기");
   document.getElementById("unpanel").style.display = (!archivedMode && splitOn) ? "" : "none";   // 보관 모드엔 미지정 분할 숨김
   saveView();   // 새로고침해도 유지
   buildAllMS();   // 필터 섹션 재구성(보관=유비온만)
@@ -1083,9 +1797,19 @@ document.getElementById("selAll").addEventListener("change", e=>{
 
 /* ---------- 백그라운드 동기화 감지 → 화면 리로드 없이 목록만 자동 갱신 ---------- */
 let lastChanged = null;
+let lastSyncedAt = 0;   // 서버측 마지막 동기화 시각 — 데몬 생존 판단용
 async function pollStatus(){
   try{
     const s = await (await fetch("status.php", { cache:"no-store" })).json();
+    lastSyncedAt = s.synced_at || 0;
+    // 서버 동기화(데몬) 상태 표시등: 60초 내 동기화 = 정상(초록)
+    const dot = document.getElementById("daemonDot");
+    if(dot){
+      const age = Math.round(Date.now()/1000 - lastSyncedAt);
+      const ok = age < 60;
+      dot.style.color = ok ? "#1e8e3e" : "#d93025";
+      dot.dataset.tip = ok ? `서버 동기화 정상 (${age}초 전)` : `서버 동기화 정체 (${age}초 전) — slack_watch 데몬 확인`;
+    }
     if(lastChanged === null){ lastChanged = s.changed_at; return; }   // 최초 호출은 기준값만
     if(s.changed_at > lastChanged){                                   // 변경된 동기화 완료 감지
       if(openId || archivedMode){ return; }                           // 상세 펼침/보관 모드에선 보류
@@ -1096,22 +1820,27 @@ async function pollStatus(){
     }
   }catch(e){ /* 무시하고 다음 폴링 */ }
 }
-setInterval(pollStatus, 5000);   // 5초마다 가볍게 상태 확인(DB 1행 조회)
+setInterval(pollStatus, 2000);   // 2초마다 가볍게 상태 확인(DB 1행 조회, ~1ms)
 
-/* ---------- 백그라운드 동기화 (JS fetch → 콘솔창 없음) ---------- */
+/* ---------- 백그라운드 동기화 (JS fetch → 콘솔창 없음) ----------
+   서버 감시 데몬(slack_watch.php)이 15초마다 통합 동기화하므로,
+   브라우저는 서버 동기화가 끊겼을 때(90초 이상 정체)만 폴백으로 대신 실행.
+   → 사용자 10명이 열어놔도 Slack API 호출은 서버 1곳에서만 발생 */
 async function bgSync(){
+  if (lastSyncedAt && (Date.now() / 1000 - lastSyncedAt) < 90) return;   // 데몬 살아있음 → 브라우저는 안 함
   try{ await fetch("sync.php", { cache:"no-store" }); }catch(e){}
   // 결과 반영은 pollStatus 가 changed_at 변화를 감지해 자동 처리
 }
-setInterval(bgSync, 60000);   // 60초마다 백그라운드 동기화
+setRefreshInterval(loadUi().refresh);   // 자동 새로고침 주기(설정값, 기본 1분)
 
 /* ===== 이미지 라이트박스(모달 슬라이드) ===== */
 document.body.insertAdjacentHTML("beforeend", `
   <div id="lightbox" role="dialog" aria-modal="true">
     <button id="lb-close" title="닫기 (Esc)">✕</button>
-    <button class="lb-btn" id="lb-prev" title="이전 (←)">‹</button>
-    <button class="lb-btn" id="lb-next" title="다음 (→)">›</button>
+    <button class="lb-btn" id="lb-prev" title="이전 (←)"><svg viewBox="0 0 24 24" width="38" height="38" fill="currentColor" aria-hidden="true"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg></button>
+    <button class="lb-btn" id="lb-next" title="다음 (→)"><svg viewBox="0 0 24 24" width="38" height="38" fill="currentColor" aria-hidden="true"><path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg></button>
     <div class="lb-stage">
+      <div id="lb-loading"><span class="lb-spin"></span>불러오는 중…</div>
       <img id="lb-img" src="" alt="">
       <video id="lb-video" controls playsinline preload="metadata" style="display:none"></video>
       <iframe id="lb-frame" title="문서 미리보기" style="display:none"></iframe>
@@ -1121,9 +1850,9 @@ document.body.insertAdjacentHTML("beforeend", `
           <button id="lb-zout" type="button" title="축소 (−)">−</button>
           <span id="lb-zval">100%</span>
           <button id="lb-zin" type="button" title="확대 (+)">＋</button>
-          <button id="lb-zreset" type="button" title="원본 크기 (0)">⤢</button>
+          <button id="lb-zreset" type="button" title="원본 크기 (0)">1:1</button>
         </span>
-        <a id="lb-dl" href="#" title="원본 다운로드">⬇ 다운로드</a></div>
+        <a id="lb-dl" href="#" title="원본 다운로드">⬇️ 다운로드</a></div>
     </div>
   </div>`);
 let lbImgs=[], lbIdx=0;
@@ -1144,10 +1873,26 @@ function lbRender(){
   if(!isVid){ vid.pause?.(); vid.removeAttribute("src"); vid.load?.(); }
   if(!isPdf) frm.removeAttribute("src");
   if(!isSheet) sht.innerHTML="";
+  const loading=document.getElementById("lb-loading");
+  loading.style.display="none"; img.classList.remove("lb-dim");
   if(isVid){ vid.src=c.src||""; vid.play?.().catch(()=>{}); }        // 자동재생(권한 없으면 컨트롤로 재생)
   else if(isPdf){ frm.src=c.src||""; }                              // 브라우저 내장 PDF 뷰어
   else if(isSheet){ sht.innerHTML='<div class="lb-sheet-load">불러오는 중…</div>'; renderSheet(sht, c.src, c.name); }
-  else { img.src=c.full; img.alt=c.name||""; }
+  else {
+    // 이미지 전환: 로드 완료까지 이전 이미지 흐림 + 스피너 → "이전 사진이 그대로 보이는" 혼동 방지
+    if(img.getAttribute("src") !== c.full){
+      img.classList.add("lb-dim");
+      loading.style.display="flex";
+      img.onload = img.onerror = () => { img.classList.remove("lb-dim"); loading.style.display="none"; };
+      img.src=c.full;
+    }
+    img.alt=c.name||"";
+    // 이웃 이미지 미리 받기 → 다음/이전 넘길 때 즉시 표시
+    [lbIdx+1, lbIdx-1].forEach(i=>{
+      const n=lbImgs[(i+lbImgs.length)%lbImgs.length];
+      if(n && (!n.type || n.type==="image") && n.full){ const p=new Image(); p.src=n.full; }
+    });
+  }
   document.getElementById("lb-count").textContent = lbImgs.length>1 ? ((lbIdx+1)+" / "+lbImgs.length) : "";
   document.getElementById("lb-name").textContent = c.name||"";
   document.getElementById("lb-dl").href = c.dl||c.full||c.src;
@@ -1273,7 +2018,7 @@ function smBuildVers(){
 }
 async function smLoad(force){
   if(SCHOOLS && !force) return;
-  try{ SCHOOLS = (await (await fetch("schools/schools.php", {cache:"no-store"})).json()).rows || []; }
+  try{ SCHOOLS = (await (await fetch("schools.php", {cache:"no-store"})).json()).rows || []; }
   catch(e){ SCHOOLS = []; }
 }
 function smRender(){
@@ -1311,9 +2056,83 @@ restoreFilters();  // 새로고침 전 필터 복원 (localStorage)
 document.getElementById("searchClear").hidden = !document.getElementById("search").value;   // 복원된 검색어 있으면 ✕ 표시
 restoreView();     // 미지정 분할/숨김 보기 토글 상태 복원
 buildAllMS();      // 헤더 다중선택 필터 생성 — 복원된 선택값 반영
+initPresets();     // 필터 세트(프리셋) 드롭다운 초기화
+syncFiltersFromServer();   // DB(사용자별) 필터 선택 반영 → 브라우저 바뀌어도 유지
 if(archivedMode) loadArchived(0); else load();   // 보관 보기 상태면 보관 목록으로 시작
 pollStatus();          // 기준값 즉시 설정
 bgSync().then(()=>{ if(!archivedMode) load(); });   // 진입 즉시 동기화 → 활성 모드에서만 재로드
+
+/* ---- @멘션 프로필 팝업 (Slack users.info) ---- */
+const PROFILE_CACHE = {};
+function _prof(){ let el=document.getElementById("uprof"); if(!el){ el=document.createElement("div"); el.id="uprof"; el.hidden=true; document.body.appendChild(el); } return el; }
+function _profPlace(card, x, y){
+  card.style.left = Math.min(x, innerWidth - card.offsetWidth - 16) + "px";
+  card.style.top  = Math.min(y + 12, innerHeight - card.offsetHeight - 16) + "px";
+}
+async function showProfile(uid, x, y){
+  const card = _prof();
+  card.innerHTML = '<div class="up-load">프로필 불러오는 중…</div>';
+  card.hidden = false; _profPlace(card, x, y);
+  let p = PROFILE_CACHE[uid];
+  if(!p){
+    try{ p = await (await fetch("user_info.php?id="+encodeURIComponent(uid))).json(); }catch(e){ p=null; }
+    if(!p || !p.ok){ card.innerHTML = '<div class="up-load">프로필을 불러오지 못했습니다</div>'; return; }
+    PROFILE_CACHE[uid] = p;
+  }
+  const tm = (LIST_URL||"").match(/\/(T[A-Z0-9]+)\//);
+  card.innerHTML = `
+    <div class="up-h">
+      ${p.image ? `<img src="${escAttr(p.image)}" alt="">` : `<div class="up-noimg">👤</div>`}
+      <div class="up-hh">
+        <div class="up-name">${esc(p.name||"")}</div>
+        ${p.real_name && p.real_name!==p.name ? `<div class="up-real">${esc(p.real_name)}</div>` : ""}
+        ${p.title ? `<div class="up-title">${esc(p.title)}</div>` : ""}
+      </div>
+    </div>
+    ${p.status ? `<div class="up-row">💬 ${esc(p.status)}</div>` : ""}
+    ${p.phone ? `<div class="up-row">📞 <a href="tel:${escAttr(p.phone)}">${esc(p.phone)}</a></div>` : ""}
+    ${p.email ? `<div class="up-row">✉️ <a href="mailto:${escAttr(p.email)}">${esc(p.email)}</a></div>` : ""}
+    ${tm ? `<div class="up-row up-slack"><a href="slack://user?team=${tm[1]}&id=${escAttr(uid)}">Slack 에서 열기 ↗</a></div>` : ""}`;
+  _profPlace(card, x, y);
+}
+document.addEventListener("click", e=>{
+  const card = document.getElementById("uprof");
+  const m = e.target.closest(".mention");
+  if(m && m.dataset.uid && !m.closest("[contenteditable]")){   // 에디터 안 멘션은 제외
+    e.stopPropagation();
+    showProfile(m.dataset.uid, e.clientX, e.clientY);
+    return;
+  }
+  if(card && !card.hidden && !card.contains(e.target)) card.hidden = true;
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ const c=document.getElementById("uprof"); if(c) c.hidden=true; } });
+
+/* ---- 마감 지연 필터 토글 ---- */
+document.getElementById("dueBtn").addEventListener("click", ()=>{ dueOnly = !dueOnly; openId = null; render(); });
+
+/* ---- 다크/라이트 수동 전환 (OS 설정보다 우선, localStorage 공유) ---- */
+document.getElementById("themeBtn").addEventListener("click", ()=>{
+  const el = document.documentElement;
+  const isDark = el.classList.contains("dark")
+    || (!el.classList.contains("light") && matchMedia("(prefers-color-scheme: dark)").matches);
+  el.classList.remove("dark","light");
+  el.classList.add(isDark ? "light" : "dark");
+  localStorage.setItem("ui_theme", isDark ? "light" : "dark");
+});
+
+/* ---- 상단 현재 시각 (1초 갱신) ---- */
+(function(){
+  const el = document.getElementById("clock");
+  if (!el) return;
+  const D = ["일","월","화","수","목","금","토"];
+  const tick = () => {
+    const d = new Date();
+    el.textContent = d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate())
+                   + " (" + D[d.getDay()] + ") " + pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds());
+  };
+  tick();
+  setInterval(tick, 1000);
+})();
 </script>
 </body>
 </html>
