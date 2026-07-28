@@ -1,6 +1,9 @@
 /* 전 모듈 공통 상단바 — blue-iwork 포털 대시보드와 완전히 동일한 스타일.
    페이지마다 --line/--muted 등을 다른 값으로 재정의해서 쓰므로, 여기서는 var() 대신
    포털의 실제 색상값을 그대로 박아 써서 항상 포털과 동일하게 보이게 한다. */
+/* 스크롤 유무로 뷰포트 폭이 달라져 topbar-in(가운데 정렬)이 밀리는 것 방지 —
+   슬랙 페이지마다 콘텐츠 높이가 달라 스크롤 유무가 제각각이라 반드시 필요 */
+html{scrollbar-gutter:stable}
 .topbar{background:#FFFFFF;border-bottom:1px solid #E2E9F6;position:sticky;top:0;z-index:200}
 .topbar-in{max-width:1600px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .logo{font-family:'Space Grotesk','Pretendard',system-ui,sans-serif;font-weight:700;letter-spacing:-.01em;color:#0E1A33;display:inline-flex;align-items:baseline;font-size:21px}
