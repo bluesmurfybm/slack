@@ -29,8 +29,8 @@ FIELDS = ("year", "date", "applicant", "gubun", "title",
 
 # blue-iwork 포털과 신원 공유(SSO). 포털(PHP)이 로그인 시 심는 서명 쿠키를 여기서 검증만 한다.
 # 전제: 포털·book이 같은 호스트(포트만 달라도 됨)에서 서빙되어야 브라우저가 쿠키를 같이 보낸다.
-PORTAL_URL       = os.environ.get("PORTAL_URL", "http://localhost/")   # TODO: 실제 포털 주소로 설정
-SLACK_URL        = os.environ.get("SLACK_URL", "http://localhost/slack/lists.php")  # 공통 헤더 드롭다운의 "업무현황판" 링크
+PORTAL_URL       = os.environ.get("PORTAL_URL", "/")   # TODO: 실제 포털 주소로 설정
+SLACK_URL        = os.environ.get("SLACK_URL", "slack/lists.php")  # 공통 헤더 드롭다운의 "업무현황판" 링크
 SSO_SECRET_PATH  = os.path.join(BASE, "..", "sso_secret.key")          # 포털 auth.php가 최초 실행 시 생성
 ADMIN_EMAIL      = "jian@bluesoft.co.kr"                               # 전체 수정/삭제/완료처리 권한
 
