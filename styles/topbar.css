@@ -13,7 +13,7 @@
 html{scrollbar-gutter:stable}
 .topbar{background:#FFFFFF;border-bottom:1px solid #E2E9F6;position:sticky;top:0;z-index:200}
 .topbar-in{max-width:1600px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-/* 워드마크(blue-iwork 로고) — topbar 전용이 아니라 어디서든(로그인 화면 등) 재사용 가능한 일반 규칙 */
+/* 워드마크(blue-iWorks 로고) — topbar 전용이 아니라 어디서든(로그인 화면 등) 재사용 가능한 일반 규칙 */
 .logo{font-family:'Space Grotesk','Pretendard',system-ui,sans-serif;font-weight:700;letter-spacing:-.01em;color:#0E1A33;display:inline-flex;align-items:baseline}
 .logo b{color:#1C5DE5;font-weight:700}
 .logo .dash{color:#4C8DFF;margin:0 1px}

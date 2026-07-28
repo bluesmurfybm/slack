@@ -1,4 +1,4 @@
-# blue-iwork — 사내 업무 포털
+# blue-iWorks — 사내 업무 포털
 
 Bluesoft 사내 포털. 로그인 하나로 **도서구매신청(book)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를
 오가는 구조. 이 문서는 이어받아 작업할 개발자를 위한 현황 정리다.
@@ -57,7 +57,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
   - book 쪽 로그아웃 링크는 포털의 `api/logout.php`를 GET으로 직접 연다(`api/logout.php`가
     POST면 JSON, GET이면 `index.php`로 리다이렉트하도록 나뉘어 있음).
 - **공통 상단바**: `slack/header.php`(PHP include)와 `book/index.html`의 `.bw-topbar`가 시각적으로
-  동일한 blue-iwork 상단바(로고+사용자명+로그아웃)를 각자 방식으로 그린다. slack 하위 폴더
+  동일한 blue-iWorks 상단바(로고+사용자명+로그아웃)를 각자 방식으로 그린다. slack 하위 폴더
   페이지는 include 전에 `$__bwBase = '../';`를 반드시 설정해야 링크가 안 깨진다(폴더 깊이 보정용).
 
 ---

@@ -1,6 +1,6 @@
 <?php
 /**
- * 전 모듈 공통 상단바 — blue-iwork 포털 대시보드와 완전히 동일한 클래스/스타일.
+ * 전 모듈 공통 상단바 — blue-iWorks 포털 대시보드와 완전히 동일한 클래스/스타일.
  * slack 쪽 페이지들의 <body> 바로 다음에 include 해서 쓴다.
  * (require_once auth.php; require_login(); 이후에 include할 것 — current_portal_user() 필요)
  *
@@ -20,7 +20,7 @@ if (!preg_match('#^[a-z][a-z0-9+.-]*://#i', $__bwBookUrl)) {
 ?>
 <div class="topbar">
   <div class="topbar-in">
-    <a class="logo" href="<?= $__bwBase ?>../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iwork</a>
+    <a class="logo" href="<?= $__bwBase ?>../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
     <div class="top-right">
       <?php if ($__bwUser): ?>
       <div class="user-menu" id="hdrUserMenu">

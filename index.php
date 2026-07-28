@@ -29,7 +29,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php'];
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>blue-iwork</title>
+<title>blue-iWorks</title>
 <link rel="icon" href="styles/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +44,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php'];
 <section id="login" class="<?= $__current ? 'hidden' : '' ?>">
   <div class="login-x">X</div>
   <div class="login-card">
-    <div class="logo"><b>blue</b><span class="dash">-</span>iwork</div>
+    <div class="logo"><b>blue</b><span class="dash">-</span>iWorks</div>
     <div class="login-tag">Bluesoft e<em>X</em>perience · 사내 업무 포털</div>
     <div class="fld">
       <label>이메일</label>
@@ -68,7 +68,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php'];
 <div id="app" class="<?= $__current ? '' : 'hidden' ?>">
   <div class="topbar">
     <div class="topbar-in">
-      <div class="logo" style="cursor:pointer" onclick="showDash()"><b>blue</b><span class="dash">-</span>iwork</div>
+      <div class="logo" style="cursor:pointer" onclick="showDash()"><b>blue</b><span class="dash">-</span>iWorks</div>
       <div class="top-right">
         <div class="user-menu" id="userMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">

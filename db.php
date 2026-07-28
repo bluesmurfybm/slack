@@ -1,6 +1,6 @@
 <?php
 /**
- * 포털(blue-iwork) DB 연결.
+ * 포털(blue-iWorks) DB 연결.
  *  - slack 모듈과 같은 slackapi DB를 그대로 씀. 여기서는 포털 전용 테이블만 관리.
  */
 
@@ -64,7 +64,7 @@ function portal_db() {
         foreach ($seed as [$name, $email, $color]) {
             $ins->execute([$name, $email, $hash, $color]);
         }
-        error_log('[blue-iwork] portal_users ' . count($seed) . '명 시드 완료 (초기 비번 blue$123)');
+        error_log('[blue-iWorks] portal_users ' . count($seed) . '명 시드 완료 (초기 비번 blue$123)');
     } else {
         // 이미 있는 설치본: 색이 아예 없으면 채우고, 옛 팔레트(쨍한 값) 그대로면 새 팔레트로 갈아탄다.
         // 그 외(본인이 직접 고른 색)는 건드리지 않는다.

@@ -27,7 +27,7 @@ SEED  = os.path.join(BASE, "seed.json")
 FIELDS = ("year", "date", "applicant", "gubun", "title",
           "author", "publisher", "price", "done", "note", "kyobo_url")
 
-# blue-iwork 포털과 신원 공유(SSO). 포털(PHP)이 로그인 시 심는 서명 쿠키를 여기서 검증만 한다.
+# blue-iWorks 포털과 신원 공유(SSO). 포털(PHP)이 로그인 시 심는 서명 쿠키를 여기서 검증만 한다.
 # 전제: 포털·book이 같은 호스트(포트만 달라도 됨)에서 서빙되어야 브라우저가 쿠키를 같이 보낸다.
 PORTAL_URL       = os.environ.get("PORTAL_URL", "/")   # TODO: 실제 포털 주소로 설정
 SLACK_URL        = os.environ.get("SLACK_URL", "/slack/lists.php")  # 공통 헤더 드롭다운의 "업무현황판" 링크
