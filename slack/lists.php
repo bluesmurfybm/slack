@@ -16,7 +16,7 @@ header('Pragma: no-cache');
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>유지보수 요청</title>
+<title>업무현황판</title>
 <script>(function(){var t=localStorage.getItem("ui_theme");if(t)document.documentElement.classList.add(t);})();</script>
 <link rel="icon" href="../styles/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,7 +31,7 @@ header('Pragma: no-cache');
 <?php include __DIR__ . '/header.php'; ?>
 <div class="wrap">
   <div class="head">
-    <h1>📥 유지보수 요청 <span class="badge" id="count"></span></h1>
+    <h1>업무현황판 <span class="badge" id="count"></span></h1>
     <span id="clock" title="현재 시각"></span>
     <span id="daemonDot" class="tip" data-tip="동기화 상태 확인 중…">●</span>
     <div class="filters iconbar">
