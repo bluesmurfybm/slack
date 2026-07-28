@@ -177,7 +177,7 @@ let lastEditBookResults=[];
 let editSearchT=null;
 let editPickedThumbnail="";
 let serverMode=false;
-const API="/api/requests";
+const API="/bookapi/requests";
 const ADMIN_EMAIL="jian@bluesoft.co.kr";
 let me={name:"",email:""};
 
@@ -434,7 +434,7 @@ function onTitleInput(){
 async function searchBooks(q){
   const box=document.getElementById("booksearch");
   try{
-    const r=await authedFetch(`/api/booksearch?q=${encodeURIComponent(q)}`);
+    const r=await authedFetch(`/bookapi/booksearch?q=${encodeURIComponent(q)}`);
     if(!r.ok)throw 0;
     lastBookResults=await r.json();
     if(!lastBookResults.length){box.classList.remove("show");box.innerHTML="";return;}
@@ -473,7 +473,7 @@ function onEditTitleInput(){
 async function searchEditBooks(q){
   const box=document.getElementById("ed-booksearch");
   try{
-    const r=await authedFetch(`/api/booksearch?q=${encodeURIComponent(q)}`);
+    const r=await authedFetch(`/bookapi/booksearch?q=${encodeURIComponent(q)}`);
     if(!r.ok)throw 0;
     lastEditBookResults=await r.json();
     if(!lastEditBookResults.length){box.classList.remove("show");box.innerHTML="";return;}
@@ -532,14 +532,14 @@ function showToast(m){const el=document.getElementById("toast");el.textContent=m
 
 async function loadWhoami(){
   try{
-    const r=await fetch("/api/whoami");
+    const r=await fetch("/bookapi/whoami");
     const who=await r.json();
     me={name:who.name||"",email:who.email||"",color:who.color||""};
     const portalUrl=(who.portal_url||"").replace(/\/+$/,"");
     document.getElementById("hdrBrand").href=portalUrl||"#";
     document.getElementById("dd-mypage").href=portalUrl?`${portalUrl}/?view=profile`:"#";
     document.getElementById("dd-slack").href=who.slack_url||"#";
-    document.getElementById("dd-logout").href=portalUrl?`${portalUrl}/api/logout.php`:"#";
+    document.getElementById("dd-logout").href=portalUrl?`${portalUrl}/bookapi/logout.php`:"#";
     document.getElementById("hdrName").textContent=me.name;
     const av=document.getElementById("hdrAvatar");
     av.textContent=me.name.slice(0,1);

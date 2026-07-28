@@ -271,7 +271,7 @@ def index(request: Request):
     return FileResponse(INDEX)
 
 
-@app.get("/api/whoami")
+@app.get("/bookapi/whoami")
 def whoami(request: Request):
     ident = get_identity(request)
     base = {"email": None, "name": None, "color": None}
@@ -282,12 +282,12 @@ def whoami(request: Request):
 
 
 # ---------- API (전부 로그인 필요) ----------
-@app.get("/api/booksearch")
+@app.get("/bookapi/booksearch")
 def book_search(q: str = "", identity: dict = Depends(require_identity)):
     return search_kakao_books(q)
 
 
-@app.get("/api/requests")
+@app.get("/bookapi/requests")
 def list_requests(identity: dict = Depends(require_identity)):
     conn = get_db()
     rows = conn.execute("SELECT * FROM requests ORDER BY date DESC, id DESC").fetchall()
@@ -307,7 +307,7 @@ class NewReq(BaseModel):
     thumbnail: Optional[str] = None
 
 
-@app.post("/api/requests")
+@app.post("/bookapi/requests")
 def create(req: NewReq, identity: dict = Depends(require_identity)):
     # 신청자는 항상 로그인한 본인 — 클라이언트가 보낸 값은 신뢰하지 않는다.
     applicant = identity["name"]
@@ -340,7 +340,7 @@ class UpdateReq(BaseModel):
     thumbnail: Optional[str] = None
 
 
-@app.put("/api/requests/{rid}")
+@app.put("/bookapi/requests/{rid}")
 def update(rid: int, req: UpdateReq, identity: dict = Depends(require_identity)):
     conn = get_db()
     existing = conn.execute("SELECT * FROM requests WHERE id=?", (rid,)).fetchone()
@@ -374,7 +374,7 @@ def update(rid: int, req: UpdateReq, identity: dict = Depends(require_identity))
     return row_to_dict(row)
 
 
-@app.delete("/api/requests/{rid}")
+@app.delete("/bookapi/requests/{rid}")
 def delete(rid: int, identity: dict = Depends(require_identity)):
     conn = get_db()
     existing = conn.execute("SELECT * FROM requests WHERE id=?", (rid,)).fetchone()
