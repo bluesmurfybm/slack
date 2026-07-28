@@ -1,8 +1,7 @@
   /* :root/box-sizing/body 기본, .badge/.toolbar, 다중선택 드롭다운 등은 common.css(공통) 참고 */
   :root { --star:#f5a623; }
   @media (prefers-color-scheme: dark) { :root { --star:#f5b942; } }
-  body { padding:24px; }
-  .wrap { width:100%; max-width:1500px; margin:0 auto; }
+  .wrap { width:100%; max-width:1500px; margin:0 auto; padding-top:24px; }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
   .head h1 { font-size:18px; font-weight:600; margin:0; display:flex; align-items:center; gap:10px; }
   .who { font-size:12px; color:var(--muted); margin-right:auto; }

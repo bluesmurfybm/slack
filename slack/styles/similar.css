@@ -1,6 +1,5 @@
   /* :root/box-sizing/body 기본, .empty, 레코드 상세+댓글 렌더링 등은 common.css(공통) 참고 */
-  body{padding:24px;}
-  .wrap{max-width:1000px;margin:0 auto;}
+  .wrap{max-width:1000px;margin:0 auto; padding-top:24px;}
   .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
   .head h1{font-size:18px;margin:0;} .tag{font-size:11px;background:#fff0e0;color:#a85b00;border-radius:6px;padding:2px 8px;}
   a.back{font-size:13px;color:var(--info);text-decoration:none;}
