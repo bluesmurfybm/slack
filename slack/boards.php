@@ -5,7 +5,7 @@
  *  키 = Slack list_id, 값 = 보드 메타(라벨·컬럼맵·댓글채널·초기상태 등)
  */
 require_once __DIR__ . '/slack_lib.php';
-$cfg = require __DIR__ . '/config.php';
+$cfg = require __DIR__ . '/../config.php';
 
 return [
     // 블루소프트 (현행)

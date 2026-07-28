@@ -26,7 +26,7 @@ if (!$lockFp || !flock($lockFp, LOCK_EX | LOCK_NB)) {
     exit;
 }
 
-$cfg    = require __DIR__ . '/config.php';
+$cfg    = require __DIR__ . '/../config.php';
 $boards = require __DIR__ . '/boards.php';
 $pdo    = db();
 $now    = date('Y-m-d H:i:s');

@@ -79,10 +79,12 @@ function portal_db() {
 }
 
 /** ALTER TABLE ADD COLUMN 안전 실행 — 이미 있는 컬럼 에러(42S21)만 무시(동시요청 경쟁 대비) */
-function add_column_if_missing($pdo, $sql) {
-    try {
-        $pdo->exec($sql);
-    } catch (PDOException $e) {
-        if ($e->getCode() !== '42S21') throw $e;
+if (!function_exists('add_column_if_missing')) {
+    function add_column_if_missing($pdo, $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '42S21') throw $e;
+        }
     }
 }

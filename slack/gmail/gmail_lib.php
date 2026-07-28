@@ -69,7 +69,7 @@ function gmail_ensure_table() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
     // 기존 설치본(단일 계정, PK=uid) 마이그레이션: account 컬럼 추가 + 데이터/메타 백필
-    $cfg = require __DIR__ . '/../config.php';
+    $cfg = require __DIR__ . '/../../config.php';
     $has = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
                           WHERE TABLE_SCHEMA=? AND TABLE_NAME='gmail_mails' AND COLUMN_NAME='account'");
     $has->execute([$cfg['db']['name']]);

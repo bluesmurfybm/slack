@@ -12,11 +12,13 @@
  *    db()를 부르면 둘 다 "없음"을 보고 동시에 ALTER를 실행해 경쟁이 생긴다.
  *    이미 존재해서 나는 에러(42S21/1060)만 조용히 무시해 멱등하게 만든다.
  */
-function add_column_if_missing($pdo, $sql) {
-    try {
-        $pdo->exec($sql);
-    } catch (PDOException $e) {
-        if ($e->getCode() !== '42S21') throw $e;
+if (!function_exists('add_column_if_missing')) {
+    function add_column_if_missing($pdo, $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '42S21') throw $e;
+        }
     }
 }
 
@@ -24,7 +26,7 @@ function db() {
     static $pdo = null;
     if ($pdo) return $pdo;
 
-    $cfg = require __DIR__ . '/config.php';
+    $cfg = require __DIR__ . '/../config.php';
     $d   = $cfg['db'];
     $opt = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,

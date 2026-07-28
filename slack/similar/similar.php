@@ -10,7 +10,7 @@ require_once __DIR__ . '/../db.php';
 require_login();
 $me = current_user();
 session_release();
-$listUrl = (require __DIR__ . '/../config.php')['list_url'] ?? '';
+$listUrl = (require __DIR__ . '/../../config.php')['list_url'] ?? '';
 // 피커용 경량 목록 (id/제목/보드/보관)
 $items = db()->query("SELECT id, title, board, archived FROM requests ORDER BY created DESC")->fetchAll(PDO::FETCH_ASSOC);
 foreach ($items as &$it) { $it['archived'] = (int)$it['archived']; } unset($it);

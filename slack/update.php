@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405); echo json_encode(['ok' => false, 'error' => 'POST only']); exit;
 }
 
-$cfg    = require __DIR__ . '/config.php';
+$cfg    = require __DIR__ . '/../config.php';
 $boards = require __DIR__ . '/boards.php';
 $tok    = current_token();
 
