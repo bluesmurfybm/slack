@@ -56,6 +56,8 @@ header('Pragma: no-cache');
   .ms-empty { font-size:12px; color:var(--muted); padding:6px 7px; }
   .ms-sec { font-size:11px; font-weight:700; color:var(--info); padding:6px 7px 2px; border-top:1px solid var(--line); margin-top:2px; }
   .ms-sec:first-child { border-top:0; margin-top:0; }
+  .ms-link { font-weight:600; color:var(--txt); }
+  .ms-div { border-top:1px solid var(--line); margin:4px 0; }
   .toolbar { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:14px; flex-wrap:wrap; }
   .badge { font-size:12px; color:var(--info); background:var(--info-bg); padding:2px 10px; border-radius:8px; }
   .who { font-size:12px; color:var(--muted); }
@@ -98,6 +100,8 @@ header('Pragma: no-cache');
   .dropdown.open .ddmenu { display:block; }
   .ddmenu a { display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:7px; text-decoration:none; color:var(--txt); font-size:13px; white-space:nowrap; }
   .ddmenu a:hover { background:var(--bg2); }
+  #recentMenu { max-width:300px; max-height:340px; overflow:auto; }
+  #recentMenu a.recent-item { display:block; overflow:hidden; text-overflow:ellipsis; }
   .listhead { display:flex; align-items:center; gap:10px; padding:9px 16px; border:1px solid var(--line); border-bottom:0; border-radius:12px 12px 0 0; background:var(--bg2); font-size:12px; color:var(--muted); }
   #selInfo { user-select:none; }
   /* 선택 액션(항목 체크 시에만 표시) */
@@ -125,8 +129,48 @@ header('Pragma: no-cache');
   .arch-bar .arch-cur { min-width:64px; text-align:center; }
   /* 상단 리스트 탭 */
   .btabs { display:flex; gap:8px; margin:0 auto 0 0; flex-wrap:wrap; }   /* 좌측 정렬(우측은 기존 필터) */
-  .preset-wrap { display:inline-flex; gap:5px; align-items:center; }
-  #presetSel { font-size:12px; padding:4px 6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--txt); max-width:160px; }
+  .preset-box { position:relative; display:inline-flex; }
+  .preset-toggle { display:inline-flex; align-items:center; justify-content:center; padding:5px 7px; line-height:0; }
+  .preset-toggle.on { border-color:#1a73e8; color:#1a73e8; }
+  /* 세트/설정 컨트롤은 톱니 버튼을 누를 때만 뜨는 팝오버 */
+  .preset-box .preset-wrap { position:absolute; top:calc(100% + 8px); right:0; z-index:50;
+      display:flex; flex-direction:column; white-space:nowrap; overflow:hidden;
+      background:var(--bg); border:1px solid var(--line); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.22); min-width:252px; max-width:300px; }
+  .preset-box .preset-wrap[hidden] { display:none; }
+  .pw-head { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:var(--txt);
+      padding:11px 14px; background:var(--bg2); border-bottom:1px solid var(--line); }
+  .pw-sec { padding:13px 14px; }
+  .pw-sec + .pw-sec { border-top:1px solid var(--line); }
+  .pw-title { display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; color:var(--txt); margin-bottom:10px; }
+  .pw-title .ic { font-size:13px; }
+  .pw-hint { font-size:10.5px; font-weight:400; color:var(--hint); }
+  .pw-row { display:flex; gap:5px; align-items:center; }
+  .pw-toggles { display:flex; flex-wrap:wrap; gap:6px; max-width:260px; }
+  .pw-tg { font-size:12px; padding:4px 10px; border:1px solid var(--line); border-radius:14px; background:var(--bg2); color:var(--muted); cursor:pointer; user-select:none; }
+  .pw-tg[draggable="true"] { cursor:grab; }
+  .pw-tg[draggable="true"]:active { cursor:grabbing; }
+  .pw-tg.drag { opacity:.4; }
+  .pw-tg.on { background:var(--info-bg); color:var(--info); border-color:var(--info); }
+  .pw-line { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--txt); padding:4px 0; cursor:pointer; }
+  .pw-line span { color:var(--muted); }
+  .pw-line select { margin-left:auto; font-size:12px; padding:3px 6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--txt); }
+  .pw-subtitle { font-size:10.5px; color:var(--muted); margin:10px 0 5px; }
+  /* 컴팩트 모드: 목록 행 간격·글자 축소 */
+  .wrap.compact .row { padding:5px 14px; gap:8px; }
+  .wrap.compact .title { font-size:12px; }
+  .wrap.compact .snip { font-size:11px; }
+  .wrap.compact .names { font-size:12px; }
+  .wrap.compact .listbox .st { transform:scale(.92); }
+  /* 글자 크기 (보통=기본, 클래스 없음) */
+  .wrap.fs-sm .title{font-size:12px} .wrap.fs-sm .snip{font-size:11px} .wrap.fs-sm .names{font-size:11px} .wrap.fs-sm .st{font-size:10px}
+  .wrap.fs-lg .title{font-size:15px} .wrap.fs-lg .snip{font-size:13px} .wrap.fs-lg .names{font-size:14px} .wrap.fs-lg .st{font-size:12px}
+  /* 목록 컬럼 표시/숨김 */
+  .wrap.hide-pri .col-pri{display:none}
+  .wrap.hide-status .col-status{display:none}
+  .wrap.hide-team .col-team{display:none}
+  .wrap.hide-date .date{display:none}
+  .wrap.hide-snip .snipline{display:none}
+  #presetSel { font-size:12px; padding:4px 6px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--txt); max-width:150px; }
   .preset-del { padding:4px 7px; }
   .btab { height:34px; padding:0 16px; border:1px solid var(--line); border-radius:18px; background:var(--bg); color:var(--muted); font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
   .btab.on { border-color:var(--info); color:var(--info); background:var(--info-bg); font-weight:600; }
@@ -426,6 +470,10 @@ header('Pragma: no-cache');
       <button id="toggleArch" type="button" class="txtbtn iconable" title="보관 보기"><span class="bico">🗄️</span><span class="btxt">보관 보기</span></button>
       <button id="toggleHidden" type="button" class="tip" data-tip="숨김 보기"><span class="ico" id="hidIco">🙈</span><span class="cnt" id="hidCnt"></span></button>
       <button id="schoolBtn" type="button" class="tip" data-tip="학교 검색">🏫</button>
+      <div class="dropdown" id="recentDd">
+        <button type="button" class="ddBtn tip" data-tip="최근 본 항목" id="recentBtn">🕘<span class="caret">▾</span></button>
+        <div class="ddmenu" id="recentMenu"></div>
+      </div>
       <div class="dropdown" id="analyzeDd">
         <button type="button" class="ddBtn tip" data-tip="분석 도구" id="analyzeBtn">📈<span class="caret">▾</span></button>
         <div class="ddmenu">
@@ -436,7 +484,7 @@ header('Pragma: no-cache');
       </div>
       <button id="sync" class="tip" data-tip="동기화"><span class="ico">🔄</span></button>
       <button id="themeBtn" type="button" class="tip" data-tip="다크/라이트 전환">🌓</button>
-      <a href="logout.php"><button type="button" class="tip" data-tip="로그아웃"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M17.7 7.3a8 8 0 1 1-11.4 0"/></svg></button></a>
+      <a href="logout.php" id="logoutBtn"><button type="button" class="tip" data-tip="로그아웃"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3v8"/><path d="M17.7 7.3a8 8 0 1 1-11.4 0"/></svg></button></a>
     </div>
   </div>
   <div class="toolbar">
@@ -448,10 +496,54 @@ header('Pragma: no-cache');
     <div class="ms" id="msStatus"></div>
     <div class="ms" id="msAsg"></div>
     <button id="reset" type="button">필터 초기화</button>
-    <span class="preset-wrap">
-      <select id="presetSel" title="저장된 필터 세트 적용"><option value="">필터 선택</option></select>
-      <button id="presetSave" type="button" title="현재 필터 조합을 세트로 저장">＋필터 저장</button>
-      <button id="presetDel" type="button" class="preset-del" title="선택한 세트 삭제" hidden>🗑</button>
+    <span class="preset-box">
+      <button id="presetToggle" type="button" class="preset-toggle" title="필터 세트 저장·불러오기" aria-label="필터 세트"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <span class="preset-wrap" id="presetWrap" hidden>
+        <div class="pw-head"><span class="ic">⚙️</span> 설정</div>
+        <div class="pw-sec">
+          <div class="pw-title">필터 설정</div>
+          <div class="pw-row">
+            <select id="presetSel" title="저장된 필터 세트 적용"><option value="">필터 선택</option></select>
+            <button id="presetSave" type="button" title="현재 필터 조합을 세트로 저장">＋저장</button>
+            <button id="presetDel" type="button" class="preset-del" title="선택한 세트 삭제" hidden>🗑</button>
+          </div>
+        </div>
+        <div class="pw-sec">
+          <div class="pw-title">헤더 버튼 <span class="pw-hint">클릭=표시, 드래그=순서</span></div>
+          <div class="pw-toggles" id="hdrToggles"></div>
+        </div>
+        <div class="pw-sec">
+          <label class="pw-line"><input type="checkbox" id="uiCompact"> 컴팩트 모드</label>
+          <label class="pw-line"><span>정렬</span>
+            <select id="uiSort">
+              <option value="unread">안읽음 우선 + 최신순</option>
+              <option value="recent">최신순</option>
+              <option value="priority">우선순위(긴급 먼저)</option>
+              <option value="due">마감 임박순</option>
+              <option value="diff">난이도(어려운순)</option>
+            </select>
+          </label>
+          <label class="pw-line"><span>자동 새로고침</span>
+            <select id="uiRefresh">
+              <option value="30000">30초</option>
+              <option value="60000">1분</option>
+              <option value="300000">5분</option>
+              <option value="0">끄기</option>
+            </select>
+          </label>
+          <label class="pw-line"><span>글자 크기</span>
+            <select id="uiFont">
+              <option value="sm">작게</option>
+              <option value="md">보통</option>
+              <option value="lg">크게</option>
+            </select>
+          </label>
+          <label class="pw-line"><input type="checkbox" id="uiAutoRead"> 열면 자동 읽음 처리</label>
+          <label class="pw-line"><input type="checkbox" id="uiAsgLink"> 담당자: 유비온·와이오즈 동일 선택</label>
+          <div class="pw-subtitle">목록 컬럼 표시</div>
+          <div class="pw-toggles" id="colToggles"></div>
+        </div>
+      </span>
     </span>
   </div>
   <div class="cols">
@@ -776,10 +868,10 @@ function rowHtml(r){
       ${!archivedMode && fboardTab==="all" && r.board ? `<span class="bdot ${r.board==='와이오즈'?'w':'b'}" title="${esc(boardLabel(r.board))}">${r.board==='와이오즈'?'W':'U'}</span>` : ''}
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px">
-          ${r.priority?`<span class="st" style="flex:none;background:${priColor(r.priority).bg};color:${priColor(r.priority).fg}">${esc(r.priority)}</span>`:''}
+          ${r.priority?`<span class="st col-pri" style="flex:none;background:${priColor(r.priority).bg};color:${priColor(r.priority).fg}">${esc(r.priority)}</span>`:''}
           <span class="twrap"><span class="title">${esc(r.title)}</span><button type="button" class="copyTitle tip" data-tip="제목복사" data-id="${esc(r.id)}" data-list="${esc(r.list_id||'')}" data-title="${escAttr(r.title)}">📋</button></span>
-          ${r.status?`<span class="st" style="background:${p.bg};color:${p.fg}">${esc(r.status)}</span>`:''}
-          ${r.team?`<span class="st" style="background:${teamColor(r.team).bg};color:${teamColor(r.team).fg}">${esc(r.team)}</span>`:''}
+          ${r.status?`<span class="st col-status" style="background:${p.bg};color:${p.fg}">${esc(r.status)}</span>`:''}
+          ${r.team?`<span class="st col-team" style="background:${teamColor(r.team).bg};color:${teamColor(r.team).fg}">${esc(r.team)}</span>`:''}
           ${r.archived?'<span class="st" style="background:#e5e7eb;color:#4b5563">🗄️ 보관</span>':''}
           ${r.locked?'<span class="lock">✏️수정됨</span>':''}
         </div>
@@ -861,11 +953,24 @@ function asgEditOptions(curId){
   return h;
 }
 async function updateField(id, field, value){
+  const r0 = DATA.find(x=>x.id===id);
+  // 사용자가 '본' 값(변경 전) — 서버가 Slack 현재값과 비교해 동시편집 감지
+  const expect = r0 ? (field==="status" ? (r0.status||"") : field==="asg" ? (r0.asg_id||"") : (r0.eta||"")) : "";
   try{
     const j = await (await fetch("update.php", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({request_id:id, field, value})
+      body: JSON.stringify({request_id:id, field, value, expect})
     })).json();
+    if(j.conflict){                              // 다른 사람이 먼저 변경함 → 덮어쓰지 않고 최신값 반영
+      const r = DATA.find(x=>x.id===id);
+      if(r){
+        if(field==="status"){ r.status=j.current; r.status_id=j.current_id; }
+        else if(field==="asg"){ r.asg_id=j.current_id||null; r.asg=j.current; }
+      }
+      render();
+      alert("⚠️ 다른 사람이 이미 변경했습니다.\n현재 값: " + (j.current || "—") + "\n\n최신 상태로 갱신했습니다. 그래도 바꾸려면 다시 선택하세요.");
+      return;
+    }
     if(!j.ok) throw new Error(j.error || "실패");
     const r = DATA.find(x=>x.id===id);
     if(r){
@@ -1174,6 +1279,17 @@ async function postComment(id){
   }
 }
 
+/* 상세 열 때 해당 항목의 진행상태/담당자/완료예정일을 Slack 최신값으로 새로고침(동시편집 대비) */
+async function refreshItem(id){
+  try{
+    const j = await (await fetch("itemfresh.php?id="+encodeURIComponent(id), {cache:"no-store"})).json();
+    if(!j.ok) return;
+    const r = DATA.find(x=>x.id===id); if(!r) return;
+    const changed = (r.status!==j.status) || ((r.asg_id||"")!==(j.asg_id||"")) || ((r.eta||"")!==(j.eta||""));
+    r.status=j.status; r.status_id=j.status_id; r.asg_id=j.asg_id||null; r.asg=j.asg; r.eta=j.eta||null;
+    if(changed && openId===id) render();   // 값이 바뀌었고 아직 열려 있으면 상세 갱신
+  }catch(e){ /* 무시 */ }
+}
 function bindRows(box){
   box.querySelectorAll(".row").forEach(el=>{
     el.addEventListener("click",()=>{
@@ -1182,7 +1298,9 @@ function bindRows(box){
       openId = opening ? id : null;
       if(opening){
         const r = DATA.find(x=>x.id===id);   // 댓글 패널 상태는 마지막 값 유지(showCmts)
-        if(r && !r.is_read) markRead(id, 1, false);
+        if(r && !r.is_read && loadUi().autoRead!==false) markRead(id, 1, false);   // 설정: 열면 자동 읽음
+        pushRecent(r);   // 최근 본 항목 기록
+        if(!archivedMode) refreshItem(id);   // 진행상태/담당자 최신값으로 갱신(동시편집 대비)
       }
       render();
       if(opening && showCmts) loadComments(id);   // 열 때 최신 댓글 자동 로드
@@ -1406,9 +1524,18 @@ function markRead(id, read, doRender){
   if(doRender) render();
 }
 
-/* 고정 우선 정렬: 고정 → 안읽음 → 최신순 (data.php ORDER BY 와 동일) */
+/* 정렬: 고정은 항상 최상단, 그 다음 사용자 지정 정렬(설정) */
 function sortData(){
-  DATA.sort((a,b)=> (b.is_pinned-a.is_pinned) || (a.is_read-b.is_read) || (b.created-a.created));
+  const mode = (loadUi().sort) || "unread";
+  const recent = (a,b)=> b.created - a.created;
+  DATA.sort((a,b)=>{
+    if(a.is_pinned!==b.is_pinned) return b.is_pinned - a.is_pinned;   // 고정 먼저
+    if(mode==="recent")   return recent(a,b);
+    if(mode==="priority"){ const pa=(a.priority==="긴급")?0:1, pb=(b.priority==="긴급")?0:1; return (pa-pb) || recent(a,b); }
+    if(mode==="due"){      const oa=overdueDays(a), ob=overdueDays(b); return (ob-oa) || recent(a,b); }
+    if(mode==="diff"){     const da=a.ai_stars||0, db=b.ai_stars||0; return (db-da) || recent(a,b); }
+    return (a.is_read - b.is_read) || recent(a,b);   // 기본: 안읽음 우선 + 최신순
+  });
 }
 /* 고정/해제: 로컬 즉시 반영 + 재정렬(상단 이동) + 서버 저장 */
 function markPin(id, pin){
@@ -1434,6 +1561,8 @@ function markHide(id, hide){
 }
 
 /* ---------- 헤더 다중선택 필터 드롭다운 (보드별 섹션) ---------- */
+let asgLink = false;   // 담당자 '양쪽 보드 동일 적용' — 설정(uiprefs)에서 제어. applyUi() 에서 최신화
+
 const MS = [
   { id:'msPriority', label:'우선순위', dim:'priority', field:'priority' },
   { id:'msTeam',     label:'담당팀',   dim:'team',     field:'team' },
@@ -1473,9 +1602,16 @@ function buildMS(cfg){
   const btn=cont.querySelector(".ms-btn"), menuEl=cont.querySelector(".ms-menu");
   btn.addEventListener("click", e=>{ e.stopPropagation(); const willOpen=menuEl.hidden; closeAllMS(); menuEl.hidden=!willOpen; });
   menuEl.addEventListener("click", e=>e.stopPropagation());
-  menuEl.querySelectorAll("input").forEach(inp=>inp.addEventListener("change", ()=>{
-    const set=FILT[cfg.dim][inp.dataset.b];
-    if(inp.checked) set.add(inp.value); else set.delete(inp.value);
+  // 항목 체크박스(data-b) 변경
+  menuEl.querySelectorAll("input[data-b]").forEach(inp=>inp.addEventListener("change", ()=>{
+    const val=inp.value;
+    if(cfg.dim==='asg' && asgLink){                 // 동일 적용: 양쪽 보드에 함께 반영
+      BOARDS_F.forEach(b=>{ const s=FILT.asg[b]; if(inp.checked) s.add(val); else s.delete(val); });
+      menuEl.querySelectorAll("input[data-b]").forEach(o=>{ if(o.value===val) o.checked=inp.checked; });  // 반대편 체크박스도 시각 반영
+    } else {
+      const set=FILT[cfg.dim][inp.dataset.b];
+      if(inp.checked) set.add(inp.value); else set.delete(inp.value);
+    }
     clearPresetSel();   // 수동 변경 → 프리셋 선택 해제
     updateMSBtn(cfg); saveFilters(); openId=null; render();
   }));
@@ -1614,10 +1750,185 @@ function applySelectedPresetOnLoad(){
   const p = loadPresets().find(x=>x.name===nm);
   if(p){ applyFilterState(p.state); saveSelectedPreset(nm); renderPresetSelect(); }
 }
+
+/* ---------- 헤더 버튼 표시/숨김 (DB 사용자별 저장 + 로컬 캐시) ---------- */
+const HDRBTN_KEY = "slackapi_hdrbtns_" + (ME_ID || "me");
+const HEADER_BTNS = [
+  {id:"dueBtn",       label:"지연"},
+  {id:"toggleUn",     label:"미지정"},
+  {id:"toggleArch",   label:"보관"},
+  {id:"toggleHidden", label:"숨김"},
+  {id:"recentDd",     label:"최근"},
+  {id:"schoolBtn",    label:"학교"},
+  {id:"analyzeDd",    label:"분석"},
+  {id:"sync",         label:"동기화"},
+  {id:"themeBtn",     label:"테마"},
+  {id:"logoutBtn",    label:"로그아웃"},
+];
+const HDR_IDS = HEADER_BTNS.map(b=>b.id);
+const HDR_LABEL = {}; HEADER_BTNS.forEach(b=>HDR_LABEL[b.id]=b.label);
+function loadHdrRaw(){ try{ return JSON.parse(localStorage.getItem(HDRBTN_KEY)||"{}")||{}; }catch(e){ return {}; } }
+/* 저장 포맷: {order:[id...], hidden:{id:true}}  (구포맷 {id:false} 도 호환) */
+function loadHdr(){
+  const raw = loadHdrRaw();
+  let hidden = {};
+  if(raw.hidden && typeof raw.hidden==="object") hidden = {...raw.hidden};
+  else for(const k in raw){ if(raw[k]===false) hidden[k]=true; }   // 구포맷 이관
+  let order = Array.isArray(raw.order) ? raw.order.filter(id=>HDR_IDS.includes(id)) : [];
+  HDR_IDS.forEach(id=>{ if(!order.includes(id)) order.push(id); });   // 누락분은 기본 순서로 뒤에 추가
+  return { order, hidden };
+}
+function saveHdr(state){
+  localStorage.setItem(HDRBTN_KEY, JSON.stringify(state));   // 캐시(즉시)
+  fetch("prefs.php", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({key:"hdrbtns", value:state})}).catch(()=>{});  // DB(사용자별)
+}
+/* 표시/숨김 + 실제 헤더 버튼 순서 재배치 */
+function applyHdrBtns(){
+  const st=loadHdr(), bar=document.querySelector(".filters.iconbar");
+  st.order.forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.style.display = st.hidden[id] ? "none" : "";
+    if(bar && el.parentNode===bar) bar.appendChild(el);   // order 순서대로 뒤에 재배치
+  });
+}
+function buildHdrToggles(){
+  const st=loadHdr(), box=document.getElementById("hdrToggles"); if(!box) return;
+  box.innerHTML = st.order.map(id=>`<button type="button" class="pw-tg${st.hidden[id]?'':' on'}" data-id="${id}" draggable="true">${esc(HDR_LABEL[id]||id)}</button>`).join("");
+  box.querySelectorAll(".pw-tg").forEach(el=>{
+    el.addEventListener("click", e=>{           // 클릭 = 표시/숨김 토글
+      e.stopPropagation();
+      const id=el.dataset.id, s=loadHdr();
+      if(s.hidden[id]) delete s.hidden[id]; else s.hidden[id]=true;
+      saveHdr(s); el.classList.toggle("on", !s.hidden[id]); applyHdrBtns();
+    });
+    el.addEventListener("dragstart", e=>{ e.stopPropagation(); e.dataTransfer.setData("text/plain", el.dataset.id); e.dataTransfer.effectAllowed="move"; el.classList.add("drag"); });
+    el.addEventListener("dragend", ()=>el.classList.remove("drag"));
+    el.addEventListener("dragover", e=>{ e.preventDefault(); e.dataTransfer.dropEffect="move"; });
+    el.addEventListener("drop", e=>{            // 드롭 = 순서 변경
+      e.preventDefault(); e.stopPropagation();
+      const from=e.dataTransfer.getData("text/plain"), to=el.dataset.id;
+      if(!from || from===to) return;
+      const s=loadHdr(); const arr=s.order;
+      arr.splice(arr.indexOf(from), 1);
+      arr.splice(arr.indexOf(to), 0, from);      // from 을 to 앞자리에 삽입
+      saveHdr(s); buildHdrToggles(); applyHdrBtns();
+    });
+  });
+}
+async function syncHdrBtnsFromServer(){
+  try{
+    const j = await (await fetch("prefs.php?key=hdrbtns", {cache:"no-store"})).json();
+    if(!j || !j.ok) return;
+    if(j.value && typeof j.value==="object" && (Array.isArray(j.value.order) || (j.value.hidden && typeof j.value.hidden==="object") || Object.keys(j.value).length)){
+      localStorage.setItem(HDRBTN_KEY, JSON.stringify(j.value));   // 서버값 채택
+      applyHdrBtns(); buildHdrToggles();
+    } else {
+      const raw=loadHdrRaw(); if(Object.keys(raw).length) saveHdr(loadHdr());   // 서버 비었으면 로컬 이관(정규화)
+    }
+  }catch(e){}
+}
+
+/* ---------- 화면 설정: 컴팩트/정렬/자동새로고침 (DB 사용자별) ---------- */
+const UIPREF_KEY = "slackapi_uipref_" + (ME_ID || "me");
+const UI_DEFAULT = { compact:false, sort:"unread", refresh:60000, font:"md", autoRead:true, asgLink:false, cols:{} };
+const LIST_COLS = [
+  {id:"pri",    label:"우선순위"},
+  {id:"status", label:"상태"},
+  {id:"team",   label:"담당팀"},
+  {id:"date",   label:"날짜"},
+  {id:"snip",   label:"본문요약"},
+];
+function loadUi(){ let s={}; try{ s=JSON.parse(localStorage.getItem(UIPREF_KEY)||"{}")||{}; }catch(e){} return {...UI_DEFAULT, ...s, cols:{...(s.cols||{})}}; }
+function saveUi(s){
+  localStorage.setItem(UIPREF_KEY, JSON.stringify(s));
+  fetch("prefs.php", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({key:"uiprefs", value:s})}).catch(()=>{});
+}
+let _refreshTimer=null;
+function refreshTick(){
+  bgSync();                                // 데몬 정체 시 폴백 서버 동기화
+  if(openId || archivedMode) return;       // 상세 열림/보관 모드에선 목록 갱신 보류
+  const y = window.scrollY;                // 스크롤 위치 보존
+  Promise.resolve(load()).then(()=>window.scrollTo(0, y)).catch(()=>{});
+}
+function setRefreshInterval(ms){
+  if(_refreshTimer){ clearInterval(_refreshTimer); _refreshTimer=null; }
+  ms = +ms||0;
+  if(ms>0) _refreshTimer = setInterval(refreshTick, ms);   // 주기마다 목록 자동 새로고침
+}
+function applyUi(){
+  const u=loadUi();
+  const wrap=document.querySelector(".wrap"); if(!wrap){ setRefreshInterval(u.refresh); return; }
+  wrap.classList.toggle("compact", !!u.compact);
+  wrap.classList.remove("fs-sm","fs-lg");
+  if(u.font==="sm") wrap.classList.add("fs-sm"); else if(u.font==="lg") wrap.classList.add("fs-lg");
+  LIST_COLS.forEach(c=> wrap.classList.toggle("hide-"+c.id, u.cols && u.cols[c.id]===false));
+  asgLink = !!u.asgLink;   // 담당자 양쪽 보드 동일 적용
+  setRefreshInterval(u.refresh);
+}
+function buildUiControls(){
+  const u=loadUi();
+  const c=document.getElementById("uiCompact");
+  if(c){ c.checked=!!u.compact; c.onchange=()=>{ const s=loadUi(); s.compact=c.checked; saveUi(s); applyUi(); }; }
+  const so=document.getElementById("uiSort");
+  if(so){ so.value=u.sort; so.onclick=e=>e.stopPropagation(); so.onchange=()=>{ const s=loadUi(); s.sort=so.value; saveUi(s); sortData(); openId=null; render(); }; }
+  const rf=document.getElementById("uiRefresh");
+  if(rf){ rf.value=String(u.refresh); rf.onclick=e=>e.stopPropagation(); rf.onchange=()=>{ const s=loadUi(); s.refresh=+rf.value; saveUi(s); setRefreshInterval(s.refresh); }; }
+  const ft=document.getElementById("uiFont");
+  if(ft){ ft.value=u.font; ft.onclick=e=>e.stopPropagation(); ft.onchange=()=>{ const s=loadUi(); s.font=ft.value; saveUi(s); applyUi(); }; }
+  const ar=document.getElementById("uiAutoRead");
+  if(ar){ ar.checked=(u.autoRead!==false); ar.onchange=()=>{ const s=loadUi(); s.autoRead=ar.checked; saveUi(s); }; }
+  const al=document.getElementById("uiAsgLink");
+  if(al){ al.checked=!!u.asgLink; al.onchange=()=>{
+    const s=loadUi(); s.asgLink=al.checked; saveUi(s); asgLink=al.checked;
+    if(asgLink){                                   // 켤 때: 현재 담당자 선택을 양쪽 보드 합집합으로 통일
+      const union=new Set([...FILT.asg["블루소프트"], ...FILT.asg["와이오즈"]]);
+      FILT.asg["블루소프트"]=new Set(union); FILT.asg["와이오즈"]=new Set(union);
+      clearPresetSel(); saveFilters();
+    }
+    buildAllMS(); openId=null; render();
+  }; }
+  buildColToggles();
+}
+function buildColToggles(){
+  const u=loadUi(), box=document.getElementById("colToggles"); if(!box) return;
+  box.innerHTML = LIST_COLS.map(c=>`<button type="button" class="pw-tg${(u.cols&&u.cols[c.id]===false)?'':' on'}" data-col="${c.id}">${esc(c.label)}</button>`).join("");
+  box.querySelectorAll(".pw-tg").forEach(el=>el.addEventListener("click", e=>{
+    e.stopPropagation();
+    const id=el.dataset.col, s=loadUi(); s.cols=s.cols||{};
+    if(s.cols[id]!==false) s.cols[id]=false; else delete s.cols[id];   // 토글(표시↔숨김)
+    saveUi(s); el.classList.toggle("on", s.cols[id]!==false); applyUi();
+  }));
+}
+async function syncUiFromServer(){
+  try{
+    const j = await (await fetch("prefs.php?key=uiprefs", {cache:"no-store"})).json();
+    if(!j || !j.ok) return;
+    if(j.value && typeof j.value==="object" && Object.keys(j.value).length){
+      localStorage.setItem(UIPREF_KEY, JSON.stringify({...UI_DEFAULT, ...j.value}));   // 서버값 채택
+      applyUi(); buildUiControls(); sortData(); render();
+    } else {
+      const raw=(()=>{try{return JSON.parse(localStorage.getItem(UIPREF_KEY)||"{}");}catch(e){return {};}})();
+      if(Object.keys(raw).length) saveUi(loadUi());   // 서버 비었으면 로컬 이관
+    }
+  }catch(e){}
+}
 function initPresets(){
   renderPresetSelect();          // 캐시로 즉시 표시(+저장된 선택 복원)
   applySelectedPresetOnLoad();   // 선택돼 있던 프리셋의 필터를 그대로 적용
   syncPresetsFromServer();       // DB(사용자별)와 동기화 → 브라우저 바뀌어도 유지
+  applyHdrBtns(); buildHdrToggles(); syncHdrBtnsFromServer();   // 헤더 버튼 표시/숨김(DB 사용자별)
+  applyUi(); buildUiControls(); syncUiFromServer();             // 화면 설정(컴팩트/정렬/새로고침, DB 사용자별)
+  // 톱니 버튼 클릭 시에만 세트 팝오버 표시
+  const pToggle=document.getElementById("presetToggle"), pWrap=document.getElementById("presetWrap");
+  pToggle.addEventListener("click", e=>{
+    e.stopPropagation();
+    const willOpen = pWrap.hidden;
+    closeAllMS();                 // 다른 다중선택 메뉴는 닫기
+    pWrap.hidden = !willOpen;
+    pToggle.classList.toggle("on", willOpen);
+  });
+  pWrap.addEventListener("click", e=>e.stopPropagation());   // 팝오버 내부 클릭은 유지
+  document.addEventListener("click", ()=>{ pWrap.hidden=true; pToggle.classList.remove("on"); });  // 바깥 클릭 닫기
   document.getElementById("presetSel").addEventListener("change", e=>{
     const i = e.target.value;
     document.getElementById("presetDel").hidden = (i==="");
@@ -1741,6 +2052,52 @@ async function load(){
   const dd=document.getElementById("analyzeDd");
   document.getElementById("analyzeBtn").addEventListener("click", e=>{ e.stopPropagation(); dd.classList.toggle("open"); });
   document.addEventListener("click", e=>{ if(!dd.contains(e.target)) dd.classList.remove("open"); });
+})();
+
+/* ---------- 최근 본 항목 ---------- */
+const RECENTV_KEY = "slackapi_recentview_" + (ME_ID || "me");
+function loadRecent(){ try{ return JSON.parse(localStorage.getItem(RECENTV_KEY)||"[]")||[]; }catch(e){ return []; } }
+function pushRecent(r){
+  if(!r) return;
+  let list = loadRecent().filter(x=>x.id!==r.id);
+  list.unshift({ id:r.id, title:r.title, board:r.board });
+  localStorage.setItem(RECENTV_KEY, JSON.stringify(list.slice(0,15)));   // 최근 15개
+  buildRecentMenu();
+}
+function buildRecentMenu(){
+  const box=document.getElementById("recentMenu"); if(!box) return;
+  const list=loadRecent();
+  box.innerHTML = list.length
+    ? list.map(x=>`<a href="#" class="recent-item" data-id="${escAttr(x.id)}" title="${escAttr(x.title||x.id)}">${esc(x.title||x.id)}</a>`).join("")
+        + `<a href="#" class="recent-clear" style="color:var(--hint);border-top:1px solid var(--line);margin-top:4px">🧹 기록 지우기</a>`
+    : `<div style="padding:10px 12px;font-size:12px;color:var(--hint)">최근 본 항목 없음</div>`;
+  box.querySelectorAll(".recent-item").forEach(a=>a.addEventListener("click", e=>{ e.preventDefault(); e.stopPropagation(); openRecent(a.dataset.id); }));
+  const cl=box.querySelector(".recent-clear");
+  if(cl) cl.addEventListener("click", e=>{ e.preventDefault(); e.stopPropagation(); localStorage.setItem(RECENTV_KEY,"[]"); buildRecentMenu(); });
+}
+function openRecent(id){
+  document.getElementById("recentDd").classList.remove("open");
+  const r = DATA.find(x=>x.id===id);
+  if(!r){ alert("목록에 없는 항목입니다. 동기화 후 다시 시도하세요."); return; }
+  openId = id;
+  // 현재 필터/탭/검색에 안 보이면 필터를 풀어 강제로 보이게
+  if(!filteredItems().some(x=>x.id===id)){
+    FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+    fboardTab="all"; filter=""; dueOnly=false;
+    document.getElementById("search").value=""; document.getElementById("searchClear").hidden=true;
+    if(r.is_hidden) showHidden = true;   // 숨김 항목이면 숨김 보기 켜기
+    clearPresetSel(); saveFilters(); buildAllMS();
+  }
+  if(r && !r.is_read && loadUi().autoRead!==false) markRead(id, 1, false);
+  render();
+  if(showCmts) loadComments(id);
+  setTimeout(()=>{ const el=document.querySelector('.row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]'); if(el) el.scrollIntoView({behavior:"smooth", block:"center"}); }, 60);
+}
+(function(){
+  const dd=document.getElementById("recentDd");
+  document.getElementById("recentBtn").addEventListener("click", e=>{ e.stopPropagation(); buildRecentMenu(); dd.classList.toggle("open"); });
+  document.addEventListener("click", e=>{ if(!dd.contains(e.target)) dd.classList.remove("open"); });
+  buildRecentMenu();
 })();
 
 document.getElementById("sync").addEventListener("click", async ()=>{
@@ -1904,7 +2261,7 @@ async function bgSync(){
   try{ await fetch("sync.php", { cache:"no-store" }); }catch(e){}
   // 결과 반영은 pollStatus 가 changed_at 변화를 감지해 자동 처리
 }
-setInterval(bgSync, 60000);   // 폴백 체크 주기
+setRefreshInterval(loadUi().refresh);   // 자동 새로고침 주기(설정값, 기본 1분)
 
 /* ===== 이미지 라이트박스(모달 슬라이드) ===== */
 document.body.insertAdjacentHTML("beforeend", `

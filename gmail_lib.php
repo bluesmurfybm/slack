@@ -125,6 +125,14 @@ function gmail_ensure_table() {
         $pdo->exec("ALTER TABLE `gmail_mails` ADD COLUMN `thrid` BIGINT UNSIGNED NULL COMMENT 'Gmail 대화 ID(X-GM-THRID, 첫 열람 때 채움)' AFTER `atts`");
         $pdo->exec("ALTER TABLE `gmail_mails` ADD INDEX `idx_acct_thrid` (`account`, `thrid`)");
     }
+    // hdr_to/hdr_cc 컬럼 (전체답장 빠른 계산용 — 본문 수집 시 함께 저장, NULL=미수집)
+    $has = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
+                          WHERE TABLE_SCHEMA=? AND TABLE_NAME='gmail_mails' AND COLUMN_NAME='hdr_to'");
+    $has->execute([$cfg['db']['name']]);
+    if (!$has->fetchColumn()) {
+        $pdo->exec("ALTER TABLE `gmail_mails` ADD COLUMN `hdr_to` TEXT NULL COMMENT '원본 To 이메일 CSV(전체답장용, NULL=미수집)' AFTER `atts`");
+        $pdo->exec("ALTER TABLE `gmail_mails` ADD COLUMN `hdr_cc` TEXT NULL COMMENT '원본 Cc 이메일 CSV(전체답장용)' AFTER `hdr_to`");
+    }
     // [향후 회원가입] 사용자 계정 테이블 — id/pw 로그인 + 개인 Slack 토큰/Gmail 앱 비밀번호 보관.
     // 지금은 구조만 준비(가입/로그인 로직은 메일 기능 완료 후).
     $pdo->exec("
@@ -308,14 +316,26 @@ function gmail_body_text($plain, $html) {
     return preg_replace("/\n{3,}/", "\n\n", trim($t));
 }
 
-/** 본문/inline 이미지를 수집해 DB에 채움 (예열·열람 공용). 성공 시 true */
+/** imap_headerinfo 주소 배열 → 소문자 이메일 CSV (원본 그대로, 중복 제거) */
+function gmail_addr_csv($arr) {
+    $out = [];
+    foreach ((array)$arr as $a) {
+        if (empty($a->mailbox) || empty($a->host)) continue;
+        $out[] = strtolower($a->mailbox . '@' . $a->host);
+    }
+    return implode(',', array_values(array_unique($out)));
+}
+
+/** 본문/inline 이미지 + To/Cc 헤더를 수집해 DB에 채움 (예열·열람 공용). 성공 시 true */
 function gmail_fill_body($im, $pdo, $acct, $uid) {
     $msgno = imap_msgno($im, (int)$uid);
     if ($msgno < 1) return false;
     [$plain, $html, $atts] = gmail_extract($im, $msgno);
-    $pdo->prepare("UPDATE gmail_mails SET body = ?, body_html = ?, atts = ? WHERE account = ? AND uid = ?")
+    $h = imap_headerinfo($im, $msgno);                 // 전체답장용 To/Cc (이미 접속돼 있어 저렴)
+    $pdo->prepare("UPDATE gmail_mails SET body = ?, body_html = ?, atts = ?, hdr_to = ?, hdr_cc = ? WHERE account = ? AND uid = ?")
         ->execute([gmail_body_text($plain, $html), ($html !== '') ? gmail_sanitize_html($html) : '',
-                   json_encode($atts, JSON_UNESCAPED_UNICODE), $acct, (int)$uid]);
+                   json_encode($atts, JSON_UNESCAPED_UNICODE),
+                   gmail_addr_csv($h->to ?? []), gmail_addr_csv($h->cc ?? []), $acct, (int)$uid]);
     return true;
 }
 

@@ -30,7 +30,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
   .form { display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:var(--bg); border:1px solid var(--line);
           border-radius:12px; padding:12px 14px; margin-bottom:14px; }
   .form .fname { flex:1; min-width:150px; }
-  .form .fdev, .form .fops { flex:2; min-width:200px; }
+  .form .fdev, .form .fops, .form .flog { flex:2; min-width:200px; }
   .form .fmode { font-size:13px; color:var(--muted); font-weight:600; margin-right:2px; }
   .form .fchk { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--muted); white-space:nowrap; }
   .form .fchk input { width:16px; height:16px; }
@@ -77,6 +77,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     <datalist id="verlist"></datalist>
     <input class="fdev" id="fdev" type="text" placeholder="개발 URL">
     <input class="fops" id="fops" type="text" placeholder="운영 URL">
+    <input class="flog" id="flog" type="text" placeholder="로그 관리 URL">
     <label class="fchk"><input type="checkbox" id="fact" checked> 사용</label>
     <button class="primary" id="save">추가</button>
     <button id="cancel" type="button" style="display:none">취소</button>
@@ -119,15 +120,16 @@ function render(){
   const box = $("list");
   if(!list.length){ box.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
   box.innerHTML = `<table><thead><tr>
-      <th style="width:22%">대학명</th><th style="width:7%">버전</th>
-      <th style="width:25%">개발 URL</th><th style="width:25%">운영 URL</th>
-      <th style="width:8%">사용</th><th style="width:13%">관리</th>
+      <th style="width:20%">대학명</th><th style="width:6%">버전</th>
+      <th style="width:20%">개발 URL</th><th style="width:20%">운영 URL</th><th style="width:18%">로그 관리</th>
+      <th style="width:6%">사용</th><th style="width:10%">관리</th>
     </tr></thead><tbody>` +
     list.map(s=>`<tr${s.active?'':' class="off"'}>
       <td class="name">${esc(s.name)}</td>
       <td><span class="vtag">${esc(s.ver)}</span></td>
       <td>${s.dev?`<a class="link" href="${escA(s.dev)}" target="_blank" rel="noopener">${esc(s.dev)}</a>`:'<span class="muted">—</span>'}</td>
       <td>${s.ops?`<a class="link" href="${escA(s.ops)}" target="_blank" rel="noopener">${esc(s.ops)}</a>`:'<span class="muted">—</span>'}</td>
+      <td>${s.log?`<a class="link" href="${escA(s.log)}" target="_blank" rel="noopener">${esc(s.log)}</a>`:'<span class="muted">—</span>'}</td>
       <td><button class="tgl${s.active?' on':''}" data-id="${s.id}" data-a="${s.active?0:1}">${s.active?'사용':'미사용'}</button></td>
       <td class="act"><button class="edit" data-id="${s.id}">수정</button><button class="del" data-id="${s.id}">삭제</button></td>
     </tr>`).join("") + `</tbody></table>`;
@@ -138,19 +140,19 @@ function render(){
 function startEdit(id){
   const s = DATA.find(x=>x.id===id); if(!s) return;
   editId = id;
-  $("fname").value=s.name; $("fver").value=s.ver||""; $("fdev").value=s.dev||""; $("fops").value=s.ops||""; $("fact").checked=!!s.active;
+  $("fname").value=s.name; $("fver").value=s.ver||""; $("fdev").value=s.dev||""; $("fops").value=s.ops||""; $("flog").value=s.log||""; $("fact").checked=!!s.active;
   $("fmode").textContent="수정"; $("save").textContent="저장"; $("cancel").style.display="";
   $("fname").focus(); window.scrollTo({top:0,behavior:"smooth"});
 }
 function resetForm(){
   editId=null;
-  $("fname").value=""; $("fdev").value=""; $("fops").value=""; $("fact").checked=true;
+  $("fname").value=""; $("fdev").value=""; $("fops").value=""; $("flog").value=""; $("fact").checked=true;
   $("fmode").textContent="추가"; $("save").textContent="추가"; $("cancel").style.display="none";
 }
 async function save(){
   const name=$("fname").value.trim();
   if(!name){ alert("대학명을 입력하세요."); $("fname").focus(); return; }
-  const body={ action: editId?"update":"create", id:editId, name, ver:$("fver").value.trim(), dev:$("fdev").value.trim(), ops:$("fops").value.trim(), active:$("fact").checked?1:0 };
+  const body={ action: editId?"update":"create", id:editId, name, ver:$("fver").value.trim(), dev:$("fdev").value.trim(), ops:$("fops").value.trim(), log:$("flog").value.trim(), active:$("fact").checked?1:0 };
   $("save").disabled=true;
   try{
     const j = await (await fetch("schools.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})).json();
@@ -181,6 +183,7 @@ $("cancel").addEventListener("click", resetForm);
 $("search").addEventListener("input", render);
 $("fname").addEventListener("keydown", e=>{ if(e.key==="Enter") save(); });
 $("fops").addEventListener("keydown", e=>{ if(e.key==="Enter") save(); });
+$("flog").addEventListener("keydown", e=>{ if(e.key==="Enter") save(); });
 buildVers();
 load();
 </script>

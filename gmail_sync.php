@@ -107,6 +107,26 @@ function gmail_sync_pass() {
             if ($newNos) {
                 $out['added'] = $upsert(imap_fetch_overview($im, implode(',', $newNos)) ?: []);
                 gmeta_set('gmail_last_uid', $maxUid());
+                // 새 메일 대화 ID(thrid) 즉시 채우기 → 기존 대화와 바로 합쳐져 보이게 (변경 마커 올리기 전에)
+                if ($out['added'] > 0) {
+                    try {
+                        $nu = $pdo->prepare("SELECT uid FROM gmail_mails WHERE account = ? AND thrid IS NULL ORDER BY udate DESC LIMIT 300");
+                        $nu->execute([$acct]);
+                        $nuids = $nu->fetchAll(PDO::FETCH_COLUMN);
+                        if ($nuids) {
+                            $raw = new GmailRaw();
+                            $map = $raw->thridMap(implode(',', $nuids));
+                            $raw->close();
+                            if ($map) {
+                                $st = $pdo->prepare("UPDATE gmail_mails SET thrid = ? WHERE account = ? AND uid = ?");
+                                $pdo->beginTransaction();
+                                foreach ($nuids as $u) if (isset($map[$u])) $st->execute([$map[$u], $acct, $u]);   // 누락분은 NULL 유지 → 예열2가 재시도
+                                $pdo->commit();
+                                $out['thrid_new'] = count(array_intersect_key(array_flip($nuids), $map));
+                            }
+                        }
+                    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); /* 실패해도 예열2가 이어받음 */ }
+                }
             }
             // ---- 읽음 플래그 갱신: 서버 UNSEEN 집합과 DB 를 맞춘다 (1콜) ----
             $unseen = imap_search($im, 'UNSEEN', SE_UID) ?: [];
@@ -161,13 +181,26 @@ function gmail_sync_pass() {
                 }
             }
             // ---- 예열 1: 최근 메일 본문 미리 수집 → 열람 시 IMAP 없이 즉시 표시 ----
-            $q = $pdo->prepare("SELECT uid FROM gmail_mails WHERE account = ? AND body_html IS NULL ORDER BY udate DESC LIMIT 15");
+            $q = $pdo->prepare("SELECT uid FROM gmail_mails WHERE account = ? AND body_html IS NULL ORDER BY udate DESC LIMIT 40");
             $q->execute([$acct]);
             $pre = 0;
             foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $u) {
                 if (gmail_fill_body($im, $pdo, $acct, $u)) $pre++;
             }
             $out['prefetched'] = $pre;
+            // ---- 예열 1-2: 최근 메일 To/Cc 헤더 미리 수집 → 전체답장 즉시 계산 (본문은 이미 있고 hdr 만 없는 것) ----
+            $q = $pdo->prepare("SELECT uid FROM gmail_mails WHERE account = ? AND hdr_to IS NULL ORDER BY udate DESC LIMIT 80");
+            $q->execute([$acct]);
+            $hu = 0;
+            $stH = $pdo->prepare("UPDATE gmail_mails SET hdr_to = ?, hdr_cc = ? WHERE account = ? AND uid = ?");
+            foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $u) {
+                $mno = imap_msgno($im, (int)$u);
+                if ($mno < 1) { $stH->execute(['', '', $acct, $u]); continue; }   // 없는 메일도 '' 마킹(재조회 방지)
+                $hh = imap_headerinfo($im, $mno);
+                $stH->execute([gmail_addr_csv($hh->to ?? []), gmail_addr_csv($hh->cc ?? []), $acct, $u]);
+                $hu++;
+            }
+            $out['hdr_filled'] = $hu;
         }
 
         imap_close($im);
@@ -187,7 +220,7 @@ function gmail_sync_pass() {
                         $map = $raw->thridMap(implode(',', $tUids));
                         $st = $pdo->prepare("UPDATE gmail_mails SET thrid = ? WHERE account = ? AND uid = ?");
                         $pdo->beginTransaction();
-                        foreach ($tUids as $u) $st->execute([$map[$u] ?? '0', $acct, $u]);   // 0=응답 없음(삭제 등)
+                        foreach ($tUids as $u) if (isset($map[$u])) $st->execute([$map[$u], $acct, $u]);   // 놓친 건 NULL 유지 → 다음 sync 재시도(삭제분은 삭제동기화가 정리). 잘못된 0 마킹으로 대화 분리 방지
                         $pdo->commit();
                         $out['thrid_filled'] = count($tUids);
                     }

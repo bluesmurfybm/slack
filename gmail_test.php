@@ -120,12 +120,18 @@ function reply_targets($uid, $mode) {
         return array_values(array_unique($out));
     };
     $to = $collect(!empty($h->reply_to) ? $h->reply_to : ($h->from ?? []));   // 답장: 보낸사람(reply-to 우선)
+    if (!$to) $to = $collect($h->to ?? []);               // 내가 보낸 메일(from=나 → 제외됨) → 원래 받는사람에게 답장
     $cc = [];
     if ($mode === 'all') {                                 // 전체답장: 원본 To 합류, Cc 유지
         $to = array_values(array_unique(array_merge($to, $collect($h->to ?? []))));
         $cc = array_values(array_diff($collect($h->cc ?? []), $to));
     }
     if (!$to && $cc) { $to = $cc; $cc = []; }
+    if (!$to) {                                           // 나에게만 보낸 메일 등 → 나에게 답장(빈 수신자 방지)
+        $selfTo = [];
+        foreach ((array)($h->to ?? []) as $a) if (!empty($a->mailbox) && !empty($a->host)) $selfTo[] = strtolower($a->mailbox . '@' . $a->host);
+        $to = $selfTo ? array_values(array_unique($selfTo)) : [$me];
+    }
     $subjO = gmail_dec_header($h->subject ?? '');
     $subject = preg_match('/^\s*re\s*:/i', $subjO) ? $subjO : 'Re: ' . $subjO;
     // Gmail 스레드 연결 헤더 (In-Reply-To / References)
@@ -143,7 +149,44 @@ function reply_targets($uid, $mode) {
 if (isset($_GET['replyinfo'])) {
     header('Content-Type: application/json; charset=utf-8');
     try {
-        [$to, $cc, $subject] = reply_targets((int)$_GET['replyinfo'], ($_GET['mode'] ?? 'reply') === 'all' ? 'all' : 'reply');
+        $uid  = (int)$_GET['replyinfo'];
+        $mode = ($_GET['mode'] ?? 'reply') === 'all' ? 'all' : 'reply';
+        $me   = gmail_owner();
+        // 빠른 경로: DB(sender/subject + hdr_to/hdr_cc)로 IMAP 접속 없이 즉시 계산 → 프리필 지연 제거
+        $st = $pdo->prepare("SELECT sender, subject, hdr_to, hdr_cc FROM gmail_mails WHERE account = ? AND uid = ?");
+        $st->execute([$me, $uid]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        if ($r) {
+            $emailOf = function ($s) {
+                if (preg_match('/<([^>]+@[^>]+)>/', (string)$s, $m)) return strtolower(trim($m[1]));
+                if (preg_match('/([^\s<>]+@[^\s<>]+)/', (string)$s, $m)) return strtolower(trim($m[1]));
+                return '';
+            };
+            $csv = fn($x) => array_values(array_filter(array_map('trim', explode(',', (string)$x))));
+            $sender = $emailOf($r['sender']);
+            $isSent = ($sender !== '' && $sender === $me);   // 내가 보낸 메일
+            $hasHdr = ($r['hdr_to'] !== null);               // To/Cc 수집됨
+            // 받은 메일 + 일반답장은 sender 만으로 즉시(hdr 불필요). 그 외(전체답장/내가보낸메일)는 hdr 필요.
+            if ((!$isSent && $mode === 'reply') || $hasHdr) {
+                $hdrTo = $csv($r['hdr_to']); $hdrCc = $csv($r['hdr_cc']);
+                // 받는사람 기본: 내가 보낸 메일이면 '원래 받는사람', 받은 메일이면 '보낸사람'
+                $to = $isSent ? $hdrTo : ($sender !== '' ? [$sender] : []);
+                $cc = [];
+                if ($mode === 'all') { $to = array_merge($to, $hdrTo); $cc = $hdrCc; }
+                $to = array_values(array_unique(array_filter($to, fn($e) => $e !== '')));
+                $toF = array_values(array_filter($to, fn($e) => $e !== $me));
+                $to = $toF ?: $to;   // 나에게만 보낸 메일 등 → 나 제외 시 비면 나에게 답장
+                $cc = array_values(array_diff(array_filter(array_unique($cc), fn($e) => $e !== '' && $e !== $me), $to));
+                if ($to || $cc) {
+                    $subjO = (string)$r['subject'];
+                    $subject = preg_match('/^\s*re\s*:/i', $subjO) ? $subjO : 'Re: ' . $subjO;
+                    echo json_encode(['ok' => true, 'to' => $to, 'cc' => $cc, 'subject' => $subject], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+            }
+            // hdr 미수집(내가 보낸 메일 등) 또는 계산 결과 빔 → IMAP 폴백
+        }
+        [$to, $cc, $subject] = reply_targets($uid, $mode);   // 폴백(정확 계산)
         echo json_encode(['ok' => true, 'to' => $to, 'cc' => $cc, 'subject' => $subject], JSON_UNESCAPED_UNICODE);
     } catch (Throwable $e) {
         echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
@@ -350,6 +393,29 @@ if (isset($_GET['label_set']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+/* ---------- 백그라운드 읽음 처리: ?markseen=<uid,uid,...> (fire-and-forget) ----------
+   본문이 이미 캐시된 대화를 열 때, 화면 표시는 IMAP 대기 없이 즉시 하고
+   Gmail 원본 \Seen 반영만 여기서 뒤늦게(비동기) 처리한다. */
+if (isset($_GET['markseen'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    ignore_user_abort(true);
+    $uids = array_values(array_filter(array_map('intval', explode(',', (string)$_GET['markseen']))));
+    if ($uids) {
+        try {
+            [$im, $err] = gmail_open();
+            if ($im) {
+                imap_setflag_full($im, implode(',', $uids), '\\Seen', ST_UID);
+                imap_close($im);
+                $ph = implode(',', array_fill(0, count($uids), '?'));
+                $pdo->prepare("UPDATE gmail_mails SET seen = 1 WHERE account = ? AND uid IN ($ph)")
+                    ->execute(array_merge([gmail_owner()], $uids));
+            }
+        } catch (Throwable $e) { /* 실패해도 다음 동기화가 재조정 */ }
+    }
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
 /* ---------- 대화(스레드) 조회: ?thread=<uid> — Gmail 처럼 같은 대화를 시간순으로 ---------- */
 if (isset($_GET['thread'])) {
     header('Content-Type: application/json; charset=utf-8');
@@ -391,7 +457,8 @@ if (isset($_GET['thread'])) {
         unset($m);
         $needB = array_filter($mails, fn($m) => $m['body_html'] === null);
         $needS = array_filter($mails, fn($m) => !(int)$m['seen']);
-        if ($needB || $needS) {
+        $deferSeen = [];
+        if ($needB) {                                      // 본문 미수집분 있음 → IMAP 접속 불가피
             [$im, $err] = gmail_open();
             if ($im) {
                 foreach ($mails as &$m) {
@@ -402,25 +469,39 @@ if (isset($_GET['thread'])) {
                         $m['body'] = gmail_body_text($plain, $html);
                         $m['body_html'] = ($html !== '') ? gmail_sanitize_html($html) : '';
                         $m['atts'] = json_encode($atts, JSON_UNESCAPED_UNICODE);
-                        $pdo->prepare("UPDATE gmail_mails SET body = ?, body_html = ?, atts = ? WHERE account = ? AND uid = ?")
-                            ->execute([$m['body'], $m['body_html'], $m['atts'], $acct, $m['uid']]);
+                        $hh = imap_headerinfo($im, $msgno);   // 전체답장용 To/Cc 저장
+                        $pdo->prepare("UPDATE gmail_mails SET body = ?, body_html = ?, atts = ?, hdr_to = ?, hdr_cc = ? WHERE account = ? AND uid = ?")
+                            ->execute([$m['body'], $m['body_html'], $m['atts'], gmail_addr_csv($hh->to ?? []), gmail_addr_csv($hh->cc ?? []), $acct, $m['uid']]);
                     } else { $m['body'] = '(메일함에서 찾을 수 없습니다 — 삭제/이동됨)'; $m['body_html'] = ''; }
                 }
                 unset($m);
-                if ($needS) {                              // 대화 열람 = 대화 전체 읽음 (Gmail 과 동일)
+                if ($needS) {                              // 이왕 접속했으니 \Seen 도 함께 처리
                     $set = implode(',', array_map(fn($m) => (int)$m['uid'], $needS));
                     imap_setflag_full($im, $set, '\\Seen', ST_UID);
                     $pdo->exec("UPDATE gmail_mails SET seen = 1 WHERE account = " . $pdo->quote($acct) . " AND uid IN ($set)");
                 }
                 imap_close($im);
-            } elseif ($needB) { echo json_encode(['ok' => false, 'error' => $err]); exit; }
+            } else { echo json_encode(['ok' => false, 'error' => $err]); exit; }
+        } elseif ($needS) {
+            // 본문이 모두 캐시됨 → IMAP 접속으로 표시를 지연시키지 않는다.
+            // DB 만 즉시 읽음 처리하고, Gmail \Seen 은 클라이언트가 백그라운드(?markseen)로 요청 → 화면은 바로 뜸
+            $set = implode(',', array_map(fn($m) => (int)$m['uid'], $needS));
+            $pdo->exec("UPDATE gmail_mails SET seen = 1 WHERE account = " . $pdo->quote($acct) . " AND uid IN ($set)");
+            foreach ($mails as &$m) { if (!(int)$m['seen']) { $m['seen'] = 1; $deferSeen[] = (int)$m['uid']; } }
+            unset($m);
         }
-        // 내가 보낸/전달한 메일(보낸편지함 사본)도 대화에 포함 — Gmail 대화 화면과 동일
+        // 내가 보낸/전달한 메일(보낸편지함 사본)도 대화에 포함 — Gmail 대화 화면과 동일.
+        // 단, 받은편지함에 없는 사본이 있을 때만 실시간 IMAP 병합(자기발신 등 전부 중복이면 스킵 → 상세 즉시 표시)
         if ($thrid) {
-            try { $mails = array_merge($mails, gmail_sent_in_thread($thrid, $mails)); } catch (Throwable $e) { /* 실패해도 받은 메일은 표시 */ }
-            usort($mails, fn($a, $b) => (int)$a['udate'] <=> (int)$b['udate']);
+            $sq = $pdo->prepare("SELECT COUNT(*) FROM gmail_sent s WHERE s.account = ? AND s.thrid = ?
+                                 AND NOT EXISTS (SELECT 1 FROM gmail_mails m WHERE m.account = s.account AND m.thrid = s.thrid AND m.udate = s.udate)");
+            $sq->execute([$acct, $thrid]);
+            if ((int)$sq->fetchColumn() > 0) {
+                try { $mails = array_merge($mails, gmail_sent_in_thread($thrid, $mails)); } catch (Throwable $e) { /* 실패해도 받은 메일은 표시 */ }
+                usort($mails, fn($a, $b) => (int)$a['udate'] <=> (int)$b['udate']);
+            }
         }
-        $out = ['ok' => true, 'subject' => $mails ? $mails[0]['subject'] : '', 'mails' => []];
+        $out = ['ok' => true, 'subject' => $mails ? $mails[0]['subject'] : '', 'deferSeen' => $deferSeen, 'mails' => []];
         foreach ($mails as $m) {
             $out['mails'][] = ['uid' => (int)$m['uid'], 'sender' => $m['sender'],
                 'datef' => $m['udate'] ? date('Y-m-d H:i', $m['udate']) : '',
@@ -457,8 +538,9 @@ if (isset($_GET['body'])) {
                     $row['body'] = gmail_body_text($plain, $html);
                     $row['body_html'] = ($html !== '') ? gmail_sanitize_html($html) : '';   // ''=plain 전용 표시
                     $row['atts'] = json_encode($atts, JSON_UNESCAPED_UNICODE);
-                    $pdo->prepare("UPDATE gmail_mails SET body = ?, body_html = ?, atts = ? WHERE account = ? AND uid = ?")
-                        ->execute([$row['body'], $row['body_html'], $row['atts'], gmail_owner(), $uid]);
+                    $hh = imap_headerinfo($im, $msgno);   // 전체답장용 To/Cc 저장
+                    $pdo->prepare("UPDATE gmail_mails SET body = ?, body_html = ?, atts = ?, hdr_to = ?, hdr_cc = ? WHERE account = ? AND uid = ?")
+                        ->execute([$row['body'], $row['body_html'], $row['atts'], gmail_addr_csv($hh->to ?? []), gmail_addr_csv($hh->cc ?? []), gmail_owner(), $uid]);
                 } else { $row['body'] = '(메일함에서 찾을 수 없습니다 — 삭제/이동됨)'; }
             }
             if ($needSeen) {                               // Gmail 원본도 읽음 처리
@@ -482,8 +564,9 @@ if ($nRaw === '' && isset($_COOKIE['gm_n'])) $nRaw = (string)$_COOKIE['gm_n'];
 if ($nRaw === 'def') { $nRaw = ''; setcookie('gm_n', '', time() - 3600, '/'); }
 elseif ($nRaw !== '') setcookie('gm_n', $nRaw, time() + 86400 * 365, '/');
 $showAll = ($nRaw === 'all');
+$defLimit = max(1, (int)($g['limit'] ?: 30));   // config 기본 개수(이후 $g 가 다른 용도로 덮어써지므로 미리 보관)
 $perPage = $showAll ? PHP_INT_MAX
-         : ((int)$nRaw > 0 ? min(2000, (int)$nRaw) : max(1, (int)($g['limit'] ?: 30)));
+         : ((int)$nRaw > 0 ? min(2000, (int)$nRaw) : $defLimit);
 $page        = max(0, (int)($_GET['p'] ?? 1) - 1);         // URL 은 1기준, 내부는 0기준
 /* 안읽음 우선: ?unread=1|0. 미지정 시 쿠키(마지막 선택값) 기억 */
 $unreadParam = $_GET['unread'] ?? null;
@@ -547,7 +630,10 @@ if ($gs) {
             WHERE account = ?$flt AND (thrid IN ($ph) OR uid IN ($ph))
             GROUP BY g HAVING g IN ($ph)
         ) x
-        LEFT JOIN (SELECT thrid, COUNT(*) AS scnt FROM gmail_sent WHERE account = ? AND thrid IN ($ph) GROUP BY thrid) sc
+        LEFT JOIN (SELECT s.thrid, COUNT(*) AS scnt FROM gmail_sent s
+                   WHERE s.account = ? AND s.thrid IN ($ph)
+                     AND NOT EXISTS (SELECT 1 FROM gmail_mails m WHERE m.account = s.account AND m.thrid = s.thrid AND m.udate = s.udate)
+                   GROUP BY s.thrid) sc   -- 받은편지함과 중복(자기발신 사본)은 카운트 제외
           ON sc.thrid = x.g");
     $st->execute(array_merge([$acct], $fp, $gs, $gs, $gs, [$acct], $gs));
     $agg = [];
@@ -940,7 +1026,7 @@ $mkUrl = function (array $over) use ($keepArr) {
     · 동기화 <?= e(substr((string)$lastSync, 11, 5) ?: $lastSync) ?>
   </span>
   <select id="psel" class="toggle<?= $nRaw !== '' ? ' on' : '' ?>" title="페이지당 표시 개수">
-    <option value="">개수: 기본(<?= (int)($g['limit'] ?: 30) ?>)</option>
+    <option value="">개수: 기본(<?= $defLimit ?>)</option>
     <?php foreach ([50, 100, 200, 300, 400, 500, 1000] as $nOpt): ?>
     <option value="<?= $nOpt ?>"<?= (int)$nRaw === $nOpt ? ' selected' : '' ?>><?= $nOpt ?>개</option>
     <?php endforeach; ?>
@@ -1192,9 +1278,12 @@ function openCompose(body, foot, lastMail, mode){
   (async () => {
     try {
       const j = await (await fetch("?replyinfo=" + lastMail.uid + "&mode=" + mode)).json();
-      if (j.ok) { toInp.value = j.to.join(", "); ccInp.value = j.cc.join(", "); }
-      else { toInp.placeholder = "(수신자 계산 실패 — 직접 입력)"; }
+      if (j.ok) {
+        toInp.value = (j.to || []).join(", "); ccInp.value = (j.cc || []).join(", ");
+        toInp.placeholder = (j.to && j.to.length) ? "" : "받는사람 직접 입력 (쉼표로 여러 명)";
+      } else { toInp.placeholder = "(수신자 계산 실패 — 직접 입력)"; }
     } catch (e) { toInp.placeholder = "(수신자 계산 실패 — 직접 입력)"; }
+    ccInp.placeholder = "";   // 로딩 표시 해제
     toInp.disabled = false; ccInp.disabled = false;
   })();
   const ta = document.createElement("textarea"); ta.placeholder = "답장 내용을 입력하세요…";
@@ -1308,6 +1397,7 @@ function bindRows(scope){
     const j = await (await fetch("?thread=" + mail.dataset.uid)).json();
     if (!j.ok || !j.mails.length) { body.innerHTML = '<div class="mail-load">(본문을 가져오지 못했습니다)</div>'; delete body.dataset.loaded; return; }
     buildThread(mail, body, j);               // 열람 = 대화 전체 읽음 처리(Gmail 동일)
+    if (j.deferSeen && j.deferSeen.length) fetch("?markseen=" + j.deferSeen.join(","), {cache:"no-store"});   // \Seen 은 백그라운드로(화면 지연 없음)
     loadLabels(mail, body);                    // 라벨은 본문 뒤에 비동기로
   } catch (e) { body.innerHTML = '<div class="mail-load">(본문을 가져오지 못했습니다)</div>'; delete body.dataset.loaded; }
 }));

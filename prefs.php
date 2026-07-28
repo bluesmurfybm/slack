@@ -12,7 +12,7 @@ session_release();   // 세션 잠금 즉시 해제
 
 header('Content-Type: application/json; charset=utf-8');
 
-$ALLOWED = ['filter_presets', 'filters', 'view'];   // 저장 허용 키
+$ALLOWED = ['filter_presets', 'filters', 'view', 'hdrbtns', 'uiprefs'];   // 저장 허용 키
 $user = current_user();
 
 try {

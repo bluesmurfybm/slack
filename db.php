@@ -120,19 +120,18 @@ function db() {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `user_reads` (
             `user_id`    VARCHAR(32)  NOT NULL COMMENT '읽은 사용자 Slack ID',
-            `user_name`  VARCHAR(120) NULL COMMENT '읽은 사용자 이름',
             `request_id` VARCHAR(32)  NOT NULL COMMENT 'requests.id',
             `read_at`    DATETIME     NOT NULL,
             PRIMARY KEY (`user_id`, `request_id`),
             KEY `idx_user` (`user_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
-    // 기존 user_reads 마이그레이션: user_name 없으면 추가
+    // 기존 user_reads 마이그레이션: user_name 컬럼 있으면 제거
     $hasUN = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
                             WHERE TABLE_SCHEMA=? AND TABLE_NAME='user_reads' AND COLUMN_NAME='user_name'");
     $hasUN->execute([$dbName]);
-    if (!$hasUN->fetchColumn()) {
-        $pdo->exec("ALTER TABLE `user_reads` ADD COLUMN `user_name` VARCHAR(120) NULL COMMENT '읽은 사용자 이름' AFTER `user_id`");
+    if ($hasUN->fetchColumn()) {
+        $pdo->exec("ALTER TABLE `user_reads` DROP COLUMN `user_name`");
     }
 
     // 5) 사용자별 고정 상태 (행 존재 = 고정). 고정 항목은 목록 최상단 출력
@@ -176,6 +175,7 @@ function db() {
             `ver`        VARCHAR(20)  NOT NULL DEFAULT '' COMMENT '버전(3.5/3.9/4.5 등)',
             `dev`        VARCHAR(500) NOT NULL DEFAULT '' COMMENT '개발 URL',
             `ops`        VARCHAR(500) NOT NULL DEFAULT '' COMMENT '운영 URL',
+            `log`        VARCHAR(500) NOT NULL DEFAULT '' COMMENT '로그 관리 URL',
             `active`     TINYINT(1)   NOT NULL DEFAULT 1 COMMENT '1=사용,0=미사용',
             `created_at` DATETIME     NULL,
             `updated_at` DATETIME     NULL,
@@ -190,6 +190,13 @@ function db() {
     $hasActive->execute([$dbName]);
     if (!$hasActive->fetchColumn()) {
         $pdo->exec("ALTER TABLE `schools` ADD COLUMN `active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `ops`");
+    }
+    // 로그 관리 URL 컬럼 마이그레이션
+    $hasLog = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS
+                             WHERE TABLE_SCHEMA=? AND TABLE_NAME='schools' AND COLUMN_NAME='log'");
+    $hasLog->execute([$dbName]);
+    if (!$hasLog->fetchColumn()) {
+        $pdo->exec("ALTER TABLE `schools` ADD COLUMN `log` VARCHAR(500) NOT NULL DEFAULT '' COMMENT '로그 관리 URL' AFTER `ops`");
     }
 
     // schools 최초 자동 시딩: git clone 후 첫 실행 시 seed 파일로 채움 (DB당 1회만)
