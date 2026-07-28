@@ -5,8 +5,8 @@
     :root { --bg:#1a1d21; --bg2:#222529; --line:#383a3f; --txt:#e8e8e8; --muted:#9aa0a6; --hint:#6b7177; --info:#85b7eb; --info-bg:#0c2740; }
   }
   * { box-sizing:border-box; }
-  body { font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; background:var(--bg2); color:var(--txt); margin:0; padding:24px; }
-  .wrap { width:100%; max-width:1600px; margin:0 auto; }   /* 창 크기에 맞춰 가변(최대 1600px) */
+  body { font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; background:var(--bg2); color:var(--txt); margin:0; }
+  .wrap { width:100%; max-width:1600px; margin:0 auto; padding-top:24px;}   /* 창 크기에 맞춰 가변(최대 1600px) */
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
   .head h1 { font-size:18px; font-weight:600; margin:0; display:flex; align-items:center; gap:10px; }
   .filters { display:flex; gap:8px; align-items:center; }   /* 제목 옆 오른쪽 정렬(부모 space-between) */

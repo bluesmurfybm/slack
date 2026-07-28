@@ -11,7 +11,7 @@
   --muted:#63719A;
   --shadow:0 1px 2px rgba(16,35,90,.05), 0 12px 32px -18px rgba(16,35,90,.35);
   --sans:'Pretendard',system-ui,sans-serif;
-  --disp:'Space Grotesk','Pretendard',sans-serif;
+  --disp:'Space Grotesk','Pretendard',system-ui,sans-serif;
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -51,7 +51,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15p
 .login-hint code{background:#EEF3FB;padding:2px 6px;border-radius:5px;color:var(--blue-deep);font-size:11.5px}
 
 /* ---------- APP SHELL ---------- */
-.topbar{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.topbar{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:200}
 .topbar-in{max-width:1600px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .topbar .logo{font-size:21px}
 .top-right{display:flex;align-items:center;gap:10px}
