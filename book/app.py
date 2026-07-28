@@ -261,6 +261,9 @@ def row_to_dict(row):
 app = FastAPI(title="도서구매신청")
 init_db()
 app.mount("/styles", StaticFiles(directory=os.path.join(BASE, "styles")), name="styles")
+# 포털(root)의 styles/ 를 그대로 서빙 — topbar.css 공통 원본을 book이 복사하지 않고 직접 참조.
+# book은 SSO 쿠키 특성상 어차피 포털과 같은 호스트에 있어야 하므로 추가 결합은 아님.
+app.mount("/shared-styles", StaticFiles(directory=os.path.join(BASE, "..", "styles")), name="shared-styles")
 
 
 # ---------- 화면 ----------

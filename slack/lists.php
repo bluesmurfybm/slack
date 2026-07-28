@@ -23,6 +23,7 @@ header('Pragma: no-cache');
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="styles/header.css">
+<link rel="stylesheet" href="styles/common.css">
 <link rel="stylesheet" href="styles/lists.css">
 </head>
 <body>

@@ -1,6 +1,5 @@
-  :root { --bg:#fff; --bg2:#f6f7f8; --line:#e3e5e8; --txt:#1f2328; --muted:#6e7781; --hint:#8b949e; --info:#0c447c; }
-  @media (prefers-color-scheme: dark){ :root{ --bg:#1a1d21; --bg2:#222529; --line:#383a3f; --txt:#e8e8e8; --muted:#9aa0a6; --hint:#6b7177; --info:#85b7eb; } }
-  *{box-sizing:border-box;} body{font-family:-apple-system,"Malgun Gothic",sans-serif;background:var(--bg2);color:var(--txt);margin:0;padding:24px;}
+  /* :root/box-sizing/body 기본, .empty 등은 common.css(공통) 참고. --info-bg는 이 페이지에서 안 씀 */
+  body{padding:24px;}
   .wrap{max-width:920px;margin:0 auto;}
   .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
   .head h1{font-size:18px;margin:0;} .tag{font-size:11px;background:#fff0e0;color:#a85b00;border-radius:6px;padding:2px 8px;}
@@ -25,4 +24,3 @@
   .sfill{height:100%;transition:width .45s cubic-bezier(.2,.8,.2,1);min-width:2px;}
   .sval{flex:none;width:88px;font-size:11px;color:var(--muted);} .sval b{color:var(--txt);}
   .samp{margin:1px 0 8px 130px;font-size:11px;color:var(--hint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .empty{padding:24px;text-align:center;color:var(--muted);}

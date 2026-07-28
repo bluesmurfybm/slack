@@ -1,31 +1,3 @@
-/* 전 모듈 공통 상단바 — blue-iwork 포털 대시보드와 완전히 동일한 스타일.
-   페이지마다 --line/--muted 등을 다른 값으로 재정의해서 쓰므로, 여기서는 var() 대신
-   포털의 실제 색상값을 그대로 박아 써서 항상 포털과 동일하게 보이게 한다. */
-/* 스크롤 유무로 뷰포트 폭이 달라져 topbar-in(가운데 정렬)이 밀리는 것 방지 —
-   슬랙 페이지마다 콘텐츠 높이가 달라 스크롤 유무가 제각각이라 반드시 필요 */
-html{scrollbar-gutter:stable}
-.topbar{background:#FFFFFF;border-bottom:1px solid #E2E9F6;position:sticky;top:0;z-index:200}
-.topbar-in{max-width:1600px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.logo{font-family:'Space Grotesk','Pretendard',system-ui,sans-serif;font-weight:700;letter-spacing:-.01em;color:#0E1A33;display:inline-flex;align-items:baseline;font-size:21px}
-.logo b{color:#1C5DE5;font-weight:700}
-.logo .dash{color:#4C8DFF;margin:0 1px}
-.top-right{display:flex;align-items:center;gap:10px}
-.user-menu{position:relative}
-.user-chip{display:flex;align-items:center;gap:9px;padding:5px 6px 5px 5px;border:1px solid #E2E9F6;
-  border-radius:999px;cursor:pointer;background:#fff;transition:border-color .12s ease;font-family:'Pretendard',system-ui,sans-serif}
-.user-chip:hover{border-color:#4C8DFF}
-.avatar{width:30px;height:30px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
-  font-weight:700;font-size:13px;color:#fff;font-family:'Pretendard',system-ui,sans-serif}
-.user-chip .nm{font-size:13.5px;font-weight:600;color:#16223B;padding-right:2px;font-family:'Pretendard',system-ui,sans-serif}
-.user-caret{font-size:9px;color:#63719A;margin-right:4px;display:inline-block;transition:transform .15s ease}
-.user-menu.open .user-caret{transform:rotate(180deg)}
-.dd-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:190px;background:#fff;
-  border:1px solid #E2E9F6;border-radius:14px;box-shadow:0 1px 2px rgba(16,35,90,.05), 0 12px 32px -18px rgba(16,35,90,.35);
-  padding:6px;opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .12s ease,transform .12s ease;z-index:60;
-  font-family:'Pretendard',system-ui,sans-serif}
-.user-menu.open .dd-menu{opacity:1;visibility:visible;transform:none}
-.dd-menu a{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:9px;
-  font-size:13.5px;color:#16223B;text-decoration:none;white-space:nowrap}
-.dd-menu a:hover{background:#EEF3FB}
-.dd-menu .dd-sep{height:1px;background:#E2E9F6;margin:5px 6px}
-.dd-menu .dd-label{font-size:11px;color:#63719A;padding:6px 11px 2px}
+/* 전 모듈 공통 상단바 — 원본은 styles/topbar.css(포털 루트) 하나뿐.
+   slack/는 포털과 같은 서버 트리이므로 그 파일을 그대로 가져다 쓴다. */
+@import url('../../styles/topbar.css');

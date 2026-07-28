@@ -14,15 +14,11 @@
   --disp:'Space Grotesk','Pretendard',system-ui,sans-serif;
 }
 *{box-sizing:border-box}
-html{scrollbar-gutter:stable}
 html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;font-size: 15px;line-height: 1.5;}
 .hidden{display:none !important}
 
-/* wordmark */
-.logo{font-family:var(--disp);font-weight:700;letter-spacing:-.01em;color:var(--navy);display:inline-flex;align-items:baseline}
-.logo b{color:var(--blue);font-weight:700}
-.logo .dash{color:var(--blue-soft);margin:0 1px}
+/* wordmark — styles/topbar.css 의 공통 .logo 규칙을 그대로 씀(중복 제거) */
 
 /* ---------- LOGIN ---------- */
 #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
@@ -52,28 +48,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15p
 .login-hint code{background:#EEF3FB;padding:2px 6px;border-radius:5px;color:var(--blue-deep);font-size:11.5px}
 
 /* ---------- APP SHELL ---------- */
-.topbar{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:200}
-.topbar-in{max-width:1600px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.topbar .logo{font-size:21px}
-.top-right{display:flex;align-items:center;gap:10px}
-.user-chip{display:flex;align-items:center;gap:9px;padding:5px 6px 5px 5px;border:1px solid var(--line);
-  border-radius:999px;cursor:pointer;background:#fff;transition:border-color .12s ease}
-.user-chip:hover{border-color:var(--blue-soft)}
-.avatar{width:30px;height:30px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
-  font-weight:700;font-size:13px;color:#fff}
-.user-chip .nm{font-size:13.5px;font-weight:600;color:var(--ink);padding-right:2px}
-.user-menu{position:relative}
-.user-caret{font-size:9px;color:var(--muted);margin-right:4px;display:inline-block;transition:transform .15s ease}
-.user-menu.open .user-caret{transform:rotate(180deg)}
-.dd-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:190px;background:#fff;
-  border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:6px;
-  opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .12s ease,transform .12s ease;z-index:60}
-.user-menu.open .dd-menu{opacity:1;visibility:visible;transform:none}
-.dd-menu a{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:9px;
-  font-size:13.5px;color:var(--ink);text-decoration:none;white-space:nowrap}
-.dd-menu a:hover{background:var(--bg)}
-.dd-menu .dd-sep{height:1px;background:var(--line);margin:5px 6px}
-.dd-menu .dd-label{font-size:11px;color:var(--muted);padding:6px 11px 2px}
+/* topbar/드롭다운 스타일은 styles/topbar.css(공통 원본)에서 온다 — index.php가 별도로 link 함 */
 .btn-ghost{font-family:var(--sans);font-size:13px;background:none;border:1px solid var(--line);border-radius:999px;
   padding:8px 15px;cursor:pointer;color:var(--muted)}
 .btn-ghost:hover{border-color:var(--muted);color:var(--ink)}

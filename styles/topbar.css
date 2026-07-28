@@ -1,0 +1,40 @@
+/* 전 모듈(portal/slack/book) 공통 상단바 — 유일한 원본.
+ *  - portal/slack은 같은 서버 트리라 이 파일을 상대경로로 직접 가져다 쓴다
+ *    (portal: styles/topbar.css, slack: ../styles/topbar.css → slack/styles/header.css가 @import).
+ *  - book은 별도 프로세스라 book/app.py가 이 디렉토리를 정적 마운트해서 서빙한다
+ *    (/shared-styles/topbar.css). SSO 쿠키 특성상 book은 어차피 portal과 같은 호스트에
+ *    있어야 하므로 추가 결합이 생기는 건 아니다.
+ *  - 각 페이지가 자체 :root 변수(--line/--muted 등, book은 베이지 테마 등)를 따로 정의하므로
+ *    var() 대신 실제 색상값을 그대로 박아 써서 어디서 로드되든 항상 동일하게 보이게 한다.
+ */
+
+/* 스크롤 유무로 뷰포트 폭이 달라져 topbar-in(가운데 정렬)이 밀리는 것 방지 —
+   페이지마다 콘텐츠 높이가 달라 스크롤 유무가 제각각이라 반드시 필요 */
+html{scrollbar-gutter:stable}
+.topbar{background:#FFFFFF;border-bottom:1px solid #E2E9F6;position:sticky;top:0;z-index:200}
+.topbar-in{max-width:1600px;margin:0 auto;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+/* 워드마크(blue-iwork 로고) — topbar 전용이 아니라 어디서든(로그인 화면 등) 재사용 가능한 일반 규칙 */
+.logo{font-family:'Space Grotesk','Pretendard',system-ui,sans-serif;font-weight:700;letter-spacing:-.01em;color:#0E1A33;display:inline-flex;align-items:baseline}
+.logo b{color:#1C5DE5;font-weight:700}
+.logo .dash{color:#4C8DFF;margin:0 1px}
+.topbar .logo{font-size:21px}
+.topbar .top-right{display:flex;align-items:center;gap:10px}
+.topbar .user-menu{position:relative}
+.topbar .user-chip{display:flex;align-items:center;gap:9px;padding:5px 6px 5px 5px;border:1px solid #E2E9F6;
+  border-radius:999px;cursor:pointer;background:#fff;transition:border-color .12s ease;font-family:'Pretendard',system-ui,sans-serif}
+.topbar .user-chip:hover{border-color:#4C8DFF}
+.topbar .avatar{width:30px;height:30px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:13px;color:#fff;font-family:'Pretendard',system-ui,sans-serif}
+.topbar .user-chip .nm{font-size:13.5px;font-weight:600;color:#16223B;padding-right:2px;font-family:'Pretendard',system-ui,sans-serif}
+.topbar .user-caret{font-size:9px;color:#63719A;margin-right:4px;display:inline-block;transition:transform .15s ease}
+.topbar .user-menu.open .user-caret{transform:rotate(180deg)}
+.topbar .dd-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:190px;background:#fff;
+  border:1px solid #E2E9F6;border-radius:14px;box-shadow:0 1px 2px rgba(16,35,90,.05), 0 12px 32px -18px rgba(16,35,90,.35);
+  padding:6px;opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .12s ease,transform .12s ease;z-index:60;
+  font-family:'Pretendard',system-ui,sans-serif}
+.topbar .user-menu.open .dd-menu{opacity:1;visibility:visible;transform:none}
+.topbar .dd-menu a{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:9px;
+  font-size:13.5px;color:#16223B;text-decoration:none;white-space:nowrap}
+.topbar .dd-menu a:hover{background:#EEF3FB}
+.topbar .dd-menu .dd-sep{height:1px;background:#E2E9F6;margin:5px 6px}
+.topbar .dd-menu .dd-label{font-size:11px;color:#63719A;padding:6px 11px 2px}

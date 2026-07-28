@@ -35,6 +35,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php'];
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="styles/topbar.css">
 <link rel="stylesheet" href="styles/default.css">
 </head>
 <body>

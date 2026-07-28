@@ -1,0 +1,74 @@
+/* slack 5개 페이지(lists/difficulty/similar/category/schools_admin) 공통 스타일.
+ * 이전에 인라인 <style>을 페이지별로 각자 뽑아내면서 그대로 복붙된 부분들 — 여기 한 곳으로 통합.
+ * 값이 페이지마다 조금이라도 다른 규칙(.head, .listbox, .links 등)은 일부러 그대로 각 페이지
+ * css에 남겨뒀다(강제로 맞추면 그 페이지만 미묘하게 레이아웃이 바뀔 수 있어서).
+ * login.css는 로그인 전용의 완전히 다른 레이아웃이라 이 통합에서 제외.
+ */
+:root { --bg:#fff; --bg2:#f6f7f8; --line:#e3e5e8; --txt:#1f2328; --muted:#6e7781; --hint:#8b949e; --info:#0c447c; --info-bg:#e6f1fb; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#1a1d21; --bg2:#222529; --line:#383a3f; --txt:#e8e8e8; --muted:#9aa0a6; --hint:#6b7177; --info:#85b7eb; --info-bg:#0c2740; }
+}
+* { box-sizing:border-box; }
+body { font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif; background:var(--bg2); color:var(--txt); margin:0; }
+
+/* 배지/에러/빈 상태/툴바 */
+.badge { font-size:12px; color:var(--info); background:var(--info-bg); padding:2px 10px; border-radius:8px; }
+.err { color:#e24b4a; padding:16px; }
+.empty { padding:24px; text-align:center; color:var(--muted); }
+.toolbar { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-bottom:14px; flex-wrap:wrap; }
+
+/* 다중선택 필터 드롭다운 */
+.ms { position:relative; display:inline-block; }
+.ms-btn { height:32px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; cursor:pointer; white-space:nowrap; }
+.ms-btn.active { border-color:var(--info); color:var(--info); background:var(--info-bg); }
+.ms-n { display:inline-block; min-width:16px; text-align:center; background:var(--info); color:#fff; border-radius:8px; font-size:11px; padding:0 5px; margin-left:2px; }
+.ms-ar { color:var(--muted); font-size:10px; }
+.ms-menu { position:absolute; z-index:50; top:36px; right:0; left:auto; min-width:170px; max-height:320px; overflow-y:auto;
+           background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px; box-shadow:0 6px 22px rgba(0,0,0,.18); }
+.ms-menu[hidden] { display:none; }
+.ms-item { display:flex; align-items:center; gap:8px; padding:5px 7px; border-radius:6px; font-size:13px; cursor:pointer; white-space:nowrap; }
+.ms-item:hover { background:var(--bg2); }
+.ms-item input { width:15px; height:15px; margin:0; cursor:pointer; }
+.ms-empty { font-size:12px; color:var(--muted); padding:6px 7px; }
+
+/* 레코드 행 공통 */
+.row { display:flex; align-items:center; gap:12px; padding:11px 16px; cursor:pointer; border-bottom:1px solid var(--line); }
+.row:hover { background:var(--bg2); }
+.title { flex:1; min-width:0; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.date { font-size:12px; color:var(--hint); flex:none; white-space:nowrap; }
+.st { font-size:11px; padding:2px 9px; border-radius:8px; white-space:nowrap; }
+#updated { font-size:12px; color:var(--hint); margin:10px 2px 0; }
+
+/* 레코드 상세 패널 (lists/similar 기준값 — difficulty는 자체 padding/line-height를 따로 유지) */
+.detail { padding:16px 20px 20px; border-bottom:1px solid var(--line); background:var(--bg2); }
+.detail.with-cmts { display:flex; gap:20px; align-items:flex-start; }
+.detail-main { flex:1; min-width:0; }
+.detail-cmts { flex:none; width:380px; max-width:90%; min-width:280px; display:flex; flex-direction:column;
+               background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+@container (max-width:900px){ .detail.with-cmts{ flex-direction:column; } .detail-cmts{ width:100%; max-width:100%; } }
+.meta { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px; }
+.mi { display:flex; align-items:center; gap:6px; font-size:12px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:4px 10px; }
+.ml { color:var(--hint); }
+.mv { color:var(--txt); font-weight:500; }
+.body-card { font-size:13px; line-height:1.75; white-space:normal; word-break:break-word; color:var(--txt);
+             background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+.body-card a, .cmt-b a { color:#1a73e8; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
+.body-card a:hover, .cmt-b a:hover { color:#0b57d0; }
+.body-card code, .cmt-b code { background:var(--bg2); border:1px solid var(--line); border-radius:4px; padding:0 4px; font-family:Consolas,monospace; font-size:12px; }
+.body-card pre, .cmt-b pre { background:var(--bg2); border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin:6px 0; overflow:auto; font-family:Consolas,monospace; font-size:12px; white-space:pre-wrap; }
+.body-card blockquote, .cmt-b blockquote { margin:4px 0; padding:1px 0 1px 12px; border-left:4px solid var(--hint); color:var(--txt); }
+
+/* 댓글 패널 (개별 댓글 렌더링 — 컨테이너 자체(.cmts/.cmts-title)는 페이지마다 높이/resize가 달라 로컬 유지) */
+.cmts-n { background:var(--info-bg); color:var(--info); border-radius:9px; padding:0 7px; font-size:11px; }
+.cmt { display:flex; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); }
+.cmt:last-child { border-bottom:0; }
+.cmt-av { flex:none; width:20px; height:20px; margin-top:1px; border-radius:50%;
+          display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; }
+.cmt-bub { flex:1; min-width:0; }
+.cmt-h b { font-weight:600; font-size:12px; }
+.cmt-t { color:var(--hint); margin-left:6px; font-size:10px; }
+.cmt-b { font-size:12.5px; line-height:1.5; white-space:normal; word-break:break-word; color:var(--txt); margin-top:1px; }
+.cmt-files { display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; }
+.cmt-img { max-width:180px; max-height:180px; border-radius:6px; border:1px solid var(--line); display:block; object-fit:cover; background:var(--bg2); cursor:zoom-in; }
+.cmt-filedl { font-size:12px; color:var(--info); text-decoration:none; border:1px solid var(--line); border-radius:6px; padding:3px 8px; }
+.cmt-loading, .cmt-empty { font-size:12px; color:var(--hint); padding:8px 0; }
