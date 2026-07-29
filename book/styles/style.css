@@ -121,7 +121,7 @@ select.ef{appearance:none;background:#fff}
 .empty .big{font-family:var(--display);font-size:20px;color:var(--ink);margin-bottom:6px}
 
 .overlay{position:fixed;inset:0;background:rgba(27,26,22,.42);display:none;align-items:flex-start;
-  justify-content:center;z-index:50;padding:40px 16px;overflow:auto}
+  justify-content:center;z-index:300;padding:40px 16px;overflow:auto}
 .overlay.open{display:flex}
 .sheet{background:var(--card);width:100%;max-width:580px;border-radius:3px;border:1.5px solid var(--ink);
   box-shadow:0 30px 60px -20px rgba(0,0,0,.5);animation:pop .18s ease}
