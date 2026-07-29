@@ -60,7 +60,6 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php'];
       <label><input id="lg-remember" type="checkbox"> 자동 로그인</label>
     </div>
     <button class="btn-primary" onclick="doLogin()">로그인</button>
-    <div class="login-hint">회사 이메일 + 초기 비밀번호 <code>blue$123</code></div>
   </div>
 </section>
 
