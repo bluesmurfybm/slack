@@ -69,19 +69,28 @@ try {
             $msgs[] = $m;
             if (!empty($m['user'])) $uids[] = $m['user'];
             if (preg_match_all('/<@([UW][A-Z0-9]+)>/', $m['text'], $mm)) $uids = array_merge($uids, $mm[1]);
+            foreach (($m['reactions'] ?? []) as $rc) $uids = array_merge($uids, $rc['users'] ?? []);   // 반응 누른 사람들(툴팁용)
         }
         $cursor = $r['response_metadata']['next_cursor'] ?? null;
     } while ($cursor && ++$guard < 20);
 
     $names = slackResolveUsers($tok, $uids);
-    $fmt = function ($t) use ($names) {
-        return preg_replace_callback('/<@([UW][A-Z0-9]+)>/', function ($m) use ($names) {
-            return '@' . (isset($names[$m[1]]) ? $names[$m[1]] : $m[1]);
-        }, $t);
-    };
+    // 멘션(<@U...>)은 치환하지 않고 원형 유지 → 프론트가 파란 멘션 + 프로필 팝업으로 렌더.
+    // 이름은 응답의 users 맵으로 함께 전달.
+    $fmt = function ($t) { return $t; };
     $comments = [];
+    $meId = current_user()['id'] ?? '';
     foreach ($msgs as $m) {
         $uid = $m['user'] ?? null;
+        // 이모지 반응: 이름/개수/내가 눌렀는지/누른 사람들(툴팁)
+        $reactions = [];
+        foreach (($m['reactions'] ?? []) as $rc) {
+            $who = [];
+            foreach (($rc['users'] ?? []) as $ru) $who[] = $names[$ru] ?? $ru;
+            $reactions[] = ['name' => $rc['name'] ?? '', 'count' => (int)($rc['count'] ?? 0),
+                            'me' => $meId !== '' && in_array($meId, $rc['users'] ?? [], true),
+                            'who' => $who];
+        }
         $files = [];
         foreach (($m['files'] ?? []) as $f) {
             $url = $f['url_private'] ?? ''; if ($url === '') continue;
@@ -91,9 +100,10 @@ try {
         }
         $comments[] = ['author_name' => $uid && isset($names[$uid]) ? $names[$uid] : ($uid ?: 'Slack'),
                        'body' => $fmt($m['text'] ?? ''), 'created_at' => date('Y-m-d H:i', (int)floor((float)$m['ts'])),
+                       'ts' => $m['ts'] ?? '', 'reactions' => $reactions,
                        'files' => $files];
     }
-    echo json_encode(['comments' => $comments], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['comments' => $comments, 'users' => $names], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     echo json_encode(['comments' => [], 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
