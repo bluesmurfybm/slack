@@ -1,6 +1,6 @@
   /* :root/box-sizing/body 기본, .badge 등은 common.css(공통) 참고 */
-  body { padding:24px; }
-  .wrap { max-width:1100px; margin:0 auto; }
+  /* body 패딩을 주면 포털 헤더(header.php)까지 밀려 정렬이 어긋남 → 다른 페이지처럼 .wrap 에만 여백 */
+  .wrap { max-width:1100px; margin:0 auto; padding:24px 24px 0; }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
   .head h1 { font-size:18px; font-weight:600; margin:0; display:flex; align-items:center; gap:10px; }
   a.back { font-size:13px; color:var(--info); text-decoration:none; }

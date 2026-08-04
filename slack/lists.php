@@ -141,7 +141,7 @@ header('Pragma: no-cache');
 <div id="schoolModal" class="sm-overlay" hidden>
   <div class="sm-box">
     <div class="sm-head"><span>🏫 학교 사이트 검색 <span class="sm-count" id="smCount"></span></span>
-      <span><a href="schools_admin.php" target="_blank" rel="noopener" class="sm-manage">⚙️ 관리</a><button id="smClose" class="sm-x" type="button">✕</button></span></div>
+      <span><a href="schools/schools_admin.php" target="_blank" rel="noopener" class="sm-manage">⚙️ 관리</a><button id="smClose" class="sm-x" type="button">✕</button></span></div>
     <div class="sm-tools">
       <input id="smSearch" type="text" placeholder="대학명 검색…">
       <div class="sm-vers" id="smVers"></div>
@@ -2018,7 +2018,7 @@ function smBuildVers(){
 }
 async function smLoad(force){
   if(SCHOOLS && !force) return;
-  try{ SCHOOLS = (await (await fetch("schools.php", {cache:"no-store"})).json()).rows || []; }
+  try{ SCHOOLS = (await (await fetch("schools/schools.php", {cache:"no-store"})).json()).rows || []; }
   catch(e){ SCHOOLS = []; }
 }
 function smRender(){
