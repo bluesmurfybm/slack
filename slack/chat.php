@@ -135,7 +135,12 @@ if (isset($_GET['dm_history'])) {
     header('Content-Type: application/json; charset=utf-8');
     $ch = trim((string)$_GET['dm_history']);
     if ($ch === '') { echo json_encode(['ok' => false, 'error' => 'channel 필요']); exit; }
-    $r = slackGet('conversations.history', $tok, ['channel' => $ch, 'limit' => 50]);
+    $params = ['channel' => $ch, 'limit' => 50];
+    if (!empty($_GET['cursor']))              $params['cursor']    = (string)$_GET['cursor'];   // (미사용 예비) 커서 페이지
+    if (isset($_GET['latest']) && $_GET['latest'] !== '') $params['latest'] = (string)$_GET['latest'];   // 이 시각보다 과거 → 위로 스크롤/날짜이동
+    if (isset($_GET['oldest']) && $_GET['oldest'] !== '') $params['oldest'] = (string)$_GET['oldest'];   // 이 시각보다 미래 → 아래로 스크롤/날짜창
+    if (isset($_GET['inclusive'])) $params['inclusive'] = $_GET['inclusive'] ? 'true' : 'false';         // 경계 ts 포함 여부
+    $r = slackGet('conversations.history', $tok, $params);
     if (empty($r['ok'])) { echo json_encode(['ok' => false, 'error' => $r['error'] ?? 'fail']); exit; }
     $self = chat_self($tok);
     $msgs = array_reverse($r['messages'] ?? []);          // 최신→과거 응답 → 과거→최신 정렬
@@ -159,7 +164,8 @@ if (isset($_GET['dm_history'])) {
             'files'=> array_map(fn($f) => ['name' => $f['name'] ?? '', 'url' => $f['url_private'] ?? '', 'img' => (strpos($f['mimetype'] ?? '', 'image/') === 0)], $m['files'] ?? []),
         ];
     }
-    echo json_encode(['ok' => true, 'self' => $self, 'names' => $names, 'rows' => $rows], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'self' => $self, 'names' => $names, 'rows' => $rows,
+        'next_cursor' => ($r['response_metadata']['next_cursor'] ?? ''), 'has_more' => !empty($r['has_more'])], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -213,8 +219,15 @@ header('Cache-Control: no-store');
   .dm-sec .dm-secn { background:var(--line); color:var(--muted); border-radius:8px; padding:0 6px; font-size:10px; }
   .dm-sec .dm-caret { margin-left:auto; }
   /* 대화 */
-  .conv { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg2); }
-  .conv-h { padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--line); font-weight:600; font-size:14px; }
+  .conv { flex:1; display:flex; flex-direction:column; min-width:0; background:var(--bg2); position:relative; }
+  .conv-h { padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--line); font-weight:600; font-size:14px; display:flex; align-items:center; gap:10px; }
+  .conv-h #convname { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:none; max-width:40%; }
+  .conv-h .cnote { flex:1; font-weight:400; font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .conv-h .datepick { margin-left:auto; font:inherit; font-size:12px; font-weight:400; height:30px; padding:0 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); cursor:pointer; }
+  .daysep { align-self:stretch; display:flex; align-items:center; margin:8px 0; }
+  .daysep::before, .daysep::after { content:""; flex:1; height:1px; background:var(--line); }
+  .daysep span { padding:2px 12px; margin:0 8px; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:var(--muted); font-size:11px; font-weight:600; white-space:nowrap; }
+  .tolatest { position:absolute; right:20px; bottom:74px; z-index:5; height:32px; padding:0 14px; border:none; border-radius:16px; background:var(--info); color:#fff; font-size:12px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); }
   .msgs { flex:1; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:8px; }
   .msg { max-width:72%; padding:8px 12px; border-radius:12px; background:var(--bg); border:1px solid var(--line); font-size:13px; line-height:1.5; word-break:break-word; }
   .msg.mine { align-self:flex-end; background:var(--mine); border-color:transparent; }
@@ -241,8 +254,13 @@ header('Cache-Control: no-store');
 <div class="main">
   <div class="list" id="dmlist"><div class="empty" style="padding:20px">불러오는 중…</div></div>
   <div class="conv">
-    <div class="conv-h" id="convh">대화를 선택하세요</div>
+    <div class="conv-h" id="convh">
+      <span id="convname">대화를 선택하세요</span>
+      <span id="convnote" class="cnote"></span>
+      <input type="date" id="datePick" class="datepick" title="날짜로 이동" style="display:none">
+    </div>
     <div class="msgs" id="msgs"><div class="empty">왼쪽에서 대화를 선택하세요.</div></div>
+    <button class="tolatest" id="tolatest" style="display:none">최신 메시지로 ↓</button>
     <div class="send">
       <textarea id="inp" placeholder="메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)" disabled></textarea>
       <button id="sendbtn" disabled>보내기</button>
@@ -303,35 +321,165 @@ function renderDMs(){
   box.querySelectorAll(".dm").forEach(el=>el.addEventListener("click",()=>openDM(el.dataset.ch, el.dataset.nm)));
   const sec = $("botsec"); if(sec) sec.addEventListener("click",()=>{ botsOpen=!botsOpen; renderDMs(); });
 }
+let curMsgs=[], seenTs=new Set(),
+    hasMoreOlder=false, loadingOlder=false,   // 위(과거) 방향
+    atLive=true, hasNewerGap=false, loadingNewer=false;   // 아래(미래) 방향 / 현재 최신에 붙어있는지
+function topTs(){ return curMsgs.length ? curMsgs[0].ts : ""; }
+function botTs(){ return curMsgs.length ? curMsgs[curMsgs.length-1].ts : ""; }
+function todayStr(){ const d=new Date(),p=n=>n<10?"0"+n:n; return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+function dayKey(ts){ const d=new Date(parseFloat(ts)*1000); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
+function dayLabel(ts){
+  const d=new Date(parseFloat(ts)*1000), now=new Date(), y=new Date(now); y.setDate(y.getDate()-1);
+  const k=dayKey(ts);
+  if(k===dayKey(now.getTime()/1000)) return "오늘";
+  if(k===dayKey(y.getTime()/1000))   return "어제";
+  const w=["일","월","화","수","목","금","토"][d.getDay()];
+  return d.getFullYear()+"년 "+(d.getMonth()+1)+"월 "+d.getDate()+"일 ("+w+")";
+}
+function mergeNames(j){ SELF=j.self||SELF; NAMES=Object.assign(NAMES,j.names||{}); }
+/* dm_history 공통 fetch: {latest,oldest,inclusive} 시간창 */
+async function fetchHist(ch, opt){
+  const q=new URLSearchParams({dm_history:ch});
+  if(opt.latest!=null) q.set("latest", String(opt.latest));
+  if(opt.oldest!=null) q.set("oldest", String(opt.oldest));
+  if(opt.inclusive!=null) q.set("inclusive", opt.inclusive?"1":"0");
+  try{ return await (await fetch("?"+q.toString(),{cache:"no-store"})).json(); }catch(e){ return null; }
+}
+function msgHtml(m){
+  return `<div class="msg${m.mine?' mine':''}">
+    <div class="mh">${esc(m.name)}<span class="t">${fmtTs(m.ts)}</span></div>
+    <div class="mb">${mrkdwn(m.text)}</div>
+    ${(m.files||[]).map(f=>f.img&&f.url?`<img class="mimg" src="file.php?u=${encodeURIComponent(f.url)}" alt="${escA(f.name)}" loading="lazy">`:(f.url?`<a href="file.php?u=${encodeURIComponent(f.url)}&dl=1&name=${encodeURIComponent(f.name)}">📎 ${esc(f.name)}</a>`:"")).join("")}
+  </div>`;
+}
+function renderMsgs(){
+  const box=$("msgs");
+  if(!curMsgs.length){ box.innerHTML='<div class="empty">메시지가 없습니다.</div>'; return; }
+  let html="", lastDay="";
+  for(const m of curMsgs){
+    const k=dayKey(m.ts);
+    if(k!==lastDay){ html+=`<div class="daysep"><span>${esc(dayLabel(m.ts))}</span></div>`; lastDay=k; }   // 날짜 구분선
+    html+=msgHtml(m);
+  }
+  box.innerHTML=html;
+}
+function updateNewerBtn(){ $("tolatest").style.display = atLive ? "none" : ""; }
 async function openDM(ch, nm){
-  curCh = ch;
-  renderDMs();
-  $("convh").textContent = nm;
+  curCh = ch; renderDMs();
+  $("convname").textContent = nm; $("convnote").textContent="";
+  const dp=$("datePick"); dp.style.display=""; dp.max=todayStr(); dp.value="";
   $("inp").disabled = false; $("sendbtn").disabled = false; $("inp").focus();
-  await loadHistory(true);
-  startPoll();
+  curMsgs=[]; seenTs=new Set(); hasMoreOlder=false; atLive=true; hasNewerGap=false;   // 채널 전환 초기화
+  $("msgs").innerHTML = '<div class="empty">불러오는 중…</div>';
+  await loadLatest(true, true);
+  updateNewerBtn(); startPoll();
 }
-async function loadHistory(scrollEnd){
+/* 최신 창 로드(초기/폴링): 새 메시지만 병합(append) — 기존 로드분 유지 */
+async function loadLatest(scrollEnd, isInit){
   if(!curCh) return;
+  const ch=curCh;
+  const j = await fetchHist(ch, {});   // 커서 없음 = 최신 50
+  if(ch!==curCh) return;
+  if(!j || !j.ok){ if(!curMsgs.length) $("msgs").innerHTML = `<div class="err">대화 오류: ${esc(j&&j.error)}${(j&&j.error==="missing_scope")?"<br>(im:history 스코프 필요)":""}</div>`; return; }
+  mergeNames(j);
+  const box=$("msgs");
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  let added=false;
+  (j.rows||[]).forEach(m=>{ if(!seenTs.has(m.ts)){ seenTs.add(m.ts); curMsgs.push(m); added=true; } });
+  if(isInit){ hasMoreOlder=!!j.has_more; atLive=true; }
+  if(added || scrollEnd){ curMsgs.sort((a,b)=>parseFloat(a.ts)-parseFloat(b.ts)); renderMsgs(); }
+  if(scrollEnd || atBottom) box.scrollTop = box.scrollHeight;
+}
+/* 위로 스크롤 → 과거(topTs 이전) 이어 불러오기(prepend, 스크롤 위치 보존) */
+async function loadOlder(){
+  if(!curCh || loadingOlder || !hasMoreOlder || !curMsgs.length) return;
+  loadingOlder=true;
+  const ch=curCh, box=$("msgs"), prevH=box.scrollHeight, prevTop=box.scrollTop;
   try{
-    const j = await (await fetch("?dm_history="+encodeURIComponent(curCh),{cache:"no-store"})).json();
-    if(!j.ok){ $("msgs").innerHTML = `<div class="err">대화 오류: ${esc(j.error)}${j.error==="missing_scope"?"<br>(im:history 스코프 필요)":""}</div>`; return; }
-    SELF = j.self || SELF; NAMES = Object.assign(NAMES, j.names||{});
-    const box = $("msgs");
-    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-    box.innerHTML = (j.rows||[]).map(m=>`
-      <div class="msg${m.mine?' mine':''}">
-        <div class="mh">${esc(m.name)}<span class="t">${fmtTs(m.ts)}</span></div>
-        <div class="mb">${mrkdwn(m.text)}</div>
-        ${(m.files||[]).map(f=>f.img&&f.url?`<img class="mimg" src="file.php?u=${encodeURIComponent(f.url)}" alt="${escA(f.name)}" loading="lazy">`:(f.url?`<a href="file.php?u=${encodeURIComponent(f.url)}&dl=1&name=${encodeURIComponent(f.name)}">📎 ${esc(f.name)}</a>`:"")).join("")}
-      </div>`).join("") || '<div class="empty">메시지가 없습니다.</div>';
-    if(scrollEnd || atBottom) box.scrollTop = box.scrollHeight;
-  }catch(e){ /* 폴링 실패 무시 */ }
+    const j = await fetchHist(ch, {latest:topTs(), inclusive:false});
+    if(ch!==curCh || !j || !j.ok) return;
+    mergeNames(j);
+    const older=[];
+    (j.rows||[]).forEach(m=>{ if(!seenTs.has(m.ts)){ seenTs.add(m.ts); older.push(m); } });
+    hasMoreOlder=!!j.has_more;
+    if(older.length){
+      curMsgs = older.concat(curMsgs);
+      curMsgs.sort((a,b)=>parseFloat(a.ts)-parseFloat(b.ts));
+      renderMsgs();
+      box.scrollTop = box.scrollHeight - prevH + prevTop;   // 스크롤 위치 유지
+    }
+  }catch(e){}
+  finally{ loadingOlder=false; }
 }
-function startPoll(){
-  if(pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(()=>{ if(!document.hidden && curCh) loadHistory(false); }, 4000);   // 4초 폴링
+/* 아래로 스크롤 → 미래(botTs 이후) 이어 불러오기 (날짜 이동 후 현재로 복귀) */
+async function loadNewer(){
+  if(!curCh || loadingNewer || atLive || !curMsgs.length) return;
+  loadingNewer=true;
+  const ch=curCh, box=$("msgs");
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  try{
+    const j = await fetchHist(ch, {oldest:botTs(), inclusive:false});
+    if(ch!==curCh || !j || !j.ok) return;
+    mergeNames(j);
+    if(j.has_more){   // 사이에 50건 초과 남음 → 연속 로드 불가(Slack API는 미래 페이징 미지원). 버튼으로 최신 이동.
+      hasNewerGap=true; updateNewerBtn(); return;
+    }
+    const add=[];
+    (j.rows||[]).forEach(m=>{ if(!seenTs.has(m.ts)){ seenTs.add(m.ts); add.push(m); } });
+    if(add.length){
+      curMsgs = curMsgs.concat(add);
+      curMsgs.sort((a,b)=>parseFloat(a.ts)-parseFloat(b.ts));
+      renderMsgs();
+    }
+    atLive=true; hasNewerGap=false; updateNewerBtn(); startPoll();   // 최신에 도달 → 폴링 재개
+    if(atBottom) box.scrollTop = box.scrollHeight;
+  }catch(e){}
+  finally{ loadingNewer=false; }
 }
+/* 날짜 선택 → 그 날짜 창으로 이동 */
+async function jumpToDate(dateStr){
+  if(!curCh || !dateStr) return;
+  const start=Math.floor(new Date(dateStr+"T00:00:00").getTime()/1000), end=start+86400;
+  stopPoll();
+  const ch=curCh;
+  curMsgs=[]; seenTs=new Set(); hasMoreOlder=false; atLive=false; hasNewerGap=false;
+  $("convnote").textContent=""; $("msgs").innerHTML='<div class="empty">불러오는 중…</div>';
+  let j = await fetchHist(ch, {oldest:start, latest:end, inclusive:true});
+  if(ch!==curCh) return;
+  if(!j || !j.ok){ $("msgs").innerHTML='<div class="err">해당 날짜 대화를 불러오지 못했습니다.</div>'; return; }
+  mergeNames(j);
+  let rows=j.rows||[];
+  if(!rows.length){   // 그 날짜에 메시지 없음 → 그 이전 대화 표시
+    const j2=await fetchHist(ch, {latest:end, inclusive:true});
+    if(ch!==curCh) return;
+    if(j2 && j2.ok){ mergeNames(j2); rows=j2.rows||[]; j=j2; $("convnote").textContent="※ 그 날짜엔 메시지가 없어 이전 대화를 표시합니다"; }
+  }
+  rows.forEach(m=>{ if(!seenTs.has(m.ts)){ seenTs.add(m.ts); curMsgs.push(m); } });
+  curMsgs.sort((a,b)=>parseFloat(a.ts)-parseFloat(b.ts));
+  hasMoreOlder=!!j.has_more;
+  atLive = end >= (Date.now()/1000);   // 오늘로 이동한 경우엔 사실상 라이브
+  renderMsgs();
+  $("msgs").scrollTop = 0;   // 그 날짜 시작이 보이도록 상단
+  updateNewerBtn();
+  if(atLive) startPoll();
+}
+/* 최신으로 복귀 */
+async function jumpToLatest(){
+  stopPoll();
+  curMsgs=[]; seenTs=new Set(); hasMoreOlder=false; atLive=true; hasNewerGap=false;
+  $("convnote").textContent=""; $("msgs").innerHTML='<div class="empty">불러오는 중…</div>';
+  await loadLatest(true, true);
+  updateNewerBtn(); startPoll();
+}
+function startPoll(){ stopPoll(); pollTimer=setInterval(()=>{ if(!document.hidden && curCh && atLive) loadLatest(false,false); }, 4000); }
+function stopPoll(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
+$("msgs").addEventListener("scroll", ()=>{
+  const box=$("msgs");
+  if(box.scrollTop < 40) loadOlder();                                              // 맨 위 근처 → 과거
+  if(!atLive && box.scrollHeight - box.scrollTop - box.clientHeight < 40) loadNewer();   // 맨 아래 근처 → 미래
+});
+$("datePick").addEventListener("change", ()=>{ const v=$("datePick").value; if(v) jumpToDate(v); });
+$("tolatest").addEventListener("click", jumpToLatest);
 async function send(){
   const inp = $("inp"), text = inp.value.trim();
   if(!text || !curCh) return;
@@ -339,7 +487,8 @@ async function send(){
   try{
     const j = await (await fetch("?dm_send=1",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:curCh,text})})).json();
     if(!j.ok) throw new Error(j.error||"실패");
-    inp.value = ""; await loadHistory(true);
+    inp.value = "";
+    if(atLive) await loadLatest(true,false); else await jumpToLatest();   // 과거 보던 중 전송 → 최신으로
   }catch(e){ alert("전송 실패: "+e.message); }
   finally{ $("sendbtn").disabled = false; inp.focus(); }
 }
