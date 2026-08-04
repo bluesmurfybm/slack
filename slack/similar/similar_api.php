@@ -30,7 +30,7 @@ try {
     $limit = min(100, max(1, (int)($_GET['limit'] ?? 30)));
 
     // 전체 로드 + 토큰화 + DF
-    $rows = $pdo->query("SELECT id, board, archived, title, body, status, req, asg, created FROM requests")->fetchAll();
+    $rows = $pdo->query("SELECT id, board, archived, title, body, status, req, asg, created, attachments FROM requests")->fetchAll();
     $N = count($rows); $df = []; $docs = [];
     foreach ($rows as $r) {
         $tt  = toks($r['title']);
@@ -42,6 +42,7 @@ try {
             'created' => (int)$r['created'],
             'snip' => mb_substr(preg_replace('/\s+/u', ' ', (string)$r['body']), 0, 140, 'UTF-8'),
             'body' => mb_substr((string)$r['body'], 0, 4000, 'UTF-8'),
+            'attachments' => $r['attachments'] ? (json_decode($r['attachments'], true) ?: []) : [],
             'tt' => $tt, 'all' => $all,
         ];
     }

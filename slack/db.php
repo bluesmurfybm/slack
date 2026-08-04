@@ -174,7 +174,7 @@ function db() {
             `updated_at` DATETIME     NULL,
             PRIMARY KEY (`id`),
             KEY `idx_ver`  (`ver`),
-            KEY `idx_name` (`name`)
+            KEY `idx_name` (`name`(191))   -- utf8mb4 는 1글자=4byte. 767byte 제한 환경(구 InnoDB) 대응
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
     // 기존 설치본 마이그레이션: active / log 컬럼 없으면 추가
