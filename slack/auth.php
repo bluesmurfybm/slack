@@ -6,6 +6,8 @@
  *    세션에 캐시한다. 사용자가 슬랙 토큰을 직접 입력하는 화면은 없어졌다.
  */
 
+date_default_timezone_set('Asia/Seoul');   // 운영/로컬 php.ini 타임존이 달라도 KST 고정 (댓글 등 date() 표시 9시간 어긋남 방지)
+
 require_once __DIR__ . '/../auth.php';   // 포털: current_portal_user(), dec_token(), 세션 시작
 require_once __DIR__ . '/slack_lib.php';
 
