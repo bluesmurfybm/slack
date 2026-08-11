@@ -236,3 +236,42 @@ def test_claim_works_on_seeded_row_with_empty_email(client, app_mod):
     rows = client.get("/magazineapi/topics").json()
     tid = next(r["id"] for r in rows if r["status"] == "미지정")
     assert client.post(f"/magazineapi/topics/{tid}/claim", json={}).status_code == 200
+
+
+# ---------- 개발 전용 로그인 ----------
+@pytest.fixture()
+def dev_client(tmp_path):
+    secret = tmp_path / "sso_secret.key"
+    secret.write_text("test-secret-0123456789")
+    os.environ["SSO_SECRET_PATH"] = str(secret)
+    os.environ["DB_PATH"] = str(tmp_path / "dev.db")
+    os.environ["ADMIN_EMAILS"] = ADMIN
+    os.environ["DEV_LOGIN"] = "1"
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import app as app_module
+    importlib.reload(app_module)
+    return TestClient(app_module.app)
+
+
+def test_devlogin_sets_working_cookie(dev_client):
+    r = dev_client.post("/magazineapi/devlogin", json={"email": ADMIN, "name": "김지안"})
+    assert r.status_code == 200
+    assert r.json()["is_admin"] is True
+    # 발급된 쿠키가 운영 검증 경로를 그대로 통과한다
+    who = dev_client.get("/magazineapi/whoami").json()
+    assert who["email"] == ADMIN
+    assert who["is_admin"] is True
+    assert dev_client.get("/magazineapi/topics").status_code == 200
+
+
+def test_devlogin_switch_to_normal_user(dev_client):
+    dev_client.post("/magazineapi/devlogin", json={"email": ADMIN})
+    dev_client.post("/magazineapi/devlogin", json={"email": USER, "name": "유승인"})
+    assert dev_client.get("/magazineapi/whoami").json()["is_admin"] is False
+    assert dev_client.post("/magazineapi/topics", json=NEW).status_code == 403
+
+
+def test_whoami_exposes_dev_accounts(dev_client):
+    who = dev_client.get("/magazineapi/whoami").json()
+    assert who["dev_login"] is True
+    assert any(a["email"] == ADMIN for a in who["dev_accounts"])
