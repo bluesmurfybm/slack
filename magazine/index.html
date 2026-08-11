@@ -274,6 +274,7 @@ function actionsHtml(t){
   if(t.status==="미지정"){
     out.push(`<button class="btn-mini primary" onclick="claim(${t.id})">내가 발표할게요</button>`);
   }else if(t.presenter_email===ME.email && t.status!=="발표완료"){
+    out.push(`<button class="btn-mini" onclick="schedule(${t.id})">예정일</button>`);
     out.push(`<button class="btn-mini" onclick="release(${t.id})">취소</button>`);
   }
   if(ME.is_admin){
@@ -303,13 +304,27 @@ const today=()=>new Date().toISOString().slice(0,10);
 
 /* ---------- 선점 ---------- */
 async function claim(id){
-  const d=await askDate("발표 예정일","비워 두면 나중에 정할 수 있어요.","");
+  const d=await askDate("발표 예정일","비워 두면 선점 후 '예정일' 버튼으로 정할 수 있어요.","");
   if(d===null) return;
   try{
     await api(`/magazineapi/topics/${id}/claim`,{
       method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({planned_date:d})});
     showToast("선점했습니다");
+    await reload();
+  }catch(e){ showToast(e.message); }
+}
+
+/* 선점 시 날짜를 비웠거나, 정해둔 날짜를 바꿀 때 */
+async function schedule(id){
+  const t=TOPICS.find(x=>x.id===id);
+  const d=await askDate("발표 예정일","비워 두면 미정으로 돌아갑니다.",t?t.planned_date:"");
+  if(d===null) return;
+  try{
+    await api(`/magazineapi/topics/${id}/schedule`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({planned_date:d})});
+    showToast(d?"예정일을 정했습니다":"예정일을 지웠습니다");
     await reload();
   }catch(e){ showToast(e.message); }
 }

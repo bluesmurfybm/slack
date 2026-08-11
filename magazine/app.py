@@ -375,6 +375,32 @@ def release_topic(tid: int, identity: dict = Depends(require_identity)):
     return row_to_dict(row)
 
 
+class ScheduleIn(BaseModel):
+    planned_date: str = ""
+
+
+@app.post("/magazineapi/topics/{tid}/schedule")
+def schedule_topic(tid: int, body: ScheduleIn, identity: dict = Depends(require_identity)):
+    """선점자가 발표 예정일을 나중에 정하거나 바꾼다.
+
+    선점(claim)은 아직 아무도 안 잡은 주제에만 걸리므로, 날짜를 비우고 선점한
+    사람이 나중에 날짜를 넣을 방법이 따로 필요하다.
+    """
+    conn = get_db()
+    row = _fetch(conn, tid)
+    if row["presenter_email"] != identity["email"] and not is_admin(identity["email"]):
+        conn.close()
+        raise HTTPException(status_code=403, detail="본인이 선점한 주제만 예정일을 정할 수 있습니다")
+    if row["done_date"]:
+        conn.close()
+        raise HTTPException(status_code=409, detail="이미 발표가 끝난 주제입니다")
+    conn.execute("UPDATE topics SET planned_date=? WHERE id=?", (body.planned_date, tid))
+    conn.commit()
+    row = _fetch(conn, tid)
+    conn.close()
+    return row_to_dict(row)
+
+
 @app.post("/magazineapi/topics/{tid}/complete")
 def complete_topic(tid: int, body: CompleteIn, identity: dict = Depends(require_admin)):
     conn = get_db()

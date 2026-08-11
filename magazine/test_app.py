@@ -238,6 +238,74 @@ def test_claim_works_on_seeded_row_with_empty_email(client, app_mod):
     assert client.post(f"/magazineapi/topics/{tid}/claim", json={}).status_code == 200
 
 
+# ---------- 발표 예정일 변경 ----------
+def _claimed_topic_id(client, app_mod, by=USER, name="유승인"):
+    tid = _open_topic_id(client, app_mod)
+    login(client, app_mod, by, name)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    return tid
+
+
+def test_owner_sets_planned_date_after_claiming(client, app_mod):
+    """날짜를 비우고 선점한 뒤에도 본인이 나중에 정할 수 있어야 한다."""
+    tid = _claimed_topic_id(client, app_mod)
+    r = client.post(f"/magazineapi/topics/{tid}/schedule",
+                    json={"planned_date": "2026-10-15"})
+    assert r.status_code == 200
+    assert r.json()["planned_date"] == "2026-10-15"
+    assert r.json()["status"] == "발표예정"
+
+
+def test_owner_changes_existing_planned_date(client, app_mod):
+    tid = _claimed_topic_id(client, app_mod)
+    client.post(f"/magazineapi/topics/{tid}/schedule", json={"planned_date": "2026-10-15"})
+    r = client.post(f"/magazineapi/topics/{tid}/schedule", json={"planned_date": "2026-11-02"})
+    assert r.json()["planned_date"] == "2026-11-02"
+
+
+def test_owner_can_clear_planned_date(client, app_mod):
+    tid = _claimed_topic_id(client, app_mod)
+    client.post(f"/magazineapi/topics/{tid}/schedule", json={"planned_date": "2026-10-15"})
+    r = client.post(f"/magazineapi/topics/{tid}/schedule", json={"planned_date": ""})
+    assert r.json()["planned_date"] == ""
+
+
+def test_third_party_cannot_schedule(client, app_mod):
+    tid = _claimed_topic_id(client, app_mod)
+    login(client, app_mod, OTHER)
+    assert client.post(f"/magazineapi/topics/{tid}/schedule",
+                       json={"planned_date": "2026-10-15"}).status_code == 403
+
+
+def test_admin_can_schedule_anyones_topic(client, app_mod):
+    tid = _claimed_topic_id(client, app_mod)
+    login(client, app_mod, ADMIN)
+    assert client.post(f"/magazineapi/topics/{tid}/schedule",
+                       json={"planned_date": "2026-10-15"}).status_code == 200
+
+
+def test_schedule_requires_login(client, app_mod):
+    tid = _claimed_topic_id(client, app_mod)
+    client.cookies.clear()
+    assert client.post(f"/magazineapi/topics/{tid}/schedule",
+                       json={"planned_date": "2026-10-15"}).status_code == 401
+
+
+def test_schedule_missing_topic_is_404(client, app_mod):
+    login(client, app_mod, USER)
+    assert client.post("/magazineapi/topics/99999/schedule",
+                       json={"planned_date": "2026-10-15"}).status_code == 404
+
+
+def test_completed_topic_cannot_be_rescheduled(client, app_mod):
+    tid = _claimed_topic_id(client, app_mod)
+    login(client, app_mod, ADMIN)
+    client.post(f"/magazineapi/topics/{tid}/complete", json={"done_date": "2026-09-01"})
+    login(client, app_mod, USER)
+    assert client.post(f"/magazineapi/topics/{tid}/schedule",
+                       json={"planned_date": "2026-10-15"}).status_code == 409
+
+
 # ---------- 개발 전용 로그인 ----------
 @pytest.fixture()
 def dev_client(tmp_path):
