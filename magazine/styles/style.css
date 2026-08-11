@@ -20,6 +20,7 @@
   --nega50:#f04438; --nega40:#dc1e11; --nega95:#fbebed;
   --posi50:#1ea465; --posi40:#188351; --posi95:#e4faf0;
   --info40:#0673e7; --info93:#eaf4fe;
+  --warn50:#ffc107; --warn40:#d09c00; --warn30:#9c7500; --warn90:#fff3cd; --warn95:#fff9e6;
 
   /* 역할 */
   --tx-primary:var(--gray10);
@@ -158,7 +159,8 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
   box-shadow:var(--shadow-sm);
 }
 .list li.row{
-  display:grid;grid-template-columns:1fr auto auto;gap:16px;align-items:center;
+  /* 발표자·날짜 / 제목 / 액션 */
+  display:grid;grid-template-columns:118px 1fr auto;gap:16px;align-items:center;
   padding:16px 18px;border-bottom:1px solid var(--bo-primary);background:var(--bg-card);
   transition:background .12s ease;
 }
@@ -170,7 +172,8 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
   display:flex;align-items:center;gap:6px;flex-wrap:wrap;
 }
 .row-sub{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.row-side{display:flex;flex-direction:column;align-items:flex-end;gap:5px;white-space:nowrap}
+.row-side{display:flex;flex-direction:column;align-items:flex-start;gap:5px;white-space:nowrap;min-width:0}
+.row-side .who{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .row-act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .muted{color:var(--tx-quaternary);font-size:12.5px}
 .when{color:var(--tx-quaternary);font-size:12.5px;font-variant-numeric:tabular-nums}
@@ -186,7 +189,8 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
   font-size:11.5px;font-weight:700;line-height:1.5;vertical-align:middle;
 }
 .badge.req{background:var(--nega95);color:var(--nega40)}
-.badge.rec{background:var(--info93);color:var(--info40)}
+/* 권장은 눈에 띄게 노란색 (csms45 warn 토큰) */
+.badge.rec{background:var(--warn90);color:var(--warn30);border:1px solid var(--warn50)}
 .badge.st-open{background:var(--gray95);color:var(--tx-quaternary)}
 .badge.st-planned{background:var(--cos95);color:var(--cos40)}
 .badge.st-done{background:var(--posi95);color:var(--posi40)}
@@ -323,10 +327,12 @@ body.is-admin .admin-only{display:inline-flex !important}
 
 /* 뷰어 */
 .viewer{
-  background:var(--bg-card);width:100%;max-width:960px;border-radius:var(--r16);
+  background:var(--bg-card);width:100%;max-width:1280px;border-radius:var(--r16);
   border:1px solid var(--bo-primary);box-shadow:var(--shadow-lg);
-  display:flex;flex-direction:column;max-height:82vh;animation:pop .16s ease;
+  display:flex;flex-direction:column;height:88vh;animation:pop .16s ease;
 }
+/* 꽉 채워 보기 */
+.viewer.full{max-width:none;width:100%;height:100%;border-radius:var(--r8)}
 .viewer-head{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
   padding:14px 18px;border-bottom:1px solid var(--bo-primary);
@@ -337,7 +343,20 @@ body.is-admin .admin-only{display:inline-flex !important}
 .viewer-act .btn-mini{text-decoration:none;display:inline-flex;align-items:center}
 .viewer-body{flex:1;min-height:320px;overflow:auto;background:var(--bg-subtle);
   display:flex;align-items:center;justify-content:center;padding:12px}
-.viewer-body img{max-width:100%;max-height:70vh;display:block;border-radius:var(--r6)}
-.viewer-body iframe{width:100%;height:70vh;border:none;background:#fff;border-radius:var(--r6)}
+.viewer-body img{max-width:100%;max-height:100%;display:block;border-radius:var(--r6);object-fit:contain}
+.viewer-body iframe{width:100%;height:100%;border:none;background:#fff;border-radius:var(--r6)}
 .viewer-none{text-align:center;color:var(--tx-quaternary);padding:48px 20px}
 .viewer-none .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bottom:6px}
+
+/* 자료 버튼 — ghost 로 두면 묻혀서 잘 안 보인다 */
+.btn-mini.mat{
+  background:var(--bg-card);border-color:var(--cos50);color:var(--cos40);font-weight:700;
+}
+.btn-mini.mat:hover{background:var(--cos95);border-color:var(--cos45)}
+.btn-mini.mat.has{background:var(--cos50);border-color:var(--cos50);color:#fff}
+.btn-mini.mat.has:hover{background:var(--cos45);border-color:var(--cos45)}
+
+/* 뷰어는 여백을 줄여 더 크게 쓴다 */
+#viewOverlay{padding:24px 16px;align-items:stretch}
+#viewOverlay .viewer.full{margin:0}
+.viewer-body{min-height:0}

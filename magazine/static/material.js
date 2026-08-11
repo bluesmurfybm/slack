@@ -93,8 +93,8 @@ function openViewer(id) {
   const src = `/magazineapi/topics/${id}/material/download`;
   const body = document.getElementById("viewBody");
   document.getElementById("viewName").textContent = name;
-  const dl = document.getElementById("viewDownload");
-  dl.href = src;
+  document.getElementById("viewDownload").href = src;
+  document.getElementById("viewNewTab").href = src;
 
   if (IMAGE_RE.test(name)) {
     body.innerHTML = `<img src="${src}" alt="${esc(name)}">`;
@@ -106,7 +106,25 @@ function openViewer(id) {
         <div class="muted">${esc(name)}</div>
       </div>`;
   }
+  applyViewerSize();
   document.getElementById("viewOverlay").classList.add("open");
+}
+
+/* 기본은 넓은 모달, 한 번 더 누르면 화면을 꽉 채운다.
+   선택은 다음에 열 때도 유지된다. */
+function toggleViewerSize() {
+  const v = document.querySelector("#viewOverlay .viewer");
+  const full = v.classList.toggle("full");
+  document.getElementById("viewExpand").textContent = full ? "작게 보기" : "크게 보기";
+  try { localStorage.setItem("dti-viewer-full", full ? "1" : "0"); } catch (e) { }
+}
+
+function applyViewerSize() {
+  let full = false;
+  try { full = localStorage.getItem("dti-viewer-full") === "1"; } catch (e) { }
+  const v = document.querySelector("#viewOverlay .viewer");
+  v.classList.toggle("full", full);
+  document.getElementById("viewExpand").textContent = full ? "작게 보기" : "크게 보기";
 }
 
 function closeViewer() {

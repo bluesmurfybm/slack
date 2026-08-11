@@ -71,7 +71,13 @@ function rowHtml(t) {
   const src = [t.magazine, t.volume && `Vol.${t.volume}`, t.page && `p.${t.page}`]
     .filter(Boolean).join(" ");
   const when = t.done_date || t.planned_date || "";
+  // 발표자·날짜를 맨 왼쪽에 세로로 세운다
   return `<li class="row">
+    <div class="row-side">
+      ${who ? `<span class="who" style="background:${c.bg};color:${c.fg}">${esc(who)}</span>`
+        : '<span class="who none">미지정</span>'}
+      <span class="muted when">${esc(when || "—")}</span>
+    </div>
     <div class="row-main">
       <div class="row-title">${esc(t.title)} ${need} ${st}</div>
       <div class="row-sub">
@@ -81,11 +87,6 @@ function rowHtml(t) {
         ${materialChip(t)}
       </div>
     </div>
-    <div class="row-side">
-      ${who ? `<span class="who" style="background:${c.bg};color:${c.fg}">${esc(who)}</span>`
-        : '<span class="who none">미지정</span>'}
-      <span class="muted when">${esc(when || "—")}</span>
-    </div>
     <div class="row-act">${actionsHtml(t)}</div>
   </li>`;
 }
@@ -93,7 +94,9 @@ function rowHtml(t) {
 function actionsHtml(t) {
   const out = [];
   if (canManageMaterial(t)) {
-    out.push(`<button class="btn-mini ghost" onclick="openMaterial(${t.id})">자료</button>`);
+    const has = !!t.material_kind;
+    out.push(`<button class="btn-mini mat${has ? " has" : ""}"
+      onclick="openMaterial(${t.id})">📎 ${has ? "자료 변경" : "자료 올리기"}</button>`);
   }
   if (t.status === "미지정") {
     out.push(`<button class="btn-mini primary" onclick="claim(${t.id})">내가 발표할게요</button>`);
