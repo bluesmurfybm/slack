@@ -245,3 +245,82 @@ li.empty .big{font-size:15px;font-weight:600;color:var(--ink);margin-bottom:4px}
   .row-side{align-items:flex-start;flex-direction:row;gap:8px}
   .row-act{justify-content:flex-start}
 }
+
+/* ---------- 버튼: 토스 스타일 ----------
+   기존 장부 톤(각진 2px, 초록)에서 버튼만 토스 계열로 바꾼다.
+   파일 뒤쪽에 두어 앞선 규칙을 덮는다. */
+:root{
+  --toss-blue:#3182F6;
+  --toss-blue-hover:#1B64DA;
+  --toss-blue-press:#1957C2;
+  --toss-grey-bg:#F2F4F6;
+  --toss-grey-bg-hover:#E5E8EB;
+  --toss-grey-text:#4E5968;
+  --toss-red:#F04452;
+  --toss-red-hover:#D63241;
+}
+
+.btn-new{
+  background:var(--toss-blue);border-radius:14px;padding:12px 22px;
+  font-weight:700;letter-spacing:-.01em;box-shadow:none;
+  transition:background .15s ease, transform .08s ease;
+}
+.btn-new:hover{background:var(--toss-blue-hover)}
+.btn-new:active{background:var(--toss-blue-press);transform:scale(.97)}
+
+.btn-submit{
+  background:var(--toss-blue);border-radius:12px;padding:12px 24px;
+  font-weight:700;letter-spacing:-.01em;transition:background .15s ease, transform .08s ease;
+}
+.btn-submit:hover{background:var(--toss-blue-hover)}
+.btn-submit:active{background:var(--toss-blue-press);transform:scale(.97)}
+
+.btn-ghost{
+  background:var(--toss-grey-bg);border:none;border-radius:12px;padding:12px 22px;
+  font-weight:600;color:var(--toss-grey-text);transition:background .15s ease, transform .08s ease;
+}
+.btn-ghost:hover{background:var(--toss-grey-bg-hover);color:var(--toss-grey-text)}
+.btn-ghost:active{transform:scale(.97)}
+
+.btn-danger{
+  background:var(--toss-red);border-radius:12px;padding:12px 22px;font-weight:700;
+  transition:background .15s ease, transform .08s ease;
+}
+.btn-danger:hover{background:var(--toss-red-hover)}
+.btn-danger:active{transform:scale(.97)}
+
+.btn-mini{
+  border:none;border-radius:10px;padding:7px 13px;font-size:12px;font-weight:600;
+  background:var(--toss-grey-bg);color:var(--toss-grey-text);
+  transition:background .15s ease, transform .08s ease;
+}
+.btn-mini:hover{background:var(--toss-grey-bg-hover)}
+.btn-mini:active{transform:scale(.96)}
+.btn-mini.primary{background:var(--toss-blue);color:#fff}
+.btn-mini.primary:hover{background:var(--toss-blue-hover)}
+.btn-mini.ghost{background:transparent;color:#8B95A1}
+.btn-mini.ghost:hover{background:var(--toss-grey-bg);color:var(--toss-grey-text)}
+.btn-mini.danger:hover{background:#FFEBEE;color:var(--toss-red)}
+.btn-mini.on{background:var(--toss-blue);color:#fff}
+
+.seg{border:none;border-radius:12px;overflow:hidden;background:var(--toss-grey-bg);padding:3px;gap:3px}
+.seg button{
+  border:none;border-right:none;border-radius:9px;padding:9px 10px;font-weight:600;
+  color:var(--toss-grey-text);background:transparent;transition:background .15s ease, color .15s ease;
+}
+.seg button:hover{background:rgba(255,255,255,.6)}
+.seg button.on{background:#fff;color:var(--toss-blue);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* 날짜 선택 다이얼로그 */
+.date-field{
+  width:100%;font-family:var(--sans);font-size:15px;padding:12px 14px;margin-bottom:20px;
+  border:1.5px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);
+}
+.date-field:focus{outline:none;border-color:var(--toss-blue)}
+
+/* 폼 안의 select 도 입력칸과 같은 톤으로 */
+.sheet-body select{
+  width:100%;font-family:var(--sans);font-size:14px;padding:11px 12px;
+  border:1.5px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
+}
+.sheet-body select:focus{outline:none;border-color:var(--toss-blue)}

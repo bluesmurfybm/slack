@@ -92,7 +92,12 @@
         <input id="f-title" type="text" placeholder="아티클 제목">
       </div>
       <div class="two">
-        <div class="field"><label>분야</label><input id="f-field-in" type="text" placeholder="UI/UX · Trend · Marketing · Etc"></div>
+        <div class="field">
+          <label>분야</label>
+          <input id="f-field-in" type="text" list="dl-field" autocomplete="off"
+                 placeholder="UI/UX · Trend · Marketing · Etc">
+          <datalist id="dl-field"></datalist>
+        </div>
         <div class="field"><label>중요 키워드</label><input id="f-keywords" type="text" placeholder="생성형AI"></div>
       </div>
       <div class="field">
@@ -105,14 +110,19 @@
       <div class="field">
         <label>매거진 / Volume / Page</label>
         <div class="triple">
-          <input id="f-magazine-in" type="text" placeholder="DI">
+          <input id="f-magazine-in" type="text" list="dl-magazine" autocomplete="off" placeholder="DI">
           <input id="f-volume" type="text" placeholder="280">
           <input id="f-page" type="text" placeholder="46">
         </div>
+        <datalist id="dl-magazine"></datalist>
       </div>
       <div class="two">
-        <div class="field"><label>년도</label><input id="f-year" type="number" placeholder="2026"></div>
-        <div class="field"><label>배정 팀 (선택)</label><input id="f-team" type="text" placeholder="App · LAB · SQUARE"></div>
+        <div class="field"><label>년도</label><select id="f-year"></select></div>
+        <div class="field"><label>배정 팀 (선택)</label><select id="f-team"></select></div>
+      </div>
+      <div class="field">
+        <label>발표 예정일 (선택)</label>
+        <input id="f-planned" type="date">
       </div>
       <div class="field">
         <label>비고</label>
@@ -133,6 +143,18 @@
     <div class="row-btn">
       <button class="btn-ghost" onclick="closeConfirm()">취소</button>
       <button class="btn-danger" onclick="doDelete()">삭제</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="dateOverlay" onclick="if(event.target===this)closeDate(null)">
+  <div class="cdialog">
+    <h3 id="dateTitle">발표 예정일</h3>
+    <p id="dateHint"></p>
+    <input id="dateInput" type="date" class="date-field">
+    <div class="row-btn">
+      <button class="btn-ghost" onclick="closeDate(null)">취소</button>
+      <button class="btn-submit" onclick="closeDate(document.getElementById('dateInput').value)">확인</button>
     </div>
   </div>
 </div>
@@ -262,10 +284,27 @@ function actionsHtml(t){
   return out.join("");
 }
 
+/* ---------- 날짜 선택 ---------- */
+/* prompt() 대신 <input type="date">. 취소는 null, 확인은 문자열("" 이면 날짜 없음). */
+let dateResolver=null;
+function askDate(title,hint,initial){
+  document.getElementById("dateTitle").textContent=title;
+  document.getElementById("dateHint").textContent=hint;
+  document.getElementById("dateInput").value=initial||"";
+  document.getElementById("dateOverlay").classList.add("open");
+  setTimeout(()=>document.getElementById("dateInput").focus(),50);
+  return new Promise(r=>{ dateResolver=r; });
+}
+function closeDate(v){
+  document.getElementById("dateOverlay").classList.remove("open");
+  if(dateResolver){ const r=dateResolver; dateResolver=null; r(v); }
+}
+const today=()=>new Date().toISOString().slice(0,10);
+
 /* ---------- 선점 ---------- */
 async function claim(id){
-  const d=(prompt("발표 예정일 (YYYY-MM-DD, 비워도 됩니다)","")||"").trim();
-  if(d && !/^\d{4}-\d{2}-\d{2}$/.test(d)){ showToast("날짜는 YYYY-MM-DD 형식으로 적어 주세요"); return; }
+  const d=await askDate("발표 예정일","비워 두면 나중에 정할 수 있어요.","");
+  if(d===null) return;
   try{
     await api(`/magazineapi/topics/${id}/claim`,{
       method:"POST",headers:{"Content-Type":"application/json"},
@@ -284,8 +323,8 @@ async function release(id){
 }
 
 async function complete(id){
-  const d=(prompt("발표일 (YYYY-MM-DD, 비우면 오늘)","")||"").trim();
-  if(d && !/^\d{4}-\d{2}-\d{2}$/.test(d)){ showToast("날짜는 YYYY-MM-DD 형식으로 적어 주세요"); return; }
+  const d=await askDate("발표일","비워 두면 오늘 날짜로 기록됩니다.",today());
+  if(d===null) return;
   try{
     await api(`/magazineapi/topics/${id}/complete`,{
       method:"POST",headers:{"Content-Type":"application/json"},
@@ -296,7 +335,30 @@ async function complete(id){
 }
 
 /* ---------- 등록 / 수정 ---------- */
-const FORM_IDS=["f-title","f-field-in","f-keywords","f-magazine-in","f-volume","f-page","f-year","f-team","f-note"];
+const FORM_IDS=["f-title","f-field-in","f-keywords","f-magazine-in","f-volume","f-page","f-year","f-team","f-planned","f-note"];
+const TEAMS=["App","LAB","SQUARE"];
+
+/* 분야·매거진은 기존 값 자동완성, 년도·팀은 드롭박스. 모두 현재 데이터에서 만든다. */
+function buildFormOptions(){
+  const fillDL=(id,vals)=>{
+    document.getElementById(id).innerHTML=
+      [...new Set(vals)].filter(Boolean).sort()
+        .map(v=>`<option value="${esc(v)}"></option>`).join("");
+  };
+  fillDL("dl-field",TOPICS.map(t=>t.field));
+  fillDL("dl-magazine",TOPICS.map(t=>t.magazine));
+
+  const years=new Set(TOPICS.map(t=>t.year).filter(Boolean));
+  const now=new Date().getFullYear();
+  for(let y=now-1;y<=now+1;y++) years.add(y);
+  document.getElementById("f-year").innerHTML='<option value="">선택</option>'+
+    [...years].sort((a,b)=>b-a).map(y=>`<option value="${y}">${y}</option>`).join("");
+
+  const teams=new Set(TEAMS);
+  TOPICS.forEach(t=>{ if(t.team) teams.add(t.team); });
+  document.getElementById("f-team").innerHTML='<option value="">없음</option>'+
+    [...teams].sort().map(t=>`<option>${esc(t)}</option>`).join("");
+}
 
 function openSheet(){ document.getElementById("overlay").classList.add("open"); }
 function closeSheet(){ document.getElementById("overlay").classList.remove("open"); }
@@ -324,7 +386,7 @@ function openEdit(id){
   const s=(el,v)=>document.getElementById(el).value=(v==null?"":v);
   s("f-title",t.title); s("f-field-in",t.field); s("f-keywords",t.keywords);
   s("f-magazine-in",t.magazine); s("f-volume",t.volume); s("f-page",t.page);
-  s("f-year",t.year); s("f-team",t.team); s("f-note",t.note);
+  s("f-year",t.year); s("f-team",t.team); s("f-planned",t.planned_date); s("f-note",t.note);
   setReq(t.requirement);
   document.getElementById("sheet-kicker").textContent="수정";
   document.getElementById("sheet-title").textContent="주제 수정";
@@ -337,7 +399,7 @@ function formValues(){
     title:g("f-title"), field:g("f-field-in"), keywords:g("f-keywords"),
     magazine:g("f-magazine-in"), volume:g("f-volume"), page:g("f-page"),
     year:g("f-year")?Number(g("f-year")):null,
-    requirement:REQ, team:g("f-team"), note:g("f-note"),
+    requirement:REQ, team:g("f-team"), planned_date:g("f-planned"), note:g("f-note"),
   };
 }
 
@@ -423,6 +485,7 @@ async function loadWhoami(){
 async function reload(){
   TOPICS=await api("/magazineapi/topics");
   buildFilters();
+  buildFormOptions();
   render();
 }
 
@@ -436,7 +499,7 @@ async function loadAll(){
   }
 }
 
-document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSheet();closeConfirm();}});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeSheet();closeConfirm();closeDate(null);}});
 loadAll();
 </script>
 </body>
