@@ -329,6 +329,64 @@ def delete_topic(tid: int, identity: dict = Depends(require_admin)):
     return {"ok": True}
 
 
+class ClaimIn(BaseModel):
+    planned_date: str = ""
+
+
+class CompleteIn(BaseModel):
+    done_date: str = ""
+
+
+@app.post("/magazineapi/topics/{tid}/claim")
+def claim_topic(tid: int, body: ClaimIn, identity: dict = Depends(require_identity)):
+    conn = get_db()
+    _fetch(conn, tid)   # 없으면 404
+    # 조건부 UPDATE 한 방으로 동시 선점을 막는다.
+    # - 임포트된 행의 presenter_email 은 NULL 이 아니라 빈 문자열이라 둘 다 본다.
+    # - 발표까지 끝난 주제는 발표자가 비어 있어도 선점 대상이 아니다.
+    cur = conn.execute(
+        "UPDATE topics SET presenter_email=?, presenter=?, "
+        "planned_date=CASE WHEN ?<>'' THEN ? ELSE planned_date END "
+        "WHERE id=? AND (presenter_email IS NULL OR presenter_email='') "
+        "AND (done_date IS NULL OR done_date='')",
+        (identity["email"], identity.get("name") or "",
+         body.planned_date, body.planned_date, tid))
+    conn.commit()
+    if cur.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=409, detail="이미 선점되었거나 발표가 끝난 주제입니다")
+    row = _fetch(conn, tid)
+    conn.close()
+    return row_to_dict(row)
+
+
+@app.post("/magazineapi/topics/{tid}/release")
+def release_topic(tid: int, identity: dict = Depends(require_identity)):
+    conn = get_db()
+    row = _fetch(conn, tid)
+    if row["presenter_email"] != identity["email"] and not is_admin(identity["email"]):
+        conn.close()
+        raise HTTPException(status_code=403, detail="본인이 선점한 주제만 취소할 수 있습니다")
+    conn.execute("UPDATE topics SET presenter_email='', presenter='', planned_date='' "
+                 "WHERE id=?", (tid,))
+    conn.commit()
+    row = _fetch(conn, tid)
+    conn.close()
+    return row_to_dict(row)
+
+
+@app.post("/magazineapi/topics/{tid}/complete")
+def complete_topic(tid: int, body: CompleteIn, identity: dict = Depends(require_admin)):
+    conn = get_db()
+    _fetch(conn, tid)
+    done = body.done_date or time.strftime("%Y-%m-%d")
+    conn.execute("UPDATE topics SET done_date=? WHERE id=?", (done, tid))
+    conn.commit()
+    row = _fetch(conn, tid)
+    conn.close()
+    return row_to_dict(row)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)

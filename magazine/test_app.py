@@ -143,3 +143,96 @@ def test_admin_deletes_topic(client, app_mod):
 def test_update_missing_topic_is_404(client, app_mod):
     login(client, app_mod, ADMIN)
     assert client.put("/magazineapi/topics/99999", json={"title": "x"}).status_code == 404
+
+
+# ---------- 선점 / 취소 / 발표완료 ----------
+OTHER = "hjlee@bluesoft.co.kr"
+
+
+def _open_topic_id(client, app_mod):
+    login(client, app_mod, ADMIN)
+    return client.post("/magazineapi/topics", json=NEW).json()["id"]
+
+
+def test_user_claims_open_topic(client, app_mod):
+    tid = _open_topic_id(client, app_mod)
+    login(client, app_mod, USER, "유승인")
+    r = client.post(f"/magazineapi/topics/{tid}/claim", json={"planned_date": "2026-09-01"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "발표예정"
+    assert body["presenter_email"] == USER
+    assert body["presenter"] == "유승인"
+    assert body["planned_date"] == "2026-09-01"
+
+
+def test_second_claim_conflicts(client, app_mod):
+    tid = _open_topic_id(client, app_mod)
+    login(client, app_mod, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    login(client, app_mod, OTHER)
+    assert client.post(f"/magazineapi/topics/{tid}/claim", json={}).status_code == 409
+
+
+def test_claim_missing_topic_is_404(client, app_mod):
+    login(client, app_mod, USER)
+    assert client.post("/magazineapi/topics/99999/claim", json={}).status_code == 404
+
+
+def test_completed_topic_cannot_be_claimed(client, app_mod):
+    """발표까지 끝난 주제는 발표자가 비어 있어도 선점 대상이 아니다."""
+    login(client, app_mod, USER)
+    rows = client.get("/magazineapi/topics").json()
+    done = next(r for r in rows if r["status"] == "발표완료" and not r["presenter_email"])
+    assert client.post(f"/magazineapi/topics/{done['id']}/claim", json={}).status_code == 409
+
+
+def test_owner_releases_own_claim(client, app_mod):
+    tid = _open_topic_id(client, app_mod)
+    login(client, app_mod, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    r = client.post(f"/magazineapi/topics/{tid}/release")
+    assert r.status_code == 200
+    assert r.json()["status"] == "미지정"
+    assert r.json()["presenter_email"] in ("", None)
+
+
+def test_third_party_cannot_release(client, app_mod):
+    tid = _open_topic_id(client, app_mod)
+    login(client, app_mod, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    login(client, app_mod, OTHER)
+    assert client.post(f"/magazineapi/topics/{tid}/release").status_code == 403
+
+
+def test_admin_can_release_anyones_claim(client, app_mod):
+    tid = _open_topic_id(client, app_mod)
+    login(client, app_mod, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    login(client, app_mod, ADMIN)
+    assert client.post(f"/magazineapi/topics/{tid}/release").status_code == 200
+
+
+def test_admin_completes_topic(client, app_mod):
+    tid = _open_topic_id(client, app_mod)
+    login(client, app_mod, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    login(client, app_mod, ADMIN)
+    r = client.post(f"/magazineapi/topics/{tid}/complete", json={"done_date": "2026-09-01"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "발표완료"
+
+
+def test_normal_user_cannot_complete(client, app_mod):
+    tid = _open_topic_id(client, app_mod)
+    login(client, app_mod, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    assert client.post(f"/magazineapi/topics/{tid}/complete", json={}).status_code == 403
+
+
+def test_claim_works_on_seeded_row_with_empty_email(client, app_mod):
+    """임포트된 행의 presenter_email 은 NULL 이 아니라 빈 문자열이다."""
+    login(client, app_mod, USER)
+    rows = client.get("/magazineapi/topics").json()
+    tid = next(r["id"] for r in rows if r["status"] == "미지정")
+    assert client.post(f"/magazineapi/topics/{tid}/claim", json={}).status_code == 200
