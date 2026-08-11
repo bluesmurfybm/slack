@@ -241,6 +241,94 @@ def list_topics(identity: dict = Depends(require_identity)):
     return [row_to_dict(r) for r in rows]
 
 
+class TopicIn(BaseModel):
+    title: str
+    field: str = ""
+    keywords: str = ""
+    magazine: str = ""
+    volume: str = ""
+    page: str = ""
+    year: Optional[int] = None
+    requirement: str = "recommended"
+    team: str = ""
+    planned_date: str = ""
+    note: str = ""
+
+
+class TopicPatch(BaseModel):
+    title: Optional[str] = None
+    field: Optional[str] = None
+    keywords: Optional[str] = None
+    magazine: Optional[str] = None
+    volume: Optional[str] = None
+    page: Optional[str] = None
+    year: Optional[int] = None
+    requirement: Optional[str] = None
+    team: Optional[str] = None
+    presenter: Optional[str] = None
+    presenter_email: Optional[str] = None
+    planned_date: Optional[str] = None
+    done_date: Optional[str] = None
+    note: Optional[str] = None
+
+
+def _fetch(conn, tid):
+    row = conn.execute("SELECT * FROM topics WHERE id=?", (tid,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="없는 주제입니다")
+    return row
+
+
+@app.get("/magazineapi/topics/{tid}")
+def get_topic(tid: int, identity: dict = Depends(require_identity)):
+    conn = get_db()
+    row = _fetch(conn, tid)
+    conn.close()
+    return row_to_dict(row)
+
+
+@app.post("/magazineapi/topics", status_code=201)
+def create_topic(body: TopicIn, identity: dict = Depends(require_admin)):
+    conn = get_db()
+    cur = conn.execute(
+        "INSERT INTO topics(field,title,keywords,magazine,volume,page,year,"
+        "requirement,team,planned_date,note,created_by,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (body.field, body.title, body.keywords, body.magazine, body.volume,
+         body.page, body.year, body.requirement, body.team, body.planned_date,
+         body.note, identity["email"], time.strftime("%Y-%m-%d %H:%M:%S")))
+    conn.commit()
+    row = _fetch(conn, cur.lastrowid)
+    conn.close()
+    notify_slack_new_topic(row)
+    return row_to_dict(row)
+
+
+@app.put("/magazineapi/topics/{tid}")
+def update_topic(tid: int, body: TopicPatch, identity: dict = Depends(require_admin)):
+    conn = get_db()
+    _fetch(conn, tid)
+    patch = body.model_dump(exclude_unset=True)
+    if patch:
+        sets = ",".join(f"{k}=?" for k in patch)
+        conn.execute(f"UPDATE topics SET {sets} WHERE id=?", (*patch.values(), tid))
+        conn.commit()
+    row = _fetch(conn, tid)
+    conn.close()
+    return row_to_dict(row)
+
+
+@app.delete("/magazineapi/topics/{tid}")
+def delete_topic(tid: int, identity: dict = Depends(require_admin)):
+    conn = get_db()
+    _fetch(conn, tid)
+    conn.execute("DELETE FROM topics WHERE id=?", (tid,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8001)

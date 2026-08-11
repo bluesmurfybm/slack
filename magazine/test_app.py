@@ -76,3 +76,70 @@ def test_status_is_derived_not_stored(client, app_mod):
 
 def test_devlogin_absent_when_disabled(client):
     assert client.post("/magazineapi/devlogin", json={"email": USER}).status_code == 404
+
+
+# ---------- 관리자 CRUD ----------
+NEW = {"field": "Trend", "title": "새 주제", "keywords": "AI",
+       "magazine": "DI", "volume": "280", "page": "12", "year": 2026,
+       "requirement": "required"}
+
+
+def test_normal_user_cannot_create(client, app_mod):
+    login(client, app_mod, USER)
+    assert client.post("/magazineapi/topics", json=NEW).status_code == 403
+
+
+def test_anonymous_cannot_create(client):
+    assert client.post("/magazineapi/topics", json=NEW).status_code == 401
+
+
+def test_admin_creates_topic_as_unassigned(client, app_mod):
+    login(client, app_mod, ADMIN, "김지안")
+    r = client.post("/magazineapi/topics", json=NEW)
+    assert r.status_code == 201
+    body = r.json()
+    assert body["status"] == "미지정"
+    assert body["requirement"] == "required"
+    assert body["created_by"] == ADMIN
+
+
+def test_created_topic_appears_in_list(client, app_mod):
+    login(client, app_mod, ADMIN)
+    client.post("/magazineapi/topics", json=NEW)
+    titles = [t["title"] for t in client.get("/magazineapi/topics").json()]
+    assert "새 주제" in titles
+
+
+def test_title_is_required(client, app_mod):
+    login(client, app_mod, ADMIN)
+    assert client.post("/magazineapi/topics", json={"field": "Etc"}).status_code == 422
+
+
+def test_admin_updates_requirement(client, app_mod):
+    login(client, app_mod, ADMIN)
+    tid = client.post("/magazineapi/topics", json=NEW).json()["id"]
+    r = client.put(f"/magazineapi/topics/{tid}", json={"requirement": "recommended"})
+    assert r.status_code == 200
+    assert r.json()["requirement"] == "recommended"
+    # 보내지 않은 필드는 보존된다
+    assert r.json()["title"] == "새 주제"
+
+
+def test_normal_user_cannot_update_or_delete(client, app_mod):
+    login(client, app_mod, ADMIN)
+    tid = client.post("/magazineapi/topics", json=NEW).json()["id"]
+    login(client, app_mod, USER)
+    assert client.put(f"/magazineapi/topics/{tid}", json={"title": "x"}).status_code == 403
+    assert client.delete(f"/magazineapi/topics/{tid}").status_code == 403
+
+
+def test_admin_deletes_topic(client, app_mod):
+    login(client, app_mod, ADMIN)
+    tid = client.post("/magazineapi/topics", json=NEW).json()["id"]
+    assert client.delete(f"/magazineapi/topics/{tid}").status_code == 200
+    assert client.get(f"/magazineapi/topics/{tid}").status_code == 404
+
+
+def test_update_missing_topic_is_404(client, app_mod):
+    login(client, app_mod, ADMIN)
+    assert client.put("/magazineapi/topics/99999", json={"title": "x"}).status_code == 404
