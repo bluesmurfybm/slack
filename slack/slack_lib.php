@@ -89,6 +89,41 @@ function slackPost($method, $token, $fields) {
     return $res;
 }
 
+/* 파일 업로드(외부 업로드 3단계): 채널(+옵션 thread_ts)에 첨부. files:write 스코프 필요.
+   $file = $_FILES['x'] 형태. 반환 ['ok'=>bool, 'error'=>string] */
+function slackUploadFile($token, $channel, array $file, $comment = '', $threadTs = null) {
+    if (!empty($file['error']))            return ['ok' => false, 'error' => '업로드 오류(코드 ' . $file['error'] . ') — 파일 크기 제한 확인'];
+    $tmp  = $file['tmp_name'] ?? '';
+    $name = (!empty($file['name']) ? $file['name'] : 'file');
+    $size = (int)($file['size'] ?? 0);
+    if ($tmp === '' || $size <= 0)         return ['ok' => false, 'error' => '빈 파일'];
+    // 1) 업로드 URL 발급
+    $g = slackPost('files.getUploadURLExternal', $token, ['filename' => $name, 'length' => $size]);
+    if (empty($g['ok']))                   return ['ok' => false, 'error' => $g['error'] ?? 'getUploadURL 실패'];
+    $uurl = $g['upload_url'] ?? ''; $fid = $g['file_id'] ?? '';
+    if ($uurl === '' || $fid === '')       return ['ok' => false, 'error' => 'upload_url 없음'];
+    // 2) 업로드 URL 에 파일 바이트 POST(multipart)
+    $c = curl_init($uurl);
+    curl_setopt_array($c, [
+        CURLOPT_POST           => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_TIMEOUT        => 120,
+        CURLOPT_POSTFIELDS     => ['file' => new CURLFile($tmp, ($file['type'] ?: 'application/octet-stream'), $name)],
+    ]);
+    curl_exec($c);
+    $code = curl_getinfo($c, CURLINFO_HTTP_CODE);
+    curl_close($c);
+    if ($code < 200 || $code >= 300)       return ['ok' => false, 'error' => '파일 업로드 실패(HTTP ' . $code . ')'];
+    // 3) 업로드 완료(대상 채널/스레드 지정 + 코멘트)
+    $params = ['files' => json_encode([['id' => $fid, 'title' => $name]]), 'channel_id' => $channel];
+    if ($comment !== '') $params['initial_comment'] = $comment;
+    if ($threadTs)       $params['thread_ts']       = $threadTs;
+    $r = slackPost('files.completeUploadExternal', $token, $params);
+    if (empty($r['ok']))                   return ['ok' => false, 'error' => $r['error'] ?? 'completeUpload 실패'];
+    return ['ok' => true];
+}
+
 /** 레코드의 댓글 스레드 앵커 ts 찾기 (date_created 주변 시간창). 없으면 null. */
 function slackFindRecordThread($token, $channel, $created, $rid) {
     // 앵커("A comment was added")는 레코드 생성 시점이 아니라 "첫 댓글이 달린 시각"에 생기므로

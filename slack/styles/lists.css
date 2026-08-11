@@ -191,9 +191,12 @@
   .links .slack-link { font-size:12px; color:#fff; background:#4a154b; border:1px solid #4a154b; padding:5px 11px; border-radius:8px; height:auto; }
   /* 댓글 패널 (우측, 고정 높이 + 스크롤) — 컨테이너 자체는 lists 전용 크기 */
   .cmts-title { font-size:12px; font-weight:600; color:var(--muted); margin-bottom:8px; display:flex; align-items:center; gap:6px; flex:none; }
-  .cmts { display:flex; flex-direction:column; overflow-y:auto; resize:vertical; height:360px; max-height:85vh; min-height:80px; padding-right:4px; }
+  .cmts { display:flex; flex-direction:column; overflow-y:auto; resize:vertical; height:360px; max-height:85vh; min-height:80px; padding-right:4px; padding-top:12px; }
   /* 각 댓글 = 컴팩트 한 줄형 — position:relative는 hover 툴바(.cmt-hov) 배치용, lists 전용 추가분 */
   .cmt { position:relative; }
+  /* 인라인 SVG 아이콘(이모지 대체) — 버튼/링크 안에서 세로 중앙 정렬 */
+  .ico { vertical-align:middle; flex:none; }
+  .att-file .ico { color:var(--muted); }
   /* 상세 본문 첨부파일 */
   .atts { margin-top:10px; }
   .atts-title { font-size:12px; font-weight:700; color:var(--muted); margin-bottom:6px; }
@@ -285,6 +288,27 @@
   .cmt-input a { color:var(--info); }
   .cmt-actions { display:flex; justify-content:flex-end; }
   .cmt-send { height:30px; font-size:12px; background:var(--info); color:#fff; border-color:var(--info); }
+  /* 댓글 첨부 대기(전송 전) 미리보기 */
+  .cmt-pend { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+  .cmt-pend .pf { position:relative; display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:4px 8px; background:var(--bg2); max-width:170px; }
+  .cmt-pend .pf img { width:38px; height:38px; object-fit:cover; border-radius:6px; display:block; }
+  .cmt-pend .pf .pf-ic { font-size:16px; }
+  .cmt-pend .pf .pf-nm { font-size:11px; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cmt-pend .pf .pf-x { position:absolute; top:-6px; right:-6px; width:18px; height:18px; border:none; border-radius:50%; background:#d93025; color:#fff; font-size:11px; line-height:1; cursor:pointer; padding:0; }
+  .cmt-form.cmt-drag { outline:2px dashed var(--info); outline-offset:2px; border-radius:8px; }
+  /* 내 댓글 수정/삭제 — 반응 호버 툴바(.cmt-hov)에 통합 (.qr 아님 → 반응 핸들러에 안 걸림) */
+  .cmt-hov-sep { width:1px; align-self:stretch; margin:2px 3px; background:var(--line); }
+  .cmt-hov-btn { border:none; background:none; cursor:pointer; padding:3px 4px; border-radius:6px; line-height:1; display:inline-flex; align-items:center; }
+  .cmt-hov-btn:hover { background:var(--bg2); }
+  .cmt-hov-btn .ico { display:block; color:var(--muted); }
+  .cmt-hov .cmt-edit:hover .ico { color:var(--info); }
+  .cmt-hov .cmt-del:hover .ico { color:#d93025; }
+  /* 인라인 편집창 (.cmt-input 스타일 재사용) */
+  .cme-inp { height:auto; min-height:60px; }
+  .cme-btns { display:flex; gap:6px; justify-content:flex-end; margin-top:6px; }
+  .cme-btns button { border:none; border-radius:7px; padding:4px 13px; font-size:12px; cursor:pointer; }
+  .cme-save { background:var(--info); color:#fff; }
+  .cme-cancel { background:var(--bg2); color:var(--muted); border:1px solid var(--line); }
   /* @멘션 칩 + 자동완성 */
   .mention { background:var(--info-bg); color:var(--info); border-radius:4px; padding:0 3px; font-weight:600; }
   .mention.m-view { cursor:pointer; }

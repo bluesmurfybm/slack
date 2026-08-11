@@ -31,14 +31,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_array($in)) $in = $_POST;
     $rid  = isset($in['request_id']) ? trim($in['request_id']) : '';
     $text = isset($in['text']) ? trim((string)$in['text']) : '';
-    if ($rid === '' || $text === '' || !$tok) { echo json_encode(['ok' => false, 'error' => '내용을 입력하세요.']); exit; }
+    $action = isset($in['action']) ? (string)$in['action'] : '';
+
+    // 내 댓글 수정/삭제 (chat.update / chat.delete — 본인 메시지만 가능)
+    if ($action === 'edit' || $action === 'delete') {
+        $ts = isset($in['ts']) ? trim((string)$in['ts']) : '';
+        if ($rid === '' || $ts === '' || !$tok) { echo json_encode(['ok' => false, 'error' => '잘못된 요청']); exit; }
+        if ($action === 'edit' && $text === '') { echo json_encode(['ok' => false, 'error' => '내용을 입력하세요.']); exit; }
+        try {
+            [, $ch] = rec_channel(db(), $boards, $rid);
+            if ($ch === '') { echo json_encode(['ok' => false, 'error' => '댓글 채널이 없습니다.']); exit; }
+            if ($action === 'edit') {
+                $r = slackPost('chat.update', $tok, ['channel' => $ch, 'ts' => $ts, 'text' => $text]);
+            } else {
+                $r = slackPost('chat.delete', $tok, ['channel' => $ch, 'ts' => $ts]);
+            }
+            if (empty($r['ok'])) { echo json_encode(['ok' => false, 'error' => 'Slack: ' . ($r['error'] ?? 'fail')]); exit; }
+            echo json_encode(['ok' => true]);
+        } catch (Throwable $e) { echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE); }
+        exit;
+    }
+
+    $hasFile = !empty($_FILES['file']) && empty($_FILES['file']['error']);
+    if ($rid === '' || !$tok || ($text === '' && !$hasFile)) { echo json_encode(['ok' => false, 'error' => '내용을 입력하세요.']); exit; }
     try {
         [$created, $ch] = rec_channel(db(), $boards, $rid);
         if ($ch === '') { echo json_encode(['ok' => false, 'error' => '이 리스트는 댓글 채널이 설정되지 않았습니다.']); exit; }
         $anchor = $created ? slackFindRecordThread($tok, $ch, $created, $rid) : null;
         if (!$anchor) { echo json_encode(['ok' => false, 'error' => '기존 댓글 스레드가 없어 작성할 수 없습니다.']); exit; }
-        $r = slackPost('chat.postMessage', $tok, ['channel' => $ch, 'thread_ts' => $anchor, 'text' => $text]);
-        if (empty($r['ok'])) { echo json_encode(['ok' => false, 'error' => 'Slack: ' . ($r['error'] ?? 'fail')]); exit; }
+        if ($hasFile) {   // 스레드에 파일 첨부(+텍스트는 코멘트로)
+            $up = slackUploadFile($tok, $ch, $_FILES['file'], $text, $anchor);
+            if (empty($up['ok'])) { echo json_encode(['ok' => false, 'error' => $up['error'] ?? '업로드 실패']); exit; }
+        } else {
+            $r = slackPost('chat.postMessage', $tok, ['channel' => $ch, 'thread_ts' => $anchor, 'text' => $text]);
+            if (empty($r['ok'])) { echo json_encode(['ok' => false, 'error' => 'Slack: ' . ($r['error'] ?? 'fail')]); exit; }
+        }
         echo json_encode(['ok' => true]);
     } catch (Throwable $e) { echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE); }
     exit;
@@ -101,6 +128,7 @@ try {
         $comments[] = ['author_name' => $uid && isset($names[$uid]) ? $names[$uid] : ($uid ?: 'Slack'),
                        'body' => $fmt($m['text'] ?? ''), 'created_at' => date('Y-m-d H:i', (int)floor((float)$m['ts'])),
                        'ts' => $m['ts'] ?? '', 'reactions' => $reactions,
+                       'mine' => ($uid !== null && $meId !== '' && $uid === $meId),   // 본인 댓글 여부(수정/삭제 노출용)
                        'files' => $files];
     }
     echo json_encode(['comments' => $comments, 'users' => $names], JSON_UNESCAPED_UNICODE);

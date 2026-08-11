@@ -491,9 +491,12 @@ function rowHtml(r){
             <button type="button" class="tb" data-id="${esc(r.id)}" data-act="i" title="기울임"><i>I</i></button>
             <button type="button" class="tb" data-id="${esc(r.id)}" data-act="s" title="취소선"><s>S</s></button>
             <button type="button" class="tb" data-id="${esc(r.id)}" data-act="code" title="코드">&lt;/&gt;</button>
-            <button type="button" class="tb" data-id="${esc(r.id)}" data-act="link" title="링크">🔗</button>
+            <button type="button" class="tb" data-id="${esc(r.id)}" data-act="link" title="링크">${ICON.link}</button>
+            <button type="button" class="tb cmt-att" data-id="${esc(r.id)}" title="파일 첨부">${ICON.clip}</button>
           </div>
-          <div class="cmt-input" id="cin-${esc(r.id)}" contenteditable="true" data-ph="댓글 입력… (Ctrl+Enter 전송)"></div>
+          <input type="file" class="cmt-file" id="cfile-${esc(r.id)}" multiple style="display:none">
+          <div class="cmt-input" id="cin-${esc(r.id)}" contenteditable="true" data-ph="댓글 입력… (Ctrl+Enter 전송 · 파일 📎/Ctrl+V/드래그)"></div>
+          <div class="cmt-pend" id="cpend-${esc(r.id)}" style="display:none"></div>
           <div class="cmt-actions"><button type="button" class="cmt-send" data-id="${esc(r.id)}">작성</button></div>
         </div>
       </div>`:''}
@@ -558,6 +561,15 @@ function authorColor(name){            // 작성자 이름 → 고유 색상(HSL
   const hue=h%360;
   return { bg:`hsl(${hue} 68% 92%)`, fg:`hsl(${hue} 45% 35%)` };
 }
+/* UI 아이콘: 이모지 폰트 미탑재 환경에서도 안 깨지도록 인라인 SVG(currentColor 상속) */
+const ICON = {
+  link:  '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3.9 12a3.1 3.1 0 0 1 3.1-3.1h4V7H7a5 5 0 0 0 0 10h4v-1.9H7A3.1 3.1 0 0 1 3.9 12zM8 13h8v-2H8v2zm9-6h-4v1.9h4a3.1 3.1 0 0 1 0 6.2h-4V17h4a5 5 0 0 0 0-10z"/></svg>',
+  clip:  '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M16.5 6v11.5a4.5 4.5 0 0 1-9 0V5a3 3 0 0 1 6 0v10.5a1.5 1.5 0 0 1-3 0V6H10v9.5a3 3 0 0 0 6 0V5a4.5 4.5 0 0 0-9 0v12.5a6 6 0 0 0 12 0V6h-1.5z"/></svg>',
+  doc:   '<svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
+  sheet: '<svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M4 4h16v16H4V4zm2 2v3h5V6H6zm7 0v3h5V6h-5zm-7 5v3h5v-3H6zm7 0v3h5v-3h-5zm-7 5v2h5v-2H6zm7 0v2h5v-2h-5z"/></svg>',
+  edit:  '<svg class="ico" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>',
+  trash: '<svg class="ico" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+};
 function fmtSize(n){ if(!n) return ""; if(n<1024) return n+"B"; if(n<1048576) return Math.round(n/1024)+"KB"; return (n/1048576).toFixed(1)+"MB"; }
 function fileExt(n){ const m=(n||"").match(/\.([a-z0-9]+)$/i); return m?m[1].toUpperCase():"FILE"; }
 const _pf = u => "file.php?u="+encodeURIComponent(u);
@@ -601,7 +613,7 @@ function fileHtml(f, imgCls){
     }
     // 썸네일이 없으면 아이콘 타일
     return `<div class="media-doc media-doc--noimg lb" data-type="${dt}" data-src="${src}" data-dl="${escAttr(dl)}" data-name="${escAttr(f.name)}" title="${escAttr(f.name)}">`
-      + `<span class="media-doc-ic">${dt==="sheet"?"📊":"📄"}</span>`
+      + `<span class="media-doc-ic">${dt==="sheet"?ICON.sheet:ICON.doc}</span>`
       + `<span class="media-doc-nm">${esc(f.name)}</span><span class="media-doc-badge">${badge}</span></div>`;
   }
   // 그 외 문서(doc/ppt 등): 첫 페이지 미리보기 → 클릭 시 원본 새 탭
@@ -611,18 +623,29 @@ function fileHtml(f, imgCls){
       + `<span class="media-doc-badge">${esc(fileExt(f.name))}</span></a>`;
   }
   // 기타: 다운로드 링크
-  return `<a class="att-file" href="${dl}" rel="noopener">📎 <span>${esc(f.name)}</span>${f.size?`<span class="sz">${fmtSize(f.size)}</span>`:""}</a>`;
+  return `<a class="att-file" href="${dl}" rel="noopener">${ICON.clip}<span>${esc(f.name)}</span>${f.size?`<span class="sz">${fmtSize(f.size)}</span>`:""}</a>`;
 }
 /* 상세 본문 첨부파일: 이미지/동영상/문서 미리보기, 그 외 다운로드 링크 */
 function attHtml(list){
   if(!list || !list.length) return "";
   const items = list.map(f=>fileHtml(f, "att-img")).join("");
-  return `<div class="atts"><div class="atts-title">📎 첨부파일 ${list.length}</div><div class="atts-list">${items}</div></div>`;
+  return `<div class="atts"><div class="atts-title">${ICON.clip} 첨부파일 ${list.length}</div><div class="atts-list">${items}</div></div>`;
 }
+const cmtEditing = new Set();   // 인라인 수정 중인 댓글 ts (ts 는 메시지별 고유)
 function cmtHtml(list){
   if(!list || !list.length) return '<div class="cmt-empty">아직 댓글이 없습니다.</div>';
   return list.map(c=>{
     const col = authorColor(c.author_name);
+    if(c.mine && c.ts && cmtEditing.has(c.ts)){   // 인라인 편집 모드 (contenteditable: 멘션/서식 그대로)
+      return `
+      <div class="cmt">
+        <div class="cmt-av" style="background:${col.bg};color:${col.fg}">${esc(cmtInitial(c.author_name))}</div>
+        <div class="cmt-bub"><div class="cme" data-ts="${escAttr(c.ts)}">
+          <div class="cme-inp cmt-input" contenteditable="true">${mrkdwn(c.body||"")}</div>
+          <div class="cme-btns"><button type="button" class="cme-cancel" data-ts="${escAttr(c.ts)}">취소</button><button type="button" class="cme-save" data-ts="${escAttr(c.ts)}">저장</button></div>
+        </div></div>
+      </div>`;
+    }
     return `
     <div class="cmt">
       <div class="cmt-av" style="background:${col.bg};color:${col.fg}">${esc(cmtInitial(c.author_name))}</div>
@@ -634,6 +657,56 @@ function cmtHtml(list){
       </div>
     </div>`;
   }).join("");
+}
+/* 댓글 렌더 + 이벤트 바인딩 일괄 */
+function renderCmts(id){
+  const box=document.getElementById("cmts-"+id); if(!box) return;
+  box.innerHTML = cmtHtml(cmtCache[id]||[]); bindLightbox(box); bindReacts(box, id); resolveMentions(box); bindCmtTools(box);
+}
+function _cmtRid(el){ const b=el.closest(".cmts"); return b ? b.id.replace("cmts-","") : ""; }
+function bindCmtTools(scope){
+  scope.querySelectorAll(".cmt-edit").forEach(el=>el.addEventListener("click", e=>{ e.stopPropagation(); cmtEditStart(el); }));
+  scope.querySelectorAll(".cmt-del").forEach(el=>el.addEventListener("click", e=>{ e.stopPropagation(); cmtDelete(el); }));
+  scope.querySelectorAll(".cme-save").forEach(el=>el.addEventListener("click", e=>{ e.stopPropagation(); cmtEditSave(el); }));
+  scope.querySelectorAll(".cme-cancel").forEach(el=>el.addEventListener("click", e=>{ e.stopPropagation(); cmtEditCancel(el); }));
+  scope.querySelectorAll(".cme-inp").forEach(el=>{
+    el.addEventListener("click", e=>e.stopPropagation());
+    el.addEventListener("keydown", e=>{
+      if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){ e.preventDefault(); const b=el.closest(".cme").querySelector(".cme-save"); if(b) cmtEditSave(b); }
+      else if(e.key==="Escape"){ const b=el.closest(".cme").querySelector(".cme-cancel"); if(b) cmtEditCancel(b); }
+    });
+  });
+}
+function cmtEditStart(btn){
+  const ts=btn.dataset.ts, id=_cmtRid(btn); if(!id) return;
+  cmtEditing.add(ts); renderCmts(id);
+  const box=document.getElementById("cmts-"+id);
+  const ta=box && box.querySelector('.cme[data-ts="'+ts+'"] .cme-inp');
+  if(ta){ ta.focus(); const r=document.createRange(); r.selectNodeContents(ta); r.collapse(false); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); }   // 캐럿 끝으로
+}
+function cmtEditCancel(btn){ cmtEditing.delete(btn.dataset.ts); const id=_cmtRid(btn); if(id) renderCmts(id); }
+async function cmtEditSave(btn){
+  const ts=btn.dataset.ts, id=_cmtRid(btn); if(!id) return;
+  const box=document.getElementById("cmts-"+id);
+  const ta=box && box.querySelector('.cme[data-ts="'+ts+'"] .cme-inp'); if(!ta) return;
+  const text=htmlToMrkdwn(ta).trim(); if(!text){ alert("내용을 입력하세요."); return; }   // 청크 멘션/서식 → Slack 원문
+  try{
+    const j=await (await fetch("comments.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"edit",request_id:id,ts,text})})).json();
+    if(!j.ok) throw new Error(j.error||"실패");
+    const c=(cmtCache[id]||[]).find(x=>x.ts===ts); if(c) c.body=text;   // 낙관적 반영
+    cmtEditing.delete(ts); renderCmts(id);
+    loadComments(id);   // 서버 재동기화
+  }catch(e){ alert("수정 실패: "+e.message); }
+}
+async function cmtDelete(btn){
+  const ts=btn.dataset.ts, id=_cmtRid(btn); if(!id) return;
+  if(!confirm("이 댓글을 삭제할까요?")) return;
+  try{
+    const j=await (await fetch("comments.php",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"delete",request_id:id,ts})})).json();
+    if(!j.ok) throw new Error(j.error||"실패");
+    cmtCache[id]=(cmtCache[id]||[]).filter(x=>x.ts!==ts); cmtEditing.delete(ts); renderCmts(id);
+    loadComments(id);   // 서버 재동기화
+  }catch(e){ alert("삭제 실패: "+e.message); }
 }
 /* 댓글 이모지 반응: 칩(내가 누른 건 강조) + ➕ 추가 피커. 클릭 = Slack 반응 토글
    피커 목록은 사용자 토큰 기준: 자주 사용(내 반응 이력 집계) + 워크스페이스 커스텀 이모지 */
@@ -679,9 +752,16 @@ function reactHtml(c){
   if(!c.ts) return '';
   // 모든 댓글에 hover 툴바 (자주 사용 3개 + 피커, Slack 식). 반응 있으면 하단 칩 줄도 함께.
   const freq=[...new Set([...recentReacts(), ...((_EM&&_EM.frequent)||[]), ...QUICK_REACTS_DEFAULT])].slice(0,3);
+  // 내 댓글이면 수정/삭제 버튼을 같은 호버 툴바에 통합(반응 툴바와 겹치지 않게)
+  const mineTools = (c.mine && c.ts)
+    ? `<span class="cmt-hov-sep"></span>`
+      + `<button type="button" class="cmt-hov-btn cmt-edit" data-ts="${escAttr(c.ts)}" title="수정">${ICON.edit}</button>`
+      + `<button type="button" class="cmt-hov-btn cmt-del del" data-ts="${escAttr(c.ts)}" title="삭제">${ICON.trash}</button>`
+    : '';
   const hov = `<div class="cmt-hov" data-ts="${escAttr(c.ts)}">`
     + freq.map(n=>`<button type="button" class="qr" data-name="${escAttr(n)}" title=":${escAttr(n)}:">${emjHtml(n)}</button>`).join("")
-    + `<button type="button" class="qr qr-add" title="반응 추가">☺<i class="pp">+</i></button></div>`;
+    + `<button type="button" class="qr qr-add" title="반응 추가">☺<i class="pp">+</i></button>`
+    + mineTools + `</div>`;
   if(!(c.reactions||[]).length) return hov;
   const chips=(c.reactions||[]).map(r=>
     `<button type="button" class="rct${r.me?' me':''}" data-ts="${escAttr(c.ts)}" data-name="${escAttr(r.name)}" data-me="${r.me?1:0}" data-who="${escAttr(JSON.stringify(r.who||[]))}" data-count="${r.count}">${emjHtml(r.name)} <span class="rc">${r.count}</span></button>`
@@ -820,28 +900,66 @@ async function loadComments(id){
     box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box);
     bindReacts(box, id);                                    // 이모지 반응 토글
     resolveMentions(box);                                   // 댓글 멘션 이름 해석
+    bindCmtTools(box);                                      // 내 댓글 수정/삭제
     box.scrollTop = box.scrollHeight;                       // 최신 댓글(맨 아래) 바로 보이게
     setTimeout(()=>{ box.scrollTop = box.scrollHeight; }, 150);   // 이미지 로드 등 늦은 레이아웃 보정
   }
 }
 function _nowStr(){ const d=new Date(); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+" "+pad2(d.getHours())+":"+pad2(d.getMinutes()); }
+/* ===== 댓글 첨부파일 (📎 / Ctrl+V / 드래그) — 레코드 id 별 대기 목록 ===== */
+const cmtPend = {};
+function addCmtFiles(id, list){
+  cmtPend[id] = cmtPend[id] || [];
+  for(let f of list){
+    if(!f) continue;
+    if(!f.name){ const ext=((f.type||"").split("/")[1]||"bin"); f=new File([f], "pasted-"+Date.now()+"."+ext, {type:f.type}); }
+    cmtPend[id].push(f);
+  }
+  renderCmtPend(id);
+}
+function renderCmtPend(id){
+  const box = document.getElementById("cpend-"+id); if(!box) return;
+  const list = cmtPend[id] || [];
+  if(!list.length){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display="";
+  box.innerHTML = list.map((f,i)=>{
+    const isImg=(f.type||"").indexOf("image/")===0;
+    const inner = isImg ? `<img src="${URL.createObjectURL(f)}" alt="">`
+                        : `<span class="pf-ic">${ICON.clip}</span><span class="pf-nm">${esc(f.name)}</span>`;
+    return `<div class="pf">${inner}<button type="button" class="pf-x" data-i="${i}" title="제거">✕</button></div>`;
+  }).join("");
+  box.querySelectorAll(".pf-x").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); cmtPend[id].splice(+b.dataset.i,1); renderCmtPend(id); }));
+}
 async function postComment(id){
   const ed = document.getElementById("cin-"+id);
   const text = ed ? htmlToMrkdwn(ed).trim() : "";
-  if(!text) return;
+  const files = (cmtPend[id]||[]).slice();
+  if(!text && !files.length) return;
   const box = document.getElementById("cmts-"+id);
   // 낙관적 표시: Slack 응답 기다리지 않고 즉시 화면에 추가 (렉 체감 제거)
   if(ed) ed.innerHTML = "";
+  cmtPend[id] = []; renderCmtPend(id);
   cmtCache[id] = cmtCache[id] || [];
-  cmtCache[id].push({ author_name: ME, body: text, created_at: _nowStr(), files: [] });
-  if(box){ box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box); bindReacts(box, id); box.scrollTop = box.scrollHeight; }
+  cmtCache[id].push({ author_name: ME, body: text || (files.length?`_(파일 ${files.length}개 전송 중…)_`:""), created_at: _nowStr(), files: [] });
+  if(box){ box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box); bindReacts(box, id); bindCmtTools(box); box.scrollTop = box.scrollHeight; }
   // 실제 전송은 백그라운드 → 완료되면 Slack 기준으로 재동기화
   try{
-    const j = await (await fetch("comments.php", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({request_id:id, text})
-    })).json();
-    if(!j.ok) throw new Error(j.error || "실패");
+    if(files.length){                      // 파일: 건당 업로드(첫 파일에 텍스트 코멘트)
+      for(let i=0;i<files.length;i++){
+        const fd=new FormData();
+        fd.append("request_id", id);
+        if(i===0 && text) fd.append("text", text);
+        fd.append("file", files[i]);
+        const j=await (await fetch("comments.php",{method:"POST",body:fd})).json();
+        if(!j.ok) throw new Error(j.error==="missing_scope" ? "권한 부족(files:write 스코프 필요)" : (j.error||"실패"));
+      }
+    } else {
+      const j = await (await fetch("comments.php", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({request_id:id, text})
+      })).json();
+      if(!j.ok) throw new Error(j.error || "실패");
+    }
     loadComments(id);   // 백그라운드 재로드(대기 안 함)
   }catch(err){
     alert("댓글 작성 실패: " + err.message);
@@ -950,6 +1068,11 @@ function bindRows(box){
       }
       if(e.key==="Enter" && (e.ctrlKey||e.metaKey)){ e.preventDefault(); postComment(el.id.replace("cin-","")); }   // Ctrl/Cmd+Enter 전송
     });
+    el.addEventListener("paste", e=>{                            // Ctrl+V: 클립보드 파일/이미지 첨부
+      const items=(e.clipboardData||{}).items||[], files=[];
+      for(const it of items){ if(it.kind==="file"){ const f=it.getAsFile(); if(f) files.push(f); } }
+      if(files.length){ e.preventDefault(); e.stopPropagation(); addCmtFiles(el.id.replace("cin-",""), files); }
+    });
   });
   box.querySelectorAll(".tb").forEach(el=>{
     el.addEventListener("mousedown", e=>e.preventDefault());   // 클릭해도 에디터 선택 유지
@@ -968,6 +1091,21 @@ function bindRows(box){
   box.querySelectorAll(".cmt-send").forEach(el=>{
     el.addEventListener("click", e=>{ e.stopPropagation(); postComment(el.dataset.id); });
   });
+  box.querySelectorAll(".cmt-att").forEach(el=>{                 // 📎 버튼 → 파일 선택창
+    el.addEventListener("click", e=>{ e.stopPropagation(); const fi=document.getElementById("cfile-"+el.dataset.id); if(fi) fi.click(); });
+  });
+  box.querySelectorAll(".cmt-file").forEach(el=>{
+    el.addEventListener("change", e=>{ e.stopPropagation(); const id=el.id.replace("cfile-",""); if(el.files.length){ addCmtFiles(id, [...el.files]); el.value=""; } });
+  });
+  box.querySelectorAll(".cmt-form").forEach(el=>{               // 폼 위로 드래그드롭
+    const id = (el.querySelector(".cmt-input")||{}).id?.replace("cin-","");
+    if(!id) return;
+    el.addEventListener("dragover", e=>{ e.preventDefault(); e.stopPropagation(); el.classList.add("cmt-drag"); });
+    el.addEventListener("dragleave", e=>{ if(e.target===el) el.classList.remove("cmt-drag"); });
+    el.addEventListener("drop", e=>{ e.preventDefault(); e.stopPropagation(); el.classList.remove("cmt-drag");
+      const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])]; if(fs.length) addCmtFiles(id, fs); });
+  });
+  bindCmtTools(box);   // 내 댓글 수정/삭제 (초기 캐시 렌더분)
   bindLightbox(box);
 }
 

@@ -182,6 +182,44 @@ if (isset($_GET['dm_send']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+/* 내 메시지 수정: chat.update (본인 메시지만 가능) */
+if (isset($_GET['dm_edit']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    $in = json_decode(file_get_contents('php://input'), true) ?: [];
+    $ch = trim((string)($in['channel'] ?? ''));
+    $ts = trim((string)($in['ts'] ?? ''));
+    $text = trim((string)($in['text'] ?? ''));
+    if ($ch === '' || $ts === '' || $text === '') { echo json_encode(['ok' => false, 'error' => 'channel/ts/text 필요']); exit; }
+    $r = slackPost('chat.update', $tok, ['channel' => $ch, 'ts' => $ts, 'text' => $text]);
+    if (empty($r['ok'])) { echo json_encode(['ok' => false, 'error' => $r['error'] ?? 'fail']); exit; }
+    echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* 내 메시지 삭제: chat.delete (본인 메시지만 가능) */
+if (isset($_GET['dm_delete']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    $in = json_decode(file_get_contents('php://input'), true) ?: [];
+    $ch = trim((string)($in['channel'] ?? ''));
+    $ts = trim((string)($in['ts'] ?? ''));
+    if ($ch === '' || $ts === '') { echo json_encode(['ok' => false, 'error' => 'channel/ts 필요']); exit; }
+    $r = slackPost('chat.delete', $tok, ['channel' => $ch, 'ts' => $ts]);
+    if (empty($r['ok'])) { echo json_encode(['ok' => false, 'error' => $r['error'] ?? 'fail']); exit; }
+    echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/* 파일 첨부 전송: files.getUploadURLExternal → 업로드 URL 에 바이트 POST → files.completeUploadExternal (files:write 스코프 필요) */
+if (isset($_GET['dm_upload']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    $ch      = trim((string)($_POST['channel'] ?? ''));
+    $comment = trim((string)($_POST['text'] ?? ''));
+    if ($ch === '' || empty($_FILES['file'])) { echo json_encode(['ok' => false, 'error' => 'channel/file 필요']); exit; }
+    $up = slackUploadFile($tok, $ch, $_FILES['file'], $comment);
+    echo json_encode($up, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-store');
 ?>
@@ -229,8 +267,21 @@ header('Cache-Control: no-store');
   .daysep span { padding:2px 12px; margin:0 8px; background:var(--bg); border:1px solid var(--line); border-radius:12px; color:var(--muted); font-size:11px; font-weight:600; white-space:nowrap; }
   .tolatest { position:absolute; right:20px; bottom:74px; z-index:5; height:32px; padding:0 14px; border:none; border-radius:16px; background:var(--info); color:#fff; font-size:12px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); }
   .msgs { flex:1; overflow-y:auto; padding:14px 16px; display:flex; flex-direction:column; gap:8px; }
-  .msg { max-width:72%; padding:8px 12px; border-radius:12px; background:var(--bg); border:1px solid var(--line); font-size:13px; line-height:1.5; word-break:break-word; }
+  .msg { position:relative; max-width:72%; padding:8px 12px; border-radius:12px; background:var(--bg); border:1px solid var(--line); font-size:13px; line-height:1.5; word-break:break-word; }
   .msg.mine { align-self:flex-end; background:var(--mine); border-color:transparent; }
+  /* 내 메시지 수정/삭제 툴바(호버) */
+  .msg-tools { position:absolute; top:-12px; right:8px; display:none; gap:2px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:2px; box-shadow:0 1px 5px rgba(0,0,0,.14); }
+  .msg.mine:hover .msg-tools { display:flex; }
+  .msg-tools button { border:none; background:none; color:var(--muted); cursor:pointer; padding:3px; border-radius:6px; display:flex; align-items:center; }
+  .msg-tools button:hover { background:var(--bg2); color:var(--info); }
+  .msg-tools .del:hover { color:#d93025; }
+  /* 인라인 편집 */
+  .msg-ed { max-width:72%; align-self:flex-end; }
+  .msg-ed .me-inp { width:100%; min-width:240px; min-height:64px; border:1px solid var(--info); border-radius:10px; background:var(--bg); color:var(--txt); font:inherit; font-size:13px; padding:7px 10px; resize:vertical; }
+  .msg-ed .me-btns { display:flex; gap:6px; justify-content:flex-end; margin-top:6px; }
+  .msg-ed .me-btns button { border:none; border-radius:8px; padding:5px 14px; font-size:12px; cursor:pointer; }
+  .msg-ed .me-save { background:var(--info); color:#fff; }
+  .msg-ed .me-cancel { background:var(--bg2); color:var(--muted); border:1px solid var(--line); }
   .msg .mh { font-size:11px; color:var(--muted); margin-bottom:3px; }
   .msg.mine .mh { text-align:right; }
   .msg a { color:var(--info); }
@@ -240,8 +291,18 @@ header('Cache-Control: no-store');
   /* 입력 */
   .send { display:flex; gap:8px; padding:10px 14px; background:var(--bg); border-top:1px solid var(--line); }
   .send textarea { flex:1; resize:none; height:40px; max-height:120px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--txt); font:inherit; font-size:13px; padding:9px 12px; }
-  .send button { border:none; background:var(--info); color:#fff; border-radius:10px; padding:0 18px; font-size:13px; cursor:pointer; }
+  .send button#sendbtn { border:none; background:var(--info); color:#fff; border-radius:10px; padding:0 18px; font-size:13px; cursor:pointer; }
   .send button:disabled { opacity:.5; cursor:default; }
+  .send .att-btn { flex:none; border:1px solid var(--line); background:var(--bg); color:var(--muted); border-radius:10px; padding:0 12px; font-size:16px; cursor:pointer; }
+  /* 첨부 대기(전송 전) 미리보기 */
+  .pend { display:flex; flex-wrap:wrap; gap:10px; padding:8px 14px; background:var(--bg); border-top:1px solid var(--line); }
+  .pend .pf { position:relative; display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:5px 9px; background:var(--bg2); max-width:190px; }
+  .pend .pf img { width:40px; height:40px; object-fit:cover; border-radius:6px; display:block; }
+  .pend .pf .pf-ic { font-size:18px; }
+  .pend .pf .pf-nm { font-size:12px; color:var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pend .pf .pf-x { position:absolute; top:-7px; right:-7px; width:19px; height:19px; border:none; border-radius:50%; background:#d93025; color:#fff; font-size:11px; line-height:1; cursor:pointer; padding:0; }
+  .conv.drag-over::after { content:"파일을 놓아 첨부"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+                           background:rgba(12,68,124,.12); border:2px dashed var(--info); color:var(--info); font-size:14px; font-weight:600; z-index:20; pointer-events:none; }
   .err { color:#d93025; font-size:12px; padding:8px 16px; }
 </style>
 </head>
@@ -261,8 +322,11 @@ header('Cache-Control: no-store');
     </div>
     <div class="msgs" id="msgs"><div class="empty">왼쪽에서 대화를 선택하세요.</div></div>
     <button class="tolatest" id="tolatest" style="display:none">최신 메시지로 ↓</button>
+    <div id="pend" class="pend" style="display:none"></div>
     <div class="send">
-      <textarea id="inp" placeholder="메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)" disabled></textarea>
+      <button type="button" id="attbtn" class="att-btn" title="파일 첨부" disabled>📎</button>
+      <input type="file" id="fileinp" multiple style="display:none">
+      <textarea id="inp" placeholder="메시지 입력 (Enter 전송, Shift+Enter 줄바꿈 · 파일은 📎 또는 Ctrl+V/드래그)" disabled></textarea>
       <button id="sendbtn" disabled>보내기</button>
     </div>
   </div>
@@ -272,6 +336,11 @@ const $ = id => document.getElementById(id);
 let SELF = "", curCh = "", NAMES = {}, pollTimer = null, dmCache = [], botCache = [], botsOpen = false;
 function esc(s){ return (s??"").toString().replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
 function escA(s){ return esc(s).replace(/"/g,"&quot;"); }
+let editingTs = "";   // 현재 인라인 수정 중인 메시지 ts
+const ICON = {   // 이모지 대신 SVG (currentColor 상속)
+  edit:  '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
+};
 function initial(n){ return (n||"?").trim().slice(0,1) || "?"; }
 function fmtTs(ts){ const d=new Date(parseFloat(ts)*1000); const p=n=>n<10?"0"+n:n; return p(d.getHours())+":"+p(d.getMinutes()); }
 function relTime(ts){                                    // 상대 시간(목록용)
@@ -346,7 +415,14 @@ async function fetchHist(ch, opt){
   try{ return await (await fetch("?"+q.toString(),{cache:"no-store"})).json(); }catch(e){ return null; }
 }
 function msgHtml(m){
-  return `<div class="msg${m.mine?' mine':''}">
+  if(m.ts===editingTs){   // 인라인 수정 모드
+    return `<div class="msg mine msg-ed" data-ts="${escA(m.ts)}">
+      <textarea class="me-inp">${esc(m.text)}</textarea>
+      <div class="me-btns"><button type="button" class="me-cancel" data-ts="${escA(m.ts)}">취소</button><button type="button" class="me-save" data-ts="${escA(m.ts)}">저장</button></div>
+    </div>`;
+  }
+  return `<div class="msg${m.mine?' mine':''}" data-ts="${escA(m.ts)}">
+    ${m.mine?`<div class="msg-tools"><button type="button" class="msg-edit" data-ts="${escA(m.ts)}" title="수정">${ICON.edit}</button><button type="button" class="msg-del del" data-ts="${escA(m.ts)}" title="삭제">${ICON.trash}</button></div>`:""}
     <div class="mh">${esc(m.name)}<span class="t">${fmtTs(m.ts)}</span></div>
     <div class="mb">${mrkdwn(m.text)}</div>
     ${(m.files||[]).map(f=>f.img&&f.url?`<img class="mimg" src="file.php?u=${encodeURIComponent(f.url)}" alt="${escA(f.name)}" loading="lazy">`:(f.url?`<a href="file.php?u=${encodeURIComponent(f.url)}&dl=1&name=${encodeURIComponent(f.name)}">📎 ${esc(f.name)}</a>`:"")).join("")}
@@ -368,7 +444,9 @@ async function openDM(ch, nm){
   curCh = ch; renderDMs();
   $("convname").textContent = nm; $("convnote").textContent="";
   const dp=$("datePick"); dp.style.display=""; dp.max=todayStr(); dp.value="";
-  $("inp").disabled = false; $("sendbtn").disabled = false; $("inp").focus();
+  $("inp").disabled = false; $("sendbtn").disabled = false; $("attbtn").disabled = false; $("inp").focus();
+  pendFiles=[]; renderPend();   // 첨부 대기 초기화
+  editingTs="";
   curMsgs=[]; seenTs=new Set(); hasMoreOlder=false; atLive=true; hasNewerGap=false;   // 채널 전환 초기화
   $("msgs").innerHTML = '<div class="empty">불러오는 중…</div>';
   await loadLatest(true, true);
@@ -480,20 +558,107 @@ $("msgs").addEventListener("scroll", ()=>{
 });
 $("datePick").addEventListener("change", ()=>{ const v=$("datePick").value; if(v) jumpToDate(v); });
 $("tolatest").addEventListener("click", jumpToLatest);
+/* 내 메시지 수정/삭제 (이벤트 위임) */
+$("msgs").addEventListener("click", e=>{
+  const ed=e.target.closest(".msg-edit");   if(ed){ editMsg(ed.dataset.ts); return; }
+  const dl=e.target.closest(".msg-del");     if(dl){ deleteMsg(dl.dataset.ts); return; }
+  const sv=e.target.closest(".me-save");     if(sv){ saveEdit(sv.dataset.ts); return; }
+  const cc=e.target.closest(".me-cancel");   if(cc){ editingTs=""; renderMsgs(); startPoll(); return; }
+});
+function editMsg(ts){
+  editingTs=ts; stopPoll(); renderMsgs();   // 수정 중엔 폴링 중단(재렌더로 편집창 안 지워지게)
+  const ta=$("msgs").querySelector('.msg-ed[data-ts="'+ts+'"] .me-inp');
+  if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+async function saveEdit(ts){
+  const ta=$("msgs").querySelector('.msg-ed[data-ts="'+ts+'"] .me-inp'); if(!ta) return;
+  const text=ta.value.trim(); if(!text){ alert("내용을 입력하세요."); return; }
+  const ch=curCh;
+  try{
+    const j=await (await fetch("?dm_edit=1",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:ch,ts,text})})).json();
+    if(!j.ok) throw new Error(j.error||"실패");
+    const m=curMsgs.find(x=>x.ts===ts); if(m) m.text=text;
+    editingTs=""; renderMsgs(); startPoll();
+  }catch(e){ alert("수정 실패: "+e.message); }
+}
+async function deleteMsg(ts){
+  if(!confirm("이 메시지를 삭제할까요?")) return;
+  const ch=curCh;
+  try{
+    const j=await (await fetch("?dm_delete=1",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:ch,ts})})).json();
+    if(!j.ok) throw new Error(j.error||"실패");
+    const i=curMsgs.findIndex(x=>x.ts===ts); if(i>=0){ curMsgs.splice(i,1); seenTs.delete(ts); }
+    if(editingTs===ts) editingTs="";
+    renderMsgs();
+  }catch(e){ alert("삭제 실패: "+e.message); }
+}
+/* ===== 첨부 파일 (📎 버튼 / Ctrl+V 붙여넣기 / 드래그드롭) ===== */
+let pendFiles=[];
+function addFiles(list){
+  for(let f of list){
+    if(!f) continue;
+    if(!f.name){ const ext=((f.type||"").split("/")[1]||"bin"); f=new File([f], "pasted-"+Date.now()+"."+ext, {type:f.type}); }   // 붙여넣기 이미지 이름 보정
+    pendFiles.push(f);
+  }
+  renderPend();
+}
+function renderPend(){
+  const box=$("pend");
+  if(!pendFiles.length){ box.style.display="none"; box.innerHTML=""; return; }
+  box.style.display="";
+  box.innerHTML = pendFiles.map((f,i)=>{
+    const isImg=(f.type||"").indexOf("image/")===0;
+    const inner = isImg ? `<img src="${URL.createObjectURL(f)}" alt="">`
+                        : `<span class="pf-ic">📎</span><span class="pf-nm">${esc(f.name)}</span>`;
+    return `<div class="pf">${inner}<button type="button" class="pf-x" data-i="${i}" title="제거">✕</button></div>`;
+  }).join("");
+  box.querySelectorAll(".pf-x").forEach(b=>b.addEventListener("click",()=>{ pendFiles.splice(+b.dataset.i,1); renderPend(); }));
+}
 async function send(){
   const inp = $("inp"), text = inp.value.trim();
-  if(!text || !curCh) return;
-  $("sendbtn").disabled = true;
+  if((!text && !pendFiles.length) || !curCh) return;
+  $("sendbtn").disabled = true; $("attbtn").disabled = true;
   try{
-    const j = await (await fetch("?dm_send=1",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:curCh,text})})).json();
-    if(!j.ok) throw new Error(j.error||"실패");
+    if(pendFiles.length){
+      for(let i=0;i<pendFiles.length;i++){
+        const fd=new FormData();
+        fd.append("channel", curCh);
+        if(i===0 && text) fd.append("text", text);   // 첫 파일에 메시지(코멘트) 첨부
+        fd.append("file", pendFiles[i]);
+        const j=await (await fetch("?dm_upload=1",{method:"POST",body:fd})).json();
+        if(!j.ok) throw new Error(j.error==="missing_scope" ? "권한 부족(files:write 스코프 필요)" : (j.error||"업로드 실패"));
+      }
+      pendFiles=[]; renderPend();
+    } else {
+      const j = await (await fetch("?dm_send=1",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:curCh,text})})).json();
+      if(!j.ok) throw new Error(j.error||"실패");
+    }
     inp.value = "";
     if(atLive) await loadLatest(true,false); else await jumpToLatest();   // 과거 보던 중 전송 → 최신으로
   }catch(e){ alert("전송 실패: "+e.message); }
-  finally{ $("sendbtn").disabled = false; inp.focus(); }
+  finally{ $("sendbtn").disabled = false; $("attbtn").disabled = !curCh; inp.focus(); }
 }
 $("sendbtn").addEventListener("click", send);
 $("inp").addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } });
+$("attbtn").addEventListener("click", ()=>$("fileinp").click());
+$("fileinp").addEventListener("change", ()=>{ if($("fileinp").files.length){ addFiles([...$("fileinp").files]); $("fileinp").value=""; } });
+$("inp").addEventListener("paste", e=>{                       // Ctrl+V: 클립보드 파일/이미지 첨부
+  if(!curCh) return;
+  const items=(e.clipboardData||{}).items||[], files=[];
+  for(const it of items){ if(it.kind==="file"){ const f=it.getAsFile(); if(f) files.push(f); } }
+  if(files.length){ e.preventDefault(); addFiles(files); }    // 파일이 있으면 텍스트 붙여넣기는 막고 첨부
+});
+(function(){                                                  // 대화창에 드래그드롭
+  const conv=document.querySelector(".conv");
+  conv.addEventListener("dragover", e=>{ if(curCh){ e.preventDefault(); conv.classList.add("drag-over"); } });
+  conv.addEventListener("dragleave", e=>{ if(e.target===conv) conv.classList.remove("drag-over"); });
+  conv.addEventListener("drop", e=>{
+    conv.classList.remove("drag-over");
+    if(!curCh) return;
+    const fs=[...((e.dataTransfer&&e.dataTransfer.files)||[])];
+    if(fs.length){ e.preventDefault(); addFiles(fs); }
+  });
+})();
 loadDMs();
 setInterval(loadDMs, 30000);   // DM 목록 30초마다 갱신
 </script>
