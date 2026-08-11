@@ -7,10 +7,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# 데이터와 시크릿은 볼륨에 둔다
-ENV DB_PATH=/app/data/magazine.db \
-    SSO_SECRET_PATH=/app/data/sso_secret.key \
-    UPLOAD_DIR=/app/data/uploads
+# 런타임 산출물(DB·시크릿·업로드)은 전부 /app/var 볼륨에 둔다
+ENV DB_PATH=/app/var/magazine.db \
+    SSO_SECRET_PATH=/app/var/sso_secret.key \
+    UPLOAD_DIR=/app/var/uploads
 
 EXPOSE 8001
 ENTRYPOINT ["/app/entrypoint.sh"]

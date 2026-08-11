@@ -7,7 +7,7 @@ import json
 import os
 import sqlite3
 
-from config import Settings
+from core.config import Settings
 
 # seed.json 의 키이자 topics 컬럼. 순서가 INSERT 와 맞아야 한다.
 SEED_FIELDS = (
@@ -65,6 +65,7 @@ def _migrate(conn) -> None:
 def init_db(settings: Settings) -> None:
     """스키마를 만들고, 비어 있으면 seed.json 을 넣는다."""
     os.makedirs(settings.upload_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(settings.db_path)), exist_ok=True)
     conn = connect(settings)
     conn.execute(SCHEMA)
     conn.commit()

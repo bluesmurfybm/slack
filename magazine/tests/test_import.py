@@ -1,4 +1,4 @@
-import import_xlsx as ix
+from tools import import_xlsx as ix
 
 
 def test_excel_date_uses_1899_12_30_epoch():

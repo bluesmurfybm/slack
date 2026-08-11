@@ -8,7 +8,8 @@ import os
 from dataclasses import dataclass
 from typing import FrozenSet, Optional
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+# core/ 의 한 단계 위가 프로젝트 루트다.
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 DEV_ACCOUNTS = [
     {"email": "jian@bluesoft.co.kr", "name": "김지안", "role": "관리자"},
@@ -38,13 +39,13 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
-            db_path=os.environ.get("DB_PATH", os.path.join(BASE, "magazine.db")),
-            index_path=os.path.join(BASE, "index.html"),
-            seed_path=os.path.join(BASE, "seed.json"),
-            styles_dir=os.path.join(BASE, "styles"),
-            static_dir=os.path.join(BASE, "static"),
+            db_path=os.environ.get("DB_PATH", os.path.join(BASE, "var", "magazine.db")),
+            index_path=os.path.join(BASE, "web", "index.html"),
+            seed_path=os.path.join(BASE, "data", "seed.json"),
+            styles_dir=os.path.join(BASE, "web", "styles"),
+            static_dir=os.path.join(BASE, "web", "static"),
             # 업로드 파일. 도커에서는 DB 와 같은 볼륨(/app/data)에 둔다.
-            upload_dir=os.environ.get("UPLOAD_DIR", os.path.join(BASE, "data", "uploads")),
+            upload_dir=os.environ.get("UPLOAD_DIR", os.path.join(BASE, "var", "uploads")),
             max_upload_bytes=int(os.environ.get("MAX_UPLOAD_MB", "50")) * 1024 * 1024,
             # 포털 공용 스타일. 컨테이너에는 없을 수 있어 앱 조립 시 존재 여부를 본다.
             shared_styles_dir=os.path.join(BASE, "..", "styles"),

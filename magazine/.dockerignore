@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
 *.db
-data/
-test_*.py
+var/
+tests/
 .pytest_cache/

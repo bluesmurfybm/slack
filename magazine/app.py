@@ -5,13 +5,18 @@
     pip install -r requirements.txt
     python app.py            ->  http://localhost:8001
 
-도메인별로 나뉘어 있다:
-    config.py    설정(환경변수는 여기서만 읽는다)
-    db.py        연결·스키마·시드
-    auth.py      포털 SSO 쿠키 검증, 관리자 판정, whoami
-    topics.py    주제 등록·수정·삭제와 선점 흐름
-    notify.py    슬랙 알림
-    devlogin.py  개발 전용 로그인(DEV_LOGIN=1 일 때만 등록)
+구조:
+    core/       config(설정) · db(연결·스키마·시드)
+    features/
+      identity/ 포털 SSO 쿠키 검증, 관리자 판정, whoami, 개발 로그인
+      topics/   주제 등록·수정·삭제와 선점 흐름 (models/service/router)
+      material/ 발표 자료 파일·링크 (storage/router)
+      notify/   슬랙 알림
+    web/        index.html, static(js), styles(css)
+    data/       seed.json
+    var/        런타임 산출물 — DB, 업로드 파일 (git 제외)
+    tools/      xlsx -> seed.json 변환기
+    tests/
 
 로그인 화면은 없다. 포털(PHP auth.php)이 심는 쿠키를 검증만 하므로
 포털과 같은 호스트에서 서빙되어야 한다(포트는 달라도 된다).
@@ -22,12 +27,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-import auth
-import devlogin
-import material
-import topics
-from config import Settings
-from db import init_db
+from core.config import Settings
+from core.db import init_db
+from features import identity, material, topics
+from features.identity.auth import get_identity
 
 
 def create_app(settings: Settings = None) -> FastAPI:
@@ -51,16 +54,16 @@ def create_app(settings: Settings = None) -> FastAPI:
                   StaticFiles(directory=settings.shared_styles_dir),
                   name="shared-styles")
 
-    app.include_router(auth.router)
+    app.include_router(identity.router)
     app.include_router(topics.router)
     app.include_router(material.router)
     if settings.dev_login:
-        app.include_router(devlogin.router)
+        app.include_router(identity.devlogin_router)
 
     @app.get("/")
     def index(request: Request):
         # 개발 모드에서는 로그인 전에도 화면을 내준다. 계정 전환 바를 써야 하기 때문.
-        if not settings.dev_login and not auth.get_identity(request):
+        if not settings.dev_login and not get_identity(request):
             return RedirectResponse(settings.portal_url)
         return FileResponse(settings.index_path)
 

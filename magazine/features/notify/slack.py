@@ -6,7 +6,7 @@
 """
 from typing import Optional
 
-from config import Settings
+from core.config import Settings
 
 
 def _webhook(settings: Settings) -> Optional[str]:

@@ -1,24 +1,10 @@
-import dataclasses
-import io
-
-import pytest
 from fastapi.testclient import TestClient
 
 from app import create_app
-from test_app import ADMIN, OTHER, USER, _settings, login
+from conftest import ADMIN, OTHER, USER, login, make_settings
+
 
 NEW = {"title": "자료 붙일 주제", "requirement": "recommended"}
-
-
-@pytest.fixture()
-def settings(tmp_path):
-    return dataclasses.replace(_settings(tmp_path),
-                               upload_dir=str(tmp_path / "uploads"))
-
-
-@pytest.fixture()
-def client(settings):
-    return TestClient(create_app(settings))
 
 
 def _claimed(client, settings):
@@ -114,9 +100,7 @@ def test_svg_and_html_are_forced_to_download(client, settings):
 
 
 def test_upload_over_limit_is_rejected(tmp_path):
-    small = dataclasses.replace(_settings(tmp_path),
-                                upload_dir=str(tmp_path / "up"),
-                                max_upload_bytes=1024)
+    small = make_settings(tmp_path, max_upload_bytes=1024)
     c = TestClient(create_app(small))
     login(c, small, ADMIN)
     tid = c.post("/magazineapi/topics", json=NEW).json()["id"]

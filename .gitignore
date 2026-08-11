@@ -26,8 +26,7 @@ book/book.db
 
 # magazine(DTI 발표주제) 로컬 전용 설정/데이터
 magazine/config_local.py
-magazine/magazine.db
-magazine/data/
+magazine/var/
 __pycache__/
 *.pyc
 

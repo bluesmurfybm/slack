@@ -8,8 +8,8 @@ DEV_LOGIN=1 일 때만 앱에 등록되므로 운영에는 존재하지 않는�
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from auth import get_settings, is_admin, make_cookie
-from config import DEV_ACCOUNTS, Settings
+from features.identity.auth import get_settings, is_admin, make_cookie
+from core.config import DEV_ACCOUNTS, Settings
 
 router = APIRouter(prefix="/magazineapi", tags=["dev"])
 

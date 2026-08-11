@@ -11,9 +11,9 @@ import hmac
 import time
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
-from config import DEV_ACCOUNTS, Settings
+from core.config import Settings
 
 COOKIE_NAME = "blueiwork_id"
 
@@ -82,19 +82,3 @@ def require_admin(request: Request,
     if not is_admin(get_settings(request), identity.get("email")):
         raise HTTPException(status_code=403, detail="관리자만 할 수 있습니다")
     return identity
-
-
-router = APIRouter(prefix="/magazineapi", tags=["identity"])
-
-
-@router.get("/whoami")
-def whoami(request: Request, settings: Settings = Depends(get_settings)):
-    ident = get_identity(request)
-    base = {"email": None, "name": None, "color": None}
-    base.update(ident or {})
-    base["is_admin"] = is_admin(settings, base.get("email"))
-    base["dev_login"] = settings.dev_login
-    base["dev_accounts"] = DEV_ACCOUNTS if settings.dev_login else []
-    base["portal_url"] = settings.portal_url
-    base["slack_url"] = settings.slack_url
-    return base

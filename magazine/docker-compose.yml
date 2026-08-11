@@ -16,7 +16,7 @@ services:
       PORTAL_URL: "/"
       MAX_UPLOAD_MB: "50"
     volumes:
-      - magazine-data:/app/data
+      - magazine-data:/app/var
       # 포털 공용 스타일(topbar.css). BASE 가 /app 이므로 ../styles 는 /styles 다.
       - ../styles:/styles:ro
 

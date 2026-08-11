@@ -1,46 +1,5 @@
-import dataclasses
-
-import pytest
-from fastapi.testclient import TestClient
-
-from app import create_app
-from auth import make_cookie
-from config import Settings
-
-ADMIN = "jian@bluesoft.co.kr"
-USER = "siyu@bluesoft.co.kr"
-
-
-def _settings(tmp_path, dev_login=False):
-    """매 테스트마다 빈 DB와 임시 시크릿을 쓰는 설정.
-
-    모듈을 reload 하지 않는다 — 환경변수 대신 Settings 를 직접 갈아끼우고
-    create_app() 으로 앱을 새로 만든다.
-    """
-    secret = tmp_path / "sso_secret.key"
-    secret.write_text("test-secret-0123456789")
-    return dataclasses.replace(
-        Settings.from_env(),
-        db_path=str(tmp_path / "test.db"),
-        sso_secret_path=str(secret),
-        admin_emails=frozenset({ADMIN}),
-        dev_login=dev_login,
-        slack_webhook=None,
-    )
-
-
-@pytest.fixture()
-def settings(tmp_path):
-    return _settings(tmp_path)
-
-
-@pytest.fixture()
-def client(settings):
-    return TestClient(create_app(settings))
-
-
-def login(client, settings, email, name="테스터"):
-    client.cookies.set("blueiwork_id", make_cookie(settings, email, name))
+from conftest import ADMIN, OTHER, USER, login
+from features.identity.auth import make_cookie
 
 
 def test_seed_is_loaded(client, settings):
@@ -317,11 +276,6 @@ def test_completed_topic_cannot_be_rescheduled(client, settings):
 
 
 # ---------- 개발 전용 로그인 ----------
-@pytest.fixture()
-def dev_client(tmp_path):
-    return TestClient(create_app(_settings(tmp_path, dev_login=True)))
-
-
 def test_devlogin_sets_working_cookie(dev_client):
     r = dev_client.post("/magazineapi/devlogin", json={"email": ADMIN, "name": "김지안"})
     assert r.status_code == 200
