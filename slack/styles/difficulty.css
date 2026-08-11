@@ -8,6 +8,12 @@
   input,button,select { font-family:inherit; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; height:32px; padding:0 10px; }
   button { cursor:pointer; }
   a.btn { text-decoration:none; }
+  /* 보관 포함 토글 (켜면 색 변함) */
+  .arch-tgl { height:32px; padding:0 13px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--muted);
+              font-size:13px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+  .arch-tgl:hover { border-color:var(--info); color:var(--info); }
+  .arch-tgl.on { background:var(--info); border-color:var(--info); color:#fff; }
+  .arch-tgl.on:hover { color:#fff; }
   /* 난이도 요약 막대 */
   .summary { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
   .scard { flex:1; min-width:120px; background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; cursor:pointer; }

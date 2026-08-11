@@ -44,6 +44,7 @@ header('Pragma: no-cache');
   </div>
   <div class="toolbar">
     <span class="who"><?= htmlspecialchars($me['name'], ENT_QUOTES) ?> 님 · 별 많을수록 어려움(★5 기준)</span>
+    <button type="button" id="incArch" class="arch-tgl" aria-pressed="false">🗄 보관 항목 포함</button>
     <button id="reset" type="button">필터 초기화</button>
     <a class="btn" href="../lists.php"><button type="button">← 요청 목록</button></a>
   </div>
@@ -108,7 +109,7 @@ const TEAM = {"블루소프트":{bg:"#e6f1fb",fg:"#0c447c"},"와이오즈":{bg:"
 function pal(s){ return PALETTE[s]||PALETTE["기타"]; }
 function teamColor(s){ return TEAM[s]||{bg:"#eceff1",fg:"#455a64"}; }
 
-let DATA=[], filter="", fteam=new Set(), fstat=new Set(), openId=null, fLevel=0;
+let DATA=[], filter="", fteam=new Set(), fstat=new Set(), openId=null, fLevel=0, includeArchived=false;
 const ASSIGNEES = ["김아랑","박화랑","안정민","유병문","유승인","이준영","이한재"];
 let LOCAL = {};        // request_id -> 배정 담당자(로컬)
 let PREVIEW = null;    // 자동 배정 미리보기 결과 [{id, assignee}]
@@ -173,6 +174,7 @@ function rowHtml(r){
       ${LOCAL[r.id]?`<span class="asg-chip">담당 ${esc(LOCAL[r.id])}</span>`:''}
       ${r.team?`<span class="st" style="background:${teamColor(r.team).bg};color:${teamColor(r.team).fg}">${esc(r.team)}</span>`:''}
       ${r.status?`<span class="st" style="background:${pal(r.status).bg};color:${pal(r.status).fg}">${esc(r.status)}</span>`:''}
+      ${r.archived?`<span class="st" style="background:#e5e7eb;color:#4b5563">🗄 보관</span>`:''}
       <div class="date">${fmtDate(r.created)}</div>
     </div>`;
   if(!open) return html;
@@ -375,16 +377,28 @@ document.getElementById("ap-clear").addEventListener("click", async ()=>{
 
 async function load(){
   try{
-    const res = await fetch("../data.php",{cache:"no-store"});
-    const json = await res.json();
-    if(json.error){ document.getElementById("board").innerHTML='<div class="err">에러: '+esc(json.error)+'</div>'; return; }
-    DATA = (json.rows||[]).filter(r => r.board === '블루소프트' || !r.board);   // 난이도·배정은 블루소프트만
+    // 활성 항목 + (옵션) 보관 항목 병합
+    const jobs = [ fetch("../data.php",{cache:"no-store"}).then(r=>r.json()) ];
+    if(includeArchived) jobs.push( fetch("../data.php?archived=1&limit=all",{cache:"no-store"}).then(r=>r.json()).catch(()=>({rows:[]})) );
+    const results = await Promise.all(jobs);
+    if(results[0] && results[0].error){ document.getElementById("board").innerHTML='<div class="err">에러: '+esc(results[0].error)+'</div>'; return; }
+    let rows=[];
+    results.forEach(j=>{ if(j && j.rows) rows=rows.concat(j.rows); });
+    DATA = rows.filter(r => r.board === '블루소프트' || !r.board);   // 난이도·배정은 블루소프트만
     DATA.forEach(r=>r._diff = difficultyOf(r));   // 난이도 1회 계산(데이터 갱신 시 재계산)
     await loadAssignments();                       // 로컬 배정 로드
     buildAllMS(); renderAssignPanel(); render();
-    document.getElementById("updated").textContent = "마지막 갱신: "+new Date().toLocaleTimeString("ko-KR");
+    document.getElementById("updated").textContent = "마지막 갱신: "+new Date().toLocaleTimeString("ko-KR")+(includeArchived?" · 보관 포함":"");
   }catch(e){ document.getElementById("board").innerHTML='<div class="err">불러오기 실패</div>'; }
 }
+document.getElementById("incArch").addEventListener("click", e=>{
+  includeArchived = !includeArchived;
+  const b=e.currentTarget;
+  b.classList.toggle("on", includeArchived);
+  b.setAttribute("aria-pressed", includeArchived?"true":"false");
+  b.textContent = "🗄 " + (includeArchived ? "보관 항목 제외" : "보관 항목 포함");   // 상태에 따라 문구 전환
+  openId=null; load();
+});
 
 load();
 </script>
