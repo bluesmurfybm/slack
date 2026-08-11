@@ -163,10 +163,18 @@ let EDIT_ID=null;
 let PENDING_DELETE=null;
 
 /* 세션이 끊긴 채(만료 등) API를 호출하면 401 — 포털 로그인으로 돌려보낸다.
-   "/" 자체가 서버에서 로그인 여부를 확인하므로 이동만 시키면 된다. */
+   "/" 자체가 서버에서 로그인 여부를 확인하므로 이동만 시키면 된다.
+
+   단 개발 모드에서는 "/" 가 401 이어도 화면을 그대로 내주므로, 여기서 이동시키면
+   로드 -> 401 -> 이동 -> 로드 의 무한 새로고침이 된다. 계정 전환 바를 쓸 수 있게
+   토스트만 띄우고 멈춘다. */
 async function api(path,opts){
   const r=await fetch(path,Object.assign({credentials:"same-origin"},opts||{}));
-  if(r.status===401){ location.href="/"; throw new Error("unauthenticated"); }
+  if(r.status===401){
+    if(ME.dev_login) throw new Error("상단 개발 모드 바에서 계정을 선택해 주세요");
+    location.href="/";
+    throw new Error("unauthenticated");
+  }
   if(!r.ok){
     let msg="요청이 실패했습니다";
     try{ msg=(await r.json()).detail||msg; }catch(e){}
