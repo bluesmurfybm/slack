@@ -24,6 +24,7 @@ class Settings:
     index_path: str
     seed_path: str
     styles_dir: str
+    static_dir: str
     shared_styles_dir: str
     sso_secret_path: str
     admin_emails: FrozenSet[str]
@@ -39,6 +40,7 @@ class Settings:
             index_path=os.path.join(BASE, "index.html"),
             seed_path=os.path.join(BASE, "seed.json"),
             styles_dir=os.path.join(BASE, "styles"),
+            static_dir=os.path.join(BASE, "static"),
             # 포털 공용 스타일. 컨테이너에는 없을 수 있어 앱 조립 시 존재 여부를 본다.
             shared_styles_dir=os.path.join(BASE, "..", "styles"),
             # book/ 과 달리 경로를 환경변수로 뺀다. 개발 환경에는 포털이 만드는
