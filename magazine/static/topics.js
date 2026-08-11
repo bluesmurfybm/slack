@@ -78,6 +78,7 @@ function rowHtml(t) {
         ${t.field ? `<span class="chip">${esc(t.field)}</span>` : ""}
         ${t.keywords ? `<span class="chip ghost">${esc(t.keywords)}</span>` : ""}
         <span class="muted">${esc(src || "—")}</span>
+        ${materialChip(t)}
       </div>
     </div>
     <div class="row-side">
@@ -91,6 +92,9 @@ function rowHtml(t) {
 
 function actionsHtml(t) {
   const out = [];
+  if (canManageMaterial(t)) {
+    out.push(`<button class="btn-mini ghost" onclick="openMaterial(${t.id})">자료</button>`);
+  }
   if (t.status === "미지정") {
     out.push(`<button class="btn-mini primary" onclick="claim(${t.id})">내가 발표할게요</button>`);
   } else if (t.presenter_email === APP.me.email && t.status !== "발표완료") {

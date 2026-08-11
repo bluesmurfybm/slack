@@ -159,6 +159,42 @@
   </div>
 </div>
 
+<div class="overlay" id="matOverlay" onclick="if(event.target===this)closeMaterial()">
+  <div class="cdialog">
+    <h3>발표 자료</h3>
+    <p id="matCurrent"></p>
+    <div class="seg" id="seg-mat">
+      <button type="button" id="mat-file" class="on" onclick="setMatMode('file')">파일 올리기</button>
+      <button type="button" id="mat-link" onclick="setMatMode('link')">링크</button>
+    </div>
+    <div id="mat-file-box" class="mat-box">
+      <input id="mat-fileinput" type="file">
+    </div>
+    <div id="mat-link-box" class="mat-box" style="display:none">
+      <input id="mat-url" type="url" placeholder="https://...">
+      <input id="mat-name" type="text" placeholder="표시 이름 (선택)">
+    </div>
+    <div class="row-btn">
+      <button class="btn-ghost danger" id="mat-del" onclick="detachMaterial()">삭제</button>
+      <button class="btn-ghost" onclick="closeMaterial()">닫기</button>
+      <button class="btn-submit" onclick="submitMaterial()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="viewOverlay" onclick="if(event.target===this)closeViewer()">
+  <div class="viewer">
+    <div class="viewer-head">
+      <span id="viewName"></span>
+      <span class="viewer-act">
+        <a id="viewDownload" class="btn-mini" href="#" download>내려받기</a>
+        <button class="btn-mini ghost" onclick="closeViewer()">닫기</button>
+      </span>
+    </div>
+    <div class="viewer-body" id="viewBody"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- 도메인별로 나뉜 스크립트. 로드 순서가 의존 순서다.
@@ -168,6 +204,7 @@
 <script src="/static/topics.js"></script>
 <script src="/static/claim.js"></script>
 <script src="/static/form.js"></script>
+<script src="/static/material.js"></script>
 <script src="/static/main.js"></script>
 </body>
 </html>

@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 import auth
 import devlogin
+import material
 import topics
 from config import Settings
 from db import init_db
@@ -52,6 +53,7 @@ def create_app(settings: Settings = None) -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(topics.router)
+    app.include_router(material.router)
     if settings.dev_login:
         app.include_router(devlogin.router)
 

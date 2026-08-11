@@ -301,3 +301,43 @@ body.is-admin .admin-only{display:inline-flex !important}
   .row-act{justify-content:flex-start}
   .two,.triple{grid-template-columns:1fr}
 }
+
+/* ---------- 발표 자료 ---------- */
+.chip.material{
+  font-family:var(--sans);cursor:pointer;background:var(--cos95);border-color:var(--cos90);
+  color:var(--cos40);font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;padding:2px 8px;
+}
+.chip.material:hover{background:var(--cos90)}
+
+.mat-box{display:flex;flex-direction:column;gap:8px;margin:14px 0 18px}
+.mat-box input[type="url"],.mat-box input[type="text"]{
+  width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;
+  border:1px solid var(--bo-tertiary);border-radius:var(--r8);background:var(--bg-card);color:var(--tx-primary);
+}
+.mat-box input:focus{outline:none;border-color:var(--cos50);box-shadow:0 0 0 3px var(--cos95)}
+.mat-box input[type="file"]{font-size:13px;color:var(--tx-tertiary)}
+#matCurrent{margin-bottom:12px}
+.btn-ghost.danger{color:var(--nega40);border-color:var(--nega50);margin-right:auto}
+.btn-ghost.danger:hover{background:var(--nega95);color:var(--nega40)}
+
+/* 뷰어 */
+.viewer{
+  background:var(--bg-card);width:100%;max-width:960px;border-radius:var(--r16);
+  border:1px solid var(--bo-primary);box-shadow:var(--shadow-lg);
+  display:flex;flex-direction:column;max-height:82vh;animation:pop .16s ease;
+}
+.viewer-head{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:14px 18px;border-bottom:1px solid var(--bo-primary);
+  font-weight:600;font-size:14px;color:var(--tx-primary);
+}
+.viewer-head span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.viewer-act{display:flex;gap:6px;flex:none;align-items:center}
+.viewer-act .btn-mini{text-decoration:none;display:inline-flex;align-items:center}
+.viewer-body{flex:1;min-height:320px;overflow:auto;background:var(--bg-subtle);
+  display:flex;align-items:center;justify-content:center;padding:12px}
+.viewer-body img{max-width:100%;max-height:70vh;display:block;border-radius:var(--r6)}
+.viewer-body iframe{width:100%;height:70vh;border:none;background:#fff;border-radius:var(--r6)}
+.viewer-none{text-align:center;color:var(--tx-quaternary);padding:48px 20px}
+.viewer-none .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bottom:6px}

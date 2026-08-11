@@ -45,11 +45,30 @@ def connect(settings: Settings) -> sqlite3.Connection:
     return conn
 
 
+# 나중에 추가된 컬럼. 이미 돌고 있는 DB 도 있으므로 없을 때만 붙인다.
+ADDED_COLUMNS = (
+    ("material_kind", "TEXT"),   # '' | 'link' | 'file'
+    ("material_name", "TEXT"),   # 표시 이름 / 원본 파일명
+    ("material_url", "TEXT"),    # link 인 경우 외부 URL
+    ("material_path", "TEXT"),   # file 인 경우 저장된 파일명
+)
+
+
+def _migrate(conn) -> None:
+    have = {r[1] for r in conn.execute("PRAGMA table_info(topics)").fetchall()}
+    for name, decl in ADDED_COLUMNS:
+        if name not in have:
+            conn.execute(f"ALTER TABLE topics ADD COLUMN {name} {decl}")
+    conn.commit()
+
+
 def init_db(settings: Settings) -> None:
     """스키마를 만들고, 비어 있으면 seed.json 을 넣는다."""
+    os.makedirs(settings.upload_dir, exist_ok=True)
     conn = connect(settings)
     conn.execute(SCHEMA)
     conn.commit()
+    _migrate(conn)
 
     empty = conn.execute("SELECT COUNT(*) FROM topics").fetchone()[0] == 0
     if empty and os.path.exists(settings.seed_path):
