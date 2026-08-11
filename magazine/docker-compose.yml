@@ -1,0 +1,23 @@
+# 기동:  docker compose up --build   ->  http://localhost:8001
+#
+# Docker Desktop + WSL 환경에서 "error getting credentials" 로 빌드가 실패하면
+# ~/.docker/config.json 의 credsStore(desktop.exe) 헬퍼를 docker 가 확장자 없는
+# 이름으로 찾기 때문이다. 아래 중 하나로 푼다.
+#   ln -s /Docker/host/bin/docker-credential-desktop.exe ~/.local/bin/docker-credential-desktop
+#   또는  DOCKER_CONFIG=$(mktemp -d) docker compose up --build
+services:
+  magazine:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      DEV_LOGIN: "1"                      # 포털이 없으므로 개발 로그인을 켠다
+      ADMIN_EMAILS: "jian@bluesoft.co.kr"
+      PORTAL_URL: "/"
+    volumes:
+      - magazine-data:/app/data
+      # 포털 공용 스타일(topbar.css). BASE 가 /app 이므로 ../styles 는 /styles 다.
+      - ../styles:/styles:ro
+
+volumes:
+  magazine-data:

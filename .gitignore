@@ -23,6 +23,11 @@ sso_secret.key
 book/config_local.py
 book/kakao_keys.json
 book/book.db
+
+# magazine(DTI 발표주제) 로컬 전용 설정/데이터
+magazine/config_local.py
+magazine/magazine.db
+magazine/data/
 __pycache__/
 *.pyc
 
