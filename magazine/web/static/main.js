@@ -6,8 +6,6 @@ document.addEventListener("click", e => {
   const um = document.getElementById("hdrUserMenu");
   if (um && !um.contains(e.target)) um.classList.remove("open");
 });
-
-/* ---------- 개발 모드 계정 전환 ---------- */
 function buildDevBar() {
   const bar = document.getElementById("devbar");
   if (!APP.me.dev_login) { bar.style.display = "none"; return; }
@@ -23,8 +21,6 @@ async function devLogin(email) {
   await postJSON("/magazineapi/devlogin", { email });
   await loadAll();
 }
-
-/* ---------- 부팅 ---------- */
 async function loadWhoami() {
   APP.me = await api("/magazineapi/whoami");
   document.body.classList.toggle("is-admin", !!APP.me.is_admin);

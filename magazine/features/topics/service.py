@@ -9,8 +9,7 @@ STATUS_DONE = "발표완료"
 
 
 def derive_status(row) -> str:
-    # 컬럼으로 저장하지 않고 매번 파생한다. 원본 xlsx 에 '발표자와 예정일이
-    # 있는데 비고는 미지정' 같은 어긋난 행이 실제로 있어서, 저장하면 계속 어긋난다.
+    # 컬럼으로 저장하지 않는다 — 원본 xlsx 에 상태와 값이 어긋난 행이 있었다.
     if row["done_date"]:
         return STATUS_DONE
     if row["presenter_email"]:
@@ -25,7 +24,6 @@ def to_dict(row) -> dict:
 
 
 def fetch(conn, tid):
-    """없으면 커넥션을 닫고 404."""
     row = conn.execute("SELECT * FROM topics WHERE id=?", (tid,)).fetchone()
     if not row:
         conn.close()
@@ -34,6 +32,5 @@ def fetch(conn, tid):
 
 
 def may_manage_claim(settings: Settings, row, identity: dict) -> bool:
-    """선점자 본인이거나 관리자."""
     return (row["presenter_email"] == identity["email"]
             or is_admin(settings, identity["email"]))

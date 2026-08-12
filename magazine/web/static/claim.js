@@ -8,7 +8,6 @@ async function claim(id) {
   } catch (e) { showToast(e.message); }
 }
 
-/* 선점 시 날짜를 비웠거나, 정해둔 날짜를 바꿀 때 */
 async function schedule(id) {
   const t = APP.topics.find(x => x.id === id);
   const d = await askDate("발표 예정일", "비워 두면 미정으로 돌아갑니다.", t ? t.planned_date : "");

@@ -27,7 +27,6 @@ function buildFilters() {
   fill("f-magazine", APP.topics.map(t => t.magazine), "전체 매거진");
 }
 
-/* 분야·매거진은 기존 값 자동완성, 년도·팀은 드롭박스. 모두 현재 데이터에서 만든다. */
 function buildFormOptions() {
   const fillDL = (id, vals) => {
     document.getElementById(id).innerHTML =
@@ -69,7 +68,6 @@ function rowHtml(t) {
   const src = [t.magazine, t.volume && `Vol.${t.volume}`, t.page && `p.${t.page}`]
     .filter(Boolean).join(" ");
   const when = t.done_date || t.planned_date || "";
-  // 발표자·날짜를 맨 왼쪽에 세로로 세운다
   return `<li class="row">
     <div class="row-side">
       ${who ? `<span class="who" style="background:${c.bg};color:${c.fg}">${esc(who)}</span>`

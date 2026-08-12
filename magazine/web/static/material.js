@@ -4,7 +4,6 @@ let MAT_MODE = "file";
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp)$/i;
 const PDF_RE = /\.pdf$/i;
 
-/* 자료를 붙이거나 바꿀 수 있는 사람인가 (버튼 노출용) */
 function canManageMaterial(t) {
   return APP.me.is_admin || (t.presenter_email && t.presenter_email === APP.me.email);
 }
@@ -16,8 +15,6 @@ function materialChip(t) {
   return `<button class="chip material" onclick="openViewer(${t.id})"
             title="${esc(name)}">${icon} ${esc(name)}</button>`;
 }
-
-/* ---------- 등록 ---------- */
 function openMaterial(id) {
   const t = APP.topics.find(x => x.id === id);
   if (!t) return;
@@ -73,8 +70,6 @@ async function detachMaterial() {
     await reload();
   } catch (e) { showToast(e.message); }
 }
-
-/* ---------- 뷰어 ---------- */
 function openViewer(id) {
   const t = APP.topics.find(x => x.id === id);
   if (!t || !t.material_kind) return;
@@ -106,8 +101,6 @@ function openViewer(id) {
   document.getElementById("viewOverlay").classList.add("open");
 }
 
-/* 기본은 넓은 모달, 한 번 더 누르면 화면을 꽉 채운다.
-   선택은 다음에 열 때도 유지된다. */
 function toggleViewerSize() {
   const v = document.querySelector("#viewOverlay .viewer");
   const full = v.classList.toggle("full");

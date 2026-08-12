@@ -13,7 +13,6 @@ from features.topics.service import fetch, may_manage_claim, to_dict
 router = APIRouter(prefix="/magazineapi/topics", tags=["topics"])
 
 
-# ---------- 조회 ----------
 @router.get("")
 def list_topics(request: Request, identity: dict = Depends(require_identity)):
     conn = connect(get_settings(request))
@@ -32,7 +31,6 @@ def get_topic(tid: int, request: Request, identity: dict = Depends(require_ident
     return to_dict(row)
 
 
-# ---------- 관리자 CRUD ----------
 @router.post("", status_code=201)
 def create_topic(body: TopicIn, request: Request,
                  identity: dict = Depends(require_admin)):
@@ -78,15 +76,12 @@ def delete_topic(tid: int, request: Request,
     return {"ok": True}
 
 
-# ---------- 선점 흐름 ----------
 @router.post("/{tid}/claim")
 def claim_topic(tid: int, body: ClaimIn, request: Request,
                 identity: dict = Depends(require_identity)):
     conn = connect(get_settings(request))
     fetch(conn, tid)   # 없으면 404
-    # 조건부 UPDATE 한 방으로 동시 선점을 막는다.
-    # - 임포트된 행의 presenter_email 은 NULL 이 아니라 빈 문자열이라 둘 다 본다.
-    # - 발표까지 끝난 주제는 발표자가 비어 있어도 선점 대상이 아니다.
+    # 동시 선점 방지 — 조건부 UPDATE 한 방. 임포트된 행은 NULL 이 아니라 빈 문자열이다.
     cur = conn.execute(
         "UPDATE topics SET presenter_email=?, presenter=?, "
         "planned_date=CASE WHEN ?<>'' THEN ? ELSE planned_date END "
@@ -123,11 +118,7 @@ def release_topic(tid: int, request: Request,
 @router.post("/{tid}/schedule")
 def schedule_topic(tid: int, body: ScheduleIn, request: Request,
                    identity: dict = Depends(require_identity)):
-    """선점자가 발표 예정일을 나중에 정하거나 바꾼다.
-
-    선점(claim)은 아직 아무도 안 잡은 주제에만 걸리므로, 날짜를 비우고
-    선점한 사람이 나중에 날짜를 넣을 방법이 따로 필요하다.
-    """
+    # claim 은 아무도 안 잡은 주제에만 걸려서, 선점 후 날짜를 넣을 경로가 따로 필요하다.
     settings = get_settings(request)
     conn = connect(settings)
     row = fetch(conn, tid)
@@ -160,10 +151,7 @@ def complete_topic(tid: int, body: CompleteIn, request: Request,
 @router.post("/{tid}/assign")
 def assign_presenter(tid: int, body: AssignIn, request: Request,
                      identity: dict = Depends(require_admin)):
-    """관리자가 발표자를 직접 지정한다. 이메일이 비면 지정을 푼다.
-
-    선점(claim)과 달리 이미 선점된 주제도 덮어쓴다 — 배정 권한은 관리자에게 있다.
-    """
+    # 선점과 달리 이미 선점된 주제도 덮어쓴다 — 배정 권한은 관리자에게 있다.
     conn = connect(get_settings(request))
     fetch(conn, tid)
     email = body.email.strip()
@@ -172,7 +160,6 @@ def assign_presenter(tid: int, body: AssignIn, request: Request,
         raise HTTPException(status_code=422, detail="명단에 없는 사람입니다")
 
     if not email:
-        # 발표자가 없으면 예정일도 의미가 없다. release 와 같게 맞춘다.
         conn.execute("UPDATE topics SET presenter_email='', presenter='', "
                      "planned_date='' WHERE id=?", (tid,))
     elif body.planned_date is None:

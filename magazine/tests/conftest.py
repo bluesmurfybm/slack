@@ -1,5 +1,3 @@
-import dataclasses
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -15,16 +13,15 @@ OTHER = "hjlee@bluesoft.co.kr"
 def make_settings(tmp_path, dev_login=False, **over):
     secret = tmp_path / "sso_secret.key"
     secret.write_text("test-secret-0123456789")
-    return dataclasses.replace(
-        Settings.from_env(),
-        db_path=str(tmp_path / "test.db"),
-        upload_dir=str(tmp_path / "uploads"),
-        sso_secret_path=str(secret),
-        admin_emails=frozenset({ADMIN}),
-        dev_login=dev_login,
-        slack_webhook=None,
+    return Settings().model_copy(update={
+        "db_path": str(tmp_path / "test.db"),
+        "upload_dir": str(tmp_path / "uploads"),
+        "sso_secret_path": str(secret),
+        "admin_emails": frozenset({ADMIN}),
+        "dev_login": dev_login,
+        "slack_webhook": None,
         **over,
-    )
+    })
 
 
 @pytest.fixture()

@@ -36,7 +36,6 @@ def _sign(settings: Settings, payload: str) -> str:
 def make_cookie(settings: Settings, email: str, name: str = "",
                 color: str = "", ttl: int = 3600) -> str:
     """포털 auth.php 의 issue_sso_cookie 와 같은 형식. 개발 로그인과 테스트 전용."""
-    # b64url(email \t name \t color \t exp) + "." + hmac_sha256(payload, secret)
     inner = f"{email}\t{name}\t{color}\t{int(time.time()) + ttl}"
     payload = _b64url_encode(inner.encode("utf-8"))
     return f"{payload}.{_sign(settings, payload)}"

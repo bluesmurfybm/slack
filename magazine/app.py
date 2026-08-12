@@ -11,7 +11,7 @@ from features.identity.auth import get_identity
 
 
 def create_app(settings: Settings = None) -> FastAPI:
-    settings = settings or Settings.from_env()
+    settings = settings or Settings()
     init_db(settings)
 
     app = FastAPI(title="BlueUP-DTI 발표 주제")
@@ -19,8 +19,6 @@ def create_app(settings: Settings = None) -> FastAPI:
 
     app.mount("/styles", StaticFiles(directory=settings.styles_dir), name="styles")
     app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
-    # 포털 공용 스타일(topbar.css). 컨테이너에는 없을 수 있으므로 있을 때만 마운트한다
-    # (StaticFiles 는 디렉터리가 없으면 기동 시점에 바로 예외를 던진다).
     if os.path.isdir(settings.shared_styles_dir):
         app.mount("/shared-styles",
                   StaticFiles(directory=settings.shared_styles_dir),

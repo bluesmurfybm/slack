@@ -19,7 +19,6 @@ CHUNK = 1024 * 1024
 
 
 async def save_upload(settings: Settings, tid: int, upload) -> str:
-    """업로드를 저장하고 저장 파일명을 돌려준다. 상한을 넘으면 413."""
     original = os.path.basename(upload.filename or "자료")
     ext = os.path.splitext(original)[1][:16]
     stored = f"{tid}_{uuid.uuid4().hex}{ext}"
@@ -54,7 +53,6 @@ def remove(settings: Settings, stored: Optional[str]) -> None:
 
 
 def resolve(settings: Settings, stored: Optional[str]) -> str:
-    """저장 파일의 실제 경로. 없거나 디렉터리를 벗어나면 404."""
     if not stored:
         raise HTTPException(status_code=404, detail="올라온 파일이 없습니다")
     root = os.path.realpath(settings.upload_dir)
@@ -67,7 +65,6 @@ def resolve(settings: Settings, stored: Optional[str]) -> str:
 
 
 def disposition(name: str):
-    """(media_type, Content-Disposition) — 안전한 타입만 인라인."""
     ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
     inline = ctype in INLINE_TYPES
     how = "inline" if inline else "attachment"

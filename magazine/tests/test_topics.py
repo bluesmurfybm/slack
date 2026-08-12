@@ -39,15 +39,11 @@ def test_status_is_derived_not_stored(client, settings):
     rows = client.get("/magazineapi/topics").json()
     assert {r["status"] for r in rows} <= {"미지정", "발표예정", "발표완료"}
     assert sum(1 for r in rows if r["status"] == "발표완료") == 16
-    # 비고 원문은 상태와 별개로 보존된다
     assert any(r["note"] == "미지정" and r["status"] == "발표예정" for r in rows)
 
 
 def test_devlogin_absent_when_disabled(client):
     assert client.post("/magazineapi/devlogin", json={"email": USER}).status_code == 404
-
-
-# ---------- 관리자 CRUD ----------
 NEW = {"field": "Trend", "title": "새 주제", "keywords": "AI",
        "magazine": "DI", "volume": "280", "page": "12", "year": 2026,
        "requirement": "required"}
@@ -90,7 +86,6 @@ def test_admin_updates_requirement(client, settings):
     r = client.put(f"/magazineapi/topics/{tid}", json={"requirement": "recommended"})
     assert r.status_code == 200
     assert r.json()["requirement"] == "recommended"
-    # 보내지 않은 필드는 보존된다
     assert r.json()["title"] == "새 주제"
 
 
@@ -112,9 +107,6 @@ def test_admin_deletes_topic(client, settings):
 def test_update_missing_topic_is_404(client, settings):
     login(client, settings, ADMIN)
     assert client.put("/magazineapi/topics/99999", json={"title": "x"}).status_code == 404
-
-
-# ---------- 선점 / 취소 / 발표완료 ----------
 OTHER = "hjlee@bluesoft.co.kr"
 
 
@@ -149,7 +141,6 @@ def test_claim_missing_topic_is_404(client, settings):
 
 
 def test_completed_topic_cannot_be_claimed(client, settings):
-    """발표까지 끝난 주제는 발표자가 비어 있어도 선점 대상이 아니다."""
     login(client, settings, USER)
     rows = client.get("/magazineapi/topics").json()
     done = next(r for r in rows if r["status"] == "발표완료" and not r["presenter_email"])
@@ -200,14 +191,10 @@ def test_normal_user_cannot_complete(client, settings):
 
 
 def test_claim_works_on_seeded_row_with_empty_email(client, settings):
-    """임포트된 행의 presenter_email 은 NULL 이 아니라 빈 문자열이다."""
     login(client, settings, USER)
     rows = client.get("/magazineapi/topics").json()
     tid = next(r["id"] for r in rows if r["status"] == "미지정")
     assert client.post(f"/magazineapi/topics/{tid}/claim", json={}).status_code == 200
-
-
-# ---------- 발표 예정일 변경 ----------
 def _claimed_topic_id(client, settings, by=USER, name="유승인"):
     tid = _open_topic_id(client, settings)
     login(client, settings, by, name)
@@ -216,7 +203,6 @@ def _claimed_topic_id(client, settings, by=USER, name="유승인"):
 
 
 def test_owner_sets_planned_date_after_claiming(client, settings):
-    """날짜를 비우고 선점한 뒤에도 본인이 나중에 정할 수 있어야 한다."""
     tid = _claimed_topic_id(client, settings)
     r = client.post(f"/magazineapi/topics/{tid}/schedule",
                     json={"planned_date": "2026-10-15"})
@@ -273,14 +259,10 @@ def test_completed_topic_cannot_be_rescheduled(client, settings):
     login(client, settings, USER)
     assert client.post(f"/magazineapi/topics/{tid}/schedule",
                        json={"planned_date": "2026-10-15"}).status_code == 409
-
-
-# ---------- 개발 전용 로그인 ----------
 def test_devlogin_sets_working_cookie(dev_client):
     r = dev_client.post("/magazineapi/devlogin", json={"email": ADMIN, "name": "김지안"})
     assert r.status_code == 200
     assert r.json()["is_admin"] is True
-    # 발급된 쿠키가 운영 검증 경로를 그대로 통과한다
     who = dev_client.get("/magazineapi/whoami").json()
     assert who["email"] == ADMIN
     assert who["is_admin"] is True
@@ -298,9 +280,6 @@ def test_whoami_exposes_dev_accounts(dev_client):
     who = dev_client.get("/magazineapi/whoami").json()
     assert who["dev_login"] is True
     assert any(a["email"] == ADMIN for a in who["dev_accounts"])
-
-
-# ---------- 관리자가 발표자 지정 ----------
 def test_members_list_is_available_to_logged_in(client, settings):
     login(client, settings, USER)
     r = client.get("/magazineapi/members")

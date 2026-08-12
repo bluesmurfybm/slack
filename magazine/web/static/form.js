@@ -64,7 +64,6 @@ async function submitForm() {
   } catch (e) { showToast(e.message); }
 }
 
-/* 확인 다이얼로그는 askDelete 로 열고 doDelete 가 인자 없이 확정한다. */
 function askDelete(id) {
   const t = APP.topics.find(x => x.id === id);
   PENDING_DELETE = id;

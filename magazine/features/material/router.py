@@ -22,7 +22,6 @@ def _stored(row):
 
 
 def _guard(request: Request, tid: int):
-    """대상 행과 커넥션을 돌려준다. 권한이 없으면 403."""
     settings = get_settings(request)
     identity = require_identity(request)
     conn = connect(settings)

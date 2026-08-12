@@ -4,7 +4,6 @@ import sqlite3
 
 from core.config import Settings
 
-# seed.json 의 키이자 topics 컬럼. 순서가 INSERT 와 맞아야 한다.
 SEED_FIELDS = (
     "field", "title", "keywords", "magazine", "volume", "page", "year",
     "requirement", "team", "presenter", "presenter_email",
@@ -40,7 +39,6 @@ def connect(settings: Settings) -> sqlite3.Connection:
     return conn
 
 
-# 나중에 추가된 컬럼. 이미 돌고 있는 DB 도 있으므로 없을 때만 붙인다.
 ADDED_COLUMNS = (
     ("material_kind", "TEXT"),   # '' | 'link' | 'file'
     ("material_name", "TEXT"),   # 표시 이름 / 원본 파일명
@@ -58,7 +56,6 @@ def _migrate(conn) -> None:
 
 
 def init_db(settings: Settings) -> None:
-    """스키마를 만들고, 비어 있으면 seed.json 을 넣는다."""
     os.makedirs(settings.upload_dir, exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(settings.db_path)), exist_ok=True)
     conn = connect(settings)

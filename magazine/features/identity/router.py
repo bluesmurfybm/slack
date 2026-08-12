@@ -22,5 +22,4 @@ def whoami(request: Request, settings: Settings = Depends(get_settings)):
 
 @router.get("/members")
 def members(identity: dict = Depends(require_identity)):
-    """발표자 지정 드롭다운이 쓰는 구성원 명단."""
     return MEMBERS

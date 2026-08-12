@@ -8,7 +8,6 @@ NEW = {"title": "자료 붙일 주제", "requirement": "recommended"}
 
 
 def _claimed(client, settings):
-    """관리자가 주제를 만들고 USER 가 선점한 상태의 id."""
     login(client, settings, ADMIN)
     tid = client.post("/magazineapi/topics", json=NEW).json()["id"]
     login(client, settings, USER, "유승인")
@@ -18,9 +17,6 @@ def _claimed(client, settings):
 
 def _url(tid, tail=""):
     return f"/magazineapi/topics/{tid}/material{tail}"
-
-
-# ---------- 링크 ----------
 def test_presenter_attaches_link(client, settings):
     tid = _claimed(client, settings)
     r = client.post(_url(tid, "/link"),
@@ -64,9 +60,6 @@ def test_non_http_scheme_rejected(client, settings):
     tid = _claimed(client, settings)
     for bad in ("javascript:alert(1)", "file:///etc/passwd", "ftp://x/y"):
         assert client.post(_url(tid, "/link"), json={"url": bad}).status_code == 422
-
-
-# ---------- 파일 ----------
 def test_presenter_uploads_file(client, settings):
     tid = _claimed(client, settings)
     r = client.post(_url(tid, "/file"),
@@ -90,7 +83,6 @@ def test_uploaded_file_downloads_with_content(client, settings):
 
 
 def test_svg_and_html_are_forced_to_download(client, settings):
-    """같은 오리진에서 인라인으로 열면 스크립트가 돌아 세션을 노릴 수 있다."""
     for name, ctype in (("x.svg", "image/svg+xml"), ("x.html", "text/html")):
         tid = _claimed(client, settings)
         client.post(_url(tid, "/file"), files={"file": (name, b"<svg onload=1>", ctype)})
@@ -100,12 +92,12 @@ def test_svg_and_html_are_forced_to_download(client, settings):
 
 
 def test_upload_over_limit_is_rejected(tmp_path):
-    small = make_settings(tmp_path, max_upload_bytes=1024)
+    small = make_settings(tmp_path, max_upload_mb=1)
     c = TestClient(create_app(small))
     login(c, small, ADMIN)
     tid = c.post("/magazineapi/topics", json=NEW).json()["id"]
     r = c.post(_url(tid, "/file"),
-               files={"file": ("big.bin", b"x" * 5000, "application/octet-stream")})
+               files={"file": ("big.bin", b"x" * (2 * 1024 * 1024), "application/octet-stream")})
     assert r.status_code == 413
 
 
@@ -119,9 +111,6 @@ def test_anonymous_cannot_download(client, settings):
     client.post(_url(tid, "/file"), files={"file": ("a.txt", b"hello", "text/plain")})
     client.cookies.clear()
     assert client.get(_url(tid, "/download")).status_code == 401
-
-
-# ---------- 교체 / 삭제 ----------
 def test_new_upload_replaces_previous_file(client, settings):
     import os
     tid = _claimed(client, settings)

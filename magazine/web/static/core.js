@@ -19,15 +19,10 @@ function colorFor(name) {
   return { bg: `hsl(${h},32%,87%)`, fg: `hsl(${h},42%,33%)` };
 }
 
-/* 세션이 끊긴 채(만료 등) API를 호출하면 401 — 포털 로그인으로 돌려보낸다.
-   "/" 자체가 서버에서 로그인 여부를 확인하므로 이동만 시키면 된다.
-
-   단 개발 모드에서는 "/" 가 401 이어도 화면을 그대로 내주므로, 여기서
-   이동시키면 로드 -> 401 -> 이동 -> 로드 의 무한 새로고침이 된다.
-   계정 전환 바를 쓸 수 있게 토스트만 띄우고 멈춘다. */
 async function api(path, opts) {
   const r = await fetch(path, Object.assign({ credentials: "same-origin" }, opts || {}));
   if (r.status === 401) {
+    // 개발 모드에서는 "/" 가 401 이어도 화면을 내주므로 이동시키면 무한 새로고침이 된다.
     if (APP.me.dev_login) throw new Error("상단 개발 모드 바에서 계정을 선택해 주세요");
     location.href = "/";
     throw new Error("unauthenticated");
@@ -45,8 +40,6 @@ const postJSON = (path, body) => api(path, {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(body || {}),
 });
-
-/* ---------- 토스트 ---------- */
 let toastT;
 function showToast(m) {
   const el = document.getElementById("toast");
@@ -55,17 +48,10 @@ function showToast(m) {
   clearTimeout(toastT);
   toastT = setTimeout(() => el.classList.remove("show"), 2200);
 }
-
-/* ---------- 시트(등록/수정) ---------- */
 function openSheet() { document.getElementById("overlay").classList.add("open"); }
 function closeSheet() { document.getElementById("overlay").classList.remove("open"); }
 function closeForm() { closeSheet(); }
-
-/* ---------- 삭제 확인 ---------- */
 function closeConfirm() { document.getElementById("confirmOverlay").classList.remove("open"); }
-
-/* ---------- 날짜 선택 ----------
-   prompt() 대신 <input type="date">. 취소는 null, 확인은 문자열("" 이면 날짜 없음). */
 let dateResolver = null;
 function askDate(title, hint, initial) {
   document.getElementById("dateTitle").textContent = title;
