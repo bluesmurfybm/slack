@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-"""저장소: 연결, 스키마, 시드 적재.
-
-SQL 은 여기와 topics.py 에만 둔다.
-"""
 import json
 import os
 import sqlite3

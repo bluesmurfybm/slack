@@ -1,8 +1,3 @@
-"""테스트 공통 준비물.
-
-모듈을 reload 하지 않는다 — 환경변수 대신 Settings 를 직접 갈아끼우고
-create_app() 으로 앱을 새로 만든다.
-"""
 import dataclasses
 
 import pytest
@@ -18,7 +13,6 @@ OTHER = "hjlee@bluesoft.co.kr"
 
 
 def make_settings(tmp_path, dev_login=False, **over):
-    """매 테스트마다 빈 DB·업로드 폴더·임시 시크릿을 쓰는 설정."""
     secret = tmp_path / "sso_secret.key"
     secret.write_text("test-secret-0123456789")
     return dataclasses.replace(

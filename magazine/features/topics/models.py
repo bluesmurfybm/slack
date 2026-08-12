@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-"""주제 도메인의 요청 모델."""
 from typing import Optional
 
 from pydantic import BaseModel

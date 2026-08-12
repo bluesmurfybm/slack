@@ -1,5 +1,3 @@
-/* 관리자 폼 도메인: 주제 등록·수정 시트와 삭제 확인. */
-
 const FORM_IDS = ["f-title", "f-field-in", "f-keywords", "f-magazine-in",
   "f-volume", "f-page", "f-year", "f-team", "f-planned", "f-note"];
 

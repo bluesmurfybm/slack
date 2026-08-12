@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-"""신원 라우트: 현재 로그인한 사람이 누구인지."""
 from fastapi import APIRouter, Depends, Request
 
 from core.config import DEV_ACCOUNTS, Settings

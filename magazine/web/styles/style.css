@@ -1,10 +1,3 @@
-/* ============================================================
-   DTI 발표 주제 — csms45(coursemos) 디자인 토큰 기반
-
-   토큰 출처: csms45 theme/coursemos/scss/coursemos/frame/_variables.scss
-   상단바(.topbar)는 포털 공용 /shared-styles/topbar.css 소관이라
-   이 파일에서 일절 건드리지 않는다.
-   ============================================================ */
 :root{
   /* coursemos 브랜드 */
   --cos50:#0075f8;  --cos45:#0069e1;  --cos40:#005dc8;  --cos35:#0052af;

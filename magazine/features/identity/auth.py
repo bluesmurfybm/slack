@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""신원 도메인: 포털 SSO 쿠키 검증과 관리자 판정.
-
-이 앱에는 로그인 화면이 없다. 포털(PHP auth.php)이 심는 blueiwork_id
-서명 쿠키를 검증만 한다. 쿠키 형식은 포털 issue_sso_cookie 와 같다:
-    b64url(email \\t name \\t color \\t exp) + "." + hmac_sha256(payload, secret)
-"""
 import base64
 import hashlib
 import hmac
@@ -42,7 +35,8 @@ def _sign(settings: Settings, payload: str) -> str:
 
 def make_cookie(settings: Settings, email: str, name: str = "",
                 color: str = "", ttl: int = 3600) -> str:
-    """포털과 같은 형식의 서명 쿠키 값. 개발 로그인과 테스트에서만 쓴다."""
+    """포털 auth.php 의 issue_sso_cookie 와 같은 형식. 개발 로그인과 테스트 전용."""
+    # b64url(email \t name \t color \t exp) + "." + hmac_sha256(payload, secret)
     inner = f"{email}\t{name}\t{color}\t{int(time.time()) + ttl}"
     payload = _b64url_encode(inner.encode("utf-8"))
     return f"{payload}.{_sign(settings, payload)}"

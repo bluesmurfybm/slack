@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-"""주제 라우트: 등록·수정·삭제와 선점 흐름."""
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request

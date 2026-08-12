@@ -1,5 +1,3 @@
-/* 부팅과 상단바 연결, 개발 모드 계정 전환. 마지막에 로드된다. */
-
 function toggleUserMenu(e) {
   if (e) e.stopPropagation();
   document.getElementById("hdrUserMenu").classList.toggle("open");

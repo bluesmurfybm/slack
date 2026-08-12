@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""알림 도메인: 새 주제가 올라온 것을 슬랙에 알린다.
-
-선점을 유도하는 용도라 등록 시에만 보낸다.
-웹훅이 설정되지 않으면 아무것도 하지 않는다.
-"""
 from typing import Optional
 
 from core.config import Settings
@@ -20,6 +14,7 @@ def _webhook(settings: Settings) -> Optional[str]:
 
 
 def new_topic(settings: Settings, row) -> None:
+    # 선점을 유도하는 용도라 등록 시에만 보낸다. 웹훅이 없으면 아무것도 안 한다.
     url = _webhook(settings)
     if not url:
         return

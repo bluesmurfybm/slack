@@ -1,12 +1,3 @@
-# -*- coding: utf-8 -*-
-"""발표 자료 파일 저장.
-
-보안상 지키는 것:
-- 저장 파일명은 서버가 만든다. 클라이언트가 준 이름을 경로로 쓰지 않는다.
-- 업로드 디렉터리 밖을 가리키는 경로는 거부한다.
-- HTML/SVG 는 같은 오리진에서 인라인으로 열면 포털 세션을 노린 XSS 가
-  되므로 인라인 허용 목록에서 뺀다.
-"""
 import mimetypes
 import os
 import uuid
@@ -17,6 +8,8 @@ from fastapi import HTTPException
 
 from core.config import Settings
 
+# 같은 오리진에서 인라인으로 열어도 안전한 타입만. HTML/SVG 는 스크립트를
+# 실행할 수 있어 포털 세션을 노린 XSS 가 되므로 넣지 않는다.
 INLINE_TYPES = {
     "application/pdf",
     "image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp",

@@ -1,8 +1,4 @@
-/* 공통 기반: 앱 상태, 서버 호출, 토스트, 모달.
-   도메인 스크립트(topics/claim/form)보다 먼저 로드된다. */
-
-/* 앱 상태 한 곳. 도메인 스크립트는 여기만 읽고 쓴다. */
-const APP = { me: {}, topics: [] };
+const APP = { me: {}, topics: [] };   // 앱 상태 한 곳 — 도메인 스크립트는 여기만 읽고 쓴다
 
 const esc = s => (s == null ? "" : String(s))
   .replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

@@ -1,5 +1,3 @@
-/* 주제 목록 도메인: 필터, 렌더, 행 그리기. */
-
 const STATUS_CLASS = { "미지정": "open", "발표예정": "planned", "발표완료": "done" };
 const TEAMS = ["App", "LAB", "SQUARE"];
 

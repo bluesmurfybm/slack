@@ -1,5 +1,3 @@
-/* 선점 도메인: 주제 선점, 예정일 지정, 취소, 발표완료 처리. */
-
 async function claim(id) {
   const d = await askDate("발표 예정일", "비워 두면 선점 후 '예정일' 버튼으로 정할 수 있어요.", "");
   if (d === null) return;

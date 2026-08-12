@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""설정 한 곳.
-
-환경변수는 여기서만 읽는다. 다른 모듈은 Settings 를 주입받아 쓴다.
-그래야 테스트가 모듈을 reload 하지 않고 설정만 바꿔 앱을 새로 만들 수 있다.
-"""
 import os
 from dataclasses import dataclass
 from typing import FrozenSet, Optional
@@ -38,6 +32,8 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        # 환경변수는 여기서만 읽는다. 다른 모듈은 Settings 를 주입받아 쓴다.
+        # 그래야 테스트가 모듈 reload 없이 설정만 갈아끼울 수 있다.
         return cls(
             db_path=os.environ.get("DB_PATH", os.path.join(BASE, "var", "magazine.db")),
             index_path=os.path.join(BASE, "web", "index.html"),

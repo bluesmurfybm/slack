@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""발표 자료 라우트: 파일/링크 등록, 삭제, 내려받기.
-
-등록·삭제는 그 주제의 발표자 본인이나 관리자만. 열람은 로그인하면 된다.
-자료는 주제당 하나다. 바꾸면 이전 파일을 디스크에서도 지운다.
-"""
 import os
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -47,7 +41,7 @@ def attach_link(tid: int, body: LinkIn, request: Request):
     if not url.startswith(("http://", "https://")):
         conn.close()
         raise HTTPException(status_code=422, detail="http(s) 로 시작하는 주소만 넣을 수 있습니다")
-    storage.remove(settings, _stored(row))
+    storage.remove(settings, _stored(row))   # 자료는 주제당 하나 — 이전 파일은 디스크에서도 지운다
     conn.execute(
         "UPDATE topics SET material_kind='link', material_url=?, material_name=?, "
         "material_path=NULL WHERE id=?",

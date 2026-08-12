@@ -1,4 +1,3 @@
-"""pytest 가 magazine/ 을 임포트 루트로 잡게 한다."""
 import os
 import sys
 
