@@ -31,6 +31,7 @@ magazine/**/*.db
 magazine/*.db
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # 로컬 작업관련 문서 (book/ 등 하위 폴더 포함, 모든 md 문서)
 _info

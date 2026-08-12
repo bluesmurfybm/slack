@@ -22,7 +22,7 @@ $__current = $__u ? [
     'color'       => user_color($__u),
 ] : null;
 $__cfg   = require __DIR__ . '/config.php';
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php'];
+$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine']];
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -81,6 +81,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php'];
             <div class="dd-label">업무 시스템</div>
             <a href="" id="dd-book" target="_blank" rel="noopener">📚 도서구매신청</a>
             <a href="" id="dd-slack" target="_blank" rel="noopener">📥 업무현황판</a>
+            <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표주제</a>
             <div class="dd-sep"></div>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
@@ -231,6 +232,7 @@ function renderShell(){
   document.getElementById("hero-hi").textContent=`${current.name}님, 환영합니다`;
   document.getElementById("dd-book").href=LINKS.book;
   document.getElementById("dd-slack").href=LINKS.slack;
+  document.getElementById("dd-magazine").href=LINKS.magazine;
 }
 
 function toggleUserMenu(e){
@@ -311,7 +313,7 @@ const arrow=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-w
 function renderTiles(){
   const bookIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
   const slackIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-  const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+  const magazineIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
   document.getElementById("tiles").innerHTML=`
     <a class="tile" href="${LINKS.book}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
@@ -323,11 +325,11 @@ function renderTiles(){
       <span class="ic" style="background:linear-gradient(135deg,#3AAE8C,#1C7A5E)">${slackIcon}</span>
       <div><h3>업무현황판</h3><p>유지보수 요청 현황을 확인하고 관리합니다.</p></div>
     </a>
-    <div class="tile soon">
-      <span class="badge-soon">준비중</span>
-      <span class="ic">${plusIcon}</span>
-      <div><h3>추가 예정</h3><p>새로운 사내 시스템이 이 자리에 추가됩니다.</p></div>
-    </div>`;
+    <a class="tile" href="${LINKS.magazine}" target="_blank" rel="noopener">
+      <span class="go">${arrow}</span>
+      <span class="ic" style="background:linear-gradient(135deg,#0075F8,#00234B)">${magazineIcon}</span>
+      <div><h3>DTI 발표주제</h3><p>매거진 아티클 발표 주제를 고르고 자료를 공유합니다.</p></div>
+    </a>`;
 }
 
 /* ---- profile save ---- */
