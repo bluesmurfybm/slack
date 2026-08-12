@@ -2,11 +2,12 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from core.config import EMAIL_TO_NAME
 from core.db import connect
 from features.identity.auth import get_settings, require_admin, require_identity
 from features.notify import slack
-from features.topics.models import (ClaimIn, CompleteIn, ScheduleIn, TopicIn,
-                                    TopicPatch)
+from features.topics.models import (AssignIn, ClaimIn, CompleteIn, ScheduleIn,
+                                    TopicIn, TopicPatch)
 from features.topics.service import fetch, may_manage_claim, to_dict
 
 router = APIRouter(prefix="/magazineapi/topics", tags=["topics"])
@@ -150,6 +151,37 @@ def complete_topic(tid: int, body: CompleteIn, request: Request,
     fetch(conn, tid)
     done = body.done_date or time.strftime("%Y-%m-%d")
     conn.execute("UPDATE topics SET done_date=? WHERE id=?", (done, tid))
+    conn.commit()
+    row = fetch(conn, tid)
+    conn.close()
+    return to_dict(row)
+
+
+@router.post("/{tid}/assign")
+def assign_presenter(tid: int, body: AssignIn, request: Request,
+                     identity: dict = Depends(require_admin)):
+    """관리자가 발표자를 직접 지정한다. 이메일이 비면 지정을 푼다.
+
+    선점(claim)과 달리 이미 선점된 주제도 덮어쓴다 — 배정 권한은 관리자에게 있다.
+    """
+    conn = connect(get_settings(request))
+    fetch(conn, tid)
+    email = body.email.strip()
+    if email and email not in EMAIL_TO_NAME:
+        conn.close()
+        raise HTTPException(status_code=422, detail="명단에 없는 사람입니다")
+
+    if not email:
+        # 발표자가 없으면 예정일도 의미가 없다. release 와 같게 맞춘다.
+        conn.execute("UPDATE topics SET presenter_email='', presenter='', "
+                     "planned_date='' WHERE id=?", (tid,))
+    elif body.planned_date is None:
+        conn.execute("UPDATE topics SET presenter_email=?, presenter=? WHERE id=?",
+                     (email, EMAIL_TO_NAME[email], tid))
+    else:
+        conn.execute("UPDATE topics SET presenter_email=?, presenter=?, "
+                     "planned_date=? WHERE id=?",
+                     (email, EMAIL_TO_NAME[email], body.planned_date, tid))
     conn.commit()
     row = fetch(conn, tid)
     conn.close()

@@ -353,3 +353,15 @@ body.is-admin .admin-only{display:inline-flex !important}
 #viewOverlay{padding:24px 16px;align-items:stretch}
 #viewOverlay .viewer.full{margin:0}
 .viewer-body{min-height:0}
+
+/* 발표자 지정 다이얼로그 */
+#assignOverlay .cdialog .field{margin-bottom:14px}
+#assignOverlay .cdialog select,
+#assignOverlay .cdialog input[type="date"]{
+  width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;
+  border:1px solid var(--bo-tertiary);border-radius:var(--r8);
+  background:var(--bg-card);color:var(--tx-primary);
+}
+#assignOverlay .cdialog select:focus,
+#assignOverlay .cdialog input:focus{outline:none;border-color:var(--cos50);box-shadow:0 0 0 3px var(--cos95)}
+#assignSubject{font-weight:600;color:var(--tx-secondary)}

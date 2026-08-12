@@ -298,3 +298,83 @@ def test_whoami_exposes_dev_accounts(dev_client):
     who = dev_client.get("/magazineapi/whoami").json()
     assert who["dev_login"] is True
     assert any(a["email"] == ADMIN for a in who["dev_accounts"])
+
+
+# ---------- 관리자가 발표자 지정 ----------
+def test_members_list_is_available_to_logged_in(client, settings):
+    login(client, settings, USER)
+    r = client.get("/magazineapi/members")
+    assert r.status_code == 200
+    members = r.json()
+    assert any(m["email"] == ADMIN for m in members)
+    assert all("name" in m and "email" in m for m in members)
+
+
+def test_members_requires_login(client):
+    assert client.get("/magazineapi/members").status_code == 401
+
+
+def test_admin_assigns_presenter(client, settings):
+    tid = _open_topic_id(client, settings)
+    r = client.post(f"/magazineapi/topics/{tid}/assign",
+                    json={"email": USER, "planned_date": "2026-11-03"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["presenter_email"] == USER
+    assert body["presenter"] == "유승인"          # 명단에서 이름을 채운다
+    assert body["planned_date"] == "2026-11-03"
+    assert body["status"] == "발표예정"
+
+
+def test_admin_reassigns_already_claimed_topic(client, settings):
+    tid = _open_topic_id(client, settings)
+    login(client, settings, USER, "유승인")
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    login(client, settings, ADMIN)
+    r = client.post(f"/magazineapi/topics/{tid}/assign", json={"email": OTHER})
+    assert r.status_code == 200
+    assert r.json()["presenter_email"] == OTHER
+
+
+def test_admin_unassigns_with_empty_email(client, settings):
+    tid = _open_topic_id(client, settings)
+    client.post(f"/magazineapi/topics/{tid}/assign", json={"email": USER})
+    r = client.post(f"/magazineapi/topics/{tid}/assign", json={"email": ""})
+    assert r.status_code == 200
+    assert r.json()["status"] == "미지정"
+    assert r.json()["presenter_email"] in ("", None)
+
+
+def test_unknown_email_is_rejected(client, settings):
+    tid = _open_topic_id(client, settings)
+    r = client.post(f"/magazineapi/topics/{tid}/assign",
+                    json={"email": "nobody@bluesoft.co.kr"})
+    assert r.status_code == 422
+
+
+def test_normal_user_cannot_assign(client, settings):
+    tid = _open_topic_id(client, settings)
+    login(client, settings, USER)
+    assert client.post(f"/magazineapi/topics/{tid}/assign",
+                       json={"email": OTHER}).status_code == 403
+
+
+def test_anonymous_cannot_assign(client, settings):
+    tid = _open_topic_id(client, settings)
+    client.cookies.clear()
+    assert client.post(f"/magazineapi/topics/{tid}/assign",
+                       json={"email": USER}).status_code == 401
+
+
+def test_assign_missing_topic_is_404(client, settings):
+    login(client, settings, ADMIN)
+    assert client.post("/magazineapi/topics/99999/assign",
+                       json={"email": USER}).status_code == 404
+
+
+def test_assign_keeps_planned_date_when_omitted(client, settings):
+    tid = _open_topic_id(client, settings)
+    client.post(f"/magazineapi/topics/{tid}/assign",
+                json={"email": USER, "planned_date": "2026-11-03"})
+    r = client.post(f"/magazineapi/topics/{tid}/assign", json={"email": OTHER})
+    assert r.json()["planned_date"] == "2026-11-03"

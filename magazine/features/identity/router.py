@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Request
 
-from core.config import DEV_ACCOUNTS, Settings
-from features.identity.auth import get_identity, get_settings, is_admin
+from core.config import DEV_ACCOUNTS, MEMBERS, Settings
+from features.identity.auth import (get_identity, get_settings, is_admin,
+                                    require_identity)
 
 router = APIRouter(prefix="/magazineapi", tags=["identity"])
 
@@ -17,3 +18,9 @@ def whoami(request: Request, settings: Settings = Depends(get_settings)):
     base["portal_url"] = settings.portal_url
     base["slack_url"] = settings.slack_url
     return base
+
+
+@router.get("/members")
+def members(identity: dict = Depends(require_identity)):
+    """발표자 지정 드롭다운이 쓰는 구성원 명단."""
+    return MEMBERS

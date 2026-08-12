@@ -103,6 +103,7 @@ function actionsHtml(t) {
     out.push(`<button class="btn-mini" onclick="release(${t.id})">취소</button>`);
   }
   if (APP.me.is_admin) {
+    out.push(`<button class="btn-mini" onclick="openAssign(${t.id})">발표자 지정</button>`);
     if (t.status === "발표예정") {
       out.push(`<button class="btn-mini" onclick="complete(${t.id})">발표완료</button>`);
     }

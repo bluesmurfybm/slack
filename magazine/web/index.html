@@ -197,6 +197,25 @@
   </div>
 </div>
 
+<div class="overlay" id="assignOverlay" onclick="if(event.target===this)closeAssign()">
+  <div class="cdialog">
+    <h3>발표자 지정</h3>
+    <p id="assignSubject"></p>
+    <div class="field">
+      <label>발표자</label>
+      <select id="assignWho"></select>
+    </div>
+    <div class="field">
+      <label>발표 예정일 (선택)</label>
+      <input id="assignDate" type="date">
+    </div>
+    <div class="row-btn">
+      <button class="btn-ghost" onclick="closeAssign()">취소</button>
+      <button class="btn-submit" onclick="submitAssign()">저장</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- 도메인별로 나뉜 스크립트. 로드 순서가 의존 순서다.
@@ -207,6 +226,7 @@
 <script src="/static/claim.js"></script>
 <script src="/static/form.js"></script>
 <script src="/static/material.js"></script>
+<script src="/static/assign.js"></script>
 <script src="/static/main.js"></script>
 </body>
 </html>

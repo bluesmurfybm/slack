@@ -44,3 +44,8 @@ class ScheduleIn(BaseModel):
 
 class CompleteIn(BaseModel):
     done_date: str = ""
+
+
+class AssignIn(BaseModel):
+    email: str = ""                      # 비우면 지정 해제
+    planned_date: Optional[str] = None   # None 이면 기존 예정일 유지

@@ -42,6 +42,7 @@ async function loadWhoami() {
 async function loadAll() {
   await loadWhoami();
   buildDevBar();
+  await loadMembers();   // 관리자만 실제로 받아온다
   try {
     await reload();
   } catch (e) {
