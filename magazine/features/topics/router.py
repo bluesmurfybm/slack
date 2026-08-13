@@ -16,9 +16,10 @@ router = APIRouter(prefix="/magazineapi/topics", tags=["topics"])
 @router.get("")
 def list_topics(request: Request, identity: dict = Depends(require_identity)):
     conn = connect(get_settings(request))
+    on_date = "COALESCE(NULLIF(done_date,''), NULLIF(planned_date,''))"
     rows = conn.execute(
-        "SELECT * FROM topics ORDER BY (done_date IS NULL OR done_date='') DESC, "
-        "COALESCE(NULLIF(planned_date,''), '9999') ASC, id ASC").fetchall()
+        f"SELECT * FROM topics "
+        f"ORDER BY ({on_date} IS NULL) DESC, {on_date} DESC, id DESC").fetchall()
     conn.close()
     return [to_dict(r) for r in rows]
 

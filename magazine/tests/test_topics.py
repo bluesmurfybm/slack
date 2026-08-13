@@ -357,3 +357,13 @@ def test_assign_keeps_planned_date_when_omitted(client, settings):
                 json={"email": USER, "planned_date": "2026-11-03"})
     r = client.post(f"/magazineapi/topics/{tid}/assign", json={"email": OTHER})
     assert r.json()["planned_date"] == "2026-11-03"
+
+
+def test_list_is_undated_first_then_newest(client, settings):
+    login(client, settings, USER)
+    rows = client.get("/magazineapi/topics").json()
+    dates = [(r["done_date"] or r["planned_date"] or "") for r in rows]
+    undated = [i for i, d in enumerate(dates) if not d]
+    dated = [d for d in dates if d]
+    assert undated == list(range(len(undated)))
+    assert dated == sorted(dated, reverse=True)
