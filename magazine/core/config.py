@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     sso_secret_path: str = os.path.join(BASE, "..", "sso_secret.key")
 
-    admin_emails: Annotated[FrozenSet[str], NoDecode] = frozenset({"jian@bluesoft.co.kr"})
+    admin_emails: Annotated[FrozenSet[str], NoDecode] = frozenset({"jian@bluesoft.co.kr", "kimhy@bluesoft.co.kr"})
     dev_login: bool = False
     portal_url: str = "/"
     slack_url: str = "/slack/lists.php"
