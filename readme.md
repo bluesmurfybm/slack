@@ -20,7 +20,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │
 ├── magazine/                    DTI 발표주제 — Python/FastAPI, 별도 프로세스(포트 8001)
 │   ├── app.py                   조립만(create_app 팩토리)
-│   ├── core/                    config(pydantic-settings), db
+│   ├── core/                    config(pydantic-settings), db(SQLModel)
 │   ├── features/                identity · topics · material · notify
 │   ├── web/                     index.html, static/(도메인별 js), styles/
 │   ├── data/seed.json           초기 데이터 31건
@@ -91,8 +91,29 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 - **상태는 저장하지 않고 파생한다** — `done_date`면 발표완료, `presenter_email`이면 발표예정,
   둘 다 없으면 미지정(`features/topics/service.py`). 원본 xlsx에 "발표자·예정일이 있는데
   비고는 미지정"인 행이 실제로 있어서, 컬럼으로 저장하면 계속 어긋난다.
+- **DB 접근은 SQLModel ORM** — `core/db.py`의 `Topic` 모델 하나가 스키마의 원본이다.
+  엔진은 `create_app`이 만들어 `app.state.engine`에 두고, 라우터는 `get_session` 의존성으로
+  세션을 받는다. 마이그레이션은 모델에 있고 테이블에 없는 컬럼만 `ALTER TABLE`로 붙이는
+  방식이라, 컬럼을 추가할 때 모델만 고치면 된다. **기존 행까지 값이 채워져야 하는 컬럼은
+  `sa_column_kwargs={"server_default": ...}`를 반드시 준다** — 파이썬 기본값만으로는
+  운영 DB의 기존 행에 NULL이 남는다(`tests/test_db.py`가 이걸 지킨다).
 - **선점(claim)**: 미지정 주제를 일반 사용자가 직접 가져간다. 동시 선점은 조건부 UPDATE
   한 방으로 막고 409를 준다. 발표가 끝난 주제는 발표자가 비어 있어도 선점 대상이 아니다.
+  숨김(`active=0`)·보관(`archived=1`) 주제도 선점 대상이 아니다.
+- **노출과 보관**: `active`는 구성원 화면 노출 스위치, `archived`는 보관함이다. 목록 API가
+  관리자가 아닌 요청에서 둘을 걸러낸다 — 화면에서만 숨기지 않는다.
+- **발표 구분은 3단계**: `required`(필수) / `recommended`(권장) / `normal`(일반).
+- **화면**: 구성원 화면은 내 활동 스트립 + 진행 레일(미지정 → 발표예정 → 자료준비 완료 →
+  발표완료) + 리스트/카드 전환 + 상세 드로어. 관리자는 상단에서 관리자 화면으로 전환하면
+  아티클 관리·보관함 탭이 뜬다. **'자료준비 완료'는 서버 상태가 아니라 화면에서 파생한다**
+  (발표예정 + 자료 등록). 서버 `status`는 그대로 3단계다.
+- **연관 아티클**(드로어): 분야·키워드·팀·매거진 일치로 점수를 매겨 상위 3건(`web/static/related.js`).
+  난수를 쓰지 않는다 — 같은 두 주제는 언제 봐도 같은 점수여야 한다.
+- **등록 폼 자동 입력**: 매거진을 고르면 그 매거진의 **가장 최근 호**(Volume 앞머리 숫자 →
+  년도 → 등록 순) Volume/Page를 채운다. 등록 순(`id`)을 먼저 보면 안 된다 — xlsx에서 넘어온
+  행의 `id`는 등록 시점이 아니라 시트 행 순서라서 DI가 279가 아니라 2024년 275호로 잡힌다.
+  년도를 먼저 봐도 안 된다 — 년도는 비워 둘 수 있어서, 년도 없이 등록한 새 호가 옛 호보다
+  뒤로 밀린다. 수정 중에는 채우지 않는다.
 - **권한**: 주제 등록·수정·삭제·발표자 지정·발표완료 처리는 관리자만. 관리자 명단은
   `core/config.py` 의 `Settings.admin_emails` 기본값이 출처다. 선점·선점취소·예정일 변경은
   본인 또는 관리자. **판정은 항상 서버에서** 하고 화면은 버튼을 감추기만 한다.
@@ -101,7 +122,7 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
   (`features/material/storage.py`).
 - **구성원 명단**: 발표자 지정 드롭다운용으로 `core/config.py`의 `MEMBERS`에 하드코딩.
   magazine은 포털 MySQL을 보지 않기 때문. 입·퇴사 시 이 목록을 고친다.
-- **테스트**: `cd magazine && python -m pytest` (71건). 앱은 `create_app(settings)` 팩토리라
+- **테스트**: `cd magazine && python -m pytest` (82건). 앱은 `create_app(settings)` 팩토리라
   테스트가 `Settings`만 갈아끼워 새 앱을 만든다.
 
 ---
