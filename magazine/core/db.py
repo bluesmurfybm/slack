@@ -20,13 +20,18 @@ class Topic(SQLModel, table=True):
     volume: str = ""
     page: str = ""
     year: Optional[int] = None
-    requirement: str = "recommended"       # required | recommended
+    requirement: str = "recommended"       # required | recommended | normal
     team: str = ""
     presenter: str = ""
     presenter_email: str = ""
     planned_date: str = ""
     done_date: str = ""
     note: str = ""
+
+    # server_default 를 주는 이유: 운영 DB 에는 ALTER 로 붙는 컬럼이라
+    # 기존 행까지 이 값으로 채워져야 한다. 파이썬 기본값만으로는 NULL 이 남는다.
+    active: int = Field(default=1, sa_column_kwargs={"server_default": "1"})
+    archived: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
 
     # 자료는 주제당 하나. 없음을 NULL 로 두는 건 화면·테스트가 기대하는 계약이다.
     material_kind: Optional[str] = None    # link | file

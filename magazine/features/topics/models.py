@@ -15,6 +15,7 @@ class TopicIn(BaseModel):
     team: str = ""
     planned_date: str = ""
     note: str = ""
+    active: int = 1
 
 
 class TopicPatch(BaseModel):
@@ -32,6 +33,8 @@ class TopicPatch(BaseModel):
     planned_date: Optional[str] = None
     done_date: Optional[str] = None
     note: Optional[str] = None
+    active: Optional[int] = None
+    archived: Optional[int] = None
 
 
 class ClaimIn(BaseModel):

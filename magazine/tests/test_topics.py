@@ -367,3 +367,54 @@ def test_list_is_undated_first_then_newest(client, settings):
     dated = [d for d in dates if d]
     assert undated == list(range(len(undated)))
     assert dated == sorted(dated, reverse=True)
+
+
+def test_seeded_rows_are_visible_and_not_archived(client, settings):
+    login(client, settings, USER)
+    rows = client.get("/magazineapi/topics").json()
+    assert all(r["active"] == 1 and r["archived"] == 0 for r in rows)
+
+
+def test_hidden_topic_is_kept_from_members(client, settings):
+    login(client, settings, ADMIN)
+    tid = client.post("/magazineapi/topics", json={**NEW, "active": 0}).json()["id"]
+    assert any(t["id"] == tid for t in client.get("/magazineapi/topics").json())
+    login(client, settings, USER)
+    assert not any(t["id"] == tid for t in client.get("/magazineapi/topics").json())
+
+
+def test_archived_topic_is_kept_from_members(client, settings):
+    login(client, settings, ADMIN)
+    tid = client.post("/magazineapi/topics", json=NEW).json()["id"]
+    client.put(f"/magazineapi/topics/{tid}", json={"archived": 1})
+    assert any(t["id"] == tid for t in client.get("/magazineapi/topics").json())
+    login(client, settings, USER)
+    assert not any(t["id"] == tid for t in client.get("/magazineapi/topics").json())
+
+
+def test_admin_toggles_visibility_back_and_forth(client, settings):
+    login(client, settings, ADMIN)
+    tid = client.post("/magazineapi/topics", json=NEW).json()["id"]
+    assert client.put(f"/magazineapi/topics/{tid}", json={"active": 0}).json()["active"] == 0
+    assert client.put(f"/magazineapi/topics/{tid}", json={"active": 1}).json()["active"] == 1
+
+
+def test_hidden_topic_cannot_be_claimed(client, settings):
+    login(client, settings, ADMIN)
+    tid = client.post("/magazineapi/topics", json={**NEW, "active": 0}).json()["id"]
+    login(client, settings, USER)
+    assert client.post(f"/magazineapi/topics/{tid}/claim", json={}).status_code == 409
+
+
+def test_archived_topic_cannot_be_claimed(client, settings):
+    login(client, settings, ADMIN)
+    tid = client.post("/magazineapi/topics", json=NEW).json()["id"]
+    client.put(f"/magazineapi/topics/{tid}", json={"archived": 1})
+    login(client, settings, USER)
+    assert client.post(f"/magazineapi/topics/{tid}/claim", json={}).status_code == 409
+
+
+def test_requirement_accepts_normal_level(client, settings):
+    login(client, settings, ADMIN)
+    r = client.post("/magazineapi/topics", json={**NEW, "requirement": "normal"})
+    assert r.json()["requirement"] == "normal"

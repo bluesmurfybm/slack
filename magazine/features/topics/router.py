@@ -6,7 +6,7 @@ from sqlmodel import Session, func, select
 
 from core.config import EMAIL_TO_NAME
 from core.db import Topic, get_session
-from features.identity.auth import (get_settings, require_admin,
+from features.identity.auth import (get_settings, is_admin, require_admin,
                                     require_identity)
 from features.notify import slack
 from features.topics.models import (AssignIn, ClaimIn, CompleteIn, ScheduleIn,
@@ -17,12 +17,15 @@ router = APIRouter(prefix="/magazineapi/topics", tags=["topics"])
 
 
 @router.get("")
-def list_topics(session: Session = Depends(get_session),
+def list_topics(request: Request, session: Session = Depends(get_session),
                 identity: dict = Depends(require_identity)):
     on_date = func.coalesce(func.nullif(Topic.done_date, ""),
                             func.nullif(Topic.planned_date, ""))
     stmt = select(Topic).order_by(on_date.is_(None).desc(), on_date.desc(),
                                  Topic.id.desc())
+    if not is_admin(get_settings(request), identity["email"]):
+        # 숨김·보관은 관리자 화면에만 있어야 한다. 목록에서 빼는 판정은 서버가 한다.
+        stmt = stmt.where(Topic.active == 1, Topic.archived == 0)
     return [to_dict(t) for t in session.exec(stmt).all()]
 
 
@@ -68,7 +71,9 @@ def delete_topic(tid: int, session: Session = Depends(get_session),
 @router.post("/{tid}/claim")
 def claim_topic(tid: int, body: ClaimIn, session: Session = Depends(get_session),
                 identity: dict = Depends(require_identity)):
-    fetch(session, tid)   # 없으면 404
+    topic = fetch(session, tid)   # 없으면 404
+    if not topic.active or topic.archived:
+        raise HTTPException(status_code=409, detail="지금은 선점할 수 없는 주제입니다")
     values = {"presenter_email": identity["email"],
               "presenter": identity.get("name") or ""}
     if body.planned_date:

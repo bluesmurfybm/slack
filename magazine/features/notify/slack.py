@@ -1,11 +1,13 @@
 from core.config import Settings
 from core.db import Topic
 
+REQUIREMENT_LABEL = {"required": "필수", "recommended": "권장", "normal": "일반"}
+
 
 def new_topic(settings: Settings, topic: Topic) -> None:
     if not settings.slack_webhook:
         return
-    need = "필수" if topic.requirement == "required" else "권장"
+    need = REQUIREMENT_LABEL.get(topic.requirement, "권장")
     text = "\n".join([
         ":newspaper: *새 DTI 주제*",
         f"• 제목: {topic.title}",
