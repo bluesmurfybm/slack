@@ -40,19 +40,41 @@
   <div class="site-inner">
     <div class="brand">
       <span class="eyebrow">매거진 아티클 발표 · BlueUP-DTI</span>
-      <h1>DTI 발표 주제</h1>
+      <h1 id="pageTitle">DTI 발표 주제</h1>
+      <p class="lede" id="pageLede">배달된 매거진에서 우리 팀에 필요한 아티클을 골라 발표를 예약하세요.</p>
     </div>
-    <button class="btn-new admin-only" onclick="openForm()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-      주제 등록
-    </button>
+    <div class="site-act">
+      <div class="seg-mode admin-only" role="group" aria-label="화면 전환">
+        <button type="button" id="modeUser" class="on" onclick="setMode('user')">구성원 화면</button>
+        <button type="button" id="modeAdmin" onclick="setMode('admin')">관리자 화면</button>
+      </div>
+      <button class="btn-new admin-only" onclick="openForm()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        주제 등록
+      </button>
+    </div>
   </div>
 </header>
 
 <div class="wrap">
   <div id="devbar" class="devbar" style="display:none"></div>
 
-  <div class="toolbar">
+  <section class="mystrip" id="mystrip">
+    <div class="m"><b id="statDone">0회</b><span>내 발표</span></div>
+    <div class="divider"></div>
+    <div class="m"><b id="statUpcoming">0건</b><span>예정 · 준비중</span></div>
+    <div class="divider"></div>
+    <div class="m"><b id="statFields">0개</b><span>내가 발표한 분야</span></div>
+    <div class="divider"></div>
+    <div class="m"><b id="statOpen">0건</b><span>선점 대기</span></div>
+  </section>
+
+  <nav class="tabs" id="adminTabs">
+    <button type="button" id="tabArticles" class="on" onclick="setTab('articles')">아티클 관리</button>
+    <button type="button" id="tabArchive" onclick="setTab('archive')">보관함</button>
+  </nav>
+
+  <div class="toolbar" id="toolbar">
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input id="q" type="text" placeholder="제목·키워드·발표자 검색" oninput="render()">
@@ -60,16 +82,23 @@
     <div class="filters">
       <select id="f-field" onchange="render()"></select>
       <select id="f-magazine" onchange="render()"></select>
-      <select id="f-status" onchange="render()">
-        <option value="">전체 상태</option>
-        <option>미지정</option><option>발표예정</option><option>발표완료</option>
-      </select>
+      <select id="f-team" onchange="render()"></select>
+      <select id="f-status" onchange="render()"></select>
       <select id="f-req" onchange="render()">
-        <option value="">필수·권장</option>
+        <option value="">필수·권장·일반</option>
         <option value="required">필수</option>
         <option value="recommended">권장</option>
+        <option value="normal">일반</option>
       </select>
       <label class="check"><input id="f-mine" type="checkbox" onchange="render()"> 내가 선점한 것만</label>
+      <div class="viewtoggle">
+        <button type="button" id="vList" title="리스트로 보기" onclick="setLayout('list')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        </button>
+        <button type="button" id="vCard" title="카드로 보기" onclick="setLayout('card')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -79,6 +108,9 @@
   </div>
   <ul class="list" id="list"></ul>
 </div>
+
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer" aria-label="아티클 상세"></aside>
 
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeForm()">
   <div class="sheet">
@@ -101,16 +133,18 @@
         <div class="field"><label>중요 키워드</label><input id="f-keywords" type="text" placeholder="생성형AI"></div>
       </div>
       <div class="field">
-        <label>발표</label>
+        <label>발표 구분</label>
         <div class="seg" id="seg-req">
-          <button type="button" id="req-recommended" class="on" onclick="setReq('recommended')">권장</button>
           <button type="button" id="req-required" onclick="setReq('required')">필수</button>
+          <button type="button" id="req-recommended" class="on" onclick="setReq('recommended')">권장</button>
+          <button type="button" id="req-normal" onclick="setReq('normal')">일반</button>
         </div>
       </div>
       <div class="field">
         <label>매거진 / Volume / Page</label>
         <div class="triple">
-          <input id="f-magazine-in" type="text" list="dl-magazine" autocomplete="off" placeholder="DI">
+          <input id="f-magazine-in" type="text" list="dl-magazine" autocomplete="off"
+                 placeholder="DI">
           <input id="f-volume" type="text" placeholder="280">
           <input id="f-page" type="text" placeholder="46">
         </div>
@@ -118,11 +152,20 @@
       </div>
       <div class="two">
         <div class="field"><label>년도</label><select id="f-year"></select></div>
-        <div class="field"><label>배정 팀 (선택)</label><select id="f-team"></select></div>
+        <div class="field"><label>배정 팀 (선택)</label><select id="f-team-in"></select></div>
       </div>
-      <div class="field">
-        <label>발표 예정일 (선택)</label>
-        <input id="f-planned" type="date">
+      <div class="two">
+        <div class="field">
+          <label>발표 예정일 (선택)</label>
+          <input id="f-planned" type="date">
+        </div>
+        <div class="field">
+          <label>노출 상태</label>
+          <select id="f-active">
+            <option value="1">활성 — 구성원에게 노출</option>
+            <option value="0">비활성 — 숨김</option>
+          </select>
+        </div>
       </div>
       <div class="field">
         <label>비고</label>
@@ -219,14 +262,17 @@
 <div class="toast" id="toast"></div>
 
 <!-- 도메인별로 나뉜 스크립트. 로드 순서가 의존 순서다.
-     core -> topics -> claim/form -> main.
+     core -> topics -> related/drawer -> claim/form/material/assign/admin -> main.
      인라인 onclick 이 함수를 전역에서 찾으므로 ES 모듈이 아닌 클래식 스크립트로 둔다. -->
 <script src="static/core.js"></script>
 <script src="static/topics.js"></script>
+<script src="static/related.js"></script>
+<script src="static/drawer.js"></script>
 <script src="static/claim.js"></script>
 <script src="static/form.js"></script>
 <script src="static/material.js"></script>
 <script src="static/assign.js"></script>
+<script src="static/admin.js"></script>
 <script src="static/main.js"></script>
 </body>
 </html>

@@ -6,6 +6,24 @@ document.addEventListener("click", e => {
   const um = document.getElementById("hdrUserMenu");
   if (um && !um.contains(e.target)) um.classList.remove("open");
 });
+function setMode(mode) {
+  APP.view.mode = mode;
+  document.getElementById("modeUser").classList.toggle("on", mode === "user");
+  document.getElementById("modeAdmin").classList.toggle("on", mode === "admin");
+  render();
+}
+
+function setTab(tab) {
+  APP.view.tab = tab;
+  render();
+}
+
+function setLayout(layout) {
+  APP.view.layout = layout;
+  try { localStorage.setItem(LAYOUT_KEY, layout); } catch (e) { }
+  render();
+}
+
 function buildDevBar() {
   const bar = document.getElementById("devbar");
   if (!APP.me.dev_login) { bar.style.display = "none"; return; }
@@ -24,6 +42,7 @@ async function devLogin(email) {
 async function loadWhoami() {
   APP.me = await api("/magazineapi/whoami");
   document.body.classList.toggle("is-admin", !!APP.me.is_admin);
+  if (!APP.me.is_admin) setMode("user");   // 관리자 화면은 계정 전환 시에도 남지 않는다
   const portalUrl = (APP.me.portal_url || "").replace(/\/+$/, "");
   document.getElementById("hdrBrand").href = portalUrl || "#";
   document.getElementById("dd-mypage").href = portalUrl ? `${portalUrl}/?view=profile` : "#";
@@ -47,7 +66,11 @@ async function loadAll() {
 }
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { closeSheet(); closeConfirm(); closeDate(null); }
+  if (e.key !== "Escape") return;
+  closeSheet();
+  closeConfirm();
+  closeDate(null);
+  closeDrawer();
 });
 
 loadAll();

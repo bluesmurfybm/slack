@@ -1,4 +1,15 @@
-const APP = { me: {}, topics: [] };   // 앱 상태 한 곳 — 도메인 스크립트는 여기만 읽고 쓴다
+// 앱 상태 한 곳 — 도메인 스크립트는 여기만 읽고 쓴다
+const APP = {
+  me: {},
+  topics: [],
+  view: { mode: "user", tab: "articles", layout: "list" },
+};
+
+const LAYOUT_KEY = "dti-list-layout";
+try {
+  const saved = localStorage.getItem(LAYOUT_KEY);
+  if (saved) APP.view.layout = saved;
+} catch (e) { }
 
 const esc = s => (s == null ? "" : String(s))
   .replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -35,11 +46,13 @@ async function api(path, opts) {
   return r.status === 204 ? null : r.json();
 }
 
-const postJSON = (path, body) => api(path, {
-  method: "POST",
+const sendJSON = (method, path, body) => api(path, {
+  method,
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(body || {}),
 });
+const postJSON = (path, body) => sendJSON("POST", path, body);
+const putJSON = (path, body) => sendJSON("PUT", path, body);
 let toastT;
 function showToast(m) {
   const el = document.getElementById("toast");
