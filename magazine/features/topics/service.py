@@ -1,6 +1,8 @@
 from fastapi import HTTPException
+from sqlmodel import Session
 
 from core.config import Settings
+from core.db import Topic
 from features.identity.auth import is_admin
 
 STATUS_OPEN = "미지정"
@@ -8,29 +10,26 @@ STATUS_PLANNED = "발표예정"
 STATUS_DONE = "발표완료"
 
 
-def derive_status(row) -> str:
+def derive_status(topic: Topic) -> str:
     # 컬럼으로 저장하지 않는다 — 원본 xlsx 에 상태와 값이 어긋난 행이 있었다.
-    if row["done_date"]:
+    if topic.done_date:
         return STATUS_DONE
-    if row["presenter_email"]:
+    if topic.presenter_email:
         return STATUS_PLANNED
     return STATUS_OPEN
 
 
-def to_dict(row) -> dict:
-    d = dict(row)
-    d["status"] = derive_status(row)
-    return d
+def to_dict(topic: Topic) -> dict:
+    return {**topic.model_dump(), "status": derive_status(topic)}
 
 
-def fetch(conn, tid):
-    row = conn.execute("SELECT * FROM topics WHERE id=?", (tid,)).fetchone()
-    if not row:
-        conn.close()
+def fetch(session: Session, tid: int) -> Topic:
+    topic = session.get(Topic, tid)
+    if not topic:
         raise HTTPException(status_code=404, detail="없는 주제입니다")
-    return row
+    return topic
 
 
-def may_manage_claim(settings: Settings, row, identity: dict) -> bool:
-    return (row["presenter_email"] == identity["email"]
+def may_manage_claim(settings: Settings, topic: Topic, identity: dict) -> bool:
+    return (topic.presenter_email == identity["email"]
             or is_admin(settings, identity["email"]))

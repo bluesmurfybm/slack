@@ -1,77 +1,86 @@
 import json
 import os
-import sqlite3
+from typing import Iterator, Optional
+
+from fastapi import Request
+from sqlalchemy import Engine, inspect
+from sqlmodel import Field, Session, SQLModel, create_engine, func, select
 
 from core.config import Settings
 
-SEED_FIELDS = (
-    "field", "title", "keywords", "magazine", "volume", "page", "year",
-    "requirement", "team", "presenter", "presenter_email",
-    "planned_date", "done_date", "note",
-)
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS topics(
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    field           TEXT,
-    title           TEXT NOT NULL,
-    keywords        TEXT,
-    magazine        TEXT,
-    volume          TEXT,
-    page            TEXT,
-    year            INTEGER,
-    requirement     TEXT DEFAULT 'recommended',
-    team            TEXT,
-    presenter       TEXT,
-    presenter_email TEXT,
-    planned_date    TEXT,
-    done_date       TEXT,
-    note            TEXT,
-    created_by      TEXT,
-    created_at      TEXT
-)
-"""
+class Topic(SQLModel, table=True):
+    __tablename__ = "topics"
 
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str
+    field: str = ""
+    keywords: str = ""
+    magazine: str = ""
+    volume: str = ""
+    page: str = ""
+    year: Optional[int] = None
+    requirement: str = "recommended"       # required | recommended
+    team: str = ""
+    presenter: str = ""
+    presenter_email: str = ""
+    planned_date: str = ""
+    done_date: str = ""
+    note: str = ""
 
-def connect(settings: Settings) -> sqlite3.Connection:
-    conn = sqlite3.connect(settings.db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+    # 자료는 주제당 하나. 없음을 NULL 로 두는 건 화면·테스트가 기대하는 계약이다.
+    material_kind: Optional[str] = None    # link | file
+    material_name: Optional[str] = None
+    material_url: Optional[str] = None
+    material_path: Optional[str] = None
+
+    created_by: str = ""
+    created_at: str = ""
 
 
-ADDED_COLUMNS = (
-    ("material_kind", "TEXT"),   # '' | 'link' | 'file'
-    ("material_name", "TEXT"),   # 표시 이름 / 원본 파일명
-    ("material_url", "TEXT"),    # link 인 경우 외부 URL
-    ("material_path", "TEXT"),   # file 인 경우 저장된 파일명
-)
+COLUMNS = frozenset(Topic.__table__.columns.keys())
 
 
-def _migrate(conn) -> None:
-    have = {r[1] for r in conn.execute("PRAGMA table_info(topics)").fetchall()}
-    for name, decl in ADDED_COLUMNS:
-        if name not in have:
-            conn.execute(f"ALTER TABLE topics ADD COLUMN {name} {decl}")
-    conn.commit()
-
-
-def init_db(settings: Settings) -> None:
+def init_db(settings: Settings) -> Engine:
     os.makedirs(settings.upload_dir, exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(settings.db_path)), exist_ok=True)
-    conn = connect(settings)
-    conn.execute(SCHEMA)
-    conn.commit()
-    _migrate(conn)
+    engine = create_engine(f"sqlite:///{settings.db_path}",
+                           connect_args={"check_same_thread": False})
+    SQLModel.metadata.create_all(engine)
+    _add_missing_columns(engine)
+    _seed(engine, settings.seed_path)
+    return engine
 
-    empty = conn.execute("SELECT COUNT(*) FROM topics").fetchone()[0] == 0
-    if empty and os.path.exists(settings.seed_path):
-        with open(settings.seed_path, "r", encoding="utf-8") as f:
+
+def get_session(request: Request) -> Iterator[Session]:
+    with Session(request.app.state.engine) as session:
+        yield session
+
+
+def _add_missing_columns(engine: Engine) -> None:
+    # create_all 은 이미 있는 테이블에 컬럼을 붙이지 않는다. 먼저 만들어진 DB 는 이 경로로 온다.
+    have = {c["name"] for c in inspect(engine).get_columns(Topic.__tablename__)}
+    missing = [c for c in Topic.__table__.columns if c.name not in have]
+    if not missing:
+        return
+    with engine.begin() as conn:
+        for col in missing:
+            decl = col.type.compile(engine.dialect)
+            if col.server_default is not None:
+                decl += f" DEFAULT {col.server_default.arg}"
+            conn.exec_driver_sql(
+                f"ALTER TABLE {Topic.__tablename__} ADD COLUMN {col.name} {decl}")
+
+
+def _seed(engine: Engine, seed_path: str) -> None:
+    if not os.path.exists(seed_path):
+        return
+    with Session(engine) as session:
+        if session.exec(select(func.count()).select_from(Topic)).one():
+            return
+        with open(seed_path, "r", encoding="utf-8") as f:
             rows = json.load(f)
-        cols = ",".join(SEED_FIELDS)
-        marks = ",".join("?" * len(SEED_FIELDS))
-        conn.executemany(
-            f"INSERT INTO topics({cols}) VALUES({marks})",
-            [tuple(r.get(k) for k in SEED_FIELDS) for r in rows])
-        conn.commit()
+        session.add_all([Topic(**{k: v for k, v in r.items()
+                                  if k in COLUMNS and v is not None}) for r in rows])
+        session.commit()
         print(f"[seed] {len(rows)}건 초기 데이터를 적재했습니다.")
-    conn.close()

@@ -12,10 +12,10 @@ from features.identity.auth import get_identity
 
 def create_app(settings: Settings = None) -> FastAPI:
     settings = settings or Settings()
-    init_db(settings)
 
     app = FastAPI(title="BlueUP-DTI 발표 주제")
     app.state.settings = settings
+    app.state.engine = init_db(settings)
 
     app.mount("/styles", StaticFiles(directory=settings.styles_dir), name="styles")
     app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
