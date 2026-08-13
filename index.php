@@ -314,6 +314,7 @@ function renderTiles(){
   const bookIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
   const slackIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
   const magazineIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
+  const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
   document.getElementById("tiles").innerHTML=`
     <a class="tile" href="${LINKS.book}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
@@ -329,7 +330,12 @@ function renderTiles(){
       <span class="go">${arrow}</span>
       <span class="ic" style="background:linear-gradient(135deg,#0075F8,#00234B)">${magazineIcon}</span>
       <div><h3>DTI 발표주제</h3><p>매거진 아티클 발표 주제를 고르고 자료를 공유합니다.</p></div>
-    </a>`;
+    </a>
+    <div class="tile soon">
+      <span class="badge-soon">준비중</span>
+      <span class="ic">${plusIcon}</span>
+      <div><h3>추가 예정</h3><p>새로운 사내 시스템이 이 자리에 추가됩니다.</p></div>
+    </div>`;
 }
 
 /* ---- profile save ---- */
