@@ -144,11 +144,12 @@
         <label>매거진 / Volume / Page</label>
         <div class="triple">
           <input id="f-magazine-in" type="text" list="dl-magazine" autocomplete="off"
-                 placeholder="DI">
+                 placeholder="DI" onchange="fillLatestIssue()">
           <input id="f-volume" type="text" placeholder="280">
           <input id="f-page" type="text" placeholder="46">
         </div>
         <datalist id="dl-magazine"></datalist>
+        <p class="hint" id="issueHint" style="display:none"></p>
       </div>
       <div class="two">
         <div class="field"><label>년도</label><select id="f-year"></select></div>

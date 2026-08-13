@@ -306,6 +306,12 @@ li.empty .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bo
 body.is-admin .admin-only{display:inline-flex !important}
 
 /* ---------- 반응형 ---------- */
+/* ---------- 폼 힌트 ---------- */
+.hint{
+  margin:2px 0 0;font-size:12px;font-weight:600;color:var(--cos40);
+  background:var(--cos95);border-radius:var(--r6);padding:8px 10px;
+}
+
 @media (max-width:820px){
   .list li.row{grid-template-columns:1fr;gap:10px}
   .row-side{flex-direction:row;align-items:center;gap:10px}
