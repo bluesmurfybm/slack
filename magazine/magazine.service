@@ -1,0 +1,15 @@
+[Unit]
+Description=magazine (BlueUP-DTI 발표주제)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/blueapp_core/magazine
+ExecStart=/home/blueapp_core/magazine/venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8001
+Restart=always
+User=blueapp_core
+Environment=PORTAL_URL=http://iworks.bizblue.co.kr/
+Environment=SLACK_URL=http://iworks.bizblue.co.kr/slack/lists.php
+Environment=ADMIN_EMAILS=jian@bluesoft.co.kr
+
+[Install]
+WantedBy=multi-user.target
