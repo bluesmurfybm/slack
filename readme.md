@@ -25,8 +25,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── web/                     index.html, static/(도메인별 js), styles/
 │   ├── data/seed.json           초기 데이터 31건
 │   ├── var/                     DB·업로드 (gitignore)
-│   ├── tests/
-│   └── magazine.service         systemd 유닛
+│   └── tests/
 │
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
     ├── auth.php, db.php, config.php, slack_lib.php, header.php   (공통)
@@ -169,14 +168,28 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 
 ## 배포 (systemd)
 
-book·magazine은 각각 uvicorn 프로세스로 돈다. magazine 유닛은 `magazine/magazine.service`에
-있다(book 유닛과 같은 형태, 포트만 8001).
+book·magazine은 각각 uvicorn 프로세스로 돈다. 유닛 파일은 서버에만 두고 저장소에는 올리지
+않는다(실제 호스트명이 들어가기 때문). `/etc/systemd/system/magazine.service`:
 
-```bash
-sudo cp magazine/magazine.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now magazine
+```ini
+[Unit]
+Description=magazine (BlueUP-DTI 발표주제)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/home/blueapp_core/magazine
+ExecStart=/home/blueapp_core/magazine/venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8001
+Restart=always
+User=blueapp_core
+Environment=PORTAL_URL=http://포털주소/
+Environment=SLACK_URL=http://포털주소/slack/lists.php
+Environment=ADMIN_EMAILS=jian@bluesoft.co.kr
+
+[Install]
+WantedBy=multi-user.target
 ```
+
+`DEV_LOGIN` 은 넣지 않는다 — 켜면 로그인 없이 계정 전환 바가 뜬다.
 
 - `WorkingDirectory`가 `/home/blueapp_core/magazine`이고, DB·업로드가 그 아래 `var/`에 생긴다.
   실행 사용자(`blueapp_core`)에게 쓰기 권한이 있어야 한다.
