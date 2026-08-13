@@ -12,7 +12,6 @@ services:
       - "8001:8001"
     environment:
       DEV_LOGIN: "1"                      # 포털이 없으므로 개발 로그인을 켠다
-      ADMIN_EMAILS: "jian@bluesoft.co.kr"
       PORTAL_URL: "/"
       MAX_UPLOAD_MB: "50"
     volumes:

@@ -23,7 +23,7 @@ MEMBERS = [
 ]
 EMAIL_TO_NAME = {m["email"]: m["name"] for m in MEMBERS}
 
-_DEV_EMAILS = ["jian@bluesoft.co.kr", "siyu@bluesoft.co.kr",
+_DEV_EMAILS = ["jian@bluesoft.co.kr", "kimhy@bluesoft.co.kr", "siyu@bluesoft.co.kr",
                "pink@bluesoft.co.kr", "hjlee@bluesoft.co.kr"]
 DEV_ACCOUNTS = [
     {"email": e, "name": EMAIL_TO_NAME[e],

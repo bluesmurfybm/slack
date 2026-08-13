@@ -93,9 +93,9 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
   비고는 미지정"인 행이 실제로 있어서, 컬럼으로 저장하면 계속 어긋난다.
 - **선점(claim)**: 미지정 주제를 일반 사용자가 직접 가져간다. 동시 선점은 조건부 UPDATE
   한 방으로 막고 409를 준다. 발표가 끝난 주제는 발표자가 비어 있어도 선점 대상이 아니다.
-- **권한**: 주제 등록·수정·삭제·발표자 지정·발표완료 처리는 관리자만(`ADMIN_EMAILS`, 콤마 구분
-  환경변수). 선점·선점취소·예정일 변경은 본인 또는 관리자. **판정은 항상 서버에서** 하고 화면은
-  버튼을 감추기만 한다.
+- **권한**: 주제 등록·수정·삭제·발표자 지정·발표완료 처리는 관리자만. 관리자 명단은
+  `core/config.py` 의 `Settings.admin_emails` 기본값이 출처다. 선점·선점취소·예정일 변경은
+  본인 또는 관리자. **판정은 항상 서버에서** 하고 화면은 버튼을 감추기만 한다.
 - **발표 자료**: 주제당 하나(파일 또는 링크). 발표자 본인이나 관리자만 올린다. 저장 파일명은
   서버가 만들고, HTML/SVG는 같은 오리진 인라인 시 XSS가 되므로 강제로 내려받기 처리한다
   (`features/material/storage.py`).
@@ -138,9 +138,12 @@ return [
 - **`index.php`의 `LINKS.book` / `LINKS.magazine`** — 대시보드 타일이 여는 실제 주소.
   둘 다 `config.php`의 `links`에서 읽는다. magazine을 추가했으면 `'magazine' => 'http://호스트:8001'`
   한 줄이 있어야 한다(없으면 PHP 경고).
-- **magazine 환경변수** — `PORTAL_URL`, `SLACK_URL`, `ADMIN_EMAILS`(콤마 구분), `DB_PATH`,
+- **magazine 환경변수** — `PORTAL_URL`, `SLACK_URL`, `DB_PATH`,
   `UPLOAD_DIR`, `SSO_SECRET_PATH`, `MAX_UPLOAD_MB`(기본 50). 전부 `core/config.py`의
   `Settings`(pydantic-settings)가 읽는다. **설정을 읽는 곳은 여기 한 군데다.**
+  **관리자 명단(`ADMIN_EMAILS`)은 환경변수로 주지 않는다** — pydantic-settings 는 환경변수를
+  필드 기본값보다 우선하므로, 한 번 넣어두면 `config.py` 에서 명단을 고쳐도 조용히 무시된다.
+  명단은 `Settings.admin_emails` 기본값에서만 관리한다.
   `DEV_LOGIN=1`은 포털 없이 화면을 보기 위한 개발 전용 스위치라 **운영에서는 절대 켜지 않는다**
   (켜면 로그인 없이 계정 전환 바가 뜬다).
 - **PHP IMAP 확장** — Gmail 기능(`slack/gmail/`)에 필요. 이 서버(WAMP php8.2.28 등)엔 이미 켜져
@@ -183,13 +186,13 @@ Restart=always
 User=blueapp_core
 Environment=PORTAL_URL=http://포털주소/
 Environment=SLACK_URL=http://포털주소/slack/lists.php
-Environment=ADMIN_EMAILS=jian@bluesoft.co.kr
 
 [Install]
 WantedBy=multi-user.target
 ```
 
 `DEV_LOGIN` 은 넣지 않는다 — 켜면 로그인 없이 계정 전환 바가 뜬다.
+`ADMIN_EMAILS` 도 넣지 않는다 — 넣으면 `config.py` 의 관리자 명단이 무시된다(위 환경변수 항목 참고).
 
 - `WorkingDirectory`가 `/home/blueapp_core/magazine`이고, DB·업로드가 그 아래 `var/`에 생긴다.
   실행 사용자(`blueapp_core`)에게 쓰기 권한이 있어야 한다.
@@ -205,7 +208,7 @@ WantedBy=multi-user.target
 - [ ] book이 포털과 다른 호스트에 있으면 SSO 쿠키가 전달되지 않음 — 같은 서버로 이전 필요.
 - [ ] `PORTAL_URL`, `LINKS.book` 플레이스홀더를 실제 주소로 확정.
 - [ ] 관리자(`ADMIN_EMAIL`)가 book `app.py`에 하드코딩 — 여러 명이 되면 배열/DB 플래그로 전환 고려.
-      magazine은 `ADMIN_EMAILS` 환경변수(콤마 구분)로 이미 분리해뒀다.
+      magazine은 `core/config.py` 의 `admin_emails`(frozenset)로 이미 분리해뒀다.
 - [ ] magazine의 구성원 명단(`core/config.py` `MEMBERS`)이 포털 `portal_users`와 따로 논다 —
       입·퇴사 때 두 곳을 고쳐야 한다.
 - [ ] slack 모듈 관리자 기능(회원 추가/삭제, 비번 초기화) 없음.

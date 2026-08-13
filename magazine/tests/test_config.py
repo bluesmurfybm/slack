@@ -8,7 +8,8 @@ def test_admin_emails_from_env(monkeypatch):
 
 def test_admin_emails_default(monkeypatch):
     monkeypatch.delenv("ADMIN_EMAILS", raising=False)
-    assert Settings().admin_emails == frozenset({"jian@bluesoft.co.kr"})
+    assert Settings().admin_emails == frozenset({"jian@bluesoft.co.kr",
+                                                 "kimhy@bluesoft.co.kr"})
 
 
 def test_dev_login_from_env(monkeypatch):
