@@ -112,6 +112,8 @@ header('Pragma: no-cache');
             <select id="uiDetailView">
               <option value="slide">슬라이드(아래 펼침)</option>
               <option value="modal">모달(팝업 크게)</option>
+              <option value="drawer">우측 슬라이드(옆에서)</option>
+              <option value="drawerLeft">좌측 슬라이드(옆에서)</option>
             </select>
           </label>
           <label class="pw-line"><input type="checkbox" id="uiAutoRead"> 열면 자동 읽음 처리</label>
@@ -1225,10 +1227,13 @@ document.body.insertAdjacentHTML("beforeend", `
 function placeDetail(){
   const modal=document.getElementById("detailModal"); if(!modal) return;
   const body=modal.querySelector(".dm-body");
-  if(loadUi().detailView==="modal" && openId){
+  const dv=loadUi().detailView;
+  if((dv==="modal" || dv==="drawer" || dv==="drawerLeft") && openId){
+    modal.classList.toggle("as-drawer", dv==="drawer" || dv==="drawerLeft");   // 좌/우 슬라이드(드로어)
+    modal.classList.toggle("as-drawer-left", dv==="drawerLeft");
     const det=document.querySelector("#list .detail") || document.querySelector("#unlist .detail");
     if(det){
-      body.innerHTML=""; body.appendChild(det); modal.hidden=false; applyCmtSize();   // 상세를 모달로 이동
+      body.innerHTML=""; body.appendChild(det); modal.hidden=false; applyCmtSize();   // 상세를 팝업/드로어로 이동
       const r=DATA.find(x=>x.id===openId), t=document.getElementById("dmTitle"); if(t) t.textContent = r ? (r.title||"") : "";   // 상단 제목
     }
     else { modal.hidden=true; body.innerHTML=""; }
