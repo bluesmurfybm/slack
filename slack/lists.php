@@ -108,6 +108,12 @@ header('Pragma: no-cache');
               <option value="lg">크게</option>
             </select>
           </label>
+          <label class="pw-line"><span>상세 보기</span>
+            <select id="uiDetailView">
+              <option value="slide">슬라이드(아래 펼침)</option>
+              <option value="modal">모달(팝업 크게)</option>
+            </select>
+          </label>
           <label class="pw-line"><input type="checkbox" id="uiAutoRead"> 열면 자동 읽음 처리</label>
           <label class="pw-line"><input type="checkbox" id="uiAsgLink"> 담당자: 유비온·와이오즈 동일 선택</label>
           <div class="pw-subtitle">목록 컬럼 표시</div>
@@ -457,6 +463,7 @@ function rowHtml(r){
     <div class="detail${showCmts?' with-cmts':''}">
       <div class="detail-main">
         <div class="meta">
+          ${loadUi().detailView==="modal" ? metaItem('요청자', r.req||'—') : ''}
           ${r.archived
             ? metaItem('진행상태', r.status||'—')
             : `<div class="mi"><span class="ml">진행상태</span><select class="edit-status" data-id="${esc(r.id)}">${statusEditOptions(r.status, r.board)}</select></div>`}
@@ -1203,7 +1210,35 @@ function render(){
     paint(document.getElementById("unlist"), un);
   }
   applyCmtSize();   // 댓글 영역 사용자 지정 크기 복원
+  placeDetail();    // 상세 보기: 모달 모드면 상세를 팝업으로 이동
 }
+
+/* ===== 상세 보기 모달 (설정에서 슬라이드/모달 선택) — 렌더된 .detail 노드를 팝업으로 이동(바인딩 유지) ===== */
+document.body.insertAdjacentHTML("beforeend", `
+  <div id="detailModal" class="detail-modal" hidden>
+    <div class="dm-panel">
+      <div class="dm-head"><span class="dm-title" id="dmTitle"></span></div>
+      <button type="button" id="dmClose" class="dm-close" title="닫기 (Esc)">✕</button>
+      <div class="dm-body"></div>
+    </div>
+  </div>`);
+function placeDetail(){
+  const modal=document.getElementById("detailModal"); if(!modal) return;
+  const body=modal.querySelector(".dm-body");
+  if(loadUi().detailView==="modal" && openId){
+    const det=document.querySelector("#list .detail") || document.querySelector("#unlist .detail");
+    if(det){
+      body.innerHTML=""; body.appendChild(det); modal.hidden=false; applyCmtSize();   // 상세를 모달로 이동
+      const r=DATA.find(x=>x.id===openId), t=document.getElementById("dmTitle"); if(t) t.textContent = r ? (r.title||"") : "";   // 상단 제목
+    }
+    else { modal.hidden=true; body.innerHTML=""; }
+  } else if(!modal.hidden){ modal.hidden=true; body.innerHTML=""; }
+  document.body.classList.toggle("modal-open", !modal.hidden);   // 열렸을 때 배경 스크롤 잠금
+}
+function closeDetailModal(){ if(openId){ openId=null; render(); } }
+document.getElementById("dmClose").addEventListener("click", e=>{ e.stopPropagation(); closeDetailModal(); });
+document.getElementById("detailModal").addEventListener("click", e=>{ if(e.target.id==="detailModal") closeDetailModal(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !document.getElementById("detailModal").hidden) closeDetailModal(); });
 
 /* 선택 항목 일괄 읽음/안읽음 */
 async function bulkRead(read){
@@ -1538,7 +1573,7 @@ async function syncHdrBtnsFromServer(){
 
 /* ---------- 화면 설정: 컴팩트/정렬/자동새로고침 (DB 사용자별) ---------- */
 const UIPREF_KEY = "slackapi_uipref_" + (ME_ID || "me");
-const UI_DEFAULT = { compact:false, sort:"unread", refresh:60000, font:"md", autoRead:true, asgLink:false, cols:{} };
+const UI_DEFAULT = { compact:false, sort:"unread", refresh:60000, font:"md", autoRead:true, asgLink:false, detailView:"slide", cols:{} };
 const LIST_COLS = [
   {id:"pri",    label:"우선순위"},
   {id:"status", label:"상태"},
@@ -1583,6 +1618,8 @@ function buildUiControls(){
   if(rf){ rf.value=String(u.refresh); rf.onclick=e=>e.stopPropagation(); rf.onchange=()=>{ const s=loadUi(); s.refresh=+rf.value; saveUi(s); setRefreshInterval(s.refresh); }; }
   const ft=document.getElementById("uiFont");
   if(ft){ ft.value=u.font; ft.onclick=e=>e.stopPropagation(); ft.onchange=()=>{ const s=loadUi(); s.font=ft.value; saveUi(s); applyUi(); }; }
+  const dv=document.getElementById("uiDetailView");
+  if(dv){ dv.value=u.detailView||"slide"; dv.onclick=e=>e.stopPropagation(); dv.onchange=()=>{ const s=loadUi(); s.detailView=dv.value; saveUi(s); render(); }; }
   const ar=document.getElementById("uiAutoRead");
   if(ar){ ar.checked=(u.autoRead!==false); ar.onchange=()=>{ const s=loadUi(); s.autoRead=ar.checked; saveUi(s); }; }
   const al=document.getElementById("uiAsgLink");
