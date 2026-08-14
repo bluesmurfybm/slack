@@ -116,6 +116,9 @@ header('Pragma: no-cache');
               <option value="drawerLeft">좌측 슬라이드(옆에서)</option>
             </select>
           </label>
+          <label class="pw-line" id="drawerPctRow"><span>슬라이드 폭</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><input id="uiDrawerPct" type="number" min="20" max="100" step="5" style="width:62px"> % (화면 비율)</span>
+          </label>
           <label class="pw-line"><input type="checkbox" id="uiAutoRead"> 열면 자동 읽음 처리</label>
           <label class="pw-line"><input type="checkbox" id="uiAsgLink"> 담당자: 유비온·와이오즈 동일 선택</label>
           <div class="pw-subtitle">목록 컬럼 표시</div>
@@ -1238,7 +1241,20 @@ function placeDetail(){
     }
     else { modal.hidden=true; body.innerHTML=""; }
   } else if(!modal.hidden){ modal.hidden=true; body.innerHTML=""; }
+  applyDrawerWidth();   // 좌/우 슬라이드 폭(화면 비율) 적용
   document.body.classList.toggle("modal-open", !modal.hidden);   // 열렸을 때 배경 스크롤 잠금
+}
+/* 드로어(좌/우)일 때만 폭 = 화면 비율(%) 적용. 모달/슬라이드는 CSS 기본 */
+function applyDrawerWidth(){
+  const modal=document.getElementById("detailModal"); if(!modal || modal.hidden) return;
+  const panel=modal.querySelector(".dm-panel"); if(!panel) return;
+  panel.style.width = modal.classList.contains("as-drawer") ? (Math.max(20,Math.min(100, loadUi().drawerPct||60))+"vw") : "";
+}
+/* '슬라이드 폭' 설정 줄은 좌/우 슬라이드 모드에서만 노출 */
+function toggleDrawerPctRow(){
+  const row=document.getElementById("drawerPctRow"); if(!row) return;
+  const dv=loadUi().detailView;
+  row.style.display = (dv==="drawer" || dv==="drawerLeft") ? "" : "none";
 }
 function closeDetailModal(){ if(openId){ openId=null; render(); } }
 document.getElementById("dmClose").addEventListener("click", e=>{ e.stopPropagation(); closeDetailModal(); });
@@ -1578,7 +1594,7 @@ async function syncHdrBtnsFromServer(){
 
 /* ---------- 화면 설정: 컴팩트/정렬/자동새로고침 (DB 사용자별) ---------- */
 const UIPREF_KEY = "slackapi_uipref_" + (ME_ID || "me");
-const UI_DEFAULT = { compact:false, sort:"unread", refresh:60000, font:"md", autoRead:true, asgLink:false, detailView:"slide", cols:{} };
+const UI_DEFAULT = { compact:false, sort:"unread", refresh:60000, font:"md", autoRead:true, asgLink:false, detailView:"slide", drawerPct:60, cols:{} };
 const LIST_COLS = [
   {id:"pri",    label:"우선순위"},
   {id:"status", label:"상태"},
@@ -1624,7 +1640,11 @@ function buildUiControls(){
   const ft=document.getElementById("uiFont");
   if(ft){ ft.value=u.font; ft.onclick=e=>e.stopPropagation(); ft.onchange=()=>{ const s=loadUi(); s.font=ft.value; saveUi(s); applyUi(); }; }
   const dv=document.getElementById("uiDetailView");
-  if(dv){ dv.value=u.detailView||"slide"; dv.onclick=e=>e.stopPropagation(); dv.onchange=()=>{ const s=loadUi(); s.detailView=dv.value; saveUi(s); render(); }; }
+  if(dv){ dv.value=u.detailView||"slide"; dv.onclick=e=>e.stopPropagation(); dv.onchange=()=>{ const s=loadUi(); s.detailView=dv.value; saveUi(s); toggleDrawerPctRow(); render(); }; }
+  const dp=document.getElementById("uiDrawerPct");
+  if(dp){ dp.value=u.drawerPct||60; dp.onclick=e=>e.stopPropagation();
+    dp.onchange=()=>{ let v=Math.max(20,Math.min(100,+dp.value||60)); dp.value=v; const s=loadUi(); s.drawerPct=v; saveUi(s); applyDrawerWidth(); }; }
+  toggleDrawerPctRow();
   const ar=document.getElementById("uiAutoRead");
   if(ar){ ar.checked=(u.autoRead!==false); ar.onchange=()=>{ const s=loadUi(); s.autoRead=ar.checked; saveUi(s); }; }
   const al=document.getElementById("uiAsgLink");
