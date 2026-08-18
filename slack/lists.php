@@ -468,7 +468,7 @@ function rowHtml(r){
     <div class="detail${showCmts?' with-cmts':''}">
       <div class="detail-main">
         <div class="meta">
-          ${loadUi().detailView==="modal" ? metaItem('요청자', r.req||'—') : ''}
+          ${loadUi().detailView!=="slide" ? metaItem('요청자', r.req||'—') : ''}
           ${r.archived
             ? metaItem('진행상태', r.status||'—')
             : `<div class="mi"><span class="ml">진행상태</span><select class="edit-status" data-id="${esc(r.id)}">${statusEditOptions(r.status, r.board)}</select></div>`}
@@ -1222,7 +1222,7 @@ function render(){
 document.body.insertAdjacentHTML("beforeend", `
   <div id="detailModal" class="detail-modal" hidden>
     <div class="dm-panel">
-      <div class="dm-head"><span class="dm-title" id="dmTitle"></span></div>
+      <div class="dm-head"><span class="dm-title" id="dmTitle"></span><button type="button" id="dmCopy" class="dm-copy tip" data-tip="제목복사" title="제목복사">📋</button></div>
       <button type="button" id="dmClose" class="dm-close" title="닫기 (Esc)">✕</button>
       <div class="dm-body"></div>
     </div>
@@ -1258,6 +1258,15 @@ function toggleDrawerPctRow(){
 }
 function closeDetailModal(){ if(openId){ openId=null; render(); } }
 document.getElementById("dmClose").addEventListener("click", e=>{ e.stopPropagation(); closeDetailModal(); });
+document.getElementById("dmCopy").addEventListener("click", async e=>{   // 모달/드로어 제목 복사(리스트 제목복사와 동일)
+  e.stopPropagation();
+  const r=DATA.find(x=>String(x.id)===String(openId)); if(!r) return;
+  const base = r.list_id ? LIST_URL.replace(/[^\/]+$/, r.list_id) : LIST_URL;
+  const text = (r.title||"") + "\n" + base + "?record_id=" + r.id;
+  try{ await navigator.clipboard.writeText(text); }
+  catch(_){ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+  const b=document.getElementById("dmCopy"), old=b.textContent; b.textContent="✅"; setTimeout(()=>{ b.textContent=old; }, 1200);
+});
 document.getElementById("detailModal").addEventListener("click", e=>{ if(e.target.id==="detailModal") closeDetailModal(); });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !document.getElementById("detailModal").hidden) closeDetailModal(); });
 
