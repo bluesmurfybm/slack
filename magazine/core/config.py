@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 BASE = Path(__file__).resolve().parent.parent
 
 class Team(StrEnum):
-    app = "App"
+    app = "APP"
     square = "SQUARE"
     lab = "LAB"
 
@@ -26,19 +26,19 @@ MAGAZINES = [m.value for m in Magazine]
 
 
 MEMBERS = [
-    {"name": "김호영", "email": "kimhy@bluesoft.co.kr", "teams": ["App", "SQUARE", "LAB"]},
+    {"name": "김호영", "email": "kimhy@bluesoft.co.kr", "teams": ["APP", "SQUARE", "LAB"]},
     {"name": "김지안", "email": "jian@bluesoft.co.kr", "teams": ["SQUARE"]},
-    {"name": "박성철", "email": "scpark@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "박성철", "email": "scpark@bluesoft.co.kr", "teams": ["APP"]},
     {"name": "김태주", "email": "pink@bluesoft.co.kr", "teams": ["LAB"]},
-    {"name": "안정민", "email": "venus@bluesoft.co.kr", "teams": ["App"]},
-    {"name": "조성훈", "email": "akddd@bluesoft.co.kr", "teams": ["App"]},
-    {"name": "진소현", "email": "lenda83@bluesoft.co.kr", "teams": ["App", "LAB"]},
-    {"name": "김아랑", "email": "amitoa@bluesoft.co.kr", "teams": ["App"]},
-    {"name": "박화랑", "email": "phr@bluesoft.co.kr", "teams": ["App"]},
-    {"name": "유병문", "email": "bnmmnbhj@bluesoft.co.kr", "teams": ["App"]},
-    {"name": "유승인", "email": "siyu@bluesoft.co.kr", "teams": ["App"]},
-    {"name": "이한재", "email": "hjlee@bluesoft.co.kr", "teams": ["App"]},
-    {"name": "이준영", "email": "jun0@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "안정민", "email": "venus@bluesoft.co.kr", "teams": ["APP"]},
+    {"name": "조성훈", "email": "akddd@bluesoft.co.kr", "teams": ["APP"]},
+    {"name": "진소현", "email": "lenda83@bluesoft.co.kr", "teams": ["APP", "LAB"]},
+    {"name": "김아랑", "email": "amitoa@bluesoft.co.kr", "teams": ["APP"]},
+    {"name": "박화랑", "email": "phr@bluesoft.co.kr", "teams": ["APP"]},
+    {"name": "유병문", "email": "bnmmnbhj@bluesoft.co.kr", "teams": ["APP"]},
+    {"name": "유승인", "email": "siyu@bluesoft.co.kr", "teams": ["APP"]},
+    {"name": "이한재", "email": "hjlee@bluesoft.co.kr", "teams": ["APP"]},
+    {"name": "이준영", "email": "jun0@bluesoft.co.kr", "teams": ["APP"]},
 ]
 EMAIL_TO_NAME = {m["email"]: m["name"] for m in MEMBERS}
 EMAIL_TO_TEAMS = {m["email"]: m["teams"] for m in MEMBERS}

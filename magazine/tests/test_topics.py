@@ -37,12 +37,12 @@ def test_whoami_normal_user_is_not_admin(client, settings):
 
 def test_whoami_carries_my_team(client, settings):
     login(client, settings, USER, "유승인")
-    assert client.get("/magazineapi/whoami").json()["teams"] == ["App"]
+    assert client.get("/magazineapi/whoami").json()["teams"] == ["APP"]
 
 
 def test_whoami_carries_both_teams_when_shared(client, settings):
     login(client, settings, "lenda83@bluesoft.co.kr", "진소현")
-    assert client.get("/magazineapi/whoami").json()["teams"] == ["App", "LAB"]
+    assert client.get("/magazineapi/whoami").json()["teams"] == ["APP", "LAB"]
 
 
 def test_whoami_of_a_stranger_has_no_team(client, settings):
