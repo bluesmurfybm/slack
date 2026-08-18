@@ -202,9 +202,8 @@ header.site{background:var(--bg-page)}
 /* 팀은 색으로 구분한다. 보라·주황은 토큰에 없어 값을 직접 쓴다 */
 .badge.team{background:var(--gray95);color:var(--tx-tertiary)}
 .badge.team[data-t="LAB"]{background:var(--cos95);color:var(--cos40)}
-.badge.team[data-t="App"]{background:var(--posi95);color:var(--posi40)}
+.badge.team[data-t="APP"]{background:var(--posi95);color:var(--posi40)}
 .badge.team[data-t="SQUARE"]{background:#f1ecff;color:#5b3fd8}
-.badge.team[data-t="CLOUD"]{background:#fdf0e6;color:#b35c12}
 
 .chip{
   display:inline-block;padding:2px 8px;border:1px solid var(--bo-secondary);
