@@ -605,7 +605,7 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
 .box2 h3{margin:0 0 16px;font-size:14px;color:var(--tx-primary)}
 .box2 .muted{margin:0}
 
-.bars{display:flex;align-items:flex-end;gap:10px;height:150px;padding-bottom:22px}
+.bars{display:flex;align-items:flex-end;gap:10px;height:300px;padding-bottom:22px}
 .bars .b{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
   height:100%;position:relative}
 .bars .b i{width:100%;max-width:34px;background:linear-gradient(180deg,var(--cos55,#1582ff),var(--cos40));

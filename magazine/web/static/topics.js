@@ -164,7 +164,7 @@ function railHtml(t) {
     cells += `<i class="${i <= at ? tone : ""}"></i>`;
     if (i < STAGES.length - 1) cells += `<u class="${i < at ? tone : ""}"></u>`;
   }
-  return `<span class="railwrap" title="선점 → 자료 등록 → 발표">
+  return `<span class="railwrap" title="예약 → 자료 등록 → 발표">
     <span class="rail">${cells}</span><b>${STAGES[at].label}</b></span>`;
 }
 
@@ -248,7 +248,7 @@ function actionsHtml(t) {
     out.push(likeButton(t));
   } else if (mine) {
     out.push(`<button class="btn-mini" onclick="schedule(${t.id})">예정일</button>`);
-    out.push(`<button class="btn-mini" onclick="release(${t.id})">발표 등록 취소</button>`);
+    out.push(`<button class="btn-mini" onclick="release(${t.id})">발표 예약 취소</button>`);
     // 자료는 상세에서 올린다 — 발표자가 거기로 갈 길이 있어야 한다
     out.push(`<button class="btn-mini ghost" onclick="openDrawer(${t.id})">상세</button>`);
   } else {

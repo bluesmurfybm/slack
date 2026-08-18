@@ -19,8 +19,6 @@ TEAMS = [t.value for t in Team]
 class Magazine(StrEnum):
     di = "DI"
     mit_tr = "MIT TR"
-    hbr_korea = "HBR Korea"
-    msw = "마이크로소프트웨어"
     etc = "Etc"
 
 

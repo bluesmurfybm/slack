@@ -73,12 +73,12 @@ def claim_topic(tid: int, body: ClaimIn, session: Session = Depends(get_session)
                 identity: dict = Depends(require_identity)):
     topic = fetch(session, tid) # 없으면 404
     if not topic.active or topic.archived:
-        raise HTTPException(status_code=409, detail="지금은 선점할 수 없는 주제입니다")
+        raise HTTPException(status_code=409, detail="지금은 예약할 수 없는 주제입니다")
     values = {"presenter_email": identity["email"],
               "presenter": identity.get("name") or ""}
     if body.planned_date:
         values["planned_date"] = body.planned_date
-    # 동시 선점 방지 — 조건부 UPDATE 한 방. 임포트된 행은 NULL 이 아니라 빈 문자열이다.
+    # 동시 예약 방지 — 조건부 UPDATE 한 방. 임포트된 행은 NULL 이 아니라 빈 문자열이다.
     result = session.execute(
         update(Topic)
         .where(Topic.id == tid,
@@ -88,7 +88,7 @@ def claim_topic(tid: int, body: ClaimIn, session: Session = Depends(get_session)
     session.commit()
     if result.rowcount == 0:
         raise HTTPException(status_code=409,
-                            detail="이미 선점되었거나 발표가 끝난 주제입니다")
+                            detail="이미 예약되었거나 발표가 끝난 주제입니다")
     return to_dict(fetch(session, tid))
 
 
@@ -97,7 +97,7 @@ def release_topic(tid: int, request: Request, session: Session = Depends(get_ses
                   identity: dict = Depends(require_identity)):
     topic = fetch(session, tid)
     if not may_manage_claim(get_settings(request), topic, identity):
-        raise HTTPException(status_code=403, detail="본인이 선점한 주제만 취소할 수 있습니다")
+        raise HTTPException(status_code=403, detail="본인이 예약한 주제만 취소할 수 있습니다")
     topic.presenter_email = ""
     topic.presenter = ""
     topic.planned_date = ""
@@ -111,11 +111,11 @@ def release_topic(tid: int, request: Request, session: Session = Depends(get_ses
 def schedule_topic(tid: int, body: ScheduleIn, request: Request,
                    session: Session = Depends(get_session),
                    identity: dict = Depends(require_identity)):
-    # claim 은 아무도 안 잡은 주제에만 걸려서, 선점 후 날짜를 넣을 경로가 따로 필요하다.
+    # claim 은 아무도 안 잡은 주제에만 걸려서, 예약 후 날짜를 넣을 경로가 따로 필요하다.
     topic = fetch(session, tid)
     if not may_manage_claim(get_settings(request), topic, identity):
         raise HTTPException(status_code=403,
-                            detail="본인이 선점한 주제만 예정일을 정할 수 있습니다")
+                            detail="본인이 예약한 주제만 예정일을 정할 수 있습니다")
     if topic.done_date:
         raise HTTPException(status_code=409, detail="이미 발표가 끝난 주제입니다")
     topic.planned_date = body.planned_date
@@ -137,7 +137,7 @@ def complete_topic(tid: int, body: CompleteIn, session: Session = Depends(get_se
 
 @router.post("/{tid}/assign", dependencies=[Depends(require_admin)])
 def assign_presenter(tid: int, body: AssignIn, session: Session = Depends(get_session)):
-    # 선점과 달리 이미 선점된 주제도 덮어쓴다 — 배정 권한은 관리자에게 있다.
+    # 예약과 달리 이미 예약된 주제도 덮어쓴다 — 배정 권한은 관리자에게 있다.
     topic = fetch(session, tid)
     email = body.email.strip()
     if email and email not in EMAIL_TO_NAME:

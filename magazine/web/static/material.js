@@ -16,7 +16,8 @@ const slotName = (t, slot) =>
   slotOf(t, slot, "name") || (slotOf(t, slot, "kind") === "link" ? "링크" : "파일");
 
 function canManageMaterial(t) {
-  return APP.me.is_admin || (t.presenter_email && t.presenter_email === APP.me.email);
+  const mine = t.presenter_email && t.presenter_email === APP.me.email;
+  return mine || (APP.me.is_admin && APP.view.mode === "admin");
 }
 
 function materialChips(t) {

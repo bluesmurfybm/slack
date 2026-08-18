@@ -1,9 +1,9 @@
 async function claim(id) {
-  const d = await askDate("발표 예정일", "비워 두면 선점 후 '예정일' 버튼으로 정할 수 있어요.", "");
+  const d = await askDate("발표 예정일", "비워 두면 예약 후 '예정일' 버튼으로 정할 수 있어요.", "");
   if (d === null) return;
   try {
     await postJSON(`/magazineapi/topics/${id}/claim`, { planned_date: d });
-    showToast("선점했습니다");
+    showToast("발표를 예약했습니다");
     await reload();
   } catch (e) { showToast(e.message); }
 }
@@ -22,7 +22,7 @@ async function schedule(id) {
 async function release(id) {
   try {
     await postJSON(`/magazineapi/topics/${id}/release`);
-    showToast("발표 등록을 취소했습니다");
+    showToast("발표 예약을 취소했습니다");
     await reload();
   } catch (e) { showToast(e.message); }
 }

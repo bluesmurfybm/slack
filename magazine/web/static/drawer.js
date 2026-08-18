@@ -98,22 +98,30 @@ function relatedListHtml(t) {
   </div>`).join("");
 }
 
-function drawerActions(t) {
+function adminDrawerActions(t) {
+  const out = [`<button class="btn-ghost" onclick="openAssign(${t.id})">발표자 지정</button>`];
+  if (t.status === "발표예정") {
+    out.push(`<button class="btn-ghost" onclick="complete(${t.id})">발표완료</button>`);
+  }
+  out.push(`<button class="btn-ghost" onclick="openEdit(${t.id})">수정</button>`);
+  out.push(`<button class="btn-ghost danger" onclick="askDelete(${t.id})">삭제</button>`);
+  return out;
+}
+
+function memberDrawerActions(t) {
   const out = [];
   const mine = t.presenter_email === APP.me.email;
   if (t.status === "미지정") {
     out.push(`<button class="btn-submit grow" onclick="claim(${t.id})">내가 발표할게요</button>`);
   } else if (mine && t.status !== "발표완료") {
     out.push(`<button class="btn-ghost" onclick="schedule(${t.id})">예정일 변경</button>`);
-    out.push(`<button class="btn-ghost" onclick="release(${t.id})">발표 등록 취소</button>`);
+    out.push(`<button class="btn-ghost" onclick="release(${t.id})">발표 예약 취소</button>`);
   }
-  if (APP.me.is_admin) {
-    out.push(`<button class="btn-ghost" onclick="openAssign(${t.id})">발표자 지정</button>`);
-    if (t.status === "발표예정") {
-      out.push(`<button class="btn-ghost" onclick="complete(${t.id})">발표완료</button>`);
-    }
-    out.push(`<button class="btn-ghost" onclick="openEdit(${t.id})">수정</button>`);
-  }
+  return out;
+}
+
+function drawerActions(t) {
+  const out = APP.view.mode === "admin" ? adminDrawerActions(t) : memberDrawerActions(t);
   out.push('<button class="btn-ghost" onclick="closeDrawer()">닫기</button>');
   return out.join("");
 }
