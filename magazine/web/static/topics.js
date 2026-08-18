@@ -119,6 +119,7 @@ function render() {
   const admin = v.mode === "admin";
   const isCards = cardsMode();
 
+  document.body.classList.toggle("admin-view", admin);
   document.getElementById("mystrip").style.display = admin ? "none" : "";
   document.getElementById("adminTabs").style.display = admin ? "" : "none";
   document.querySelector(".viewtoggle").style.display = admin ? "none" : "";
