@@ -239,11 +239,6 @@ li.empty .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bo
 }
 .sheet-head .k{font-size:12px;font-weight:600;color:var(--cos50);display:block;margin-bottom:2px}
 .sheet-head h2{font-size:18px;font-weight:700;margin:0;letter-spacing:-.02em}
-.sheet-head .x{
-  background:none;border:none;font-size:22px;line-height:1;color:var(--tx-quinary);
-  cursor:pointer;padding:2px 6px;border-radius:var(--r6);
-}
-.sheet-head .x:hover{background:var(--bg-subtle);color:var(--tx-secondary)}
 .sheet-body{padding:20px 24px;display:flex;flex-direction:column;gap:16px}
 .sheet-foot{
   padding:16px 24px 22px;display:flex;gap:8px;justify-content:flex-end;
@@ -574,3 +569,61 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
   .mystrip .divider{display:none}
   .drawer{width:100%}
 }
+
+/* 발표자료 드래그 앤 드롭 */
+.dropzone{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  padding:26px 16px;border:1.5px dashed var(--bo-tertiary);border-radius:var(--r12);
+  background:var(--bg-subtle);cursor:pointer;text-align:center;
+  transition:border-color .15s ease,background .15s ease;
+}
+.dropzone:hover{border-color:var(--cos50);background:var(--cos95)}
+.dropzone.over{border-color:var(--cos50);background:var(--cos95);border-style:solid}
+.dropzone.has{border-style:solid;border-color:var(--cos50);background:var(--cos95)}
+.dz-icon{font-size:22px;line-height:1}
+.dz-main{font-size:13.5px;color:var(--tx-tertiary)}
+.dz-main b{color:var(--cos40);font-weight:700}
+.dz-sub{font-size:12px;color:var(--tx-quinary);max-width:100%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.dropzone.has .dz-sub{color:var(--cos40);font-weight:600}
+
+/* ---------- 통계 탭 ---------- */
+.statspage{padding-top:4px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:14px}
+.stat{background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
+  padding:16px;box-shadow:var(--shadow-sm)}
+.stat span{font-size:12px;color:var(--tx-quaternary);font-weight:700}
+.stat b{display:block;font-size:28px;letter-spacing:-.03em;margin-top:4px;color:var(--tx-primary)}
+.stat i{font-style:normal;font-size:12px;font-weight:700;display:block;margin-top:4px}
+.stat i.up{color:var(--posi40)}
+.stat i.down{color:var(--nega40)}
+.stat i.flat{color:var(--tx-quinary);font-weight:600}
+
+.statgrid{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}
+.box2{background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
+  padding:18px;box-shadow:var(--shadow-sm)}
+.box2 h3{margin:0 0 16px;font-size:14px;color:var(--tx-primary)}
+.box2 .muted{margin:0}
+
+.bars{display:flex;align-items:flex-end;gap:10px;height:150px;padding-bottom:22px}
+.bars .b{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+  height:100%;position:relative}
+.bars .b i{width:100%;max-width:34px;background:linear-gradient(180deg,var(--cos55,#1582ff),var(--cos40));
+  border-radius:5px 5px 0 0;display:block;min-height:2px}
+.bars .b span{position:absolute;bottom:-20px;font-size:11px;color:var(--tx-quaternary);font-weight:700}
+.bars .b em{font-style:normal;font-size:11px;font-weight:800;color:var(--tx-secondary);margin-bottom:4px}
+
+.hbar{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:12.5px}
+.hbar .nm{width:78px;font-weight:700;flex-shrink:0;color:var(--tx-secondary)}
+.hbar .tr{flex:1;height:9px;background:var(--gray95);border-radius:999px;overflow:hidden}
+.hbar .tr i{display:block;height:100%;background:var(--cos50);border-radius:999px}
+.hbar .vl{width:58px;text-align:right;color:var(--tx-quaternary);font-weight:700}
+
+.rank{display:flex;align-items:center;gap:10px;padding:9px 0;
+  border-bottom:1px solid var(--bo-primary);font-size:13px}
+.rank:last-child{border-bottom:none}
+.rank .n{width:20px;font-weight:800;color:var(--tx-quinary)}
+.rank .nm{flex:1;font-weight:700;color:var(--tx-secondary)}
+.rank .v{color:var(--tx-quaternary);font-weight:700;font-size:12px}
+
+@media (max-width:820px){ .statgrid{grid-template-columns:1fr} }

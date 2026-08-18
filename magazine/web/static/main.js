@@ -55,7 +55,7 @@ async function devLogin(email) {
 async function loadWhoami() {
   APP.me = await api("/magazineapi/whoami");
   document.body.classList.toggle("is-admin", !!APP.me.is_admin);
-  if (!APP.me.is_admin) setMode("user");   // 관리자 화면은 계정 전환 시에도 남지 않는다
+  if (!APP.me.is_admin) setMode("user"); // 관리자 화면은 계정 전환 시에도 남지 않는다
   const portalUrl = (APP.me.portal_url || "").replace(/\/+$/, "");
   document.getElementById("hdrBrand").href = portalUrl || "#";
   document.getElementById("dd-mypage").href = portalUrl ? `${portalUrl}/?view=profile` : "#";
@@ -71,7 +71,7 @@ async function loadWhoami() {
 async function loadAll() {
   await loadWhoami();
   buildDevBar();
-  await loadMembers();   // 관리자만 실제로 받아온다
+  await loadMembers(); // 관리자만 실제로 받아온다
   try {
     await reload();
   } catch (e) {

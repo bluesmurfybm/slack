@@ -1,4 +1,3 @@
-const TEAMS = ["SQUARE", "App", "LAB", "CLOUD"];
 const FIELDS = ["UI/UX", "Marketing", "Trend", "Etc"];
 const MAGAZINES = ["DI", "MIT TR", "HBR Korea", "마이크로소프트웨어"];
 
@@ -64,7 +63,7 @@ function buildFilters() {
   };
   fill("f-field", APP.topics.map(t => t.field), "전체 분야");
   fill("f-magazine", APP.topics.map(t => t.magazine), "전체 매거진");
-  fill("f-team", APP.topics.map(t => t.team), "전체 팀");
+  fill("f-team", APP.me.all_teams || [], "전체 팀");
 
   const st = document.getElementById("f-status"), keep = st.value;
   st.innerHTML = '<option value="">전체 상태</option>' +
@@ -73,9 +72,6 @@ function buildFilters() {
 }
 
 function buildFormOptions() {
-  // 데이터에 이미 들어 있는 값은 기본 목록에 없어도 옵션으로 살려 둔다.
-  // 닫힌 select 는 모르는 값을 만나면 조용히 다른 값으로 바꿔 저장해 버린다.
-  // (실제로 매거진 'Etc' 와 팀 빈값이 기본 목록 밖에 있다.)
   const union = (base, key) =>
     [...new Set([...base, ...APP.topics.map(t => t[key]).filter(Boolean)])];
 
@@ -84,7 +80,7 @@ function buildFormOptions() {
       (blank ? `<option value="">${blank}</option>` : "") +
       vals.map(v => `<option>${esc(v)}</option>`).join("");
   };
-  fill("f-team-in", union(TEAMS, "team"), "없음");
+  fill("f-team-in", APP.me.all_teams || [], "없음");
   fill("f-field-in", union(FIELDS, "field"), null);
   fill("f-magazine-in", union(MAGAZINES, "magazine"), "매거진 선택");
 }
@@ -133,8 +129,16 @@ function render() {
     : "배달된 매거진에서 우리 팀에 필요한 아티클을 골라 발표를 예약하세요.";
   document.getElementById("tabArticles").classList.toggle("on", v.tab === "articles");
   document.getElementById("tabArchive").classList.toggle("on", v.tab === "archive");
+  document.getElementById("tabStats").classList.toggle("on", v.tab === "stats");
   document.getElementById("vList").classList.toggle("on", v.layout === "list");
   document.getElementById("vCard").classList.toggle("on", v.layout === "card");
+
+  const isStats = admin && v.tab === "stats";
+  document.getElementById("statsPage").style.display = isStats ? "" : "none";
+  document.getElementById("toolbar").style.display = isStats ? "none" : "";
+  document.querySelector(".ledger-head").style.display = isStats ? "none" : "";
+  document.getElementById("list").style.display = isStats ? "none" : "";
+  if (isStats) { renderStatsPage(); return; }
 
   const rows = visible();
   const hidden = pool().filter(t => !t.active).length;
@@ -245,7 +249,7 @@ function actionsHtml(t) {
     out.push(likeButton(t));
   } else if (mine) {
     out.push(`<button class="btn-mini" onclick="schedule(${t.id})">예정일</button>`);
-    out.push(`<button class="btn-mini" onclick="release(${t.id})">취소</button>`);
+    out.push(`<button class="btn-mini" onclick="release(${t.id})">발표 등록 취소</button>`);
     // 자료는 상세에서 올린다 — 발표자가 거기로 갈 길이 있어야 한다
     out.push(`<button class="btn-mini ghost" onclick="openDrawer(${t.id})">상세</button>`);
   } else {

@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 
-from features.identity.auth import get_settings, is_admin, make_cookie
 from core.config import DEV_ACCOUNTS, Settings
+from features.identity.auth import get_settings, is_admin, make_cookie
 
 router = APIRouter(prefix="/magazineapi", tags=["dev"])
 

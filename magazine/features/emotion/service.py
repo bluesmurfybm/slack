@@ -1,11 +1,11 @@
-from enum import Enum
+from enum import StrEnum
 
 from sqlmodel import Session, func, select
 
 from core.db import TopicEmotion
 
 
-class Emotion(str, Enum):
+class Emotion(StrEnum):
     like = "like"
     apply = "apply"
     easy = "easy"

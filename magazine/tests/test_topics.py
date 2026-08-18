@@ -1,4 +1,3 @@
-import sqlite3
 
 from conftest import ADMIN, OTHER, USER, login
 from features.identity.auth import make_cookie
@@ -124,7 +123,6 @@ def test_admin_deletes_topic(client, settings):
 def test_update_missing_topic_is_404(client, settings):
     login(client, settings, ADMIN)
     assert client.put("/magazineapi/topics/99999", json={"title": "x"}).status_code == 404
-OTHER = "hjlee@bluesoft.co.kr"
 
 
 def _open_topic_id(client, settings):
@@ -317,7 +315,7 @@ def test_admin_assigns_presenter(client, settings):
     assert r.status_code == 200
     body = r.json()
     assert body["presenter_email"] == USER
-    assert body["presenter"] == "유승인"          # 명단에서 이름을 채운다
+    assert body["presenter"] == "유승인" # 명단에서 이름을 채운다
     assert body["planned_date"] == "2026-11-03"
     assert body["status"] == "발표예정"
 

@@ -7,7 +7,6 @@
 <link rel="icon" href="styles/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Space Grotesk 는 포털 공용 topbar.css 의 .logo 가 쓴다. 지우면 상단바가 바뀐다. -->
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="shared-styles/topbar.css">
@@ -72,6 +71,7 @@
   <nav class="tabs" id="adminTabs">
     <button type="button" id="tabArticles" class="on" onclick="setTab('articles')">아티클 관리</button>
     <button type="button" id="tabArchive" onclick="setTab('archive')">보관함</button>
+    <button type="button" id="tabStats" onclick="setTab('stats')">통계</button>
   </nav>
 
   <div class="toolbar" id="toolbar">
@@ -110,6 +110,7 @@
     <span class="count" id="ledgerCount"></span>
   </div>
   <ul class="list" id="list"></ul>
+  <section class="statspage" id="statsPage" style="display:none"></section>
 </div>
 
 <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
@@ -119,7 +120,6 @@
   <div class="sheet">
     <div class="sheet-head">
       <div><span class="k" id="sheet-kicker">신규 등록</span><h2 id="sheet-title">새 주제 등록</h2></div>
-      <button class="x" onclick="closeForm()">×</button>
     </div>
     <div class="sheet-body">
       <div class="field">
@@ -208,7 +208,12 @@
       <button type="button" id="mat-link" onclick="setMatMode('link')">링크</button>
     </div>
     <div id="mat-file-box" class="mat-box">
-      <input id="mat-fileinput" type="file">
+      <label class="dropzone" id="mat-drop">
+        <input id="mat-fileinput" type="file" hidden>
+        <span class="dz-icon">📎</span>
+        <span class="dz-main">파일을 끌어다 놓거나 <b>클릭해서 선택</b></span>
+        <span class="dz-sub" id="mat-filename">형식 제한 없음</span>
+      </label>
     </div>
     <div id="mat-link-box" class="mat-box" style="display:none">
       <input id="mat-url" type="url" placeholder="https://...">
@@ -270,6 +275,7 @@
 <script src="static/form.js"></script>
 <script src="static/material.js"></script>
 <script src="static/assign.js"></script>
+<script src="static/stats.js"></script>
 <script src="static/admin.js"></script>
 <script src="static/main.js"></script>
 </body>

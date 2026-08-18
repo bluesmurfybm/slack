@@ -2,7 +2,7 @@ import base64
 import hashlib
 import hmac
 import time
-from typing import Optional
+from pathlib import Path
 
 from fastapi import Depends, HTTPException, Request
 
@@ -16,7 +16,7 @@ def get_settings(request: Request) -> Settings:
 
 
 def _secret(settings: Settings) -> str:
-    with open(settings.sso_secret_path, "r", encoding="utf-8") as f:
+    with Path(settings.sso_secret_path).open(encoding="utf-8") as f:
         return f.read().strip()
 
 
@@ -41,7 +41,7 @@ def make_cookie(settings: Settings, email: str, name: str = "",
     return f"{payload}.{_sign(settings, payload)}"
 
 
-def verify_cookie(settings: Settings, raw: str) -> Optional[dict]:
+def verify_cookie(settings: Settings, raw: str) -> dict | None:
     try:
         payload, sig = raw.rsplit(".", 1)
         if not hmac.compare_digest(sig, _sign(settings, payload)):
@@ -49,12 +49,13 @@ def verify_cookie(settings: Settings, raw: str) -> Optional[dict]:
         email, name, color, exp_s = _b64url_decode(payload).decode("utf-8").split("\t")
         if int(exp_s) < time.time():
             return None
-        return {"email": email, "name": name, "color": color}
-    except Exception:
+    except Exception: # noqa: BLE001 쿠키 파싱 실패는 형태를 가리지 않고 전부 무효 처리한다
         return None
+    else:
+        return {"email": email, "name": name, "color": color}
 
 
-def get_identity(request: Request) -> Optional[dict]:
+def get_identity(request: Request) -> dict | None:
     raw = request.cookies.get(COOKIE_NAME)
     return verify_cookie(get_settings(request), raw) if raw else None
 
@@ -66,7 +67,7 @@ def require_identity(request: Request) -> dict:
     return ident
 
 
-def is_admin(settings: Settings, email: Optional[str]) -> bool:
+def is_admin(settings: Settings, email: str | None) -> bool:
     return bool(email) and email.lower() in settings.admin_emails
 
 

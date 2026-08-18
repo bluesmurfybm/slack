@@ -38,6 +38,7 @@ function openMaterial(id, slot = "material") {
     : `아직 올린 자료가 없습니다. (${SLOTS[slot].hint})`;
   document.getElementById("mat-del").style.display = kind ? "" : "none";
   document.getElementById("mat-fileinput").value = "";
+  setPickedFile(null);
   const isLink = kind === "link";
   document.getElementById("mat-url").value = isLink ? slotOf(t, slot, "url") : "";
   document.getElementById("mat-name").value = isLink ? (slotOf(t, slot, "name") || "") : "";
@@ -65,10 +66,9 @@ async function submitMaterial() {
       await postJSON(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}/link`,
         { url, name: document.getElementById("mat-name").value.trim() });
     } else {
-      const f = document.getElementById("mat-fileinput").files[0];
-      if (!f) { showToast("파일을 골라 주세요"); return; }
+      if (!PICKED_FILE) { showToast("파일을 골라 주세요"); return; }
       const fd = new FormData();
-      fd.append("file", f);
+      fd.append("file", PICKED_FILE);
       await api(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}/file`, { method: "POST", body: fd });
     }
     showToast("자료를 올렸습니다");
@@ -133,5 +133,41 @@ function applyViewerSize() {
 
 function closeViewer() {
   document.getElementById("viewOverlay").classList.remove("open");
-  document.getElementById("viewBody").innerHTML = "";   // iframe 정지
+  document.getElementById("viewBody").innerHTML = ""; // iframe 정지
 }
+
+
+let PICKED_FILE = null;
+
+function setPickedFile(f) {
+  PICKED_FILE = f || null;
+  document.getElementById("mat-filename").textContent =
+    PICKED_FILE ? PICKED_FILE.name : "형식 제한 없음";
+  document.getElementById("mat-drop").classList.toggle("has", !!PICKED_FILE);
+}
+
+function initDropzone() {
+  const dz = document.getElementById("mat-drop");
+  const input = document.getElementById("mat-fileinput");
+  input.addEventListener("change", () => setPickedFile(input.files[0]));
+
+  ["dragenter", "dragover"].forEach(ev => dz.addEventListener(ev, e => {
+    e.preventDefault();
+    dz.classList.add("over");
+  }));
+  ["dragleave", "dragend"].forEach(ev =>
+    dz.addEventListener(ev, () => dz.classList.remove("over")));
+
+  dz.addEventListener("drop", e => {
+    e.preventDefault();
+    dz.classList.remove("over");
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) { setMatMode("file"); setPickedFile(f); }
+  });
+
+  ["dragover", "drop"].forEach(ev => window.addEventListener(ev, e => {
+    if (!e.target.closest || !e.target.closest("#mat-drop")) e.preventDefault();
+  }));
+}
+
+initDropzone();

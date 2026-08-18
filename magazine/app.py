@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, RedirectResponse
@@ -19,7 +19,7 @@ def create_app(settings: Settings = None) -> FastAPI:
 
     app.mount("/styles", StaticFiles(directory=settings.styles_dir), name="styles")
     app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
-    if os.path.isdir(settings.shared_styles_dir):
+    if Path(settings.shared_styles_dir).is_dir():
         app.mount("/shared-styles",
                   StaticFiles(directory=settings.shared_styles_dir),
                   name="shared-styles")
@@ -45,4 +45,4 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8001) # noqa: S104 사내망의 다른 PC 에서 접속한다

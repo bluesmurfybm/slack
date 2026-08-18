@@ -22,7 +22,7 @@ async function schedule(id) {
 async function release(id) {
   try {
     await postJSON(`/magazineapi/topics/${id}/release`);
-    showToast("선점을 취소했습니다");
+    showToast("발표 등록을 취소했습니다");
     await reload();
   } catch (e) { showToast(e.message); }
 }

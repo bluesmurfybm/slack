@@ -1,1 +1,1 @@
-from features.topics.router import router            # noqa: F401
+from features.topics.router import router  # noqa: F401

@@ -1,6 +1,7 @@
 import json
-import os
-from typing import Iterator, Optional
+import logging
+from collections.abc import Iterator
+from pathlib import Path
 
 from fastapi import Request
 from sqlalchemy import Engine, inspect
@@ -8,19 +9,21 @@ from sqlmodel import Field, Session, SQLModel, create_engine, func, select
 
 from core.config import Settings
 
+logger = logging.getLogger(__name__)
+
 
 class Topic(SQLModel, table=True):
     __tablename__ = "topics"
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     title: str
     field: str = ""
     keywords: str = ""
     magazine: str = ""
     volume: str = ""
     page: str = ""
-    year: Optional[int] = None
-    requirement: str = "recommended"       # required | recommended | normal
+    year: int | None = None
+    requirement: str = "recommended" # required | recommended | normal
     team: str = ""
     presenter: str = ""
     presenter_email: str = ""
@@ -34,15 +37,15 @@ class Topic(SQLModel, table=True):
     archived: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
 
     # 자료 칸은 슬롯당 하나. 없음을 NULL 로 두는 건 화면·테스트가 기대하는 계약이다.
-    material_kind: Optional[str] = None    # link | file
-    material_name: Optional[str] = None
-    material_url: Optional[str] = None
-    material_path: Optional[str] = None
+    material_kind: str | None = None # link | file
+    material_name: str | None = None
+    material_url: str | None = None
+    material_path: str | None = None
 
-    scan_kind: Optional[str] = None        # link | file
-    scan_name: Optional[str] = None
-    scan_url: Optional[str] = None
-    scan_path: Optional[str] = None
+    scan_kind: str | None = None # link | file
+    scan_name: str | None = None
+    scan_url: str | None = None
+    scan_path: str | None = None
 
     created_by: str = ""
     created_at: str = ""
@@ -53,7 +56,7 @@ class TopicEmotion(SQLModel, table=True):
 
     topic_id: int = Field(foreign_key="topics.id", primary_key=True)
     email: str = Field(primary_key=True)
-    kind: str = Field(primary_key=True)     # features/emotion/service.py 의 Emotion
+    kind: str = Field(primary_key=True) # features/emotion/service.py 의 Emotion
     created_at: str = ""
 
 
@@ -61,8 +64,8 @@ COLUMNS = frozenset(Topic.__table__.columns.keys())
 
 
 def init_db(settings: Settings) -> Engine:
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    os.makedirs(os.path.dirname(os.path.abspath(settings.db_path)), exist_ok=True)
+    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+    Path(settings.db_path).resolve().parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(f"sqlite:///{settings.db_path}",
                            connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine)
@@ -92,14 +95,14 @@ def _add_missing_columns(engine: Engine) -> None:
 
 
 def _seed(engine: Engine, seed_path: str) -> None:
-    if not os.path.exists(seed_path):
+    if not Path(seed_path).exists():
         return
     with Session(engine) as session:
         if session.exec(select(func.count()).select_from(Topic)).one():
             return
-        with open(seed_path, "r", encoding="utf-8") as f:
+        with Path(seed_path).open(encoding="utf-8") as f:
             rows = json.load(f)
         session.add_all([Topic(**{k: v for k, v in r.items()
                                   if k in COLUMNS and v is not None}) for r in rows])
         session.commit()
-        print(f"[seed] {len(rows)}건 초기 데이터를 적재했습니다.")
+        logger.info("[seed] %d건 초기 데이터를 적재했습니다.", len(rows))

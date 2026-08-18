@@ -1,9 +1,11 @@
+import contextlib
 import mimetypes
 import os
 import uuid
-from typing import Optional
+from pathlib import Path
 from urllib.parse import quote
 
+import anyio
 from fastapi import HTTPException
 
 from core.config import Settings
@@ -18,50 +20,51 @@ INLINE_TYPES = {
 CHUNK = 1024 * 1024
 
 
+def _too_large(settings: Settings) -> HTTPException:
+    limit = settings.max_upload_bytes // (1024 * 1024)
+    return HTTPException(status_code=413, detail=f"{limit}MB 까지 올릴 수 있습니다")
+
+
 async def save_upload(settings: Settings, tid: int, upload) -> str:
-    original = os.path.basename(upload.filename or "자료")
-    ext = os.path.splitext(original)[1][:16]
+    original = Path(upload.filename or "자료").name
+    ext = Path(original).suffix[:16]
     stored = f"{tid}_{uuid.uuid4().hex}{ext}"
-    dest = os.path.join(settings.upload_dir, stored)
+    dest = Path(settings.upload_dir) / stored
 
     size = 0
     try:
-        with open(dest, "wb") as out:
+        async with await anyio.open_file(dest, "wb") as out:
             while True:
                 chunk = await upload.read(CHUNK)
                 if not chunk:
                     break
                 size += len(chunk)
                 if size > settings.max_upload_bytes:
-                    limit = settings.max_upload_bytes // (1024 * 1024)
-                    raise HTTPException(status_code=413,
-                                        detail=f"{limit}MB 까지 올릴 수 있습니다")
-                out.write(chunk)
+                    raise _too_large(settings) # noqa: TRY301
+                await out.write(chunk)
     except Exception:
         remove(settings, stored)
         raise
     return stored
 
 
-def remove(settings: Settings, stored: Optional[str]) -> None:
+def remove(settings: Settings, stored: str | None) -> None:
     if not stored:
         return
-    try:
-        os.remove(os.path.join(settings.upload_dir, stored))
-    except OSError:
-        pass
+    with contextlib.suppress(OSError):
+        (Path(settings.upload_dir) / stored).unlink()
 
 
-def resolve(settings: Settings, stored: Optional[str]) -> str:
+def resolve(settings: Settings, stored: str | None) -> str:
     if not stored:
         raise HTTPException(status_code=404, detail="올라온 파일이 없습니다")
-    root = os.path.realpath(settings.upload_dir)
-    path = os.path.realpath(os.path.join(settings.upload_dir, stored))
-    if os.path.commonpath([path, root]) != root:
+    root = Path(settings.upload_dir).resolve()
+    path = (Path(settings.upload_dir) / stored).resolve()
+    if os.path.commonpath([path, root]) != str(root):
         raise HTTPException(status_code=404, detail="올라온 파일이 없습니다")
-    if not os.path.exists(path):
+    if not path.exists():
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
-    return path
+    return str(path)
 
 
 def disposition(name: str):

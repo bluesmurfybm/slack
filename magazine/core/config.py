@@ -1,10 +1,20 @@
-import os
-from typing import Annotated, FrozenSet, Optional
+from enum import StrEnum
+from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = Path(__file__).resolve().parent.parent
+
+class Team(StrEnum):
+    app = "App"
+    square = "SQUARE"
+    lab = "LAB"
+
+
+TEAMS = [t.value for t in Team]
+
 
 MEMBERS = [
     {"name": "김호영", "email": "kimhy@bluesoft.co.kr", "teams": ["App", "SQUARE", "LAB"]},
@@ -24,6 +34,10 @@ MEMBERS = [
 EMAIL_TO_NAME = {m["email"]: m["name"] for m in MEMBERS}
 EMAIL_TO_TEAMS = {m["email"]: m["teams"] for m in MEMBERS}
 
+_unknown_teams = {t for m in MEMBERS for t in m["teams"]} - set(TEAMS)
+if _unknown_teams:
+    raise ValueError(f"MEMBERS 에 없는 팀: {sorted(_unknown_teams)}")
+
 _DEV_EMAILS = ["jian@bluesoft.co.kr", "kimhy@bluesoft.co.kr", "siyu@bluesoft.co.kr",
                "pink@bluesoft.co.kr", "hjlee@bluesoft.co.kr"]
 DEV_ACCOUNTS = [
@@ -36,23 +50,24 @@ DEV_ACCOUNTS = [
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(frozen=True, extra="ignore", case_sensitive=False)
 
-    db_path: str = os.path.join(BASE, "var", "magazine.db")
-    upload_dir: str = os.path.join(BASE, "var", "uploads")
+    db_path: str = str(BASE / "var" / "magazine.db")
+    upload_dir: str = str(BASE / "var" / "uploads")
     max_upload_mb: int = Field(default=50, gt=0)
 
-    sso_secret_path: str = os.path.join(BASE, "..", "sso_secret.key")
+    sso_secret_path: str = str(BASE.parent / "sso_secret.key")
 
-    admin_emails: Annotated[FrozenSet[str], NoDecode] = frozenset({"jian@bluesoft.co.kr", "kimhy@bluesoft.co.kr"})
+    admin_emails: Annotated[frozenset[str], NoDecode] = frozenset(
+        {"jian@bluesoft.co.kr", "kimhy@bluesoft.co.kr"})
     dev_login: bool = False
     portal_url: str = "/"
     slack_url: str = "/slack/lists.php"
-    slack_webhook: Optional[str] = Field(default=None, validation_alias="SLACK_WEBHOOK_URL")
+    slack_webhook: str | None = Field(default=None, validation_alias="SLACK_WEBHOOK_URL")
 
-    index_path: str = os.path.join(BASE, "web", "index.html")
-    seed_path: str = os.path.join(BASE, "data", "seed.json")
-    styles_dir: str = os.path.join(BASE, "web", "styles")
-    static_dir: str = os.path.join(BASE, "web", "static")
-    shared_styles_dir: str = os.path.join(BASE, "..", "styles")
+    index_path: str = str(BASE / "web" / "index.html")
+    seed_path: str = str(BASE / "data" / "seed.json")
+    styles_dir: str = str(BASE / "web" / "styles")
+    static_dir: str = str(BASE / "web" / "static")
+    shared_styles_dir: str = str(BASE.parent / "styles")
 
     @field_validator("admin_emails", mode="before")
     @classmethod
@@ -66,7 +81,7 @@ class Settings(BaseSettings):
         if v:
             return v
         try:
-            from config_local import SLACK_WEBHOOK_URL
+            from config_local import SLACK_WEBHOOK_URL  # noqa: PLC0415
         except ImportError:
             return None
         return SLACK_WEBHOOK_URL or None

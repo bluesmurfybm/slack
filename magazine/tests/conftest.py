@@ -10,7 +10,7 @@ USER = "siyu@bluesoft.co.kr"
 OTHER = "hjlee@bluesoft.co.kr"
 
 
-def make_settings(tmp_path, dev_login=False, **over):
+def make_settings(tmp_path, *, dev_login=False, **over):
     secret = tmp_path / "sso_secret.key"
     secret.write_text("test-secret-0123456789")
     return Settings().model_copy(update={
@@ -24,17 +24,17 @@ def make_settings(tmp_path, dev_login=False, **over):
     })
 
 
-@pytest.fixture()
+@pytest.fixture
 def settings(tmp_path):
     return make_settings(tmp_path)
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(settings):
     return TestClient(create_app(settings))
 
 
-@pytest.fixture()
+@pytest.fixture
 def dev_client(tmp_path):
     return TestClient(create_app(make_settings(tmp_path, dev_login=True)))
 

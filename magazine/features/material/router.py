@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -76,7 +76,7 @@ async def attach_file(tid: int, slot: str, request: Request,
     stored = await storage.save_upload(settings, tid, file)
     storage.remove(settings, fields.get(topic, "path"))
     fields.set(topic, kind="file", path=stored, url=None,
-               name=os.path.basename(file.filename or "자료"))
+               name=Path(file.filename or "자료").name)
     return _save(session, topic)
 
 
@@ -90,10 +90,9 @@ def detach(tid: int, slot: str, request: Request,
     return _save(session, topic)
 
 
-@router.get("/download")
+@router.get("/download", dependencies=[Depends(require_identity)])
 def download(tid: int, slot: str, request: Request,
-             session: Session = Depends(get_session),
-             identity: dict = Depends(require_identity)):
+             session: Session = Depends(get_session)):
     fields = Fields(slot)
     settings = get_settings(request)
     topic = fetch(session, tid)

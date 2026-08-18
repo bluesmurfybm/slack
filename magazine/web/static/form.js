@@ -1,7 +1,7 @@
 const FORM_IDS = ["f-title", "f-field-in", "f-keywords", "f-magazine-in",
   "f-volume", "f-page", "f-team-in", "f-planned", "f-note"];
 
-let REQ = "recommended";   // 폼의 발표 구분 선택
+let REQ = "recommended"; // 폼의 발표 구분 선택
 let EDIT_ID = null;
 let PENDING_DELETE = null;
 
@@ -65,7 +65,7 @@ function latestIssueOf(magazine) {
 function fillLatestIssue() {
   const hint = document.getElementById("issueHint");
   hint.style.display = "none";
-  if (EDIT_ID) return;          // 수정 중에는 이미 들어 있는 값을 덮지 않는다
+  if (EDIT_ID) return; // 수정 중에는 이미 들어 있는 값을 덮지 않는다
   const magazine = document.getElementById("f-magazine-in").value.trim();
   const latest = magazine && latestIssueOf(magazine);
   if (!latest) return;

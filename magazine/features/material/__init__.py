@@ -1,1 +1,1 @@
-from features.material.router import router          # noqa: F401
+from features.material.router import router  # noqa: F401

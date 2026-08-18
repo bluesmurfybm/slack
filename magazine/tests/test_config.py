@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from core.config import Settings
 
 
@@ -42,8 +45,5 @@ def test_slack_webhook_from_env(monkeypatch):
 def test_settings_is_frozen(monkeypatch):
     monkeypatch.delenv("ADMIN_EMAILS", raising=False)
     s = Settings()
-    try:
+    with pytest.raises(ValidationError):
         s.dev_login = True
-    except Exception:
-        return
-    raise AssertionError("frozen 이어야 한다")

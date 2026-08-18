@@ -42,7 +42,7 @@ def test_migration_adds_columns_to_an_existing_db(tmp_path):
 
     engine = init_db(settings)
     with Session(engine) as session:
-        topic = session.exec(select(Topic)).one()   # 시드는 다시 적재되지 않는다
+        topic = session.exec(select(Topic)).one() # 시드는 다시 적재되지 않는다
     assert topic.title == "옛 주제"
     assert topic.material_kind is None
 

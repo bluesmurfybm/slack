@@ -20,7 +20,8 @@ def derive_status(topic: Topic) -> str:
     return STATUS_OPEN
 
 
-def to_dict(topic: Topic, emotions: dict = None, my_emotions: list = None) -> dict:
+def to_dict(topic: Topic, emotions: dict | None = None,
+            my_emotions: list | None = None) -> dict:
     return {**topic.model_dump(), "status": derive_status(topic),
             "emotions": emotions or empty_counts(), "my_emotions": my_emotions or []}
 

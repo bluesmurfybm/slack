@@ -18,7 +18,7 @@ function closeDrawer() {
 function refreshDrawer() {
   if (DRAWER_ID === null) return;
   if (APP.topics.some(t => t.id === DRAWER_ID)) openDrawer(DRAWER_ID);
-  else closeDrawer();     // 삭제되거나 숨겨져서 목록에서 빠진 주제
+  else closeDrawer(); // 삭제되거나 숨겨져서 목록에서 빠진 주제
 }
 
 function drawerHtml(t) {
@@ -31,7 +31,7 @@ function drawerHtml(t) {
     </header>
     <div class="d-body">
       <dl class="kv">
-        <dt>매거진</dt><dd>${esc(sourceOf(t) || "—")}${t.year ? ` · ${t.year}년` : ""}</dd>
+        <dt>매거진</dt><dd>${esc(sourceOf(t) || "—")}</dd>
         <dt>분야 / 키워드</dt><dd>${esc(t.field || "—")} · ${esc(t.keywords || "—")}</dd>
         <dt>발표자</dt><dd>${t.presenter ? esc(t.presenter)
       : (t.team ? `${esc(t.team)} 팀 배정` : '<span class="muted">아직 없음</span>')}</dd>
@@ -105,7 +105,7 @@ function drawerActions(t) {
     out.push(`<button class="btn-submit grow" onclick="claim(${t.id})">내가 발표할게요</button>`);
   } else if (mine && t.status !== "발표완료") {
     out.push(`<button class="btn-ghost" onclick="schedule(${t.id})">예정일 변경</button>`);
-    out.push(`<button class="btn-ghost" onclick="release(${t.id})">선점 취소</button>`);
+    out.push(`<button class="btn-ghost" onclick="release(${t.id})">발표 등록 취소</button>`);
   }
   if (APP.me.is_admin) {
     out.push(`<button class="btn-ghost" onclick="openAssign(${t.id})">발표자 지정</button>`);

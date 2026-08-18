@@ -1,8 +1,9 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from app import create_app
 from conftest import ADMIN, OTHER, USER, login, make_settings
-
 
 NEW = {"title": "자료 붙일 주제", "requirement": "recommended"}
 
@@ -68,8 +69,8 @@ def test_presenter_uploads_file(client, settings):
     body = r.json()
     assert body["material_kind"] == "file"
     assert body["material_name"] == "발표.pdf"
-    assert body["material_path"]           # 저장 이름은 서버가 만든다
-    assert "발표.pdf" != body["material_path"]
+    assert body["material_path"] # 저장 이름은 서버가 만든다
+    assert body["material_path"] != "발표.pdf"
 
 
 def test_uploaded_file_downloads_with_content(client, settings):
@@ -112,24 +113,22 @@ def test_anonymous_cannot_download(client, settings):
     client.cookies.clear()
     assert client.get(_url(tid, "/download")).status_code == 401
 def test_new_upload_replaces_previous_file(client, settings):
-    import os
     tid = _claimed(client, settings)
     first = client.post(_url(tid, "/file"),
                         files={"file": ("a.txt", b"one", "text/plain")}).json()["material_path"]
     client.post(_url(tid, "/file"), files={"file": ("b.txt", b"two", "text/plain")})
-    assert not os.path.exists(os.path.join(settings.upload_dir, first))
+    assert not (Path(settings.upload_dir) / first).exists()
     assert client.get(_url(tid, "/download")).content == b"two"
 
 
 def test_link_replaces_file_and_removes_it(client, settings):
-    import os
     tid = _claimed(client, settings)
     stored = client.post(_url(tid, "/file"),
                          files={"file": ("a.txt", b"one", "text/plain")}).json()["material_path"]
     r = client.post(_url(tid, "/link"), json={"url": "https://example.com/a"})
     assert r.json()["material_kind"] == "link"
     assert r.json()["material_path"] is None
-    assert not os.path.exists(os.path.join(settings.upload_dir, stored))
+    assert not (Path(settings.upload_dir) / stored).exists()
 
 
 def test_presenter_detaches(client, settings):

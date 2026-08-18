@@ -6,12 +6,10 @@ from sqlmodel import Session, func, select
 
 from core.config import EMAIL_TO_NAME
 from core.db import Topic, TopicEmotion, get_session
-from features.identity.auth import (get_settings, is_admin, require_admin,
-                                    require_identity)
-from features.notify import slack
-from features.topics.models import (AssignIn, ClaimIn, CompleteIn, ScheduleIn,
-                                    TopicIn, TopicPatch)
 from features.emotion.service import summary as emotion_summary
+from features.identity.auth import get_settings, is_admin, require_admin, require_identity
+from features.notify import slack
+from features.topics.models import AssignIn, ClaimIn, CompleteIn, ScheduleIn, TopicIn, TopicPatch
 from features.topics.service import fetch, may_manage_claim, to_dict
 
 router = APIRouter(prefix="/magazineapi/topics", tags=["topics"])
@@ -32,9 +30,8 @@ def list_topics(request: Request, session: Session = Depends(get_session),
             for t in session.exec(stmt).all()]
 
 
-@router.get("/{tid}")
-def get_topic(tid: int, session: Session = Depends(get_session),
-              identity: dict = Depends(require_identity)):
+@router.get("/{tid}", dependencies=[Depends(require_identity)])
+def get_topic(tid: int, session: Session = Depends(get_session)):
     return to_dict(fetch(session, tid))
 
 
@@ -51,9 +48,8 @@ def create_topic(body: TopicIn, request: Request,
     return to_dict(topic)
 
 
-@router.put("/{tid}")
-def update_topic(tid: int, body: TopicPatch, session: Session = Depends(get_session),
-                 identity: dict = Depends(require_admin)):
+@router.put("/{tid}", dependencies=[Depends(require_admin)])
+def update_topic(tid: int, body: TopicPatch, session: Session = Depends(get_session)):
     topic = fetch(session, tid)
     for name, value in body.model_dump(exclude_unset=True).items():
         setattr(topic, name, value)
@@ -63,9 +59,8 @@ def update_topic(tid: int, body: TopicPatch, session: Session = Depends(get_sess
     return to_dict(topic)
 
 
-@router.delete("/{tid}")
-def delete_topic(tid: int, session: Session = Depends(get_session),
-                 identity: dict = Depends(require_admin)):
+@router.delete("/{tid}", dependencies=[Depends(require_admin)])
+def delete_topic(tid: int, session: Session = Depends(get_session)):
     topic = fetch(session, tid)
     session.execute(delete(TopicEmotion).where(TopicEmotion.topic_id == tid))
     session.delete(topic)
@@ -76,7 +71,7 @@ def delete_topic(tid: int, session: Session = Depends(get_session),
 @router.post("/{tid}/claim")
 def claim_topic(tid: int, body: ClaimIn, session: Session = Depends(get_session),
                 identity: dict = Depends(require_identity)):
-    topic = fetch(session, tid)   # 없으면 404
+    topic = fetch(session, tid) # 없으면 404
     if not topic.active or topic.archived:
         raise HTTPException(status_code=409, detail="지금은 선점할 수 없는 주제입니다")
     values = {"presenter_email": identity["email"],
@@ -130,9 +125,8 @@ def schedule_topic(tid: int, body: ScheduleIn, request: Request,
     return to_dict(topic)
 
 
-@router.post("/{tid}/complete")
-def complete_topic(tid: int, body: CompleteIn, session: Session = Depends(get_session),
-                   identity: dict = Depends(require_admin)):
+@router.post("/{tid}/complete", dependencies=[Depends(require_admin)])
+def complete_topic(tid: int, body: CompleteIn, session: Session = Depends(get_session)):
     topic = fetch(session, tid)
     topic.done_date = body.done_date or time.strftime("%Y-%m-%d")
     session.add(topic)
@@ -141,9 +135,8 @@ def complete_topic(tid: int, body: CompleteIn, session: Session = Depends(get_se
     return to_dict(topic)
 
 
-@router.post("/{tid}/assign")
-def assign_presenter(tid: int, body: AssignIn, session: Session = Depends(get_session),
-                     identity: dict = Depends(require_admin)):
+@router.post("/{tid}/assign", dependencies=[Depends(require_admin)])
+def assign_presenter(tid: int, body: AssignIn, session: Session = Depends(get_session)):
     # 선점과 달리 이미 선점된 주제도 덮어쓴다 — 배정 권한은 관리자에게 있다.
     topic = fetch(session, tid)
     email = body.email.strip()
