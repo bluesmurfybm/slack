@@ -21,7 +21,7 @@
   --tx-tertiary:var(--gray40);
   --tx-quaternary:var(--gray50);
   --tx-quinary:var(--gray60);
-  --bg-page:var(--gray99);
+  --bg-page:var(--gray96);
   --bg-card:#fff;
   --bg-subtle:var(--gray96);
   --bg-hover:var(--gray95);
@@ -45,14 +45,16 @@ body{
   font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased;
   letter-spacing:-.01em;
 }
-.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 22px 80px}
 
-/* topbar/드롭다운은 /shared-styles/topbar.css(포털 원본)에서 온다 — 여기서 재정의하지 않는다 */
+/* topbar 는 /shared-styles/topbar.css(포털 원본)에서 온다 — 본문과 줄을 맞추는 아래 두 줄만 예외 */
+.topbar-in{max-width:1240px}
+.topbar-in .seg-mode{margin-right:auto}
 
 /* ---------- 페이지 헤더 ---------- */
-header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
+header.site{background:var(--bg-page)}
 .site-inner{
-  max-width:1180px;margin:0 auto;padding:28px 20px 20px;
+  max-width:1240px;margin:0 auto;padding:28px 22px 0;
   display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;
 }
 .brand{display:flex;flex-direction:column;gap:4px}
@@ -60,7 +62,7 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
   font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--cos50);
   text-transform:none;
 }
-.brand h1{font-size:24px;font-weight:700;margin:0;letter-spacing:-.02em;color:var(--tx-primary)}
+.brand h1{font-size:26px;font-weight:700;margin:0;letter-spacing:-.03em;color:var(--tx-primary)}
 
 /* ---------- 버튼 ---------- */
 .btn-new{
@@ -99,19 +101,19 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
 .btn-mini{
   font-family:var(--sans);font-size:12.5px;font-weight:600;height:30px;padding:0 11px;
   background:var(--bg-card);color:var(--tx-tertiary);
-  border:1px solid var(--bo-tertiary);border-radius:var(--r6);cursor:pointer;white-space:nowrap;
+  border:1px solid var(--bo-tertiary);border-radius:var(--r8);cursor:pointer;white-space:nowrap;
   transition:background .15s ease,border-color .15s ease,color .15s ease;
 }
 .btn-mini:hover{background:var(--bg-subtle);border-color:var(--gray80)}
 .btn-mini.primary{background:var(--cos50);border-color:var(--cos50);color:#fff}
 .btn-mini.primary:hover{background:var(--cos45);border-color:var(--cos45)}
-.btn-mini.ghost{background:transparent;border-color:transparent;color:var(--tx-quinary)}
+.btn-mini.ghost{background:transparent;border-color:transparent;color:var(--tx-tertiary)}
 .btn-mini.ghost:hover{background:var(--bg-subtle);color:var(--tx-tertiary)}
 .btn-mini.danger:hover{background:var(--nega95);border-color:var(--nega50);color:var(--nega40)}
 .btn-mini.on{background:var(--cos50);border-color:var(--cos50);color:#fff}
 
 /* ---------- 툴바 ---------- */
-.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:20px 0 14px}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:18px 0 14px}
 .search{position:relative;flex:1;min-width:220px}
 .search input{
   width:100%;font-family:var(--sans);font-size:14px;height:40px;padding:0 12px 0 36px;
@@ -143,18 +145,17 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
   display:flex;justify-content:space-between;align-items:baseline;
   padding:6px 4px 10px;
 }
-.ledger-head .title{font-size:15px;font-weight:700;color:var(--tx-primary)}
+.ledger-head .title{font-size:14px;font-weight:700;color:var(--tx-primary)}
 .ledger-head .count{font-size:12.5px;color:var(--tx-quaternary)}
 
 .list{
   list-style:none;margin:0;padding:0;background:var(--bg-card);
   border:1px solid var(--bo-primary);border-radius:var(--r12);overflow:hidden;
-  box-shadow:var(--shadow-sm);
 }
 .list li.row{
   /* 팀·진행단계 / 제목·메타 / 액션 */
   display:grid;grid-template-columns:124px 1fr auto;gap:16px;align-items:center;
-  padding:16px 18px;border-bottom:1px solid var(--bo-primary);background:var(--bg-card);
+  padding:14px 18px;border-bottom:1px solid var(--bo-primary);background:var(--bg-card);
   transition:background .12s ease;
 }
 .list li.row:last-child{border-bottom:none}
@@ -163,8 +164,8 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
 .row-lead{display:flex;flex-direction:column;align-items:flex-start;gap:7px;min-width:0}
 .row-main{min-width:0}
 .row-title{
-  font-size:14.5px;font-weight:600;line-height:1.5;margin-bottom:6px;color:var(--tx-primary);
-  display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+  font-size:14.5px;font-weight:700;line-height:1.5;margin-bottom:6px;color:var(--tx-primary);
+  letter-spacing:-.02em;display:flex;align-items:center;gap:6px;flex-wrap:wrap;
 }
 .row-sub{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .row-sub .sep{color:var(--bo-tertiary)}
@@ -180,18 +181,21 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
 .linkish:hover{color:var(--cos45);text-decoration:underline}
 
 .who{
-  display:inline-block;padding:3px 10px;border-radius:var(--r32);
-  font-size:12.5px;font-weight:600;line-height:1.4;
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12.5px;font-weight:600;line-height:1.4;color:var(--tx-secondary);
 }
-.who.none{background:var(--gray95);color:var(--tx-quinary);font-weight:500}
+.who .dot{
+  display:grid;place-items:center;width:20px;height:20px;flex:none;
+  border-radius:50%;font-size:10px;font-weight:700;
+}
 
 .badge{
-  display:inline-block;padding:2px 8px;border-radius:var(--r4);
+  display:inline-block;padding:2px 8px;border-radius:var(--r6);
   font-size:11.5px;font-weight:700;line-height:1.5;vertical-align:middle;
 }
 .badge.lv-required{background:var(--nega95);color:var(--nega40)}
-/* 권장은 눈에 띄게 노란색 (csms45 warn 토큰) */
-.badge.lv-recommended{background:var(--warn90);color:var(--warn30);border:1px solid var(--warn50)}
+/* csms45 warn 토큰 */
+.badge.lv-recommended{background:var(--warn90);color:var(--warn30)}
 .badge.lv-normal{background:var(--gray95);color:var(--tx-quaternary)}
 .badge.off{background:var(--bg-subtle);color:var(--tx-quinary);border:1px dashed var(--bo-tertiary)}
 
@@ -204,7 +208,7 @@ header.site{background:var(--bg-page);border-bottom:1px solid var(--bo-primary)}
 
 .chip{
   display:inline-block;padding:2px 8px;border:1px solid var(--bo-secondary);
-  border-radius:var(--r4);font-size:11.5px;color:var(--tx-tertiary);background:var(--bg-card);
+  border-radius:var(--r6);font-size:11.5px;color:var(--tx-tertiary);background:var(--bg-card);
 }
 .chip.ghost{background:var(--bg-subtle);border-color:transparent;color:var(--tx-quaternary)}
 
@@ -225,7 +229,7 @@ li.empty .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bo
 }
 .overlay.open{display:flex}
 .sheet{
-  background:var(--bg-card);width:100%;max-width:560px;border-radius:var(--r16);
+  background:var(--bg-card);width:100%;max-width:560px;border-radius:14px;
   border:1px solid var(--bo-primary);box-shadow:var(--shadow-lg);animation:pop .16s ease;
 }
 @keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
@@ -279,7 +283,7 @@ li.empty .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bo
 
 /* 확인/날짜 다이얼로그 */
 .cdialog{
-  background:var(--bg-card);width:100%;max-width:400px;border-radius:var(--r16);
+  background:var(--bg-card);width:100%;max-width:400px;border-radius:14px;
   border:1px solid var(--bo-primary);box-shadow:var(--shadow-lg);
   padding:24px;animation:pop .16s ease;
 }
@@ -296,7 +300,7 @@ li.empty .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bo
 .toast{
   position:fixed;left:50%;bottom:32px;transform:translate(-50%,16px);
   background:var(--gray10);color:#fff;font-size:13.5px;font-weight:500;
-  padding:12px 18px;border-radius:var(--r8);box-shadow:var(--shadow-md);
+  padding:12px 18px;border-radius:var(--r10);box-shadow:var(--shadow-md);
   opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;z-index:400;
 }
 .toast.show{opacity:1;transform:translate(-50%,0)}
@@ -333,7 +337,7 @@ body.is-admin .admin-only{display:inline-flex !important}
 
 /* 뷰어 */
 .viewer{
-  background:var(--bg-card);width:100%;max-width:1280px;border-radius:var(--r16);
+  background:var(--bg-card);width:100%;max-width:1280px;border-radius:14px;
   border:1px solid var(--bo-primary);box-shadow:var(--shadow-lg);
   display:flex;flex-direction:column;height:88vh;animation:pop .16s ease;
 }
@@ -396,11 +400,11 @@ body.is-admin .admin-only{display:inline-flex !important}
 /* ---------- 내 활동 스트립 ---------- */
 .mystrip{
   display:flex;align-items:center;gap:28px;flex-wrap:wrap;
-  margin:20px 0 4px;padding:18px 22px;border-radius:var(--r16);color:#fff;
-  background:linear-gradient(100deg,#062a5e,var(--cos40) 62%,#3a92ff);
+  margin:18px 0 0;padding:18px 20px;border-radius:14px;color:#fff;
+  background:linear-gradient(100deg,#062a5e,var(--cos40) 62%,#3d7ae8);
 }
 .mystrip .m{display:flex;flex-direction:column;gap:2px}
-.mystrip .m b{font-size:23px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.mystrip .m b{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
 .mystrip .m span{font-size:11.5px;font-weight:600;color:#cfe0ff}
 .mystrip .divider{width:1px;height:32px;background:rgba(255,255,255,.24)}
 
@@ -434,21 +438,22 @@ ul.cards{
 }
 ul.cards li.card{
   background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
-  padding:16px;display:flex;flex-direction:column;gap:10px;min-height:196px;
-  box-shadow:var(--shadow-sm);transition:box-shadow .15s ease;
+  padding:16px;display:flex;flex-direction:column;gap:10px;min-height:200px;
+  transition:box-shadow .15s ease;
 }
 ul.cards li.card:hover{box-shadow:var(--shadow-md)}
 ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-radius:var(--r12)}
 .card-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .card-top .card-rail{margin-left:auto}
-.card-title{font-size:15px;font-weight:600;line-height:1.45;letter-spacing:-.02em}
+.card-title{font-size:15px;font-weight:700;line-height:1.45;letter-spacing:-.02em}
+.card-tags{margin-top:auto}
 .card-foot{
-  margin-top:auto;padding-top:12px;border-top:1px solid var(--bo-primary);
+  padding-top:12px;border-top:1px solid var(--bo-primary);
   display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;
 }
 
 /* ---------- 관리자 탭 ---------- */
-.tabs{display:flex;gap:2px;border-bottom:1px solid var(--bo-secondary);margin:20px 0 0}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--bo-secondary);margin:18px 0 0}
 .tabs button{
   font-family:var(--sans);font-size:13.5px;font-weight:700;padding:11px 16px;
   background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
@@ -519,6 +524,7 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
   display:flex;align-items:center;gap:12px;padding:14px;
   border:1.5px dashed var(--bo-tertiary);border-radius:var(--r10);background:var(--gray99);
 }
+.drop + .drop{margin-top:8px}
 .drop.filled{border-style:solid;border-color:var(--cos90);background:var(--cos95)}
 .drop .ic{
   display:grid;place-items:center;width:34px;height:34px;flex:none;
@@ -538,6 +544,19 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
 }
 .rel-main{flex:1;min-width:0}
 .rel-main b{display:block;font-size:13px;font-weight:600;letter-spacing:-.02em}
+.reactions{display:flex;gap:8px;flex-wrap:wrap}
+.rx{
+  display:inline-flex;align-items:center;gap:7px;padding:8px 12px;
+  font-family:var(--sans);font-size:12.5px;font-weight:700;color:var(--tx-tertiary);
+  background:var(--bg-card);border:1px solid var(--bo-tertiary);border-radius:var(--r32);
+  cursor:pointer;transition:background .15s ease,border-color .15s ease,color .15s ease;
+}
+.rx:hover{background:var(--bg-subtle);border-color:var(--gray80)}
+.rx em{font-style:normal;font-size:15px}
+.rx small{font-weight:700;color:var(--tx-quaternary)}
+.rx.on{background:var(--cos95);border-color:var(--cos50);color:var(--cos40)}
+.rx.on small{color:var(--cos40)}
+
 .note{
   margin:8px 0 0;padding:10px 12px;font-size:12.5px;color:var(--tx-quaternary);
   background:var(--bg-subtle);border:1px solid var(--bo-primary);border-radius:var(--r8);

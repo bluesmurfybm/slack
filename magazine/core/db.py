@@ -33,13 +33,27 @@ class Topic(SQLModel, table=True):
     active: int = Field(default=1, sa_column_kwargs={"server_default": "1"})
     archived: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
 
-    # 자료는 주제당 하나. 없음을 NULL 로 두는 건 화면·테스트가 기대하는 계약이다.
+    # 자료 칸은 슬롯당 하나. 없음을 NULL 로 두는 건 화면·테스트가 기대하는 계약이다.
     material_kind: Optional[str] = None    # link | file
     material_name: Optional[str] = None
     material_url: Optional[str] = None
     material_path: Optional[str] = None
 
+    scan_kind: Optional[str] = None        # link | file
+    scan_name: Optional[str] = None
+    scan_url: Optional[str] = None
+    scan_path: Optional[str] = None
+
     created_by: str = ""
+    created_at: str = ""
+
+
+class TopicEmotion(SQLModel, table=True):
+    __tablename__ = "topic_emotions"
+
+    topic_id: int = Field(foreign_key="topics.id", primary_key=True)
+    email: str = Field(primary_key=True)
+    kind: str = Field(primary_key=True)     # features/emotion/service.py 의 Emotion
     created_at: str = ""
 
 

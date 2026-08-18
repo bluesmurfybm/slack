@@ -17,6 +17,10 @@
 <div class="topbar">
   <div class="topbar-in">
     <a class="logo" id="hdrBrand" href="#" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
+    <div class="seg-mode admin-only" role="group" aria-label="화면 전환">
+      <button type="button" id="modeUser" class="on" onclick="setMode('user')">구성원 화면</button>
+      <button type="button" id="modeAdmin" onclick="setMode('admin')">관리자 화면</button>
+    </div>
     <div class="top-right">
       <div class="user-menu" id="hdrUserMenu">
         <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
@@ -44,10 +48,6 @@
       <p class="lede" id="pageLede">배달된 매거진에서 우리 팀에 필요한 아티클을 골라 발표를 예약하세요.</p>
     </div>
     <div class="site-act">
-      <div class="seg-mode admin-only" role="group" aria-label="화면 전환">
-        <button type="button" id="modeUser" class="on" onclick="setMode('user')">구성원 화면</button>
-        <button type="button" id="modeAdmin" onclick="setMode('admin')">관리자 화면</button>
-      </div>
       <button class="btn-new admin-only" onclick="openForm()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         주제 등록
@@ -64,9 +64,9 @@
     <div class="divider"></div>
     <div class="m"><b id="statUpcoming">0건</b><span>예정 · 준비중</span></div>
     <div class="divider"></div>
-    <div class="m"><b id="statFields">0개</b><span>내가 발표한 분야</span></div>
+    <div class="m"><b id="statLikes">0</b><span>받은 좋아요</span></div>
     <div class="divider"></div>
-    <div class="m"><b id="statOpen">0건</b><span>선점 대기</span></div>
+    <div class="m"><b id="statFields">0개</b><span>내가 발표한 분야</span></div>
   </section>
 
   <nav class="tabs" id="adminTabs">
@@ -90,6 +90,9 @@
         <option value="recommended">권장</option>
         <option value="normal">일반</option>
       </select>
+      <label class="check" id="myteamCheck" style="display:none">
+        <input id="f-myteam" type="checkbox" onchange="render()"> <span id="myteamLabel">우리 팀</span>
+      </label>
       <label class="check"><input id="f-mine" type="checkbox" onchange="render()"> 내가 선점한 것만</label>
       <div class="viewtoggle">
         <button type="button" id="vList" title="리스트로 보기" onclick="setLayout('list')">
@@ -205,7 +208,7 @@
 
 <div class="overlay" id="matOverlay" onclick="if(event.target===this)closeMaterial()">
   <div class="cdialog">
-    <h3>발표 자료</h3>
+    <h3 id="matTitle">발표용 자료</h3>
     <p id="matCurrent"></p>
     <div class="seg" id="seg-mat">
       <button type="button" id="mat-file" class="on" onclick="setMatMode('file')">파일 올리기</button>
@@ -270,6 +273,7 @@
 <script src="static/related.js"></script>
 <script src="static/drawer.js"></script>
 <script src="static/claim.js"></script>
+<script src="static/emotion.js"></script>
 <script src="static/form.js"></script>
 <script src="static/material.js"></script>
 <script src="static/assign.js"></script>

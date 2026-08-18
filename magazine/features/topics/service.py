@@ -3,6 +3,7 @@ from sqlmodel import Session
 
 from core.config import Settings
 from core.db import Topic
+from features.emotion.service import empty_counts
 from features.identity.auth import is_admin
 
 STATUS_OPEN = "미지정"
@@ -19,8 +20,9 @@ def derive_status(topic: Topic) -> str:
     return STATUS_OPEN
 
 
-def to_dict(topic: Topic) -> dict:
-    return {**topic.model_dump(), "status": derive_status(topic)}
+def to_dict(topic: Topic, emotions: dict = None, my_emotions: list = None) -> dict:
+    return {**topic.model_dump(), "status": derive_status(topic),
+            "emotions": emotions or empty_counts(), "my_emotions": my_emotions or []}
 
 
 def fetch(session: Session, tid: int) -> Topic:

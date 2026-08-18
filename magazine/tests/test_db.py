@@ -3,7 +3,7 @@ import sqlite3
 from sqlmodel import Session, select
 
 from conftest import make_settings
-from core.db import Topic, init_db
+from core.db import Topic, TopicEmotion, init_db
 
 LEGACY_SCHEMA = """
 CREATE TABLE topics(
@@ -57,6 +57,19 @@ def test_migration_backfills_visibility_of_existing_rows(tmp_path):
         topic = session.exec(select(Topic)).one()
     assert topic.active == 1
     assert topic.archived == 0
+
+
+def test_emotions_table_is_added_to_an_existing_db(tmp_path):
+    settings = make_settings(tmp_path)
+    _legacy_db(settings, "옛 주제")
+
+    engine = init_db(settings)
+    with Session(engine) as session:
+        tid = session.exec(select(Topic)).one().id
+        session.add(TopicEmotion(topic_id=tid, email="siyu@bluesoft.co.kr",
+                                 kind="like"))
+        session.commit()
+        assert session.exec(select(TopicEmotion)).one().topic_id == tid
 
 
 def test_migration_is_repeatable(tmp_path):

@@ -146,3 +146,56 @@ def test_third_party_cannot_detach(client, settings):
     client.post(_url(tid, "/link"), json={"url": "https://example.com/a"})
     login(client, settings, OTHER)
     assert client.delete(_url(tid)).status_code == 403
+
+
+def _scan(tid, tail=""):
+    return f"/magazineapi/topics/{tid}/scan{tail}"
+
+
+def test_presenter_uploads_scan(client, settings):
+    tid = _claimed(client, settings)
+    r = client.post(_scan(tid, "/file"),
+                    files={"file": ("스캔.pdf", b"%PDF-1.4 scan", "application/pdf")})
+    assert r.status_code == 200
+    assert r.json()["scan_kind"] == "file"
+    assert r.json()["scan_name"] == "스캔.pdf"
+
+
+def test_scan_link_is_accepted(client, settings):
+    tid = _claimed(client, settings)
+    r = client.post(_scan(tid, "/link"), json={"url": "https://example.com/scan.pdf"})
+    assert r.json()["scan_kind"] == "link"
+    assert r.json()["scan_url"] == "https://example.com/scan.pdf"
+
+
+def test_scan_and_deck_are_kept_apart(client, settings):
+    tid = _claimed(client, settings)
+    client.post(_url(tid, "/file"), files={"file": ("발표.pdf", b"deck", "application/pdf")})
+    body = client.post(_scan(tid, "/file"),
+                       files={"file": ("스캔.pdf", b"scan", "application/pdf")}).json()
+    assert body["material_name"] == "발표.pdf"
+    assert body["scan_name"] == "스캔.pdf"
+    assert client.get(_url(tid, "/download")).content == b"deck"
+    assert client.get(_scan(tid, "/download")).content == b"scan"
+
+
+def test_detaching_scan_leaves_the_deck(client, settings):
+    tid = _claimed(client, settings)
+    client.post(_url(tid, "/link"), json={"url": "https://example.com/deck"})
+    client.post(_scan(tid, "/link"), json={"url": "https://example.com/scan"})
+    r = client.delete(_scan(tid))
+    assert r.json()["scan_kind"] is None
+    assert r.json()["material_kind"] == "link"
+
+
+def test_third_party_cannot_upload_scan(client, settings):
+    tid = _claimed(client, settings)
+    login(client, settings, OTHER)
+    assert client.post(_scan(tid, "/link"),
+                       json={"url": "https://example.com/a"}).status_code == 403
+
+
+def test_unknown_slot_is_rejected(client, settings):
+    tid = _claimed(client, settings)
+    assert client.post(f"/magazineapi/topics/{tid}/bogus/link",
+                       json={"url": "https://example.com/a"}).status_code == 404

@@ -36,40 +36,50 @@ function drawerHtml(t) {
         <dt>발표자</dt><dd>${t.presenter ? esc(t.presenter)
       : (t.team ? `${esc(t.team)} 팀 배정` : '<span class="muted">아직 없음</span>')}</dd>
         <dt>${t.done_date ? "발표일" : "발표 예정일"}</dt>
-        <dd>${esc(t.done_date || t.planned_date) || '<span class="muted">미정</span>'}</dd>
+        <dd>${dotDate(esc(t.done_date || t.planned_date)) || '<span class="muted">미정</span>'}</dd>
         ${t.note ? `<dt>비고</dt><dd>${esc(t.note)}</dd>` : ""}
       </dl>
 
       <section class="d-sec">
         <h4>발표 자료</h4>
-        ${materialSlot(t)}
+        ${materialSlots(t)}
       </section>
 
       <section class="d-sec">
         <h4>연관 아티클</h4>
         ${relatedListHtml(t)}
       </section>
+
+      ${t.status === "발표완료" ? `<section class="d-sec">
+        <h4>이 발표 어땠나요</h4>
+        ${reactionsHtml(t)}
+      </section>` : ""}
     </div>
     <footer>${drawerActions(t)}</footer>`;
 }
 
-function materialSlot(t) {
+function materialSlots(t) {
   const may = canManageMaterial(t);
-  if (!t.material_kind) {
+  return Object.keys(SLOTS).map(slot => slotBox(t, slot, may)).join("")
+    + (may ? "" : '<p class="note">자료 등록은 발표자 본인이나 관리자만 할 수 있습니다.</p>');
+}
+
+function slotBox(t, slot, may) {
+  const meta = SLOTS[slot];
+  const kind = slotOf(t, slot, "kind");
+  if (!kind) {
     return `<div class="drop">
-      <span class="ic">📄</span>
-      <span class="t"><b>아직 올린 자료가 없습니다</b>
-        <span>스캔한 원본이나 발표용 자료 (파일 또는 링크)</span></span>
-      ${may ? `<button class="btn-mini mat" onclick="openMaterial(${t.id})">자료 올리기</button>`
+      <span class="ic">${meta.icon}</span>
+      <span class="t"><b>${meta.label}</b><span>${meta.hint}</span></span>
+      ${may ? `<button class="btn-mini mat" onclick="openMaterial(${t.id},'${slot}')">올리기</button>`
       : '<span class="chip ghost">미등록</span>'}
-    </div>${may ? "" : '<p class="note">자료 등록은 발표자 본인이나 관리자만 할 수 있습니다.</p>'}`;
+    </div>`;
   }
-  const name = t.material_name || (t.material_kind === "link" ? "링크" : "파일");
   return `<div class="drop filled">
-    <span class="ic">${t.material_kind === "link" ? "🔗" : "📎"}</span>
-    <span class="t"><b>${esc(name)}</b><span>등록 완료</span></span>
-    <button class="btn-mini" onclick="openViewer(${t.id})">열기</button>
-    ${may ? `<button class="btn-mini mat has" onclick="openMaterial(${t.id})">변경</button>` : ""}
+    <span class="ic">${kind === "link" ? "🔗" : meta.icon}</span>
+    <span class="t"><b>${esc(slotName(t, slot))}</b><span>${meta.label}</span></span>
+    <button class="btn-mini" onclick="openViewer(${t.id},'${slot}')">열기</button>
+    ${may ? `<button class="btn-mini mat has" onclick="openMaterial(${t.id},'${slot}')">변경</button>` : ""}
   </div>`;
 }
 

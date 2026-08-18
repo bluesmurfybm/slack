@@ -38,10 +38,13 @@ function visible() {
   const v = id => document.getElementById(id).value;
   const q = v("q").trim().toLowerCase();
   const mine = document.getElementById("f-mine").checked;
+  const myteam = document.getElementById("f-myteam").checked;
+  const teams = APP.me.teams || [];
   return pool().filter(t =>
     (!v("f-field") || t.field === v("f-field")) &&
     (!v("f-magazine") || t.magazine === v("f-magazine")) &&
     (!v("f-team") || t.team === v("f-team")) &&
+    (!myteam || teams.includes(t.team)) &&
     (!v("f-status") || STAGES[stageOf(t)].key === v("f-status")) &&
     (!v("f-req") || t.requirement === v("f-req")) &&
     (!mine || t.presenter_email === APP.me.email) &&
@@ -94,8 +97,8 @@ function myStats() {
   return {
     done: done.length,
     upcoming: mine.length - done.length,
+    likes: done.reduce((sum, t) => sum + emotionCount(t, "like"), 0),
     fields: new Set(done.map(t => t.field).filter(Boolean)).size,
-    open: APP.topics.filter(t => t.status === "미지정" && t.active && !t.archived).length,
   };
 }
 
@@ -104,8 +107,8 @@ function renderStats() {
   const put = (id, text) => document.getElementById(id).textContent = text;
   put("statDone", `${s.done}회`);
   put("statUpcoming", `${s.upcoming}건`);
+  put("statLikes", `${s.likes}`);
   put("statFields", `${s.fields}개`);
-  put("statOpen", `${s.open}건`);
 }
 
 const LEDGER_TITLE = {
@@ -114,10 +117,14 @@ const LEDGER_TITLE = {
   archive: "보관된 아티클",
 };
 
+function cardsMode() {
+  return APP.view.mode !== "admin" && APP.view.layout === "card";
+}
+
 function render() {
   const v = APP.view;
   const admin = v.mode === "admin";
-  const isCards = !admin && v.layout === "card";
+  const isCards = cardsMode();
 
   document.getElementById("mystrip").style.display = admin ? "none" : "";
   document.getElementById("adminTabs").style.display = admin ? "" : "none";
@@ -178,24 +185,33 @@ function sourceOf(t) {
     .filter(Boolean).join(" ");
 }
 
+const dotDate = d => String(d).replace(/-/g, ".");
+
 function presenterChip(t) {
-  if (!t.presenter && !t.team) return '<span class="chip ghost">발표자 미지정</span>';
-  const who = t.presenter || t.team;
-  const c = colorFor(who);
+  if (!t.presenter) return '<span class="chip ghost">발표자 미지정</span>';
+  const c = colorFor(t.presenter);
   const when = t.done_date || t.planned_date;
-  return `<span class="who" style="background:${c.bg};color:${c.fg}">${esc(who)}</span>`
-    + (when ? `<span class="when">${esc(when)}</span>` : "");
+  const sep = cardsMode() ? "" : "· ";
+  return `<span class="who"><span class="dot" style="background:${c.bg};color:${c.fg}"
+    >${esc(t.presenter.slice(0, 1))}</span>${esc(t.presenter)}</span>`
+    + (when ? `<span class="when">${sep}${dotDate(esc(when))}</span>` : "");
 }
 
 function titleHtml(t) {
   return `<button class="linkish" onclick="openDrawer(${t.id})">${esc(t.title)}</button>`;
 }
 
-function metaHtml(t) {
+function tagsHtml(t) {
   return `${t.field ? `<span class="chip ghost">${esc(t.field)}</span>` : ""}
-    ${t.keywords ? `<span class="chip">${esc(t.keywords)}</span>` : ""}
-    <span class="muted">${esc(sourceOf(t) || "—")}</span>
-    ${materialChip(t)}`;
+    ${t.keywords ? `<span class="chip">${esc(t.keywords)}</span>` : ""}`;
+}
+
+function sourceHtml(t) {
+  return `<span class="muted">${esc(sourceOf(t) || "—")}</span>${materialChips(t)}`;
+}
+
+function metaHtml(t) {
+  return `${tagsHtml(t)}${sourceHtml(t)}`;
 }
 
 function rowHtml(t) {
@@ -214,7 +230,8 @@ function cardHtml(t) {
     <div class="card-top">${teamTag(t)}${reqBadge(t)}${stateTags(t)}
       <span class="card-rail">${railHtml(t)}</span></div>
     <div class="card-title">${titleHtml(t)}</div>
-    <div class="row-sub">${metaHtml(t)}</div>
+    <div class="row-sub card-tags">${tagsHtml(t)}</div>
+    <div class="row-sub">${sourceHtml(t)}</div>
     <div class="card-foot">${presenterChip(t)}<span class="row-act">${actionsHtml(t)}</span></div>
   </li>`;
 }
@@ -222,16 +239,20 @@ function cardHtml(t) {
 function actionsHtml(t) {
   if (APP.view.mode === "admin") return adminActionsHtml(t);
   const out = [];
+  const mine = t.presenter_email === APP.me.email;
+
   if (t.status === "미지정") {
     out.push(`<button class="btn-mini primary" onclick="claim(${t.id})">내가 발표할게요</button>`);
-  } else if (t.presenter_email === APP.me.email && t.status !== "발표완료") {
+  } else if (t.status === "발표완료") {
+    out.push(likeButton(t));
+  } else if (mine) {
     out.push(`<button class="btn-mini" onclick="schedule(${t.id})">예정일</button>`);
     out.push(`<button class="btn-mini" onclick="release(${t.id})">취소</button>`);
+    // 자료는 상세에서 올린다 — 발표자가 거기로 갈 길이 있어야 한다
+    out.push(`<button class="btn-mini ghost" onclick="openDrawer(${t.id})">상세</button>`);
+  } else {
+    out.push(`<button class="btn-mini ghost" onclick="openDrawer(${t.id})">상세</button>`);
   }
-  if (canManageMaterial(t) && !t.material_kind) {
-    out.push(`<button class="btn-mini mat" onclick="openMaterial(${t.id})">📎 자료 올리기</button>`);
-  }
-  out.push(`<button class="btn-mini ghost" onclick="openDrawer(${t.id})">상세</button>`);
   return out.join("");
 }
 

@@ -1,32 +1,47 @@
 let MAT_ID = null;
+let MAT_SLOT = "material";
 let MAT_MODE = "file";
+
+// 슬롯 이름은 서버의 컬럼 접두어이자 API 경로다 (features/material/router.py)
+const SLOTS = {
+  scan: { label: "스캔한 아티클 원본", icon: "📄", hint: "PDF · 이미지" },
+  material: { label: "발표용 자료", icon: "📊", hint: "PPTX · PDF · 키노트" },
+};
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp|bmp)$/i;
 const PDF_RE = /\.pdf$/i;
+
+const slotOf = (t, slot, part) => t[`${slot}_${part}`];
+const slotName = (t, slot) =>
+  slotOf(t, slot, "name") || (slotOf(t, slot, "kind") === "link" ? "링크" : "파일");
 
 function canManageMaterial(t) {
   return APP.me.is_admin || (t.presenter_email && t.presenter_email === APP.me.email);
 }
 
-function materialChip(t) {
-  if (!t.material_kind) return "";
-  const name = t.material_name || (t.material_kind === "link" ? "링크" : "파일");
-  const icon = t.material_kind === "link" ? "🔗" : "📎";
-  return `<button class="chip material" onclick="openViewer(${t.id})"
-            title="${esc(name)}">${icon} ${esc(name)}</button>`;
+function materialChips(t) {
+  return Object.keys(SLOTS).filter(s => slotOf(t, s, "kind")).map(s => {
+    const icon = slotOf(t, s, "kind") === "link" ? "🔗" : SLOTS[s].icon;
+    return `<button class="chip material" onclick="openViewer(${t.id},'${s}')"
+      title="${SLOTS[s].label} — ${esc(slotName(t, s))}">${icon} ${esc(slotName(t, s))}</button>`;
+  }).join("");
 }
-function openMaterial(id) {
+function openMaterial(id, slot = "material") {
   const t = APP.topics.find(x => x.id === id);
   if (!t) return;
   MAT_ID = id;
-  document.getElementById("matCurrent").textContent = t.material_kind
-    ? `현재: ${t.material_name || ""}`
-    : "아직 올린 자료가 없습니다.";
-  document.getElementById("mat-del").style.display = t.material_kind ? "" : "none";
+  MAT_SLOT = slot;
+  const kind = slotOf(t, slot, "kind");
+  document.getElementById("matTitle").textContent = SLOTS[slot].label;
+  document.getElementById("matCurrent").textContent = kind
+    ? `현재: ${slotName(t, slot)}`
+    : `아직 올린 자료가 없습니다. (${SLOTS[slot].hint})`;
+  document.getElementById("mat-del").style.display = kind ? "" : "none";
   document.getElementById("mat-fileinput").value = "";
-  document.getElementById("mat-url").value = t.material_kind === "link" ? t.material_url : "";
-  document.getElementById("mat-name").value = t.material_kind === "link" ? (t.material_name || "") : "";
-  setMatMode(t.material_kind === "link" ? "link" : "file");
+  const isLink = kind === "link";
+  document.getElementById("mat-url").value = isLink ? slotOf(t, slot, "url") : "";
+  document.getElementById("mat-name").value = isLink ? (slotOf(t, slot, "name") || "") : "";
+  setMatMode(isLink ? "link" : "file");
   document.getElementById("matOverlay").classList.add("open");
 }
 
@@ -47,14 +62,14 @@ async function submitMaterial() {
     if (MAT_MODE === "link") {
       const url = document.getElementById("mat-url").value.trim();
       if (!url) { showToast("주소를 넣어 주세요"); return; }
-      await postJSON(`/magazineapi/topics/${MAT_ID}/material/link`,
+      await postJSON(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}/link`,
         { url, name: document.getElementById("mat-name").value.trim() });
     } else {
       const f = document.getElementById("mat-fileinput").files[0];
       if (!f) { showToast("파일을 골라 주세요"); return; }
       const fd = new FormData();
       fd.append("file", f);
-      await api(`/magazineapi/topics/${MAT_ID}/material/file`, { method: "POST", body: fd });
+      await api(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}/file`, { method: "POST", body: fd });
     }
     showToast("자료를 올렸습니다");
     closeMaterial();
@@ -64,24 +79,24 @@ async function submitMaterial() {
 
 async function detachMaterial() {
   try {
-    await api(`/magazineapi/topics/${MAT_ID}/material`, { method: "DELETE" });
+    await api(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}`, { method: "DELETE" });
     showToast("자료를 삭제했습니다");
     closeMaterial();
     await reload();
   } catch (e) { showToast(e.message); }
 }
-function openViewer(id) {
+function openViewer(id, slot = "material") {
   const t = APP.topics.find(x => x.id === id);
-  if (!t || !t.material_kind) return;
+  if (!t || !slotOf(t, slot, "kind")) return;
 
   // 링크는 임베드를 막는 사이트가 많아 새 탭으로 연다.
-  if (t.material_kind === "link") {
-    window.open(t.material_url, "_blank", "noopener");
+  if (slotOf(t, slot, "kind") === "link") {
+    window.open(slotOf(t, slot, "url"), "_blank", "noopener");
     return;
   }
 
-  const name = t.material_name || "자료";
-  const src = `/magazineapi/topics/${id}/material/download`;
+  const name = slotName(t, slot);
+  const src = `/magazineapi/topics/${id}/${slot}/download`;
   const body = document.getElementById("viewBody");
   document.getElementById("viewName").textContent = name;
   document.getElementById("viewDownload").href = src;

@@ -1,3 +1,5 @@
+import sqlite3
+
 from conftest import ADMIN, OTHER, USER, login
 from features.identity.auth import make_cookie
 
@@ -32,6 +34,21 @@ def test_whoami_marks_admin(client, settings):
 def test_whoami_normal_user_is_not_admin(client, settings):
     login(client, settings, USER)
     assert client.get("/magazineapi/whoami").json()["is_admin"] is False
+
+
+def test_whoami_carries_my_team(client, settings):
+    login(client, settings, USER, "유승인")
+    assert client.get("/magazineapi/whoami").json()["teams"] == ["App"]
+
+
+def test_whoami_carries_both_teams_when_shared(client, settings):
+    login(client, settings, "lenda83@bluesoft.co.kr", "진소현")
+    assert client.get("/magazineapi/whoami").json()["teams"] == ["App", "LAB"]
+
+
+def test_whoami_of_a_stranger_has_no_team(client, settings):
+    login(client, settings, "nobody@bluesoft.co.kr", "손님")
+    assert client.get("/magazineapi/whoami").json()["teams"] == []
 
 
 def test_status_is_derived_not_stored(client, settings):

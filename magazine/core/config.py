@@ -7,21 +7,22 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 MEMBERS = [
-    {"name": "김호영", "email": "kimhy@bluesoft.co.kr"},
-    {"name": "김지안", "email": "jian@bluesoft.co.kr"},
-    {"name": "박성철", "email": "scpark@bluesoft.co.kr"},
-    {"name": "김태주", "email": "pink@bluesoft.co.kr"},
-    {"name": "안정민", "email": "venus@bluesoft.co.kr"},
-    {"name": "조성훈", "email": "akddd@bluesoft.co.kr"},
-    {"name": "진소현", "email": "lenda83@bluesoft.co.kr"},
-    {"name": "김아랑", "email": "amitoa@bluesoft.co.kr"},
-    {"name": "박화랑", "email": "phr@bluesoft.co.kr"},
-    {"name": "유병문", "email": "bnmmnbhj@bluesoft.co.kr"},
-    {"name": "유승인", "email": "siyu@bluesoft.co.kr"},
-    {"name": "이한재", "email": "hjlee@bluesoft.co.kr"},
-    {"name": "이준영", "email": "jun0@bluesoft.co.kr"},
+    {"name": "김호영", "email": "kimhy@bluesoft.co.kr", "teams": ["App", "SQUARE", "LAB"]},
+    {"name": "김지안", "email": "jian@bluesoft.co.kr", "teams": ["SQUARE"]},
+    {"name": "박성철", "email": "scpark@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "김태주", "email": "pink@bluesoft.co.kr", "teams": ["LAB"]},
+    {"name": "안정민", "email": "venus@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "조성훈", "email": "akddd@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "진소현", "email": "lenda83@bluesoft.co.kr", "teams": ["App", "LAB"]},
+    {"name": "김아랑", "email": "amitoa@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "박화랑", "email": "phr@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "유병문", "email": "bnmmnbhj@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "유승인", "email": "siyu@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "이한재", "email": "hjlee@bluesoft.co.kr", "teams": ["App"]},
+    {"name": "이준영", "email": "jun0@bluesoft.co.kr", "teams": ["App"]},
 ]
 EMAIL_TO_NAME = {m["email"]: m["name"] for m in MEMBERS}
+EMAIL_TO_TEAMS = {m["email"]: m["teams"] for m in MEMBERS}
 
 _DEV_EMAILS = ["jian@bluesoft.co.kr", "kimhy@bluesoft.co.kr", "siyu@bluesoft.co.kr",
                "pink@bluesoft.co.kr", "hjlee@bluesoft.co.kr"]

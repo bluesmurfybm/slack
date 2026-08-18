@@ -24,6 +24,19 @@ function setLayout(layout) {
   render();
 }
 
+function buildMyTeam() {
+  const teams = APP.me.teams || [];
+  const box = document.getElementById("myteamCheck");
+  box.style.display = teams.length ? "" : "none";
+  if (!teams.length) {
+    document.getElementById("f-myteam").checked = false;
+    return;
+  }
+  document.getElementById("myteamLabel").textContent =
+    teams.length === 1 ? `우리 팀(${teams[0]})` : "우리 팀";
+  box.title = `내 팀 — ${teams.join(" · ")}`;
+}
+
 function buildDevBar() {
   const bar = document.getElementById("devbar");
   if (!APP.me.dev_login) { bar.style.display = "none"; return; }
@@ -49,6 +62,7 @@ async function loadWhoami() {
   document.getElementById("dd-slack").href = APP.me.slack_url || "#";
   document.getElementById("dd-logout").href = portalUrl ? `${portalUrl}/logout.php` : "#";
   document.getElementById("hdrName").textContent = APP.me.name || "(로그인 필요)";
+  buildMyTeam();
   const av = document.getElementById("hdrAvatar");
   av.textContent = (APP.me.name || "?").slice(0, 1);
   av.style.background = APP.me.color || colorFor(APP.me.name).fg;

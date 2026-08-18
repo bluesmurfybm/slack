@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 
-from core.config import DEV_ACCOUNTS, MEMBERS, Settings
+from core.config import DEV_ACCOUNTS, EMAIL_TO_TEAMS, MEMBERS, Settings
 from features.identity.auth import (get_identity, get_settings, is_admin,
                                     require_identity)
 
@@ -13,6 +13,7 @@ def whoami(request: Request, settings: Settings = Depends(get_settings)):
     base = {"email": None, "name": None, "color": None}
     base.update(ident or {})
     base["is_admin"] = is_admin(settings, base.get("email"))
+    base["teams"] = EMAIL_TO_TEAMS.get(base.get("email"), [])
     base["dev_login"] = settings.dev_login
     base["dev_accounts"] = DEV_ACCOUNTS if settings.dev_login else []
     base["portal_url"] = settings.portal_url

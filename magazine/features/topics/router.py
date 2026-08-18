@@ -1,16 +1,17 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import or_, update
+from sqlalchemy import delete, or_, update
 from sqlmodel import Session, func, select
 
 from core.config import EMAIL_TO_NAME
-from core.db import Topic, get_session
+from core.db import Topic, TopicEmotion, get_session
 from features.identity.auth import (get_settings, is_admin, require_admin,
                                     require_identity)
 from features.notify import slack
 from features.topics.models import (AssignIn, ClaimIn, CompleteIn, ScheduleIn,
                                     TopicIn, TopicPatch)
+from features.emotion.service import summary as emotion_summary
 from features.topics.service import fetch, may_manage_claim, to_dict
 
 router = APIRouter(prefix="/magazineapi/topics", tags=["topics"])
@@ -26,7 +27,9 @@ def list_topics(request: Request, session: Session = Depends(get_session),
     if not is_admin(get_settings(request), identity["email"]):
         # 숨김·보관은 관리자 화면에만 있어야 한다. 목록에서 빼는 판정은 서버가 한다.
         stmt = stmt.where(Topic.active == 1, Topic.archived == 0)
-    return [to_dict(t) for t in session.exec(stmt).all()]
+    counts, mine = emotion_summary(session, identity["email"])
+    return [to_dict(t, counts.get(t.id), mine.get(t.id))
+            for t in session.exec(stmt).all()]
 
 
 @router.get("/{tid}")
@@ -63,7 +66,9 @@ def update_topic(tid: int, body: TopicPatch, session: Session = Depends(get_sess
 @router.delete("/{tid}")
 def delete_topic(tid: int, session: Session = Depends(get_session),
                  identity: dict = Depends(require_admin)):
-    session.delete(fetch(session, tid))
+    topic = fetch(session, tid)
+    session.execute(delete(TopicEmotion).where(TopicEmotion.topic_id == tid))
+    session.delete(topic)
     session.commit()
     return {"ok": True}
 
