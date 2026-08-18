@@ -1,5 +1,5 @@
 const FORM_IDS = ["f-title", "f-field-in", "f-keywords", "f-magazine-in",
-  "f-volume", "f-page", "f-year", "f-team-in", "f-planned", "f-note"];
+  "f-volume", "f-page", "f-team-in", "f-planned", "f-note"];
 
 let REQ = "recommended";   // 폼의 발표 구분 선택
 let EDIT_ID = null;
@@ -14,6 +14,8 @@ function setReq(v) {
 function openForm() {
   EDIT_ID = null;
   FORM_IDS.forEach(id => document.getElementById(id).value = "");
+  // 분야 select 에는 빈 옵션이 없다(시안과 동일). 첫 항목을 기본값으로 둔다.
+  document.getElementById("f-field-in").selectedIndex = 0;
   document.getElementById("f-active").value = "1";
   document.getElementById("issueHint").style.display = "none";
   setReq("recommended");
@@ -29,12 +31,12 @@ function openEdit(id) {
   const s = (el, v) => document.getElementById(el).value = (v == null ? "" : v);
   s("f-title", t.title); s("f-field-in", t.field); s("f-keywords", t.keywords);
   s("f-magazine-in", t.magazine); s("f-volume", t.volume); s("f-page", t.page);
-  s("f-year", t.year); s("f-team-in", t.team); s("f-planned", t.planned_date);
+  s("f-team-in", t.team); s("f-planned", t.planned_date);
   s("f-note", t.note); s("f-active", t.active ? "1" : "0");
   document.getElementById("issueHint").style.display = "none";
   setReq(t.requirement);
-  document.getElementById("sheet-kicker").textContent = "수정";
-  document.getElementById("sheet-title").textContent = "주제 수정";
+  document.getElementById("sheet-kicker").textContent = "아티클 수정";
+  document.getElementById("sheet-title").textContent = "아티클 정보 수정";
   openSheet();
 }
 
@@ -80,7 +82,6 @@ function formValues() {
   return {
     title: g("f-title"), field: g("f-field-in"), keywords: g("f-keywords"),
     magazine: g("f-magazine-in"), volume: g("f-volume"), page: g("f-page"),
-    year: g("f-year") ? Number(g("f-year")) : null,
     requirement: REQ, team: g("f-team-in"), planned_date: g("f-planned"),
     note: g("f-note"), active: Number(g("f-active")),
   };

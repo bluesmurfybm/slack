@@ -1,4 +1,6 @@
-const TEAMS = ["App", "LAB", "SQUARE"];
+const TEAMS = ["SQUARE", "App", "LAB", "CLOUD"];
+const FIELDS = ["UI/UX", "Marketing", "Trend", "Etc"];
+const MAGAZINES = ["DI", "MIT TR", "HBR Korea", "마이크로소프트웨어"];
 
 const REQUIREMENTS = [
   { key: "required", label: "필수" },
@@ -71,24 +73,20 @@ function buildFilters() {
 }
 
 function buildFormOptions() {
-  const fillDL = (id, vals) => {
+  // 데이터에 이미 들어 있는 값은 기본 목록에 없어도 옵션으로 살려 둔다.
+  // 닫힌 select 는 모르는 값을 만나면 조용히 다른 값으로 바꿔 저장해 버린다.
+  // (실제로 매거진 'Etc' 와 팀 빈값이 기본 목록 밖에 있다.)
+  const union = (base, key) =>
+    [...new Set([...base, ...APP.topics.map(t => t[key]).filter(Boolean)])];
+
+  const fill = (id, vals, blank) => {
     document.getElementById(id).innerHTML =
-      [...new Set(vals)].filter(Boolean).sort()
-        .map(v => `<option value="${esc(v)}"></option>`).join("");
+      (blank ? `<option value="">${blank}</option>` : "") +
+      vals.map(v => `<option>${esc(v)}</option>`).join("");
   };
-  fillDL("dl-field", APP.topics.map(t => t.field));
-  fillDL("dl-magazine", APP.topics.map(t => t.magazine));
-
-  const years = new Set(APP.topics.map(t => t.year).filter(Boolean));
-  const now = new Date().getFullYear();
-  for (let y = now - 1; y <= now + 1; y++) years.add(y);
-  document.getElementById("f-year").innerHTML = '<option value="">선택</option>' +
-    [...years].sort((a, b) => b - a).map(y => `<option value="${y}">${y}</option>`).join("");
-
-  const teams = new Set(TEAMS);
-  APP.topics.forEach(t => { if (t.team) teams.add(t.team); });
-  document.getElementById("f-team-in").innerHTML = '<option value="">없음</option>' +
-    [...teams].sort().map(t => `<option>${esc(t)}</option>`).join("");
+  fill("f-team-in", union(TEAMS, "team"), "없음");
+  fill("f-field-in", union(FIELDS, "field"), null);
+  fill("f-magazine-in", union(MAGAZINES, "magazine"), "매거진 선택");
 }
 
 function myStats() {

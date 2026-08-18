@@ -127,13 +127,12 @@
         <input id="f-title" type="text" placeholder="아티클 제목">
       </div>
       <div class="two">
-        <div class="field">
-          <label>분야</label>
-          <input id="f-field-in" type="text" list="dl-field" autocomplete="off"
-                 placeholder="UI/UX · Trend · Marketing · Etc">
-          <datalist id="dl-field"></datalist>
-        </div>
-        <div class="field"><label>중요 키워드</label><input id="f-keywords" type="text" placeholder="생성형AI"></div>
+        <div class="field"><label>관련 팀</label><select id="f-team-in"></select></div>
+        <div class="field"><label>분야</label><select id="f-field-in"></select></div>
+      </div>
+      <div class="field">
+        <label>중요 키워드</label>
+        <input id="f-keywords" type="text" placeholder="생성형AI">
       </div>
       <div class="field">
         <label>발표 구분</label>
@@ -146,17 +145,11 @@
       <div class="field">
         <label>매거진 / Volume / Page</label>
         <div class="triple">
-          <input id="f-magazine-in" type="text" list="dl-magazine" autocomplete="off"
-                 placeholder="DI" onchange="fillLatestIssue()">
-          <input id="f-volume" type="text" placeholder="280">
-          <input id="f-page" type="text" placeholder="46">
+          <select id="f-magazine-in" onchange="fillLatestIssue()"></select>
+          <input id="f-volume" type="text" placeholder="Volume">
+          <input id="f-page" type="text" placeholder="Page">
         </div>
-        <datalist id="dl-magazine"></datalist>
         <p class="hint" id="issueHint" style="display:none"></p>
-      </div>
-      <div class="two">
-        <div class="field"><label>년도</label><select id="f-year"></select></div>
-        <div class="field"><label>배정 팀 (선택)</label><select id="f-team-in"></select></div>
       </div>
       <div class="two">
         <div class="field">
@@ -166,14 +159,14 @@
         <div class="field">
           <label>노출 상태</label>
           <select id="f-active">
-            <option value="1">활성 — 구성원에게 노출</option>
-            <option value="0">비활성 — 숨김</option>
+            <option value="1">활성 (구성원에게 노출)</option>
+            <option value="0">비활성 (숨김)</option>
           </select>
         </div>
       </div>
       <div class="field">
         <label>비고</label>
-        <textarea id="f-note" placeholder=""></textarea>
+        <textarea id="f-note" rows="2" placeholder="발표자 지정 사유, 참고 링크 등"></textarea>
       </div>
     </div>
     <div class="sheet-foot">
