@@ -1,5 +1,4 @@
 const FIELDS = ["UI/UX", "Marketing", "Trend", "Etc"];
-const MAGAZINES = ["DI", "MIT TR", "HBR Korea", "마이크로소프트웨어"];
 
 const REQUIREMENTS = [
   { key: "required", label: "필수" },
@@ -62,7 +61,7 @@ function buildFilters() {
     el.value = keep;
   };
   fill("f-field", APP.topics.map(t => t.field), "전체 분야");
-  fill("f-magazine", APP.topics.map(t => t.magazine), "전체 매거진");
+  fill("f-magazine", APP.me.all_magazines || [], "전체 매거진");
   fill("f-team", APP.me.all_teams || [], "전체 팀");
 
   const st = document.getElementById("f-status"), keep = st.value;
@@ -82,7 +81,7 @@ function buildFormOptions() {
   };
   fill("f-team-in", APP.me.all_teams || [], "없음");
   fill("f-field-in", union(FIELDS, "field"), null);
-  fill("f-magazine-in", union(MAGAZINES, "magazine"), "매거진 선택");
+  fill("f-magazine-in", APP.me.all_magazines || [], "매거진 선택");
 }
 
 function myStats() {

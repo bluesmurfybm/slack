@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel
 
-from core.config import TEAMS
+from core.config import MAGAZINES, TEAMS
 
 
 def _check_team(v):
@@ -14,11 +14,20 @@ def _check_team(v):
 TeamStr = Annotated[str, AfterValidator(_check_team)]
 
 
+def _check_magazine(v):
+    if v and v not in MAGAZINES:
+        raise ValueError(f"없는 매거진입니다: {v}")
+    return v
+
+
+MagazineStr = Annotated[str, AfterValidator(_check_magazine)]
+
+
 class TopicIn(BaseModel):
     title: str
     field: str = ""
     keywords: str = ""
-    magazine: str = ""
+    magazine: MagazineStr = ""
     volume: str = ""
     page: str = ""
     year: int | None = None
@@ -33,7 +42,7 @@ class TopicPatch(BaseModel):
     title: str | None = None
     field: str | None = None
     keywords: str | None = None
-    magazine: str | None = None
+    magazine: MagazineStr | None = None
     volume: str | None = None
     page: str | None = None
     year: int | None = None

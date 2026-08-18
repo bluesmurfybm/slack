@@ -16,6 +16,17 @@ class Team(StrEnum):
 TEAMS = [t.value for t in Team]
 
 
+class Magazine(StrEnum):
+    di = "DI"
+    mit_tr = "MIT TR"
+    hbr_korea = "HBR Korea"
+    msw = "마이크로소프트웨어"
+    etc = "Etc"
+
+
+MAGAZINES = [m.value for m in Magazine]
+
+
 MEMBERS = [
     {"name": "김호영", "email": "kimhy@bluesoft.co.kr", "teams": ["App", "SQUARE", "LAB"]},
     {"name": "김지안", "email": "jian@bluesoft.co.kr", "teams": ["SQUARE"]},

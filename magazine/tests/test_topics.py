@@ -433,3 +433,39 @@ def test_requirement_accepts_normal_level(client, settings):
     login(client, settings, ADMIN)
     r = client.post("/magazineapi/topics", json={**NEW, "requirement": "normal"})
     assert r.json()["requirement"] == "normal"
+
+
+def test_magazine_list_is_served(client, settings):
+    login(client, settings, USER)
+    body = client.get("/magazineapi/whoami").json()
+    assert "DI" in body["all_magazines"]
+    assert "Etc" in body["all_magazines"]
+
+
+def test_seed_magazines_are_all_in_enum(client, settings):
+    login(client, settings, USER)
+    rows = client.get("/magazineapi/topics").json()
+    allowed = set(client.get("/magazineapi/whoami").json()["all_magazines"])
+    assert {r["magazine"] for r in rows if r["magazine"]} <= allowed
+
+
+def test_unknown_magazine_is_rejected(client, settings):
+    login(client, settings, ADMIN)
+    r = client.post("/magazineapi/topics", json={"title": "t", "magazine": "없는매거진"})
+    assert r.status_code == 422
+
+
+def test_known_magazine_is_accepted(client, settings):
+    login(client, settings, ADMIN)
+    for m in ("", "DI", "MIT TR", "Etc"):
+        r = client.post("/magazineapi/topics", json={"title": f"t-{m}", "magazine": m})
+        assert r.status_code == 201, m
+
+
+def test_editing_keeps_existing_magazine(client, settings):
+    login(client, settings, ADMIN)
+    rows = client.get("/magazineapi/topics").json()
+    target = next(r for r in rows if r["magazine"] == "Etc")
+    r = client.put(f"/magazineapi/topics/{target['id']}", json={"title": "제목만 수정"})
+    assert r.status_code == 200
+    assert r.json()["magazine"] == "Etc"
