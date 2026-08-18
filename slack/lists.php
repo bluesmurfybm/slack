@@ -108,6 +108,17 @@ header('Pragma: no-cache');
               <option value="lg">크게</option>
             </select>
           </label>
+          <label class="pw-line"><span>상세 보기</span>
+            <select id="uiDetailView">
+              <option value="slide">슬라이드(아래 펼침)</option>
+              <option value="modal">모달(팝업 크게)</option>
+              <option value="drawer">우측 슬라이드(옆에서)</option>
+              <option value="drawerLeft">좌측 슬라이드(옆에서)</option>
+            </select>
+          </label>
+          <label class="pw-line" id="drawerPctRow"><span>슬라이드 폭</span>
+            <span style="display:inline-flex;align-items:center;gap:4px"><input id="uiDrawerPct" type="number" min="20" max="100" step="5" style="width:62px"> % (화면 비율)</span>
+          </label>
           <label class="pw-line"><input type="checkbox" id="uiAutoRead"> 열면 자동 읽음 처리</label>
           <label class="pw-line"><input type="checkbox" id="uiAsgLink"> 담당자: 유비온·와이오즈 동일 선택</label>
           <div class="pw-subtitle">목록 컬럼 표시</div>
@@ -457,6 +468,7 @@ function rowHtml(r){
     <div class="detail${showCmts?' with-cmts':''}">
       <div class="detail-main">
         <div class="meta">
+          ${loadUi().detailView!=="slide" ? metaItem('요청자', r.req||'—') : ''}
           ${r.archived
             ? metaItem('진행상태', r.status||'—')
             : `<div class="mi"><span class="ml">진행상태</span><select class="edit-status" data-id="${esc(r.id)}">${statusEditOptions(r.status, r.board)}</select></div>`}
@@ -1203,7 +1215,60 @@ function render(){
     paint(document.getElementById("unlist"), un);
   }
   applyCmtSize();   // 댓글 영역 사용자 지정 크기 복원
+  placeDetail();    // 상세 보기: 모달 모드면 상세를 팝업으로 이동
 }
+
+/* ===== 상세 보기 모달 (설정에서 슬라이드/모달 선택) — 렌더된 .detail 노드를 팝업으로 이동(바인딩 유지) ===== */
+document.body.insertAdjacentHTML("beforeend", `
+  <div id="detailModal" class="detail-modal" hidden>
+    <div class="dm-panel">
+      <div class="dm-head"><span class="dm-title" id="dmTitle"></span><button type="button" id="dmCopy" class="dm-copy tip" data-tip="제목복사" title="제목복사">📋</button></div>
+      <button type="button" id="dmClose" class="dm-close" title="닫기 (Esc)">✕</button>
+      <div class="dm-body"></div>
+    </div>
+  </div>`);
+function placeDetail(){
+  const modal=document.getElementById("detailModal"); if(!modal) return;
+  const body=modal.querySelector(".dm-body");
+  const dv=loadUi().detailView;
+  if((dv==="modal" || dv==="drawer" || dv==="drawerLeft") && openId){
+    modal.classList.toggle("as-drawer", dv==="drawer" || dv==="drawerLeft");   // 좌/우 슬라이드(드로어)
+    modal.classList.toggle("as-drawer-left", dv==="drawerLeft");
+    const det=document.querySelector("#list .detail") || document.querySelector("#unlist .detail");
+    if(det){
+      body.innerHTML=""; body.appendChild(det); modal.hidden=false; applyCmtSize();   // 상세를 팝업/드로어로 이동
+      const r=DATA.find(x=>x.id===openId), t=document.getElementById("dmTitle"); if(t) t.textContent = r ? (r.title||"") : "";   // 상단 제목
+    }
+    else { modal.hidden=true; body.innerHTML=""; }
+  } else if(!modal.hidden){ modal.hidden=true; body.innerHTML=""; }
+  applyDrawerWidth();   // 좌/우 슬라이드 폭(화면 비율) 적용
+  document.body.classList.toggle("modal-open", !modal.hidden);   // 열렸을 때 배경 스크롤 잠금
+}
+/* 드로어(좌/우)일 때만 폭 = 화면 비율(%) 적용. 모달/슬라이드는 CSS 기본 */
+function applyDrawerWidth(){
+  const modal=document.getElementById("detailModal"); if(!modal || modal.hidden) return;
+  const panel=modal.querySelector(".dm-panel"); if(!panel) return;
+  panel.style.width = modal.classList.contains("as-drawer") ? (Math.max(20,Math.min(100, loadUi().drawerPct||60))+"vw") : "";
+}
+/* '슬라이드 폭' 설정 줄은 좌/우 슬라이드 모드에서만 노출 */
+function toggleDrawerPctRow(){
+  const row=document.getElementById("drawerPctRow"); if(!row) return;
+  const dv=loadUi().detailView;
+  row.style.display = (dv==="drawer" || dv==="drawerLeft") ? "" : "none";
+}
+function closeDetailModal(){ if(openId){ openId=null; render(); } }
+document.getElementById("dmClose").addEventListener("click", e=>{ e.stopPropagation(); closeDetailModal(); });
+document.getElementById("dmCopy").addEventListener("click", async e=>{   // 모달/드로어 제목 복사(리스트 제목복사와 동일)
+  e.stopPropagation();
+  const r=DATA.find(x=>String(x.id)===String(openId)); if(!r) return;
+  const base = r.list_id ? LIST_URL.replace(/[^\/]+$/, r.list_id) : LIST_URL;
+  const text = (r.title||"") + "\n" + base + "?record_id=" + r.id;
+  try{ await navigator.clipboard.writeText(text); }
+  catch(_){ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+  const b=document.getElementById("dmCopy"), old=b.textContent; b.textContent="✅"; setTimeout(()=>{ b.textContent=old; }, 1200);
+});
+document.getElementById("detailModal").addEventListener("click", e=>{ if(e.target.id==="detailModal") closeDetailModal(); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !document.getElementById("detailModal").hidden) closeDetailModal(); });
 
 /* 선택 항목 일괄 읽음/안읽음 */
 async function bulkRead(read){
@@ -1538,7 +1603,7 @@ async function syncHdrBtnsFromServer(){
 
 /* ---------- 화면 설정: 컴팩트/정렬/자동새로고침 (DB 사용자별) ---------- */
 const UIPREF_KEY = "slackapi_uipref_" + (ME_ID || "me");
-const UI_DEFAULT = { compact:false, sort:"unread", refresh:60000, font:"md", autoRead:true, asgLink:false, cols:{} };
+const UI_DEFAULT = { compact:false, sort:"unread", refresh:60000, font:"md", autoRead:true, asgLink:false, detailView:"slide", drawerPct:60, cols:{} };
 const LIST_COLS = [
   {id:"pri",    label:"우선순위"},
   {id:"status", label:"상태"},
@@ -1583,6 +1648,12 @@ function buildUiControls(){
   if(rf){ rf.value=String(u.refresh); rf.onclick=e=>e.stopPropagation(); rf.onchange=()=>{ const s=loadUi(); s.refresh=+rf.value; saveUi(s); setRefreshInterval(s.refresh); }; }
   const ft=document.getElementById("uiFont");
   if(ft){ ft.value=u.font; ft.onclick=e=>e.stopPropagation(); ft.onchange=()=>{ const s=loadUi(); s.font=ft.value; saveUi(s); applyUi(); }; }
+  const dv=document.getElementById("uiDetailView");
+  if(dv){ dv.value=u.detailView||"slide"; dv.onclick=e=>e.stopPropagation(); dv.onchange=()=>{ const s=loadUi(); s.detailView=dv.value; saveUi(s); toggleDrawerPctRow(); render(); }; }
+  const dp=document.getElementById("uiDrawerPct");
+  if(dp){ dp.value=u.drawerPct||60; dp.onclick=e=>e.stopPropagation();
+    dp.onchange=()=>{ let v=Math.max(20,Math.min(100,+dp.value||60)); dp.value=v; const s=loadUi(); s.drawerPct=v; saveUi(s); applyDrawerWidth(); }; }
+  toggleDrawerPctRow();
   const ar=document.getElementById("uiAutoRead");
   if(ar){ ar.checked=(u.autoRead!==false); ar.onchange=()=>{ const s=loadUi(); s.autoRead=ar.checked; saveUi(s); }; }
   const al=document.getElementById("uiAsgLink");

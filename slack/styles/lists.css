@@ -309,6 +309,29 @@
   .cme-btns button { border:none; border-radius:7px; padding:4px 13px; font-size:12px; cursor:pointer; }
   .cme-save { background:var(--info); color:#fff; }
   .cme-cancel { background:var(--bg2); color:var(--muted); border:1px solid var(--line); }
+  /* 상세 보기 모달(설정에서 슬라이드/모달 선택) */
+  body.modal-open { overflow:hidden; }   /* 모달 열림 → 배경 스크롤 잠금 */
+  .detail-modal { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9500; display:flex; align-items:center; justify-content:center; padding:24px 16px; overflow:hidden; }
+  .detail-modal[hidden] { display:none; }
+  .detail-modal .dm-panel { position:relative; width:min(1100px,96vw); max-height:calc(100vh - 48px); display:flex; flex-direction:column; overflow:hidden;
+                            background:var(--bg); border:1px solid var(--line); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.38); }
+  .detail-modal .dm-head { flex:none; display:flex; align-items:center; gap:2px; padding:14px 52px 12px 20px; border-bottom:1px solid var(--line); }
+  .detail-modal .dm-head .dm-title { flex:0 1 auto; }
+  .detail-modal .dm-title { font-size:15px; font-weight:600; color:var(--txt); line-height:1.4; word-break:break-word; }
+  .detail-modal .dm-copy { flex:none; border:none; background:none; cursor:pointer; font-size:14px; padding:2px 6px; margin-left:6px; border-radius:6px; line-height:1; }
+  .detail-modal .dm-copy:hover { background:var(--bg2); }
+  .detail-modal .dm-close { position:absolute; top:12px; right:14px; z-index:3; width:30px; height:30px; border:none; background:var(--bg2); color:var(--muted); border-radius:50%; font-size:16px; line-height:1; cursor:pointer; }
+  .detail-modal .dm-close:hover { background:var(--line); color:var(--txt); }
+  .detail-modal .dm-body { flex:1 1 auto; overflow-y:auto; padding:20px 20px 22px; }   /* 스크롤은 모달 안에서 */
+  .detail-modal .dm-body .detail { padding:0; border:none; background:transparent; }
+  /* 좌/우 슬라이드(드로어) 형태 */
+  .detail-modal.as-drawer { align-items:stretch; justify-content:flex-end; padding:0; }
+  .detail-modal.as-drawer .dm-panel { width:min(720px,100vw); height:100vh; max-height:none; border-radius:0; border-top:none; border-bottom:none; }
+  .detail-modal.as-drawer:not(.as-drawer-left) .dm-panel { border-right:none; box-shadow:-14px 0 50px rgba(0,0,0,.35); animation:dm-slide-in-right .22s ease; }
+  .detail-modal.as-drawer-left { justify-content:flex-start; }
+  .detail-modal.as-drawer-left .dm-panel { border-left:none; box-shadow:14px 0 50px rgba(0,0,0,.35); animation:dm-slide-in-left .22s ease; }
+  @keyframes dm-slide-in-right { from { transform:translateX(100%); } to { transform:translateX(0); } }
+  @keyframes dm-slide-in-left  { from { transform:translateX(-100%); } to { transform:translateX(0); } }
   /* @멘션 칩 + 자동완성 */
   .mention { background:var(--info-bg); color:var(--info); border-radius:4px; padding:0 3px; font-weight:600; }
   .mention.m-view { cursor:pointer; }
