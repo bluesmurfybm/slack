@@ -36,15 +36,13 @@ def get_topic(tid: int, session: Session = Depends(get_session)):
 
 
 @router.post("", status_code=201)
-def create_topic(body: TopicIn, request: Request,
-                 session: Session = Depends(get_session),
+def create_topic(body: TopicIn, session: Session = Depends(get_session),
                  identity: dict = Depends(require_admin)):
     topic = Topic(**body.model_dump(), created_by=identity["email"],
                   created_at=time.strftime("%Y-%m-%d %H:%M:%S"))
     session.add(topic)
     session.commit()
     session.refresh(topic)
-    slack.new_topic(get_settings(request), topic)
     return to_dict(topic)
 
 
@@ -69,7 +67,8 @@ def delete_topic(tid: int, session: Session = Depends(get_session)):
 
 
 @router.post("/{tid}/claim")
-def claim_topic(tid: int, body: ClaimIn, session: Session = Depends(get_session),
+def claim_topic(tid: int, body: ClaimIn, request: Request,
+                session: Session = Depends(get_session),
                 identity: dict = Depends(require_identity)):
     topic = fetch(session, tid) # 없으면 404
     if not topic.active or topic.archived:
@@ -89,7 +88,9 @@ def claim_topic(tid: int, body: ClaimIn, session: Session = Depends(get_session)
     if result.rowcount == 0:
         raise HTTPException(status_code=409,
                             detail="이미 예약되었거나 발표가 끝난 주제입니다")
-    return to_dict(fetch(session, tid))
+    topic = fetch(session, tid)
+    slack.new_presenter(get_settings(request), topic)
+    return to_dict(topic)
 
 
 @router.post("/{tid}/release")
@@ -136,7 +137,8 @@ def complete_topic(tid: int, body: CompleteIn, session: Session = Depends(get_se
 
 
 @router.post("/{tid}/assign", dependencies=[Depends(require_admin)])
-def assign_presenter(tid: int, body: AssignIn, session: Session = Depends(get_session)):
+def assign_presenter(tid: int, body: AssignIn, request: Request,
+                     session: Session = Depends(get_session)):
     # 예약과 달리 이미 예약된 주제도 덮어쓴다 — 배정 권한은 관리자에게 있다.
     topic = fetch(session, tid)
     email = body.email.strip()
@@ -152,4 +154,6 @@ def assign_presenter(tid: int, body: AssignIn, session: Session = Depends(get_se
     session.add(topic)
     session.commit()
     session.refresh(topic)
+    if topic.presenter_email:
+        slack.new_presenter(get_settings(request), topic)
     return to_dict(topic)
