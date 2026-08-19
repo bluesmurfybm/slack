@@ -60,6 +60,17 @@ class TopicEmotion(SQLModel, table=True):
     created_at: str = ""
 
 
+class FieldOption(SQLModel, table=True):
+    __tablename__ = "fields"
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+
+
+# 관리자가 화면에서 추가하기 전까지의 초기 선택지
+DEFAULT_FIELDS = ["UI/UX", "Marketing", "Trend", "AX", "Etc"]
+
+
 COLUMNS = frozenset(Topic.__table__.columns.keys())
 
 
@@ -71,6 +82,7 @@ def init_db(settings: Settings) -> Engine:
     SQLModel.metadata.create_all(engine)
     _add_missing_columns(engine)
     _seed(engine, settings.seed_path)
+    _seed_fields(engine)
     return engine
 
 
@@ -92,6 +104,14 @@ def _add_missing_columns(engine: Engine) -> None:
                 decl += f" DEFAULT {col.server_default.arg}"
             conn.exec_driver_sql(
                 f"ALTER TABLE {Topic.__tablename__} ADD COLUMN {col.name} {decl}")
+
+
+def _seed_fields(engine: Engine) -> None:
+    with Session(engine) as session:
+        if session.exec(select(func.count()).select_from(FieldOption)).one():
+            return
+        session.add_all([FieldOption(name=n) for n in DEFAULT_FIELDS])
+        session.commit()
 
 
 def _seed(engine: Engine, seed_path: str) -> None:

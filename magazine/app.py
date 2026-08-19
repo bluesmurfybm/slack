@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core.config import Settings
 from core.db import init_db
-from features import emotion, identity, material, topics
+from features import emotion, fields, identity, material, topics
 from features.identity.auth import get_identity
 
 
@@ -28,6 +28,7 @@ def create_app(settings: Settings = None) -> FastAPI:
     app.include_router(topics.router)
     app.include_router(material.router)
     app.include_router(emotion.router)
+    app.include_router(fields.router)
     if settings.dev_login:
         app.include_router(identity.devlogin_router)
 

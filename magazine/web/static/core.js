@@ -2,6 +2,7 @@
 const APP = {
   me: {},
   topics: [],
+  fields: [],
   view: { mode: "user", tab: "articles", layout: "list" },
 };
 

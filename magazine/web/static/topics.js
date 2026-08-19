@@ -1,5 +1,3 @@
-const FIELDS = ["UI/UX", "Marketing", "Trend", "AX", "Etc"];
-
 const REQUIREMENTS = [
   { key: "required", label: "필수" },
   { key: "recommended", label: "권장" },
@@ -80,7 +78,8 @@ function buildFormOptions() {
       vals.map(v => `<option>${esc(v)}</option>`).join("");
   };
   fill("f-team-in", APP.me.all_teams || [], "없음");
-  fill("f-field-in", union(FIELDS, "field"), null);
+  // 서버의 분야 목록에 실데이터 값을 합친다 — 목록에서 지운 분야도 수정 폼에서 잃지 않는다.
+  fill("f-field-in", union(APP.fields.map(f => f.name), "field"), null);
   fill("f-magazine-in", APP.me.all_magazines || [], "매거진 선택");
 }
 
@@ -129,16 +128,21 @@ function render() {
     : "배달된 매거진에서 우리 팀에 필요한 아티클을 골라 발표를 예약하세요.";
   document.getElementById("tabArticles").classList.toggle("on", v.tab === "articles");
   document.getElementById("tabArchive").classList.toggle("on", v.tab === "archive");
+  document.getElementById("tabFields").classList.toggle("on", v.tab === "fields");
   document.getElementById("tabStats").classList.toggle("on", v.tab === "stats");
   document.getElementById("vList").classList.toggle("on", v.layout === "list");
   document.getElementById("vCard").classList.toggle("on", v.layout === "card");
 
   const isStats = admin && v.tab === "stats";
+  const isFields = admin && v.tab === "fields";
+  const isPanel = isStats || isFields;
   document.getElementById("statsPage").style.display = isStats ? "" : "none";
-  document.getElementById("toolbar").style.display = isStats ? "none" : "";
-  document.querySelector(".ledger-head").style.display = isStats ? "none" : "";
-  document.getElementById("list").style.display = isStats ? "none" : "";
+  document.getElementById("fieldsPage").style.display = isFields ? "" : "none";
+  document.getElementById("toolbar").style.display = isPanel ? "none" : "";
+  document.querySelector(".ledger-head").style.display = isPanel ? "none" : "";
+  document.getElementById("list").style.display = isPanel ? "none" : "";
   if (isStats) { renderStatsPage(); return; }
+  if (isFields) { renderFieldsPage(); return; }
 
   const rows = visible();
   const hidden = pool().filter(t => !t.active).length;
@@ -259,7 +263,8 @@ function actionsHtml(t) {
 }
 
 async function reload() {
-  APP.topics = await api("/magazineapi/topics");
+  [APP.topics, APP.fields] = await Promise.all([
+    api("/magazineapi/topics"), api("/magazineapi/fields")]);
   buildFilters();
   buildFormOptions();
   renderStats();
