@@ -78,7 +78,6 @@ function buildFormOptions() {
       vals.map(v => `<option>${esc(v)}</option>`).join("");
   };
   fill("f-team-in", APP.me.all_teams || [], "없음");
-  // 서버의 분야 목록에 실데이터 값을 합친다 — 목록에서 지운 분야도 수정 폼에서 잃지 않는다.
   fill("f-field-in", union(APP.fields.map(f => f.name), "field"), null);
   fill("f-magazine-in", APP.me.all_magazines || [], "매거진 선택");
 }

@@ -34,7 +34,6 @@ def create_field(body: FieldIn, session: Session = Depends(get_session)):
 
 @router.delete("/{fid}", dependencies=[Depends(require_admin)])
 def delete_field(fid: int, session: Session = Depends(get_session)):
-    # 삭제해도 이 분야를 쓰던 주제의 값은 그대로 남는다 — 선택지 목록만 줄인다.
     row = session.get(FieldOption, fid)
     if not row:
         raise HTTPException(status_code=404, detail="없는 분야입니다")

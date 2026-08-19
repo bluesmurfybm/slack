@@ -50,6 +50,16 @@ def test_admin_deletes_field(client, settings):
     assert "Data" not in _names(client)
 
 
+def test_deleting_used_field_keeps_topic_value(client, settings):
+    login(client, settings, ADMIN)
+    tid = client.post("/magazineapi/topics",
+                      json={"title": "t", "field": "AX"}).json()["id"]
+    fid = next(f["id"] for f in client.get("/magazineapi/fields").json()
+               if f["name"] == "AX")
+    assert client.delete(f"/magazineapi/fields/{fid}").status_code == 200
+    assert client.get(f"/magazineapi/topics/{tid}").json()["field"] == "AX"
+
+
 def test_delete_missing_field_is_404(client, settings):
     login(client, settings, ADMIN)
     assert client.delete("/magazineapi/fields/99999").status_code == 404

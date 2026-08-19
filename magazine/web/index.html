@@ -244,6 +244,22 @@
   </div>
 </div>
 
+<div class="overlay" id="fieldOverlay" onclick="if(event.target===this)closeFieldModal()">
+  <div class="cdialog">
+    <h3>분야 추가</h3>
+    <p>주제 등록 폼의 분야 선택지에 추가됩니다.</p>
+    <div class="field">
+      <label>분야 이름</label>
+      <input id="newFieldName" type="text" placeholder="예: Data"
+        onkeydown="if(event.key==='Enter')addField()">
+    </div>
+    <div class="row-btn">
+      <button class="btn-ghost" onclick="closeFieldModal()">취소</button>
+      <button class="btn-submit" onclick="addField()">추가</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="assignOverlay" onclick="if(event.target===this)closeAssign()">
   <div class="cdialog">
     <h3>발표자 지정</h3>

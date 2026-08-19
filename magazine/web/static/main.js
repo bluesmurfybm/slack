@@ -85,6 +85,7 @@ document.addEventListener("keydown", e => {
   closeConfirm();
   closeDate(null);
   closeDrawer();
+  closeFieldModal();
 });
 
 loadAll();

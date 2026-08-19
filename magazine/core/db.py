@@ -67,7 +67,6 @@ class FieldOption(SQLModel, table=True):
     name: str = Field(unique=True)
 
 
-# 관리자가 화면에서 추가하기 전까지의 초기 선택지
 DEFAULT_FIELDS = ["UI/UX", "Marketing", "Trend", "AX", "Etc"]
 
 

@@ -640,7 +640,10 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
   border-bottom:1px solid var(--bo-primary);font-size:13.5px}
 .fields-list li:last-child{border-bottom:none}
 .fields-list .name{flex:1;font-weight:600;color:var(--tx-secondary)}
-.fields-add{display:flex;gap:8px}
-.fields-add input{flex:1;font-family:var(--sans);font-size:14px;padding:9px 12px;
+#fieldOverlay .cdialog .field{margin-bottom:14px}
+#fieldOverlay .cdialog input[type="text"]{
+  width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;
   border:1px solid var(--bo-tertiary);border-radius:var(--r8);
-  background:var(--bg-card);color:var(--tx-primary)}
+  background:var(--bg-card);color:var(--tx-primary);
+}
+#fieldOverlay .cdialog input:focus{outline:none;border-color:var(--cos50);box-shadow:0 0 0 3px var(--cos95)}

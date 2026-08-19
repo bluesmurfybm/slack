@@ -50,12 +50,18 @@ function renderFieldsPage() {
           <button class="btn-mini ghost danger" onclick="deleteField(${f.id})">삭제</button>
         </li>`).join("")}
       </ul>
-      <div class="fields-add">
-        <input id="newFieldName" type="text" placeholder="새 분야 이름"
-          onkeydown="if(event.key==='Enter')addField()">
-        <button class="btn-mini primary" onclick="addField()">추가</button>
-      </div>
+      <button class="btn-mini primary" onclick="openFieldModal()">+ 분야 추가</button>
     </div>`;
+}
+
+function openFieldModal() {
+  document.getElementById("newFieldName").value = "";
+  document.getElementById("fieldOverlay").classList.add("open");
+  setTimeout(() => document.getElementById("newFieldName").focus(), 50);
+}
+
+function closeFieldModal() {
+  document.getElementById("fieldOverlay").classList.remove("open");
 }
 
 async function refreshFields() {
@@ -69,6 +75,7 @@ async function addField() {
   if (!name) { showToast("분야 이름을 입력해 주세요"); return; }
   try {
     await postJSON("/magazineapi/fields", { name });
+    closeFieldModal();
     showToast(`"${name}" 분야를 추가했습니다`);
     await refreshFields();
   } catch (e) { showToast(e.message); }
