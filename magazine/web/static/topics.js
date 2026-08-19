@@ -1,4 +1,4 @@
-const FIELDS = ["UI/UX", "Marketing", "Trend", "Etc"];
+const FIELDS = ["UI/UX", "Marketing", "Trend", "AX", "Etc"];
 
 const REQUIREMENTS = [
   { key: "required", label: "필수" },
