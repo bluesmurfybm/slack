@@ -17,7 +17,7 @@ def toggle(tid: int, kind: Emotion, session: Session = Depends(get_session),
     topic = fetch(session, tid)
     if not topic.done_date:
         raise HTTPException(status_code=409,
-                            detail="발표가 끝난 주제에만 반응을 남길 수 있습니다")
+                            detail="발표가 끝난 아티클에만 반응을 남길 수 있습니다")
     already = session.get(TopicEmotion, (tid, identity["email"], kind.value))
     if already:
         session.delete(already)

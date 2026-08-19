@@ -41,8 +41,8 @@ function renderFieldsPage() {
   document.getElementById("fieldsPage").innerHTML = `
     <div class="fields-card">
       <h3>분야 관리</h3>
-      <p class="muted">주제 등록 폼의 분야 선택지입니다.
-        삭제해도 이미 등록된 주제의 분야는 바뀌지 않습니다.</p>
+      <p class="muted">아티클 등록 폼의 분야 선택지입니다.
+        삭제해도 이미 등록된 아티클의 분야는 바뀌지 않습니다.</p>
       <ul class="fields-list">
         ${APP.fields.map(f => `<li>
           <span class="name">${esc(f.name)}</span>

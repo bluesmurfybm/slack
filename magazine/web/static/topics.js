@@ -103,7 +103,7 @@ function renderStats() {
 }
 
 const LEDGER_TITLE = {
-  user: "발표 주제 목록",
+  user: "발표 아티클 목록",
   articles: "등록된 아티클",
   archive: "보관된 아티클",
 };
@@ -121,7 +121,7 @@ function render() {
   document.getElementById("mystrip").style.display = admin ? "none" : "";
   document.getElementById("adminTabs").style.display = admin ? "" : "none";
   document.querySelector(".viewtoggle").style.display = admin ? "none" : "";
-  document.getElementById("pageTitle").textContent = admin ? "DTI 운영 관리" : "DTI 발표 주제";
+  document.getElementById("pageTitle").textContent = admin ? "DTI 운영 관리" : "DTI 발표 아티클";
   document.getElementById("pageLede").textContent = admin
     ? "아티클 등록 · 노출 관리 · 발표자 지정 · 보관"
     : "배달된 매거진에서 우리 팀에 필요한 아티클을 골라 발표를 예약하세요.";
@@ -154,7 +154,7 @@ function render() {
   list.className = isCards ? "cards" : "list";
   list.innerHTML = rows.length
     ? rows.map(isCards ? cardHtml : rowHtml).join("")
-    : `<li class="empty"><div class="big">해당하는 주제가 없어요</div>
+    : `<li class="empty"><div class="big">해당하는 아티클이 없어요</div>
        <div>${admin && v.tab === "archive"
       ? "발표가 끝난 아티클을 보관함으로 옮기면 여기에 모입니다."
       : "필터를 바꿔 보세요."}</div></li>`;

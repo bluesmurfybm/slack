@@ -20,7 +20,7 @@ function openForm() {
   document.getElementById("issueHint").style.display = "none";
   setReq("recommended");
   document.getElementById("sheet-kicker").textContent = "신규 등록";
-  document.getElementById("sheet-title").textContent = "새 주제 등록";
+  document.getElementById("sheet-title").textContent = "새 아티클 등록";
   openSheet();
 }
 
@@ -107,7 +107,7 @@ function askDelete(id) {
   const t = APP.topics.find(x => x.id === id);
   PENDING_DELETE = id;
   document.getElementById("confirmText").textContent =
-    `"${t ? t.title : ""}" 주제를 삭제할까요?`;
+    `"${t ? t.title : ""}" 아티클을 삭제할까요?`;
   document.getElementById("confirmOverlay").classList.add("open");
 }
 

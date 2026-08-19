@@ -13,7 +13,7 @@ from features.identity.auth import get_identity
 def create_app(settings: Settings = None) -> FastAPI:
     settings = settings or Settings()
 
-    app = FastAPI(title="BlueUP-DTI 발표 주제")
+    app = FastAPI(title="BlueUP-DTI 발표 아티클")
     app.state.settings = settings
     app.state.engine = init_db(settings)
 

@@ -84,7 +84,7 @@ function statsHtml() {
   return `
   <div class="stats">
     <div class="stat"><span>이번 달 발표</span><b>${d.cur}건</b>${deltaHtml(d.cur, d.prev)}</div>
-    <div class="stat"><span>예약 대기</span><b>${d.waiting}건</b><i class="flat">노출 중인 미지정 주제</i></div>
+    <div class="stat"><span>예약 대기</span><b>${d.waiting}건</b><i class="flat">노출 중인 미지정 아티클</i></div>
     <div class="stat"><span>구성원 참여율</span><b>${d.rate}%</b><i class="flat">${d.spoke}/${d.headcount}명 발표 경험</i></div>
     <div class="stat"><span>누적 좋아요</span><b>${d.likes}</b><i class="flat">발표당 평균 ${perTalk}</i></div>
   </div>

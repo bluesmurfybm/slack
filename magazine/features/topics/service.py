@@ -29,7 +29,7 @@ def to_dict(topic: Topic, emotions: dict | None = None,
 def fetch(session: Session, tid: int) -> Topic:
     topic = session.get(Topic, tid)
     if not topic:
-        raise HTTPException(status_code=404, detail="없는 주제입니다")
+        raise HTTPException(status_code=404, detail="없는 아티클입니다")
     return topic
 
 

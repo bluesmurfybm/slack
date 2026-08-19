@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DTI 발표 주제</title>
+<title>DTI 발표 아티클</title>
 <link rel="icon" href="styles/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,13 +43,13 @@
   <div class="site-inner">
     <div class="brand">
       <span class="eyebrow">매거진 아티클 발표 · BlueUP-DTI</span>
-      <h1 id="pageTitle">DTI 발표 주제</h1>
+      <h1 id="pageTitle">DTI 발표 아티클</h1>
       <p class="lede" id="pageLede">배달된 매거진에서 우리 팀에 필요한 아티클을 골라 발표를 예약하세요.</p>
     </div>
     <div class="site-act">
       <button class="btn-new admin-view-only" onclick="openForm()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-        주제 등록
+        아티클 등록
       </button>
     </div>
   </div>
@@ -107,7 +107,7 @@
   </div>
 
   <div class="ledger-head">
-    <span class="title" id="ledgerTitle">발표 주제 목록</span>
+    <span class="title" id="ledgerTitle">발표 아티클 목록</span>
     <span class="count" id="ledgerCount"></span>
   </div>
   <ul class="list" id="list"></ul>
@@ -121,11 +121,11 @@
 <div class="overlay" id="overlay" onclick="if(event.target===this)closeForm()">
   <div class="sheet">
     <div class="sheet-head">
-      <div><span class="k" id="sheet-kicker">신규 등록</span><h2 id="sheet-title">새 주제 등록</h2></div>
+      <div><span class="k" id="sheet-kicker">신규 등록</span><h2 id="sheet-title">새 아티클 등록</h2></div>
     </div>
     <div class="sheet-body">
       <div class="field">
-        <label>제목 (주제)</label>
+        <label>제목 (아티클)</label>
         <input id="f-title" type="text" placeholder="아티클 제목">
       </div>
       <div class="two">
@@ -180,7 +180,7 @@
 
 <div class="overlay" id="confirmOverlay" onclick="if(event.target===this)closeConfirm()">
   <div class="cdialog">
-    <h3>주제 삭제</h3>
+    <h3>아티클 삭제</h3>
     <p id="confirmText"></p>
     <div class="row-btn">
       <button class="btn-ghost" onclick="closeConfirm()">취소</button>
@@ -247,7 +247,7 @@
 <div class="overlay" id="fieldOverlay" onclick="if(event.target===this)closeFieldModal()">
   <div class="cdialog">
     <h3>분야 추가</h3>
-    <p>주제 등록 폼의 분야 선택지에 추가됩니다.</p>
+    <p>아티클 등록 폼의 분야 선택지에 추가됩니다.</p>
     <div class="field">
       <label>분야 이름</label>
       <input id="newFieldName" type="text" placeholder="예: Data"

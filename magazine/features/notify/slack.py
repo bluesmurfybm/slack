@@ -13,7 +13,7 @@ def new_presenter(settings: Settings, topic: Topic) -> None:
         return
     text = "\n".join([
         ":studio_microphone: *DTI 발표자 등록*",
-        f"• 주제: {topic.title}",
+        f"• 아티클: {topic.title}",
         f"• 발표자: {topic.presenter}",
         f"• 예정일: {topic.planned_date or '미정'}",
     ])

@@ -72,7 +72,7 @@ def claim_topic(tid: int, body: ClaimIn, request: Request,
                 identity: dict = Depends(require_identity)):
     topic = fetch(session, tid) # 없으면 404
     if not topic.active or topic.archived:
-        raise HTTPException(status_code=409, detail="지금은 예약할 수 없는 주제입니다")
+        raise HTTPException(status_code=409, detail="지금은 예약할 수 없는 아티클입니다")
     values = {"presenter_email": identity["email"],
               "presenter": identity.get("name") or ""}
     if body.planned_date:
@@ -87,7 +87,7 @@ def claim_topic(tid: int, body: ClaimIn, request: Request,
     session.commit()
     if result.rowcount == 0:
         raise HTTPException(status_code=409,
-                            detail="이미 예약되었거나 발표가 끝난 주제입니다")
+                            detail="이미 예약되었거나 발표가 끝난 아티클입니다")
     topic = fetch(session, tid)
     slack.new_presenter(get_settings(request), topic)
     return to_dict(topic)
@@ -98,7 +98,7 @@ def release_topic(tid: int, request: Request, session: Session = Depends(get_ses
                   identity: dict = Depends(require_identity)):
     topic = fetch(session, tid)
     if not may_manage_claim(get_settings(request), topic, identity):
-        raise HTTPException(status_code=403, detail="본인이 예약한 주제만 취소할 수 있습니다")
+        raise HTTPException(status_code=403, detail="본인이 예약한 아티클만 취소할 수 있습니다")
     topic.presenter_email = ""
     topic.presenter = ""
     topic.planned_date = ""
@@ -116,9 +116,9 @@ def schedule_topic(tid: int, body: ScheduleIn, request: Request,
     topic = fetch(session, tid)
     if not may_manage_claim(get_settings(request), topic, identity):
         raise HTTPException(status_code=403,
-                            detail="본인이 예약한 주제만 예정일을 정할 수 있습니다")
+                            detail="본인이 예약한 아티클만 예정일을 정할 수 있습니다")
     if topic.done_date:
-        raise HTTPException(status_code=409, detail="이미 발표가 끝난 주제입니다")
+        raise HTTPException(status_code=409, detail="이미 발표가 끝난 아티클입니다")
     topic.planned_date = body.planned_date
     session.add(topic)
     session.commit()
