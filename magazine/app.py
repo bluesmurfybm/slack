@@ -24,6 +24,13 @@ def create_app(settings: Settings = None) -> FastAPI:
                   StaticFiles(directory=settings.shared_styles_dir),
                   name="shared-styles")
 
+    @app.middleware("http")
+    async def _revalidate_static(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith(("/static/", "/styles/", "/shared-styles/")):
+            response.headers["cache-control"] = "no-cache"
+        return response
+
     app.include_router(identity.router)
     app.include_router(topics.router)
     app.include_router(material.router)
