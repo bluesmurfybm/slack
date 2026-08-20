@@ -1268,7 +1268,12 @@ document.getElementById("dmCopy").addEventListener("click", async e=>{   // 모�
   const b=document.getElementById("dmCopy"), old=b.textContent; b.textContent="✅"; setTimeout(()=>{ b.textContent=old; }, 1200);
 });
 document.getElementById("detailModal").addEventListener("click", e=>{ if(e.target.id==="detailModal") closeDetailModal(); });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !document.getElementById("detailModal").hidden) closeDetailModal(); });
+document.addEventListener("keydown", e=>{   // ESC → 상세(모달/드로어/인라인) 닫기. 단, 입력·편집 중엔 무시
+  if(e.key!=="Escape" || !openId) return;
+  const t=e.target;
+  if(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName||""))) return;
+  closeDetailModal();
+});
 
 /* 선택 항목 일괄 읽음/안읽음 */
 async function bulkRead(read){
