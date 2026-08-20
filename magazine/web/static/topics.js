@@ -250,7 +250,7 @@ function actionsHtml(t) {
     out.push(`<button class="btn-mini primary" onclick="claim(${t.id})">내가 발표할게요</button>`);
   } else if (t.status === "발표완료") {
     out.push(likeButton(t));
-  } else if (mine) {
+  } else if (mine && !cardsMode()) {
     out.push(`<button class="btn-mini" onclick="schedule(${t.id})">예정일</button>`);
     out.push(`<button class="btn-mini" onclick="release(${t.id})">발표 예약 취소</button>`);
     // 자료는 상세에서 올린다 — 발표자가 거기로 갈 길이 있어야 한다

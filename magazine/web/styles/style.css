@@ -434,7 +434,7 @@ ul.cards{
 }
 ul.cards li.card{
   background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
-  padding:16px;display:flex;flex-direction:column;gap:10px;min-height:200px;
+  padding:16px;display:flex;flex-direction:column;gap:10px;min-height:250px;
   transition:box-shadow .15s ease;
 }
 ul.cards li.card:hover{box-shadow:var(--shadow-md)}
