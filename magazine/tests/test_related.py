@@ -40,6 +40,20 @@ def test_field_alone_is_below_threshold(client, settings):
     assert not any(r["id"] == b for r in _related(client, a))
 
 
+def test_same_team_does_not_count(client, settings):
+    login(client, settings, ADMIN)
+    a = _new(client, title="사과 재배법", field="AX", team="APP")
+    b = _new(client, title="바다 건너기", field="AX", team="APP")
+    assert not any(r["id"] == b for r in _related(client, a))
+
+
+def test_same_magazine_does_not_count(client, settings):
+    login(client, settings, ADMIN)
+    a = _new(client, title="사과 재배법", field="AX", magazine="DI")
+    b = _new(client, title="바다 건너기", field="AX", magazine="DI")
+    assert not any(r["id"] == b for r in _related(client, a))
+
+
 def test_near_identical_title_pushes_over_threshold(client, settings):
     login(client, settings, ADMIN)
     a = _new(client, title="AI 코딩의 미래", field="AX")

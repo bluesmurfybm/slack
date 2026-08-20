@@ -8,8 +8,6 @@ from core.db import Topic, TopicRelated
 SAME_FIELD = 40
 SHARED_KEYWORD = 22
 SHARED_KEYWORD_CAP = 2
-SAME_TEAM = 14
-SAME_MAGAZINE = 10
 TITLE_WEIGHT = 10
 TOKEN_MATCH = 0.8
 MIN_SCORE = 50
@@ -46,12 +44,8 @@ def score(a: Topic, b: Topic) -> int:
     matched = sum(1 for grams in _keyword_grams(b)
                   if any(_overlap(grams, m) >= TOKEN_MATCH for m in mine))
     total += min(matched, SHARED_KEYWORD_CAP) * SHARED_KEYWORD
-    if a.team and a.team == b.team:
-        total += SAME_TEAM
-    if a.magazine and a.magazine == b.magazine:
-        total += SAME_MAGAZINE
     total += round(_dice(_bigrams(a.title), _bigrams(b.title)) * TITLE_WEIGHT)
-    return min(total, 99)
+    return total
 
 
 def rebuild(session: Session) -> None:
