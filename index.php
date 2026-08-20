@@ -329,7 +329,7 @@ function renderTiles(){
     <a class="tile" href="${LINKS.magazine}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:linear-gradient(135deg,#0075F8,#00234B)">${magazineIcon}</span>
-      <div><h3>DTI 발표</h3><p>매거진 아티클 발표 주제를 고르고 자료를 공유합니다.</p></div>
+      <div><h3>DTI 발표</h3><p>매거진을 읽고 지식을 공유합니다.</p></div>
     </a>
     <div class="tile soon">
       <span class="badge-soon">준비중</span>
