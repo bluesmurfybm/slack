@@ -103,7 +103,7 @@ function renderStats() {
 }
 
 const LEDGER_TITLE = {
-  user: "발표 아티클 목록",
+  user: "아티클 목록",
   articles: "등록된 아티클",
   archive: "보관된 아티클",
 };
@@ -121,7 +121,7 @@ function render() {
   document.getElementById("mystrip").style.display = admin ? "none" : "";
   document.getElementById("adminTabs").style.display = admin ? "" : "none";
   document.querySelector(".viewtoggle").style.display = admin ? "none" : "";
-  document.getElementById("pageTitle").textContent = admin ? "DTI 운영 관리" : "DTI 발표 아티클";
+  document.getElementById("pageTitle").textContent = admin ? "DTI 운영 관리" : "DTI 발표";
   document.getElementById("pageLede").textContent = admin
     ? "아티클 등록 · 노출 관리 · 발표자 지정 · 보관"
     : "";
