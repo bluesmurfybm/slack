@@ -124,7 +124,7 @@ function render() {
   document.getElementById("pageTitle").textContent = admin ? "DTI 운영 관리" : "DTI 발표 아티클";
   document.getElementById("pageLede").textContent = admin
     ? "아티클 등록 · 노출 관리 · 발표자 지정 · 보관"
-    : "배달된 매거진에서 우리 팀에 필요한 아티클을 골라 발표를 예약하세요.";
+    : "";
   document.getElementById("tabArticles").classList.toggle("on", v.tab === "articles");
   document.getElementById("tabArchive").classList.toggle("on", v.tab === "archive");
   document.getElementById("tabFields").classList.toggle("on", v.tab === "fields");

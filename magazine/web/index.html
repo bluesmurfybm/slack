@@ -1,300 +1,318 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DTI 발표 아티클</title>
-<link rel="icon" href="styles/favicon.ico">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="shared-styles/topbar.css">
-<link rel="stylesheet" href="styles/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DTI 발표 아티클</title>
+  <link rel="icon" href="styles/favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+  <link rel="stylesheet" href="shared-styles/topbar.css">
+  <link rel="stylesheet" href="styles/style.css">
 </head>
+
 <body>
-<div class="topbar">
-  <div class="topbar-in">
-    <a class="logo" id="hdrBrand" href="#" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
-    <div class="seg-mode admin-only" role="group" aria-label="화면 전환">
-      <button type="button" id="modeUser" class="on" onclick="setMode('user')">구성원 화면</button>
-      <button type="button" id="modeAdmin" onclick="setMode('admin')">관리자 화면</button>
-    </div>
-    <div class="top-right">
-      <div class="user-menu" id="hdrUserMenu">
-        <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
-          <span class="avatar" id="hdrAvatar"></span>
-          <span class="nm" id="hdrName"></span>
-          <span class="user-caret">▾</span>
-        </div>
-        <div class="dd-menu" id="hdrUserDd">
-          <a href="#" id="dd-mypage">👤 마이페이지</a>
-          <div class="dd-sep"></div>
-          <div class="dd-label">업무 시스템</div>
-          <a href="#" id="dd-slack">📥 업무현황판</a>
-          <div class="dd-sep"></div>
-          <a href="#" id="dd-logout">🚪 로그아웃</a>
+  <div class="topbar">
+    <div class="topbar-in">
+      <a class="logo" id="hdrBrand" href="#" style="text-decoration:none"><b>blue</b><span
+          class="dash">-</span>iWorks</a>
+      <div class="seg-mode admin-only" role="group" aria-label="화면 전환">
+        <button type="button" id="modeUser" class="on" onclick="setMode('user')">구성원 화면</button>
+        <button type="button" id="modeAdmin" onclick="setMode('admin')">관리자 화면</button>
+      </div>
+      <div class="top-right">
+        <div class="user-menu" id="hdrUserMenu">
+          <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
+            <span class="avatar" id="hdrAvatar"></span>
+            <span class="nm" id="hdrName"></span>
+            <span class="user-caret">▾</span>
+          </div>
+          <div class="dd-menu" id="hdrUserDd">
+            <a href="#" id="dd-mypage">👤 마이페이지</a>
+            <div class="dd-sep"></div>
+            <div class="dd-label">업무 시스템</div>
+            <a href="#" id="dd-slack">📥 업무현황판</a>
+            <div class="dd-sep"></div>
+            <a href="#" id="dd-logout">🚪 로그아웃</a>
+          </div>
         </div>
       </div>
     </div>
   </div>
-</div>
-<header class="site">
-  <div class="site-inner">
-    <div class="brand">
-      <span class="eyebrow">매거진 아티클 발표 · BlueUP-DTI</span>
-      <h1 id="pageTitle">DTI 발표 아티클</h1>
-      <p class="lede" id="pageLede">배달된 매거진에서 우리 팀에 필요한 아티클을 골라 발표를 예약하세요.</p>
-    </div>
-    <div class="site-act">
-      <button class="btn-new admin-view-only" onclick="openForm()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-        아티클 등록
-      </button>
-    </div>
-  </div>
-</header>
-
-<div class="wrap">
-  <div id="devbar" class="devbar" style="display:none"></div>
-
-  <section class="mystrip" id="mystrip">
-    <div class="m"><b id="statDone">0회</b><span>내 발표</span></div>
-    <div class="divider"></div>
-    <div class="m"><b id="statUpcoming">0건</b><span>예정 · 준비중</span></div>
-    <div class="divider"></div>
-    <div class="m"><b id="statLikes">0</b><span>받은 좋아요</span></div>
-    <div class="divider"></div>
-    <div class="m"><b id="statFields">0개</b><span>내가 발표한 분야</span></div>
-  </section>
-
-  <nav class="tabs" id="adminTabs">
-    <button type="button" id="tabArticles" class="on" onclick="setTab('articles')">아티클 관리</button>
-    <button type="button" id="tabArchive" onclick="setTab('archive')">보관함</button>
-    <button type="button" id="tabFields" onclick="setTab('fields')">기타 관리</button>
-    <button type="button" id="tabStats" onclick="setTab('stats')">통계</button>
-  </nav>
-
-  <div class="toolbar" id="toolbar">
-    <div class="search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input id="q" type="text" placeholder="제목·키워드·발표자 검색" oninput="render()">
-    </div>
-    <div class="filters">
-      <select id="f-field" onchange="render()"></select>
-      <select id="f-magazine" onchange="render()"></select>
-      <select id="f-team" onchange="render()"></select>
-      <select id="f-status" onchange="render()"></select>
-      <select id="f-req" onchange="render()">
-        <option value="">필수·권장·일반</option>
-        <option value="required">필수</option>
-        <option value="recommended">권장</option>
-        <option value="normal">일반</option>
-      </select>
-      <label class="check" id="myteamCheck" style="display:none">
-        <input id="f-myteam" type="checkbox" onchange="render()"> <span id="myteamLabel">우리 팀</span>
-      </label>
-      <label class="check"><input id="f-mine" type="checkbox" onchange="render()"> 내가 예약한 것만</label>
-      <div class="viewtoggle">
-        <button type="button" id="vList" title="리스트로 보기" onclick="setLayout('list')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-        </button>
-        <button type="button" id="vCard" title="카드로 보기" onclick="setLayout('card')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+  <header class="site">
+    <div class="site-inner">
+      <div class="brand">
+        <span class="eyebrow">BlueUP-DTI</span>
+        <h1 id="pageTitle">DTI 발표</h1>
+        <p class="lede" id="pageLede"></p>
+      </div>
+      <div class="site-act">
+        <button class="btn-new admin-view-only" onclick="openForm()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          아티클 등록
         </button>
       </div>
     </div>
-  </div>
+  </header>
 
-  <div class="ledger-head">
-    <span class="title" id="ledgerTitle">발표 아티클 목록</span>
-    <span class="count" id="ledgerCount"></span>
-  </div>
-  <ul class="list" id="list"></ul>
-  <section class="statspage" id="statsPage" style="display:none"></section>
-  <section class="fieldspage" id="fieldsPage" style="display:none"></section>
-</div>
+  <div class="wrap">
+    <div id="devbar" class="devbar" style="display:none"></div>
 
-<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
-<aside class="drawer" id="drawer" aria-label="아티클 상세"></aside>
+    <section class="mystrip" id="mystrip">
+      <div class="m"><b id="statDone">0회</b><span>내 발표</span></div>
+      <div class="divider"></div>
+      <div class="m"><b id="statUpcoming">0건</b><span>예정 · 준비중</span></div>
+      <div class="divider"></div>
+      <div class="m"><b id="statLikes">0</b><span>받은 좋아요</span></div>
+      <div class="divider"></div>
+      <div class="m"><b id="statFields">0개</b><span>내가 발표한 분야</span></div>
+    </section>
 
-<div class="overlay" id="overlay" onclick="if(event.target===this)closeForm()">
-  <div class="sheet">
-    <div class="sheet-head">
-      <div><span class="k" id="sheet-kicker">신규 등록</span><h2 id="sheet-title">새 아티클 등록</h2></div>
+    <nav class="tabs" id="adminTabs">
+      <button type="button" id="tabArticles" class="on" onclick="setTab('articles')">아티클 관리</button>
+      <button type="button" id="tabArchive" onclick="setTab('archive')">보관함</button>
+      <button type="button" id="tabFields" onclick="setTab('fields')">기타 관리</button>
+      <button type="button" id="tabStats" onclick="setTab('stats')">통계</button>
+    </nav>
+
+    <div class="toolbar" id="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.3-4.3" />
+        </svg>
+        <input id="q" type="text" placeholder="제목·키워드·발표자 검색" oninput="render()">
+      </div>
+      <div class="filters">
+        <select id="f-field" onchange="render()"></select>
+        <select id="f-magazine" onchange="render()"></select>
+        <select id="f-team" onchange="render()"></select>
+        <select id="f-status" onchange="render()"></select>
+        <select id="f-req" onchange="render()">
+          <option value="">필수·권장·일반</option>
+          <option value="required">필수</option>
+          <option value="recommended">권장</option>
+          <option value="normal">일반</option>
+        </select>
+        <label class="check" id="myteamCheck" style="display:none">
+          <input id="f-myteam" type="checkbox" onchange="render()"> <span id="myteamLabel">우리 팀</span>
+        </label>
+        <label class="check"><input id="f-mine" type="checkbox" onchange="render()"> 내가 예약한 것만</label>
+        <div class="viewtoggle">
+          <button type="button" id="vList" title="리스트로 보기" onclick="setLayout('list')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+            </svg>
+          </button>
+          <button type="button" id="vCard" title="카드로 보기" onclick="setLayout('card')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" />
+              <rect x="14" y="3" width="7" height="7" rx="1.5" />
+              <rect x="3" y="14" width="7" height="7" rx="1.5" />
+              <rect x="14" y="14" width="7" height="7" rx="1.5" />
+            </svg>
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="sheet-body">
-      <div class="field">
-        <label>제목 (아티클)</label>
-        <input id="f-title" type="text" placeholder="아티클 제목">
-      </div>
-      <div class="two">
-        <div class="field"><label>관련 팀</label><select id="f-team-in"></select></div>
-        <div class="field"><label>분야</label><select id="f-field-in"></select></div>
-      </div>
-      <div class="field">
-        <label>중요 키워드</label>
-        <input id="f-keywords" type="text" placeholder="생성형AI">
-      </div>
-      <div class="field">
-        <label>발표 구분</label>
-        <div class="seg" id="seg-req">
-          <button type="button" id="req-required" onclick="setReq('required')">필수</button>
-          <button type="button" id="req-recommended" class="on" onclick="setReq('recommended')">권장</button>
-          <button type="button" id="req-normal" onclick="setReq('normal')">일반</button>
+
+    <div class="ledger-head">
+      <span class="title" id="ledgerTitle">발표 아티클 목록</span>
+      <span class="count" id="ledgerCount"></span>
+    </div>
+    <ul class="list" id="list"></ul>
+    <section class="statspage" id="statsPage" style="display:none"></section>
+    <section class="fieldspage" id="fieldsPage" style="display:none"></section>
+  </div>
+
+  <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+  <aside class="drawer" id="drawer" aria-label="아티클 상세"></aside>
+
+  <div class="overlay" id="overlay" onclick="if(event.target===this)closeForm()">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div><span class="k" id="sheet-kicker">신규 등록</span>
+          <h2 id="sheet-title">새 아티클 등록</h2>
         </div>
       </div>
-      <div class="field">
-        <label>매거진 / Volume / Page</label>
-        <div class="triple">
-          <select id="f-magazine-in" onchange="fillLatestIssue()"></select>
-          <input id="f-volume" type="text" placeholder="Volume">
-          <input id="f-page" type="text" placeholder="Page">
-        </div>
-        <p class="hint" id="issueHint" style="display:none"></p>
-      </div>
-      <div class="two">
+      <div class="sheet-body">
         <div class="field">
-          <label>발표 예정일 (선택)</label>
-          <input id="f-planned" type="date">
+          <label>제목 (아티클)</label>
+          <input id="f-title" type="text" placeholder="아티클 제목">
+        </div>
+        <div class="two">
+          <div class="field"><label>관련 팀</label><select id="f-team-in"></select></div>
+          <div class="field"><label>분야</label><select id="f-field-in"></select></div>
         </div>
         <div class="field">
-          <label>노출 상태</label>
-          <select id="f-active">
-            <option value="1">활성 (구성원에게 노출)</option>
-            <option value="0">비활성 (숨김)</option>
-          </select>
+          <label>중요 키워드</label>
+          <input id="f-keywords" type="text" placeholder="생성형AI">
+        </div>
+        <div class="field">
+          <label>발표 구분</label>
+          <div class="seg" id="seg-req">
+            <button type="button" id="req-required" onclick="setReq('required')">필수</button>
+            <button type="button" id="req-recommended" class="on" onclick="setReq('recommended')">권장</button>
+            <button type="button" id="req-normal" onclick="setReq('normal')">일반</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>매거진 / Volume / Page</label>
+          <div class="triple">
+            <select id="f-magazine-in" onchange="fillLatestIssue()"></select>
+            <input id="f-volume" type="text" placeholder="Volume">
+            <input id="f-page" type="text" placeholder="Page">
+          </div>
+          <p class="hint" id="issueHint" style="display:none"></p>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label>발표 예정일 (선택)</label>
+            <input id="f-planned" type="date">
+          </div>
+          <div class="field">
+            <label>노출 상태</label>
+            <select id="f-active">
+              <option value="1">활성 (구성원에게 노출)</option>
+              <option value="0">비활성 (숨김)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>비고</label>
+          <textarea id="f-note" rows="2" placeholder="발표자 지정 사유, 참고 링크 등"></textarea>
         </div>
       </div>
-      <div class="field">
-        <label>비고</label>
-        <textarea id="f-note" rows="2" placeholder="발표자 지정 사유, 참고 링크 등"></textarea>
+      <div class="sheet-foot">
+        <button class="btn-ghost" onclick="closeForm()">취소</button>
+        <button class="btn-submit" onclick="submitForm()">저장</button>
       </div>
     </div>
-    <div class="sheet-foot">
-      <button class="btn-ghost" onclick="closeForm()">취소</button>
-      <button class="btn-submit" onclick="submitForm()">저장</button>
+  </div>
+
+  <div class="overlay" id="confirmOverlay" onclick="if(event.target===this)closeConfirm()">
+    <div class="cdialog">
+      <h3>아티클 삭제</h3>
+      <p id="confirmText"></p>
+      <div class="row-btn">
+        <button class="btn-ghost" onclick="closeConfirm()">취소</button>
+        <button class="btn-danger" onclick="doDelete()">삭제</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="overlay" id="confirmOverlay" onclick="if(event.target===this)closeConfirm()">
-  <div class="cdialog">
-    <h3>아티클 삭제</h3>
-    <p id="confirmText"></p>
-    <div class="row-btn">
-      <button class="btn-ghost" onclick="closeConfirm()">취소</button>
-      <button class="btn-danger" onclick="doDelete()">삭제</button>
+  <div class="overlay" id="dateOverlay" onclick="if(event.target===this)closeDate(null)">
+    <div class="cdialog">
+      <h3 id="dateTitle">발표 예정일</h3>
+      <p id="dateHint"></p>
+      <input id="dateInput" type="date" class="date-field">
+      <div class="row-btn">
+        <button class="btn-ghost" onclick="closeDate(null)">취소</button>
+        <button class="btn-submit" onclick="closeDate(document.getElementById('dateInput').value)">확인</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="overlay" id="dateOverlay" onclick="if(event.target===this)closeDate(null)">
-  <div class="cdialog">
-    <h3 id="dateTitle">발표 예정일</h3>
-    <p id="dateHint"></p>
-    <input id="dateInput" type="date" class="date-field">
-    <div class="row-btn">
-      <button class="btn-ghost" onclick="closeDate(null)">취소</button>
-      <button class="btn-submit" onclick="closeDate(document.getElementById('dateInput').value)">확인</button>
+  <div class="overlay" id="matOverlay" onclick="if(event.target===this)closeMaterial()">
+    <div class="cdialog">
+      <h3 id="matTitle">발표용 자료</h3>
+      <p id="matCurrent"></p>
+      <div class="seg" id="seg-mat">
+        <button type="button" id="mat-file" class="on" onclick="setMatMode('file')">파일 올리기</button>
+        <button type="button" id="mat-link" onclick="setMatMode('link')">링크</button>
+      </div>
+      <div id="mat-file-box" class="mat-box">
+        <label class="dropzone" id="mat-drop">
+          <input id="mat-fileinput" type="file" hidden>
+          <span class="dz-icon">📎</span>
+          <span class="dz-main">파일을 끌어다 놓거나 <b>클릭해서 선택</b></span>
+          <span class="dz-sub" id="mat-filename">형식 제한 없음</span>
+        </label>
+      </div>
+      <div id="mat-link-box" class="mat-box" style="display:none">
+        <input id="mat-url" type="url" placeholder="https://...">
+        <input id="mat-name" type="text" placeholder="표시 이름 (선택)">
+      </div>
+      <div class="row-btn">
+        <button class="btn-ghost danger" id="mat-del" onclick="detachMaterial()">삭제</button>
+        <button class="btn-ghost" onclick="closeMaterial()">닫기</button>
+        <button class="btn-submit" onclick="submitMaterial()">저장</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="overlay" id="matOverlay" onclick="if(event.target===this)closeMaterial()">
-  <div class="cdialog">
-    <h3 id="matTitle">발표용 자료</h3>
-    <p id="matCurrent"></p>
-    <div class="seg" id="seg-mat">
-      <button type="button" id="mat-file" class="on" onclick="setMatMode('file')">파일 올리기</button>
-      <button type="button" id="mat-link" onclick="setMatMode('link')">링크</button>
-    </div>
-    <div id="mat-file-box" class="mat-box">
-      <label class="dropzone" id="mat-drop">
-        <input id="mat-fileinput" type="file" hidden>
-        <span class="dz-icon">📎</span>
-        <span class="dz-main">파일을 끌어다 놓거나 <b>클릭해서 선택</b></span>
-        <span class="dz-sub" id="mat-filename">형식 제한 없음</span>
-      </label>
-    </div>
-    <div id="mat-link-box" class="mat-box" style="display:none">
-      <input id="mat-url" type="url" placeholder="https://...">
-      <input id="mat-name" type="text" placeholder="표시 이름 (선택)">
-    </div>
-    <div class="row-btn">
-      <button class="btn-ghost danger" id="mat-del" onclick="detachMaterial()">삭제</button>
-      <button class="btn-ghost" onclick="closeMaterial()">닫기</button>
-      <button class="btn-submit" onclick="submitMaterial()">저장</button>
+  <div class="overlay" id="viewOverlay" onclick="if(event.target===this)closeViewer()">
+    <div class="viewer">
+      <div class="viewer-head">
+        <span id="viewName"></span>
+        <span class="viewer-act">
+          <button class="btn-mini" id="viewExpand" onclick="toggleViewerSize()">크게 보기</button>
+          <a id="viewNewTab" class="btn-mini" href="#" target="_blank" rel="noopener">새 탭</a>
+          <a id="viewDownload" class="btn-mini" href="#" download>내려받기</a>
+          <button class="btn-mini ghost" onclick="closeViewer()">닫기</button>
+        </span>
+      </div>
+      <div class="viewer-body" id="viewBody"></div>
     </div>
   </div>
-</div>
 
-<div class="overlay" id="viewOverlay" onclick="if(event.target===this)closeViewer()">
-  <div class="viewer">
-    <div class="viewer-head">
-      <span id="viewName"></span>
-      <span class="viewer-act">
-        <button class="btn-mini" id="viewExpand" onclick="toggleViewerSize()">크게 보기</button>
-        <a id="viewNewTab" class="btn-mini" href="#" target="_blank" rel="noopener">새 탭</a>
-        <a id="viewDownload" class="btn-mini" href="#" download>내려받기</a>
-        <button class="btn-mini ghost" onclick="closeViewer()">닫기</button>
-      </span>
-    </div>
-    <div class="viewer-body" id="viewBody"></div>
-  </div>
-</div>
-
-<div class="overlay" id="fieldOverlay" onclick="if(event.target===this)closeFieldModal()">
-  <div class="cdialog">
-    <h3>분야 추가</h3>
-    <p>아티클 등록 폼의 분야 선택지에 추가됩니다.</p>
-    <div class="field">
-      <label>분야 이름</label>
-      <input id="newFieldName" type="text" placeholder="예: Data"
-        onkeydown="if(event.key==='Enter')addField()">
-    </div>
-    <div class="row-btn">
-      <button class="btn-ghost" onclick="closeFieldModal()">취소</button>
-      <button class="btn-submit" onclick="addField()">추가</button>
+  <div class="overlay" id="fieldOverlay" onclick="if(event.target===this)closeFieldModal()">
+    <div class="cdialog">
+      <h3>분야 추가</h3>
+      <p>아티클 등록 폼의 분야 선택지에 추가됩니다.</p>
+      <div class="field">
+        <label>분야 이름</label>
+        <input id="newFieldName" type="text" placeholder="예: Data" onkeydown="if(event.key==='Enter')addField()">
+      </div>
+      <div class="row-btn">
+        <button class="btn-ghost" onclick="closeFieldModal()">취소</button>
+        <button class="btn-submit" onclick="addField()">추가</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="overlay" id="assignOverlay" onclick="if(event.target===this)closeAssign()">
-  <div class="cdialog">
-    <h3>발표자 지정</h3>
-    <p id="assignSubject"></p>
-    <div class="field">
-      <label>발표자</label>
-      <select id="assignWho"></select>
-    </div>
-    <div class="field">
-      <label>발표 예정일 (선택)</label>
-      <input id="assignDate" type="date">
-    </div>
-    <div class="row-btn">
-      <button class="btn-ghost" onclick="closeAssign()">취소</button>
-      <button class="btn-submit" onclick="submitAssign()">저장</button>
+  <div class="overlay" id="assignOverlay" onclick="if(event.target===this)closeAssign()">
+    <div class="cdialog">
+      <h3>발표자 지정</h3>
+      <p id="assignSubject"></p>
+      <div class="field">
+        <label>발표자</label>
+        <select id="assignWho"></select>
+      </div>
+      <div class="field">
+        <label>발표 예정일 (선택)</label>
+        <input id="assignDate" type="date">
+      </div>
+      <div class="row-btn">
+        <button class="btn-ghost" onclick="closeAssign()">취소</button>
+        <button class="btn-submit" onclick="submitAssign()">저장</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="toast" id="toast"></div>
+  <div class="toast" id="toast"></div>
 
-<!-- 도메인별로 나뉜 스크립트. 로드 순서가 의존 순서다.
+  <!-- 도메인별로 나뉜 스크립트. 로드 순서가 의존 순서다.
      core -> topics -> related/drawer -> claim/form/material/assign/admin -> main.
      인라인 onclick 이 함수를 전역에서 찾으므로 ES 모듈이 아닌 클래식 스크립트로 둔다. -->
-<script src="static/core.js"></script>
-<script src="static/topics.js"></script>
-<script src="static/related.js"></script>
-<script src="static/drawer.js"></script>
-<script src="static/claim.js"></script>
-<script src="static/emotion.js"></script>
-<script src="static/form.js"></script>
-<script src="static/material.js"></script>
-<script src="static/assign.js"></script>
-<script src="static/stats.js"></script>
-<script src="static/admin.js"></script>
-<script src="static/main.js"></script>
+  <script src="static/core.js"></script>
+  <script src="static/topics.js"></script>
+  <script src="static/related.js"></script>
+  <script src="static/drawer.js"></script>
+  <script src="static/claim.js"></script>
+  <script src="static/emotion.js"></script>
+  <script src="static/form.js"></script>
+  <script src="static/material.js"></script>
+  <script src="static/assign.js"></script>
+  <script src="static/stats.js"></script>
+  <script src="static/admin.js"></script>
+  <script src="static/main.js"></script>
 </body>
+
 </html>

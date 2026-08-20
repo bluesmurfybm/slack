@@ -1,6 +1,6 @@
 # blue-iWorks — 사내 업무 포털
 
-Bluesoft 사내 포털. 로그인 하나로 **도서구매신청(book)**, **DTI 발표주제(magazine)**,
+Bluesoft 사내 포털. 로그인 하나로 **도서구매신청(book)**, **DTI 발표(magazine)**,
 **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
@@ -18,7 +18,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── index.html
 │   └── styles/
 │
-├── magazine/                    DTI 발표주제 — Python/FastAPI, 별도 프로세스(포트 8001)
+├── magazine/                    DTI 발표 — Python/FastAPI, 별도 프로세스(포트 8001)
 │   ├── app.py                   조립만(create_app 팩토리)
 │   ├── core/                    config(pydantic-settings), db(SQLModel)
 │   ├── features/                identity · topics · material · notify
@@ -84,7 +84,7 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 ---
 
-## magazine (DTI 발표주제)
+## magazine (DTI 발표)
 
 매거진(DI, MIT TR) 아티클 발표 주제를 관리한다. 원래 xlsx로 돌리던 걸 옮긴 것.
 
@@ -197,7 +197,7 @@ book·magazine은 각각 uvicorn 프로세스로 돈다. 유닛 파일은 서버
 
 ```ini
 [Unit]
-Description=magazine (BlueUP-DTI 발표주제)
+Description=magazine (BlueUP-DTI 발표)
 After=network-online.target
 
 [Service]

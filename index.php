@@ -81,7 +81,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
             <div class="dd-label">업무 시스템</div>
             <a href="" id="dd-book" target="_blank" rel="noopener">📚 도서구매신청</a>
             <a href="" id="dd-slack" target="_blank" rel="noopener">📥 업무현황판</a>
-            <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표주제</a>
+            <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표</a>
             <div class="dd-sep"></div>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
@@ -329,7 +329,7 @@ function renderTiles(){
     <a class="tile" href="${LINKS.magazine}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:linear-gradient(135deg,#0075F8,#00234B)">${magazineIcon}</span>
-      <div><h3>DTI 발표주제</h3><p>매거진 아티클 발표 주제를 고르고 자료를 공유합니다.</p></div>
+      <div><h3>DTI 발표</h3><p>매거진 아티클 발표 주제를 고르고 자료를 공유합니다.</p></div>
     </a>
     <div class="tile soon">
       <span class="badge-soon">준비중</span>
