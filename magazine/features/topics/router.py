@@ -9,6 +9,7 @@ from core.db import Topic, TopicEmotion, get_session
 from features.emotion.service import summary as emotion_summary
 from features.identity.auth import get_settings, is_admin, require_admin, require_identity
 from features.notify import slack
+from features.related.service import rebuild
 from features.topics.models import AssignIn, ClaimIn, CompleteIn, ScheduleIn, TopicIn, TopicPatch
 from features.topics.service import fetch, may_manage_claim, to_dict
 
@@ -42,6 +43,7 @@ def create_topic(body: TopicIn, session: Session = Depends(get_session),
                   created_at=time.strftime("%Y-%m-%d %H:%M:%S"))
     session.add(topic)
     session.commit()
+    rebuild(session) # commit 으로 인스턴스가 만료되므로 refresh 는 이 뒤여야 한다
     session.refresh(topic)
     return to_dict(topic)
 
@@ -53,6 +55,7 @@ def update_topic(tid: int, body: TopicPatch, session: Session = Depends(get_sess
         setattr(topic, name, value)
     session.add(topic)
     session.commit()
+    rebuild(session)
     session.refresh(topic)
     return to_dict(topic)
 
@@ -63,6 +66,7 @@ def delete_topic(tid: int, session: Session = Depends(get_session)):
     session.execute(delete(TopicEmotion).where(TopicEmotion.topic_id == tid))
     session.delete(topic)
     session.commit()
+    rebuild(session)
     return {"ok": True}
 
 

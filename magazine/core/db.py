@@ -67,6 +67,14 @@ class FieldOption(SQLModel, table=True):
     name: str = Field(unique=True)
 
 
+class TopicRelated(SQLModel, table=True):
+    __tablename__ = "topic_related"
+
+    topic_id: int = Field(foreign_key="topics.id", primary_key=True)
+    related_id: int = Field(foreign_key="topics.id", primary_key=True)
+    score: int
+
+
 DEFAULT_FIELDS = ["UI/UX", "Marketing", "Trend", "AX", "Etc"]
 
 

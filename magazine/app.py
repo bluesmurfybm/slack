@@ -3,11 +3,13 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlmodel import Session
 
 from core.config import Settings
 from core.db import init_db
-from features import emotion, fields, identity, material, topics
+from features import emotion, fields, identity, material, related, topics
 from features.identity.auth import get_identity
+from features.related.service import rebuild
 
 
 def create_app(settings: Settings = None) -> FastAPI:
@@ -16,6 +18,9 @@ def create_app(settings: Settings = None) -> FastAPI:
     app = FastAPI(title="BlueUP-DTI 발표 아티클")
     app.state.settings = settings
     app.state.engine = init_db(settings)
+    # 배점을 바꿔도 재배포만으로 반영되도록 기동 때마다 새로 계산한다
+    with Session(app.state.engine) as session:
+        rebuild(session)
 
     app.mount("/styles", StaticFiles(directory=settings.styles_dir), name="styles")
     app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
@@ -36,6 +41,7 @@ def create_app(settings: Settings = None) -> FastAPI:
     app.include_router(material.router)
     app.include_router(emotion.router)
     app.include_router(fields.router)
+    app.include_router(related.router)
     if settings.dev_login:
         app.include_router(identity.devlogin_router)
 

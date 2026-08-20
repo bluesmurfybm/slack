@@ -7,6 +7,7 @@ function openDrawer(id) {
   document.getElementById("drawer").innerHTML = drawerHtml(t);
   document.getElementById("drawer").classList.add("open");
   document.getElementById("scrim").classList.add("open");
+  loadRelated(id);
 }
 
 function closeDrawer() {
@@ -47,7 +48,7 @@ function drawerHtml(t) {
 
       <section class="d-sec">
         <h4>연관 아티클</h4>
-        ${relatedListHtml(t)}
+        <div id="relatedBox"><p class="note">불러오는 중…</p></div>
       </section>
 
       ${t.status === "발표완료" ? `<section class="d-sec">
@@ -81,21 +82,6 @@ function slotBox(t, slot, may) {
     <button class="btn-mini" onclick="openViewer(${t.id},'${slot}')">열기</button>
     ${may ? `<button class="btn-mini mat has" onclick="openMaterial(${t.id},'${slot}')">변경</button>` : ""}
   </div>`;
-}
-
-function relatedListHtml(t) {
-  const found = relatedTo(t);
-  if (!found.length) {
-    return '<p class="note">분야·키워드가 겹치는 아티클이 아직 없습니다.</p>';
-  }
-  return found.map(r => `<div class="rel">
-    <span class="score">연관 ${r.score}%</span>
-    <span class="rel-main">
-      <b>${esc(r.topic.title)}</b>
-      <span class="muted">${esc(sourceOf(r.topic) || "—")}${r.topic.field ? ` · ${esc(r.topic.field)}` : ""}</span>
-    </span>
-    <button class="btn-mini" onclick="openDrawer(${r.topic.id})">보기</button>
-  </div>`).join("");
 }
 
 function adminDrawerActions(t) {
