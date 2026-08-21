@@ -10,9 +10,7 @@ function adminActionsHtml(t) {
   if (t.status === "발표예정") {
     out.push(`<button class="btn-mini" onclick="complete(${t.id})">발표완료</button>`);
   }
-  if (t.status === "발표완료") {
-    out.push(`<button class="btn-mini" onclick="setArchived(${t.id},1)">보관함으로</button>`);
-  }
+  out.push(`<button class="btn-mini" onclick="setArchived(${t.id},1)">보관함으로</button>`);
   out.push(`<button class="btn-mini ghost" onclick="openEdit(${t.id})">수정</button>`);
   out.push(`<button class="btn-mini ghost danger" onclick="askDelete(${t.id})">삭제</button>`);
   return out.join("");
