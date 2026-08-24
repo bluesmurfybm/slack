@@ -1,9 +1,10 @@
 import sqlite3
 
-from sqlmodel import Session, select
+from sqlmodel import Session, create_engine, select
 
 from conftest import make_settings
 from core.db import Presentation, PresentationEmotion, Topic, init_db
+from migrations.backfill_presentations import run
 from tests.test_db import LEGACY_SCHEMA
 
 
@@ -22,7 +23,8 @@ def _legacy_with_presentation(settings):
 def test_backfill_creates_presentations(tmp_path):
     settings = make_settings(tmp_path)
     _legacy_with_presentation(settings)
-    engine = init_db(settings)
+    run(settings.db_path)
+    engine = create_engine(f"sqlite:///{settings.db_path}")
     with Session(engine) as session:
         rows = session.exec(select(Presentation)).all()
     assert len(rows) == 2 # 발표된 주제 + 날짜만. 빈 주제는 만들지 않는다
@@ -41,7 +43,8 @@ def test_backfill_copies_emotions(tmp_path):
         "INSERT INTO topic_emotions VALUES(1, 'hjlee@bluesoft.co.kr', 'like', '');")
     conn.commit()
     conn.close()
-    engine = init_db(settings)
+    run(settings.db_path)
+    engine = create_engine(f"sqlite:///{settings.db_path}")
     with Session(engine) as session:
         emo = session.exec(select(PresentationEmotion)).one()
         pres = session.get(Presentation, emo.presentation_id)
@@ -52,8 +55,9 @@ def test_backfill_copies_emotions(tmp_path):
 def test_backfill_is_idempotent(tmp_path):
     settings = make_settings(tmp_path)
     _legacy_with_presentation(settings)
-    init_db(settings)
-    engine = init_db(settings)
+    run(settings.db_path)
+    run(settings.db_path)
+    engine = create_engine(f"sqlite:///{settings.db_path}")
     with Session(engine) as session:
         assert len(session.exec(select(Presentation)).all()) == 2
 
