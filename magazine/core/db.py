@@ -60,6 +60,31 @@ class TopicEmotion(SQLModel, table=True):
     created_at: str = ""
 
 
+class Presentation(SQLModel, table=True):
+    __tablename__ = "presentations"
+
+    id: int | None = Field(default=None, primary_key=True)
+    topic_id: int = Field(foreign_key="topics.id", unique=True)
+    presenter: str = ""
+    presenter_email: str = ""
+    planned_date: str = ""
+    done_date: str = ""
+    material_kind: str | None = None # link | file
+    material_name: str | None = None
+    material_url: str | None = None
+    material_path: str | None = None
+    created_at: str = ""
+
+
+class PresentationEmotion(SQLModel, table=True):
+    __tablename__ = "presentation_emotions"
+
+    presentation_id: int = Field(foreign_key="presentations.id", primary_key=True)
+    email: str = Field(primary_key=True)
+    kind: str = Field(primary_key=True)
+    created_at: str = ""
+
+
 class FieldOption(SQLModel, table=True):
     __tablename__ = "fields"
 
@@ -90,6 +115,7 @@ def init_db(settings: Settings) -> Engine:
     _add_missing_columns(engine)
     _seed(engine, settings.seed_path)
     _seed_fields(engine)
+    _migrate_presentations(engine)
     return engine
 
 
@@ -133,3 +159,41 @@ def _seed(engine: Engine, seed_path: str) -> None:
                                   if k in COLUMNS and v is not None}) for r in rows])
         session.commit()
         logger.info("[seed] %d건 초기 데이터를 적재했습니다.", len(rows))
+
+
+PRESENTATION_COLUMNS = ("presenter", "presenter_email", "planned_date", "done_date",
+                        "material_kind", "material_name", "material_url", "material_path")
+
+
+def _migrate_presentations(engine: Engine) -> None:
+    # 옛 컬럼은 Topic 모델에서 빠지므로 이 함수만 raw SELECT 로 읽는다 (마이그레이션 전용)
+    with Session(engine) as session:
+        if session.exec(select(func.count()).select_from(Presentation)).one():
+            return
+        have = {c["name"] for c in inspect(engine).get_columns("topics")}
+        cols = [c for c in PRESENTATION_COLUMNS if c in have]
+        if not cols:
+            return
+        rows = session.connection().exec_driver_sql(
+            f"SELECT id, {', '.join(cols)} FROM topics").all() # noqa: S608 cols 는 화이트리스트에서만 온다
+        by_topic = {}
+        for row in rows:
+            values = {c: row[i + 1] for i, c in enumerate(cols)}
+            if not any(values.get(c) for c in
+                       ("presenter_email", "planned_date", "done_date", "material_kind")):
+                continue
+            fields = {c: values.get(c) or (None if c.startswith("material") else "")
+                      for c in PRESENTATION_COLUMNS}
+            pres = Presentation(topic_id=row[0], **fields)
+            session.add(pres)
+            by_topic[row[0]] = pres
+        session.commit()
+
+        if "topic_emotions" in inspect(engine).get_table_names():
+            emotions = session.connection().exec_driver_sql(
+                "SELECT topic_id, email, kind, created_at FROM topic_emotions").all()
+            session.add_all([
+                PresentationEmotion(presentation_id=by_topic[tid].id, email=email,
+                                    kind=kind, created_at=created or "")
+                for tid, email, kind, created in emotions if tid in by_topic])
+            session.commit()
