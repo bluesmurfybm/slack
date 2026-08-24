@@ -6,7 +6,7 @@ from sqlmodel import Session, SQLModel, create_engine, func, select
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.db import Presentation, PresentationEmotion
+from core.db import Presentation, PresentationEmotion, _add_missing_columns
 
 PRESENTATION_COLUMNS = ("presenter", "presenter_email", "planned_date", "done_date",
                         "material_kind", "material_name", "material_url", "material_path")
@@ -15,6 +15,7 @@ PRESENTATION_COLUMNS = ("presenter", "presenter_email", "planned_date", "done_da
 def run(db_path: str) -> None:
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(engine) # 레거시 DB 는 새 테이블이 아직 없어 여기서 직접 만든다
+    _add_missing_columns(engine) # 레거시 topics 에 material_* 등 누락 컬럼을 보정한다
     _migrate_presentations(engine)
 
 

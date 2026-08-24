@@ -62,6 +62,18 @@ def test_backfill_is_idempotent(tmp_path):
         assert len(session.exec(select(Presentation)).all()) == 2
 
 
+def test_backfill_adds_missing_columns_to_legacy_topics(tmp_path):
+    settings = make_settings(tmp_path)
+    conn = sqlite3.connect(settings.db_path)
+    conn.executescript(LEGACY_SCHEMA) # material_* 컬럼이 없는 스키마
+    conn.commit()
+    conn.close()
+    run(settings.db_path)
+    conn = sqlite3.connect(settings.db_path)
+    conn.execute("SELECT material_kind FROM topics").fetchall()
+    conn.close()
+
+
 def test_seeded_db_gets_presentations(tmp_path):
     engine = init_db(make_settings(tmp_path))
     with Session(engine) as session:
