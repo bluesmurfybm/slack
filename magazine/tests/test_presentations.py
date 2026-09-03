@@ -2,10 +2,47 @@ import sqlite3
 
 from sqlmodel import Session, create_engine, select
 
-from conftest import make_settings
+from conftest import ADMIN, USER, login, make_settings
 from core.db import Presentation, PresentationEmotion, Topic, init_db
 from migrations.backfill_presentations import run
 from tests.test_db import LEGACY_SCHEMA
+
+NEW = {"title": "분리 검증", "field": "AX"}
+
+
+def _tid(client, settings):
+    login(client, settings, ADMIN)
+    return client.post("/magazineapi/topics", json=NEW).json()["id"]
+
+
+def test_claim_creates_presentation_row(client, settings):
+    tid = _tid(client, settings)
+    login(client, settings, USER, "유승인")
+    body = client.post(f"/magazineapi/topics/{tid}/claim",
+                       json={"planned_date": "2026-09-01"}).json()
+    assert body["presenter_email"] == USER
+    assert body["planned_date"] == "2026-09-01"
+    assert body["status"] == "발표예정"
+
+
+def test_release_removes_presentation_row(client, settings):
+    tid = _tid(client, settings)
+    login(client, settings, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    client.post(f"/magazineapi/topics/{tid}/release")
+    rows = client.get("/magazineapi/topics").json()
+    assert next(r for r in rows if r["id"] == tid)["status"] == "미지정"
+
+
+def test_unassign_after_complete_keeps_done_date(client, settings):
+    tid = _tid(client, settings)
+    login(client, settings, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={})
+    login(client, settings, ADMIN)
+    client.post(f"/magazineapi/topics/{tid}/complete", json={"done_date": "2026-09-01"})
+    body = client.post(f"/magazineapi/topics/{tid}/assign", json={"email": ""}).json()
+    assert body["status"] == "발표완료"
+    assert body["presenter_email"] in ("", None)
 
 
 def _legacy_with_presentation(settings):
