@@ -79,6 +79,7 @@
       <button type="button" id="tabArchive" onclick="setTab('archive')">보관함</button>
       <button type="button" id="tabFields" onclick="setTab('fields')">기타 관리</button>
       <button type="button" id="tabStats" onclick="setTab('stats')">통계</button>
+      <button type="button" id="tabScore" onclick="setTab('score')">점수</button>
     </nav>
 
     <div class="toolbar" id="toolbar">
@@ -129,6 +130,7 @@
     <ul class="list" id="list"></ul>
     <section class="statspage" id="statsPage" style="display:none"></section>
     <section class="fieldspage" id="fieldsPage" style="display:none"></section>
+    <section class="statspage" id="scorePage" style="display:none"></section>
   </div>
 
   <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
@@ -311,6 +313,7 @@
   <script src="static/material.js"></script>
   <script src="static/assign.js"></script>
   <script src="static/stats.js"></script>
+  <script src="static/score.js"></script>
   <script src="static/admin.js"></script>
   <script src="static/main.js"></script>
 </body>

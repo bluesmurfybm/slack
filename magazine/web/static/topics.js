@@ -129,19 +129,23 @@ function render() {
   document.getElementById("tabArchive").classList.toggle("on", v.tab === "archive");
   document.getElementById("tabFields").classList.toggle("on", v.tab === "fields");
   document.getElementById("tabStats").classList.toggle("on", v.tab === "stats");
+  document.getElementById("tabScore").classList.toggle("on", v.tab === "score");
   document.getElementById("vList").classList.toggle("on", v.layout === "list");
   document.getElementById("vCard").classList.toggle("on", v.layout === "card");
 
   const isStats = admin && v.tab === "stats";
   const isFields = admin && v.tab === "fields";
-  const isPanel = isStats || isFields;
+  const isScore = admin && v.tab === "score";
+  const isPanel = isStats || isFields || isScore;
   document.getElementById("statsPage").style.display = isStats ? "" : "none";
   document.getElementById("fieldsPage").style.display = isFields ? "" : "none";
+  document.getElementById("scorePage").style.display = isScore ? "" : "none";
   document.getElementById("toolbar").style.display = isPanel ? "none" : "";
   document.querySelector(".ledger-head").style.display = isPanel ? "none" : "";
   document.getElementById("list").style.display = isPanel ? "none" : "";
   if (isStats) { renderStatsPage(); return; }
   if (isFields) { renderFieldsPage(); return; }
+  if (isScore) { renderScorePage(); return; }
 
   const rows = visible();
   const hidden = pool().filter(t => !t.active).length;

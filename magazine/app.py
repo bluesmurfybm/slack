@@ -7,7 +7,7 @@ from sqlmodel import Session
 
 from core.config import Settings
 from core.db import init_db
-from features import emotion, fields, identity, material, related, topics
+from features import emotion, fields, identity, material, related, score, topics
 from features.identity.auth import get_identity
 from features.related.service import rebuild
 
@@ -42,6 +42,7 @@ def create_app(settings: Settings = None) -> FastAPI:
     app.include_router(emotion.router)
     app.include_router(fields.router)
     app.include_router(related.router)
+    app.include_router(score.router)
     if settings.dev_login:
         app.include_router(identity.devlogin_router)
 
