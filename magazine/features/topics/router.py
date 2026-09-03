@@ -1,12 +1,12 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import delete, update
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, func, select
 
 from core.config import EMAIL_TO_NAME
-from core.db import Presentation, Topic, TopicEmotion, get_session
+from core.db import Presentation, Topic, get_session
 from features.emotion.service import summary as emotion_summary
 from features.identity.auth import get_settings, is_admin, require_admin, require_identity
 from features.notify import slack
@@ -43,9 +43,14 @@ def get_topic(tid: int, session: Session = Depends(get_session)):
 @router.post("", status_code=201)
 def create_topic(body: TopicIn, session: Session = Depends(get_session),
                  identity: dict = Depends(require_admin)):
-    topic = Topic(**body.model_dump(), created_by=identity["email"],
+    values = body.model_dump()
+    planned_date = values.pop("planned_date")
+    topic = Topic(**values, created_by=identity["email"],
                   created_at=time.strftime("%Y-%m-%d %H:%M:%S"))
     session.add(topic)
+    session.flush()
+    if planned_date:
+        presentations.create(session, topic.id, planned_date=planned_date)
     session.commit()
     rebuild(session) # commit 으로 인스턴스가 만료되므로 refresh 는 이 뒤여야 한다
     session.refresh(topic)
@@ -55,9 +60,18 @@ def create_topic(body: TopicIn, session: Session = Depends(get_session),
 @router.put("/{tid}", dependencies=[Depends(require_admin)])
 def update_topic(tid: int, body: TopicPatch, session: Session = Depends(get_session)):
     topic = fetch(session, tid)
-    for name, value in body.model_dump(exclude_unset=True).items():
+    patch = body.model_dump(exclude_unset=True)
+    planned_date = patch.pop("planned_date", None)
+    for name, value in patch.items():
         setattr(topic, name, value)
     session.add(topic)
+    if planned_date is not None:
+        pres = presentations.of_topic(session, tid)
+        if pres is None and planned_date:
+            pres = presentations.create(session, tid)
+        if pres is not None:
+            pres.planned_date = planned_date
+            session.add(pres)
     session.commit()
     rebuild(session)
     session.refresh(topic)
@@ -67,7 +81,6 @@ def update_topic(tid: int, body: TopicPatch, session: Session = Depends(get_sess
 @router.delete("/{tid}", dependencies=[Depends(require_admin)])
 def delete_topic(tid: int, request: Request, session: Session = Depends(get_session)):
     topic = fetch(session, tid)
-    session.execute(delete(TopicEmotion).where(TopicEmotion.topic_id == tid))
     pres = presentations.of_topic(session, tid)
     if pres:
         presentations.purge(get_settings(request), session, pres)

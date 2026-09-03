@@ -1,9 +1,7 @@
 import pytest
-from sqlmodel import Session, select
 
 from conftest import ADMIN, OTHER, USER, login, make_settings
 from core.config import MEMBERS
-from core.db import Presentation, TopicEmotion
 
 NEW = {"title": "점수 검증", "field": "AX"}
 
@@ -58,35 +56,32 @@ def test_required_topic_adds_bonus(client, settings):
     assert me["total"] == 15
 
 
-def _attach_material(client, tid):
-    # 자료 라우터는 Topic 컬럼에 쓴다. 발표 행의 자료는 직접 넣는다.
-    with Session(client.app.state.engine) as s:
-        pres = s.exec(select(Presentation).where(Presentation.topic_id == tid)).one()
-        pres.material_kind, pres.material_name, pres.material_url = "link", "슬라이드", "https://x"
-        s.add(pres)
-        s.commit()
+def _attach_material(client, settings, tid):
+    login(client, settings, ADMIN)
+    r = client.post(f"/magazineapi/topics/{tid}/material/link",
+                    json={"url": "https://x", "name": "슬라이드"})
+    assert r.status_code == 200
 
 
 def test_material_on_presentation_adds_three(client, settings):
     tid = _done(client, settings)
-    _attach_material(client, tid)
+    _attach_material(client, settings, tid)
     login(client, settings, ADMIN)
     me = _of(_scores(client), USER)
     assert me["breakdown"]["material"] == 3
     assert me["total"] == 13
 
 
-def _react(client, tid, email, kinds, created_at):
-    # 반응 라우터는 Topic 의 done_date 로 막는다. 반응 행은 직접 넣는다.
-    with Session(client.app.state.engine) as s:
-        s.add_all([TopicEmotion(topic_id=tid, email=email, kind=k, created_at=created_at)
-                   for k in kinds])
-        s.commit()
+def _react(client, settings, tid, email, kinds):
+    login(client, settings, email)
+    for kind in kinds:
+        assert client.post(f"/magazineapi/topics/{tid}/emotions/{kind}").status_code == 200
 
 
 def test_reactions_score_one_each_capped_per_day(client, settings):
     tid = _topic(client, settings)
-    _react(client, tid, USER, ("like", "apply", "easy", "new"), "2026-09-01 10:00:00")
+    client.post(f"/magazineapi/topics/{tid}/complete", json={})
+    _react(client, settings, tid, USER, ("like", "apply", "easy", "new"))
     login(client, settings, ADMIN)
     me = _of(_scores(client), USER)
     assert me["breakdown"]["reaction"] == 3

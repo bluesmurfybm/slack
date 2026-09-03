@@ -3,7 +3,7 @@ import sqlite3
 from sqlmodel import Session, select
 
 from conftest import make_settings
-from core.db import Topic, TopicEmotion, init_db
+from core.db import Presentation, PresentationEmotion, Topic, init_db
 
 LEGACY_SCHEMA = """
 CREATE TABLE topics(
@@ -66,10 +66,13 @@ def test_emotions_table_is_added_to_an_existing_db(tmp_path):
     engine = init_db(settings)
     with Session(engine) as session:
         tid = session.exec(select(Topic)).one().id
-        session.add(TopicEmotion(topic_id=tid, email="siyu@bluesoft.co.kr",
-                                 kind="like"))
+        pres = Presentation(topic_id=tid, done_date="2026-01-10")
+        session.add(pres)
         session.commit()
-        assert session.exec(select(TopicEmotion)).one().topic_id == tid
+        session.add(PresentationEmotion(presentation_id=pres.id, email="siyu@bluesoft.co.kr",
+                                        kind="like"))
+        session.commit()
+        assert session.exec(select(PresentationEmotion)).one().presentation_id == pres.id
 
 
 def test_migration_is_repeatable(tmp_path):

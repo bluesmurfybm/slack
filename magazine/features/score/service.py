@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from sqlmodel import Session, func, select
 
 from core.config import EMAIL_TO_NAME, MEMBERS
-from core.db import Presentation, Topic, TopicEmotion
+from core.db import Presentation, PresentationEmotion, Topic
 
 DONE = 10
 REQUIRED_BONUS = 5
@@ -36,9 +36,10 @@ def events(session: Session) -> list[Event]:
                 out.append(Event(who, date, "required", REQUIRED_BONUS))
         if pres.material_kind:
             out.append(Event(who, date, "material", MATERIAL))
-    day = func.substr(TopicEmotion.created_at, 1, 10)
+    day = func.substr(PresentationEmotion.created_at, 1, 10)
     for email, date, n in session.exec(
-            select(TopicEmotion.email, day, func.count()).group_by(TopicEmotion.email, day)).all():
+            select(PresentationEmotion.email, day, func.count())
+            .group_by(PresentationEmotion.email, day)).all():
         out.append(Event(email, date, "reaction", min(n, REACTION_DAILY_CAP) * REACTION))
     return out
 

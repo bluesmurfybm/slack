@@ -119,3 +119,23 @@ def test_seeded_db_gets_presentations(tmp_path):
         topics = session.exec(select(Topic)).all()
     assert len(topics) == 31
     assert len(done) == 16 # 시드의 발표완료 행 수
+
+
+def test_admin_creates_topic_with_planned_date(client, settings):
+    login(client, settings, ADMIN)
+    body = client.post("/magazineapi/topics",
+                       json={**NEW, "planned_date": "2026-10-01"}).json()
+    assert body["planned_date"] == "2026-10-01"
+    assert body["status"] == "미지정"
+
+
+def test_admin_edit_keeps_claim_and_moves_planned_date(client, settings):
+    tid = _tid(client, settings)
+    login(client, settings, USER)
+    client.post(f"/magazineapi/topics/{tid}/claim", json={"planned_date": "2026-09-01"})
+    login(client, settings, ADMIN)
+    body = client.put(f"/magazineapi/topics/{tid}",
+                      json={"title": "제목 수정", "planned_date": "2026-10-02"}).json()
+    assert body["title"] == "제목 수정"
+    assert body["planned_date"] == "2026-10-02"
+    assert body["presenter_email"] == USER

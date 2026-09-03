@@ -51,15 +51,6 @@ class Topic(SQLModel, table=True):
     created_at: str = ""
 
 
-class TopicEmotion(SQLModel, table=True):
-    __tablename__ = "topic_emotions"
-
-    topic_id: int = Field(foreign_key="topics.id", primary_key=True)
-    email: str = Field(primary_key=True)
-    kind: str = Field(primary_key=True) # features/emotion/service.py 의 Emotion
-    created_at: str = ""
-
-
 class Presentation(SQLModel, table=True):
     __tablename__ = "presentations"
 
