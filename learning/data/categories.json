@@ -1,0 +1,854 @@
+[
+  {
+    "site": "인프런",
+    "large": "AI 기술",
+    "medium": "",
+    "sort_order": 10
+  },
+  {
+    "site": "인프런",
+    "large": "AI 기술",
+    "medium": "AI에이전트 개발",
+    "sort_order": 11
+  },
+  {
+    "site": "인프런",
+    "large": "AI 기술",
+    "medium": "딥러닝 · 머신러닝",
+    "sort_order": 12
+  },
+  {
+    "site": "인프런",
+    "large": "AI 기술",
+    "medium": "컴퓨터 비전",
+    "sort_order": 13
+  },
+  {
+    "site": "인프런",
+    "large": "AI 기술",
+    "medium": "자연어 처리",
+    "sort_order": 14
+  },
+  {
+    "site": "인프런",
+    "large": "AI 기술",
+    "medium": "인공지능 기타",
+    "sort_order": 15
+  },
+  {
+    "site": "인프런",
+    "large": "AI 활용(AX)",
+    "medium": "",
+    "sort_order": 20
+  },
+  {
+    "site": "인프런",
+    "large": "AI 활용(AX)",
+    "medium": "AI 시작하기",
+    "sort_order": 21
+  },
+  {
+    "site": "인프런",
+    "large": "AI 활용(AX)",
+    "medium": "AI 개발 활용",
+    "sort_order": 22
+  },
+  {
+    "site": "인프런",
+    "large": "AI 활용(AX)",
+    "medium": "AI 실무 활용",
+    "sort_order": 23
+  },
+  {
+    "site": "인프런",
+    "large": "AI 활용(AX)",
+    "medium": "AI 크리에이티브",
+    "sort_order": 24
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "",
+    "sort_order": 30
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "웹 개발",
+    "sort_order": 31
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "AI 코딩",
+    "sort_order": 32
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "프론트엔드",
+    "sort_order": 33
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "백엔드",
+    "sort_order": 34
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "풀스택",
+    "sort_order": 35
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "모바일 앱 개발",
+    "sort_order": 36
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "프로그래밍 언어",
+    "sort_order": 37
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "알고리즘 · 자료구조",
+    "sort_order": 38
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "데이터베이스",
+    "sort_order": 39
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "데브옵스 · 인프라",
+    "sort_order": 40
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "소프트웨어 테스트",
+    "sort_order": 41
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "개발 도구",
+    "sort_order": 42
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "웹 퍼블리싱",
+    "sort_order": 43
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "데스크톱 앱 개발",
+    "sort_order": 44
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "VR/AR",
+    "sort_order": 45
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "개발 · 프로그래밍 자격증",
+    "sort_order": 46
+  },
+  {
+    "site": "인프런",
+    "large": "개발 · 프로그래밍",
+    "medium": "개발 · 프로그래밍 기타",
+    "sort_order": 47
+  },
+  {
+    "site": "인프런",
+    "large": "게임 개발",
+    "medium": "",
+    "sort_order": 40
+  },
+  {
+    "site": "인프런",
+    "large": "게임 개발",
+    "medium": "게임 프로그래밍",
+    "sort_order": 41
+  },
+  {
+    "site": "인프런",
+    "large": "게임 개발",
+    "medium": "게임 기획",
+    "sort_order": 42
+  },
+  {
+    "site": "인프런",
+    "large": "게임 개발",
+    "medium": "게임 아트 · 그래픽",
+    "sort_order": 43
+  },
+  {
+    "site": "인프런",
+    "large": "게임 개발",
+    "medium": "게임 개발 기타",
+    "sort_order": 44
+  },
+  {
+    "site": "인프런",
+    "large": "데이터 사이언스",
+    "medium": "",
+    "sort_order": 50
+  },
+  {
+    "site": "인프런",
+    "large": "데이터 사이언스",
+    "medium": "데이터 분석",
+    "sort_order": 51
+  },
+  {
+    "site": "인프런",
+    "large": "데이터 사이언스",
+    "medium": "데이터 엔지니어링",
+    "sort_order": 52
+  },
+  {
+    "site": "인프런",
+    "large": "데이터 사이언스",
+    "medium": "데이터 사이언스 자격증",
+    "sort_order": 53
+  },
+  {
+    "site": "인프런",
+    "large": "데이터 사이언스",
+    "medium": "데이터 사이언스 기타",
+    "sort_order": 54
+  },
+  {
+    "site": "인프런",
+    "large": "보안 · 네트워크",
+    "medium": "",
+    "sort_order": 60
+  },
+  {
+    "site": "인프런",
+    "large": "보안 · 네트워크",
+    "medium": "보안",
+    "sort_order": 61
+  },
+  {
+    "site": "인프런",
+    "large": "보안 · 네트워크",
+    "medium": "네트워크",
+    "sort_order": 62
+  },
+  {
+    "site": "인프런",
+    "large": "보안 · 네트워크",
+    "medium": "시스템 · 운영체제",
+    "sort_order": 63
+  },
+  {
+    "site": "인프런",
+    "large": "보안 · 네트워크",
+    "medium": "클라우드",
+    "sort_order": 64
+  },
+  {
+    "site": "인프런",
+    "large": "보안 · 네트워크",
+    "medium": "블록체인",
+    "sort_order": 65
+  },
+  {
+    "site": "인프런",
+    "large": "보안 · 네트워크",
+    "medium": "보안 · 네트워크 자격증",
+    "sort_order": 66
+  },
+  {
+    "site": "인프런",
+    "large": "보안 · 네트워크",
+    "medium": "보안 · 네트워크 기타",
+    "sort_order": 67
+  },
+  {
+    "site": "인프런",
+    "large": "하드웨어",
+    "medium": "",
+    "sort_order": 70
+  },
+  {
+    "site": "인프런",
+    "large": "하드웨어",
+    "medium": "컴퓨터 구조",
+    "sort_order": 71
+  },
+  {
+    "site": "인프런",
+    "large": "하드웨어",
+    "medium": "임베디드 · IoT",
+    "sort_order": 72
+  },
+  {
+    "site": "인프런",
+    "large": "하드웨어",
+    "medium": "반도체",
+    "sort_order": 73
+  },
+  {
+    "site": "인프런",
+    "large": "하드웨어",
+    "medium": "로봇공학",
+    "sort_order": 74
+  },
+  {
+    "site": "인프런",
+    "large": "하드웨어",
+    "medium": "모빌리티",
+    "sort_order": 75
+  },
+  {
+    "site": "인프런",
+    "large": "하드웨어",
+    "medium": "하드웨어 자격증",
+    "sort_order": 76
+  },
+  {
+    "site": "인프런",
+    "large": "하드웨어",
+    "medium": "하드웨어 기타",
+    "sort_order": 77
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "",
+    "sort_order": 80
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "CAD · 3D 모델링",
+    "sort_order": 81
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "UX/UI",
+    "sort_order": 82
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "그래픽 디자인",
+    "sort_order": 83
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "웹툰 · 이모티콘",
+    "sort_order": 84
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "사진 · 영상",
+    "sort_order": 85
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "사운드",
+    "sort_order": 86
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "디자인 자격증",
+    "sort_order": 87
+  },
+  {
+    "site": "인프런",
+    "large": "디자인 · 아트",
+    "medium": "디자인 기타",
+    "sort_order": 88
+  },
+  {
+    "site": "인프런",
+    "large": "기획 · 경영 · 마케팅",
+    "medium": "",
+    "sort_order": 90
+  },
+  {
+    "site": "인프런",
+    "large": "기획 · 경영 · 마케팅",
+    "medium": "기획 · PM · PO",
+    "sort_order": 91
+  },
+  {
+    "site": "인프런",
+    "large": "기획 · 경영 · 마케팅",
+    "medium": "마케팅",
+    "sort_order": 92
+  },
+  {
+    "site": "인프런",
+    "large": "기획 · 경영 · 마케팅",
+    "medium": "경영 · 전략",
+    "sort_order": 93
+  },
+  {
+    "site": "인프런",
+    "large": "기획 · 경영 · 마케팅",
+    "medium": "기획 · 경영 · 마케팅 자격증",
+    "sort_order": 94
+  },
+  {
+    "site": "인프런",
+    "large": "기획 · 경영 · 마케팅",
+    "medium": "기획 · 경영 · 마케팅 기타",
+    "sort_order": 95
+  },
+  {
+    "site": "인프런",
+    "large": "외국어",
+    "medium": "",
+    "sort_order": 100
+  },
+  {
+    "site": "인프런",
+    "large": "외국어",
+    "medium": "영어",
+    "sort_order": 101
+  },
+  {
+    "site": "인프런",
+    "large": "외국어",
+    "medium": "일본어",
+    "sort_order": 102
+  },
+  {
+    "site": "인프런",
+    "large": "외국어",
+    "medium": "중국어",
+    "sort_order": 103
+  },
+  {
+    "site": "인프런",
+    "large": "외국어",
+    "medium": "스페인어",
+    "sort_order": 104
+  },
+  {
+    "site": "인프런",
+    "large": "외국어",
+    "medium": "독일어",
+    "sort_order": 105
+  },
+  {
+    "site": "인프런",
+    "large": "업무 생산성",
+    "medium": "",
+    "sort_order": 110
+  },
+  {
+    "site": "인프런",
+    "large": "업무 생산성",
+    "medium": "업무 자동화",
+    "sort_order": 111
+  },
+  {
+    "site": "인프런",
+    "large": "업무 생산성",
+    "medium": "오피스",
+    "sort_order": 112
+  },
+  {
+    "site": "인프런",
+    "large": "업무 생산성",
+    "medium": "생산성 도구",
+    "sort_order": 113
+  },
+  {
+    "site": "인프런",
+    "large": "업무 생산성",
+    "medium": "업무 생산성 기타",
+    "sort_order": 114
+  },
+  {
+    "site": "인프런",
+    "large": "커리어 · 자기계발",
+    "medium": "",
+    "sort_order": 120
+  },
+  {
+    "site": "인프런",
+    "large": "커리어 · 자기계발",
+    "medium": "취업 · 이직",
+    "sort_order": 121
+  },
+  {
+    "site": "인프런",
+    "large": "커리어 · 자기계발",
+    "medium": "창업 · 부업",
+    "sort_order": 122
+  },
+  {
+    "site": "인프런",
+    "large": "커리어 · 자기계발",
+    "medium": "개인 브랜딩",
+    "sort_order": 123
+  },
+  {
+    "site": "인프런",
+    "large": "커리어 · 자기계발",
+    "medium": "취미",
+    "sort_order": 124
+  },
+  {
+    "site": "인프런",
+    "large": "커리어 · 자기계발",
+    "medium": "금융 · 재테크",
+    "sort_order": 125
+  },
+  {
+    "site": "인프런",
+    "large": "커리어 · 자기계발",
+    "medium": "교양",
+    "sort_order": 126
+  },
+  {
+    "site": "인프런",
+    "large": "커리어 · 자기계발",
+    "medium": "커리어 · 자기계발 기타",
+    "sort_order": 127
+  },
+  {
+    "site": "인프런",
+    "large": "대학 교육",
+    "medium": "",
+    "sort_order": 130
+  },
+  {
+    "site": "인프런",
+    "large": "대학 교육",
+    "medium": "수학",
+    "sort_order": 131
+  },
+  {
+    "site": "인프런",
+    "large": "대학 교육",
+    "medium": "공학",
+    "sort_order": 132
+  },
+  {
+    "site": "인프런",
+    "large": "대학 교육",
+    "medium": "상경",
+    "sort_order": 133
+  },
+  {
+    "site": "인프런",
+    "large": "대학 교육",
+    "medium": "자연과학",
+    "sort_order": 134
+  },
+  {
+    "site": "인프런",
+    "large": "대학 교육",
+    "medium": "교육학",
+    "sort_order": 135
+  },
+  {
+    "site": "인프런",
+    "large": "대학 교육",
+    "medium": "대학 교육 기타",
+    "sort_order": 136
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI TECH",
+    "medium": "",
+    "sort_order": 140
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI TECH",
+    "medium": "LLM",
+    "sort_order": 141
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI TECH",
+    "medium": "RAG & AI Agent",
+    "sort_order": 142
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI TECH",
+    "medium": "딥러닝/머신러닝",
+    "sort_order": 143
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI TECH",
+    "medium": "컴퓨터 비전",
+    "sort_order": 144
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI TECH",
+    "medium": "자율주행/로봇",
+    "sort_order": 145
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI CREATIVE",
+    "medium": "",
+    "sort_order": 150
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI CREATIVE",
+    "medium": "2D/3D 이미지 생성",
+    "sort_order": 151
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI CREATIVE",
+    "medium": "영상 생성",
+    "sort_order": 152
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI/업무생산성",
+    "medium": "",
+    "sort_order": 160
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI/업무생산성",
+    "medium": "AI 생산성",
+    "sort_order": 161
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI/업무생산성",
+    "medium": "마케팅",
+    "sort_order": 162
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "AI/업무생산성",
+    "medium": "데이터분석",
+    "sort_order": 163
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "",
+    "sort_order": 170
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "프론트엔드 개발",
+    "sort_order": 171
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "백엔드 개발",
+    "sort_order": 172
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "모바일 앱 개발",
+    "sort_order": 173
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "게임 개발",
+    "sort_order": 174
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "데이터 엔지니어링",
+    "sort_order": 175
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "DevOps/Infra",
+    "sort_order": 176
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "컴퓨터 공학/SW 엔지니어링",
+    "sort_order": 177
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "개발/데이터",
+    "medium": "반도체",
+    "sort_order": 178
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "디자인",
+    "medium": "",
+    "sort_order": 180
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "디자인",
+    "medium": "UX/UI/BX",
+    "sort_order": 181
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "디자인",
+    "medium": "그래픽/타이포/브랜딩",
+    "sort_order": 182
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "영상/3D",
+    "medium": "",
+    "sort_order": 190
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "영상/3D",
+    "medium": "영상/사진",
+    "sort_order": 191
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "영상/3D",
+    "medium": "모션그래픽",
+    "sort_order": 192
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "영상/3D",
+    "medium": "3D",
+    "sort_order": 193
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "영상/3D",
+    "medium": "블렌더",
+    "sort_order": 194
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "영상/3D",
+    "medium": "버튜버",
+    "sort_order": 195
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "금융/투자",
+    "medium": "",
+    "sort_order": 200
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "금융/투자",
+    "medium": "재무/회계/세무",
+    "sort_order": 201
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "금융/투자",
+    "medium": "재테크/주식",
+    "sort_order": 202
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "금융/투자",
+    "medium": "금융 투자 실무",
+    "sort_order": 203
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "금융/투자",
+    "medium": "부동산",
+    "sort_order": 204
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "드로잉/일러스트",
+    "medium": "",
+    "sort_order": 210
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "드로잉/일러스트",
+    "medium": "드로잉/이모티콘",
+    "sort_order": 211
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "드로잉/일러스트",
+    "medium": "캐릭터일러스트",
+    "sort_order": 212
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "드로잉/일러스트",
+    "medium": "웹툰/웹소설",
+    "sort_order": 213
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "드로잉/일러스트",
+    "medium": "원화/컨셉아트",
+    "sort_order": 214
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "비즈니스/기획",
+    "medium": "",
+    "sort_order": 220
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "비즈니스/기획",
+    "medium": "PM/PO",
+    "sort_order": 221
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "비즈니스/기획",
+    "medium": "기획/경영/리더십",
+    "sort_order": 222
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "비즈니스/기획",
+    "medium": "부업/창업",
+    "sort_order": 223
+  },
+  {
+    "site": "패스트캠퍼스",
+    "large": "비즈니스/기획",
+    "medium": "글쓰기",
+    "sort_order": 224
+  }
+]

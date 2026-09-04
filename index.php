@@ -22,7 +22,7 @@ $__current = $__u ? [
     'color'       => user_color($__u),
 ] : null;
 $__cfg   = require __DIR__ . '/config.php';
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine']];
+$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => $__cfg['links']['learning']];
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -82,6 +82,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
             <a href="" id="dd-book" target="_blank" rel="noopener">📚 도서구매신청</a>
             <a href="" id="dd-slack" target="_blank" rel="noopener">📥 업무현황판</a>
             <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표</a>
+            <a href="" id="dd-learning" target="_blank" rel="noopener">🎓 BlueLearn</a>
             <div class="dd-sep"></div>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
@@ -233,6 +234,7 @@ function renderShell(){
   document.getElementById("dd-book").href=LINKS.book;
   document.getElementById("dd-slack").href=LINKS.slack;
   document.getElementById("dd-magazine").href=LINKS.magazine;
+  document.getElementById("dd-learning").href=LINKS.learning;
 }
 
 function toggleUserMenu(e){
@@ -314,22 +316,28 @@ function renderTiles(){
   const bookIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
   const slackIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
   const magazineIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
+  const learningIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg>`;
   const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
   document.getElementById("tiles").innerHTML=`
     <a class="tile" href="${LINKS.book}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:linear-gradient(135deg,#2E6BF0,#0F2E77)">${bookIcon}</span>
+      <span class="ic" style="background:#2E6BF0">${bookIcon}</span>
       <div><h3>도서구매신청</h3><p>읽고 싶은 책을 신청하고 처리 현황을 확인합니다.</p></div>
     </a>
     <a class="tile" href="${LINKS.slack}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:linear-gradient(135deg,#3AAE8C,#1C7A5E)">${slackIcon}</span>
+      <span class="ic" style="background:#1F9D76">${slackIcon}</span>
       <div><h3>업무현황판</h3><p>유지보수 요청 현황을 확인하고 관리합니다.</p></div>
     </a>
     <a class="tile" href="${LINKS.magazine}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:linear-gradient(135deg,#0075F8,#00234B)">${magazineIcon}</span>
+      <span class="ic" style="background:#7B5CF0">${magazineIcon}</span>
       <div><h3>DTI 발표</h3><p>매거진을 읽고 지식을 공유합니다.</p></div>
+    </a>
+    <a class="tile" href="${LINKS.learning}" target="_blank" rel="noopener">
+      <span class="go">${arrow}</span>
+      <span class="ic" style="background:#F2711C">${learningIcon}</span>
+      <div><h3>BlueLearn</h3><p>역량 강화를 위한 강의를 신청하고 수강료를 지원받습니다.</p></div>
     </a>
     <div class="tile soon">
       <span class="badge-soon">준비중</span>
