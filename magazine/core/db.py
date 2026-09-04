@@ -51,12 +51,28 @@ class Topic(SQLModel, table=True):
     created_at: str = ""
 
 
-class TopicEmotion(SQLModel, table=True):
-    __tablename__ = "topic_emotions"
+class Presentation(SQLModel, table=True):
+    __tablename__ = "presentations"
 
-    topic_id: int = Field(foreign_key="topics.id", primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
+    topic_id: int = Field(foreign_key="topics.id", unique=True)
+    presenter: str = ""
+    presenter_email: str = ""
+    planned_date: str = ""
+    done_date: str = ""
+    material_kind: str | None = None # link | file
+    material_name: str | None = None
+    material_url: str | None = None
+    material_path: str | None = None
+    created_at: str = ""
+
+
+class PresentationEmotion(SQLModel, table=True):
+    __tablename__ = "presentation_emotions"
+
+    presentation_id: int = Field(foreign_key="presentations.id", primary_key=True)
     email: str = Field(primary_key=True)
-    kind: str = Field(primary_key=True) # features/emotion/service.py 의 Emotion
+    kind: str = Field(primary_key=True)
     created_at: str = ""
 
 
@@ -129,7 +145,15 @@ def _seed(engine: Engine, seed_path: str) -> None:
             return
         with Path(seed_path).open(encoding="utf-8") as f:
             rows = json.load(f)
-        session.add_all([Topic(**{k: v for k, v in r.items()
-                                  if k in COLUMNS and v is not None}) for r in rows])
+        for r in rows:
+            topic = Topic(**{k: v for k, v in r.items() if k in COLUMNS and v is not None})
+            session.add(topic)
+            session.flush()
+            if any(r.get(c) for c in ("presenter_email", "planned_date", "done_date")):
+                session.add(Presentation(topic_id=topic.id,
+                                         presenter=r.get("presenter") or "",
+                                         presenter_email=r.get("presenter_email") or "",
+                                         planned_date=r.get("planned_date") or "",
+                                         done_date=r.get("done_date") or ""))
         session.commit()
         logger.info("[seed] %d건 초기 데이터를 적재했습니다.", len(rows))

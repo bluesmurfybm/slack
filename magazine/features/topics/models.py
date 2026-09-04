@@ -48,10 +48,7 @@ class TopicPatch(BaseModel):
     year: int | None = None
     requirement: str | None = None
     team: TeamStr | None = None
-    presenter: str | None = None
-    presenter_email: str | None = None
     planned_date: str | None = None
-    done_date: str | None = None
     note: str | None = None
     active: int | None = None
     archived: int | None = None

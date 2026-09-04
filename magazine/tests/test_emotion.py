@@ -108,7 +108,6 @@ def test_deleting_a_topic_takes_its_reactions_with_it(client, settings):
     client.delete(f"/magazineapi/topics/{tid}")
 
     conn = sqlite3.connect(settings.db_path)
-    left = conn.execute("SELECT COUNT(*) FROM topic_emotions WHERE topic_id = ?",
-                        (tid,)).fetchone()[0]
+    left = conn.execute("SELECT COUNT(*) FROM presentation_emotions").fetchone()[0]
     conn.close()
     assert left == 0

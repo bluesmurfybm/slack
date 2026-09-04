@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from sqlmodel import Session
 
 from core.config import Settings
-from core.db import Topic
+from core.db import Presentation, Topic
 from features.emotion.service import empty_counts
 from features.identity.auth import is_admin
 
@@ -10,20 +10,27 @@ STATUS_OPEN = "미지정"
 STATUS_PLANNED = "발표예정"
 STATUS_DONE = "발표완료"
 
+PRESENTATION_DEFAULTS = {
+    "presenter": "", "presenter_email": "", "planned_date": "", "done_date": "",
+    "material_kind": None, "material_name": None, "material_url": None,
+    "material_path": None,
+}
 
-def derive_status(topic: Topic) -> str:
-    # 컬럼으로 저장하지 않는다 — 원본 xlsx 에 상태와 값이 어긋난 행이 있었다.
-    if topic.done_date:
+
+def derive_status(pres: Presentation | None) -> str:
+    if pres and pres.done_date:
         return STATUS_DONE
-    if topic.presenter_email:
+    if pres and pres.presenter_email:
         return STATUS_PLANNED
     return STATUS_OPEN
 
 
-def to_dict(topic: Topic, emotions: dict | None = None,
-            my_emotions: list | None = None) -> dict:
-    return {**topic.model_dump(), "status": derive_status(topic),
-            "emotions": emotions or empty_counts(), "my_emotions": my_emotions or []}
+def to_dict(topic: Topic, pres: Presentation | None,
+           emotions: dict | None = None, my_emotions: list | None = None) -> dict:
+    flat = ({k: getattr(pres, k) for k in PRESENTATION_DEFAULTS} if pres
+           else dict(PRESENTATION_DEFAULTS))
+    return {**topic.model_dump(), **flat, "status": derive_status(pres),
+           "emotions": emotions or empty_counts(), "my_emotions": my_emotions or []}
 
 
 def fetch(session: Session, tid: int) -> Topic:
@@ -33,6 +40,7 @@ def fetch(session: Session, tid: int) -> Topic:
     return topic
 
 
-def may_manage_claim(settings: Settings, topic: Topic, identity: dict) -> bool:
-    return (topic.presenter_email == identity["email"]
-            or is_admin(settings, identity["email"]))
+def may_manage_claim(settings: Settings, pres: Presentation | None,
+                     identity: dict) -> bool:
+    return ((pres is not None and pres.presenter_email == identity["email"])
+           or is_admin(settings, identity["email"]))
