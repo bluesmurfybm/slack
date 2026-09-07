@@ -125,6 +125,7 @@ function db() {
     // 기존 user_reads 마이그레이션: user_name 컬럼 있으면 제거(더 이상 사용 안 함)
     $hasUN = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='user_reads' AND COLUMN_NAME='user_name'");
     $hasUN->execute();
+
     if ($hasUN->fetchColumn()) $pdo->exec("ALTER TABLE `user_reads` DROP COLUMN `user_name`");
 
     // 5) 사용자별 고정 상태 (행 존재 = 고정). 고정 항목은 목록 최상단 출력

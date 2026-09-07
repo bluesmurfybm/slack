@@ -27,6 +27,13 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── var/                     DB·업로드 (gitignore)
 │   └── tests/
 │
+├── access/                      학교 접속 정보 — PHP, slack의 schools를 마스터로 씀
+│   ├── access.php               목록 + 상세 + 편집 (복사 버튼)
+│   ├── access_api.php           JSON API
+│   ├── access_import.php        접속정보 엑셀 → DB (CLI / 화면 업로드 겸용)
+│   ├── db.php, guard.php        전용 DB 연결 · 포털 로그인 가드
+│   └── styles/access.css
+│
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
     ├── auth.php, db.php, config.php, slack_lib.php, header.php   (공통)
     ├── lists.php, comments.php, data.php, assign.php, ...        (핵심 요청 목록 기능)
@@ -127,6 +134,84 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 ---
 
+## access (학교 접속 정보)
+
+대학별 svn/git 주소 · 사이트 로그인 · 개발/운영/학사 DB · plink 터널링 · 배포 방법을 찾아
+**클립보드로 복사**하는 화면(`access/access.php`). 원본은 사내 공유 엑셀
+`SVN_배포_디비정보(블루내부공유).xlsx`.
+
+- **`schools` 가 마스터다.** 대학명 · 버전 · 개발/운영/로그 URL 은 slack 의 `schools` 를 그대로
+  쓰고(= `slack/schools/schools_admin.php` 와 같은 데이터), 접속·배포 정보만 `school_access` 에
+  둔다. 대학명과 URL을 양쪽에 복제하지 않는 게 이 구조의 핵심.
+- **1:N 이다.** 한 대학이 여러 버전군에 걸쳐 있으면(강원대 = 3.5 시트의 svn + 4.5 시트의 git)
+  행이 둘 생긴다. `schools` 도 같은 대학의 다른 버전을 별도 행으로 갖고 있어서, 가져오기는
+  이름뿐 아니라 **버전까지 맞춰** 짝을 짓는다.
+- **초기 데이터 넣기** — 엑셀을 루트에 두고:
+  ```
+  php access/access_import.php                 # 이미 데이터가 있으면 중단
+  php access/access_import.php --force         # 덮어쓰기
+  ```
+  화면의 `[엑셀 가져오기]` 버튼으로 업로드해도 같은 코드가 돈다. 엑셀에만 있는 학교는
+  `schools` 에 새로 등록되지만, **이미 있는 학교의 이름·URL은 덮어쓰지 않는다**(관리 화면에서
+  손본 값 보호). URL 칸이 비어 있을 때만 채워 준다.
+- **로그인은 운영/테스트로 갈라 저장하고, 계정과 비밀번호도 나눈다.** 엑셀은 한 칸에
+  `개발 : … ⏎ 운영 : …` 처럼 몰아 적어 놨는데 실제로 필요한 건 "지금 이 사이트 비번" 하나다.
+  - `access_split_login()` — 운영/테스트로 가른다. 라벨이 붙은 162건과 라벨 없이 두 줄인
+    16건(앞이 테스트, 뒤가 운영)은 갈라지고, 라벨 없는 한 줄 79건은 단정할 수 없어
+    `login_info` 원문에 남는다.
+  - `access_split_account()` — `csmsathena / Zhtm&ahtm1` 을 계정과 비밀번호로 가른다.
+    **`login_ops`/`login_dev` 에는 비밀번호만** 들어가서 복사 버튼이 곧바로 비밀번호 칸에
+    붙는다. 계정은 `login_ops_id`/`login_dev_id` 로 뺀다 — 대부분 csmsathena(65)·admin(13)
+    이지만 obj007·geladmin·manager 같은 고유 계정이 9건 있어 버리면 로그인이 안 된다.
+    한 줄짜리 값만 가르고(여러 줄은 설명이 섞인 것), 왼쪽은 영숫자 `. _ @ -` 만 허용해
+    `&`·`!` 가 든 비밀번호를 계정으로 오인하지 않는다.
+- **`school_access` 가 안 갖는 것** — 대학명·버전·URL은 `schools` 것을 쓰고, 무들 상세버전과
+  엑셀 시트명은 화면에 안 쓴다. 다만 `grp`(시트명) 컬럼 자체는 남겨 뒀다. 한 대학이 3.5와
+  4.5 두 벌을 갖는 경우의 행 구분자(`UNIQUE (school_id, grp)`)라 빼면 뒤 시트가 앞 시트를
+  덮어쓴다. 엑셀의 '무들 버전' 칸은 가져오기가 학교를 짝지을 때만 쓰고 저장하지 않는다.
+- `dev_note`/`ops_note` 는 URL 칸 원문 중 **마스터에 없는 것만** 남긴다
+  (`ax_strip_known_urls()`). 주소 하나만 적힌 줄이고 그 호스트가 이미 `schools.dev/ops` 에
+  있으면 버려서 33·47건이 17·12건으로 줄었다. 남는 건 여분의 도메인이나
+  "개발서버는 블루에서만 접근 가능" 같은 진짜 메모다.
+- 목록의 `svn / git` 칸은 종류를 칩으로 보여 주고, git 인데 주소만 적힌 경우
+  복사 버튼이 `git clone <주소>` 로 만들어 준다(`repoInfo()`). 현재 svn 241 · git 18 ·
+  주소 자체가 없는 것 15.
+- **비밀번호는 DB에 암호화해 둔다.** 복사 버튼이 있어야 하니 되돌릴 수 있어야 해서, 포털이
+  슬랙 토큰에 쓰는 것과 같은 AES-256-GCM + `config.php` 의 `key` 를 쓴다(`access_enc()`/
+  `access_dec()`). 대상은 `login_ops`·`login_dev`·`login_info` 세 칸. 저장 형태는
+  `enc:v1:<base64(iv|tag|cipher)>` 이고, 접두사가 없으면 아직 안 옮긴 평문으로 보고 그대로
+  돌려주므로 마이그레이션을 여러 번 돌려도 안전하다. API가 내려줄 때 풀어서 보내므로
+  **응답 본문에는 평문이 실린다** — 운영에서는 HTTPS 로 서비스해야 한다.
+  `auth.php` 의 `enc_token()` 을 그대로 안 쓰는 건 그 파일이 include 시점에 세션을 여는데
+  가져오기 스크립트는 CLI 로도 돌기 때문.
+  **아직 평문인 것**: `dev_db`·`ops_db`·`haksa_db`·`plink`·`deploy_acct` 안에 섞여 있는
+  서버·DB 비밀번호는 자유 서술이라 손대지 않았다.
+- 목록은 **리스트/카드 두 가지 보기**를 지원한다(툴바 오른쪽 토글, 선택은 `localStorage`).
+  저장소 칸은 종류 칩과 복사 버튼만 두고 주소는 상세에서 본다.
+- 필터는 버전 칩(버전별 학교 수 표시)과 VPN 드롭다운 두 가지다. VPN 은 `FortiClient, Arcon`
+  처럼 둘을 같이 쓰는 곳이 있어서 값 전체가 아니라 쉼표로 나눈 프로그램 하나하나로 고르고
+  포함 여부로 거른다.
+- **대학 추가는 `schools` 부터 넣는다.** 목록이 `schools LEFT JOIN school_access` 라, 접속 정보만
+  만들고 마스터에 안 넣으면 화면에 아예 안 나온다. `action:create` 가 `schools` INSERT →
+  그 id 로 `school_access` INSERT 순으로 처리한다. 이름만으로는 막지 않고(강원대 3.2/4.5 처럼
+  같은 대학의 다른 버전은 별도 행이 정상) **이름·버전이 똑같을 때만** 중복으로 거절한다.
+- 로그인 계정은 목록에서 칩으로 구분한다 — `csmsathena`(34) · `admin`(6) · 그 외 고유 계정(4:
+  obj007 · mmaster · geladmin · yadmin). 운영·테스트 계정이 같으면 칩 하나로 묶는다.
+- **`vpn` 은 프로그램명(varchar)이다.** 있으면 그 이름이 목록에 그대로 뜨고, 비어 있으면
+  별도 실행이 필요 없다는 뜻. 엑셀엔 VPN 전용 칸이 없어 비고·배포방법·DB 설명을 훑어
+  HIWARE / FortiClient / Citrix / SecuwaySSL / Arcon / WinNGS 를 찾아 채운다
+  (`access_detect_vpn()`, 274건 중 51건). 어디까지나 초깃값이고 근거 문장을 `vpn_note` 에
+  남기니 화면에서 고치면 된다. Arcon 은 엄밀히는 VPN이 아니라 접근제어(PAM)지만
+  "먼저 켜야 접속된다"는 점이 같아 함께 잡는다.
+- 복사 버튼은 `navigator.clipboard` 가 없을 때(개발 URL이 http 라 포털도 http 로 여는 경우)를
+  대비해 `execCommand` 폴백을 반드시 거친다. 사이트 주소는 복사 대상이 아니다 — 목록의
+  링크를 바로 누르면 되기 때문.
+- 엑셀의 `plink` 전용 칸은 거의 비어 있고 실제 터널링 명령은 **학사 DB · 운영 DB 설명 안에**
+  섞여 있다. 그래서 목록의 plink 복사 버튼은 그 칸들까지 훑어서 명령 줄만 뽑아 준다.
+- 엑셀의 나머지 시트(표절 · 보안취약점조치 · 참고 사이트)는 아직 안 가져온다.
+
+---
+
 ## 로컬에서 새로 만들어야 하는 파일 (전부 gitignore됨 — git엔 없음)
 
 | 파일 | 용도 | 비고 |
@@ -137,6 +222,7 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 | `book/config_local.py` | Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성 |
 | `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
 | `magazine/config_local.py` | Slack 웹훅 URL(선택) | `config_local.exam.py` 복사해서 사용 |
+| `SVN_배포_디비정보(블루내부공유).xlsx` (루트) | access 모듈 초기 데이터 | **직접 가져다 둘 것.** 전 대학 계정/비번이 들어 있어 커밋 금지 |
 
 `slack/config.php` 형식:
 ```php
@@ -226,6 +312,9 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 - `requests` — slack 유지보수 요청 목록(Slack Lists 동기화본)
 - `schools`, `user_reads`, `user_pins`, `user_hides`, `local_assignments`, `sync_meta` — slack 부가기능
 - `gmail_mails` — Gmail 캐시(계정별 구분, `account` 컬럼)
+- `school_access` — 대학별 접속·배포 정보(access 모듈). `schools` 가 마스터이고 여기는 상세라
+  `school_id` 로 붙는다. 한 대학이 버전군별로 여러 행을 가질 수 있어(강원대 3.5 + 4.5)
+  키는 `(school_id, grp)` 다.
 
 컬럼 추가 마이그레이션은 전부 `add_column_if_missing()`(`slack/db.php`)을 거쳐 동시 요청에도
 안전하게(이미 있으면 조용히 무시) 처리하도록 통일돼 있다. **새로 컬럼 추가 마이그레이션을 짤 때
