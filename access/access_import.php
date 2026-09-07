@@ -20,7 +20,8 @@ $IS_CLI = (PHP_SAPI === 'cli');
 
 // 시트 이름 → (schools.ver 기본값, 컬럼 매핑). 시트마다 컬럼이 한두 칸씩 밀려 있다.
 //  - '3.5 이하' : 유일하게 '무들 버전'(C)과 '기타'(O)가 있고 plink 칸이 없다
-//  - '3.9-saas' : 유일하게 '운영 웹서버'(H)가 껴 있어 그 뒤가 한 칸씩 밀린다
+//  - '3.9-saas' : 유일하게 '운영 웹서버'(H)가 껴 있어 그 뒤가 한 칸씩 밀린다.
+//                 이 칸은 전용 컬럼 없이 비고(note)에 합쳐 넣는다
 //  - '그 외'     : '사업시작' 칸이 없어 B부터 한 칸씩 당겨진다
 //  - login_*/vpn/vpn_note 는 엑셀에 칸이 없다 — 아래에서 본문을 보고 파생시킨다
 //  - '_ver_cell' 은 저장용이 아니라 학교(schools.ver)를 짝지을 때만 쓰는 임시 값이다
@@ -35,7 +36,7 @@ $SHEETS = [
         'note'=>'K','etc'=>'L','deploy'=>'M','deploy_acct'=>'N']],
     '3.9-saas' => ['ver' => '3.9', 'map' => [
         'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','login_info'=>'F',
-        'dev_db'=>'G','ops_web'=>'H','ops_db'=>'I','haksa_db'=>'J','plink'=>'K',
+        'dev_db'=>'G','_ops_web'=>'H','ops_db'=>'I','haksa_db'=>'J','plink'=>'K',
         'note'=>'L','etc'=>'M','deploy'=>'N','deploy_acct'=>'O']],
     '4.5' => ['ver' => '4.5', 'map' => [
         'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','login_info'=>'F',
@@ -137,8 +138,7 @@ function ax_host($u) {
  */
 function ax_strip_known_urls($raw, array $knownHosts) {
     $keep = [];
-    foreach (explode("
-", (string)$raw) as $line) {
+    foreach (explode("\n", (string)$raw) as $line) {
         $t = trim($line);
         if ($t === '') continue;
         // 토큰이 하나뿐인 줄 = 설명 없이 주소만 적힌 줄
@@ -148,8 +148,7 @@ function ax_strip_known_urls($raw, array $knownHosts) {
         }
         $keep[] = $t;
     }
-    return implode("
-", $keep);
+    return implode("\n", $keep);
 }
 
 /**
@@ -209,6 +208,11 @@ function access_import_xlsx($path, array $SHEETS) {
             }
             // 저장하지 않고 버전 판별에만 쓰는 칸('3.5 이하' 시트의 '무들 버전')
             $verCell = isset($def['map']['_ver_cell']) ? ax_clean($rows[$i][$def['map']['_ver_cell']] ?? '') : '';
+            // 전용 컬럼 없이 비고로 합칠 칸('3.9-saas' 시트의 '운영 웹서버')
+            if (isset($def['map']['_ops_web'])) {
+                $vals['note'] = access_merge_note($vals['note'], '운영 웹서버',
+                                                  ax_clean($rows[$i][$def['map']['_ops_web']] ?? ''));
+            }
 
             $vals['repo'] = access_strip_repo_label($vals['repo']);   // "git : https://…" → 주소만
 

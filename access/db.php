@@ -56,7 +56,8 @@ function access_db() {
     ");
 
     // 상세. 컬럼은 엑셀 5개 시트의 합집합 — 시트마다 있는 칸이 조금씩 다르다
-    // (운영 웹서버는 3.9-saas 에만, 무들 버전/기타는 3.5 시트에만 있음).
+    // (무들 버전/기타는 3.5 시트에만 있음). 3.9-saas 에만 있던 '운영 웹서버'는 값이 한 건뿐이라
+    // 따로 두지 않고 비고(note)에 합쳤다.
     //
     // 학교당 1행이 원칙이지만 UNIQUE 를 걸지는 않는다. 한 대학이 여러 시트에 걸쳐 있는데
     // (예: 혜전대 = 3.5 시트의 svn + 4.5 시트의 git) schools 에는 행이 하나뿐인 경우가 5곳
@@ -81,7 +82,6 @@ function access_db() {
             `login_dev`   TEXT         NULL COMMENT '테스트(개발) 사이트 비밀번호',
             `login_info`  TEXT         NULL COMMENT '로그인 정보 중 운영/테스트로 못 가른 나머지',
             `dev_db`      TEXT         NULL COMMENT '개발 DB 정보',
-            `ops_web`     TEXT         NULL COMMENT '운영 웹서버 (3.9-saas 전용)',
             `ops_db`      TEXT         NULL COMMENT '운영 DB 정보',
             `haksa_db`    TEXT         NULL COMMENT '학사 DB 정보',
             `plink`       TEXT         NULL COMMENT 'plink 터널링 명령',
@@ -149,7 +149,32 @@ function access_db() {
         $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `grp`");
     }
 
+    // '운영 웹서버'(3.9-saas 시트 전용)는 칸을 없애고 내용을 비고로 옮긴다 — 지우기 전에 옮긴다.
+    if (access_has_column($pdo, 'ops_web')) {
+        $rows = $pdo->query("SELECT id, ops_web, note FROM school_access
+                             WHERE ops_web IS NOT NULL AND ops_web <> ''")->fetchAll();
+        if ($rows) {
+            $st = $pdo->prepare("UPDATE school_access SET note=? WHERE id=?");
+            foreach ($rows as $r) {
+                $st->execute([access_merge_note($r['note'], '운영 웹서버', $r['ops_web']), $r['id']]);
+            }
+        }
+        $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `ops_web`");
+    }
+
     return $pdo;
+}
+
+/**
+ * 없앤 칸의 내용을 비고(note)에 라벨과 함께 덧붙인다.
+ * 칸만 지우면 정보가 사라지므로 옮겨 담되, 어디서 온 값인지 알 수 있게 머리말을 단다.
+ */
+function access_merge_note($note, $label, $value) {
+    $value = trim((string)$value);
+    if ($value === '') return (string)$note;
+    $block = "[{$label}]\n{$value}";
+    $note  = trim((string)$note);
+    return $note === '' ? $block : $note . "\n\n" . $block;
 }
 
 function access_has_index(PDO $pdo, $name) {
@@ -425,7 +450,7 @@ function access_split_login($raw) {
 function access_cols() {
     return ['opened','vpn','vpn_note','repo','dev_note','ops_note',
             'login_ops_id','login_ops','login_dev_id','login_dev','login_info',
-            'dev_db','ops_web','ops_db','haksa_db','plink','note','etc','deploy','deploy_acct','extra'];
+            'dev_db','ops_db','haksa_db','plink','note','etc','deploy','deploy_acct','extra'];
 }
 
 /**
@@ -440,7 +465,6 @@ function access_fields() {
         ['key' => 'login_dev',   'label' => '테스트 로그인',   'copy' => 1, 'acct' => 'login_dev_id'],
         ['key' => 'login_info',  'label' => '로그인 정보(구분 없음)', 'copy' => 1],
         ['key' => 'dev_db',      'label' => '개발 DB',        'copy' => 1],
-        ['key' => 'ops_web',     'label' => '운영 웹서버',     'copy' => 1],
         ['key' => 'ops_db',      'label' => '운영 DB',        'copy' => 1],
         ['key' => 'haksa_db',    'label' => '학사 DB',        'copy' => 1],
         ['key' => 'plink',       'label' => 'plink',          'copy' => 1],
