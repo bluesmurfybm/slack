@@ -138,15 +138,58 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 | `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
 | `magazine/config_local.py` | Slack 웹훅 URL(선택) | `config_local.exam.py` 복사해서 사용 |
 
+`slack/config.php` 형식:
+```php
+<?php
+/**
+ * blue-iwork 포털 설정.
+ *  - DB는 slack 모듈(slack/config.php)과 동일한 slackapi MySQL을 그대로 재사용                                                                                                     한다.
+ *    (같은 물리 DB, 포털 전용 테이블만 추가로 생성)
+ *  - 슬랙 토큰 암호화 키는 git에 올리지 않는 config.local.php 에 최초 실행 시 1                                                                                                     회 자동 생성.
+ */
+
+$local = __DIR__ . '/config.local.php';
+if (!is_file($local)) {
+    $key = base64_encode(random_bytes(32));
+    file_put_contents($local, "<?php\nreturn [\n    'key' => '" . $key . "',\n];\n");
+}
+$localCfg = require $local;
+
+return [
+    // DB 접속 정보 (slack/config.php 와 동일한 slackapi DB)
+    'db' => [
+        'host'    => '127.0.0.1',
+        'port'    => 3306,
+        'user'    => 'root',
+        'pass'    => '계정비밀번호',
+        'name'    => 'slack_db',
+        'charset' => 'utf8mb4',
+    ],
+
+    // 슬랙 토큰 암호화(AES-256-GCM) 키 — base64, 32바이트. config.local.php 최초 생성.
+    'key' => $localCfg['key'],
+
+    // slack 모듈(업무현황판)이 쓰는 Slack Lists 설정 — 원래 slack/config.php 에 있던 값
+    // (slack/config.php 는 제거하고 여기 하나로 통합)
+    'list_id'         => 'F083TU7F0BZ',
+    'comment_channel' => 'C083TU7F0BZ',
+    'list_url'        => 'https://coursemos.slack.com/lists/T04LNBX6L/F083TU7F0BZ',
+
+    // 대시보드/공통 헤더 드롭다운이 참조하는 외부 모듈 링크. book은 별도 프로세스라 절대주소 필요.
+    // 실제 배포 주소가 다르면 config.local.php 에 'book_url' => '...' 을 넣어 덮어쓸 수 있음.
+    'links' => [
+        'book' => $localCfg['book_url'] ?? 'book',
+        'magazine' => $localCfg['magazine_url'] ?? 'magazine',
+        'learning' => $localCfg['learning_url'] ?? 'learning',
+    ],
+];
+```
+
 `slack/config.local.php` 형식:
 ```php
 <?php
 return [
-    'gmail' => [
-        'user'  => 'you@gmail.com',
-        'pass'  => '앱 비밀번호(일반 비번 아님)',
-        'label' => 'INBOX',
-    ],
+    'key' => 'p1WLBZerg/PAf8y7lae4DMSw0v1r8+LsQF3AjiV9Sas=',
 ];
 ```
 
