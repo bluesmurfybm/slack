@@ -128,9 +128,7 @@ try {
     foreach ($COLS as $c) $vals[$c] = trim((string)($in[$c] ?? ''));
     foreach (access_secret_cols() as $c) $vals[$c] = access_enc($vals[$c]);
 
-    // 한 학교가 시트(grp)별로 여러 행을 가질 수 있으므로, 어떤 행을 고치는지는 access_id 로
-    // 정한다. (school_id, grp) 로 upsert 하면 편집 중 grp 를 바꿨을 때 원래 행이 그대로 남고
-    // 새 행이 하나 더 생겨 버린다.
+    // 한 학교에 접속정보가 두 벌인 경우가 있어서, 어떤 행을 고치는지는 access_id 로 정한다.
     if ($accessId > 0) {
         $set = implode(',', array_map(fn($c) => "`$c`=?", $COLS));
         $pdo->prepare("UPDATE school_access SET {$set}, updated_at=NOW() WHERE id=? AND school_id=?")
@@ -138,11 +136,8 @@ try {
     } else {
         $sel = implode(',', array_map(fn($c) => "`$c`", $COLS));
         $ph  = implode(',', array_fill(0, count($COLS), '?'));
-        $upd = implode(',', array_map(fn($c) => "`$c`=VALUES(`$c`)", $COLS));
-        // 같은 (학교, 시트) 조합이 이미 있으면 새로 만들지 않고 그 행을 갱신한다
         $pdo->prepare("INSERT INTO school_access (school_id, {$sel}, created_at, updated_at)
-                       VALUES (?, {$ph}, NOW(), NOW())
-                       ON DUPLICATE KEY UPDATE {$upd}, updated_at=NOW()")
+                       VALUES (?, {$ph}, NOW(), NOW())")
             ->execute(array_merge([$schoolId], array_values($vals)));
     }
 

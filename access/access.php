@@ -93,8 +93,8 @@ $__bwBase = '../slack/';
 <script>
 /* 상세/편집에 쓸 필드 정의는 PHP(access_fields)에서 내려받아 한 곳에서만 관리한다 */
 const FIELDS = <?= json_encode(access_fields(), JSON_UNESCAPED_UNICODE) ?>;
-/* 필터는 엑셀 시트(grp)가 아니라 버전(schools.ver) 기준이다. grp 는 화면에 안 쓰지만
-   한 학교가 3.5·4.5 두 벌을 갖는 경우의 행 구분자라 DB에는 남아 있다. */
+/* 필터는 버전(schools.ver) 기준. 한 학교에 접속정보가 두 벌인 경우가 있어서
+   행 식별자는 school_id 가 아니라 접속정보 id 다(아래 rowKey 참고). */
 
 /* 한 학교가 시트별로 여러 행을 가질 수 있어서 행 식별자는 school_id 가 아니다.
    접속정보가 있으면 그 id, 아직 없으면 학교 id 로 구분한다. */
@@ -524,7 +524,7 @@ async function save() {
 async function delAccess(key) {
   const r = DATA.find(x => rowKey(x) === key);
   if (!r || !r.access_id) return;
-  if (!confirm(`'${r.name}'${r.grp ? " (" + r.grp + ")" : ""} 의 접속 정보를 지울까요?\n(학교 자체는 학교 사이트 관리에 그대로 남습니다)`)) return;
+  if (!confirm(`'${r.name}' 의 접속 정보를 지울까요?\n(학교 자체는 학교 사이트 관리에 그대로 남습니다)`)) return;
   try {
     const j = await (await fetch("access_api.php", {
       method: "POST", headers: { "Content-Type": "application/json" },

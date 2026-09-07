@@ -8,8 +8,8 @@
  *  대학명과 URL을 여기서 다시 들고 있지 않는다 — 한쪽만 고쳐서 둘이 어긋나는 걸 막기 위함.
  *  school_access.school_id 로 schools.id 를 가리키고, 조회는 항상 JOIN 으로 한다.
  *
- *  원본 데이터는 'SVN_배포_디비정보(블루내부공유).xlsx' 이며 시트 하나가 grp 한 종류에
- *  대응한다(3.5 / 3.9 / 3.9-saas / 4.5 / 그 외).
+ *  원본 데이터는 'SVN_배포_디비정보(블루내부공유).xlsx' — 시트 5개(3.5 이하 / 3.9 / 3.9-saas /
+ *  4.5 / 그 외)를 한 테이블로 합쳐 넣는다.
  *
  *  ※ slack/db.php 의 db() 를 부르지 않고 여기서 자체 연결을 만든다. slack 쪽은 requests 등
  *    무거운 마이그레이션이 딸려 있고, access 는 slack 토큰 없이도 써야 하기 때문.
@@ -58,9 +58,10 @@ function access_db() {
     // 상세. 컬럼은 엑셀 5개 시트의 합집합 — 시트마다 있는 칸이 조금씩 다르다
     // (운영 웹서버는 3.9-saas 에만, 무들 버전/기타는 3.5 시트에만 있음).
     //
-    // 한 학교가 여러 시트에 있을 수 있다(예: 강원대 = 3.5 시트의 svn + 4.5 시트의 git).
-    // 그래서 학교당 1행이 아니라 (학교, 시트)당 1행이다 — 1:1 로 묶으면 나중 시트가 앞 시트를
-    // 덮어써서 예전 버전 접속 정보가 통째로 사라진다.
+    // 학교당 1행이 원칙이지만 UNIQUE 를 걸지는 않는다. 한 대학이 여러 시트에 걸쳐 있는데
+    // (예: 혜전대 = 3.5 시트의 svn + 4.5 시트의 git) schools 에는 행이 하나뿐인 경우가 5곳
+    // 있어서, 유일 제약을 걸면 나중 시트가 앞 시트를 덮어써 접속 정보가 통째로 사라진다.
+    // 행은 각자의 id 로 구분하고, 조회는 school_id 로 JOIN 한다.
     //
     // FK 는 일부러 안 건다: slack/schools/schools_import.php 가 schools 를 TRUNCATE 하는데
     // 참조 제약이 걸려 있으면 그 스크립트가 깨진다. 대신 school_id + JOIN 으로 다룬다.
@@ -68,7 +69,6 @@ function access_db() {
         CREATE TABLE IF NOT EXISTS `school_access` (
             `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `school_id`   INT UNSIGNED NOT NULL COMMENT 'schools.id (마스터)',
-            `grp`         VARCHAR(20)  NOT NULL DEFAULT '' COMMENT '엑셀 시트명. 화면엔 안 보이고 행 구분자로만 씀',
             `opened`      VARCHAR(120) NOT NULL DEFAULT '' COMMENT '사업시작/최초운영오픈년월',
             `vpn`         VARCHAR(80)  NOT NULL DEFAULT '' COMMENT 'VPN/접근제어 프로그램명. 비어 있으면 별도 실행 불필요',
             `vpn_note`    TEXT         NULL COMMENT 'VPN 접속 방법 / 판정 근거가 된 문장',
@@ -94,18 +94,17 @@ function access_db() {
             `created_at`  DATETIME     NOT NULL,
             `updated_at`  DATETIME     NULL,
             PRIMARY KEY (`id`),
-            UNIQUE KEY `uq_school_grp` (`school_id`, `grp`),
-            KEY `ix_grp` (`grp`)
+            KEY `ix_school` (`school_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
-    // 초기 버전에서 school_id 만 UNIQUE 로 잡았던 설치본 마이그레이션.
-    // 그 상태로는 한 학교의 두 번째 시트 행이 앞 행을 덮어쓰므로 인덱스를 바꿔 준다.
-    $hasOld = $pdo->query("SELECT 1 FROM information_schema.STATISTICS
-                           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'school_access'
-                             AND INDEX_NAME = 'uq_school' LIMIT 1")->fetchColumn();
-    if ($hasOld) {
-        $pdo->exec("ALTER TABLE `school_access` DROP INDEX `uq_school`,
-                    ADD UNIQUE KEY `uq_school_grp` (`school_id`, `grp`)");
+    // 예전 설치본에 있던 유일 제약 제거. 둘 다 한 학교에 접속정보가 두 벌인 경우를 못 담는다.
+    // (인덱스는 add_column_if_missing() 을 쓸 수 없다 — 중복 오류코드가 42S21 이 아니라
+    //  그대로 예외가 터진다. 정보스키마로 있는지 보고 판단한다.)
+    foreach (['uq_school', 'uq_school_grp'] as $ix) {
+        if (access_has_index($pdo, $ix)) $pdo->exec("ALTER TABLE `school_access` DROP INDEX `{$ix}`");
+    }
+    if (!access_has_index($pdo, 'ix_school')) {
+        $pdo->exec("ALTER TABLE `school_access` ADD INDEX `ix_school` (`school_id`)");
     }
 
     // 로그인 정보를 운영/테스트로 나누기 전에 만들어진 설치본 마이그레이션.
@@ -145,7 +144,20 @@ function access_db() {
         $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `moodle_ver`");
     }
 
+    // 엑셀 시트명(grp)도 뺀다 — 화면에서 안 쓰고, 행 구분은 각자의 id 로 한다.
+    if (access_has_column($pdo, 'grp')) {
+        $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `grp`");
+    }
+
     return $pdo;
+}
+
+function access_has_index(PDO $pdo, $name) {
+    $st = $pdo->prepare("SELECT 1 FROM information_schema.STATISTICS
+                         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'school_access'
+                           AND INDEX_NAME = ? LIMIT 1");
+    $st->execute([$name]);
+    return (bool)$st->fetchColumn();
 }
 
 function access_has_column(PDO $pdo, $col) {
@@ -411,7 +423,7 @@ function access_split_login($raw) {
 
 /** school_access 에서 사용자가 편집할 수 있는 컬럼 (school_id/sort_no 는 제외) */
 function access_cols() {
-    return ['grp','opened','vpn','vpn_note','repo','dev_note','ops_note',
+    return ['opened','vpn','vpn_note','repo','dev_note','ops_note',
             'login_ops_id','login_ops','login_dev_id','login_dev','login_info',
             'dev_db','ops_web','ops_db','haksa_db','plink','note','etc','deploy','deploy_acct','extra'];
 }

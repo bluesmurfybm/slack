@@ -18,30 +18,30 @@ require_once __DIR__ . '/db.php';
 
 $IS_CLI = (PHP_SAPI === 'cli');
 
-// 시트 이름 → (그룹명, schools.ver 기본값, 컬럼 매핑). 시트마다 컬럼이 한두 칸씩 밀려 있다.
+// 시트 이름 → (schools.ver 기본값, 컬럼 매핑). 시트마다 컬럼이 한두 칸씩 밀려 있다.
 //  - '3.5 이하' : 유일하게 '무들 버전'(C)과 '기타'(O)가 있고 plink 칸이 없다
 //  - '3.9-saas' : 유일하게 '운영 웹서버'(H)가 껴 있어 그 뒤가 한 칸씩 밀린다
 //  - '그 외'     : '사업시작' 칸이 없어 B부터 한 칸씩 당겨진다
 //  - login_*/vpn/vpn_note 는 엑셀에 칸이 없다 — 아래에서 본문을 보고 파생시킨다
 //  - '_ver_cell' 은 저장용이 아니라 학교(schools.ver)를 짝지을 때만 쓰는 임시 값이다
 $SHEETS = [
-    '3.5 이하' => ['grp' => '3.5', 'ver' => null, 'map' => [
+    '3.5 이하' => ['ver' => null, 'map' => [
         'name'=>'A','opened'=>'B','_ver_cell'=>'C','repo'=>'D','dev_note'=>'E','ops_note'=>'F',
         'login_info'=>'G','dev_db'=>'H','ops_db'=>'I','haksa_db'=>'J',
         'note'=>'K','etc'=>'L','deploy'=>'M','deploy_acct'=>'N','extra'=>'O']],
-    '3.9' => ['grp' => '3.9', 'ver' => '3.9', 'map' => [
+    '3.9' => ['ver' => '3.9', 'map' => [
         'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','login_info'=>'F',
         'dev_db'=>'G','ops_db'=>'H','haksa_db'=>'I','plink'=>'J',
         'note'=>'K','etc'=>'L','deploy'=>'M','deploy_acct'=>'N']],
-    '3.9-saas' => ['grp' => '3.9-saas', 'ver' => '3.9', 'map' => [
+    '3.9-saas' => ['ver' => '3.9', 'map' => [
         'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','login_info'=>'F',
         'dev_db'=>'G','ops_web'=>'H','ops_db'=>'I','haksa_db'=>'J','plink'=>'K',
         'note'=>'L','etc'=>'M','deploy'=>'N','deploy_acct'=>'O']],
-    '4.5' => ['grp' => '4.5', 'ver' => '4.5', 'map' => [
+    '4.5' => ['ver' => '4.5', 'map' => [
         'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','login_info'=>'F',
         'dev_db'=>'G','ops_db'=>'H','haksa_db'=>'I','plink'=>'J',
         'note'=>'K','etc'=>'L','deploy'=>'M','deploy_acct'=>'N']],
-    '그 외' => ['grp' => '그 외', 'ver' => '', 'map' => [
+    '그 외' => ['ver' => '', 'map' => [
         'name'=>'A','repo'=>'B','dev_note'=>'C','ops_note'=>'D','login_info'=>'E',
         'dev_db'=>'F','ops_db'=>'G','haksa_db'=>'H','plink'=>'I',
         'note'=>'J','etc'=>'K','deploy'=>'L','deploy_acct'=>'M']],
@@ -154,7 +154,7 @@ function ax_strip_known_urls($raw, array $knownHosts) {
 
 /**
  * 엑셀을 읽어 schools 를 보강하고 school_access 를 다시 채운다.
- * @return array ['total'=>int, 'new_schools'=>int, 'per'=>[시트명=>건수]]
+ * @return array ['total'=>int, 'new_schools'=>int, 'dup_skipped'=>int, 'per'=>[시트명=>건수]]
  */
 function access_import_xlsx($path, array $SHEETS) {
     $zip = new ZipArchive();
@@ -182,14 +182,16 @@ function access_import_xlsx($path, array $SHEETS) {
 
     $sel = implode(',', array_map(fn($c) => "`$c`", $cols));
     $ph  = implode(',', array_fill(0, count($cols), '?'));
-    $upd = implode(',', array_map(fn($c) => "`$c`=VALUES(`$c`)", $cols));
+    // 아래에서 테이블을 통째로 비우고 다시 넣으므로 upsert 가 필요 없다
     $insAccess = $pdo->prepare("INSERT INTO school_access (school_id, {$sel}, sort_no, created_at, updated_at)
-                                VALUES (?, {$ph}, ?, NOW(), NOW())
-                                ON DUPLICATE KEY UPDATE {$upd}, sort_no=VALUES(sort_no), updated_at=NOW()");
+                                VALUES (?, {$ph}, ?, NOW(), NOW())");
 
     $pdo->exec("TRUNCATE TABLE school_access");   // DDL → 트랜잭션 밖(암묵적 커밋)
 
-    $per = []; $total = 0; $newSchools = 0;
+    $per = []; $total = 0; $newSchools = 0; $dupSkipped = 0;
+    // 한 학교(=이름+버전)가 두 시트에 다 올라와 있는 경우가 있다(가톨릭성서모임: 3.9 와
+    // 3.9-saas). 같은 사이트를 두 줄로 들고 있을 이유가 없어서 먼저 나온 시트만 취한다.
+    $seen = [];
     $pdo->beginTransaction();
     foreach ($SHEETS as $sheetName => $def) {
         if (empty($targets[$sheetName])) { $per[$sheetName] = 0; continue; }
@@ -200,9 +202,8 @@ function access_import_xlsx($path, array $SHEETS) {
             $name = ax_clean($rows[$i][$def['map']['name']] ?? '');
             if ($name === '') continue;   // 빈 줄/구분선
 
-            $vals = ['grp' => $def['grp']];
+            $vals = [];
             foreach ($cols as $c) {
-                if ($c === 'grp') continue;
                 $letter = $def['map'][$c] ?? null;
                 $vals[$c] = $letter ? ax_clean($rows[$i][$letter] ?? '') : '';
             }
@@ -249,13 +250,13 @@ function access_import_xlsx($path, array $SHEETS) {
                 $ver = preg_match('/(\d+)\.(\d+)/', $verCell, $m) ? "{$m[1]}.{$m[2]}" : '3.5';
             }
 
+            // 학교는 (이름, 버전)으로 찾는다. 이름만 같고 버전이 다르면 다른 사이트다 —
+            // 강원대 3.2 와 강원대 4.5 는 서버도 저장소도 계정도 전부 다르므로 한 대학으로
+            // 묶으면 안 된다. 그래서 버전이 안 맞으면 기존 학교에 붙이지 않고 새로 만든다.
             $key      = access_norm_name($name);
             $schoolId = 0;
-            foreach ($index[$key] ?? [] as $cand) {          // 버전이 같은 학교 우선
-                if ($ver !== '' && $cand['ver'] === $ver) { $schoolId = $cand['id']; break; }
-            }
-            if (!$schoolId && !empty($index[$key])) {        // 버전이 안 맞으면 같은 이름 첫 번째
-                $schoolId = $index[$key][0]['id'];
+            foreach ($index[$key] ?? [] as $cand) {
+                if ($cand['ver'] === $ver) { $schoolId = $cand['id']; break; }
             }
 
             if ($schoolId) {
@@ -267,6 +268,9 @@ function access_import_xlsx($path, array $SHEETS) {
                 $newSchools++;
             }
 
+            if (isset($seen[$schoolId])) { $dupSkipped++; continue; }   // 앞 시트에서 이미 넣음
+            $seen[$schoolId] = true;
+
             $insAccess->execute(array_merge([$schoolId], array_values($vals), [$n]));
             $n++; $total++;
         }
@@ -275,7 +279,8 @@ function access_import_xlsx($path, array $SHEETS) {
     $pdo->commit();
     $zip->close();
 
-    return ['total' => $total, 'new_schools' => $newSchools, 'per' => $per];
+    return ['total' => $total, 'new_schools' => $newSchools,
+            'dup_skipped' => $dupSkipped, 'per' => $per];
 }
 
 /* ─────────────── CLI ─────────────── */
@@ -297,7 +302,11 @@ if ($IS_CLI) {
     }
     foreach ($r['per'] as $sheet => $n) echo "  - {$sheet}: {$n}건\n";
     echo "총 {$r['total']}건을 school_access 에 넣었습니다";
-    echo $r['new_schools'] ? " (schools 에 {$r['new_schools']}개 신규 등록).\n" : ".\n";
+    echo $r['new_schools'] ? " (schools 에 {$r['new_schools']}개 신규 등록)" : "";
+    echo ".\n";
+    if ($r['dup_skipped']) {
+        echo "  ※ 다른 시트에 같은 학교로 또 올라온 {$r['dup_skipped']}건은 건너뛰었습니다.\n";
+    }
     exit(0);
 }
 
