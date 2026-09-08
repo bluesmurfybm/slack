@@ -27,7 +27,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── var/                     DB·업로드 (gitignore)
 │   └── tests/
 │
-├── access/                      학교 접속 정보 — PHP, slack의 schools를 마스터로 씀
+├── access/                      Coursemos EnvHub — PHP, slack의 schools를 마스터로 씀
 │   ├── access.php               목록 + 상세 + 편집 (복사 버튼)
 │   ├── access_api.php           JSON API
 │   ├── access_import.php        접속정보 엑셀 → DB (CLI / 화면 업로드 겸용)

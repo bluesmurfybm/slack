@@ -1,6 +1,6 @@
 <?php
 /**
- * access(학교 접속 정보) 모듈 DB.
+ * access(Coursemos EnvHub) 모듈 DB.
  *
  *  구조: slack 모듈의 `schools` 가 마스터, 이 모듈의 `school_access` 가 1:1 상세.
  *    - `schools`       : 대학명 / 버전 / 개발·운영·로그 URL / 사용여부   (slack/schools 에서 관리)

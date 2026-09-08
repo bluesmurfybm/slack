@@ -1,6 +1,6 @@
 <?php
 /**
- * 학교 접속 정보 (access 모듈) — 목록 + 상세 + 편집 한 화면.
+ * Coursemos EnvHub (access 모듈) — 목록 + 상세 + 편집 한 화면.
  *  - 마스터는 slack 모듈의 schools 테이블, 접속·배포 상세는 school_access. (access/db.php 참고)
  *  - 원본 엑셀: SVN_배포_디비정보(블루내부공유).xlsx
  */
@@ -19,7 +19,7 @@ $__bwBase = '../slack/';
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>학교 접속 정보</title>
+<title>Coursemos EnvHub</title>
 <link rel="icon" href="../styles/favicon.ico">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="../slack/styles/header.css">
@@ -31,7 +31,7 @@ $__bwBase = '../slack/';
 
 <div class="wrap">
   <div class="head">
-    <h1>🔑 학교 접속 정보 <span class="badge" id="count"></span></h1>
+    <h1>🔑 Coursemos EnvHub <span class="badge" id="count"></span></h1>
   </div>
 
   <div class="tools">

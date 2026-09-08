@@ -1,6 +1,6 @@
 <?php
 /**
- * 학교 접속 정보 API (포털 로그인 필요)
+ * Coursemos EnvHub API (포털 로그인 필요)
  *   GET                                → schools JOIN school_access 목록 (?all=1 이면 미사용 학교 포함)
  *   POST {action:create}               → 새 대학 등록: schools 에 넣고 그 id 로 접속 정보까지 생성
  *   POST {action:save}                 → 한 학교의 접속 정보 저장(없으면 생성) + 마스터(schools) 동기화

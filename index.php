@@ -343,7 +343,7 @@ function renderTiles(){
     <a class="tile" href="${LINKS.access}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#0F7B8A">${accessIcon}</span>
-      <div><h3>학교 접속 정보</h3><p>대학별 svn·git, 계정, DB, plink 정보를 찾아 복사합니다.</p></div>
+      <div><h3>Coursemos EnvHub</h3><p>대학별 svn·git, 계정, DB, plink 정보를 찾아 복사합니다.</p></div>
     </a>
     <div class="tile soon">
       <span class="badge-soon">준비중</span>
