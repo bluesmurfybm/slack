@@ -1,6 +1,6 @@
 <?php
 /**
- * 무들 동향(moodle watch) 조회 헬퍼.
+ * MoodleUp(무들 동향) 조회 헬퍼.
  *  - 데이터는 moodle/watch/ 의 Python 주간 배치가 넣는다(주 1회 INSERT). 이 파일은 읽기만 한다.
  *  - 테이블 DDL 은 배치(core/store.py)와 같다 — 배치가 아직 안 돌았어도 화면이 뜨도록 여기서도 만든다.
  *    컬럼을 바꾸면 두 곳을 같이 고칠 것.

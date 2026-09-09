@@ -1,6 +1,6 @@
 <?php
 /**
- * 무들 동향 — 주간 팔로업 리포트 뷰어.
+ * MoodleUp(무들 동향) — 주간 팔로업 리포트 뷰어.
  *  - 데이터: moodle/watch/ 의 Python 배치가 MySQL 에 넣는다. 이 페이지는 SELECT 만 한다
  *    (형광펜·메모는 notes.php 가 사용자가 누를 때만 INSERT/DELETE).
  *  - 로그인: 포털 세션(current_portal_user). slack 과 달리 슬랙 토큰은 필요 없다.
@@ -93,7 +93,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>무들 동향 · blue-iWorks</title>
+<title>MoodleUp · blue-iWorks</title>
 <link rel="icon" href="../styles/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -128,7 +128,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
 <div class="wrap">
   <div class="hero">
     <div>
-      <h1>무들 동향</h1>
+      <h1>MoodleUp</h1>
       <p><span class="pag-tag">PAG</span> moodle.org Tech Transformation 코스를 중심으로 Tracker · GitHub · moodledev.io · moodle.com 을 매주 모아 코스모스 관점으로 요약합니다.</p>
     </div>
     <a class="back" href="../index.php">← 대시보드</a>

@@ -1,4 +1,4 @@
-"""무들 동향 주간 배치. systemd timer 가 월요일 새벽에 한 번 부른다.
+"""MoodleUp(무들 동향) 주간 배치. systemd timer 가 월요일 새벽에 한 번 부른다.
 
     python run_weekly.py                       # 마지막 실행 이후 ~ 지금 → 새 주차
     python run_weekly.py --since 2026-09-01    # 구간 지정

@@ -1,7 +1,7 @@
 # blue-iWorks — 사내 업무 포털
 
 Bluesoft 사내 포털. 로그인 하나로 **도서구매신청(book)**, **DTI 발표(magazine)**,
-**BlueLearn(learning)**, **무들 동향(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
+**BlueLearn(learning)**, **MoodleUp(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
 ## 전체 구조
@@ -27,7 +27,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── var/                     DB·업로드 (gitignore)
 │   └── tests/
 │
-├── moodle/                      무들 동향 — PHP 뷰어 + Python 주간 배치
+├── moodle/                      MoodleUp(무들 동향) — PHP 뷰어 + Python 주간 배치
 │   ├── index.php, db.php        주차별 리포트 화면(읽기 전용, 포털 세션)
 │   ├── styles/moodle.css
 │   └── watch/                   주 1회 수집·요약 배치 (systemd timer)
@@ -145,7 +145,7 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 ---
 
-## moodle (무들 동향)
+## moodle (MoodleUp · 무들 동향)
 
 moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jira Cloud), GitHub
 `moodle/moodle`, moodledev.io(`moodle/devdocs`), moodle.com 뉴스를 **주 1회 모아 한국어로 요약**하고
@@ -516,7 +516,7 @@ location ^~ /moodle/watch/ { deny all; }
 
 ```ini
 [Unit]
-Description=moodle-watch (무들 동향 주간 수집·요약)
+Description=moodle-watch (MoodleUp 주간 수집·요약)
 After=network-online.target mysql.service
 
 [Service]
@@ -592,6 +592,16 @@ sudo install -d -o blueapp_core -g www-data -m 2775 /home/blueapp_core/moodle/wa
 sudo systemctl daemon-reload
 sudo systemctl enable --now moodle-watch-refresh.path
 ```
+
+### 문제 해결 체크리스트 (MoodleUp)
+
+| 증상 | 원인 | 조치 |
+|---|---|---|
+| `claude CLI(/root/.local/bin/claude) 를 찾을 수 없다` | 배치를 root 로 실행 | `sudo -iu blueapp_core` 로 전환해 실행. root 가 만든 파일은 `chown -R blueapp_core:blueapp_core moodle/watch` |
+| 요약하기 눌러도 `journalctl -u moodle-watch-refresh -f` 에 아무것도 없음 | path 유닛 정지 또는 요청 폴더 권한 | `ls -la var/requests/` 로 `<week>.json` 생성 여부 확인 → 생기면 `sudo systemctl restart moodle-watch-refresh.path`, 안 생기면 폴더가 `blueapp_core:www-data 2775` 인지와 php-fpm 계정 확인 |
+| `start-limit-hit` 로 refresh 서비스 반복 실패 | 요청 폴더에 처리 못 한 파일이 남아 glob 에 계속 걸림 | `sudo rm -f var/requests/*` → `systemctl reset-failed moodle-watch-refresh.service` → `systemctl restart moodle-watch-refresh.path` |
+| 리포트가 `partial` 이고 노트에 `요약 없음` | claude 로그인 만료 또는 CLI 경로 | blueapp_core 로 `claude auth login`, `/etc/moodle-watch.env` 의 CLAUDE_CLI 확인. 다음 요약하기가 전체 요약을 다시 만든다 |
+| moodle.org 책(book) 두 권 `HTTPError` | Cloudflare 가 pluginfile 차단 | 구조적 제약. 재시도 무의미, 코스에서 직접 읽는다 |
 
 `PathExistsGlob` 은 파일이 남아 있는 동안 계속 service 를 부르므로, 처리 후 파일을 지우는 배치
 쪽 동작이 곧 종료 조건이다. 처리중·실패 파일(`*.running`, `*.failed`)은 `.json` 으로 끝나지 않아 glob 에 걸리지 않는다.

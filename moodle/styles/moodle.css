@@ -1,4 +1,4 @@
-/* 무들 동향 페이지. 포털(styles/default.css)과 같은 팔레트·글꼴. 상단바는 ../styles/topbar.css. */
+/* MoodleUp(무들 동향) 페이지. 포털(styles/default.css)과 같은 팔레트·글꼴. 상단바는 ../styles/topbar.css. */
 :root{
   --blue:#1C5DE5; --blue-deep:#0F2E77; --blue-soft:#4C8DFF; --navy:#0E1A33;
   --bg:#EEF3FB; --card:#FFFFFF; --line:#E2E9F6; --line-soft:#EDF1FA; --ink:#16223B; --muted:#63719A;
