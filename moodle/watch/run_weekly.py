@@ -143,7 +143,15 @@ def _full_report(settings: Settings, results: list[Result], items: list[Item], *
 def _refresh_report(settings: Settings, results: list[Result], items: list[Item], *, # noqa: PLR0913
                     previous: dict, period: tuple[str, str], week: str, run_no: int,
                     generated_at: datetime):
-    """갱신: 기존 요약은 그대로 두고, 이전 실행 이후 새로 들어온 항목만 요약해 아래에 덧붙인다."""
+    """갱신: 기존 요약은 그대로 두고, 이전 실행 이후 새로 들어온 항목만 요약해 아래에 덧붙인다.
+
+    이전 실행이 요약 없이 끝났으면(요약기 실패 등) 덧붙일 본문이 없으니 전체 요약을 다시 만든다.
+    """
+    if not previous["summary_md"]:
+        report, digest, summary, why = _full_report(
+            settings, results, items, period=period, week=week, generated_at=generated_at)
+        report["run_no"] = run_no
+        return report, digest, summary, why
     new_items = [it for it in items if it.url not in previous["known"]]
     if new_items:
         digest = digest_mod.build_update(results, new_items, period[0], period[1], run_no)

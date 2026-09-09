@@ -431,6 +431,31 @@ def test_run_refresh_without_new_items_skips_the_model_and_keeps_summary(tmp_pat
     assert "summary_md" not in sql
 
 
+def test_run_refresh_after_a_summaryless_run_makes_a_full_summary(tmp_path, monkeypatch):
+    settings = make_settings(tmp_path, summarizer="auto", anthropic_api_key="k")
+    res = Result("moodlecom", [_item("moodlecom", "old", "u-old")])
+    monkeypatch.setattr(run_weekly, "COLLECTORS", [("moodlecom", lambda ctx: res)])
+    seen = {}
+
+    def fake_anthropic(st, system, schema, prompt):
+        seen["schema"] = schema
+        return json.dumps({"headline": "첫 요약", "summary_md": "## 한눈에
+- 전체", "impacts": [],
+                           "actions": []}), "claude-opus-5"
+
+    monkeypatch.setattr(summarizer, "with_anthropic", fake_anthropic)
+    monkeypatch.setattr(run_weekly.notify, "send", lambda st, text: None)
+    conn = FakeConn(report_row=(7, datetime(2026, 9, 1), datetime(2026, 9, 8), 1, None, "", None, "[]", ""),
+                    item_rows=[("u-old", 1, None, None)], latest_week="2026-W37")
+    report = run_weekly.run(settings, RunOptions(week="2026-W37", refresh=True), lambda p: conn)
+    assert "summary_md" in seen["schema"]["properties"] # 갱신용이 아닌 전체 요약 스키마
+    assert report["run_no"] == 2
+    assert report["headline"] == "첫 요약"
+    assert report["summary_md"] == "## 한눈에
+- 전체"
+    assert report["status"] == "ok"
+
+
 def test_run_refresh_of_unknown_week_fails_loudly(tmp_path):
     settings = make_settings(tmp_path)
     with pytest.raises(ValueError, match="갱신할 주차가 DB 에 없다"):
