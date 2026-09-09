@@ -48,4 +48,4 @@ def save_review(rid: int, body: ReviewIn, session: Session = Depends(get_session
     session.add(req)
     session.commit()
     session.refresh(req)
-    return service.to_dict(req, service.cert_count(session, rid))
+    return service.to_dict(req, service.cert_names(session, rid))

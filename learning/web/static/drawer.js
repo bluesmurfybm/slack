@@ -124,20 +124,115 @@ function footerHTML(r) {
   return b.join("");
 }
 
+/* ---------- 진행 상황 ---------- */
+
+// 목록 행의 rail 을 상세에서 크게 펼친 것이다. 단계 정의는 railState 하나만 쓴다 —
+// 목록의 점 다섯 개와 여기 스테퍼가 다른 말을 하는 일이 없어야 한다.
+// 색도 rail 과 같다: 지나온 칸 초록, 지금 칸 파랑, 멈춘 칸 발간.
+const STAGE_SHORT = {
+  [S.REQUESTED]: "신청", [S.APPROVED]: "수강승인", [S.CLAIMED]: "청구",
+  [S.CLAIM_APPROVED]: "청구승인", [S.REFUNDED]: "환급완료",
+  [S.NO_REFUND]: "환급불필요", [S.REJECTED]: "수강반려", [S.CLAIM_REJECTED]: "청구반려",
+};
+
+// created_at 은 "YYYY-MM-DD HH:MM:SS" 라 날짜만 떼어 쓴다
+const shortDay = v => {
+  const d = (v || "").slice(0, 10).split("-");
+  return d.length === 3 ? `${+d[1]}/${+d[2]}` : "";
+};
+
+// 종료일까지 며칠 남았는지. 오늘이 종료일이면 0, 지났으면 음수다
+function daysLeft(r) {
+  if (!r.end_date) return null;
+  const end = new Date(`${r.end_date}T00:00:00`).getTime();
+  const today = new Date(new Date().toDateString()).getTime();
+  return Math.round((end - today) / 86400000);
+}
+
+function dueText(left) {
+  if (left == null) return "";
+  if (left > 0) return `${left}일 남음`;
+  return left === 0 ? "오늘 종료" : `${-left}일 지남`;
+}
+
+const pctText = pct => (pct === 0 ? "시작 전" : pct === 100 ? "기간 종료" : `${pct}% 지남`);
+
+function stageBar(r) {
+  const { rail, at, stopped } = railState(r);
+  if (at < 0) return "";
+
+  const steps = rail.map((step, i) => {
+    const halted = i === at && stopped;
+    const cls = [
+      i <= at ? "past" : "",
+      i < at ? "done" : i === at ? (stopped ? "stop" : "on") : "",
+    ].filter(Boolean).join(" ");
+    // 칸 이름은 언제나 단계 이름이다. 멈췄더라도 그 단계까지 온 사실은 지우지 않는다 —
+    // 실제 상태(반려)는 점 색과 아래 요약 줄이 말한다. 날짜만 반려 시각에서 가져온다.
+    const when = shortDay(r[STATUS_AT[halted ? r.status : step]]);
+    const tip = halted ? `${step} — ${r.status}` : step;
+    return `<div class="dp-step${cls ? " " + cls : ""}">
+      <i></i>
+      <b title="${esc(tip)}">${esc(STAGE_SHORT[step] || step)}</b>
+      ${when ? `<span>${esc(when)}</span>` : ""}
+    </div>`;
+  }).join("");
+
+  return `<div class="dp-stage">${steps}</div>
+    <p class="dp-at">${esc(rail.length ? `${at + 1} / ${rail.length} 단계` : "")}
+      <b>${esc(stopped ? r.status : rail[at])}</b></p>`;
+}
+
+// 기간 막대는 "얼마나 지났는지"다 — 학습 진도가 아니라서 양쪽에 날짜를 붙여 말로 못 박는다
+function periodBar(r) {
+  const pct = periodPct(r);
+  if (pct == null) return "";
+  const left = daysLeft(r);
+  const over = left != null && left < 0;
+  return `<div class="dp-period">
+    <div class="dp-prow">
+      <span class="dp-plb">수강 기간</span>
+      <span class="dp-pvl${over ? " over" : ""}">${esc(periodText(r))}${
+        dueText(left) ? ` · ${esc(dueText(left))}` : ""}</span>
+    </div>
+    <div class="dp-pbar"><i style="width:${pct}%"></i></div>
+    <div class="dp-pfoot">
+      <span>${esc(shortDay(r.start_date))} 시작</span>
+      <b>${esc(pctText(pct))}</b>
+      <span>${esc(shortDay(r.end_date))} 종료</span>
+    </div>
+  </div>`;
+}
+
+// 무료 강의는 승인·청구 절차가 없어 단계도 기간 막대도 뜻이 없다 — 안내 한 줄만 남는다
+function progressSection(r) {
+  const stage = r.is_free ? "" : stageBar(r);
+  const period = r.is_free ? "" : periodBar(r);
+  if (!stage && !period) return "";
+  const next = nextStepText(r);
+  return `<div class="d-sec dp">
+    <h4>진행 상황</h4>
+    ${stage}
+    ${next ? `<p class="note next">${esc(next)}</p>` : ""}
+    ${period}
+  </div>`;
+}
+
 function renderDrawer() {
   const r = DETAIL;
   if (!r) return;
+  // rail 은 아래 "진행 상황" 스테퍼가 크게 대신한다 — 머리에서는 배지만 낸다
   document.getElementById("dTags").innerHTML =
-    siteBadge(r.site) +
-    statusBadge(r, true) + railHTML(r, true);
+    siteBadge(r.site) + statusBadge(r, true);
   document.getElementById("dTitle").innerHTML = r.url
     ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>`
     : esc(r.title);
 
   const cat = [r.category_large, r.category_medium].filter(Boolean).join(" > ");
+  const prog = progressSection(r);
   const next = nextStepText(r);
   document.getElementById("dBody").innerHTML = `
-    ${next ? `<p class="note next">${esc(next)}</p>` : ""}
+    ${prog || (next ? `<p class="note next">${esc(next)}</p>` : "")}
     ${reasonNote(r)}
     <dl class="kv">
       <dt>신청자</dt><dd>${whoHTML(r.applicant)}</dd>

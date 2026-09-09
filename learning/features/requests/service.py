@@ -6,6 +6,7 @@ from sqlmodel import Session, func, select
 from core.config import ACCOUNT_COMPANY
 from core.db import LearningCert, LearningHistory, LearningRequest
 from features.identity.auth import is_admin
+from features.policy import service as policy_service
 
 STATUS_REQUESTED = "수강승인요청"
 STATUS_APPROVED = "수강승인"
@@ -120,6 +121,12 @@ def cert_count(session: Session, rid: int) -> int:
                         .where(LearningCert.request_id == rid)).one()
 
 
+def cert_names(session: Session, rid: int) -> list[str]:
+    return list(session.exec(select(LearningCert.name)
+                             .where(LearningCert.request_id == rid)
+                             .order_by(LearningCert.id)).all())
+
+
 def record(session: Session, req: LearningRequest, status: str,
            identity: dict, memo: str = "") -> None:
     session.add(LearningHistory(request_id=req.id, status=status, memo=memo,
@@ -135,5 +142,11 @@ def history(session: Session, rid: int) -> list[dict]:
     return [h.model_dump() for h in rows]
 
 
-def to_dict(req: LearningRequest, certs: int = 0) -> dict:
-    return {**req.model_dump(), "status": derive_status(req), "cert_count": certs}
+# 목록에서 파일명을 팝오버로 띄우므로 개수만이 아니라 이름도 함께 내려준다
+def to_dict(req: LearningRequest, certs=()) -> dict:
+    names = list(certs)
+    # 환급 예정액은 화면 여러 곳에서 쓰는데, 규칙(신청 시점 상한 스냅샷)을 클라이언트에
+    # 베끼면 정책이 바뀔 때 두 곳이 갈라진다 — 서버가 계산해 실어 보낸다.
+    return {**req.model_dump(), "status": derive_status(req),
+            "expected_refund": policy_service.expected_refund(req),
+            "cert_count": len(names), "cert_names": names}

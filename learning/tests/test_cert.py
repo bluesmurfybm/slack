@@ -162,3 +162,20 @@ def test_an_oversized_upload_is_refused(tmp_path):
     rid = create(client, is_free=True)["id"]
     assert upload(client, rid, "big.png", b"0" * (2 * 1024 * 1024)).status_code == 413
     assert not list(Path(settings.upload_dir).iterdir())
+
+
+def test_the_list_carries_certificate_names(client, settings):
+    rid = approved(client, settings)
+    upload(client, rid, "수료증.png")
+    upload(client, rid, "진행률캡쳐.png")
+    row = next(r for r in client.get("/learningapi/requests").json() if r["id"] == rid)
+    assert row["cert_count"] == 2
+    assert row["cert_names"] == ["수료증.png", "진행률캡쳐.png"]
+
+
+def test_a_request_without_certificates_has_an_empty_name_list(client, settings):
+    login(client, settings, USER)
+    rid = create(client)["id"]
+    row = next(r for r in client.get("/learningapi/requests").json() if r["id"] == rid)
+    assert row["cert_count"] == 0
+    assert row["cert_names"] == []

@@ -49,16 +49,38 @@
         <span class="eyebrow">BlueUP-Learning</span>
         <h1 id="pageTitle">BlueLearn</h1>
       </div>
-      <div class="site-act">
-        <button class="btn-new" id="btnNew" onclick="openForm()">＋ 강의 신청</button>
-      </div>
     </div>
   </header>
 
   <div class="wrap">
     <!-- ===================== 구성원 화면 ===================== -->
     <section id="userView">
-      <div class="statgrid" id="adminStats" style="display:none"></div>
+      <section class="mystrip" id="myStrip">
+        <div class="ms-head">
+          <span class="ms-ava" id="msAva"></span>
+          <div class="ms-id">
+            <span class="ms-name">
+              <b id="msName"></b>
+              <button type="button" class="ms-fold" id="msFold" aria-expanded="true"
+                title="현황 접기/펼치기" onclick="toggleStrip()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                  stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+              </button>
+            </span>
+            <span id="msSub"></span>
+          </div>
+          <div class="ms-act">
+            <button class="btn-ghost" type="button" id="msMine"
+              onclick="toggleMineOnly()">내 신청 내역</button>
+            <button class="btn-new" id="btnNew" onclick="openForm()">＋ 강의 신청</button>
+          </div>
+        </div>
+        <div class="ms-body" id="msBody">
+          <div class="ms-nums" id="msNums"></div>
+          <div class="ms-note" id="msNote" style="display:none"></div>
+        </div>
+      </section>
+      <div class="adminbar" id="adminBar" style="display:none"></div>
       <p class="note" id="policyNote" style="display:none"></p>
 
       <div class="toolbar">
@@ -75,12 +97,26 @@
           <select id="f-level" onchange="applyFilters()"></select>
           <select id="f-status" onchange="applyFilters()"></select>
           <label class="check"><input type="checkbox" id="f-mine" onchange="applyFilters()"> 내 신청만</label>
+          <div class="viewtoggle">
+            <button type="button" id="vList" title="리스트로 보기" onclick="setLayout('list')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+              </svg>
+            </button>
+            <button type="button" id="vCard" title="카드로 보기" onclick="setLayout('card')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       <div class="ledger-head">
-        <span class="title">신청 목록</span>
-        <span class="count" id="listCount"></span>
+        <span class="title">신청 목록 <span class="count" id="listCount"></span></span>
       </div>
       <ul class="list" id="board"></ul>
       <div id="listPager"></div>
@@ -88,14 +124,10 @@
 
     <!-- ===================== 관리자 화면 ===================== -->
     <section id="adminView" style="display:none">
-      <div class="tabs" id="adminTabs">
-        <button class="on" onclick="setTab('manage')">신청 관리</button>
-        <button onclick="setTab('categories')">강의 분류</button>
-        <button onclick="setTab('settings')">설정</button>
-        <button onclick="setTab('stats')">통계</button>
-        <button onclick="setTab('archive')">보관함</button>
+      <div class="adminlay">
+        <nav class="sidenav" id="adminNav" aria-label="관리자 메뉴"></nav>
+        <div id="adminPanel"></div>
       </div>
-      <div id="adminPanel"></div>
     </section>
   </div>
 

@@ -397,16 +397,6 @@ body.admin-view .admin-view-only{display:inline-flex !important}
 .seg-mode button.on{background:var(--bg-card);color:var(--tx-primary);box-shadow:var(--shadow-sm)}
 
 /* ---------- 내 활동 스트립 ---------- */
-.mystrip{
-  display:flex;align-items:center;gap:28px;flex-wrap:wrap;
-  margin:18px 0 0;padding:18px 20px;border-radius:14px;color:#fff;
-  background:linear-gradient(100deg,#062a5e,var(--cos40) 62%,#3d7ae8);
-}
-.mystrip .m{display:flex;flex-direction:column;gap:2px}
-.mystrip .m b{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
-.mystrip .m span{font-size:11.5px;font-weight:600;color:#cfe0ff}
-.mystrip .divider{width:1px;height:32px;background:rgba(255,255,255,.24)}
-
 /* ---------- 진행 단계 레일 ---------- */
 .railwrap{
   display:inline-flex;align-items:center;gap:7px;
@@ -437,7 +427,7 @@ ul.cards{
 }
 ul.cards li.card{
   background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
-  padding:16px;display:flex;flex-direction:column;gap:10px;min-height:250px;
+  padding:18px;display:flex;flex-direction:column;gap:10px;min-height:290px;
   transition:box-shadow .15s ease;
 }
 ul.cards li.card:hover{box-shadow:var(--shadow-md)}
@@ -452,14 +442,75 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
 }
 
 /* ---------- 관리자 탭 ---------- */
-.tabs{display:flex;gap:2px;border-bottom:1px solid var(--bo-secondary);margin:18px 0 0}
-.tabs button{
-  font-family:var(--sans);font-size:13.5px;font-weight:700;padding:11px 16px;
-  background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;
-  color:var(--tx-quinary);cursor:pointer;
+/* ---------- 관리자 레이아웃 (좌측 사이드바) ---------- */
+/* 가로 탭을 버린 이유: 매일 여는 신청 관리 하나와 분기에 한 번 만지는 구성 셋이
+   같은 크기·같은 위치에 놓여 있었다. 사이드바는 성격별로 묶을 수 있고, 메뉴가
+   늘어도 구조가 버틴다. 200px 을 쓰지만 .wrap 이 1240px 이라 목록 폭에 여유가 있다. */
+.adminlay{
+  display:grid;grid-template-columns:200px minmax(0,1fr);gap:18px;
+  margin-top:18px;align-items:start;
 }
-.tabs button:hover{color:var(--tx-tertiary)}
-.tabs button.on{color:var(--cos50);border-bottom-color:var(--cos50)}
+
+/* 목록이 길어도 메뉴는 따라온다 — 어느 화면에 있는지 늘 보이게 */
+.sidenav{
+  position:sticky;top:18px;
+  background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
+  padding:10px;box-shadow:var(--shadow-sm);
+}
+.sidenav .nav-grp{
+  font-size:10.5px;font-weight:800;letter-spacing:.1em;
+  color:var(--tx-quinary);padding:13px 10px 5px;
+}
+.sidenav .nav-grp:first-child{padding-top:3px}
+.sidenav button{
+  display:flex;align-items:center;gap:9px;width:100%;
+  font-family:var(--sans);font-size:13px;font-weight:600;text-align:left;
+  padding:8px 10px;background:none;border:none;border-radius:var(--r8);
+  color:var(--tx-tertiary);cursor:pointer;
+  transition:background .12s ease,color .12s ease;
+}
+.sidenav button:hover{background:var(--bg-hover);color:var(--tx-secondary)}
+.sidenav button.on{background:var(--cos95);color:var(--cos40)}
+.sidenav button:focus-visible{outline:2px solid var(--cos50);outline-offset:-2px}
+.sidenav .ic{flex:none;width:15px;text-align:center;font-size:12px;opacity:.7}
+.sidenav .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 처리 대기 배지. #96580A 는 흰 글자 대비 5.7:1 — warn40 은 2.3:1 로 모자라 쓸 수 없다 */
+.sidenav .bdg{
+  flex:none;min-width:18px;padding:0 6px;border-radius:var(--r32);
+  background:#96580A;color:#fff;
+  font-size:11px;font-weight:800;line-height:18px;text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+
+/* 좁아지면 메뉴가 위로 올라가 가로로 흐른다 — 사이드바를 접는 UI 는 두지 않는다 */
+@media (max-width:900px){
+  .adminlay{grid-template-columns:1fr;gap:14px}
+  .sidenav{position:static;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+  .sidenav .nav-grp{padding:5px 6px 5px 10px}
+  .sidenav .nav-grp:first-child{padding-top:5px}
+  .sidenav button{width:auto}
+}
+
+/* ---------- 처리 큐 칩 ---------- */
+/* 카드 세 장이 차지하던 세로 80px 을 한 줄로 눌러 담은 것 */
+.queue{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.qb{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--sans);padding:8px 13px;cursor:pointer;
+  background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r10);
+  transition:border-color .12s ease,box-shadow .12s ease;
+}
+.qb:hover{border-color:var(--cos90);box-shadow:var(--shadow-sm)}
+.qb .n{
+  font-size:15px;font-weight:800;color:var(--tx-primary);
+  font-variant-numeric:tabular-nums;
+}
+.qb .l{font-size:12px;font-weight:600;color:var(--tx-quaternary)}
+/* 고른 큐만 색으로 뒤집는다 — 대기 큐는 앰버, 전체는 파랑 */
+.qb.on{background:var(--warn95);border-color:var(--warn90)}
+.qb.on .n,.qb.on .l{color:var(--warn30)}
+.qb.all.on{background:var(--cos95);border-color:var(--cos90)}
+.qb.all.on .n,.qb.all.on .l{color:var(--cos40)}
 
 /* ---------- 노출 스위치 ---------- */
 .toggle{
@@ -569,8 +620,6 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
 
 @media (max-width:820px){
   .list li.row .row-lead{flex-direction:row;align-items:center;gap:10px}
-  .mystrip{gap:18px;padding:16px}
-  .mystrip .divider{display:none}
   .drawer{width:100%}
 }
 
@@ -736,30 +785,193 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
   background-repeat:no-repeat;background-position:right 9px center;background-size:14px;
 }
 .addbar .grow{flex:1;min-width:160px}
-.polrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0}
-.polrow + .polrow{border-top:1px solid var(--bo-primary)}
-.polrow .lbl{flex:1;min-width:180px}
-.polrow .lbl b{display:block;font-size:13.5px;font-weight:700}
-.polrow .lbl span{font-size:12px;color:var(--tx-quaternary)}
-.polrow input[type="number"]{
-  width:140px;font-family:var(--sans);font-size:13.5px;padding:8px 10px;
-  border:1px solid var(--bo-tertiary);border-radius:var(--r8);text-align:right;
+/* ---------- 설정 화면 (환급 정책) ---------- */
+/* 체크박스 + 빈 입력칸을 스위치로 바꿨다. 예전에는 "끈 항목"과 "값을 안 채운 항목"이
+   같아 보였다 — 스위치를 내리면 값 칸이 회색으로 죽어 검사하지 않는다는 게 드러난다. */
+/* 항목 줄만 상자에 담는다. 바깥 틀과 머리글은 .adm 을 그대로 쓴다 —
+   교육 플랫폼·관리자·보관함과 같은 상자·같은 h4·같은 폭이 된다. */
+.setrows{
+  border:1px solid var(--bo-primary);border-radius:var(--r10);overflow:hidden;
+}
+.srow{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 14px;border-top:1px solid var(--bo-primary);
+}
+.srow:first-child{border-top:none}
+/* 바뀐 줄은 파란 바탕으로 표시해 저장 전에 검토할 수 있게 한다 */
+.srow.edited{background:var(--cos95)}
+.srow .lb{flex:1;min-width:0}
+.srow .lb b{display:block;font-size:13.5px;font-weight:700;color:var(--tx-secondary)}
+.srow .lb .ds{display:block;margin-top:2px;font-size:12px;color:var(--tx-quaternary)}
+.srow .sp{display:flex;align-items:center;gap:12px;flex:none}
+
+/* 값 칸 — 단위를 입력칸 안에 붙여 "100,000 원"이 한 덩어리로 읽히게 한다 */
+.srow .fld{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:0 10px 0 0;background:var(--bg-card);
+  border:1px solid var(--bo-tertiary);border-radius:var(--r8);
+}
+.srow .fld input{
+  width:104px;font-family:var(--sans);font-size:13.5px;font-weight:600;
+  padding:7px 0 7px 10px;text-align:right;
+  background:transparent;border:none;color:var(--tx-primary);
   font-variant-numeric:tabular-nums;
 }
-.polrow input[type="number"]:disabled{background:var(--bg-subtle);color:var(--tx-quinary)}
+.srow .fld input:focus{outline:none}
+.srow .fld:focus-within{border-color:var(--cos50);box-shadow:0 0 0 3px var(--cos95)}
+.srow .fld i{font-style:normal;font-size:12px;font-weight:600;color:var(--tx-quaternary)}
+/* 꺼진 항목은 값 자체가 뜻이 없다 — 칸까지 회색으로 죽인다 */
+.srow .fld.dim{background:var(--gray95);border-color:var(--bo-primary)}
+.srow .fld.dim input{color:var(--tx-quinary)}
+.srow .fld.dim i{color:var(--tx-quinary)}
+
+.srow .switch{cursor:pointer}
+.srow .switch:focus-visible{outline:2px solid var(--cos50);outline-offset:2px}
 
 @media (max-width:760px){
   .list li.row.lrow{grid-template-columns:1fr}
 }
 
-/* 대기 건수 카드는 세 장이고 눌러서 목록을 거른다 */
-#adminStats{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}
-#adminStats .stat{
-  font-family:var(--sans);text-align:left;cursor:pointer;
-  transition:border-color .15s ease,box-shadow .15s ease;
+/* ---------- 강의 분류 (좌우 분할) ---------- */
+/* 왼쪽에서 대분류를 고르고 오른쪽에서 그 중분류만 편집한다. 예전에는 대분류 카드가
+   세로로 쌓여서 41개 중분류면 저장 버튼도 41개였다 — 저장은 아래 바 하나로 모았다. */
+.cat{display:grid;grid-template-columns:264px minmax(0,1fr);gap:12px;align-items:start}
+
+.catl{
+  background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
+  overflow:hidden;box-shadow:var(--shadow-sm);
 }
-#adminStats .stat:hover{border-color:var(--cos90);box-shadow:var(--shadow-md)}
-@media (max-width:760px){#adminStats{grid-template-columns:1fr}}
+.catl .hd{
+  padding:10px 14px;border-bottom:1px solid var(--bo-primary);background:var(--gray98);
+  font-size:11.5px;font-weight:700;color:var(--tx-tertiary);letter-spacing:.02em;
+}
+.catl button{
+  display:flex;align-items:center;gap:8px;width:100%;
+  font-family:var(--sans);font-size:13px;font-weight:600;text-align:left;
+  padding:9px 14px;background:none;border:none;border-top:1px solid var(--bo-primary);
+  color:var(--tx-secondary);cursor:pointer;
+}
+.catl button:first-of-type{border-top:none}
+.catl button:hover{background:var(--bg-hover)}
+.catl button.on{background:var(--cos95);color:var(--cos40)}
+.catl button.off{opacity:.55}
+.catl .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.catl .n{
+  flex:none;font-size:11px;font-weight:700;color:var(--tx-quinary);
+  font-variant-numeric:tabular-nums;
+}
+.catl button.on .n{color:var(--cos40)}
+
+.catr{
+  display:flex;flex-direction:column;
+  background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
+  overflow:hidden;box-shadow:var(--shadow-sm);
+}
+.catr .hd{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:11px 14px;border-bottom:1px solid var(--bo-primary);background:var(--gray98);
+}
+/* 대분류 이름도 같은 방식으로 고친다 — 오른쪽 머리에서 바로 편집한다 */
+.catr .hd .t{
+  flex:1;min-width:140px;font-family:var(--sans);font-size:14px;font-weight:700;
+  letter-spacing:-.02em;color:var(--tx-primary);
+  padding:5px 8px;background:transparent;
+  border:1px solid transparent;border-radius:var(--r8);
+}
+.catr .hd .t:hover{border-color:var(--bo-primary);background:var(--bg-card)}
+.catr .hd .t:focus{outline:none;border-color:var(--cos50);background:var(--bg-card);
+  box-shadow:0 0 0 3px var(--cos95)}
+.catr .hd .sp{margin-left:auto;display:flex;gap:6px;flex:none}
+
+.crow{
+  display:flex;align-items:center;gap:10px;
+  padding:7px 14px;border-top:1px solid var(--bo-primary);
+}
+.crow:first-of-type{border-top:none}
+.crow.off{opacity:.55}
+/* 바뀐 행은 파란 바탕으로 표시해 저장 전에 검토할 수 있게 한다 */
+.crow.edited{background:var(--cos95)}
+.crow .nm{
+  flex:1;min-width:0;font-family:var(--sans);font-size:13px;font-weight:600;
+  color:var(--tx-secondary);padding:5px 8px;background:transparent;
+  border:1px solid transparent;border-radius:var(--r8);
+}
+.crow:hover .nm{border-color:var(--bo-primary);background:var(--bg-card)}
+.crow .nm:focus{outline:none;border-color:var(--cos50);background:var(--bg-card);
+  box-shadow:0 0 0 3px var(--cos95)}
+/* 추천은 체크박스 대신 ★ 토글 — 목록에서 몇 개인지 한눈에 세진다 */
+.crow .star{
+  flex:none;width:26px;height:26px;display:grid;place-items:center;
+  font-size:14px;line-height:1;background:none;border:none;border-radius:var(--r6);
+  color:var(--gray80);cursor:pointer;
+}
+.crow .star:hover{background:var(--bg-hover)}
+.crow .star.on{color:#D9A21B}
+.crow .offbtn{
+  flex:none;font-family:var(--sans);font-size:11px;font-weight:600;
+  padding:3px 8px;background:var(--bg-card);color:var(--tx-quaternary);
+  border:1px solid var(--bo-primary);border-radius:var(--r6);cursor:pointer;
+}
+.crow .offbtn:hover{border-color:var(--bo-tertiary);color:var(--tx-secondary)}
+.crow .offbtn.is-off{background:var(--gray95);color:var(--tx-quinary)}
+.crow-empty{margin:0;padding:18px 14px;font-size:13px;color:var(--tx-quinary)}
+
+/* 추가란 — 좁은 칸에서 입력과 버튼을 한 줄에 두면 둘 다 눌려 읽히지 않는다.
+   줄을 나눠 각자 온폭을 준다. 추가는 이 칸의 주된 동작이라 버튼에 색을 넣는다. */
+.catl .addrow,.catr .addrow{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:11px 14px;border-top:1px solid var(--bo-primary);background:var(--gray99);
+}
+.catl .addrow input,.catr .addrow input{
+  flex:1 1 100%;min-width:0;height:34px;
+  font-family:var(--sans);font-size:13px;padding:0 10px;
+  border:1px solid var(--bo-tertiary);border-radius:var(--r8);
+  background:var(--bg-card);color:var(--tx-primary);
+}
+.catl .addrow input::placeholder,.catr .addrow input::placeholder{color:var(--tx-quinary)}
+.catl .addrow input:focus,.catr .addrow input:focus{
+  outline:none;border-color:var(--cos50);box-shadow:0 0 0 3px var(--cos95);
+}
+.catl .addrow .btn-mini,.catr .addrow .btn-mini{flex:1 1 100%;height:32px;font-size:12.5px}
+/* 오른쪽 칸은 넉넉하니 한 줄로 둔다 */
+@media (min-width:861px){
+  .catr .addrow input{flex:1 1 auto}
+  .catr .addrow .btn-mini{flex:0 0 auto;padding:0 14px}
+}
+
+/* 행의 삭제 — 되돌릴 수 없는 동작이라 평소엔 흐리게, 올렸을 때만 붉게 드러난다 */
+.crow .delbtn{
+  flex:none;width:24px;height:24px;display:grid;place-items:center;
+  font-family:var(--sans);font-size:15px;line-height:1;
+  background:none;border:none;border-radius:var(--r6);
+  color:var(--gray80);cursor:pointer;
+}
+.crow .delbtn:hover{background:var(--nega95);color:var(--nega40)}
+.crow .delbtn:focus-visible{outline:2px solid var(--nega50);outline-offset:1px}
+
+/* 저장 바 — 무엇이 바뀌었는지 말하고, 되돌릴 길을 같이 준다 */
+.savebar{
+  display:flex;align-items:center;gap:9px;
+  padding:11px 14px;border-top:1px solid var(--cos90);background:var(--cos95);
+  font-size:12.5px;font-weight:600;color:var(--cos40);
+}
+/* 강의 분류에서는 카드 안쪽 맨 아래라 모서리를 물려받고, 환급 정책에서는
+   .adm 안에 홀로 놓이므로 스스로 상자가 된다. */
+.adm > .savebar{
+  margin-top:12px;border:1px solid var(--cos90);border-radius:var(--r10);
+}
+.savebar .grow{flex:1;min-width:0}
+.savebar .btn-mini[disabled]{opacity:.45;cursor:default}
+/* 바뀐 것이 없을 때는 바가 조용히 물러난다 */
+.savebar:has(.btn-mini[disabled]){
+  border-top-color:var(--bo-primary);background:var(--gray99);color:var(--tx-quinary);
+}
+/* .adm 안에서는 사방 테두리라 위쪽만 바꾸면 나머지 세 변이 파랗게 남는다 */
+.adm > .savebar:has(.btn-mini[disabled]){border-color:var(--bo-primary)}
+
+@media (max-width:860px){
+  .cat{grid-template-columns:1fr}
+}
 
 /* ---------- 분류 한눈에 보기 ---------- */
 .sheet.wide{max-width:1080px}
@@ -841,10 +1053,11 @@ button.catchip:hover{background:var(--cos95);border-color:var(--cos50);color:var
 
 /* 목록·상세의 강의명 링크 — 파란 글씨가 아니라 본문 글자 그대로, 올렸을 때만 밑줄 */
 /* 강의명은 링크여도 파랗게 물들이지 않는다 — 올렸을 때만 밑줄이 뜬다 */
-.row-title a,.lrow .l-title a,.drawer h3 a,.mrow .c-title a{
+.row-title a,.lrow .l-title a,.card-title a,.drawer h3 a,.mrow .c-title a{
   color:inherit;font-weight:inherit;text-decoration:none;
 }
-.row-title a:hover,.lrow .l-title a:hover,.drawer h3 a:hover,.mrow .c-title a:hover{
+.row-title a:hover,.lrow .l-title a:hover,.card-title a:hover,
+.drawer h3 a:hover,.mrow .c-title a:hover{
   text-decoration:underline;
 }
 
@@ -855,14 +1068,25 @@ button.catchip:hover{background:var(--cos95);border-color:var(--cos50);color:var
 /* 목록 화면과 달리 열을 고정해 눈이 세로로 훑을 수 있게 한다 */
 .mhead,.list li.row.mrow{
   display:grid;
-  grid-template-columns:118px minmax(0,1fr) 132px 150px 92px auto;
+  grid-template-columns:132px minmax(0,1fr) 124px 96px 154px;
   gap:14px;align-items:center;
 }
+/* 목록 카드의 첫 행이 되게 붙인다. 예전에는 배경도 테두리도 없이 회색 페이지에 떠 있어
+   카드와 따로 놀았고, 글자색(quinary #899199)이 그 회색 위에서 대비 2.7:1 이라 읽히지
+   않았다. tertiary(#575e64) 로 내리면 6.4:1 이다. */
 .mhead{
-  padding:10px 18px 6px;font-size:11.5px;font-weight:700;color:var(--tx-quinary);
-  letter-spacing:.02em;
+  padding:11px 18px;font-size:11.5px;font-weight:700;letter-spacing:.02em;
+  color:var(--tx-tertiary);background:var(--gray98);
+  border:1px solid var(--bo-primary);
+  border-radius:var(--r12) var(--r12) 0 0;
 }
-.mhead > span{text-align:center}
+/* 머리와 목록이 한 상자로 읽히게 맞물리는 쪽 모서리와 겹치는 테두리를 지운다.
+   머리의 아래 테두리가 둘 사이를 가르는 선 노릇을 한다. */
+.mhead + .list{border-top:none;border-top-left-radius:0;border-top-right-radius:0}
+.mhead + .list > *:first-child{border-top-left-radius:0;border-top-right-radius:0}
+/* 칸 이름은 그 칸 데이터의 정렬을 따른다 — 마크업의 .r 이 여태 가운데 정렬에 덮여 있었다 */
+.mhead > span{text-align:left}
+.mhead > span.r{text-align:right}
 .list li.row.mrow{padding:12px 18px}
 .mrow .c-st{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
 .mrow .c-title{min-width:0}
@@ -874,41 +1098,143 @@ button.catchip:hover{background:var(--cos95);border-color:var(--cos50);color:var
   display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap;font-size:12px;
 }
 .mrow .c-title .sub .muted{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mrow .c-who{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
-.mrow .c-money{text-align:right;font-size:12.5px}
-.mrow .c-when{text-align:right}
 .mrow .row-act{gap:5px}
 
-/* 대기 카드 — 지금 걸린 필터를 눈에 띄게 표시한다 */
-#adminPanel .stats .stat.on{border-color:var(--cos50);box-shadow:0 0 0 3px var(--cos95)}
-#adminPanel .stats .stat{font-family:var(--sans);text-align:left;cursor:pointer}
+/* 통계 타일 — 누를 수 없는 표시용이라 손 모양 커서도 hover 도 두지 않는다.
+   예전에는 이 선택자가 클릭 가능한 대기 카드와 겹쳐 있었다(그 카드는 큐 칩으로 옮겼다). */
 #adminPanel .stats .stat b{font-size:24px}
 
 /* 주된 동작이 아니므로 회색으로 물러나 있는다 */
 .btn-mini.gray{background:var(--gray95);border-color:var(--gray85);color:var(--tx-tertiary)}
 .btn-mini.gray:hover{background:var(--gray90);border-color:var(--gray80);color:var(--tx-secondary)}
 
-/* 탭 밑줄과 첫 박스가 붙어 보이지 않게 */
-#adminPanel{padding-top:18px}
 
-/* 대기 카드는 숫자를 보는 칸이라 가운데로 모은다 */
+
+/* 숫자를 보는 칸이라 가운데로 모은다 */
 #adminPanel .stats .stat{text-align:center}
 #adminPanel .stats .stat span,#adminPanel .stats .stat i{display:block}
 
-/* 처리 버튼 칸까지 폭을 고정해야 행마다 열이 흔들리지 않는다
-   (auto 로 두면 버튼 개수에 따라 앞 열이 밀린다).
-   236px 은 가장 넓은 조합(청구승인·청구반려·보관·삭제 ≈ 217px)이 한 줄에 들어가는 폭이다. */
-.mhead,.list li.row.mrow{
-  grid-template-columns:110px minmax(180px,1fr) 118px 140px 88px 236px;
-}
-.mrow .row-act{width:236px;justify-content:flex-end;flex-wrap:nowrap;gap:4px}
+/* 처리 칸 폭을 고정해야 행마다 열이 흔들리지 않는다(auto 면 버튼 개수에 따라 앞 열이 밀린다).
+   154px 은 가장 넓은 조합(청구승인·청구반려·⋯ ≈ 148px)이 한 줄에 들어가는 폭이다.
+   예전에는 보관·삭제까지 밖에 나와 236px 이 필요했다 — 그 둘은 ⋯ 안으로 들어갔다. */
+.mrow .row-act{width:154px;justify-content:flex-end;flex-wrap:nowrap;gap:4px}
 .mrow .row-act .btn-mini{height:26px;padding:0 7px;font-size:11.5px}
+
+/* 상태 — 배지 대신 점 + 글자. 색이 "누구 차례인가"를 먼저 말한다 */
+.stl{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:700;white-space:nowrap;
+}
+.stl .dot{width:7px;height:7px;border-radius:50%;flex:none}
+.t-amber{color:#8a4d17} .t-amber .dot{background:#dd8b45}
+.t-blue{color:var(--cos40)} .t-blue .dot{background:var(--cos50)}
+.t-green{color:var(--posi40)} .t-green .dot{background:var(--posi50)}
+.t-red{color:var(--nega40)} .t-red .dot{background:var(--nega50)}
+.t-gray{color:var(--tx-quaternary)} .t-gray .dot{background:var(--gray80)}
+
+/* 관리자 손이 필요한 행은 왼쪽에 앰버 줄. 테두리가 아니라 inset 그림자라 열이 밀리지 않는다 */
+.list li.row.mrow.due{box-shadow:inset 3px 0 0 #dd8b45}
+.mcard.due{box-shadow:inset 0 3px 0 #dd8b45}
+
+/* 강의 칸 — 제목 아래 첫 줄에 플랫폼·신청자·계정, 둘째 줄에 분류 */
+.mrow .c-title .sub2{
+  margin-top:3px;font-size:11.5px;color:var(--tx-quinary);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* 금액·신청일 — 값 아래 작은 부기(환급 예정, N일 대기) */
+.mrow .c-money{text-align:right;font-size:12.5px}
+.mrow .c-money b{display:block;font-weight:700;font-variant-numeric:tabular-nums}
+.mrow .c-money i{
+  font-style:normal;display:block;margin-top:2px;font-size:11px;font-weight:600;
+  color:var(--tx-quinary);font-variant-numeric:tabular-nums;
+}
+.mrow .c-when{text-align:right;font-size:12px;color:var(--tx-quaternary)}
+.mrow .c-when i{
+  font-style:normal;display:block;margin-top:2px;font-size:11px;font-weight:700;
+  color:#8a4d17;font-variant-numeric:tabular-nums;
+}
+
+/* ⋯ 더보기 메뉴 — 보관·삭제는 자주 쓰지 않고 삭제는 되돌릴 수 없어 한 겹 안에 둔다 */
+.rowmenu{position:relative;display:inline-flex;flex:none}
+.kb{
+  font-family:var(--sans);width:26px;height:26px;line-height:1;
+  display:grid;place-items:center;font-size:14px;
+  background:var(--bg-card);color:var(--tx-quaternary);
+  border:1px solid var(--bo-tertiary);border-radius:var(--r8);cursor:pointer;
+}
+.kb:hover{background:var(--bg-subtle);border-color:var(--gray80);color:var(--tx-secondary)}
+.rm-pop{
+  display:none;position:absolute;top:calc(100% + 5px);right:0;z-index:160;
+  min-width:132px;padding:5px;
+  background:var(--bg-card);border:1px solid var(--bo-secondary);border-radius:var(--r10);
+  box-shadow:var(--shadow-md);
+}
+.rowmenu.open .rm-pop{display:block}
+.rm-pop button{
+  display:block;width:100%;text-align:left;
+  font-family:var(--sans);font-size:12.5px;font-weight:600;
+  padding:7px 9px;background:none;border:none;border-radius:var(--r6);
+  color:var(--tx-secondary);cursor:pointer;white-space:nowrap;
+}
+.rm-pop button:hover{background:var(--bg-hover)}
+.rm-pop button.danger{color:var(--nega40)}
+.rm-pop button.danger:hover{background:var(--nega95)}
+
+/* 엑셀 버튼과 보기 전환을 한 묶음으로 */
+.ledger-head .lh-act{display:flex;align-items:center;gap:8px;flex:none}
+.ledger-head .viewtoggle button{width:34px;height:34px}
+
+/* ---------- 신청 관리 카드 보기 ---------- */
+/* 표가 밀도를, 카드가 한 건의 맥락을 맡는다. 같은 manageParts 를 나눠 쓰므로
+   두 보기가 다른 값을 보여줄 수 없다. */
+.mcards{
+  list-style:none;margin:0;padding:0;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;
+}
+.mcards .mcard{
+  display:flex;flex-direction:column;gap:8px;padding:15px 16px;
+  background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
+  box-shadow:var(--shadow-sm);
+}
+.mcard.dim{opacity:.62}
+.mc-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mc-wait{
+  font-style:normal;margin-left:auto;font-size:11px;font-weight:700;color:#8a4d17;
+  font-variant-numeric:tabular-nums;
+}
+.mcard .mc-title{
+  font-size:14px;font-weight:700;letter-spacing:-.02em;text-align:left;
+  display:block;max-width:100%;
+}
+.mc-sub,.mc-who{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px}
+.mc-sub .muted{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mc-foot{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding-top:9px;border-top:1px solid var(--bo-primary);
+}
+.mc-money b{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.mc-money i{
+  font-style:normal;display:block;margin-top:2px;font-size:11px;font-weight:600;
+  color:var(--tx-quinary);font-variant-numeric:tabular-nums;
+}
+.mc-when{font-size:12px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
+.mc-act{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.mc-act .btn-mini{height:28px;padding:0 9px;font-size:12px}
 
 @media (max-width:1180px){
   .mhead{display:none}
+  /* display:none 이어도 인접 선택자는 계속 맞는다 — 목록이 모서리를 되찾게 되돌린다 */
+  .mhead + .list{border-top:1px solid var(--bo-primary);border-radius:var(--r12)}
+  .mhead + .list > *:first-child{
+    border-top-left-radius:var(--r12);border-top-right-radius:var(--r12);
+  }
   .list li.row.mrow{grid-template-columns:1fr}
-  .mrow .row-act{width:auto}
+  .mrow .row-act{width:auto;justify-content:flex-start}
   .mrow .c-money,.mrow .c-when{text-align:left}
+  .mrow .c-money b,.mrow .c-money i,.mrow .c-when i{display:inline}
+  .mrow .c-money i,.mrow .c-when i{margin-left:6px}
+  /* 좁은 폭에서는 팝업이 오른쪽으로 넘칠 수 있어 왼쪽에 붙인다 */
+  .rm-pop{right:auto;left:0}
 }
 
 /* 엑셀 내려받기 — 엑셀 브랜드 그린 */
@@ -944,18 +1270,8 @@ button.catchip:hover{background:var(--cos95);border-color:var(--cos50);color:var
 }
 
 
-/* 대기 건수 카드는 목록 화면에서도 가운데 정렬하고, 누른 카드를 표시한다 */
-#adminStats .stat{text-align:center}
-#adminStats .stat span,#adminStats .stat i{display:block}
-#adminStats .stat.on{border-color:var(--cos50);box-shadow:0 0 0 3px var(--cos95)}
 
 
-/* 고른 카드는 문구 대신 색으로 알린다 — 카드 전체가 눌린 상태로 보이게 */
-#adminStats .stat.on,#adminPanel .stats .stat.on{
-  background:var(--cos95);border-color:var(--cos50);box-shadow:none;
-}
-#adminStats .stat.on b,#adminPanel .stats .stat.on b,
-#adminStats .stat.on span,#adminPanel .stats .stat.on span{color:var(--cos40)}
 
 /* ---------- 신청 목록(구성원) ---------- */
 .list li.row.lrow{
@@ -1004,3 +1320,284 @@ button.catchip:hover{background:var(--cos95);border-color:var(--cos50);color:var
   background:var(--gray95);border-color:transparent;color:var(--tx-tertiary);
   font-size:11px;font-weight:700;padding:1px 7px;
 }
+
+/* ---------- 카드 보기 ---------- */
+ul.cards li.card.dim{opacity:.62}
+.card-top{align-items:flex-start}
+.card-top .card-rail{margin-left:auto}
+ul.cards .card-title{
+  font-size:15px;font-weight:700;line-height:1.45;letter-spacing:-.02em;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+ul.cards .row-sub{font-size:12.5px;color:var(--tx-quaternary);gap:6px}
+ul.cards .card-tags{margin-top:0}
+ul.cards .l-score{margin-top:auto}   /* 별점이 없으면 아래 foot 이 바닥에 붙는다 */
+ul.cards .card-foot{margin-top:auto}
+ul.cards .card-foot .c-price{
+  display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;
+}
+ul.cards .card-foot .c-price b{
+  font-size:15px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;
+}
+ul.cards .card-foot .c-price span{font-size:11.5px;font-weight:700;color:var(--posi40)}
+ul.cards .l-cat{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 툴바 오른쪽 끝에 붙인다 */
+.toolbar .viewtoggle{margin-left:auto}
+
+/* 카드는 가로가 좁다 — 평가·추천을 한 줄에 붙이면 별이 눌린다 */
+ul.cards .l-score{
+  display:flex;flex-direction:column;align-items:flex-end;gap:5px;
+  font-size:11.5px;font-weight:700;color:var(--tx-quinary);
+}
+
+/* 레이블과 별을 한 덩어리로 — flex 컨테이너에서 맨 텍스트는 따로 떨어져 나간다 */
+.l-score .sc{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+
+/* ---------- 내 학습 현황 카드 ---------- */
+/* 흰 바탕에 파랑은 액센트로만 — 값은 먹색, 파랑은 신청 버튼·진척 막대·아바타에만 쓴다.
+   위계는 색이 아니라 크기로 준다: 값 26px / 단위 13px / 라벨 12px. */
+.mystrip{
+  /* 칸 머리선 전용 4색. :root 를 늘리지 않고 카드에 매어 둔다 — 이 카드 밖에서는 안 쓴다.
+     한 세트로 읽히도록 채도·명도를 맞춰 골랐고, 알림 줄이 이 값을 물려받는다. */
+  --ms-run:#dd8b45;   /* 수강 중 */
+  --ms-all:#4b8dc9;   /* 내 강좌 */
+  --ms-done:#5aa47c;  /* 환급 완료 */
+  --ms-paid:#9a7fc2;  /* 받은 환급액 */
+  margin:18px 0 0;background:var(--bg-card);
+  border:1px solid var(--bo-primary);border-radius:var(--r12);
+  box-shadow:var(--shadow-sm);
+}
+
+.mystrip .ms-head{display:flex;align-items:center;gap:12px;padding:16px 20px}
+.mystrip .ms-ava{
+  display:grid;place-items:center;flex:none;width:38px;height:38px;
+  border-radius:50%;font-size:15px;font-weight:700;color:#fff;
+}
+.mystrip .ms-id{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.mystrip .ms-name{display:flex;align-items:center;gap:4px;min-width:0}
+.mystrip .ms-id b{
+  font-size:16px;font-weight:700;letter-spacing:-.02em;color:var(--tx-primary);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* 이름에 붙는 손잡이라 테두리를 두르지 않는다 — 글자 옆 여백만 갖는다 */
+.ms-fold{
+  display:grid;place-items:center;flex:none;width:22px;height:22px;padding:0;
+  background:none;border:none;border-radius:var(--r6);
+  color:var(--tx-quinary);cursor:pointer;
+  transition:background .12s ease,color .12s ease;
+}
+.ms-fold svg{width:15px;height:15px;transition:transform .18s ease}
+.ms-fold:hover{background:var(--bg-hover);color:var(--tx-secondary)}
+.ms-fold:focus-visible{outline:2px solid var(--cos50);outline-offset:1px}
+/* 접히면 화살표가 오른쪽을 가리켜 "펼치면 더 있다"를 알린다 */
+.mystrip.fold .ms-fold svg{transform:rotate(-90deg)}
+.mystrip.fold .ms-body{display:none}
+.mystrip .ms-id span{font-size:12px;font-weight:600;color:var(--tx-quaternary)}
+.mystrip .ms-act{display:flex;align-items:center;gap:8px;flex:none}
+/* 좁혀 보는 중이면 버튼이 눌린 채로 남아 지금 상태를 알린다 */
+.mystrip .ms-act .btn-ghost.on{
+  background:var(--cos95);border-color:var(--cos50);color:var(--cos40);
+}
+
+/* 칸을 세로줄로만 끊는다 — 칸마다 상자를 두르면 카드 안에 카드가 생긴다 */
+.mystrip .ms-nums{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr}
+.ms-col{
+  padding:16px 20px;min-width:0;
+  border-left:1px solid var(--bo-primary);border-top:3px solid var(--bo-primary);
+}
+.ms-col:first-child{border-left:none}
+/* 칸마다 다른 머리선 — 아래 알림 줄이 이 중 하나의 색을 물려받는다 */
+.ms-col.run{border-top-color:var(--ms-run)}
+.ms-col.all{border-top-color:var(--ms-all)}
+.ms-col.done{border-top-color:var(--ms-done)}
+.ms-col.paid{border-top-color:var(--ms-paid)}
+.ms-lb{display:block;font-size:12px;font-weight:600;color:var(--tx-quaternary)}
+.ms-vl{display:flex;align-items:baseline;gap:2px;margin-top:5px}
+.ms-vl b{
+  font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1.1;
+  color:var(--tx-primary);font-variant-numeric:tabular-nums;
+}
+/* 단위는 숫자에 붙는 부연이라 작게 — 같은 크기로 두면 숫자의 시인성을 깎는다 */
+.ms-vl i{font-style:normal;font-size:13px;font-weight:700;color:var(--tx-quinary)}
+
+/* 대표 강의 한 줄. 첫 칸이 넓은 이유가 이 줄이다 */
+.ms-lead{margin-top:12px}
+.ms-bar{display:block;height:4px;border-radius:999px;background:var(--gray94);overflow:hidden}
+.ms-bar i{display:block;height:100%;border-radius:999px;background:var(--cos50)}
+.ms-cap{
+  display:block;margin-top:7px;font-size:12.5px;font-weight:600;color:var(--tx-quinary);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* 막대는 4px 밖에 안 되니 위아래로 히트 영역을 넓힌다 — 레이아웃은 음수 마진으로 되돌린다.
+   목록 행의 rail 이 쓰는 것과 같은 수법이다. */
+.ms-lead .tip{display:block;padding:5px 0;margin:-5px 0;cursor:help}
+.ms-cap .ms-end{color:var(--tx-quaternary)}
+
+/* 알림 줄 — 카드 맨 아래에 붙어 "지금 걸린 것"을 한 줄로 말한다 */
+/* 바탕색만으로 위 칸과 이어진다 — 왼쪽 액센트 바는 두지 않는다.
+   글자 시작점은 칸 라벨과 같은 20px 에 맞춘다. */
+.ms-note{
+  display:flex;align-items:center;gap:9px;
+  padding:11px 20px;font-size:12.5px;font-weight:600;
+  border-top:1px solid var(--bo-primary);
+  /* 카드가 더는 잘라주지 않으므로(툴팁이 나가야 한다) 스스로 둥글린다.
+     테두리 1px 안쪽이라 12px 이 아니라 11px 이다. */
+  border-radius:0 0 11px 11px;
+}
+.ms-note .grow{flex:1;min-width:0}
+.ms-note .ms-dot{flex:none;width:6px;height:6px;border-radius:50%;background:currentColor}
+.ms-note .ms-go{
+  flex:none;font-family:var(--sans);font-size:12.5px;font-weight:700;
+  background:none;border:none;padding:0;color:inherit;cursor:pointer;
+  text-decoration:underline;text-underline-offset:3px;
+}
+.ms-note .ms-go:hover{text-decoration-thickness:2px}
+/* 바탕은 그 칸 색을 아주 옅게 깐 것이고, 글자는 같은 색을 어둡게 눌러 4.5:1 을 넘긴다 */
+.ms-note.run{background:#fdf5ee;color:#8a4d17}
+.ms-note.done{background:#eef8f2;color:#2c6a4a}
+/* 반려는 세는 칸이 없다 — 급함을 색이 대신 말해야 하는 하나뿐인 예외 */
+.ms-note.no{background:var(--nega95);color:var(--nega40)}
+
+@media (max-width:820px){
+  .mystrip .ms-nums{grid-template-columns:1fr 1fr}
+  /* 두 줄로 접혀도 머리선 색은 칸의 표시니 지운다 — 세로줄만 다시 짠다 */
+  .ms-col{border-left:none}
+  .ms-col:nth-child(2n){border-left:1px solid var(--bo-primary)}
+  .ms-col:first-child{grid-column:1/-1}
+}
+@media (max-width:560px){
+  .mystrip .ms-head{flex-wrap:wrap}
+  .mystrip .ms-act{width:100%}
+  .mystrip .ms-act .btn-ghost,.mystrip .ms-act .btn-new{flex:1}
+  .ms-vl b{font-size:22px}
+}
+
+/* ---------- 상세 · 진행 상황 ---------- */
+/* 목록 rail 과 같은 색 체계를 쓴다: 지나온 칸 초록(posi50), 지금 칸 파랑(cos50),
+   멈춘 칸 발간(nega50), 아직 안 온 칸 회색. 두 화면이 다른 색으로 같은 상태를
+   말하면 사용자가 색을 두 번 배워야 한다. */
+/* 바로 아래 붙는 신청자·분류 목록(.kv)은 다른 섹션과 달리 h4 머리글이 없어서
+   "새 덩어리가 시작됐다"는 신호가 없다. 그래서 진행 상황 쪽에서 닫아준다 —
+   아래 여백에 실선 하나를 더해 어디까지가 진행 이야기인지 못 박는다. */
+.d-sec.dp{
+  margin:0 0 24px;padding-bottom:20px;
+  border-bottom:1px solid var(--bo-primary);
+}
+
+.dp-stage{display:flex;align-items:flex-start}
+.dp-step{flex:1;position:relative;min-width:0;text-align:center}
+/* 앞 칸의 점에서 이 칸의 점까지 잇는다 — 칸 폭이 모두 같아 -50% 가 정확히 앞 점이다 */
+.dp-step::before{
+  content:"";position:absolute;top:4px;left:-50%;right:50%;height:2px;
+  background:var(--gray90);
+}
+.dp-step:first-child::before{display:none}
+.dp-step.past::before{background:var(--posi50)}
+
+.dp-step i{
+  display:block;width:10px;height:10px;margin:0 auto;border-radius:50%;
+  background:var(--gray88);position:relative;
+}
+.dp-step.done i{background:var(--posi50)}
+.dp-step.on i{background:var(--cos50);box-shadow:0 0 0 3px var(--cos95)}
+.dp-step.stop i{background:var(--nega50);box-shadow:0 0 0 3px var(--nega95)}
+
+.dp-step b{
+  display:block;margin-top:9px;font-size:11.5px;font-weight:700;line-height:1.35;
+  color:var(--tx-quinary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.dp-step.done b,.dp-step.on b{color:var(--tx-secondary)}
+.dp-step.stop b{color:var(--nega40)}
+.dp-step span{
+  display:block;margin-top:2px;font-size:10.5px;font-weight:600;
+  color:var(--tx-quinary);font-variant-numeric:tabular-nums;
+}
+
+/* 몇 번째 단계인지 숫자로도 박아둔다 — 점만으로는 세어야 알 수 있다 */
+.dp-at{
+  margin:14px 0 0;font-size:12px;font-weight:600;color:var(--tx-quaternary);
+  font-variant-numeric:tabular-nums;
+}
+.dp-at b{margin-left:6px;font-weight:800;color:var(--tx-primary)}
+
+.d-sec.dp .note.next{margin:12px 0 0}
+
+.dp-period{margin-top:18px;padding-top:16px;border-top:1px solid var(--bo-primary)}
+.dp-prow{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  margin-bottom:9px;font-size:12.5px;font-weight:600;
+}
+.dp-plb{color:var(--tx-quaternary);flex:none}
+.dp-pvl{color:var(--tx-secondary);font-variant-numeric:tabular-nums;text-align:right}
+/* 기한이 지난 건은 날짜 줄에서 바로 알린다 */
+.dp-pvl.over{color:var(--nega40)}
+
+.dp-pbar{height:8px;border-radius:999px;background:var(--gray94);overflow:hidden}
+.dp-pbar i{display:block;height:100%;border-radius:999px;background:var(--cos50)}
+.dp-pfoot{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  margin-top:8px;font-size:11px;font-weight:600;color:var(--tx-quinary);
+  font-variant-numeric:tabular-nums;
+}
+.dp-pfoot b{font-size:11.5px;font-weight:800;color:var(--cos40)}
+
+/* ---------- 관리자 알림 줄 ---------- */
+/* 구성원 화면에 얹는 한 줄. 짙은 남색 단색인 이유는 이 화면의 다른 모든 것(흰 카드, 흰 페이지,
+   옅은 색 라인)이 밝아서, 어두운 덩어리 하나가 가장 적은 면적으로 가장 크게 튀기 때문이다.
+   의미색(노랑=대기, 초록=완료, 발간=반려)을 하나도 안 쓰므로 뜻이 겹칠 일도 없다.
+   숫자만 앰버로 빼서 "몇 건"이 바 안에서 다시 한 번 도드라진다. */
+.adminbar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:12px 0 0;padding:11px 16px;
+  background:#12263f;border-radius:var(--r10);color:#fff;
+  box-shadow:var(--shadow-sm);
+}
+.adminbar .ab-tag{
+  flex:none;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:var(--r6);
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.26);color:#fff;
+}
+.adminbar .ab-sum{font-size:13px;font-weight:800;letter-spacing:-.01em}
+.adminbar .ab-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1}
+.ab-chip{
+  font-family:var(--sans);font-size:12px;font-weight:600;line-height:1.5;
+  display:inline-flex;align-items:center;gap:6px;padding:4px 10px;
+  background:rgba(255,255,255,.1);color:#fff;
+  border:1px solid rgba(255,255,255,.24);border-radius:var(--r32);cursor:pointer;
+  transition:background .12s ease,border-color .12s ease;
+}
+.ab-chip:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5)}
+/* 앰버(#ffc107)는 이 남색 위에서 대비 9:1 을 넘긴다 */
+.ab-chip b{font-weight:800;color:var(--warn50);font-variant-numeric:tabular-nums}
+.ab-go{
+  flex:none;font-family:var(--sans);font-size:12.5px;font-weight:700;
+  background:none;border:none;padding:0;color:#fff;cursor:pointer;
+  text-decoration:underline;text-underline-offset:3px;
+}
+.ab-go:hover{text-decoration-thickness:2px}
+.ab-chip:focus-visible,.ab-go:focus-visible{
+  outline:2px solid var(--warn50);outline-offset:2px;
+}
+
+/* 좁아지면 칩 줄이 아래로 내려가고, 넘어갈 길은 오른쪽에 남는다 */
+@media (max-width:680px){
+  .adminbar .ab-chips{flex:1 1 100%;order:3}
+  .ab-go{margin-left:auto}
+}
+
+/* 신청 버튼은 현황 카드로 올라갔다 — 여기는 제목과 건수만 남는다 */
+.ledger-head{align-items:center;padding:14px 4px 12px}
+.ledger-head .title{display:inline-flex;align-items:baseline;gap:8px}
+.ledger-head .title .count{font-size:12.5px;font-weight:600;color:var(--tx-quaternary)}
+.ledger-head .btn-new{height:36px;font-size:13.5px;padding:0 16px}
+
+/* 이수증 — 아이콘 + 개수. 파일명은 올렸을 때만 뜬다 */
+.certchip{
+  display:inline-flex;align-items:center;gap:4px;padding:2px 8px 2px 6px;
+  background:var(--bg-subtle);border:1px solid var(--bo-primary);border-radius:var(--r6);
+  color:var(--tx-tertiary);font-size:11.5px;cursor:default;
+}
+.certchip svg{width:13px;height:13px;flex:none}
+.certchip b{font-weight:800;font-variant-numeric:tabular-nums}
+/* 파일명이 여러 줄일 수 있어 nowrap 을 푼다 */
+.tip > em.multi{white-space:normal;max-width:260px;line-height:1.7;text-align:left}

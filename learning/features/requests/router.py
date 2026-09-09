@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import delete
-from sqlmodel import Session, func, select
+from sqlmodel import Session, select
 
 from core.config import EMAIL_TO_NAME
 from core.db import LearningCert, LearningHistory, LearningRequest, LearningSite, get_session
@@ -21,7 +21,7 @@ def _ensure_site(session: Session, name: str) -> None:
 
 
 def _out(session: Session, req: LearningRequest) -> dict:
-    return service.to_dict(req, service.cert_count(session, req.id))
+    return service.to_dict(req, service.cert_names(session, req.id))
 
 
 def _save(session: Session, req: LearningRequest) -> dict:
@@ -39,10 +39,13 @@ def list_requests(request: Request, session: Session = Depends(get_session),
         # 숨김·보관은 관리자 화면에만 있어야 한다. 목록에서 빼는 판정은 서버가 한다.
         stmt = stmt.where(LearningRequest.active == 1, LearningRequest.archived == 0)
     rows = session.exec(stmt).all()
-    counts = dict(session.exec(
-        select(LearningCert.request_id, func.count(LearningCert.id))
-        .group_by(LearningCert.request_id)).all())
-    return [service.to_dict(r, counts.get(r.id, 0)) for r in rows]
+    # 건마다 조회하면 N+1 이 된다 — 한 번에 읽어 request_id 로 묶는다
+    names: dict[int, list[str]] = {}
+    for rid, name in session.exec(
+            select(LearningCert.request_id, LearningCert.name)
+            .order_by(LearningCert.id)).all():
+        names.setdefault(rid, []).append(name)
+    return [service.to_dict(r, names.get(r.id, [])) for r in rows]
 
 
 @router.get("/{rid}", dependencies=[Depends(require_identity)])

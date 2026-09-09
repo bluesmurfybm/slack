@@ -6,13 +6,19 @@ const APP = {
   categories: [],
   policy: {},
   admins: null,
-  view: { mode: "user", tab: "manage" },
+  view: { mode: "user", tab: "manage", layout: "list" },
   filter: { q: "", site: "", level: "", status: "", mine: false },
   page: { list: 1, manage: 1 },
   size: { list: 30, manage: 30 },
 };
 
 /* ---------- 페이징 ---------- */
+
+const LAYOUT_KEY = "learning-list-layout";
+try {
+  const saved = localStorage.getItem(LAYOUT_KEY);
+  if (saved === "list" || saved === "card") APP.view.layout = saved;
+} catch (e) { }
 
 const PAGE_SIZES = [10, 20, 30, 50, 100];
 const PAGE_KEY = "learning-page-size";
@@ -181,6 +187,19 @@ const NO_SITE = { fg: "#575e64", bar: "#b7c0ca", bg: "#eceff1" };
 function siteTheme(name) {
   const i = APP.sites.findIndex(s => s.name === name);
   return i < 0 ? NO_SITE : SITE_THEMES[i % SITE_THEMES.length];
+}
+
+// 이수증 — 개수는 아이콘 옆에, 파일명은 올렸을 때 팝오버로
+const CERT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="8" r="5" /><path d="M8.5 12.6 7 22l5-2.8 5 2.8-1.5-9.4" /></svg>`;
+
+function certChip(r) {
+  if (!r.cert_count) return "";
+  const names = (r.cert_names || []).map(esc).join("<br>")
+    || `이수증 ${r.cert_count}건`;
+  return `<span class="tip certchip">${CERT_ICON}<b>${r.cert_count}</b>
+    <em class="multi">${names}</em></span>`;
 }
 
 function siteBadge(name) {

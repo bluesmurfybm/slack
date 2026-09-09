@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
-from core.db import CategoryOption, get_session
+from core.db import CategoryOption, LearningRequest, get_session
 from features.identity.auth import is_admin, require_admin, require_identity
 
 router = APIRouter(prefix="/learningapi/categories", tags=["categories"])
@@ -162,6 +162,38 @@ def deactivate_category(cid: int, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(row)
     return _out(row)
+
+
+def _usage_count(session: Session, row: CategoryOption) -> int:
+    """이 분류를 쓰는 신청이 몇 건인지. 신청 행은 분류를 이름 문자열로 들고 있어
+    (site/category_large/category_medium) 옵션 행이 사라져도 표시는 남는다.
+    그래도 쓰는 중인 분류를 지우면 관리자가 필터에서 그 이름을 다시 고를 수 없게 되므로,
+    쓰고 있으면 지우지 못하게 막고 숨기기(비활성)로 보낸다."""
+    stmt = select(func.count()).select_from(LearningRequest).where(
+        LearningRequest.site == row.site,
+        LearningRequest.category_large == row.large)
+    if row.medium:
+        # 중분류는 그 중분류를 고른 건만, 대분류는 그 아래 전부를 센다
+        stmt = stmt.where(LearningRequest.category_medium == row.medium)
+    return session.exec(stmt).one()
+
+
+@router.delete("/{cid}/purge", dependencies=[Depends(require_admin)])
+def delete_category(cid: int, session: Session = Depends(get_session)):
+    """정말 지운다. 대분류를 지우면 그 아래 중분류도 함께 사라진다.
+    쓰는 신청이 있으면 409 로 거부한다 — 그 경우는 숨기기(DELETE /{cid})가 맞다."""
+    row = _fetch(session, cid)
+    kids = _children(session, row)
+    used = _usage_count(session, row)
+    if used:
+        raise HTTPException(
+            status_code=409,
+            detail=f"이 분류를 쓰는 신청이 {used}건 있어 지울 수 없습니다. 숨기기만 됩니다.")
+    for child in kids:
+        session.delete(child)
+    session.delete(row)
+    session.commit()
+    return {"deleted": 1 + len(kids)}
 
 
 def _children(session: Session, row: CategoryOption) -> list[CategoryOption]:

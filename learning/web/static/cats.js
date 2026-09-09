@@ -26,7 +26,8 @@ function chipHTML(site, large, c) {
     onclick="pickCategory(${c.id})">${label}</button>`;
 }
 
-function cardHTML(site, large, node) {
+// list.js 의 cardHTML 과 이름이 겹치면 나중에 읽힌 쪽이 덮어쓴다 — 분류 카드는 따로 둔다
+function catCardHTML(site, large, node) {
   const off = node.row && !node.row.active;
   const chips = node.mediums.map(c => chipHTML(site, large, c)).join("");
   const star = node.row && node.row.recommended ? " ★" : "";
@@ -45,7 +46,7 @@ function openCategoryBrowser(pick) {
 
   const body = [...tree.entries()].map(([site, larges]) => {
     const mediums = [...larges.values()].reduce((n, v) => n + v.mediums.length, 0);
-    const cards = [...larges.entries()].map(([large, node]) => cardHTML(site, large, node));
+    const cards = [...larges.entries()].map(([large, node]) => catCardHTML(site, large, node));
     return `<section class="catsite">
       <div class="head">
         <b style="color:${siteTheme(site).fg}">${esc(site)}</b>
