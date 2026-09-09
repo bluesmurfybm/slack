@@ -22,7 +22,7 @@ $__current = $__u ? [
     'color'       => user_color($__u),
 ] : null;
 $__cfg   = require __DIR__ . '/config.php';
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => $__cfg['links']['learning']];
+$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => $__cfg['links']['learning'], 'access' => 'access/access.php'];
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -317,6 +317,7 @@ function renderTiles(){
   const slackIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
   const magazineIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
   const learningIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg>`;
+  const accessIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.1-8.1M17 6l2.5 2.5M14.5 8.5 17 11"/></svg>`;
   const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
   document.getElementById("tiles").innerHTML=`
     <a class="tile" href="${LINKS.book}" target="_blank" rel="noopener">
@@ -338,6 +339,11 @@ function renderTiles(){
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#F2711C">${learningIcon}</span>
       <div><h3>BlueLearn</h3><p>역량 강화를 위한 강의를 신청하고 수강료를 지원받습니다.</p></div>
+    </a>
+    <a class="tile" href="${LINKS.access}" target="_blank" rel="noopener">
+      <span class="go">${arrow}</span>
+      <span class="ic" style="background:#0F7B8A">${accessIcon}</span>
+      <div><h3>Coursemos EnvHub</h3><p>대학별 svn·git, 계정, DB, plink 정보를 찾아 복사합니다.</p></div>
     </a>
     <div class="tile soon">
       <span class="badge-soon">준비중</span>

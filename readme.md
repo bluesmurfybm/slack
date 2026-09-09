@@ -27,6 +27,13 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── var/                     DB·업로드 (gitignore)
 │   └── tests/
 │
+├── access/                      Coursemos EnvHub — PHP, slack의 schools를 마스터로 씀
+│   ├── access.php               목록 + 상세 + 편집 (복사 버튼)
+│   ├── access_api.php           JSON API
+│   ├── access_import.php        접속정보 엑셀 → DB (CLI / 화면 업로드 겸용)
+│   ├── db.php, guard.php        전용 DB 연결 · 포털 로그인 가드
+│   └── styles/access.css
+│
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
     ├── auth.php, db.php, config.php, slack_lib.php, header.php   (공통)
     ├── lists.php, comments.php, data.php, assign.php, ...        (핵심 요청 목록 기능)
@@ -127,6 +134,127 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 ---
 
+## access (학교 접속 정보)
+
+대학별 svn/git 주소 · 사이트 로그인 · 개발/운영/학사 DB · plink 터널링 · 배포 방법을 찾아
+**클립보드로 복사**하는 화면(`access/access.php`). 원본은 사내 공유 엑셀
+`SVN_배포_디비정보(블루내부공유).xlsx`.
+
+- **`schools` 가 마스터다.** 대학명 · 버전 · 개발/운영/로그 URL 은 slack 의 `schools` 를 그대로
+  쓰고(= `slack/schools/schools_admin.php` 와 같은 데이터), 접속·배포 정보만 `school_access` 에
+  둔다. 대학명과 URL을 양쪽에 복제하지 않는 게 이 구조의 핵심.
+- **학교는 (이름, 버전)으로 식별한다.** 이름만 같고 버전이 다르면 서버·저장소·계정이 전부
+  다른 별개 사이트라(강원대 3.2 의 svn 과 강원대 4.5 의 git) 한 대학으로 묶으면 안 된다.
+  가져오기는 이름과 버전이 **둘 다** 맞는 학교에만 붙이고, 버전이 안 맞으면 기존 학교에
+  얹지 않고 `schools` 에 행을 새로 만든다. 현재 이렇게 갈린 곳이 10군데(강원대·부산대·
+  서울시립대·한림대·송곡대·우송정보대·혜전대·소프트랩·한국기술교육대·국립보건연구원).
+- **초기 데이터 넣기** — 엑셀을 루트에 두고:
+  ```
+  php access/access_import.php                 # 이미 데이터가 있으면 중단
+  php access/access_import.php --force         # 덮어쓰기
+  ```
+  화면의 `[엑셀 가져오기]` 버튼으로 업로드해도 같은 코드가 돈다. 엑셀에만 있는 학교는
+  `schools` 에 새로 등록되지만, **이미 있는 학교의 이름·URL은 덮어쓰지 않는다**(관리 화면에서
+  손본 값 보호). URL 칸이 비어 있을 때만 채워 준다.
+- **로그인은 운영/테스트로 갈라 저장하고, 계정과 비밀번호도 나눈다.** 엑셀은 한 칸에
+  `개발 : … ⏎ 운영 : …` 처럼 몰아 적어 놨는데 실제로 필요한 건 "지금 이 사이트 비번" 하나다.
+  - `access_split_login()` — 운영/테스트로 가른다. 라벨이 붙은 162건과 라벨 없이 두 줄인
+    16건(앞이 테스트, 뒤가 운영)은 갈라지고, 라벨 없는 한 줄 79건은 단정할 수 없어
+    `login_info` 원문에 남는다.
+  - `access_split_account()` — `csmsathena / Zhtm&ahtm1` 을 계정과 비밀번호로 가른다.
+    **`login_ops`/`login_dev` 에는 비밀번호만** 들어가서 복사 버튼이 곧바로 비밀번호 칸에
+    붙는다. 계정은 `login_ops_id`/`login_dev_id` 로 뺀다 — 대부분 csmsathena(65)·admin(13)
+    이지만 obj007·geladmin·manager 같은 고유 계정이 9건 있어 버리면 로그인이 안 된다.
+    한 줄짜리 값만 가르고(여러 줄은 설명이 섞인 것), 왼쪽은 영숫자 `. _ @ -` 만 허용해
+    `&`·`!` 가 든 비밀번호를 계정으로 오인하지 않는다.
+- **`school_access` 가 안 갖는 것** — 대학명·버전·URL은 `schools` 것을 쓴다. 무들 상세버전
+  (`moodle_ver`)과 엑셀 시트명(`grp`)은 컬럼째 없앴다. 엑셀의 '무들 버전' 칸은 가져오기가
+  학교를 짝지을 때만 쓰고 저장하지 않는다.
+- **`school_access` 에는 유일 제약이 없다.** 위 규칙 덕에 실질적으로 학교당 1행이지만,
+  가톨릭성서모임처럼 같은 버전(3.9)으로 두 시트(3.9 · 3.9-saas)에 다 올라온 경우가 남아
+  있어서 `UNIQUE(school_id)` 를 걸면 뒤 시트가 앞 시트를 덮어쓴다. 행은 각자의 `id` 로
+  구분하고 `school_id` 로 JOIN 한다. 가져오기는 TRUNCATE 후 넣으므로 upsert 가 필요 없다.
+- 3.9-saas 시트에만 있는 '운영 웹서버' 칸은 전용 컬럼(`ops_web`)을 두지 않고 비고(`note`)에
+  `[운영 웹서버]` 머리말을 달아 합쳐 넣는다(`access_merge_note()`). 값이 한 건뿐이라 컬럼을
+  따로 유지할 이유가 없었다.
+- `dev_note`/`ops_note` 는 URL 칸 원문 중 **마스터에 없는 것만** 남긴다
+  (`ax_strip_known_urls()`). 주소 하나만 적힌 줄이고 그 호스트가 이미 `schools.dev/ops` 에
+  있으면 버려서 33·47건이 17·12건으로 줄었다. 남는 건 여분의 도메인이나
+  "개발서버는 블루에서만 접근 가능" 같은 진짜 메모다.
+- 목록의 `svn / git` 칸은 종류를 칩으로 보여 주고, git 인데 주소만 적힌 경우
+  복사 버튼이 `git clone <주소>` 로 만들어 준다(`repoInfo()`). 현재 svn 241 · git 18 ·
+  주소 자체가 없는 것 15.
+- **비밀번호는 DB에 암호화해 둔다.** 복사 버튼이 있어야 하니 되돌릴 수 있어야 해서, 포털이
+  슬랙 토큰에 쓰는 것과 같은 AES-256-GCM + `config.php` 의 `key` 를 쓴다(`access_enc()`/
+  `access_dec()`). 대상은 `login_ops`·`login_dev`·`login_info` 세 칸. 저장 형태는
+  `enc:v1:<base64(iv|tag|cipher)>` 이고, 접두사가 없으면 아직 안 옮긴 평문으로 보고 그대로
+  돌려주므로 마이그레이션을 여러 번 돌려도 안전하다. API가 내려줄 때 풀어서 보내므로
+  **응답 본문에는 평문이 실린다** — 운영에서는 HTTPS 로 서비스해야 한다.
+  `auth.php` 의 `enc_token()` 을 그대로 안 쓰는 건 그 파일이 include 시점에 세션을 여는데
+  가져오기 스크립트는 CLI 로도 돌기 때문.
+  **아직 평문인 것**: `dev_db`·`ops_db`·`haksa_db`·`plink`·`deploy_acct` 안에 섞여 있는
+  서버·DB 비밀번호는 자유 서술이라 손대지 않았다.
+- **화면은 공통 / 테스트 서버 / 운영 서버 세 묶음이다.** 구성은 `access_field_groups()` 한
+  곳에 있고 상세 패널과 편집 폼이 같은 정의를 쓴다.
+
+  | 묶음 | 칸 |
+  |---|---|
+  | 공통 정보 | 최초 오픈 · svn/git 주소 · VPN 프로그램 · VPN 접속 방법 · 배포 방법 · 비고 |
+  | 테스트 서버 | 개발 URL · 아이디 · 비밀번호 · 메모 · 개발 DB |
+  | 운영 서버 | 운영 URL · 로그 관리 · 아이디 · 비밀번호 · 메모 · 운영 DB · 학사 DB |
+
+  이 구조로 정리하면서 흩어져 있던 칸을 합쳤다. **어느 것이든 "옮긴 다음 지운다"** 순서를
+  지켜야 내용이 사라지지 않는다(`access_merge_dropped_cols()`).
+  - `etc`(46) · `기타`(3) · `plink`(1) → **비고**. `[etc]` 처럼 머리말을 달아 출처를 남긴다.
+  - `배포 계정`(115) → **배포 방법**
+  - `로그인 정보(구분 없음)`(81) → **운영 비밀번호**. 라벨 없이 한 줄만 적힌 값이 대부분이고
+    테스트는 거의 `Zhtm&ahtm1` 고정이라 운영 쪽으로 본다. `csmsathena / 비번` 처럼 계정이
+    붙어 있으면 아이디도 떼어 낸다.
+  - 가져오기도 같은 결과를 내도록 고쳤다. 매핑에서 `_` 로 시작하는 키(`_etc`·`_plink`·
+    `_deploy_acct`·`_login_info`)가 전용 컬럼 없이 합쳐 넣는 칸이다.
+- 필드 `type` 이 화면을 정한다 — `input`(한 줄) · `area`(여러 줄) · `pw`(가림) · `rich`(Editor.js) ·
+  `url`(마스터인 schools 값이라 편집은 '학교 정보'에서).
+- **비밀번호는 `input[type=password]` + 눈 아이콘**으로 가린다. 저장값에 줄바꿈이 있는 행이
+  7건 있는데 input 은 줄바꿈을 못 담으므로, 화면에는 한 줄로 펴서 보여 주되 **그 칸을 손대지
+  않았으면 저장할 때 원본을 되돌린다**(access.php 의 `save()`). 안 건드린 값이 조용히 잘리면 안 된다.
+- **설명성 칸은 Editor.js 로 편집한다**(굵기·글자색·취소선·목록). 대상은 `type: rich` 인 칸 —
+  VPN 접속 방법 · 배포 방법 · 비고 · 개발/운영 메모 · 개발/운영/학사 DB.
+  저장소 주소와 계정 ID·비밀번호는 복사해서 그대로 붙여 넣는 값이라 뺐다.
+  - 저장값은 Editor.js 의 블록 JSON 이지만, 엑셀에서 가져온 값은 전부 평문이라
+    **"JSON 으로 안 읽히면 평문"** 으로 보고 둘 다 받는다(`ejParse`). 마이그레이션이 없다.
+  - 화면에 그릴 때는 `ejSanitize()` 로 서식 태그(b/s/span 등)만 남기고 속성은 색상 style 만
+    통과시킨다. script·style·iframe 류는 벗기지 않고 통째로 버린다 — 껍데기만 벗기면 안에
+    있던 코드가 글자로 남는다.
+  - **복사 버튼과 검색은 항상 평문**을 쓴다(`ejToText`). plink 추출도 평문화 후에 돌린다.
+  - Editor.js 는 자기 CSS 를 런타임에 head 끝으로 밀어 넣어서 우리 스타일이 항상 진다.
+    다크 대응은 `.ejholder` 접두로 특이도를 올리고, 전역으로 덮이는 `::selection` 만 `!important`
+    로 되돌린다.
+- 목록은 **리스트/카드 두 가지 보기**를 지원한다(툴바 오른쪽 토글, 선택은 `localStorage`).
+  저장소 칸은 종류 칩과 복사 버튼만 두고 주소는 상세에서 본다.
+- 필터는 버전 칩(버전별 학교 수 표시)과 VPN 드롭다운 두 가지다. VPN 은 `FortiClient, Arcon`
+  처럼 둘을 같이 쓰는 곳이 있어서 값 전체가 아니라 쉼표로 나눈 프로그램 하나하나로 고르고
+  포함 여부로 거른다.
+- **대학 추가는 `schools` 부터 넣는다.** 목록이 `schools LEFT JOIN school_access` 라, 접속 정보만
+  만들고 마스터에 안 넣으면 화면에 아예 안 나온다. `action:create` 가 `schools` INSERT →
+  그 id 로 `school_access` INSERT 순으로 처리한다. 이름만으로는 막지 않고(강원대 3.2/4.5 처럼
+  같은 대학의 다른 버전은 별도 행이 정상) **이름·버전이 똑같을 때만** 중복으로 거절한다.
+- 로그인 계정은 목록에서 칩으로 구분한다 — `csmsathena`(34) · `admin`(6) · 그 외 고유 계정(4:
+  obj007 · mmaster · geladmin · yadmin). 운영·테스트 계정이 같으면 칩 하나로 묶는다.
+- **`vpn` 은 프로그램명(varchar)이다.** 있으면 그 이름이 목록에 그대로 뜨고, 비어 있으면
+  별도 실행이 필요 없다는 뜻. 엑셀엔 VPN 전용 칸이 없어 비고·배포방법·DB 설명을 훑어
+  HIWARE / FortiClient / Citrix / SecuwaySSL / Arcon / WinNGS 를 찾아 채운다
+  (`access_detect_vpn()`, 274건 중 51건). 어디까지나 초깃값이고 근거 문장을 `vpn_note` 에
+  남기니 화면에서 고치면 된다. Arcon 은 엄밀히는 VPN이 아니라 접근제어(PAM)지만
+  "먼저 켜야 접속된다"는 점이 같아 함께 잡는다.
+- 복사 버튼은 `navigator.clipboard` 가 없을 때(개발 URL이 http 라 포털도 http 로 여는 경우)를
+  대비해 `execCommand` 폴백을 반드시 거친다. 사이트 주소는 복사 대상이 아니다 — 목록의
+  링크를 바로 누르면 되기 때문.
+- 엑셀의 `plink` 전용 칸은 거의 비어 있고 실제 터널링 명령은 **학사 DB · 운영 DB 설명 안에**
+  섞여 있다. 그래서 목록의 plink 복사 버튼은 그 칸들까지 훑어서 명령 줄만 뽑아 준다.
+- 엑셀의 나머지 시트(표절 · 보안취약점조치 · 참고 사이트)는 아직 안 가져온다.
+
+---
+
 ## 로컬에서 새로 만들어야 하는 파일 (전부 gitignore됨 — git엔 없음)
 
 | 파일 | 용도 | 비고 |
@@ -137,16 +265,60 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 | `book/config_local.py` | Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성 |
 | `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
 | `magazine/config_local.py` | Slack 웹훅 URL(선택) | `config_local.exam.py` 복사해서 사용 |
+| `SVN_배포_디비정보(블루내부공유).xlsx` (루트) | access 모듈 초기 데이터 | **직접 가져다 둘 것.** 전 대학 계정/비번이 들어 있어 커밋 금지 |
+
+`slack/config.php` 형식:
+```php
+<?php
+/**
+ * blue-iwork 포털 설정.
+ *  - DB는 slack 모듈(slack/config.php)과 동일한 slackapi MySQL을 그대로 재사용                                                                                                     한다.
+ *    (같은 물리 DB, 포털 전용 테이블만 추가로 생성)
+ *  - 슬랙 토큰 암호화 키는 git에 올리지 않는 config.local.php 에 최초 실행 시 1                                                                                                     회 자동 생성.
+ */
+
+$local = __DIR__ . '/config.local.php';
+if (!is_file($local)) {
+    $key = base64_encode(random_bytes(32));
+    file_put_contents($local, "<?php\nreturn [\n    'key' => '" . $key . "',\n];\n");
+}
+$localCfg = require $local;
+
+return [
+    // DB 접속 정보 (slack/config.php 와 동일한 slackapi DB)
+    'db' => [
+        'host'    => '127.0.0.1',
+        'port'    => 3306,
+        'user'    => 'root',
+        'pass'    => '계정비밀번호',
+        'name'    => 'slack_db',
+        'charset' => 'utf8mb4',
+    ],
+
+    // 슬랙 토큰 암호화(AES-256-GCM) 키 — base64, 32바이트. config.local.php 최초 생성.
+    'key' => $localCfg['key'],
+
+    // slack 모듈(업무현황판)이 쓰는 Slack Lists 설정 — 원래 slack/config.php 에 있던 값
+    // (slack/config.php 는 제거하고 여기 하나로 통합)
+    'list_id'         => 'F083TU7F0BZ',
+    'comment_channel' => 'C083TU7F0BZ',
+    'list_url'        => 'https://coursemos.slack.com/lists/T04LNBX6L/F083TU7F0BZ',
+
+    // 대시보드/공통 헤더 드롭다운이 참조하는 외부 모듈 링크. book은 별도 프로세스라 절대주소 필요.
+    // 실제 배포 주소가 다르면 config.local.php 에 'book_url' => '...' 을 넣어 덮어쓸 수 있음.
+    'links' => [
+        'book' => $localCfg['book_url'] ?? 'book',
+        'magazine' => $localCfg['magazine_url'] ?? 'magazine',
+        'learning' => $localCfg['learning_url'] ?? 'learning',
+    ],
+];
+```
 
 `slack/config.local.php` 형식:
 ```php
 <?php
 return [
-    'gmail' => [
-        'user'  => 'you@gmail.com',
-        'pass'  => '앱 비밀번호(일반 비번 아님)',
-        'label' => 'INBOX',
-    ],
+    'key' => 'p1WLBZerg/PAf8y7lae4DMSw0v1r8+LsQF3AjiV9Sas=',
 ];
 ```
 
@@ -183,6 +355,9 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 - `requests` — slack 유지보수 요청 목록(Slack Lists 동기화본)
 - `schools`, `user_reads`, `user_pins`, `user_hides`, `local_assignments`, `sync_meta` — slack 부가기능
 - `gmail_mails` — Gmail 캐시(계정별 구분, `account` 컬럼)
+- `school_access` — 대학별 접속·배포 정보(access 모듈). `schools` 가 마스터이고 여기는 상세라
+  `school_id` 로 붙는다. 한 대학이 버전군별로 여러 행을 가질 수 있어(강원대 3.5 + 4.5)
+  키는 `(school_id, grp)` 다.
 
 컬럼 추가 마이그레이션은 전부 `add_column_if_missing()`(`slack/db.php`)을 거쳐 동시 요청에도
 안전하게(이미 있으면 조용히 무시) 처리하도록 통일돼 있다. **새로 컬럼 추가 마이그레이션을 짤 때
