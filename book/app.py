@@ -258,7 +258,7 @@ def row_to_dict(row):
     return d
 
 
-app = FastAPI(title="도서구매신청")
+app = FastAPI(title="BlueBooks")
 init_db()
 app.mount("/styles", StaticFiles(directory=os.path.join(BASE, "styles")), name="styles")
 # 포털(root)의 styles/ 를 그대로 서빙 — topbar.css 공통 원본을 book이 복사하지 않고 직접 참조.

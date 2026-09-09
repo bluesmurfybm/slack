@@ -145,26 +145,25 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
     <aside class="card side">
       <h2>주차 <span class="tiny"><?= count($weeks) ?>개</span></h2>
       <?php
-      // 최근 몇 주는 바로 보이고, 그보다 오래된 주차는 달(수집 종료일 기준)로 묶어 접어 둔다.
-      // 보고 있는 주차가 접힌 달 안에 있으면 그 달만 펼친다.
-      $RECENT = 6;
-      $recent = array_slice($weeks, 0, $RECENT);
-      $older  = array_slice($weeks, $RECENT);
+      // 달(수집 종료일 KST 기준)로 묶는다. 이번 달만 펼치고 나머지는 접는다. 보고 있는 주차의 달도 펼친다.
+      // 이번 달에 아직 리포트가 없으면(월초) 가장 최근 리포트의 달을 이번 달로 본다.
+      $monthKey = function ($w) { return moodle_kst($w['period_end'], 'Y-m'); };
       $byMonth = [];
-      foreach ($older as $w) $byMonth[moodle_kst($w['period_end'], 'Y년 n월')][] = $w;
-      $renderWeek = function ($w) use ($report, $asParam, $showAdmin) { ?>
-        <a class="wk <?= $w['week'] === $report['week'] ? 'on' : '' ?>" href="?week=<?= h($w['week']) ?><?= $asParam ?>">
-          <b><?= h($w['week']) ?> <?= badge($w['status'], 'st') ?></b>
-          <span><?= h(moodle_kst($w['period_start'], 'm.d')) ?> ~ <?= h(moodle_kst($w['period_end'], 'm.d')) ?><?= $showAdmin && (int)$w['run_count'] > 1 ? ' · 갱신 ' . ((int)$w['run_count'] - 1) . '회' : '' ?></span>
-          <?php if ($w['headline']): ?><span title="<?= h($w['headline']) ?>"><?= h($w['headline']) ?></span><?php endif; ?>
-        </a>
-      <?php };
-      foreach ($recent as $w) $renderWeek($w);
-      foreach ($byMonth as $month => $rows):
-        $hasCurrent = in_array($report['week'], array_column($rows, 'week'), true); ?>
-        <details class="wk-month" <?= $hasCurrent ? 'open' : '' ?>>
-          <summary><?= h($month) ?> <span class="tiny"><?= count($rows) ?>주</span></summary>
-          <?php foreach ($rows as $w) $renderWeek($w); ?>
+      foreach ($weeks as $w) $byMonth[$monthKey($w)][] = $w;
+      $thisMonth = date('Y-m');
+      if (!isset($byMonth[$thisMonth]) && $weeks) $thisMonth = $monthKey($weeks[0]);
+      $currentMonth = $monthKey($report);
+      $label = function ($ym) { return substr($ym, 2, 2) . '년 ' . (int)substr($ym, 5, 2) . '월'; };
+      foreach ($byMonth as $ym => $rows): $open = $ym === $thisMonth || $ym === $currentMonth; ?>
+        <details class="wk-month <?= $ym === $thisMonth ? 'now' : '' ?>" <?= $open ? 'open' : '' ?>>
+          <summary><?= h($label($ym)) ?> <span class="tiny"><?= count($rows) ?>주</span><?= $ym === $thisMonth ? '<span class="tiny now-tag">이번 달</span>' : '' ?></summary>
+          <?php foreach ($rows as $w): ?>
+            <a class="wk <?= $w['week'] === $report['week'] ? 'on' : '' ?>" href="?week=<?= h($w['week']) ?><?= $asParam ?>">
+              <b><?= h($w['week']) ?> <?= badge($w['status'], 'st') ?></b>
+              <span><?= h(moodle_kst($w['period_start'], 'm.d')) ?> ~ <?= h(moodle_kst($w['period_end'], 'm.d')) ?><?= $showAdmin && (int)$w['run_count'] > 1 ? ' · 갱신 ' . ((int)$w['run_count'] - 1) . '회' : '' ?></span>
+              <?php if ($w['headline']): ?><span class="hl-line" title="<?= h($w['headline']) ?>"><?= h($w['headline']) ?></span><?php endif; ?>
+            </a>
+          <?php endforeach; ?>
         </details>
       <?php endforeach; ?>
       <?php if ($showAdmin): ?>

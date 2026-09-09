@@ -79,7 +79,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
             <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
             <div class="dd-sep"></div>
             <div class="dd-label">업무 시스템</div>
-            <a href="" id="dd-book" target="_blank" rel="noopener">📚 도서구매신청</a>
+            <a href="" id="dd-book" target="_blank" rel="noopener">📚 BlueBooks</a>
             <a href="" id="dd-slack" target="_blank" rel="noopener">📥 업무현황판</a>
             <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표</a>
             <a href="" id="dd-learning" target="_blank" rel="noopener">🎓 BlueLearn</a>
@@ -326,7 +326,7 @@ function renderTiles(){
     <a class="tile" href="${LINKS.book}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#2E6BF0">${bookIcon}</span>
-      <div><h3>도서구매신청</h3><p>읽고 싶은 책을 신청하고 처리 현황을 확인합니다.</p></div>
+      <div><h3>BlueBooks</h3><p>읽고 싶은 책을 신청하고 처리 현황을 확인합니다.</p></div>
     </a>
     <a class="tile" href="${LINKS.slack}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>

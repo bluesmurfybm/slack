@@ -250,4 +250,7 @@ a.btn.ghost{text-decoration:none}
 .side .wk-month[open] > summary::before{content:"▾"}
 .side .wk-month > summary:hover{color:var(--ink)}
 .side .wk-month .wk{padding:7px 12px}
-.side .wk-month .wk span:last-child{display:none}   /* 접힌 달의 주차는 헤드라인을 생략해 짧게 */
+.side .wk-month:not(.now) .wk .hl-line{display:none}   /* 지난 달 주차는 헤드라인을 생략해 짧게 */
+.side .wk-month.now > summary{color:var(--navy)}
+.side .now-tag{margin-left:auto;color:var(--blue);font-weight:600}
+.side .wk-month:first-of-type{border-top:0;margin-top:0}

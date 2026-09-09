@@ -1,6 +1,6 @@
 # blue-iWorks — 사내 업무 포털
 
-Bluesoft 사내 포털. 로그인 하나로 **도서구매신청(book)**, **DTI 발표(magazine)**,
+Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **DTI 발표(magazine)**,
 **BlueLearn(learning)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
@@ -13,7 +13,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── api/                         login.php, logout.php, me.php
 ├── styles/                      default.css, favicon.ico, logo-blue.png
 │
-├── book/                        도서구매신청 — Python/FastAPI, 별도 프로세스(포트 8000)
+├── book/                        BlueBooks(도서구매신청) — Python/FastAPI, 별도 프로세스(포트 8000)
 │   ├── app.py
 │   ├── index.html
 │   └── styles/
