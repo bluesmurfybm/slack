@@ -439,8 +439,7 @@ def test_run_refresh_after_a_summaryless_run_makes_a_full_summary(tmp_path, monk
 
     def fake_anthropic(st, system, schema, prompt):
         seen["schema"] = schema
-        return json.dumps({"headline": "첫 요약", "summary_md": "## 한눈에
-- 전체", "impacts": [],
+        return json.dumps({"headline": "첫 요약", "summary_md": "## 한눈에\n- 전체", "impacts": [],
                            "actions": []}), "claude-opus-5"
 
     monkeypatch.setattr(summarizer, "with_anthropic", fake_anthropic)
@@ -451,8 +450,7 @@ def test_run_refresh_after_a_summaryless_run_makes_a_full_summary(tmp_path, monk
     assert "summary_md" in seen["schema"]["properties"] # 갱신용이 아닌 전체 요약 스키마
     assert report["run_no"] == 2
     assert report["headline"] == "첫 요약"
-    assert report["summary_md"] == "## 한눈에
-- 전체"
+    assert report["summary_md"] == "## 한눈에\n- 전체"
     assert report["status"] == "ok"
 
 
