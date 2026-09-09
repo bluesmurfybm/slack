@@ -1,7 +1,7 @@
 # blue-iWorks — 사내 업무 포털
 
 Bluesoft 사내 포털. 로그인 하나로 **도서구매신청(book)**, **DTI 발표(magazine)**,
-**BlueLearn(learning)**, **MoodleUp(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
+**BlueLearn(learning)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
 ## 전체 구조
@@ -27,7 +27,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── var/                     DB·업로드 (gitignore)
 │   └── tests/
 │
-├── moodle/                      MoodleUp(무들 동향) — PHP 뷰어 + Python 주간 배치
+├── moodle/                      MoodleUp?(무들 동향) — PHP 뷰어 + Python 주간 배치
 │   ├── index.php, db.php        주차별 리포트 화면(읽기 전용, 포털 세션)
 │   ├── styles/moodle.css
 │   └── watch/                   주 1회 수집·요약 배치 (systemd timer)
@@ -145,7 +145,7 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 ---
 
-## moodle (MoodleUp · 무들 동향)
+## moodle (MoodleUp? · 무들 동향)
 
 moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jira Cloud), GitHub
 `moodle/moodle`, moodledev.io(`moodle/devdocs`), moodle.com 뉴스를 **주 1회 모아 한국어로 요약**하고
@@ -516,7 +516,7 @@ location ^~ /moodle/watch/ { deny all; }
 
 ```ini
 [Unit]
-Description=moodle-watch (MoodleUp 주간 수집·요약)
+Description=moodle-watch (MoodleUp? 주간 수집·요약)
 After=network-online.target mysql.service
 
 [Service]
@@ -593,7 +593,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now moodle-watch-refresh.path
 ```
 
-### 문제 해결 체크리스트 (MoodleUp)
+### 문제 해결 체크리스트 (MoodleUp?)
 
 | 증상 | 원인 | 조치 |
 |---|---|---|

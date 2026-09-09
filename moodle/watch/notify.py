@@ -20,7 +20,7 @@ def report_done(settings: Settings, report: dict, counts: dict[str, int],
                 problems: list[str]) -> None:
     week, status = report["week"], report["status"]
     icon = {"ok": ":white_check_mark:", "partial": ":warning:"}.get(status, ":x:")
-    lines = [f"{icon} *MoodleUp 주간 리포트 {week}* — {status}"]
+    lines = [f"{icon} *MoodleUp? 주간 리포트 {week}* — {status}"]
     if report.get("headline"):
         lines.append(f"> {report['headline']}")
     lines.append("• 수집: " + ", ".join(f"{k} {v}건" for k, v in counts.items()))

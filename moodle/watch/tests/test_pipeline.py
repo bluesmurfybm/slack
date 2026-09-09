@@ -364,7 +364,7 @@ def test_run_end_to_end_with_stub_collectors(tmp_path, monkeypatch):
     state = json.loads((tmp_path / "var" / "state.json").read_text(encoding="utf-8"))
     assert state["last_run"] == "2026-09-08T00:00:00+00:00"
     assert len(sent) == 1
-    assert ":warning: *MoodleUp 주간 리포트 2026-W37* — partial" in sent[0]
+    assert ":warning: *MoodleUp? 주간 리포트 2026-W37* — partial" in sent[0]
     assert "github: boom" in sent[0]
     assert "/moodle/?week=2026-W37" in sent[0]
 

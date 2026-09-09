@@ -83,7 +83,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
             <a href="" id="dd-slack" target="_blank" rel="noopener">📥 업무현황판</a>
             <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표</a>
             <a href="" id="dd-learning" target="_blank" rel="noopener">🎓 BlueLearn</a>
-            <a href="" id="dd-moodle" target="_blank" rel="noopener">🧭 MoodleUp</a>
+            <a href="" id="dd-moodle" target="_blank" rel="noopener">🧭 MoodleUp?</a>
             <div class="dd-sep"></div>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
@@ -351,7 +351,7 @@ function renderTiles(){
     <a class="tile" href="${LINKS.moodle}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#D6336C">${moodleIcon}</span>
-      <div><h3>MoodleUp</h3><p>무들 PAG·트래커·릴리스 변화를 매주 모아 코스모스 관점으로 요약합니다.</p></div>
+      <div><h3>MoodleUp?</h3><p>무들 PAG·트래커·릴리스 변화를 매주 모아 코스모스 관점으로 요약합니다.</p></div>
     </a>
     <div class="tile soon">
       <span class="badge-soon">준비중</span>
