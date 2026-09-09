@@ -85,7 +85,7 @@ if ($state && in_array($state['state'], ['pending', 'running'], true)) {
     header('Location: ' . $back . '&queued=1');   // 이미 진행 중이면 중복 요청을 만들지 않는다
     exit;
 }
-@unlink("$dir/$week.failed.json");   // 재시도: 이전 실패 기록은 지운다
+@unlink("$dir/$week.failed");   // 재시도: 이전 실패 기록은 지운다
 
 $payload = json_encode([
     'week'         => $week,

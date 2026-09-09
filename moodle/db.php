@@ -207,7 +207,7 @@ function moodle_requests_dir() {
  */
 function moodle_refresh_state($week) {
     $dir = moodle_requests_dir();
-    foreach (['running' => "$week.running.json", 'pending' => "$week.json", 'failed' => "$week.failed.json"] as $state => $name) {
+    foreach (['running' => "$week.running", 'pending' => "$week.json", 'failed' => "$week.failed"] as $state => $name) {
         $path = "$dir/$name";
         if (is_file($path)) {
             $info = json_decode((string)@file_get_contents($path), true) ?: [];

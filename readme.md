@@ -173,8 +173,8 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 - **버튼은 PHP 가 Python 을 띄우는 게 아니다.** `moodle/refresh.php` 가 `watch/var/requests/<week>.json`
   을 남기고, 서버에서는 systemd **path 유닛**이 그 파일이 생기면 `run_weekly.py --requests` 를
   실행한다(아래 배포 절). 로컬에서는 `python run_weekly.py --serve` 를 켜 두면 3초마다 폴더를 보고
-  처리한다. 파일 상태가 진행 표시다: `<week>.json`(대기) → `<week>.running.json`(처리 중) →
-  삭제(완료) 또는 `<week>.failed.json`(실패 사유, 화면에 표시되고 버튼을 다시 누르면 재시도).
+  처리한다. 파일 상태가 진행 표시다: `<week>.json`(대기) → `<week>.running`(처리 중) →
+  삭제(완료) 또는 `<week>.failed`(실패 사유, 화면에 표시되고 버튼을 다시 누르면 재시도).
   화면은 처리 중일 때만 5초마다 `refresh.php?status=` 로 파일 상태를 묻는다(DB 는 안 본다).
   php-fpm 사용자와 배치 사용자가 다르므로 그 폴더는 둘이 같이 쓸 수 있어야 한다(배포 절 참고).
   배치 `DATA_DIR` 을 기본값에서 바꿨으면 `moodle/config.local.php` 에 `return ['data_dir' => '...'];`
@@ -594,7 +594,8 @@ sudo systemctl enable --now moodle-watch-refresh.path
 ```
 
 `PathExistsGlob` 은 파일이 남아 있는 동안 계속 service 를 부르므로, 처리 후 파일을 지우는 배치
-쪽 동작이 곧 종료 조건이다. 실패 파일(`*.failed.json`)은 glob 에 걸리지 않는다.
+쪽 동작이 곧 종료 조건이다. 처리중·실패 파일(`*.running`, `*.failed`)은 `.json` 으로 끝나지 않아 glob 에 걸리지 않는다.
+요청 파일은 www-data 소유라 배치는 그 파일에 쓰지 않고 자기 소유의 처리중 파일을 새로 만든 뒤 원본을 지운다.
 - moodle.org 토큰: 요약용 계정으로 코스 17257 자가등록 → `https://moodle.org/login/token.php`
   (service=moodle_mobile_app) 로 발급. 만료는 `https://moodle.org/user/managetoken.php` 에서 확인.
   만료되면 그 소스만 `failed` 로 슬랙에 뜬다.

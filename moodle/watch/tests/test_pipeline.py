@@ -494,7 +494,7 @@ def test_refresh_queue_processes_pending_and_records_failures(tmp_path):
     d.mkdir(parents=True)
     (d / "2026-W37.json").write_text(json.dumps({"week": "2026-W37", "requested_by": "amitoa"}))
     (d / "2026-W36.json").write_text("{}")
-    (d / "2026-W35.failed.json").write_text("{}") # 이전 실패 파일은 대기 목록이 아니다
+    (d / "2026-W35.failed").write_text("{}") # 이전 실패 파일은 대기 목록이 아니다
     calls = []
 
     def runner(week, who):
@@ -509,8 +509,8 @@ def test_refresh_queue_processes_pending_and_records_failures(tmp_path):
     assert done == [{"week": "2026-W36", "ok": False, "error": "DB 없음"},
                     {"week": "2026-W37", "ok": True, "status": "ok"}]
     names = sorted(p.name for p in d.iterdir())
-    assert names == ["2026-W35.failed.json", "2026-W36.failed.json"]
-    failed = json.loads((d / "2026-W36.failed.json").read_text(encoding="utf-8"))
+    assert names == ["2026-W35.failed", "2026-W36.failed"]
+    failed = json.loads((d / "2026-W36.failed").read_text(encoding="utf-8"))
     assert failed["error"] == "RuntimeError: DB 없음"
     assert refresh_queue.pending(settings) == []
 

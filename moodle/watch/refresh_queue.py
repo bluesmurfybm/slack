@@ -4,8 +4,9 @@ PHP(moodle/refresh.php)가 var/requests/<week>.json 을 남기면, 서버에서�
 로컬에서는 `run_weekly.py --serve` 가 그 파일을 집어 같은 주차를 갱신한다. PHP 가 Python 을 직접
 띄우지 않는 건 php-fpm 사용자와 배치 사용자(claude 로그인 보유)가 다르기 때문이다.
 
-파일 상태로 진행을 알린다: <week>.json(대기) → <week>.running.json(처리 중) → 삭제(완료) 또는
-<week>.failed.json(실패 사유).
+파일 상태로 진행을 알린다: <week>.json(대기) → <week>.running(처리 중) → 삭제(완료) 또는
+<week>.failed(실패 사유). 처리 중·실패 파일은 .json 으로 끝나지 않는다 — systemd path 유닛의
+PathExistsGlob=*.json 이 그 파일을 새 요청으로 보고 서비스를 계속 다시 띄우지 않게 하려는 것이다.
 """
 
 import json
@@ -27,8 +28,7 @@ def pending(settings: Settings) -> list[Path]:
     d = requests_dir(settings)
     if not d.is_dir():
         return []
-    return sorted(p for p in d.glob("*.json")
-                  if not p.name.endswith((".running.json", ".failed.json")))
+    return sorted(d.glob("*.json"))
 
 
 def _read(path: Path) -> dict:
@@ -44,14 +44,17 @@ def process_all(settings: Settings, runner) -> list[dict]:
     for req in pending(settings):
         week = req.stem
         info = _read(req)
-        running = req.with_name(f"{week}.running.json")
-        failed = req.with_name(f"{week}.failed.json")
+        running = req.with_name(f"{week}.running")
+        failed = req.with_name(f"{week}.failed")
         info["started_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+        # 요청 파일은 웹 계정(www-data) 소유라 우리가 내용을 고칠 수 없다. 우리 소유의 처리중 파일을
+        # 새로 쓰고 원본은 지운다(폴더에 쓰기 권한만 있으면 다른 계정 파일도 지울 수 있다).
         try:
-            req.replace(running)
             running.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+            req.unlink()
         except OSError:
-            logger.exception("요청 파일을 옮길 수 없다: %s", req)
+            logger.exception("요청 파일을 처리중으로 바꿀 수 없다(폴더 권한 확인): %s", req)
+            running.unlink(missing_ok=True)
             continue
         try:
             report = runner(week, info.get("requested_by", ""))
