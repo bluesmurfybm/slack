@@ -124,6 +124,31 @@ function moodle_note_add(array $n) {
     return $row->fetch();
 }
 
+/**
+ * 북마크(kind=bookmark) 전체를 최신순으로. $q 가 있으면 본문·메모·주차·헤드라인에서 LIKE 검색.
+ * 북마크 페이지에서만 쓴다(사용자가 열 때 SELECT 한 번).
+ */
+function moodle_bookmarks($q = '') {
+    $sql = "SELECT n.*, r.week, r.headline, r.period_start, r.period_end
+              FROM moodle_note n JOIN moodle_weekly_report r ON r.id = n.report_id
+             WHERE n.kind = 'bookmark'";
+    $args = [];
+    $q = trim((string)$q);
+    if ($q !== '') {
+        $sql .= " AND (n.anchor_text LIKE ? OR n.note LIKE ? OR r.week LIKE ? OR r.headline LIKE ? OR n.user_name LIKE ?)";
+        $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+        $args = [$like, $like, $like, $like, $like];
+    }
+    $sql .= " ORDER BY n.id DESC";
+    $stmt = moodle_db()->prepare($sql);
+    $stmt->execute($args);
+    return $stmt->fetchAll();
+}
+
+function moodle_bookmark_count() {
+    return (int)moodle_db()->query("SELECT COUNT(*) FROM moodle_note WHERE kind = 'bookmark'")->fetchColumn();
+}
+
 /** 본인 메모만 지운다. 지웠으면 true. */
 function moodle_note_delete($id, $email) {
     $stmt = moodle_db()->prepare("DELETE FROM moodle_note WHERE id = ? AND user_email = ?");
