@@ -80,7 +80,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
             <div class="dd-sep"></div>
             <div class="dd-label">업무 시스템</div>
             <a href="" id="dd-book" target="_blank" rel="noopener">📚 BlueBooks</a>
-            <a href="" id="dd-slack" target="_blank" rel="noopener">📥 업무현황판</a>
+            <a href="" id="dd-slack" target="_blank" rel="noopener">📥 Coursemos WorkHub</a>
             <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표</a>
             <a href="" id="dd-learning" target="_blank" rel="noopener">🎓 BlueLearn</a>
             <a href="" id="dd-moodle" target="_blank" rel="noopener">🧭 MoodleUp?</a>
@@ -331,7 +331,7 @@ function renderTiles(){
     <a class="tile" href="${LINKS.slack}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#1F9D76">${slackIcon}</span>
-      <div><h3>업무현황판</h3><p>유지보수 요청 현황을 확인하고 관리합니다.</p></div>
+      <div><h3>Coursemos WorkHub</h3><p>유지보수 요청 현황을 확인하고 관리합니다.</p></div>
     </a>
     <a class="tile" href="${LINKS.magazine}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
