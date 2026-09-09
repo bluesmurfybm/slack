@@ -143,13 +143,29 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
 <?php else: ?>
   <div class="layout">
     <aside class="card side">
-      <h2>주차</h2>
-      <?php foreach ($weeks as $w): ?>
+      <h2>주차 <span class="tiny"><?= count($weeks) ?>개</span></h2>
+      <?php
+      // 최근 몇 주는 바로 보이고, 그보다 오래된 주차는 달(수집 종료일 기준)로 묶어 접어 둔다.
+      // 보고 있는 주차가 접힌 달 안에 있으면 그 달만 펼친다.
+      $RECENT = 6;
+      $recent = array_slice($weeks, 0, $RECENT);
+      $older  = array_slice($weeks, $RECENT);
+      $byMonth = [];
+      foreach ($older as $w) $byMonth[moodle_kst($w['period_end'], 'Y년 n월')][] = $w;
+      $renderWeek = function ($w) use ($report, $asParam, $showAdmin) { ?>
         <a class="wk <?= $w['week'] === $report['week'] ? 'on' : '' ?>" href="?week=<?= h($w['week']) ?><?= $asParam ?>">
           <b><?= h($w['week']) ?> <?= badge($w['status'], 'st') ?></b>
           <span><?= h(moodle_kst($w['period_start'], 'm.d')) ?> ~ <?= h(moodle_kst($w['period_end'], 'm.d')) ?><?= $showAdmin && (int)$w['run_count'] > 1 ? ' · 갱신 ' . ((int)$w['run_count'] - 1) . '회' : '' ?></span>
           <?php if ($w['headline']): ?><span title="<?= h($w['headline']) ?>"><?= h($w['headline']) ?></span><?php endif; ?>
         </a>
+      <?php };
+      foreach ($recent as $w) $renderWeek($w);
+      foreach ($byMonth as $month => $rows):
+        $hasCurrent = in_array($report['week'], array_column($rows, 'week'), true); ?>
+        <details class="wk-month" <?= $hasCurrent ? 'open' : '' ?>>
+          <summary><?= h($month) ?> <span class="tiny"><?= count($rows) ?>주</span></summary>
+          <?php foreach ($rows as $w) $renderWeek($w); ?>
+        </details>
       <?php endforeach; ?>
       <?php if ($showAdmin): ?>
       <div class="legend">

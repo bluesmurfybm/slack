@@ -22,7 +22,7 @@ a{color:var(--blue)}
 @media (max-width:900px){.layout{grid-template-columns:1fr}}
 
 .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
-.side{position:sticky;top:76px;padding:10px}
+.side{position:sticky;top:76px;padding:10px;max-height:calc(100vh - 96px);overflow-y:auto}
 .side h2{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em;margin:6px 10px 8px}
 .side a.wk{display:block;padding:10px 12px;border-radius:10px;text-decoration:none;color:var(--ink);border:1px solid transparent}
 .side a.wk:hover{background:var(--line-soft)}
@@ -241,3 +241,13 @@ mark.hl.green{background:#C3F5CB}
 a.btn.ghost{text-decoration:none}
 .summary hr{border:0;border-top:2px dashed #CFDDF9;margin:22px 0 14px}
 .summary hr + h4{color:#7A2E00;background:#FFF4E6;display:inline-block;padding:3px 10px;border-radius:8px;margin-top:0}
+
+/* 주차 목록: 최근 6주 + 달별 접힘 */
+.side .wk-month{margin-top:6px;border-top:1px solid var(--line-soft);padding-top:4px}
+.side .wk-month > summary{list-style:none;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--muted);padding:7px 12px 5px;display:flex;align-items:center;gap:6px;user-select:none}
+.side .wk-month > summary::-webkit-details-marker{display:none}
+.side .wk-month > summary::before{content:"▸";font-size:11px}
+.side .wk-month[open] > summary::before{content:"▾"}
+.side .wk-month > summary:hover{color:var(--ink)}
+.side .wk-month .wk{padding:7px 12px}
+.side .wk-month .wk span:last-child{display:none}   /* 접힌 달의 주차는 헤드라인을 생략해 짧게 */
