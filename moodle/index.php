@@ -131,7 +131,10 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
       <h1>MoodleUp?</h1>
       <p><span class="pag-tag">PAG</span> moodle.org Tech Transformation 코스를 중심으로 Tracker · GitHub · moodledev.io · moodle.com 을 매주 모아 코스모스 관점으로 요약합니다.</p>
     </div>
-    <a class="back" href="../index.php">← 대시보드</a>
+    <div class="hero-links">
+      <a class="btn ghost" href="bookmarks.php" title="북마크한 단락을 한곳에서 보고 검색합니다">🔖 북마크<?php $bc = moodle_bookmark_count(); if ($bc): ?> <span class="n"><?= $bc ?></span><?php endif; ?></a>
+      <a class="back" href="../index.php">← 대시보드</a>
+    </div>
   </div>
 
 <?php if (!$report): ?>
@@ -240,7 +243,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
 
 
         <?php if ($report['summary_md']): ?>
-          <div class="hint-annot tiny">요약 글을 드래그하면 <b>형광펜</b>·<b>메모</b>를 남길 수 있습니다. 표시는 팀이 함께 봅니다. 갱신된 내용은 구분선 아래에 날짜와 함께 덧붙습니다.</div>
+          <div class="hint-annot tiny">요약 글을 드래그하면 <b>형광펜</b>·<b>메모</b>·<b>북마크</b>를 남길 수 있습니다. 표시는 팀이 함께 보고, 북마크는 <a href="bookmarks.php">북마크 페이지</a>에 모입니다. 갱신된 내용은 구분선 아래에 날짜와 함께 덧붙습니다.</div>
           <div class="summary annot" data-target="summary"><?= moodle_md_emphasize_pag(moodle_md($report['summary_md'])) ?></div>
         <?php else: ?>
           <p class="tiny" style="margin-top:14px">이 주차는 요약 없이 원문 항목만 수집되었습니다.</p>
@@ -352,6 +355,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
     <button type="button" data-act="highlight" data-color="green" title="초록 형광펜"><span class="swatch green"></span></button>
     <span class="sep"></span>
     <button type="button" data-act="note" title="메모"><span class="swatch blue"></span>메모</button>
+    <button type="button" data-act="bookmark" title="이 단락을 북마크 페이지에 모아 둡니다"><span class="swatch violet"></span>북마크</button>
   </div>
   <div class="npop" id="npop" hidden></div>
   <div class="notebox" id="notebox" hidden>
@@ -477,9 +481,11 @@ document.querySelectorAll(".src.go").forEach(function(el){
       if(to < node.nodeValue.length) node.splitText(to);
       if(from > 0) node = node.splitText(from);
       var m = document.createElement("mark");
-      m.className = "hl " + note.color + (note.kind === "note" ? " has-note" : "");
+      m.className = "hl " + note.color + (note.kind === "note" ? " has-note" : "") + (note.kind === "bookmark" ? " is-bm" : "");
       m.dataset.id = note.id;
-      m.title = note.kind === "note" ? "클릭하면 메모가 보입니다" : (note.user_name || "") + " 형광펜 · 클릭하면 자세히";
+      m.title = note.kind === "note" ? "클릭하면 메모가 보입니다"
+              : note.kind === "bookmark" ? (note.user_name || "") + " 북마크 · 클릭하면 자세히"
+              : (note.user_name || "") + " 형광펜 · 클릭하면 자세히";
       node.parentNode.insertBefore(m, node); m.appendChild(node);
     });
   }
@@ -516,6 +522,11 @@ document.querySelectorAll(".src.go").forEach(function(el){
     return true;
   }
   NOTES.forEach(apply);
+  // 북마크 페이지에서 #note-ID 로 들어오면 그 표시로 이동해 잠깐 강조한다
+  if(location.hash.indexOf("#note-") === 0){
+    var target = document.querySelector('mark.hl[data-id="' + location.hash.slice(6) + '"]');
+    if(target){ setTimeout(function(){ target.scrollIntoView({block:"center"}); target.classList.add("flash"); setTimeout(function(){ target.classList.remove("flash"); }, 2000); }, 50); }
+  }
 
   function post(body){
     return fetch("notes.php", {method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)})
@@ -537,7 +548,9 @@ document.querySelectorAll(".src.go").forEach(function(el){
     var rect = mark.getBoundingClientRect();
     npop.innerHTML = '<div class="npop-h"><span class="swatch ' + esc(n.color) + '"></span><b>' + esc(n.user_name || n.user_email) + '</b><span class="tiny">' + esc(n.created_at) + '</span>' +
       (n.user_email === ME ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '') + '</div>' +
-      (n.note ? '<div class="npop-b">' + esc(n.note) + '</div>' : '<div class="npop-b tiny">형광펜</div>');
+      (n.note ? '<div class="npop-b">' + esc(n.note) + '</div>'
+              : n.kind === "bookmark" ? '<div class="npop-b tiny">🔖 북마크 · <a href="bookmarks.php">북마크 페이지</a></div>'
+              : '<div class="npop-b tiny">형광펜</div>');
     npop.hidden = false;
     var left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - npop.offsetWidth - 12);
     npop.style.left = Math.max(8, left) + "px";
@@ -593,7 +606,7 @@ document.querySelectorAll(".src.go").forEach(function(el){
     var s = pendingSel; pendingSel = null;
     hideBar(); notebox.hidden = true;
     post({action:"add", report_id: REPORT_ID, target: s.target, kind: kind, text: s.text, prefix: s.prefix, suffix: s.suffix,
-          note: noteText || "", color: kind === "note" ? "blue" : (color || "yellow")})
+          note: noteText || "", color: kind === "note" ? "blue" : kind === "bookmark" ? "violet" : (color || "yellow")})
       .then(function(j){
         var n = j.note;
         var note = {id:+n.id, target:n.target, kind:n.kind, text:n.anchor_text, prefix:n.prefix, suffix:n.suffix, note:n.note,
@@ -607,6 +620,7 @@ document.querySelectorAll(".src.go").forEach(function(el){
   hlbar.addEventListener("click", function(e){
     var b = e.target.closest("button"); if(!b || !pendingSel) return;
     if(b.dataset.act === "highlight"){ save("highlight", "", b.dataset.color); return; }
+    if(b.dataset.act === "bookmark"){ save("bookmark"); return; }
     document.getElementById("noteboxQuote").textContent = "“" + (pendingSel.text.length > 160 ? pendingSel.text.slice(0, 159) + "…" : pendingSel.text) + "”";
     document.getElementById("noteboxText").value = "";
     notebox.style.left = hlbar.style.left; notebox.style.top = (parseInt(hlbar.style.top, 10) + 40) + "px";

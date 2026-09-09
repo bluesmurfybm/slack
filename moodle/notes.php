@@ -52,11 +52,11 @@ if ($action === 'delete') {
 
 if ($action === 'add') {
     $reportId = (int)($in['report_id'] ?? 0);
-    $kind     = ($in['kind'] ?? '') === 'note' ? 'note' : 'highlight';
+    $kind     = in_array($in['kind'] ?? '', ['note', 'bookmark'], true) ? $in['kind'] : 'highlight';
     $target   = in_array($in['target'] ?? '', ['summary', 'updates'], true) ? $in['target'] : 'summary';
     $text     = trim((string)($in['text'] ?? ''));
     $note     = trim((string)($in['note'] ?? ''));
-    $color    = preg_match('/^[a-z]{3,12}$/', (string)($in['color'] ?? '')) ? $in['color'] : ($kind === 'note' ? 'blue' : 'yellow');
+    $color    = preg_match('/^[a-z]{3,12}$/', (string)($in['color'] ?? '')) ? $in['color'] : ($kind === 'note' ? 'blue' : ($kind === 'bookmark' ? 'violet' : 'yellow'));
     if ($reportId <= 0) $fail('report_id');
     if ($text === '' || mb_strlen($text) > 2000) $fail('선택한 글이 없거나 너무 깁니다(2000자)');
     if ($kind === 'note' && $note === '') $fail('메모 내용을 적어 주세요');
