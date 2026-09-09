@@ -1,0 +1,33 @@
+line-length = 100
+target-version = "py312"
+exclude = ["var"]
+
+[lint]
+select = ["ALL"]
+ignore = [
+  # fastapi/full-stack-fastapi-template 의 판단을 그대로 따른다
+  "B008", # FastAPI 의 Depends 기본값은 정상 패턴
+  "B904", # HTTPException 은 from e 없이 올린다
+  "W191",
+  # 이 저장소 규칙
+  "D", # 독스트링 강제 — 주석을 달지 않는 규칙과 충돌
+  "CPY001", # 파일 상단 저작권 주석 — 위와 같은 이유
+  "ANN", # 전 함수 타입 애노테이션
+  "S101", # pytest 는 assert 로 검증한다
+  "FAST002", # Depends 를 Annotated 로 바꾸라는 요구
+  "E261", # 인라인 주석은 한 칸 띄워 붙여 쓴다
+  "INP001", # tests 는 네임스페이스 패키지로 둔다
+  "COM812", "ISC001", # 포매터와 충돌
+  "TRY003", "EM101", "EM102", # 예외 메시지를 그 자리에 쓴다
+  "PLR2004", # 테스트의 상태코드 비교
+]
+
+[lint.pyupgrade]
+keep-runtime-typing = true
+
+[lint.per-file-ignores]
+# 콘솔에서 손으로 돌리는 유지보수 스크립트다 — 결과를 print 로 알린다
+"tools/*.py" = ["T201"]
+"run_weekly.py" = ["T201"]
+# 테스트는 가짜 객체·람다가 많다 — 안 쓰는 인자와 긴 픽스처 줄을 허용한다
+"tests/*.py" = ["ARG", "FBT", "PLR0913", "PLR0917", "ISC002", "PLW0108", "E501", "DTZ001", "TRY002"]
