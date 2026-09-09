@@ -39,13 +39,23 @@ $__bwBase = '../slack/';
     <h1>🔑 Coursemos EnvHub <span class="badge" id="count"></span></h1>
   </div>
 
+  <!-- 이 화면에서 제일 많이 쓰는 동작이라 검색을 맨 위 눈에 띄는 자리에 둔다 -->
+  <div class="hero">
+    <div class="hero-in">
+      <svg class="hero-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" type="text" autocomplete="off"
+             placeholder="학교명을 입력하세요 — 주소 · 계정 · DB 정보도 함께 찾습니다">
+      <button id="searchClear" class="hero-clear" type="button" title="지우기" hidden>✕</button>
+    </div>
+    <div id="vers" class="hero-chips"></div>
+  </div>
+
   <div class="tools">
-    <div id="vers"></div>
     <span class="spacer"></span>
     <select id="fvpn" title="VPN 프로그램으로 거르기"></select>
     <label class="fchk"><input type="checkbox" id="onlyMissing"> 접속정보 없는 곳만</label>
     <label class="fchk"><input type="checkbox" id="showOff"> 미사용 포함</label>
-    <input id="search" type="text" placeholder="대학명 · 주소 · 계정 검색…">
     <button id="btnNew" class="primary" type="button">+ 대학 추가</button>
     <button id="btnImport" type="button">엑셀 가져오기</button>
     <div class="viewtog" id="viewtog">
@@ -918,7 +928,18 @@ $("btnNew").addEventListener("click", openCreate);
 $("btnImport").addEventListener("click", () => openModal("mImport"));
 $("doImport").addEventListener("click", doImport);
 $("doSave").addEventListener("click", save);
-$("search").addEventListener("input", render);
+$("search").addEventListener("input", () => {
+  $("searchClear").hidden = !$("search").value;
+  render();
+});
+$("searchClear").addEventListener("click", () => {
+  $("search").value = "";
+  $("searchClear").hidden = true;
+  render();
+  $("search").focus();
+});
+// 들어오자마자 바로 학교명을 칠 수 있게
+$("search").focus();
 $("fvpn").addEventListener("change", () => { fvpn = $("fvpn").value; render(); });
 $("onlyMissing").addEventListener("change", render);
 $("showOff").addEventListener("change", load);

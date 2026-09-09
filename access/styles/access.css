@@ -17,9 +17,26 @@ button { cursor:pointer; }
 button.primary { background:var(--info); color:#fff; border-color:var(--info); }
 button:disabled { opacity:.5; cursor:default; }
 
+/* 검색 히어로 — 이 화면에서 제일 많이 쓰는 동작이라 맨 위 넓은 자리를 준다 */
+.hero { display:flex; flex-direction:column; align-items:center; gap:14px;
+        padding:26px 16px 22px; margin-bottom:14px; border-radius:16px;
+        border:1px solid var(--line);
+        background:linear-gradient(180deg, var(--info-bg) 0%, var(--bg) 100%); }
+.hero-in { position:relative; width:min(680px, 100%); }
+.hero-in input { width:100%; height:50px; font-size:14.5px; border-radius:25px;
+                 padding:0 42px 0 44px; border:1.5px solid var(--line); background:var(--bg); }
+.hero-in input::placeholder { color:var(--hint); }
+.hero-in input:focus { outline:none; border-color:var(--info); box-shadow:0 0 0 4px var(--info-bg); }
+.hero-ic { position:absolute; left:15px; top:50%; transform:translateY(-50%);
+           width:19px; height:19px; color:var(--hint); pointer-events:none; }
+.hero-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%);
+              width:28px; height:28px; padding:0; border:0; border-radius:50%;
+              background:var(--bg2); color:var(--muted); font-size:12px; line-height:1; }
+.hero-clear:hover { color:var(--txt); }
+.hero-chips { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+
 /* 툴바 */
 .tools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
-.tools #search { width:240px; }
 .tools #fvpn { max-width:190px; }
 .chip { height:30px; padding:0 12px; border:1px solid var(--line); border-radius:16px;
         background:var(--bg); color:var(--muted); font-size:13px; }
@@ -27,7 +44,6 @@ button:disabled { opacity:.5; cursor:default; }
 .chip b { font-weight:600; margin-left:6px; padding:0 5px; border-radius:8px;
           background:var(--bg2); color:var(--hint); font-size:11px; }
 .chip.on b { background:var(--info); color:#fff; }
-#vers { display:flex; gap:6px; flex-wrap:wrap; }
 .spacer { flex:1; }
 .fchk { display:flex; align-items:center; gap:5px; font-size:13px; color:var(--muted); white-space:nowrap; }
 .fchk input { width:16px; height:16px; padding:0; }
