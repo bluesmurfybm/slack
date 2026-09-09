@@ -80,16 +80,11 @@ function access_db() {
             `login_ops`   TEXT         NULL COMMENT '운영 사이트 비밀번호',
             `login_dev_id` VARCHAR(60) NOT NULL DEFAULT '' COMMENT '테스트 계정 ID',
             `login_dev`   TEXT         NULL COMMENT '테스트(개발) 사이트 비밀번호',
-            `login_info`  TEXT         NULL COMMENT '로그인 정보 중 운영/테스트로 못 가른 나머지',
-            `dev_db`      TEXT         NULL COMMENT '개발 DB 정보',
+            `dev_db`      TEXT         NULL COMMENT '개발(테스트) DB 정보',
             `ops_db`      TEXT         NULL COMMENT '운영 DB 정보',
             `haksa_db`    TEXT         NULL COMMENT '학사 DB 정보',
-            `plink`       TEXT         NULL COMMENT 'plink 터널링 명령',
-            `note`        TEXT         NULL COMMENT '비고',
-            `etc`         TEXT         NULL COMMENT 'etc',
-            `deploy`      TEXT         NULL COMMENT '배포 방법',
-            `deploy_acct` TEXT         NULL COMMENT '배포 계정 정보',
-            `extra`       TEXT         NULL COMMENT '기타(jquery 업그레이드 등)',
+            `deploy`      TEXT         NULL COMMENT '배포 방법 (배포 계정 포함)',
+            `note`        TEXT         NULL COMMENT '비고 (etc·기타·plink 통합)',
             `sort_no`     INT          NOT NULL DEFAULT 0 COMMENT '엑셀 원본 행 순서',
             `created_at`  DATETIME     NOT NULL,
             `updated_at`  DATETIME     NULL,
@@ -149,6 +144,10 @@ function access_db() {
         $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `grp`");
     }
 
+    // 화면을 공통/테스트서버/운영서버 세 묶음으로 정리하면서 흩어져 있던 칸들을 합쳤다.
+    // 어느 것이든 "옮긴 다음 지운다" 순서를 지켜야 내용이 사라지지 않는다.
+    access_merge_dropped_cols($pdo);
+
     // '운영 웹서버'(3.9-saas 시트 전용)는 칸을 없애고 내용을 비고로 옮긴다 — 지우기 전에 옮긴다.
     if (access_has_column($pdo, 'ops_web')) {
         $rows = $pdo->query("SELECT id, ops_web, note FROM school_access
@@ -163,6 +162,61 @@ function access_db() {
     }
 
     return $pdo;
+}
+
+/**
+ * 통합·이동으로 없어지는 칸들을 옮긴 뒤 DROP 한다.
+ *   etc · 기타 · plink  → 비고(note)
+ *   배포 계정           → 배포 방법(deploy)
+ *   로그인 정보(구분없음) → 운영 비밀번호(login_ops). 계정이 같이 적혀 있으면 아이디도 분리.
+ * 각각 "칸이 아직 있으면" 만 도므로 여러 번 실행해도 안전하다.
+ */
+function access_merge_dropped_cols(PDO $pdo) {
+    // (1) 비고로 합치기
+    foreach (['etc' => 'etc', 'extra' => '기타', 'plink' => 'plink'] as $col => $label) {
+        if (!access_has_column($pdo, $col)) continue;
+        $rows = $pdo->query("SELECT id, `$col` v, note FROM school_access WHERE `$col` IS NOT NULL AND `$col` <> ''")->fetchAll();
+        if ($rows) {
+            $st = $pdo->prepare("UPDATE school_access SET note=? WHERE id=?");
+            foreach ($rows as $r) $st->execute([access_merge_note($r['note'], $label, $r['v']), $r['id']]);
+        }
+        $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `$col`");
+    }
+
+    // (2) 배포 계정 → 배포 방법
+    if (access_has_column($pdo, 'deploy_acct')) {
+        $rows = $pdo->query("SELECT id, deploy_acct v, deploy FROM school_access WHERE deploy_acct IS NOT NULL AND deploy_acct <> ''")->fetchAll();
+        if ($rows) {
+            $st = $pdo->prepare("UPDATE school_access SET deploy=? WHERE id=?");
+            foreach ($rows as $r) $st->execute([access_merge_note($r['deploy'], '배포 계정', $r['v']), $r['id']]);
+        }
+        $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `deploy_acct`");
+    }
+
+    // (3) 로그인 정보(구분 없음) → 운영 비밀번호.
+    //     암호화된 칸이라 풀었다가 다시 넣는다. 이미 운영 비번이 있으면 덮지 않고 이어 붙인다.
+    if (access_has_column($pdo, 'login_info')) {
+        $rows = $pdo->query("SELECT id, login_info, login_ops, login_ops_id FROM school_access
+                             WHERE login_info IS NOT NULL AND login_info <> ''")->fetchAll();
+        if ($rows) {
+            $st = $pdo->prepare("UPDATE school_access SET login_ops_id=?, login_ops=? WHERE id=?");
+            foreach ($rows as $r) {
+                $info = access_dec($r['login_info']);
+                if ($info === '') continue;
+                $cur  = access_dec($r['login_ops']);
+                $id   = (string)$r['login_ops_id'];
+                if ($cur === '') {
+                    // "csmsathena / 비번" 처럼 계정이 붙어 있으면 아이디를 떼어 낸다
+                    $a  = access_split_account($info);
+                    $id = $id !== '' ? $id : $a['id'];
+                    $st->execute([$id, access_enc($a['pw']), $r['id']]);
+                } else {
+                    $st->execute([$id, access_enc($cur . "\n" . $info), $r['id']]);
+                }
+            }
+        }
+        $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `login_info`");
+    }
 }
 
 /**
@@ -267,7 +321,7 @@ function access_detect_vpn(array $row) {
  * 아직 안 옮긴 평문으로 보고 그대로 돌려준다 — 마이그레이션이 멱등해진다.
  */
 function access_secret_cols() {
-    return ['login_ops', 'login_dev', 'login_info'];
+    return ['login_ops', 'login_dev'];
 }
 
 function access_key() {
@@ -448,33 +502,64 @@ function access_split_login($raw) {
 
 /** school_access 에서 사용자가 편집할 수 있는 컬럼 (school_id/sort_no 는 제외) */
 function access_cols() {
-    return ['opened','vpn','vpn_note','repo','dev_note','ops_note',
-            'login_ops_id','login_ops','login_dev_id','login_dev','login_info',
-            'dev_db','ops_db','haksa_db','plink','note','etc','deploy','deploy_acct','extra'];
+    return ['opened','vpn','vpn_note','repo','deploy','note',
+            'login_dev_id','login_dev','dev_note','dev_db',
+            'login_ops_id','login_ops','ops_note','ops_db','haksa_db'];
 }
 
 /**
- * 상세 화면에 뿌릴 필드 정의 — 라벨과 복사버튼 노출 여부를 한 곳에서 관리.
- * dev/ops URL(마스터인 schools 에서 옴)과 vpn(프로그램명+설명을 한 칸에 묶어 보여줌)은
- * 여기 목록에 없고 화면에서 따로 그린다.
+ * 화면 구성 — 공통 / 테스트 서버 / 운영 서버 세 묶음.
+ * 상세 패널과 편집 폼이 같은 정의를 쓰므로 여기만 고치면 양쪽이 함께 바뀐다.
+ *
+ *   type  input=한 줄, pw=가림(눈 아이콘), rich=Editor.js(굵기·색·취소선·목록)
+ *   copy  1이면 값 옆에 복사 버튼
+ *   url   schools 에서 오는 값(마스터). 편집은 '학교 정보' 칸에서 한다.
  */
-function access_fields() {
+function access_field_groups() {
     return [
-        ['key' => 'repo',        'label' => 'svn / git 주소', 'copy' => 1],
-        ['key' => 'login_ops',   'label' => '운영 로그인',     'copy' => 1, 'acct' => 'login_ops_id'],
-        ['key' => 'login_dev',   'label' => '테스트 로그인',   'copy' => 1, 'acct' => 'login_dev_id'],
-        ['key' => 'login_info',  'label' => '로그인 정보(구분 없음)', 'copy' => 1],
-        ['key' => 'dev_db',      'label' => '개발 DB',        'copy' => 1],
-        ['key' => 'ops_db',      'label' => '운영 DB',        'copy' => 1],
-        ['key' => 'haksa_db',    'label' => '학사 DB',        'copy' => 1],
-        ['key' => 'plink',       'label' => 'plink',          'copy' => 1],
-        ['key' => 'deploy',      'label' => '배포 방법',       'copy' => 1],
-        ['key' => 'deploy_acct', 'label' => '배포 계정',       'copy' => 1],
-        ['key' => 'note',        'label' => '비고',           'copy' => 0],
-        ['key' => 'etc',         'label' => 'etc',            'copy' => 0],
-        ['key' => 'extra',       'label' => '기타',           'copy' => 0],
+        ['title' => '공통 정보', 'fields' => [
+            ['key' => 'opened',   'label' => '최초 오픈',      'type' => 'input'],
+            ['key' => 'repo',     'label' => 'svn / git 주소', 'type' => 'area',  'copy' => 1],
+            ['key' => 'vpn',      'label' => 'VPN 프로그램',   'type' => 'input'],
+            ['key' => 'vpn_note', 'label' => 'VPN 접속 방법',  'type' => 'rich'],
+            ['key' => 'deploy',   'label' => '배포 방법',      'type' => 'rich',  'copy' => 1],
+            ['key' => 'note',     'label' => '비고',           'type' => 'rich'],
+        ]],
+        ['title' => '테스트 서버', 'fields' => [
+            ['key' => 'dev',          'label' => '개발 URL',  'type' => 'url',   'copy' => 1],
+            ['key' => 'login_dev_id', 'label' => '아이디',    'type' => 'input'],
+            ['key' => 'login_dev',    'label' => '비밀번호',  'type' => 'pw',    'copy' => 1],
+            ['key' => 'dev_note',     'label' => '메모',      'type' => 'rich'],
+            ['key' => 'dev_db',       'label' => '개발 DB',   'type' => 'rich',  'copy' => 1],
+        ]],
+        ['title' => '운영 서버', 'fields' => [
+            ['key' => 'ops',          'label' => '운영 URL',  'type' => 'url',   'copy' => 1],
+            ['key' => 'log',          'label' => '로그 관리', 'type' => 'url',   'copy' => 1],
+            ['key' => 'login_ops_id', 'label' => '아이디',    'type' => 'input'],
+            ['key' => 'login_ops',    'label' => '비밀번호',  'type' => 'pw',    'copy' => 1],
+            ['key' => 'ops_note',     'label' => '메모',      'type' => 'rich'],
+            ['key' => 'ops_db',       'label' => '운영 DB',   'type' => 'rich',  'copy' => 1],
+            ['key' => 'haksa_db',     'label' => '학사 DB',   'type' => 'rich',  'copy' => 1],
+        ]],
     ];
 }
+
+/** 묶음 정의에서 특정 type 의 key 만 뽑는다 */
+function access_keys_of_type($type) {
+    $out = [];
+    foreach (access_field_groups() as $g) {
+        foreach ($g['fields'] as $f) if (($f['type'] ?? '') === $type) $out[] = $f['key'];
+    }
+    return $out;
+}
+
+/** Editor.js 로 편집하는 칸 (굵기·색·취소선·목록) */
+function access_rich_cols() { return access_keys_of_type('rich'); }
+
+/** 가려서 보여줄 칸 — input[type=password] + 눈 아이콘.
+ *  저장값에 줄바꿈이 있는 행이 7건 있는데 input 은 줄바꿈을 담을 수 없다. 화면에는 한 줄로
+ *  펴서 보여 주되, 손대지 않았으면 원본을 그대로 저장한다(access.php 의 save 참고). */
+function access_password_cols() { return access_keys_of_type('pw'); }
 
 /**
  * 대학명 매칭용 정규화 — 엑셀 A열은 줄바꿈/괄호 앞 공백이 제각각이라

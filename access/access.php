@@ -25,6 +25,11 @@ $__bwBase = '../slack/';
 <link rel="stylesheet" href="../slack/styles/header.css">
 <link rel="stylesheet" href="../slack/styles/common.css">
 <link rel="stylesheet" href="styles/access.css">
+<!-- Editor.js: 설명성 칸의 서식(굵기·색·취소선·목록) 편집용. 버전을 못 박아 둔다.
+     색상은 외부 플러그인을 쓰지 않는다 — 아래 ColorTool 주석 참고. -->
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.30.7/dist/editorjs.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@editorjs/list@1.10.0/dist/list.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@sotaproject/strikethrough@1.0.1/dist/bundle.min.js"></script>
 </head>
 <body>
 <?php include __DIR__ . '/../slack/header.php'; ?>
@@ -91,8 +96,16 @@ $__bwBase = '../slack/';
 <div class="toast" id="toast" hidden></div>
 
 <script>
-/* 상세/편집에 쓸 필드 정의는 PHP(access_fields)에서 내려받아 한 곳에서만 관리한다 */
-const FIELDS = <?= json_encode(access_fields(), JSON_UNESCAPED_UNICODE) ?>;
+/* 상세/편집 화면 구성(공통 / 테스트 서버 / 운영 서버)은 PHP 에서 내려받아 한 곳에서만 관리한다 */
+const GROUPS = <?= json_encode(access_field_groups(), JSON_UNESCAPED_UNICODE) ?>;
+const ALLF = GROUPS.flatMap(g => g.fields);
+/* 서식(Editor.js)으로 편집하는 칸. 나머지는 예전처럼 평문이다. */
+const RICH = new Set(<?= json_encode(access_rich_cols(), JSON_UNESCAPED_UNICODE) ?>);
+/* 편집 화면에서 가려 놓을 칸(비밀번호). 눈 아이콘으로 잠깐 열어 본다. */
+const PWCOLS = new Set(<?= json_encode(access_password_cols(), JSON_UNESCAPED_UNICODE) ?>);
+/* input 은 줄바꿈을 못 담는다. 화면에는 한 줄로 펴서 보여 주고, 손대지 않은 칸은
+   저장할 때 원본으로 되돌린다(save 참고) — 안 건드린 값이 조용히 잘리면 안 되니까. */
+const flatPw = s => (s || "").replace(/\s*\n+\s*/g, " ");
 /* 필터는 버전(schools.ver) 기준. 한 학교에 접속정보가 두 벌인 경우가 있어서
    행 식별자는 school_id 가 아니라 접속정보 id 다(아래 rowKey 참고). */
 
@@ -145,6 +158,103 @@ function toast(msg) {
   toastT = setTimeout(() => { t.hidden = true; }, 1800);
 }
 
+/* ── Editor.js 값 ────────────────────────────────────────────
+   저장값은 Editor.js 의 블록 JSON 이다. 다만 엑셀에서 가져온 273행은 전부 평문이라
+   "JSON 으로 안 읽히면 평문" 으로 보고 양쪽을 다 받는다. 서식이 필요 없던 칸을
+   그대로 두는 것도 같은 이유 — 마이그레이션 없이 섞여 있어도 동작한다. */
+function ejParse(v) {
+  v = (v || "").trim();
+  if (v.charAt(0) !== "{") return null;
+  try {
+    const d = JSON.parse(v);
+    return Array.isArray(d.blocks) ? d : null;
+  } catch (e) { return null; }
+}
+
+/* 태그를 걷어낸 순수 텍스트 — 복사 버튼과 검색이 쓴다 */
+function stripTags(html) {
+  const d = document.createElement("div");
+  d.innerHTML = html || "";
+  return (d.textContent || "").replace(/\u00a0/g, " ");
+}
+
+/* 목록 항목은 문자열이거나 {content, items} 중첩 구조다(@editorjs/list 1.x) */
+function ejItemText(it) {
+  if (typeof it === "string") return stripTags(it);
+  const own = stripTags((it && it.content) || "");
+  const sub = ((it && it.items) || []).map(ejItemText).filter(Boolean);
+  return sub.length ? own + "\n" + sub.join("\n") : own;
+}
+
+function ejToText(v) {
+  const d = ejParse(v);
+  if (!d) return v || "";
+  const out = [];
+  for (const b of d.blocks) {
+    const t = b && b.type, dat = (b && b.data) || {};
+    if (t === "list") (dat.items || []).forEach(it => { const s = ejItemText(it); if (s) out.push(s); });
+    else out.push(stripTags(dat.text || ""));
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/* 화면에 그릴 때 쓰는 새니타이저. 서식 태그만 남기고 속성은 색상 style 만 통과시킨다 —
+   저장값이 결국 남이 쓴 HTML 이므로 그대로 innerHTML 에 넣지 않는다. */
+/* FONT 가 들어 있는 이유: 글자 색을 <font style="color:…"> 로 감싸기 때문이다(아래 ColorTool).
+   빼 두면 저장은 되는데 화면에 그릴 때 태그가 벗겨져 색이 사라진다. MARK 는 형광펜용. */
+const EJ_TAGS = { B: 1, STRONG: 1, I: 1, EM: 1, U: 1, S: 1, STRIKE: 1, MARK: 1, SPAN: 1, FONT: 1, BR: 1, UL: 1, OL: 1, LI: 1 };
+// 이 태그들은 껍데기만 벗기면 안에 있던 코드가 글자로 남는다 — 통째로 버린다
+const EJ_DROP = { SCRIPT: 1, STYLE: 1, IFRAME: 1, OBJECT: 1, EMBED: 1, LINK: 1, META: 1, TEMPLATE: 1, NOSCRIPT: 1 };
+function ejSanitize(html) {
+  const root = document.createElement("div");
+  root.innerHTML = html || "";
+  (function walk(node) {
+    Array.prototype.slice.call(node.children).forEach(el => {
+      if (EJ_DROP[el.tagName]) { el.remove(); return; }
+      walk(el);
+      if (!EJ_TAGS[el.tagName]) { el.replaceWith.apply(el, el.childNodes); return; }
+      Array.prototype.slice.call(el.attributes).forEach(a => {
+        if (a.name === "style") {
+          const keep = (a.value.match(/(?:^|;)\s*(?:color|background-color)\s*:\s*[^;]+/gi) || [])
+            .map(x => x.replace(/^;/, "").trim()).join(";");
+          if (keep) el.setAttribute("style", keep); else el.removeAttribute("style");
+        } else if (a.name === "class") {
+          if (!/^[\w\- ]+$/.test(a.value)) el.removeAttribute("class");
+        } else {
+          el.removeAttribute(a.name);
+        }
+      });
+    });
+  })(root);
+  return root.innerHTML;
+}
+
+function ejListHtml(items) {
+  return (items || []).map(it => {
+    if (typeof it === "string") return "<li>" + ejSanitize(it) + "</li>";
+    const own = ejSanitize((it && it.content) || "");
+    const sub = (it && it.items && it.items.length) ? "<ul>" + ejListHtml(it.items) + "</ul>" : "";
+    return "<li>" + own + sub + "</li>";
+  }).join("");
+}
+
+function ejToHtml(v) {
+  const d = ejParse(v);
+  if (!d) return esc(v || "").replace(/\n/g, "<br>");   // 평문은 줄바꿈만 살려서
+  return d.blocks.map(b => {
+    const t = b && b.type, dat = (b && b.data) || {};
+    if (t === "list") {
+      const tag = dat.style === "ordered" ? "ol" : "ul";
+      return "<" + tag + ">" + ejListHtml(dat.items) + "</" + tag + ">";
+    }
+    const inner = ejSanitize(dat.text || "");
+    return inner ? "<p>" + inner + "</p>" : "";
+  }).join("");
+}
+
+/* 어떤 칸이든 "복사·검색에 쓸 평문" 으로 바꿔 준다 */
+const val = (r, k) => (RICH.has(k) ? ejToText(r[k]) : (r[k] || ""));
+
 /* ── 원문에서 "바로 쓸 한 줄"만 뽑기 ──────────────────────────
    엑셀 칸에는 주소 밑에 "변경!", "사용 불가:", 설명이 같이 적혀 있는 경우가 많다. 목록의
    복사 버튼은 실제로 붙여 넣어 쓸 부분만 주고, 원문 전체는 상세 패널의 복사 버튼으로 준다. */
@@ -190,14 +300,14 @@ function repoInfo(raw) {
   return { kind: "", addr: url, cmd: url };
 }
 
-/* 정작 plink 전용 칸은 거의 비어 있다 — 3.5 시트에는 그 칸 자체가 없고, 터널링 명령이
-   '학사 DB'(52건) · '운영 DB'(17건) 설명 안에 같이 적혀 있다. 그래서 한 칸만 보지 않고
-   아래 칸들을 훑어서 찾은 만큼 버튼을 만든다. */
+/* 터널링 명령은 전용 칸이 아니라 DB 설명 안에 섞여 있다('학사 DB' 52건 · '운영 DB' 17건).
+   그래서 아래 칸들을 훑어서 찾은 만큼 버튼을 만든다. plink 전용 칸은 값이 1건뿐이라
+   비고로 합쳤으므로 비고도 함께 본다. */
 const PLINK_SRC = [
-  ["plink",    "plink"],
   ["dev_db",   "plink·개발"],
   ["ops_db",   "plink·운영"],
   ["haksa_db", "plink·학사"],
+  ["note",     "plink·비고"],
 ];
 
 /* ── 로딩/렌더 ─────────────────────────────────────────────── */
@@ -251,9 +361,9 @@ function vpnMatch(r) {
 
 function matches(r, q) {
   if (!q) return true;
-  return [r.name, r.ver, r.vpn, r.dev, r.ops, r.repo, r.plink,
-          r.login_ops_id, r.login_ops, r.login_dev_id, r.login_dev, r.login_info,
-          r.dev_db, r.ops_db, r.haksa_db]
+  return [r.name, r.ver, r.vpn, r.dev, r.ops, r.repo,
+          r.login_ops_id, r.login_ops, r.login_dev_id, r.login_dev,
+          val(r, "note"), val(r, "dev_db"), val(r, "ops_db"), val(r, "haksa_db")]
     .some(v => (v || "").toLowerCase().includes(q));
 }
 
@@ -305,9 +415,7 @@ function rowParts(r) {
     oneAcct ? acctChip(r.login_ops_id) : "",
     r.login_ops ? (oneAcct ? "" : acctChip(r.login_ops_id)) + cpBtn(r.login_ops, "운영 로그인") : "",
     r.login_dev ? (oneAcct ? "" : acctChip(r.login_dev_id)) + cpBtn(r.login_dev, "테스트 로그인") : "",
-    // 운영/테스트로 못 가른 원문만 남은 행은 그대로 한 덩어리로 복사시킨다
-    (!r.login_ops && !r.login_dev && r.login_info) ? cpBtn(r.login_info, "로그인") : "",
-    ...PLINK_SRC.map(([k, label]) => { const c = plinkCmd(r[k]); return c ? cpBtn(c, label) : ""; }),
+    ...PLINK_SRC.map(([k, label]) => { const c = plinkCmd(val(r, k)); return c ? cpBtn(c, label) : ""; }),
   ].filter(Boolean).join("");
 
   // 저장소는 종류 칩과 복사 버튼이면 충분하다 — 주소 자체는 상세에서 본다
@@ -371,29 +479,14 @@ function cpBtn(val, label) {
 }
 
 function detailBody(r) {
-  const cells = [];
-  // VPN 은 프로그램명(vpn)과 접속 방법(vpn_note)이 짝이라 한 칸에 묶어 맨 앞에 둔다 —
-  // 이게 안 켜져 있으면 아래 주소·계정이 전부 무용지물이라 제일 먼저 보여야 한다.
-  if (r.vpn || r.vpn_note) cells.push(fieldCell("VPN", r.vpn, r.vpn_note, 0));
-  if (r.dev || r.dev_note) cells.push(fieldCell("개발 URL", r.dev, r.dev_note, 1));
-  if (r.ops || r.ops_note) cells.push(fieldCell("운영 URL", r.ops, r.ops_note, 1));
-  if (r.log)               cells.push(fieldCell("로그 관리", r.log, "", 1));
-  for (const f of FIELDS) {
-    const v = r[f.key];
-    const acct = f.acct ? (r[f.acct] || "") : "";
-    if (!v && !acct) continue;
-    // DB 설명 안에 섞여 있는 터널링 명령은 따로 뽑아 준다 — 통째로 복사하면 붙여 쓸 수 없다
-    const plk = (f.key !== "plink") ? plinkCmd(v) : "";
-    let extra = plk ? cpBtn(plk, "plink만") : "";
-    if (f.key === "repo") {
-      const ri = repoInfo(v);
-      // 원문에 설명이 섞여 있어도 붙여 넣을 한 줄은 따로 준다
-      if (ri.cmd && ri.cmd !== v) extra = cpBtn(ri.cmd, ri.kind === "git" ? "git clone" : "주소만");
-    }
-    // 로그인 칸은 계정을 라벨 옆에 적고 값(=비밀번호)만 복사시킨다
-    cells.push(fieldCell(f.label + (acct ? ` · ${acct}` : ""), v, "", f.copy, extra));
-  }
   const meta = r.opened ? `최초 오픈 ${esc(r.opened)}` : "";
+
+  // 공통 / 테스트 서버 / 운영 서버 — 값이 하나도 없는 묶음은 통째로 생략한다
+  const sections = GROUPS.map(g => {
+    const cells = g.fields.map(f => groupCell(r, f)).filter(Boolean);
+    if (!cells.length) return "";
+    return `<div class="dsec">${esc(g.title)}</div><div class="dgrid">${cells.join("")}</div>`;
+  }).filter(Boolean).join("");
 
   return `
     <div class="detail-head">
@@ -403,18 +496,57 @@ function detailBody(r) {
         ${r.access_id ? `<button class="del" type="button" data-key="${escA(rowKey(r))}">접속정보 삭제</button>` : ""}
       </span>
     </div>
-    ${cells.length ? `<div class="dgrid">${cells.join("")}</div>`
-                   : '<div class="empty">등록된 접속 정보가 없습니다. [수정]에서 채워 넣으세요.</div>'}`;
+    ${sections || '<div class="empty">등록된 접속 정보가 없습니다. [수정]에서 채워 넣으세요.</div>'}`;
 }
 
-function fieldCell(label, val, note, copyable, extraBtns) {
+/* 묶음 안의 칸 하나 — 값이 비어 있으면 아예 안 그린다 */
+function groupCell(r, f) {
+  const v = r[f.key];
+  if (!v) return "";
+  if (f.key === "opened") return "";          // 위 meta 줄에 이미 나온다
+  if (f.type === "url") {
+    return fieldCell(f.label, v, "", f.copy, `<a class="link" href="${escA(v)}" target="_blank" rel="noopener">열기 ↗</a>`);
+  }
+  if (f.key === "vpn") {                       // 프로그램명과 접속 방법을 한 칸에 묶는다
+    return fieldCell(f.label, v, "", 0, "", null, r.vpn_note);
+  }
+  if (f.key === "vpn_note") return "";         // 위에서 같이 그렸다
+
+  const plain = val(r, f.key);
+  // DB 설명 안에 섞여 있는 터널링 명령은 따로 뽑아 준다 — 통째로 복사하면 붙여 쓸 수 없다
+  let extra = "";
+  const plk = plinkCmd(plain);
+  if (plk) extra = cpBtn(plk, "plink만");
+  if (f.key === "repo") {
+    const ri = repoInfo(v);
+    // 원문에 설명이 섞여 있어도 붙여 넣을 한 줄은 따로 준다
+    if (ri.cmd && ri.cmd !== v) extra = cpBtn(ri.cmd, ri.kind === "git" ? "git clone" : "주소만");
+  }
+  return fieldCell(f.label, v, "", f.copy, extra, f.key);
+}
+
+/* 비밀번호는 줄 수만 유지한 채 길이를 드러내지 않게 고정 길이 점으로 가린다 */
+const pwMask = v => (v || "").split("\n").map(() => "\u2022".repeat(8)).join("\n");
+
+/* key 가 서식 칸이면 값은 블록 JSON 이라 HTML 로 그리고, 복사 버튼에는 평문을 담는다.
+   비밀번호 칸은 가린 채 그리되 복사 버튼은 원문을 그대로 준다 — 눈으로 볼 일보다
+   붙여 넣을 일이 많아서 굳이 열지 않아도 쓸 수 있어야 한다. */
+function fieldCell(label, value, note, copyable, extraBtns, key, richNote) {
+  const rich = key && RICH.has(key);
+  const isPw = key && PWCOLS.has(key);
+  const plain = rich ? ejToText(value) : (value || "");
   const body = [
-    val  ? `<pre class="val">${esc(val)}</pre>` : "",
-    note ? `<pre class="val note">${esc(note)}</pre>` : "",
+    value ? (rich  ? `<div class="val rich">${ejToHtml(value)}</div>`
+           : isPw  ? `<pre class="val pw" data-pw="${escA(value)}">${esc(pwMask(value))}</pre>`
+                   : `<pre class="val">${esc(value)}</pre>`) : "",
+    note     ? `<pre class="val note">${esc(note)}</pre>` : "",
+    richNote ? `<div class="val note rich">${ejToHtml(richNote)}</div>` : "",
   ].join("");
+  const eye = (isPw && value)
+    ? `<button class="cp deye" type="button" title="표시/숨김">보기</button>` : "";
   return `<div class="dcell">
     <div class="dlabel"><span>${esc(label)}</span>
-      <span class="dbtns">${extraBtns || ""}${copyable && val ? cpBtn(val, "복사") : ""}</span></div>
+      <span class="dbtns">${extraBtns || ""}${eye}${copyable && plain ? cpBtn(plain, "복사") : ""}</span></div>
     ${body}
   </div>`;
 }
@@ -426,6 +558,15 @@ function bind(box) {
     el.addEventListener("click", () => {
       openKey = (openKey === el.dataset.key) ? "" : el.dataset.key;
       render();
+    }));
+  box.querySelectorAll(".deye").forEach(b =>
+    b.addEventListener("click", e => {
+      e.stopPropagation();
+      const pre = b.closest(".dcell").querySelector("pre.val.pw");
+      if (!pre) return;
+      const shown = pre.classList.toggle("shown");
+      pre.textContent = shown ? pre.dataset.pw : pwMask(pre.dataset.pw);
+      b.textContent = shown ? "숨기기" : "보기";
     }));
   box.querySelectorAll(".edit").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); openEdit(b.dataset.key); }));
@@ -442,16 +583,6 @@ const MASTER = [
   ["ops",  "운영 URL",      "input"],
   ["log",  "로그 관리 URL",  "input"],
 ];
-const DETAIL_EXTRA = [
-  ["opened",       "최초 오픈",     "input"],
-  ["vpn",          "VPN 프로그램 (비우면 불필요)", "input"],
-  ["vpn_note",     "VPN 접속 방법", "area"],
-  ["login_ops_id", "운영 계정 ID",   "input"],
-  ["login_dev_id", "테스트 계정 ID", "input"],
-  ["dev_note",     "개발 URL 메모", "area"],
-  ["ops_note",     "운영 URL 메모", "area"],
-];
-
 function openEdit(key) {
   const r = DATA.find(x => rowKey(x) === key);
   if (r) openForm(r);
@@ -460,8 +591,7 @@ function openEdit(key) {
 /* 추가 — 빈 행을 만들어 같은 폼을 띄운다. 저장하면 schools 에도 같이 들어간다. */
 function openCreate() {
   const blank = { school_id: 0, access_id: 0, name: "", ver: "", dev: "", ops: "", log: "" };
-  for (const f of FIELDS) blank[f.key] = "";
-  for (const [k] of DETAIL_EXTRA) blank[k] = "";
+  for (const f of ALLF) blank[f.key] = "";
   openForm(blank);
 }
 
@@ -476,22 +606,224 @@ function openForm(r) {
   $("eGrid").innerHTML = [
     `<div class="esec">학교 정보 <span class="ehint">(학교 사이트 관리와 공유되는 값)</span></div>`,
     ...MASTER.map(([k, l, t]) => cellHtml(k, l, t, r[k])),
-    `<div class="esec">접속 · 배포 정보</div>`,
-    ...DETAIL_EXTRA.map(([k, l, t]) => cellHtml(k, l, t, r[k])),
-    ...FIELDS.map(f => cellHtml(f.key, f.label, "area", r[f.key])),
+    // url 타입은 위 '학교 정보'(schools)에서 이미 고치므로 폼에서는 건너뛴다
+    ...GROUPS.map(g => `<div class="esec">${esc(g.title)}</div>` +
+      g.fields.filter(f => f.type !== "url")
+              .map(f => cellHtml(f.key, f.label, f.type, r[f.key])).join("")),
   ].join("");
   openModal("mEdit");
+  bindEyes();
+  mountEditors(r);
   const first = $("eGrid").querySelector("input[data-k=name]");
   if (first) first.focus();
 }
 
-function cellHtml(key, label, type, val) {
-  const v = esc(val || "");
+function cellHtml(key, label, type, value) {
+  // 서식 칸은 <label> 로 감싸지 않는다 — 라벨 클릭이 에디터 포커스를 가로챈다
+  if (type === "rich" || RICH.has(key)) {
+    return `<div class="ecell full">
+      <span>${esc(label)}</span>
+      <div class="ejholder" data-ej="${escA(key)}"></div>
+    </div>`;
+  }
+  const v = esc(value || "");
+  if (type === "pw" || PWCOLS.has(key)) {
+    return `<label class="ecell">
+      <span>${esc(label)}</span>
+      <div class="pwbox">
+        <input data-k="${escA(key)}" type="password" value="${escA(flatPw(value))}" autocomplete="off">
+        <button type="button" class="eye" data-eye="${escA(key)}" title="표시/숨김">${EYE_OFF}</button>
+      </div>
+    </label>`;
+  }
   return `<label class="ecell${type === "area" ? " full" : ""}">
     <span>${esc(label)}</span>
     ${type === "area" ? `<textarea data-k="${escA(key)}" rows="3">${v}</textarea>`
-                      : `<input data-k="${escA(key)}" type="text" value="${escA(val || "")}">`}
+                      : `<input data-k="${escA(key)}" type="text" value="${escA(value || "")}">`}
   </label>`;
+}
+
+const EYE_ON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const EYE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7c1.6 0 3 .4 4.3 1M22 12s-3.6 7-10 7c-1.6 0-3-.4-4.3-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>`;
+
+/* 눈 아이콘 — 그 칸만 잠깐 연다. 모달을 닫으면 다시 가려진 상태로 돌아간다. */
+function bindEyes() {
+  $("eGrid").querySelectorAll(".eye[data-eye]").forEach(b => {
+    b.addEventListener("click", e => {
+      e.preventDefault();
+      const el = $("eGrid").querySelector(`input[data-k="${b.dataset.eye}"]`);
+      if (!el) return;
+      const shown = el.type === "password";
+      el.type = shown ? "text" : "password";
+      b.innerHTML = shown ? EYE_ON : EYE_OFF;
+      b.title = shown ? "숨기기" : "표시";
+    });
+  });
+}
+
+/* ── 글자 색 도구 ────────────────────────────────────────────
+   editorjs-text-color-plugin 은 자기 팝업을 shadow DOM 으로 띄우는데, Editor.js 2.30 의
+   인라인 툴바가 팝오버로 바뀌면서 그 안의 클릭을 팝오버가 먼저 가로챈다. 그래서 색이
+   아예 안 찍힌다. 2.30 이 지원하는 MenuConfig(children + onActivate)로 직접 만들었다.
+   저장 마크업은 그 플러그인과 같은 <font style="color:…"> 이라 기존 값과 호환된다. */
+const EJ_COLORS = [
+  ["빨강", "#E24A4A"], ["주황", "#E8890C"], ["초록", "#1B9E4B"],
+  ["파랑", "#0C6FD1"], ["보라", "#7A3AA8"], ["먹색", "#1F2328"], ["회색", "#8B949E"],
+];
+
+/* 팝오버 항목을 누르는 사이에 선택 영역이 풀리는 경우가 있어, 에디터 안에서 잡힌
+   마지막 범위를 따로 들고 있다가 색을 입힐 때 쓴다. */
+let ejRange = null;
+document.addEventListener("selectionchange", () => {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed) return;
+  const n = sel.getRangeAt(0).commonAncestorContainer;
+  const el = n.nodeType === 1 ? n : n.parentElement;
+  if (el && el.closest && el.closest(".ejholder")) ejRange = sel.getRangeAt(0).cloneRange();
+});
+
+const ICON_COLOR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16 12 4l6 12"/><path d="M8.5 12h7"/><path d="M4 20h16"/></svg>`;
+
+class ColorTool {
+  static get isInline() { return true; }
+  static get title() { return "글자 색"; }
+  // Editor.js 가 저장할 때 남길 태그. 플러그인과 같은 규칙(style 유지).
+  static get sanitize() { return { font: { style: true } }; }
+
+  constructor({ api }) { this.api = api; }
+
+  render() {
+    return {
+      icon: ICON_COLOR,
+      title: "글자 색",
+      children: {
+        searchable: false,
+        // 자식 팝오버가 열리면 글자 선택이 풀린다. Editor.js 내장 'Convert to' 도 같은
+        // 이유로 열 때 저장하고 닫을 때 되돌린다 — 그 방식을 그대로 따른다.
+        onOpen: () => { try { this.api.selection.save(); } catch (e) {} },
+        items: [
+          ...EJ_COLORS.map(([name, hex]) => ({
+            icon: `<span class="ejswatch" style="background:${hex}"></span>`,
+            title: name,
+            closeOnActivate: true,
+            onActivate: () => this.apply(hex),
+          })),
+          { icon: "✕", title: "색 지우기", closeOnActivate: true, onActivate: () => this.clear() },
+        ],
+      },
+    };
+  }
+
+  /* 메뉴를 여는 사이 풀린 선택을 되돌린다. Editor.js 가 저장해 둔 범위를 먼저 쓰고,
+     그게 안 되면 우리가 들고 있던 마지막 범위로 되살린다. */
+  restoreSelection() {
+    try { this.api.selection.restore(); } catch (e) {}
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount && !sel.isCollapsed) return sel.getRangeAt(0);
+    if (ejRange) {
+      sel.removeAllRanges();
+      sel.addRange(ejRange);
+      return ejRange;
+    }
+    return null;
+  }
+
+  /* MenuConfig 로 동작하므로 surround 는 쓰이지 않지만, 인라인 툴 규약상 있어야 한다 */
+  surround() {}
+  checkState() { return !!this.api.selection.findParentTag("FONT"); }
+
+  apply(hex) {
+    const range = this.restoreSelection();
+    if (!range || range.collapsed) return;
+    const cur = this.api.selection.findParentTag("FONT");
+    if (cur) { cur.style.color = hex; this.dropSelection(cur); return; }   // 색만 교체
+    const font = document.createElement("font");
+    font.style.color = hex;
+    try {
+      font.appendChild(range.extractContents());
+      range.insertNode(font);
+    } catch (e) { return; }                       // 여러 블록에 걸친 선택 등
+    this.dropSelection(font);
+  }
+
+  clear() {
+    this.restoreSelection();
+    const font = this.api.selection.findParentTag("FONT");
+    if (!font || !font.parentNode) return;
+    const parent = font.parentNode;
+    const last = font.lastChild;
+    while (font.firstChild) parent.insertBefore(font.firstChild, font);
+    parent.removeChild(font);
+    parent.normalize();
+    this.dropSelection(last);
+  }
+
+  /* 작업이 끝나면 선택을 풀고 커서만 그 뒤에 둔다.
+     선택을 남겨 두면 인라인 툴바가 계속 떠 있고, 저장해 둔 범위(onOpen 의 save)가 다시
+     복원되면서 다른 곳을 선택할 수 없게 된다. 저장 범위도 커서 위치로 덮어써 둔다. */
+  dropSelection(node) {
+    ejRange = null;
+    const sel = window.getSelection();
+    if (!sel) return;
+    try {
+      const r = document.createRange();
+      if (node && node.parentNode) r.setStartAfter(node); else r.setStart(sel.anchorNode, sel.anchorOffset);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } catch (e) {
+      sel.removeAllRanges();
+    }
+    try { this.api.selection.save(); } catch (e) {}
+  }
+}
+
+/* ── Editor.js 인스턴스 관리 ──────────────────────────────── */
+let EDITORS = {};
+
+/* 평문 → Editor.js 블록. 엑셀에서 온 값은 전부 평문이라 첫 편집 때 이 경로를 탄다. */
+function textToDoc(t) {
+  const lines = (t || "").split("\n").map(l => l.trim());
+  const blocks = lines.filter(Boolean).map(l => ({ type: "paragraph", data: { text: esc(l) } }));
+  return { blocks };
+}
+
+function mountEditors(r) {
+  if (typeof EditorJS === "undefined") return;   // CDN 을 못 불러온 환경
+  const tools = {
+    list: { class: window.List, inlineToolbar: true },
+    Color: { class: ColorTool },
+    strikethrough: { class: window.Strikethrough },
+  };
+  $("eGrid").querySelectorAll(".ejholder").forEach(el => {
+    const k = el.dataset.ej;
+    EDITORS[k] = new EditorJS({
+      holder: el,
+      minHeight: 24,
+      placeholder: "",
+      data: ejParse(r[k]) || textToDoc(r[k]),
+      tools,
+      inlineToolbar: ["bold", "Color", "strikethrough"],
+    });
+  });
+}
+
+function destroyEditors() {
+  Object.values(EDITORS).forEach(i => { try { i.destroy(); } catch (e) {} });
+  EDITORS = {};
+}
+
+/* 각 에디터의 현재 내용을 저장용 문자열로. 빈 내용은 "" 로 둬서 '값 없음' 판정이 유지된다. */
+async function collectEditors(body) {
+  for (const k of Object.keys(EDITORS)) {
+    let out = null;
+    try { out = await EDITORS[k].save(); } catch (e) { out = null; }
+    const blocks = (out && out.blocks) ? out.blocks.filter(b => {
+      const d = b.data || {};
+      return (d.text && stripTags(d.text).trim()) || (d.items && d.items.length);
+    }) : [];
+    body[k] = blocks.length ? JSON.stringify({ blocks }) : "";
+  }
 }
 
 async function save() {
@@ -501,8 +833,14 @@ async function save() {
     ? { action: "create" }
     : { action: "save", school_id: formRow.school_id, access_id: formRow.access_id };
   $("eGrid").querySelectorAll("[data-k]").forEach(el => { body[el.dataset.k] = el.value; });
+  // 비밀번호 칸은 원본이 여러 줄일 수 있는데 input 에는 한 줄로 펴서 담았다.
+  // 사용자가 그대로 뒀으면(펴 놓은 값과 같으면) 원본을 되돌려 나머지 줄을 잃지 않는다.
+  PWCOLS.forEach(k => {
+    if (body[k] === flatPw(formRow[k])) body[k] = formRow[k] || "";
+  });
   if (!(body.name || "").trim()) { toast("대학(기관)명을 입력하세요."); return; }
   $("doSave").disabled = true;
+  await collectEditors(body);
   try {
     const j = await (await fetch("access_api.php", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -556,7 +894,10 @@ async function doImport() {
 
 /* ── 모달 ──────────────────────────────────────────────────── */
 function openModal(id) { $(id).hidden = false; }
-function closeModal() { document.querySelectorAll(".modal").forEach(m => m.hidden = true); }
+function closeModal() {
+  destroyEditors();
+  document.querySelectorAll(".modal").forEach(m => m.hidden = true);
+}
 document.querySelectorAll(".modal").forEach(m => {
   m.addEventListener("click", e => { if (e.target === m || e.target.hasAttribute("data-close")) closeModal(); });
 });

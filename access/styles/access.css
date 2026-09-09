@@ -132,7 +132,12 @@ tr.d > td { background:var(--bg2); padding:14px 16px 16px; cursor:default; }
 .dmeta { font-size:12px; color:var(--muted); }
 .detail-head button { height:26px; padding:0 12px; font-size:12px; margin-left:6px; }
 .detail-head .del:hover { border-color:#e24b4a; color:#e24b4a; }
+/* 상세 패널의 묶음 제목 (공통 / 테스트 서버 / 운영 서버) */
+.dsec { font-size:12px; font-weight:700; color:var(--muted); letter-spacing:.02em;
+        margin:14px 0 7px; padding-bottom:5px; border-bottom:1px solid var(--line); }
+.dsec:first-of-type { margin-top:0; }
 .dgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:10px; }
+.dgrid + .dsec { margin-top:16px; }
 .dcell { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:9px 11px; min-width:0; }
 .dlabel { display:flex; align-items:center; justify-content:space-between; gap:8px;
           font-size:11px; font-weight:600; color:var(--muted); margin-bottom:5px; }
@@ -141,6 +146,21 @@ tr.d > td { background:var(--bg2); padding:14px 16px 16px; cursor:default; }
 pre.val { margin:0; font-family:Consolas, "D2Coding", monospace; font-size:12px; line-height:1.6;
           white-space:pre-wrap; word-break:break-all; color:var(--txt); max-height:260px; overflow:auto; }
 pre.val.note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--line); color:var(--muted); }
+/* 가려 놓은 비밀번호 — 열었을 때만 또렷하게 */
+pre.val.pw { letter-spacing:.12em; color:var(--hint); }
+pre.val.pw.shown { letter-spacing:normal; color:var(--txt); }
+.dbtns .deye { min-width:44px; }
+
+/* Editor.js 로 쓴 칸 — 저장값이 블록이라 <pre> 대신 흐르는 본문으로 그린다.
+   글자 크기·서체는 옆 칸(pre.val)과 같게 맞춰 상세 패널이 들쭉날쭉해지지 않게 한다. */
+.val.rich { font-family:Consolas, "D2Coding", monospace; font-size:12px; line-height:1.6;
+            color:var(--txt); word-break:break-word; max-height:260px; overflow:auto; }
+.val.rich p { margin:0 0 4px; }
+.val.rich p:last-child { margin-bottom:0; }
+.val.rich ul, .val.rich ol { margin:2px 0 4px; padding-left:20px; }
+.val.rich li { margin:1px 0; }
+.val.rich s { opacity:.65; }
+.val.rich.note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--line); color:var(--muted); }
 
 .foot { font-size:12px; color:var(--hint); margin:12px 2px 0; }
 .foot code { background:var(--bg); border:1px solid var(--line); border-radius:4px; padding:1px 5px; }
@@ -151,7 +171,8 @@ pre.val.note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--line
          display:flex; align-items:center; justify-content:center; padding:20px; }
 .modal[hidden] { display:none; }
 .modal-in { background:var(--bg); border:1px solid var(--line); border-radius:14px;
-            padding:20px 22px; width:min(560px, 100%); max-height:88vh; overflow:auto;
+            padding:20px 22px; width:min(560px, 100%); max-height:88vh;
+            overflow-y:auto; overflow-x:hidden;
             box-shadow:0 18px 50px rgba(0,0,0,.28); }
 .modal-in.wide { width:min(980px, 100%); }
 .modal-in h2 { margin:0 0 10px; font-size:16px; font-weight:600; }
@@ -171,6 +192,128 @@ pre.val.note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--line
 .ecell > span { font-size:11.5px; color:var(--muted); }
 .ecell input, .ecell textarea { width:100%; }
 .ecell textarea { font-family:Consolas, "D2Coding", monospace; font-size:12px; }
+
+/* 비밀번호 칸 — 눈 아이콘이 input 안쪽 오른쪽에 겹쳐 앉는다 */
+.pwbox { position:relative; }
+.pwbox input { width:100%; padding-right:32px; font-family:Consolas, "D2Coding", monospace; }
+.pwbox .eye { position:absolute; right:5px; top:50%; transform:translateY(-50%);
+              width:24px; height:24px; padding:0; display:flex; align-items:center;
+              justify-content:center; background:none; border:0; color:var(--hint); }
+.pwbox .eye:hover { color:var(--info); }
+.pwbox .eye svg { width:16px; height:16px; display:block; }
+
+/* ── Editor.js ──────────────────────────────────────────────
+   Editor.js 번들은 자기 CSS 를 런타임에 <style> 로 head 끝에 밀어 넣는다. 우리 스타일시트가
+   먼저 걸려 있어서 같은 특이도면 항상 저쪽이 이긴다 — 그래서 특이도를 올리거나(.ejholder 접두)
+   ::selection 처럼 올릴 수 없는 건 !important 로 눌러야 한다.
+   색은 전부 사이트 변수(common.css)를 쓰므로 라이트/다크가 자동으로 따라온다. */
+
+/* 홀더 — 테두리·배경·패딩을 textarea 와 똑같이 맞춘다(위 textarea 규칙: padding 7px 10px) */
+.ejholder { position:relative; border:1px solid var(--line); border-radius:8px; background:var(--bg);
+            padding:7px 10px; min-height:46px; }
+/* 색 목록 같은 팝오버는 홀더 밖으로 나오는데, 홀더들이 그리드 항목이라 DOM 순서대로
+   그려진다 — 그냥 두면 아래쪽 칸의 글자가 팝오버 위에 얹힌다. 지금 쓰고 있는 홀더만
+   위로 올린다. :has 를 못 쓰는 브라우저를 대비해 :focus-within 도 같이 건다. */
+.ejholder:focus-within { z-index:30; }
+.ejholder:has(.ce-popover--opened) { z-index:30; }
+
+/* 본문 — 원래 이 자리에 있던 textarea(Consolas 12px)와 같은 크기로. 기본값은 페이지 폰트를
+   그대로 물려받아 주변보다 크게 보인다. */
+.ejholder .codex-editor,
+.ejholder .ce-block,
+.ejholder .ce-paragraph,
+.ejholder .cdx-list {
+  font-family:Consolas, "D2Coding", monospace;
+  font-size:12px;
+  color:var(--txt);
+}
+.ejholder .ce-paragraph { line-height:1.5; padding:0; }
+
+/* 글이 시작하는 위치를 textarea 와 같게 맞춘다.
+   Editor.js 는 redactor 에 margin-left:50px, 블록 내용에 가운데 정렬(max-width:650px)을 걸어
+   왼쪽에 툴바(＋/⋮⋮) 자리를 비워 둔다. 그 들여쓰기를 없애고, 대신 오른쪽에 버튼 자리를
+   만들어 글자를 가리지 않게 한다.
+   ※ 버튼을 홀더 바깥(right 음수)에 두면 그만큼 가로로 넘쳐서 모달에 스크롤바가 생긴다.
+     반드시 안쪽(right:0)에 두고, 글자는 redactor 의 margin-right 로 비켜 준다. */
+.ejholder .codex-editor__redactor { margin-left:0 !important; margin-right:30px !important;
+                                    padding-bottom:0 !important; }
+.ejholder .ce-block__content,
+.ejholder .ce-toolbar__content { max-width:none; margin:0; }
+.ejholder .ce-toolbar__actions { right:0; }
+/* 기본 36px 버튼은 12px 본문 옆에서 위아래로 삐져나와 세로 스크롤을 만든다 */
+.ejholder .ce-toolbar__plus,
+.ejholder .ce-toolbar__settings-btn { width:22px; height:22px; }
+.ejholder .ce-toolbar__plus svg,
+.ejholder .ce-toolbar__settings-btn svg { width:16px; height:16px; }
+.ejholder .cdx-list { padding-left:20px; }
+.ejholder .cdx-list__item { padding:2px 0 2px 2px; line-height:1.6; }
+.ejholder .ce-toolbar__plus,
+.ejholder .ce-toolbar__settings-btn { color:var(--muted); }
+.ejholder .ce-toolbar__plus:hover,
+.ejholder .ce-toolbar__settings-btn:hover { background:var(--line); color:var(--txt); }
+
+/* 팝오버(＋ 메뉴 · 블록 설정)와 글자 선택 시 뜨는 인라인 툴바.
+   Editor.js 가 --color-* 변수로 색을 잡으므로(기본 --color-background:white,
+   --color-text-primary:black) 변수만 바꿔 주면 내부 항목들이 전부 따라온다. */
+.ejholder .ce-popover,
+.ejholder .ce-popover__container,
+.ejholder .ce-inline-toolbar,
+.ejholder .ce-conversion-toolbar {
+  --color-background: var(--bg);
+  --color-text-primary: var(--txt);
+  --color-text-secondary: var(--muted);
+  --color-border: var(--line);
+  --color-line-gray: var(--line);
+  --color-background-item-hover: var(--bg2);
+  --color-background-item-focus: var(--info-bg);
+  --color-shadow-item-focus: transparent;
+  --color-border-icon: var(--line);
+  background:var(--bg);
+  color:var(--txt);
+  /* 테두리를 border 로 그리면 안 된다. 인라인 팝오버 컨테이너는 height:38px 고정 +
+     box-sizing:border-box 라, 1px 씩 먹는 순간 안쪽이 2px 모자라 .ce-popover__items 에
+     세로 스크롤바가 생긴다. 레이아웃을 안 건드리는 box-shadow 로 1px 선을 그린다. */
+  box-shadow:0 0 0 1px var(--line), 0 8px 26px rgba(0,0,0,.35);
+}
+/* 팝오버는 --width:200px 고정이라 편집 칸(최소 300px)에서 자리에 따라 넘친다.
+   폭만 줄인다. 인라인(글자 선택 시 뜨는 툴바)은 width:max-content 로 자기 폭을 잡으므로
+   max-width 로 묶으면 버튼이 접히면서 또 스크롤이 생긴다 — 일반 팝오버에만 건다. */
+.ejholder .ce-popover { --width:180px; }
+.ejholder .ce-popover:not(.ce-popover--inline) .ce-popover__container { max-width:100%; }
+/* 가로로 늘어선 버튼 줄이라 세로 스크롤이 의미 없다.
+   컨테이너의 overflow:hidden 도 풀어야 한다 — 색상 팔레트가 이 안에서 열리는데
+   높이가 38px 로 고정돼 있어서 그대로 두면 팝업이 통째로 잘려 안 보인다. */
+.ejholder .ce-popover--inline .ce-popover__items { overflow:visible; }
+.ejholder .ce-popover--inline .ce-popover__container { overflow:visible; }
+/* 색 목록은 인라인 툴바 위로 떠야 한다 */
+.ejholder .ce-popover--inline { z-index:6; }
+.ejholder .ce-popover--nested { z-index:8; }
+.ejholder .ce-popover-item__title,
+.ejholder .ce-popover-item__icon,
+.ejholder .ce-popover-header__text,
+.ejholder .ce-inline-tool { color:var(--txt); }
+.ejholder .ce-popover-item__secondary-title,
+.ejholder .ce-inline-toolbar__shortcut { color:var(--hint); }
+.ejholder .ce-popover-item:hover,
+.ejholder .ce-inline-tool:hover { background:var(--bg2); }
+.ejholder .ce-inline-tool--active { color:var(--info); }
+.ejholder .ce-popover__search,
+.ejholder .cdx-search-field { background:var(--bg2); border-color:var(--line); }
+.ejholder .cdx-search-field__input { color:var(--txt); }
+.ejholder .cdx-search-field__input::placeholder { color:var(--hint); }
+/* 색상 견본 (직접 만든 ColorTool 의 팝오버 항목 아이콘) */
+.ejholder .ejswatch { display:block; width:15px; height:15px; border-radius:4px;
+                      border:1px solid rgba(127,127,127,.45); }
+
+/* 글자 선택 하이라이트.
+   Editor.js 가 ::selection 을 전역으로 #d4ecff(연한 하늘색)로 덮어써서, 다크에서
+   밝은 글자 + 밝은 배경이 되어 글자가 안 보인다. 페이지 전체를 되돌린다. */
+::selection { background:#b9d9fb !important; color:#101418 !important; }
+@media (prefers-color-scheme: dark) {
+  ::selection { background:#2f5d92 !important; color:#f2f5f8 !important; }
+}
+/* 블록을 통째로 드래그 선택했을 때의 배경도 같은 이유로 덮어쓴다 */
+.ejholder .ce-block--selected .ce-block__content { background:var(--info-bg); }
 
 /* 토스트 */
 .toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); z-index:200;

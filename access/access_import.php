@@ -24,28 +24,31 @@ $IS_CLI = (PHP_SAPI === 'cli');
 //                 이 칸은 전용 컬럼 없이 비고(note)에 합쳐 넣는다
 //  - '그 외'     : '사업시작' 칸이 없어 B부터 한 칸씩 당겨진다
 //  - login_*/vpn/vpn_note 는 엑셀에 칸이 없다 — 아래에서 본문을 보고 파생시킨다
+//  - '_' 로 시작하는 키는 전용 컬럼이 없는 칸이다. etc·기타·plink 는 비고로, 배포 계정은
+//    배포 방법으로 합치고, 로그인 정보는 운영/테스트 비밀번호로 갈라 넣는다
+//    (화면을 공통/테스트서버/운영서버 세 묶음으로 정리하면서 통합)
 //  - '_ver_cell' 은 저장용이 아니라 학교(schools.ver)를 짝지을 때만 쓰는 임시 값이다
 $SHEETS = [
     '3.5 이하' => ['ver' => null, 'map' => [
         'name'=>'A','opened'=>'B','_ver_cell'=>'C','repo'=>'D','dev_note'=>'E','ops_note'=>'F',
-        'login_info'=>'G','dev_db'=>'H','ops_db'=>'I','haksa_db'=>'J',
-        'note'=>'K','etc'=>'L','deploy'=>'M','deploy_acct'=>'N','extra'=>'O']],
+        '_login_info'=>'G','dev_db'=>'H','ops_db'=>'I','haksa_db'=>'J',
+        'note'=>'K','_etc'=>'L','deploy'=>'M','_deploy_acct'=>'N','_extra'=>'O']],
     '3.9' => ['ver' => '3.9', 'map' => [
-        'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','login_info'=>'F',
-        'dev_db'=>'G','ops_db'=>'H','haksa_db'=>'I','plink'=>'J',
-        'note'=>'K','etc'=>'L','deploy'=>'M','deploy_acct'=>'N']],
+        'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','_login_info'=>'F',
+        'dev_db'=>'G','ops_db'=>'H','haksa_db'=>'I','_plink'=>'J',
+        'note'=>'K','_etc'=>'L','deploy'=>'M','_deploy_acct'=>'N']],
     '3.9-saas' => ['ver' => '3.9', 'map' => [
-        'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','login_info'=>'F',
-        'dev_db'=>'G','_ops_web'=>'H','ops_db'=>'I','haksa_db'=>'J','plink'=>'K',
-        'note'=>'L','etc'=>'M','deploy'=>'N','deploy_acct'=>'O']],
+        'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','_login_info'=>'F',
+        'dev_db'=>'G','_ops_web'=>'H','ops_db'=>'I','haksa_db'=>'J','_plink'=>'K',
+        'note'=>'L','_etc'=>'M','deploy'=>'N','_deploy_acct'=>'O']],
     '4.5' => ['ver' => '4.5', 'map' => [
-        'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','login_info'=>'F',
-        'dev_db'=>'G','ops_db'=>'H','haksa_db'=>'I','plink'=>'J',
-        'note'=>'K','etc'=>'L','deploy'=>'M','deploy_acct'=>'N']],
+        'name'=>'A','opened'=>'B','repo'=>'C','dev_note'=>'D','ops_note'=>'E','_login_info'=>'F',
+        'dev_db'=>'G','ops_db'=>'H','haksa_db'=>'I','_plink'=>'J',
+        'note'=>'K','_etc'=>'L','deploy'=>'M','_deploy_acct'=>'N']],
     '그 외' => ['ver' => '', 'map' => [
-        'name'=>'A','repo'=>'B','dev_note'=>'C','ops_note'=>'D','login_info'=>'E',
-        'dev_db'=>'F','ops_db'=>'G','haksa_db'=>'H','plink'=>'I',
-        'note'=>'J','etc'=>'K','deploy'=>'L','deploy_acct'=>'M']],
+        'name'=>'A','repo'=>'B','dev_note'=>'C','ops_note'=>'D','_login_info'=>'E',
+        'dev_db'=>'F','ops_db'=>'G','haksa_db'=>'H','_plink'=>'I',
+        'note'=>'J','_etc'=>'K','deploy'=>'L','_deploy_acct'=>'M']],
 ];
 
 /** xlsx 의 sharedStrings — <si> 안에 <r> 런이 여러 개면 이어붙여야 원문 줄바꿈이 살아난다 */
@@ -208,23 +211,39 @@ function access_import_xlsx($path, array $SHEETS) {
             }
             // 저장하지 않고 버전 판별에만 쓰는 칸('3.5 이하' 시트의 '무들 버전')
             $verCell = isset($def['map']['_ver_cell']) ? ax_clean($rows[$i][$def['map']['_ver_cell']] ?? '') : '';
-            // 전용 컬럼 없이 비고로 합칠 칸('3.9-saas' 시트의 '운영 웹서버')
-            if (isset($def['map']['_ops_web'])) {
-                $vals['note'] = access_merge_note($vals['note'], '운영 웹서버',
-                                                  ax_clean($rows[$i][$def['map']['_ops_web']] ?? ''));
+            // 전용 컬럼이 없는 칸들은 비고 / 배포 방법으로 합쳐 넣는다
+            foreach (['_ops_web' => '운영 웹서버', '_etc' => 'etc', '_extra' => '기타', '_plink' => 'plink'] as $k => $label) {
+                if (!isset($def['map'][$k])) continue;
+                $vals['note'] = access_merge_note($vals['note'], $label, ax_clean($rows[$i][$def['map'][$k]] ?? ''));
+            }
+            if (isset($def['map']['_deploy_acct'])) {
+                $vals['deploy'] = access_merge_note($vals['deploy'], '배포 계정',
+                                                    ax_clean($rows[$i][$def['map']['_deploy_acct']] ?? ''));
             }
 
             $vals['repo'] = access_strip_repo_label($vals['repo']);   // "git : https://…" → 주소만
 
             // 엑셀에 칸이 없는 값들은 본문에서 파생시킨다(둘 다 화면에서 고칠 수 있는 초깃값)
-            $lg = access_split_login($vals['login_info']);
+            $loginCell = isset($def['map']['_login_info'])
+                ? ax_clean($rows[$i][$def['map']['_login_info']] ?? '') : '';
+            $lg = access_split_login($loginCell);
             $op = access_split_account($lg['ops']);   // "csmsathena / 비번" → 계정과 비번을 따로
             $dv = access_split_account($lg['dev']);
             $vals['login_ops_id'] = $op['id'];
             $vals['login_ops']    = $op['pw'];
             $vals['login_dev_id'] = $dv['id'];
             $vals['login_dev']    = $dv['pw'];
-            $vals['login_info']   = $lg['rest'];   // 운영/테스트로 못 가른 나머지만 남긴다
+            // 운영/테스트로 못 가른 값은 운영 비밀번호로 본다. 라벨 없이 한 줄만 적힌 경우가
+            // 대부분이고, 테스트는 거의 Zhtm&ahtm1 로 고정이라 운영 쪽일 확률이 높다.
+            if ($lg['rest'] !== '') {
+                if ($vals['login_ops'] === '') {
+                    $rs = access_split_account($lg['rest']);
+                    if ($vals['login_ops_id'] === '') $vals['login_ops_id'] = $rs['id'];
+                    $vals['login_ops'] = $rs['pw'];
+                } else {
+                    $vals['login_ops'] .= "\n" . $lg['rest'];
+                }
+            }
 
             // 4.5 는 사이트 계정이 csmsathena 로 통일돼 있다(다른 계정을 쓰는 곳이 없음).
             // 엑셀에 비밀번호만 적어 둔 칸이 많아서 계정을 채워 준다 — 이미 적혀 있으면 그대로 둔다.
