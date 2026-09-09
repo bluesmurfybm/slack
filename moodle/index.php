@@ -156,7 +156,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
       $label = function ($ym) { return substr($ym, 2, 2) . '년 ' . (int)substr($ym, 5, 2) . '월'; };
       foreach ($byMonth as $ym => $rows): $open = $ym === $thisMonth || $ym === $currentMonth; ?>
         <details class="wk-month <?= $ym === $thisMonth ? 'now' : '' ?>" <?= $open ? 'open' : '' ?>>
-          <summary><?= h($label($ym)) ?> <span class="tiny"><?= count($rows) ?>주</span><?= $ym === $thisMonth ? '<span class="tiny now-tag">이번 달</span>' : '' ?></summary>
+          <summary><?= h($label($ym)) ?><?= $ym === $thisMonth ? '<span class="tiny now-tag">이번 달</span>' : '' ?></summary>
           <?php foreach ($rows as $w): ?>
             <a class="wk <?= $w['week'] === $report['week'] ? 'on' : '' ?>" href="?week=<?= h($w['week']) ?><?= $asParam ?>">
               <b><?= h($w['week']) ?> <?= badge($w['status'], 'st') ?></b>
