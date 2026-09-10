@@ -22,9 +22,7 @@ $__current = $__u ? [
     'color'       => user_color($__u),
 ] : null;
 $__cfg   = require __DIR__ . '/config.php';
-// learning은 PHP로 다시 만들어 learn/ 으로 들어왔다 — slack·access처럼 같은 앱이라 상대경로다.
-// (별도 프로세스로 도는 book·magazine만 config.php의 주소를 쓴다)
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => 'learn/index.php', 'access' => 'access/access.php'];
+$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => $__cfg['links']['learn'], 'access' => 'access/access.php', 'moodle' => 'moodle/'];
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -81,10 +79,11 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
             <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
             <div class="dd-sep"></div>
             <div class="dd-label">업무 시스템</div>
-            <a href="" id="dd-book" target="_blank" rel="noopener">📚 도서구매신청</a>
-            <a href="" id="dd-slack" target="_blank" rel="noopener">📥 업무현황판</a>
+            <a href="" id="dd-book" target="_blank" rel="noopener">📚 BlueBooks</a>
+            <a href="" id="dd-slack" target="_blank" rel="noopener">📥 Coursemos WorkHub</a>
             <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표</a>
             <a href="" id="dd-learning" target="_blank" rel="noopener">🎓 BlueLearn</a>
+            <a href="" id="dd-moodle" target="_blank" rel="noopener">🧭 MoodleUp?</a>
             <div class="dd-sep"></div>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
@@ -237,6 +236,7 @@ function renderShell(){
   document.getElementById("dd-slack").href=LINKS.slack;
   document.getElementById("dd-magazine").href=LINKS.magazine;
   document.getElementById("dd-learning").href=LINKS.learning;
+  document.getElementById("dd-moodle").href=LINKS.moodle;
 }
 
 function toggleUserMenu(e){
@@ -320,17 +320,18 @@ function renderTiles(){
   const magazineIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
   const learningIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg>`;
   const accessIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.1-8.1M17 6l2.5 2.5M14.5 8.5 17 11"/></svg>`;
+  const moodleIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.3 6.1-6.1 2.3 2.3-6.1z"/></svg>`;
   const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
   document.getElementById("tiles").innerHTML=`
     <a class="tile" href="${LINKS.book}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#2E6BF0">${bookIcon}</span>
-      <div><h3>도서구매신청</h3><p>읽고 싶은 책을 신청하고 처리 현황을 확인합니다.</p></div>
+      <div><h3>BlueBooks</h3><p>읽고 싶은 책을 신청하고 처리 현황을 확인합니다.</p></div>
     </a>
     <a class="tile" href="${LINKS.slack}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#1F9D76">${slackIcon}</span>
-      <div><h3>업무현황판</h3><p>유지보수 요청 현황을 확인하고 관리합니다.</p></div>
+      <div><h3>Coursemos WorkHub</h3><p>유지보수 요청 현황을 확인하고 관리합니다.</p></div>
     </a>
     <a class="tile" href="${LINKS.magazine}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
@@ -346,6 +347,11 @@ function renderTiles(){
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#0F7B8A">${accessIcon}</span>
       <div><h3>Coursemos EnvHub</h3><p>대학별 svn·git, 계정, DB, plink 정보를 찾아 복사합니다.</p></div>
+    </a>
+    <a class="tile" href="${LINKS.moodle}" target="_blank" rel="noopener">
+      <span class="go">${arrow}</span>
+      <span class="ic" style="background:#D6336C">${moodleIcon}</span>
+      <div><h3>MoodleUp?</h3><p>무들 PAG·트래커·릴리스 변화를 매주 모아 코스모스 관점으로 요약합니다.</p></div>
     </a>
     <div class="tile soon">
       <span class="badge-soon">준비중</span>
