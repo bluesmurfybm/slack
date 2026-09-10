@@ -22,7 +22,7 @@ $__current = $__u ? [
     'color'       => user_color($__u),
 ] : null;
 $__cfg   = require __DIR__ . '/config.php';
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => $__cfg['links']['learning'], 'access' => 'access/access.php', 'moodle' => 'moodle/'];
+$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => $__cfg['links']['learn'], 'access' => 'access/access.php', 'moodle' => 'moodle/'];
 ?>
 <!DOCTYPE html>
 <html lang="ko">

@@ -1,0 +1,9 @@
+# 이수증 원본은 여기 쌓인다. 웹루트 아래이므로 직접 접근을 막고, 열람은 반드시
+# api.php 의 다운로드 엔드포인트(로그인 검사 + Content-Disposition 판정)를 거치게 한다.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
