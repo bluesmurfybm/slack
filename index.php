@@ -22,7 +22,9 @@ $__current = $__u ? [
     'color'       => user_color($__u),
 ] : null;
 $__cfg   = require __DIR__ . '/config.php';
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => $__cfg['links']['learning'], 'access' => 'access/access.php'];
+// learning은 PHP로 다시 만들어 learn/ 으로 들어왔다 — slack·access처럼 같은 앱이라 상대경로다.
+// (별도 프로세스로 도는 book·magazine만 config.php의 주소를 쓴다)
+$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => 'learn/index.php', 'access' => 'access/access.php'];
 ?>
 <!DOCTYPE html>
 <html lang="ko">

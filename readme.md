@@ -34,6 +34,17 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── db.php, guard.php        전용 DB 연결 · 포털 로그인 가드
 │   └── styles/access.css
 │
+├── learn/                       BlueLearn(강의 수강료 지원) — PHP, 포털 세션·DB 공유
+│   ├── index.php                화면 한 장(SPA)
+│   ├── api.php                  JSON API 프런트 컨트롤러 (?p=/requests/3 로 라우팅)
+│   ├── db.php, guard.php        learn_* 테이블 · 시드 · 포털 로그인 가드
+│   ├── lib/                     http(응답·검증) · status(요청상태 파생·전이) ·
+│   │                            policy(환급 정책) · storage(이수증 파일)
+│   ├── routes/                  identity · requests · certs · review ·
+│   │                            sites · categories · policy · admins
+│   ├── static/, styles/         도메인별 js · css
+│   └── var/uploads/             이수증 원본 (gitignore, .htaccess 로 직접 접근 차단)
+│
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
     ├── auth.php, db.php, config.php, slack_lib.php, header.php   (공통)
     ├── lists.php, comments.php, data.php, assign.php, ...        (핵심 요청 목록 기능)
@@ -306,10 +317,11 @@ return [
 
     // 대시보드/공통 헤더 드롭다운이 참조하는 외부 모듈 링크. book은 별도 프로세스라 절대주소 필요.
     // 실제 배포 주소가 다르면 config.local.php 에 'book_url' => '...' 을 넣어 덮어쓸 수 있음.
+    // learn(BlueLearn)은 포털과 같은 PHP 앱이라 여기 주소가 없다 — index.php가
+    // slack·access처럼 상대경로(learn/index.php)로 직접 건다.
     'links' => [
         'book' => $localCfg['book_url'] ?? 'book',
         'magazine' => $localCfg['magazine_url'] ?? 'magazine',
-        'learning' => $localCfg['learning_url'] ?? 'learning',
     ],
 ];
 ```
