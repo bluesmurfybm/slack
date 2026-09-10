@@ -537,11 +537,13 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
 .drawer{
   position:fixed;top:0;right:0;height:100%;width:min(520px,100%);z-index:200;
   background:var(--bg-card);border-left:1px solid var(--bo-primary);
-  box-shadow:-16px 0 40px -20px rgba(22,24,25,.4);
   display:flex;flex-direction:column;
-  transform:translateX(102%);transition:transform .22s cubic-bezier(.2,.8,.2,1);
+  transform:translateX(102%);
+  transition:transform .22s cubic-bezier(.2,.8,.2,1),box-shadow .22s ease;
 }
-.drawer.open{transform:none}
+/* 그림자는 열렸을 때만 그린다 — 닫힌 채로 두면 화면 밖 드로어의 그림자가
+   오른쪽 끝에 5~6px 번져 늘 그라데이션이 깔린 것처럼 보인다 */
+.drawer.open{transform:none;box-shadow:-16px 0 40px -20px rgba(22,24,25,.4)}
 .drawer header{
   display:flex;align-items:flex-start;gap:12px;
   padding:20px 22px 16px;border-bottom:1px solid var(--bo-primary);
