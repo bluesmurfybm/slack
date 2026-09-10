@@ -154,7 +154,8 @@ tr.d > td { background:var(--bg2); padding:14px 16px 16px; cursor:default; }
 .dsec:first-of-type { margin-top:0; }
 .dgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:10px; }
 .dgrid + .dsec { margin-top:16px; }
-.dcell { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:9px 11px; min-width:0; }
+.dcell { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:9px 11px;
+         min-width:0; display:flex; flex-direction:column; gap:5px; }
 .dlabel { display:flex; align-items:center; justify-content:space-between; gap:8px;
           font-size:11px; font-weight:600; color:var(--muted); margin-bottom:5px; }
 .dlabel .dbtns { display:flex; gap:4px; flex:none; }
@@ -162,10 +163,17 @@ tr.d > td { background:var(--bg2); padding:14px 16px 16px; cursor:default; }
 pre.val { margin:0; font-family:Consolas, "D2Coding", monospace; font-size:12px; line-height:1.6;
           white-space:pre-wrap; word-break:break-all; color:var(--txt); max-height:260px; overflow:auto; }
 pre.val.note { margin-top:6px; padding-top:6px; border-top:1px dashed var(--line); color:var(--muted); }
-/* 가려 놓은 비밀번호 — 열었을 때만 또렷하게 */
-pre.val.pw { letter-spacing:.12em; color:var(--hint); }
-pre.val.pw.shown { letter-spacing:normal; color:var(--txt); }
+/* ── 상세 패널 인라인 편집 ──────────────────────────────────
+   상세가 곧 편집 화면이다. 값이 바뀐 칸에만 [저장]/[되돌리기] 가 나타난다. */
+.dcell .dedit { width:100%; font-family:Consolas, "D2Coding", monospace; font-size:12px; }
+.dcell input.dedit { height:30px; }
+.dcell textarea.dedit { min-height:44px; line-height:1.5; }
+.dcell input.dpw { letter-spacing:.06em; }
+.dcell.dirty { border-color:var(--info); box-shadow:0 0 0 2px var(--info-bg); }
 .dbtns .deye { min-width:44px; }
+.dbtns .dsave { background:var(--info); border-color:var(--info); color:#fff; font-weight:600; }
+.dbtns .dsave:hover { color:#fff; }
+.dbtns .dcancel:hover { border-color:#e24b4a; color:#e24b4a; }
 
 /* Editor.js 로 쓴 칸 — 저장값이 블록이라 <pre> 대신 흐르는 본문으로 그린다.
    글자 크기·서체는 옆 칸(pre.val)과 같게 맞춰 상세 패널이 들쭉날쭉해지지 않게 한다. */

@@ -387,6 +387,7 @@ function render() {
     matches(r, q));
 
   $("count").textContent = list.length + "건";
+  destroyEditors();          // 다시 그리기 전에 상세 패널의 에디터를 정리한다
   const box = $("list");
   if (!list.length) { box.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
 
@@ -488,77 +489,155 @@ function cpBtn(val, label) {
   return `<button class="cp" type="button" data-cp="${escA(val)}">${esc(label)}</button>`;
 }
 
+/* ── 상세 패널 (칸 단위 인라인 편집) ─────────────────────────
+   수정 팝업 대신 상세에서 바로 고친다. 다만 실수로 친 글자가 그대로 반영되면 안 되므로
+   화면에서 바뀌었다고 바로 저장하지 않는다 — 값이 달라진 칸에만 [저장]/[되돌리기] 가
+   나타나고, 저장을 눌러야 서버로 간다. 저장도 그 칸 하나만 보낸다(save_field). */
 function detailBody(r) {
   const meta = r.opened ? `최초 오픈 ${esc(r.opened)}` : "";
 
-  // 공통 / 테스트 서버 / 운영 서버 — 값이 하나도 없는 묶음은 통째로 생략한다
-  const sections = GROUPS.map(g => {
-    const cells = g.fields.map(f => groupCell(r, f)).filter(Boolean);
-    if (!cells.length) return "";
-    return `<div class="dsec">${esc(g.title)}</div><div class="dgrid">${cells.join("")}</div>`;
-  }).filter(Boolean).join("");
+  // 값이 비어 있어도 칸은 보여 준다 — 인라인 편집이라 빈 칸이 곧 입력 자리다
+  const sections = GROUPS.map(g =>
+    `<div class="dsec">${esc(g.title)}</div>` +
+    `<div class="dgrid">${g.fields.map(f => groupCell(r, f)).join("")}</div>`
+  ).join("");
 
   return `
     <div class="detail-head">
       <span class="dmeta">${meta || "&nbsp;"}</span>
       <span>
-        <button class="edit" type="button" data-key="${escA(rowKey(r))}">수정</button>
         ${r.access_id ? `<button class="del" type="button" data-key="${escA(rowKey(r))}">접속정보 삭제</button>` : ""}
       </span>
     </div>
-    ${sections || '<div class="empty">등록된 접속 정보가 없습니다. [수정]에서 채워 넣으세요.</div>'}`;
+    ${sections}`;
 }
 
-/* 묶음 안의 칸 하나 — 값이 비어 있으면 아예 안 그린다 */
 function groupCell(r, f) {
-  const v = r[f.key];
-  if (!v) return "";
-  if (f.key === "opened") return "";          // 위 meta 줄에 이미 나온다
-  if (f.type === "url") {
-    return fieldCell(f.label, v, "", f.copy, `<a class="link" href="${escA(v)}" target="_blank" rel="noopener">열기 ↗</a>`);
-  }
-  if (f.key === "vpn") {                       // 프로그램명과 접속 방법을 한 칸에 묶는다
-    return fieldCell(f.label, v, "", 0, "", null, r.vpn_note);
-  }
-  if (f.key === "vpn_note") return "";         // 위에서 같이 그렸다
-
+  const v = r[f.key] || "";
   const plain = val(r, f.key);
-  // DB 설명 안에 섞여 있는 터널링 명령은 따로 뽑아 준다 — 통째로 복사하면 붙여 쓸 수 없다
+
+  // 값 옆에 붙는 보조 버튼 — 링크 열기, 붙여 넣을 한 줄 뽑기 등
   let extra = "";
-  const plk = plinkCmd(plain);
-  if (plk) extra = cpBtn(plk, "plink만");
-  if (f.key === "repo") {
+  if (f.type === "url" && v) {
+    extra = `<a class="link" href="${escA(v)}" target="_blank" rel="noopener">열기 ↗</a>`;
+  } else if (f.key === "repo" && v) {
     const ri = repoInfo(v);
-    // 원문에 설명이 섞여 있어도 붙여 넣을 한 줄은 따로 준다
     if (ri.cmd && ri.cmd !== v) extra = cpBtn(ri.cmd, ri.kind === "git" ? "git clone" : "주소만");
+  } else if (plain) {
+    const plk = plinkCmd(plain);
+    if (plk) extra = cpBtn(plk, "plink만");
   }
-  return fieldCell(f.label, v, "", f.copy, extra, f.key);
+
+  return `<div class="dcell" data-f="${escA(f.key)}" data-type="${escA(f.type)}">
+    <div class="dlabel"><span>${esc(f.label)}</span>
+      <span class="dbtns">
+        ${extra}
+        ${f.type === "pw" ? `<button class="cp deye" type="button" title="표시/숨김">보기</button>` : ""}
+        ${f.copy && plain ? cpBtn(plain, "복사") : ""}
+        <button class="cp dcancel" type="button" hidden>되돌리기</button>
+        <button class="cp dsave" type="button" hidden>저장</button>
+      </span>
+    </div>
+    ${cellControl(f, v)}
+  </div>`;
 }
 
-/* 비밀번호는 줄 수만 유지한 채 길이를 드러내지 않게 고정 길이 점으로 가린다 */
-const pwMask = v => (v || "").split("\n").map(() => "\u2022".repeat(8)).join("\n");
+/* 칸 하나의 입력 요소. data-orig 에 원래 값을 담아 두고 그것과 달라지면 저장 버튼을 띄운다. */
+function cellControl(f, v) {
+  if (f.type === "rich") {
+    return `<div class="ejholder dedit" data-ej="${escA(f.key)}" data-orig="${escA(v)}"></div>`;
+  }
+  if (f.type === "pw") {
+    return `<input class="dedit dpw" type="password" value="${escA(flatPw(v))}"
+                   data-orig="${escA(v)}" autocomplete="off">`;
+  }
+  if (f.type === "area") {
+    return `<textarea class="dedit" rows="2" data-orig="${escA(v)}">${esc(v)}</textarea>`;
+  }
+  return `<input class="dedit" type="text" value="${escA(v)}" data-orig="${escA(v)}">`;
+}
 
-/* key 가 서식 칸이면 값은 블록 JSON 이라 HTML 로 그리고, 복사 버튼에는 평문을 담는다.
-   비밀번호 칸은 가린 채 그리되 복사 버튼은 원문을 그대로 준다 — 눈으로 볼 일보다
-   붙여 넣을 일이 많아서 굳이 열지 않아도 쓸 수 있어야 한다. */
-function fieldCell(label, value, note, copyable, extraBtns, key, richNote) {
-  const rich = key && RICH.has(key);
-  const isPw = key && PWCOLS.has(key);
-  const plain = rich ? ejToText(value) : (value || "");
-  const body = [
-    value ? (rich  ? `<div class="val rich">${ejToHtml(value)}</div>`
-           : isPw  ? `<pre class="val pw" data-pw="${escA(value)}">${esc(pwMask(value))}</pre>`
-                   : `<pre class="val">${esc(value)}</pre>`) : "",
-    note     ? `<pre class="val note">${esc(note)}</pre>` : "",
-    richNote ? `<div class="val note rich">${ejToHtml(richNote)}</div>` : "",
-  ].join("");
-  const eye = (isPw && value)
-    ? `<button class="cp deye" type="button" title="표시/숨김">보기</button>` : "";
-  return `<div class="dcell">
-    <div class="dlabel"><span>${esc(label)}</span>
-      <span class="dbtns">${extraBtns || ""}${eye}${copyable && plain ? cpBtn(plain, "복사") : ""}</span></div>
-    ${body}
-  </div>`;
+/* 상세 패널의 편집 요소를 붙인다 — 서식 칸은 Editor.js, 나머지는 입력칸 감시 */
+function bindDetail(box) {
+  const r = DATA.find(x => rowKey(x) === openKey);
+  if (!r) return;
+
+  box.querySelectorAll(".ejholder[data-ej]").forEach(el => {
+    if (typeof EditorJS === "undefined") return;
+    const k = el.dataset.ej;
+    EDITORS["d:" + k] = new EditorJS({
+      holder: el,
+      minHeight: 24,
+      placeholder: "",
+      data: ejParse(el.dataset.orig) || textToDoc(el.dataset.orig),
+      tools: ejTools(),
+      inlineToolbar: ["bold", "Color", "strikethrough"],
+      onChange: () => markDirty(el.closest(".dcell")),
+    });
+  });
+
+  box.querySelectorAll("input.dedit, textarea.dedit").forEach(el => {
+    el.addEventListener("input", () => markDirty(el.closest(".dcell")));
+    el.addEventListener("click", e => e.stopPropagation());
+  });
+
+  box.querySelectorAll(".dsave").forEach(b =>
+    b.addEventListener("click", e => { e.stopPropagation(); saveCell(b.closest(".dcell"), r); }));
+  box.querySelectorAll(".dcancel").forEach(b =>
+    b.addEventListener("click", e => { e.stopPropagation(); render(); }));
+}
+
+function markDirty(cell) {
+  if (!cell) return;
+  cell.classList.add("dirty");
+  cell.querySelector(".dsave").hidden = false;
+  cell.querySelector(".dcancel").hidden = false;
+}
+
+/* 지금 칸에 들어 있는 값을 저장용 문자열로 꺼낸다 */
+async function cellValue(cell) {
+  const key = cell.dataset.f;
+  if (cell.dataset.type === "rich") {
+    const inst = EDITORS["d:" + key];
+    if (!inst) return null;
+    let out = null;
+    try { out = await inst.save(); } catch (e) { return null; }
+    const blocks = (out.blocks || []).filter(b => {
+      const d = b.data || {};
+      return (d.text && stripTags(d.text).trim()) || (d.items && d.items.length);
+    });
+    return blocks.length ? JSON.stringify({ blocks }) : "";
+  }
+  const el = cell.querySelector(".dedit");
+  if (!el) return null;
+  // 비밀번호는 원본이 여러 줄일 수 있는데 input 에는 한 줄로 펴서 담았다.
+  // 손대지 않았으면 원본을 그대로 둔다 — 안 건드린 값이 조용히 잘리면 안 된다.
+  if (cell.dataset.type === "pw" && el.value === flatPw(el.dataset.orig)) return el.dataset.orig;
+  return el.value;
+}
+
+async function saveCell(cell, r) {
+  const key = cell.dataset.f;
+  const value = await cellValue(cell);
+  if (value === null) return;
+  const btn = cell.querySelector(".dsave");
+  btn.disabled = true;
+  try {
+    const j = await (await fetch("access_api.php", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "save_field", school_id: r.school_id, access_id: r.access_id, key, value }),
+    })).json();
+    if (!j.ok) throw new Error(j.error || "실패");
+    // 서버에 반영된 값을 화면 데이터에도 맞춰 둔다. 전체를 다시 불러오면 열어 둔 상세가
+    // 닫히고 다른 칸의 편집 중인 내용까지 날아가서, 이 행만 갱신한다.
+    r[key] = value;
+    if (j.access_id && !r.access_id) { r.access_id = j.access_id; openKey = "a" + j.access_id; }
+    toast("저장했습니다");
+    render();
+  } catch (e) {
+    toast("저장 실패: " + e.message);
+    btn.disabled = false;
+  }
 }
 
 function bind(box) {
@@ -572,17 +651,16 @@ function bind(box) {
   box.querySelectorAll(".deye").forEach(b =>
     b.addEventListener("click", e => {
       e.stopPropagation();
-      const pre = b.closest(".dcell").querySelector("pre.val.pw");
-      if (!pre) return;
-      const shown = pre.classList.toggle("shown");
-      pre.textContent = shown ? pre.dataset.pw : pwMask(pre.dataset.pw);
+      const el = b.closest(".dcell").querySelector("input.dpw");
+      if (!el) return;
+      const shown = el.type === "password";
+      el.type = shown ? "text" : "password";
       b.textContent = shown ? "숨기기" : "보기";
     }));
-  box.querySelectorAll(".edit").forEach(b =>
-    b.addEventListener("click", e => { e.stopPropagation(); openEdit(b.dataset.key); }));
   box.querySelectorAll(".del").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); delAccess(b.dataset.key); }));
   box.querySelectorAll("tr.d, .dwide").forEach(el => el.addEventListener("click", e => e.stopPropagation()));
+  bindDetail(box);
 }
 
 /* ── 편집 ──────────────────────────────────────────────────── */
@@ -593,11 +671,6 @@ const MASTER = [
   ["ops",  "운영 URL",      "input"],
   ["log",  "로그 관리 URL",  "input"],
 ];
-function openEdit(key) {
-  const r = DATA.find(x => rowKey(x) === key);
-  if (r) openForm(r);
-}
-
 /* 추가 — 빈 행을 만들어 같은 폼을 띄운다. 저장하면 schools 에도 같이 들어간다. */
 function openCreate() {
   const blank = { school_id: 0, access_id: 0, name: "", ver: "", dev: "", ops: "", log: "" };
@@ -798,13 +871,18 @@ function textToDoc(t) {
   return { blocks };
 }
 
-function mountEditors(r) {
-  if (typeof EditorJS === "undefined") return;   // CDN 을 못 불러온 환경
-  const tools = {
+/* 모달(대학 추가)과 상세 패널이 같은 도구 구성을 쓴다 */
+function ejTools() {
+  return {
     list: { class: window.List, inlineToolbar: true },
     Color: { class: ColorTool },
     strikethrough: { class: window.Strikethrough },
   };
+}
+
+function mountEditors(r) {
+  if (typeof EditorJS === "undefined") return;   // CDN 을 못 불러온 환경
+  const tools = ejTools();
   $("eGrid").querySelectorAll(".ejholder").forEach(el => {
     const k = el.dataset.ej;
     EDITORS[k] = new EditorJS({
