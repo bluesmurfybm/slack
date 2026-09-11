@@ -33,7 +33,6 @@ def answer(
     message = client.messages.parse(
         model=config.claude_model,
         max_tokens=config.max_tokens,
-        output_config={"effort": config.effort},
         system=build_prompt_system(faqs),
         messages=[{"role": "user", "content": question}],
         output_format=Answer,
