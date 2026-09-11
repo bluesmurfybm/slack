@@ -22,7 +22,7 @@ $__current = $__u ? [
     'color'       => user_color($__u),
 ] : null;
 $__cfg   = require __DIR__ . '/config.php';
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learning' => $__cfg['links']['learning'], 'access' => 'access/access.php', 'moodle' => 'moodle/'];
+$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learn' => 'learn/index.php', 'access' => 'access/access.php', 'moodle' => 'moodle/'];
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -235,7 +235,7 @@ function renderShell(){
   document.getElementById("dd-book").href=LINKS.book;
   document.getElementById("dd-slack").href=LINKS.slack;
   document.getElementById("dd-magazine").href=LINKS.magazine;
-  document.getElementById("dd-learning").href=LINKS.learning;
+  document.getElementById("dd-learning").href=LINKS.learn;
   document.getElementById("dd-moodle").href=LINKS.moodle;
 }
 
@@ -338,7 +338,7 @@ function renderTiles(){
       <span class="ic" style="background:#7B5CF0">${magazineIcon}</span>
       <div><h3>DTI 발표</h3><p>매거진을 읽고 지식을 공유합니다.</p></div>
     </a>
-    <a class="tile" href="${LINKS.learning}" target="_blank" rel="noopener">
+    <a class="tile" href="${LINKS.learn}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:#F2711C">${learningIcon}</span>
       <div><h3>BlueLearn</h3><p>역량 강화를 위한 강의를 신청하고 수강료를 지원받습니다.</p></div>
