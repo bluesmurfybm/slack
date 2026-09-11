@@ -37,6 +37,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="styles/topbar.css">
 <link rel="stylesheet" href="styles/default.css">
+<link rel="stylesheet" href="styles/chatbot.css">
 </head>
 <body>
 
@@ -151,6 +152,25 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
       </div>
     </div>
   </div>
+
+  <!-- chatbot -->
+  <div id="chat-panel" class="chat-panel hidden">
+    <div class="chat-head">
+      <span class="bot-av" id="chat-botav"></span>
+      <div class="tt">
+        <h3>blue Assistant</h3>
+        <div class="st">업무에 대해 무엇이든 물어보세요</div>
+      </div>
+      <button class="chat-x" onclick="closeChat()" title="닫기">&times;</button>
+    </div>
+    <div class="chat-log" id="chat-log"></div>
+    <div class="chat-form">
+      <textarea id="chat-input" rows="1" placeholder="메시지를 입력하세요"
+        onkeydown="chatKeydown(event)" oninput="chatGrow(this)"></textarea>
+      <button class="chat-send" id="chat-send" onclick="sendChat()" title="보내기"></button>
+    </div>
+  </div>
+  <button id="chat-fab" class="chat-fab hidden" onclick="toggleChat()" title="챗봇"></button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -222,6 +242,8 @@ async function logout(){
   try{ await fetch("api/logout.php",{method:"POST"}); }catch(e){}
   current=null;
   document.getElementById("lg-pw").value="";
+  closeChat();
+  document.getElementById("chat-log").innerHTML="";
   document.getElementById("app").classList.add("hidden");
   document.getElementById("login").classList.remove("hidden");
 }
@@ -261,6 +283,7 @@ function showDash(){
   document.getElementById("view-profile").classList.add("hidden");
   document.getElementById("view-dash").classList.remove("hidden");
   renderTiles();
+  setChatVisible(true);
 }
 const SWATCH_COLORS=["#B6574A","#BA7D4D","#A58838","#818C46","#548058","#458278","#457797","#5A64AD","#8164AB","#9B5797","#B25D7E","#8C7055","#606D79"];
 function hexOrDefault(c){ return /^#[0-9a-fA-F]{6}$/.test(c||"") ? c : "#1C5DE5"; }
@@ -300,6 +323,7 @@ function cancelEditProfile(){
 }
 
 function showProfile(alertMsg, forceEdit){
+  setChatVisible(false);
   document.getElementById("view-dash").classList.add("hidden");
   document.getElementById("view-profile").classList.remove("hidden");
   document.getElementById("pf-name").value=current.name;
@@ -404,6 +428,101 @@ function toast(m){const el=document.getElementById("toast");el.textContent=m;el.
 document.querySelectorAll('.eye').forEach(b=>{
   b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
 });
+
+/* ---- 챗봇 ---- */
+const CHAT_API="/chatapi/ask"; // nginx 가 chatbot 서버(8003)로 넘긴다
+let chatBusy=false;
+
+function setChatVisible(on){
+  document.getElementById("chat-fab").classList.toggle("hidden", !on);
+  if(!on) closeChat();
+}
+function openChat(){
+  document.getElementById("chat-panel").classList.remove("hidden");
+  document.getElementById("chat-fab").classList.add("open");
+  const log=document.getElementById("chat-log");
+  if(!log.children.length) chatAppend("bot", `${current?current.name+"님, ":""}무엇을 도와드릴까요?`);
+  document.getElementById("chat-input").focus();
+}
+function closeChat(){
+  document.getElementById("chat-panel").classList.add("hidden");
+  document.getElementById("chat-fab").classList.remove("open");
+}
+function toggleChat(){
+  if(document.getElementById("chat-panel").classList.contains("hidden")) openChat();
+  else closeChat();
+}
+
+function chatAppend(cls, text){
+  const log=document.getElementById("chat-log");
+  const el=document.createElement("div");
+  el.className="chat-msg "+cls;
+  el.textContent=text; // 서버가 준 문자열이라 HTML 로 해석시키지 않는다
+  log.appendChild(el);
+  log.scrollTop=log.scrollHeight;
+}
+function chatTypingOn(){
+  const log=document.getElementById("chat-log");
+  const el=document.createElement("div");
+  el.className="chat-typing"; el.id="chat-typing";
+  el.innerHTML="<i></i><i></i><i></i>";
+  log.appendChild(el);
+  log.scrollTop=log.scrollHeight;
+}
+function chatTypingOff(){
+  const el=document.getElementById("chat-typing");
+  if(el) el.remove();
+}
+
+function chatGrow(el){
+  el.style.height="auto";
+  el.style.height=Math.min(el.scrollHeight,96)+"px";
+}
+function chatKeydown(e){
+  if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendChat(); }
+}
+
+async function sendChat(){
+  if(chatBusy) return;
+  const box=document.getElementById("chat-input");
+  const text=box.value.trim();
+  if(!text) return;
+  box.value=""; chatGrow(box);
+  chatAppend("me", text);
+  chatBusy=true;
+  document.getElementById("chat-send").disabled=true;
+  chatTypingOn();
+  try{
+    chatAppend("bot", await askBot(text));
+  }catch(e){
+    chatAppend("err", e.message || "답변을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }finally{
+    chatTypingOff();
+    chatBusy=false;
+    document.getElementById("chat-send").disabled=false;
+    box.focus();
+  }
+}
+
+async function askBot(text){
+  const r=await fetch(CHAT_API,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({question:text})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){
+    const detail=typeof d.detail==="string" ? d.detail : null; // 422 의 detail 은 배열이다
+    throw new Error(detail || `답변을 가져오지 못했습니다. (HTTP ${r.status})`);
+  }
+  if(!d.content) throw new Error("답변이 비어 있습니다.");
+  return d.content;
+}
+
+(function(){
+  document.getElementById("chat-botav").innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01"/></svg>`;
+  document.getElementById("chat-fab").innerHTML=
+    `<span class="ic-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.6 8.6 0 0 1-3.9-.9L3 21l1.9-5.6A8.4 8.4 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5z"/></svg></span>`+
+    `<span class="ic-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>`;
+  document.getElementById("chat-send").innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+})();
 
 /* ---- 로그인 여부는 PHP가 이미 판단해서 화면/현재사용자(current)를 내려줬다 ----
    반드시 스크립트의 모든 선언(const/let/function) 다음, 맨 마지막에 실행해야 한다.
