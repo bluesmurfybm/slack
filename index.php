@@ -158,8 +158,8 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
     <div class="chat-head">
       <span class="bot-av" id="chat-botav"></span>
       <div class="tt">
-        <h3>blue Assistant</h3>
-        <div class="st">업무에 대해 무엇이든 물어보세요</div>
+        <h3>blue chatbot</h3>
+        <div class="st">데모 챗봇입니다. 무엇이든 물어보세요</div>
       </div>
       <button class="chat-x" onclick="closeChat()" title="닫기">&times;</button>
     </div>
