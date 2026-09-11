@@ -1,0 +1,53 @@
+/* 메인 화면(대시보드) 우측 하단 챗봇 위젯.
+ * default.css 다음에 로드되므로 :root 변수를 그대로 쓴다.
+ * z-index 는 topbar(200) 아래, 드롭다운(60) 위로 둔다 — 스크롤해도 상단바가 위에 남아야 한다.
+ */
+.chat-fab{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border:none;border-radius:999px;
+  background:var(--blue);color:#fff;cursor:pointer;z-index:100;display:inline-flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 20px -6px rgba(16,35,90,.55);transition:transform .12s ease, background .15s ease}
+.chat-fab:hover{background:#1550cf;transform:translateY(-2px)}
+.chat-fab svg{width:26px;height:26px}
+.chat-fab .ic-close{display:none}
+.chat-fab.open .ic-open{display:none}
+.chat-fab.open .ic-close{display:block}
+
+.chat-panel{position:fixed;right:24px;bottom:92px;width:380px;max-height:calc(100vh - 180px);z-index:100;
+  display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:18px;
+  box-shadow:0 1px 2px rgba(16,35,90,.05), 0 24px 60px -24px rgba(16,35,90,.5);overflow:hidden}
+
+.chat-head{display:flex;align-items:center;gap:10px;padding:15px 16px;border-bottom:1px solid var(--line-soft)}
+.chat-head .bot-av{width:32px;height:32px;border-radius:999px;background:var(--blue);color:#fff;
+  display:inline-flex;align-items:center;justify-content:center;flex:none}
+.chat-head .bot-av svg{width:17px;height:17px}
+.chat-head .tt{flex:1;min-width:0}
+.chat-head h3{font-family:var(--disp);font-size:14.5px;font-weight:600;margin:0;color:var(--navy)}
+.chat-head .st{font-size:11.5px;color:var(--muted)}
+.chat-x{background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;line-height:1;padding:4px 6px;border-radius:8px}
+.chat-x:hover{background:#EEF3FB;color:var(--ink)}
+
+.chat-log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#FBFCFF}
+.chat-msg{max-width:82%;font-size:13.5px;line-height:1.55;padding:10px 13px;border-radius:14px;white-space:pre-wrap;word-break:break-word}
+.chat-msg.bot{align-self:flex-start;background:#EEF3FB;color:var(--ink);border-bottom-left-radius:5px}
+.chat-msg.me{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:5px}
+.chat-msg.err{align-self:flex-start;background:#FFF1F0;border:1px solid #F3C7C4;color:#A63B34;border-bottom-left-radius:5px}
+
+.chat-typing{align-self:flex-start;display:flex;gap:4px;padding:13px}
+.chat-typing i{width:6px;height:6px;border-radius:999px;background:var(--blue-soft);animation:chat-bounce 1.1s infinite}
+.chat-typing i:nth-child(2){animation-delay:.15s}
+.chat-typing i:nth-child(3){animation-delay:.3s}
+@keyframes chat-bounce{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}
+
+.chat-form{display:flex;align-items:flex-end;gap:8px;padding:12px;border-top:1px solid var(--line-soft);background:var(--card)}
+.chat-form textarea{flex:1;font-family:var(--sans);font-size:13.5px;line-height:1.5;padding:10px 12px;resize:none;
+  max-height:96px;border:1.5px solid var(--line);border-radius:12px;background:#FBFCFF;color:var(--ink)}
+.chat-form textarea:focus{outline:none;border-color:var(--blue);background:#fff}
+.chat-send{flex:none;width:38px;height:38px;border:none;border-radius:12px;background:var(--blue);color:#fff;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.chat-send:hover{background:#1550cf}
+.chat-send:disabled{background:#BFCEEA;cursor:not-allowed}
+.chat-send svg{width:17px;height:17px}
+
+@media(max-width:560px){
+  .chat-panel{right:12px;left:12px;width:auto;bottom:84px;max-height:calc(100vh - 160px)}
+  .chat-fab{right:16px;bottom:16px}
+}
