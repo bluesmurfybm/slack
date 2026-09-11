@@ -1,0 +1,18 @@
+- id: lunch-time
+  question: 점심 시간이 어떻게 되나요?
+  answer: 11시 50분 부터 13시까지 입니다.
+- id: business-time
+  question: 근무 시간이 어떻게 되나요?
+  answer: 평일 09:00~18:00이며 주말과 공휴일은 휴무입니다.
+- id: password-reset
+  question: 비밀번호를 잊어버렸어요.
+  answer: iwork 개발자 분들께 문의해주세요.
+- id: annual-leave-request
+  question: 연차는 어떻게 신청하나요?
+  answer: 네이버 웍스에서 신청해주세요.
+- id: annual-leave-count
+  question: 연차가 며칠 남았는지 어디서 보나요?
+  answer: 네이버 나의 연차 화면에서 확인하실 수 있습니다.
+- id: half-day-leave
+  question: 반차도 쓸 수 있나요?
+  answer: 오전 반차와 오후 반차 모두 가능하며 연차 0.5일이 차감됩니다.
