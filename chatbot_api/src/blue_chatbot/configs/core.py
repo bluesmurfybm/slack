@@ -14,7 +14,7 @@ class CoreConfig(BaseSettings):
     faq_path: Path = Path("data/faq.yaml")
 
     claude_model: str = "claude-sonnet-5"
-    max_tokens: int = 16000
+    max_tokens: int = 1000
     effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
 
 
