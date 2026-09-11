@@ -901,21 +901,34 @@ async function openReactPicker(anchor, id, ts){
   const close=ev=>{ if(!menu.contains(ev.target)){ menu.remove(); document.removeEventListener("mousedown",close);} };
   document.addEventListener("mousedown", close);
 }
+function renderCmtsBox(id){   // cmtCache[id] 기준으로 댓글 박스 다시 그림 + 최신 댓글로 스크롤
+  const box = document.getElementById("cmts-"+id);
+  if(!box) return;
+  renderCmts(id);                                        // 렌더 + 이벤트 바인딩(공용)
+  box.scrollTop = box.scrollHeight;                      // 최신 댓글(맨 아래) 바로 보이게
+  setTimeout(()=>{ box.scrollTop = box.scrollHeight; }, 150);   // 이미지 로드 등 늦은 레이아웃 보정
+}
 async function loadComments(id){
   try{
     const j = await (await fetch("comments.php?request_id="+encodeURIComponent(id), {cache:"no-store"})).json();
     cmtCache[id] = j.comments || [];
     Object.assign(MENTION_NAMES, j.users || {});   // 댓글 멘션 이름 맵 병합
   }catch(e){ cmtCache[id] = []; }
-  const box = document.getElementById("cmts-"+id);
-  if(box){
-    box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box);
-    bindReacts(box, id);                                    // 이모지 반응 토글
-    resolveMentions(box);                                   // 댓글 멘션 이름 해석
-    bindCmtTools(box);                                      // 내 댓글 수정/삭제
-    box.scrollTop = box.scrollHeight;                       // 최신 댓글(맨 아래) 바로 보이게
-    setTimeout(()=>{ box.scrollTop = box.scrollHeight; }, 150);   // 이미지 로드 등 늦은 레이아웃 보정
+  renderCmtsBox(id);
+}
+/* 작성 직후: Slack 스레드에 반영될 때까지(파일은 인덱싱이 늦음) 재시도.
+   서버 목록이 기대 개수 이상이 될 때만 낙관적 항목을 서버값으로 교체 → 작성 내용이 사라지지 않음 */
+async function reloadCommentsUntil(id, expectMin, tries){
+  for(let k=0; k<(tries||6); k++){
+    await new Promise(r=>setTimeout(r, k===0 ? 400 : 1100));
+    try{
+      const j = await (await fetch("comments.php?request_id="+encodeURIComponent(id), {cache:"no-store"})).json();
+      const arr = j.comments || [];
+      Object.assign(MENTION_NAMES, j.users || {});
+      if(arr.length >= expectMin){ cmtCache[id] = arr; renderCmtsBox(id); return true; }   // 반영 확인 → 확정 렌더
+    }catch(e){ /* 일시 오류: 낙관적 표시 유지하고 재시도 */ }
   }
+  return false;   // 끝내 미반영이어도 낙관적 표시는 유지(다음 새로고침/폴링 때 정정)
 }
 function _nowStr(){ const d=new Date(); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate())+" "+pad2(d.getHours())+":"+pad2(d.getMinutes()); }
 /* ===== 댓글 첨부파일 (📎 / Ctrl+V / 드래그) — 레코드 id 별 대기 목록 ===== */
@@ -952,8 +965,10 @@ async function postComment(id){
   if(ed) ed.innerHTML = "";
   cmtPend[id] = []; renderCmtPend(id);
   cmtCache[id] = cmtCache[id] || [];
+  const baseCount = cmtCache[id].length;                 // 전송 전 개수(반영 확인용)
+  const sentCount = files.length ? files.length : 1;     // 새로 생기는 Slack 메시지 수(텍스트는 첫 파일에 포함)
   cmtCache[id].push({ author_name: ME, body: text || (files.length?`_(파일 ${files.length}개 전송 중…)_`:""), created_at: _nowStr(), files: [] });
-  if(box){ box.innerHTML = cmtHtml(cmtCache[id]); bindLightbox(box); bindReacts(box, id); bindCmtTools(box); box.scrollTop = box.scrollHeight; }
+  renderCmtsBox(id);   // 즉시 반영(모달/드로어/인라인 모두 같은 노드)
   // 실제 전송은 백그라운드 → 완료되면 Slack 기준으로 재동기화
   try{
     if(files.length){                      // 파일: 건당 업로드(첫 파일에 텍스트 코멘트)
@@ -972,10 +987,10 @@ async function postComment(id){
       })).json();
       if(!j.ok) throw new Error(j.error || "실패");
     }
-    loadComments(id);   // 백그라운드 재로드(대기 안 함)
+    reloadCommentsUntil(id, baseCount + sentCount, 8);   // Slack 반영될 때까지 재시도(낙관적 표시 유지)
   }catch(err){
     alert("댓글 작성 실패: " + err.message);
-    loadComments(id);   // 실패 시 낙관적 항목 정리
+    loadComments(id);   // 실패 시 서버 기준으로 정리
   }
 }
 
