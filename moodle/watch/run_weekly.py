@@ -13,7 +13,7 @@ import json
 import logging
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 import digest as digest_mod
 import notify
@@ -25,7 +25,7 @@ from core import store
 from core.config import Settings
 from core.http import Http
 from core.items import Item
-from core.snapshot import State, week_key
+from core.snapshot import KST, State, week_key
 
 logger = logging.getLogger("moodle-watch")
 
@@ -79,9 +79,6 @@ def decide_status(results: list[Result], summary: summarizer.Summary | None,
     if failed or (needed_summary and summary is None):
         return "partial"
     return "ok"
-
-
-KST = timezone(timedelta(hours=9)) # 서머타임이 없어 고정 오프셋으로 충분하다(tzdata 불필요)
 
 
 def append_update(previous_md: str | None, updates_md: str, at: datetime, new_count: int) -> str:
