@@ -67,8 +67,8 @@ function materialSlots(t) {
 
 function slotBox(t, slot, may) {
   const meta = SLOTS[slot];
-  const kind = slotOf(t, slot, "kind");
-  if (!kind) {
+  const list = slotList(t, slot);
+  if (!list.length) {
     return `<div class="drop">
       <span class="ic">${meta.icon}</span>
       <span class="t"><b>${meta.label}</b><span>${meta.hint}</span></span>
@@ -76,12 +76,12 @@ function slotBox(t, slot, may) {
       : '<span class="chip ghost">미등록</span>'}
     </div>`;
   }
-  return `<div class="drop filled">
-    <span class="ic">${kind === "link" ? "🔗" : meta.icon}</span>
-    <span class="t"><b>${esc(slotName(t, slot))}</b><span>${meta.label}</span></span>
-    <button class="btn-mini" onclick="openViewer(${t.id},'${slot}')">열기</button>
-    ${may ? `<button class="btn-mini mat has" onclick="openMaterial(${t.id},'${slot}')">변경</button>` : ""}
-  </div>`;
+  return list.map((m, i) => `<div class="drop filled">
+    <span class="ic">${m.kind === "link" ? "🔗" : meta.icon}</span>
+    <span class="t"><b>${esc(matName(m))}</b><span>${meta.label}</span></span>
+    <button class="btn-mini" onclick="openViewer(${t.id},'${slot}',${m.id})">열기</button>
+    ${may && i === 0 ? `<button class="btn-mini mat has" onclick="openMaterial(${t.id},'${slot}')">관리</button>` : ""}
+  </div>`).join("");
 }
 
 function adminDrawerActions(t) {

@@ -172,6 +172,21 @@ function dti_schema_tables(): array {
                 UNIQUE KEY `uq_topic` (`topic_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 
+        'dti_materials' => "
+            CREATE TABLE IF NOT EXISTS `dti_materials` (
+                `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `topic_id` INT UNSIGNED NOT NULL,
+                `slot` VARCHAR(10) NOT NULL COMMENT 'material|scan',
+                `kind` VARCHAR(10) NOT NULL COMMENT 'link|file',
+                `name` VARCHAR(500) NOT NULL DEFAULT '',
+                `url` VARCHAR(1000) NULL,
+                `path` VARCHAR(255) NULL COMMENT '저장 파일명. link 면 NULL',
+                `created_by` VARCHAR(190) NOT NULL DEFAULT '',
+                `created_at` VARCHAR(19) NOT NULL DEFAULT '',
+                PRIMARY KEY (`id`),
+                KEY `idx_topic_slot` (`topic_id`, `slot`, `id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
         'dti_emotions' => "
             CREATE TABLE IF NOT EXISTS `dti_emotions` (
                 `presentation_id` INT UNSIGNED NOT NULL,

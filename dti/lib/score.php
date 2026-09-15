@@ -11,6 +11,7 @@ const DTI_SCORE_REACTION_DAILY_CAP = 3;
 const DTI_SCORE_KINDS = ['done', 'required', 'material', 'reaction'];
 
 function dti_score_events(PDO $pdo): array {
+    $materials = dti_material_grouped($pdo);
     $topics = [];
     foreach (dti_topic_all($pdo) as $topic) {
         $topics[(int)$topic['id']] = $topic;
@@ -31,7 +32,8 @@ function dti_score_events(PDO $pdo): array {
                 $out[] = dti_score_event($pres['presenter_email'], $date, 'required', DTI_SCORE_REQUIRED_BONUS);
             }
         }
-        if ($pres['material_kind'] !== null) {
+        // 자료를 몇 건 올렸든 배점은 한 번이다
+        if (!empty($materials[$pres['topic_id']]['material'])) {
             $out[] = dti_score_event($pres['presenter_email'], $date, 'material', DTI_SCORE_MATERIAL);
         }
     }

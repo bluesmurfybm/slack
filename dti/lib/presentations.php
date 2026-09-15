@@ -109,9 +109,12 @@ function dti_presentation_create(PDO $pdo, int $topicId, array $values = []): ar
     return $pres;
 }
 
-/** 발표를 통째로 지운다 — 자료 파일과 반응까지 같이 사라진다 */
+/**
+ * 발표를 통째로 지운다 — 발표자료와 반응까지 같이 사라진다.
+ * 스캔 원본은 아티클에 딸린 것이라 남긴다.
+ */
 function dti_presentation_purge(PDO $pdo, string $uploadDir, array $pres): void {
-    dti_remove_upload($uploadDir, $pres['material_path']);
+    dti_material_remove_all($pdo, $uploadDir, (int)$pres['topic_id'], 'material');
     dti_emotion_delete_by_presentation($pdo, (int)$pres['id']);
     dti_presentation_delete($pdo, (int)$pres['id']);
 }

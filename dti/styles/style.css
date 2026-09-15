@@ -647,3 +647,15 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
   background:var(--bg-card);color:var(--tx-primary);
 }
 #fieldOverlay .cdialog input:focus{outline:none;border-color:var(--cos50);box-shadow:0 0 0 3px var(--cos95)}
+
+/* 자료 목록 (관리 모달) */
+.mat-list{list-style:none;margin:10px 0 4px;padding:0;display:flex;flex-direction:column;gap:6px}
+.mat-list li{display:flex;align-items:center;gap:6px}
+.mat-open{
+  flex:1;min-width:0;text-align:left;padding:8px 10px;border:1px solid var(--cos90);
+  border-radius:8px;background:#fff;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mat-open:hover{background:var(--cos95)}
+.mat-del{
+  flex:none;width:32px;height:32px;border:1px solid var(--cos90);border-radius:8px;
+  background:#fff;color:var(--danger,#d9534f);cursor:pointer}
+.mat-del:hover{background:var(--cos95)}

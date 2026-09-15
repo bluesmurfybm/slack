@@ -154,27 +154,92 @@ final class MaterialTest extends TestCase
         $this->assertSame(401, $this->call('GET', ['topics', (string)$tid, 'material', 'download'], null)['status']);
     }
 
-    public function test_새로_올리면_앞의_파일은_지운다(): void
+    /* ---------- 여러 건 ---------- */
+
+    public function test_새로_올려도_앞의_자료가_남는다(): void
     {
         $tid = $this->claimed();
         $first = $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('a.txt', 'one'))
             ['data']['material_path'];
-        $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('b.txt', 'two'));
+        $res = $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('b.txt', 'two'));
 
-        $this->assertFileDoesNotExist($this->uploadDir . '/' . $first);
-        $this->assertSame('two', $this->contentOf($tid));
+        $this->assertFileExists($this->uploadDir . '/' . $first);
+        $this->assertSame(['a.txt', 'b.txt'], array_column($res['data']['materials'], 'name'));
     }
 
-    public function test_링크로_바꾸면_올렸던_파일을_지운다(): void
+    public function test_파일과_링크를_같이_둔다(): void
     {
         $tid = $this->claimed();
-        $stored = $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('a.txt', 'one'))
-            ['data']['material_path'];
-        $res = $this->post(['topics', (string)$tid, 'material', 'link'], $this->user(), ['url' => 'https://example.com/a']);
+        $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('a.txt', 'one'));
+        $res = $this->post(['topics', (string)$tid, 'material', 'link'], $this->user(),
+            ['url' => 'https://example.com/a', 'name' => '참고 영상']);
 
-        $this->assertSame('link', $res['data']['material_kind']);
-        $this->assertNull($res['data']['material_path']);
-        $this->assertFileDoesNotExist($this->uploadDir . '/' . $stored);
+        $this->assertSame(['file', 'link'], array_column($res['data']['materials'], 'kind'));
+        // 화면 계약용 material_* 는 첫 자료에서 파생한다
+        $this->assertSame('file', $res['data']['material_kind']);
+        $this->assertSame('a.txt', $res['data']['material_name']);
+    }
+
+    public function test_한_건만_골라_지운다(): void
+    {
+        $tid = $this->claimed();
+        $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('a.txt', 'one'));
+        $added = $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('b.txt', 'two'));
+        [$first, $second] = $added['data']['materials'];
+
+        $res = $this->delete(['topics', (string)$tid, 'material', (string)$second['id']], $this->user());
+
+        $this->assertSame(['a.txt'], array_column($res['data']['materials'], 'name'));
+        $this->assertFileExists($this->uploadDir . '/' . $first['path']);
+        $this->assertFileDoesNotExist($this->uploadDir . '/' . $second['path']);
+    }
+
+    public function test_한_건만_골라_내려받는다(): void
+    {
+        $tid = $this->claimed();
+        $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('a.txt', 'one'));
+        $added = $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('b.txt', 'two'));
+        $second = $added['data']['materials'][1]['id'];
+
+        $res = $this->get(['topics', (string)$tid, 'material', (string)$second, 'download']);
+
+        $this->assertSame('two', file_get_contents($res['file']));
+        $this->assertSame('b.txt', $res['name']);
+    }
+
+    public function test_남의_아티클_자료_id_로는_못_지운다(): void
+    {
+        $mine = $this->claimed();
+        $other = $this->claimed();
+        $added = $this->post(['topics', (string)$other, 'material', 'file'], $this->user(), [], $this->upload('a.txt', 'one'));
+        $mid = $added['data']['materials'][0]['id'];
+
+        $res = $this->delete(['topics', (string)$mine, 'material', (string)$mid], $this->user());
+        $this->assertSame(404, $res['status']);
+    }
+
+    public function test_칸을_통째로_비우면_전부_지운다(): void
+    {
+        $tid = $this->claimed();
+        $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('a.txt', 'one'));
+        $added = $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('b.txt', 'two'));
+        $paths = array_column($added['data']['materials'], 'path');
+
+        $res = $this->delete(['topics', (string)$tid, 'material'], $this->user());
+
+        $this->assertSame([], $res['data']['materials']);
+        $this->assertNull($res['data']['material_kind']);
+        foreach ($paths as $path) $this->assertFileDoesNotExist($this->uploadDir . '/' . $path);
+    }
+
+    public function test_스캔과_발표자료는_각자_쌓인다(): void
+    {
+        $tid = $this->claimed();
+        $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload('발표.pdf', 'deck'));
+        $res = $this->post(['topics', (string)$tid, 'scan', 'file'], $this->admin(), [], $this->upload('스캔.pdf', 'scan'));
+
+        $this->assertSame(['발표.pdf'], array_column($res['data']['materials'], 'name'));
+        $this->assertSame(['스캔.pdf'], array_column($res['data']['scans'], 'name'));
     }
 
     public function test_발표자가_자료를_뗀다(): void

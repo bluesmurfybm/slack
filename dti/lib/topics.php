@@ -153,13 +153,16 @@ function dti_topic_status(?array $pres): string {
     return DTI_STATUS_OPEN;
 }
 
-/** 아티클 하나를 화면 계약으로 옮긴다. */
+/**
+ * 아티클 하나를 화면 계약으로 옮긴다.
+ *
+ * $materials 는 칸(slot)별 자료 목록이다. 자료는 여러 건이지만 material_*·scan_* 키는
+ * 첫 자료에서 파생해 계속 채운다 — 카드 정렬과 멤버 점수가 그 키를 보고 있다.
+ */
 function dti_topic_present(array $topic, ?array $pres, ?array $emotions = null,
-                           ?array $mine = null): array {
+                           ?array $mine = null, ?array $materials = null): array {
     $flat = [
         'presenter' => '', 'presenter_email' => '', 'planned_date' => '', 'done_date' => '',
-        'material_kind' => null, 'material_name' => null, 'material_url' => null,
-        'material_path' => null,
     ];
     if ($pres) {
         foreach (array_keys($flat) as $field) {
@@ -167,11 +170,28 @@ function dti_topic_present(array $topic, ?array $pres, ?array $emotions = null,
         }
     }
 
-    return [
-        ...$topic,
-        ...$flat,
-        'status' => dti_topic_status($pres),
-        'emotions' => $emotions ?? dti_emotion_empty_counts(),
-        'my_emotions' => $mine ?? [],
-    ];
+    $out = [...$topic, ...$flat];
+    foreach (DTI_SLOT_NAMES as $slot) {
+        $list = $materials[$slot] ?? [];
+        $first = $list[0] ?? null;
+        foreach (['kind', 'name', 'url', 'path'] as $field) {
+            $out[dti_slot_column($slot, $field)] = $first[$field] ?? null;
+        }
+        $out[$slot . 's'] = array_map('dti_material_out', $list);
+    }
+
+    $out['status'] = dti_topic_status($pres);
+    $out['emotions'] = $emotions ?? dti_emotion_empty_counts();
+    $out['my_emotions'] = $mine ?? [];
+
+    return $out;
+}
+
+/** 자료를 직접 읽어 한 건을 그린다. 목록은 dti_material_grouped() 를 미리 받아 쓴다. */
+function dti_topic_present_one(PDO $pdo, array $topic, ?array $pres): array {
+    $tid = (int)$topic['id'];
+    return dti_topic_present($topic, $pres, null, null, [
+        'material' => dti_material_list($pdo, $tid, 'material'),
+        'scan' => dti_material_list($pdo, $tid, 'scan'),
+    ]);
 }

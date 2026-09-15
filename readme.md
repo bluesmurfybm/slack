@@ -62,7 +62,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   │   ├── slots.php, storage.php, notify.php
 │   ├── routes/                  topics · materials · fields · scores · identity
 │   ├── static/, styles/         magazine/web/ 이식 (core.js 에 경로 변환만 추가)
-│   ├── tools/                   rebuild_related.php
+│   ├── tools/                   rebuild_related.php · backfill_materials.php(일회성)
 │   ├── tests/                   PHPUnit 169건
 │   └── var/uploads/             발표자료 원본 (gitignore, .htaccess 로 직접 접근 차단)
 │
@@ -139,6 +139,11 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 - **테이블은 `dti_*`** — `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`,
   `dti_related`. slackapi DB 를 포털·slack·learn 과 공유하므로 맨이름을 쓸 수 없다.
   컬럼 추가는 `add_column_if_missing()` 을 거친다.
+- **자료는 칸(slot)당 여러 건이다** — `dti_materials` 가 원본이고 `topic_id + slot` 으로 건다
+  (발표는 아티클과 1:1 이라 발표자료도 topic_id 로 잡는다). 응답의 `material_kind`·`material_name`
+  ·`material_url`·`material_path` 는 **첫 자료에서 파생한 값**이고, 목록은 `materials`·`scans`
+  배열에 실린다. 파생 키를 남겨 둔 건 카드 정렬(`topics.js`)과 멤버 점수가 그걸 보고 있어서다.
+  멤버 점수의 "자료 3점" 은 몇 건을 올리든 한 번이다.
 - **자료 슬롯은 NULL 을 유지한다** — `material_*`·`scan_*` 는 "없음"이 NULL 이고 화면이 그
   구분에 기댄다. learn 의 `NOT NULL DEFAULT ''` 관례를 여기 적용하면 안 된다.
   날짜는 VARCHAR 다(`''` 가 없음).
@@ -171,7 +176,10 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 1. nginx 의 `/magazine/`·`/magazineapi/` 블록 제거
 2. `magazine.service`(uvicorn 8001) 중지·비활성화, `/home/blueapp_core/magazine` 정리
-3. `dti_topics` 의 죽은 컬럼(`presenter`·`planned_date`·`material_*` 등) 정리
+3. `php dti/tools/backfill_materials.php` — 컬럼에 있던 자료를 `dti_materials` 로 옮긴다
+   (`--dry-run` 으로 먼저 확인, 여러 번 돌려도 안전). 끝나면 이 도구도 지운다
+4. `dti_topics`·`dti_presentations` 의 죽은 컬럼(`presenter`·`planned_date`·`material_*`
+   ·`scan_*`) 정리
 
 ---
 
@@ -472,7 +480,8 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 - `requests` — slack 유지보수 요청 목록(Slack Lists 동기화본)
 - `schools`, `user_reads`, `user_pins`, `user_hides`, `local_assignments`, `sync_meta` — slack 부가기능
 - `gmail_mails` — Gmail 캐시(계정별 구분, `account` 컬럼)
-- `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`, `dti_related` — dti 모듈
+- `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`, `dti_related`,
+  `dti_materials` — dti 모듈
 - `school_access` — 대학별 접속·배포 정보(access 모듈). `schools` 가 마스터이고 여기는 상세라
   `school_id` 로 붙는다. 한 대학이 버전군별로 여러 행을 가질 수 있어(강원대 3.5 + 4.5)
   키는 `(school_id, grp)` 다.
@@ -637,6 +646,12 @@ sudo systemctl enable --now moodle-watch-refresh.path
 - [ ] `PORTAL_URL`, `LINKS.book` 플레이스홀더를 실제 주소로 확정.
 - [ ] 관리자(`ADMIN_EMAIL`)가 book `app.py`에 하드코딩 — 여러 명이 되면 배열/DB 플래그로 전환 고려.
       dti 는 `db.php` 의 `DTI_DEFAULT_ADMINS` 로 분리돼 있다.
+- [ ] dti: 자료 순서를 바꿀 수 없다(등록 순 고정). 필요해지면 `dti_materials` 에 정렬 컬럼 추가.
+- [ ] dti: 응답의 `material_*`·`scan_*` 파생 키는 화면이 `materials`·`scans` 배열만 보게
+      정리되면 뺄 수 있다. 지금은 카드 정렬과 멤버 점수가 그 키에 걸려 있다.
+- [ ] dti: PPT 미리보기 없음 — 붙이려면 업로드 때 LibreOffice headless 로 PDF 로 변환해
+      기존 PDF iframe 뷰어에 태우면 된다. 저장 파일명 옆에 `.pdf` 를 두면 스키마 변경도 없다.
+      서버에 `libreoffice-impress`+`fonts-noto-cjk` 가 필요하고, 실제 PPT 비중을 보고 정한다.
 - [ ] slack 모듈 관리자 기능(회원 추가/삭제, 비번 초기화) 없음.
 - [ ] Gmail 연동은 계정 1개 고정(`config.local.php`) 기반 — 다계정 지원은 `gmail_lib.php` 주석의
       "[향후 회원가입]" 부분에 걸이 남아 있음.

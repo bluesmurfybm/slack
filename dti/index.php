@@ -235,7 +235,7 @@ if (!dti_identity()) {
   <div class="overlay" id="matOverlay" onclick="if(event.target===this)closeMaterial()">
     <div class="cdialog">
       <h3 id="matTitle">발표용 자료</h3>
-      <p id="matCurrent"></p>
+      <div id="matList"></div>
       <div class="seg" id="seg-mat">
         <button type="button" id="mat-file" class="on" onclick="setMatMode('file')">파일 올리기</button>
         <button type="button" id="mat-link" onclick="setMatMode('link')">링크</button>
@@ -253,9 +253,8 @@ if (!dti_identity()) {
         <input id="mat-name" type="text" placeholder="표시 이름 (선택)">
       </div>
       <div class="row-btn">
-        <button class="btn-ghost danger" id="mat-del" onclick="detachMaterial()">삭제</button>
         <button class="btn-ghost" onclick="closeMaterial()">닫기</button>
-        <button class="btn-submit" onclick="submitMaterial()">저장</button>
+        <button class="btn-submit" onclick="submitMaterial()">추가</button>
       </div>
     </div>
   </div>
