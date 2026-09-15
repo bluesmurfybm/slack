@@ -1,0 +1,19 @@
+{
+    "name": "bluesoft/blue-iworks",
+    "description": "blue-iWorks 포털 — dti 모듈 테스트",
+    "type": "project",
+    "require": {
+        "php": ">=8.2"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Dti\\Tests\\": "dti/tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

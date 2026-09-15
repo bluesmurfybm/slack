@@ -56,6 +56,26 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── static/, styles/         도메인별 js · css
 │   └── var/uploads/             이수증 원본 (gitignore, .htaccess 로 직접 접근 차단)
 │
+├── dti/                         DTI 발표 — magazine 의 PHP 이관본. **전환 전**
+│   ├── index.php                화면 한 장(SPA). magazine/web/index.html 이식
+│   ├── api.php                  프런트 컨트롤러 — 출력하는 유일한 자리
+│   ├── bootstrap.php            require 목록 + 시간대
+│   ├── db.php                   설정 · 연결 · 스키마 · 시드
+│   ├── guard.php                포털 세션 신원 · 관리자 판정
+│   ├── lib/
+│   │   ├── http.php             DtiError · 요청 파싱 · 응답 · 입력 검증 · 라우팅
+│   │   ├── topics.php           아티클 읽기/쓰기 · 상태 판정 · 화면용 배열
+│   │   ├── presentations.php    발표 행 생성 · 삭제 · 배정 해제
+│   │   ├── emotions.php, fields.php, members.php
+│   │   ├── related.php, score.php     연관 점수 · 멤버 점수
+│   │   ├── slots.php, storage.php, notify.php
+│   │   └── migrate.php          magazine 이관 (전환 후 삭제)
+│   ├── routes/                  topics · materials · fields · scores · identity
+│   ├── static/, styles/         magazine/web/ 이식 (core.js 에 경로 변환만 추가)
+│   ├── tools/                   migrate_from_magazine.php · rebuild_related.php
+│   ├── tests/                   PHPUnit 169건
+│   └── var/uploads/             발표자료 원본 (gitignore, .htaccess 로 직접 접근 차단)
+│
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
     ├── auth.php, db.php, config.php, slack_lib.php, header.php   (공통)
     ├── lists.php, comments.php, data.php, assign.php, ...        (핵심 요청 목록 기능)
@@ -117,6 +137,11 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 매거진(DI, MIT TR) 아티클 발표 주제를 관리한다. 원래 xlsx로 돌리던 걸 옮긴 것.
 
+> **이관 중**: 같은 기능의 PHP/MySQL 이관본이 `dti/` 에 있다(`magazine_v2` 브랜치).
+> **아직 전환하지 않았다** — 실서버는 계속 이 FastAPI 앱(8001)이 서비스한다.
+> 아래 설명은 현재 운영 중인 파이썬 버전 기준이고, 이관본 설명은 "dti (magazine PHP 이관본)"
+> 절에 있다.
+
 - **상태는 저장하지 않고 파생한다** — `done_date`면 발표완료, `presenter_email`이면 발표예정,
   둘 다 없으면 미지정(`features/topics/service.py`). 원본 xlsx에 "발표자·예정일이 있는데
   비고는 미지정"인 행이 실제로 있어서, 컬럼으로 저장하면 계속 어긋난다.
@@ -153,6 +178,62 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
   magazine은 포털 MySQL을 보지 않기 때문. 입·퇴사 시 이 목록을 고친다.
 - **테스트**: `cd magazine && python -m pytest` (82건). 앱은 `create_app(settings)` 팩토리라
   테스트가 `Settings`만 갈아끼워 새 앱을 만든다.
+
+---
+
+## dti (magazine PHP 이관본)
+
+magazine 을 포털과 같은 PHP 앱 안으로 옮긴 것이다(`learning/` → `learn/` 과 같은 이유 —
+별도 프로세스라서 필요했던 uvicorn 유닛·nginx 프록시·venv·SSO 쿠키가 전부 사라진다).
+**동작은 1:1 로 옮겼고 화면 계약(경로·JSON 키·null 구분·상태코드)은 그대로다.**
+
+- **learn/ 과 같은 모양이다** — `lib/` 와 `routes/` 에 `dti_` 접두사 전역 함수를 나열한다.
+  소스에 도메인 클래스는 없고, 남는 클래스는 예외 하나(`DtiError`)와 PHPUnit 테스트뿐이다.
+  행은 PDO 연관 배열을 그대로 넘긴다.
+- **다만 라우트는 값을 돌려준다** — learn 의 `jsend()` 는 출력하고 `exit` 해서 라우트 단위
+  테스트를 붙일 자리가 없다. dti 의 라우트는 `['status' => .., 'data' => ..]` 를 반환하고
+  출력은 `api.php` 의 `dti_send()` 한 곳에서만 한다. 169건 중 129건이 이 덕분에 라우트를
+  통째로 검증한다.
+- **전역 `static` 캐시를 쓰지 않는다** — learn 의 `learn_policy()`·`body_json()` 같은 캐시는
+  테스트 간에 상태가 남는다. 설정·연결·신원은 `$ctx` 배열로, 요청은 `$req` 배열로 넘긴다.
+- **테이블은 `dti_*`** — `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`,
+  `dti_related`. slackapi DB 를 포털·slack·learn 과 공유하므로 맨이름을 쓸 수 없다.
+  컬럼 추가는 `add_column_if_missing()` 을 거친다.
+- **자료 슬롯은 NULL 을 유지한다** — `material_*`·`scan_*` 는 "없음"이 NULL 이고 화면이 그
+  구분에 기댄다. learn 의 `NOT NULL DEFAULT ''` 관례를 여기 적용하면 안 된다.
+  날짜는 VARCHAR 다(`''` 가 없음).
+- **인증은 포털 세션**(`guard.php` 의 `dti_identity()`). 구성원 명단은 `portal_users` 에서
+  오고, 팀 매핑과 관리자 명단만 `db.php` 의 `DTI_` 상수다. 개발 로그인(`DEV_LOGIN`)은 화면·API 에서 **없앴다** —
+  포털 세션을 쓰는 이상 로그인 없이 화면을 보는 경로가 없다.
+- **화면은 거의 그대로다** — `core.js` 의 `dtiApiURL()` 이 `/magazineapi/topics/3` 을
+  `api.php?p=/topics/3` 으로 바꾼다. 나머지 도메인 스크립트는 손대지 않았다(`material.js` 의
+  다운로드 URL 한 줄만 같은 함수를 쓴다).
+- **연관 점수**는 `dti_related` 에 저장하고 등록·수정·삭제 때 다시 계산한다. 파이썬은 기동할
+  때도 계산했지만 PHP 에는 기동 훅이 없으므로, 배점 상수를 바꾸면
+  `php dti/tools/rebuild_related.php` 를 한 번 돌린다.
+- **런타임 의존성이 0이다** — 소스가 쓰는 외부 라이브러리는 PHP 내장 `PDO` 뿐이고, 파일
+  로딩은 `dti/bootstrap.php` 의 `require_once` 목록이 한다. **composer 는 테스트에만 쓴다.**
+  서버에 composer 가 없어도, `vendor/` 를 올리지 않아도 파일만 복사하면 돌아간다
+  (access·moodle·learn 과 같은 배포).
+- **테스트**: `vendor/bin/phpunit` (169건). 테스트를 돌릴 때만 `composer install` 이 필요하다. 테스트 DB 는 `slackapi_test` 를 쓴다
+  (`dti/tests/bootstrap.php`, 환경변수 `DTI_TEST_DB` 로 바꿀 수 있다).
+  **이 환경은 커밋마다 fsync 가 돌아 쓰기 한 건이 0.2초다** — 픽스처는 트랜잭션으로 묶고
+  테이블은 TRUNCATE 가 아니라 DELETE 로 비운다(TRUNCATE 는 InnoDB 에서 DDL 이라 3초 가까이
+  걸린다). 로컬을 더 빠르게 하려면 MySQL 에서
+  `SET GLOBAL innodb_flush_log_at_trx_commit=2, sync_binlog=0` (내구성 대신 속도, 개발 전용).
+- **이관 검증**: 실데이터 사본으로 파이썬 앱과 PHP 의 응답을 통째로 비교해 **차이가 없음을
+  확인했다**(아티클 31건 전체 키·값, 목록 순서, 분야, 멤버 점수 13행, 연관 31건).
+  연관 점수는 파이썬이 저장해 둔 106쌍과 점수까지 일치한다.
+
+### 남은 전환 작업 (아직 하지 않았다)
+
+1. `php dti/tools/migrate_from_magazine.php` 로 실데이터 이관 (`--dry-run` 으로 먼저 확인)
+2. 포털 `index.php` 의 링크를 `dti/index.php` 로 교체 (`config.php` 의 `links.magazine` 제거)
+3. nginx 의 `/magazine/`·`/magazineapi/` 블록 제거
+4. `magazine.service`(uvicorn 8001) 중지·비활성화
+5. `dti/lib/migrate.php` 와 `dti/tools/migrate_from_magazine.php` 삭제 (일회성)
+6. `magazine/` 디렉터리 정리 — `learning/` 처럼 당분간 남겨 둬도 된다
+7. `dti_topics` 의 죽은 컬럼(`presenter`·`planned_date`·`material_*` 등) 정리
 
 ---
 
@@ -362,6 +443,7 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 | `book/config_local.py` | Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성 |
 | `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
 | `magazine/config_local.py` | Slack 웹훅 URL(선택) | `config_local.exam.py` 복사해서 사용 |
+| `config.php` 의 `dti_slack_webhook` | dti 모듈 Slack 웹훅 URL(선택) | 없으면 발표자 등록 알림만 비활성 |
 | `SVN_배포_디비정보(블루내부공유).xlsx` (루트) | access 모듈 초기 데이터 | **직접 가져다 둘 것.** 전 대학 계정/비번이 들어 있어 커밋 금지 |
 
 `slack/config.php` 형식:
@@ -400,6 +482,10 @@ return [
     'list_id'         => 'F083TU7F0BZ',
     'comment_channel' => 'C083TU7F0BZ',
     'list_url'        => 'https://coursemos.slack.com/lists/T04LNBX6L/F083TU7F0BZ',
+
+    // dti(DTI 발표) 슬랙 알림 웹훅 — 선택. 없으면 발표자 등록 알림만 조용히 꺼진다.
+    // (파이썬 magazine 의 config_local.py 에 있던 SLACK_WEBHOOK_URL 자리다)
+    'dti_slack_webhook' => null,
 
     // 대시보드/공통 헤더 드롭다운이 참조하는 외부 모듈 링크. book은 별도 프로세스라 절대주소 필요.
     // 실제 배포 주소가 다르면 config.local.php 에 'book_url' => '...' 을 넣어 덮어쓸 수 있음.
@@ -459,6 +545,8 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 - `requests` — slack 유지보수 요청 목록(Slack Lists 동기화본)
 - `schools`, `user_reads`, `user_pins`, `user_hides`, `local_assignments`, `sync_meta` — slack 부가기능
 - `gmail_mails` — Gmail 캐시(계정별 구분, `account` 컬럼)
+- `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`, `dti_related` — dti 모듈
+  (magazine PHP 이관본). 전환 전까지는 비어 있다.
 - `school_access` — 대학별 접속·배포 정보(access 모듈). `schools` 가 마스터이고 여기는 상세라
   `school_id` 로 붙는다. 한 대학이 버전군별로 여러 행을 가질 수 있어(강원대 3.5 + 4.5)
   키는 `(school_id, grp)` 다.
