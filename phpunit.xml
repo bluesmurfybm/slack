@@ -14,7 +14,10 @@
     </testsuites>
     <source>
         <include>
-            <directory>dti/src</directory>
+            <directory>dti/lib</directory>
+            <directory>dti/routes</directory>
+            <file>dti/db.php</file>
+            <file>dti/guard.php</file>
         </include>
     </source>
 </phpunit>

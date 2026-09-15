@@ -2,7 +2,6 @@
 
 namespace Dti\Tests;
 
-use Dti\Migration\MagazineImporter;
 use Dti\Tests\Support\TestCase;
 use PDO;
 
@@ -83,21 +82,22 @@ final class MigrateTest extends TestCase
         // 7_scan.pdf 는 일부러 만들지 않는다 — 행은 있고 원본이 없는 경우
     }
 
-    private function importer(): MagazineImporter
+    private function migrate(bool $dryRun = false, bool $force = false): array
     {
-        return new MagazineImporter($this->source, $this->pdo, $this->config, $this->sourceUploads);
+        return dti_migrate_run($this->source, $this->pdo, $this->config, $this->sourceUploads,
+                               $dryRun, $force);
     }
 
     public function test_원본_건수를_읽는다(): void
     {
         $this->assertSame(
             ['topics' => 3, 'presentations' => 2, 'presentation_emotions' => 2, 'fields' => 3],
-            $this->importer()->sourceCounts());
+            dti_migrate_source_counts($this->source));
     }
 
     public function test_아티클_id_를_그대로_옮긴다(): void
     {
-        $this->importer()->run();
+        $this->migrate();
 
         $ids = $this->pdo->query("SELECT id FROM dti_topics ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
         $this->assertSame([7, 12, 20], $ids);
@@ -105,7 +105,7 @@ final class MigrateTest extends TestCase
 
     public function test_발표와_반응의_연결이_유지된다(): void
     {
-        $this->importer()->run();
+        $this->migrate();
         $pdo = $this->pdo;
 
         $row = $pdo->query("SELECT id, topic_id, presenter_email FROM dti_presentations WHERE id = 3")->fetch();
@@ -119,7 +119,7 @@ final class MigrateTest extends TestCase
 
     public function test_자료_컬럼의_null_이_그대로_넘어온다(): void
     {
-        $this->importer()->run();
+        $this->migrate();
 
         $row = $this->pdo->query("SELECT material_kind, material_name FROM dti_presentations WHERE id = 9")->fetch();
         $this->assertNull($row['material_kind']);
@@ -128,7 +128,7 @@ final class MigrateTest extends TestCase
 
     public function test_분야는_시드와_겹치지_않게_넣는다(): void
     {
-        $report = $this->importer()->run();
+        $report = $this->migrate();
 
         // 원본 3건 중 UI/UX·AX 는 시드에 이미 있다 — 보안만 늘어난다
         $this->assertSame(1, $report['fields']);
@@ -138,7 +138,7 @@ final class MigrateTest extends TestCase
 
     public function test_업로드_파일을_옮기고_없는_것은_보고한다(): void
     {
-        $report = $this->importer()->run();
+        $report = $this->migrate();
 
         $this->assertSame(1, $report['files']);
         $this->assertFileExists($this->config['upload_dir'] . '/7_deck.pdf');
@@ -148,7 +148,7 @@ final class MigrateTest extends TestCase
 
     public function test_연관_점수는_옮기지_않고_다시_계산한다(): void
     {
-        $report = $this->importer()->run();
+        $report = $this->migrate();
 
         // 원본에는 7→12 한 쌍뿐이지만, 다시 계산하면 양쪽 방향이 나온다
         $this->assertSame(2, $report['related']);
@@ -159,24 +159,24 @@ final class MigrateTest extends TestCase
 
     public function test_dry_run_은_아무_것도_쓰지_않는다(): void
     {
-        $report = $this->importer()->run(dryRun: true);
+        $report = $this->migrate(dryRun: true);
 
         $this->assertSame(3, $report['topics']);
-        $this->assertSame(0, $this->importer()->targetTopicCount());
+        $this->assertSame(0, dti_migrate_target_topic_count($this->pdo));
         $this->assertFileDoesNotExist($this->config['upload_dir'] . '/7_deck.pdf');
     }
 
     public function test_force_는_기존_데이터를_비우고_다시_넣는다(): void
     {
-        $this->importer()->run();
-        $this->importer()->run(force: true);
+        $this->migrate();
+        $this->migrate(force: true);
 
-        $this->assertSame(3, $this->importer()->targetTopicCount());
+        $this->assertSame(3, dti_migrate_target_topic_count($this->pdo));
     }
 
     public function test_이관한_데이터가_API_로_그대로_보인다(): void
     {
-        $this->importer()->run();
+        $this->migrate();
 
         $rows = array_column($this->get(['topics'], $this->admin())['data'], null, 'id');
         $this->assertCount(3, $rows);

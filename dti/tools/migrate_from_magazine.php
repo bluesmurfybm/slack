@@ -34,17 +34,15 @@ $config = dti_config_from_portal();
 $target = dti_connect($config);
 dti_migrate($target);
 
-$importer = new Dti\Migration\MagazineImporter($source, $target, $config, $uploadDir);
-
 echo '원본: ', realpath($sqlitePath), "\n";
 echo '대상: MySQL dti_* 테이블', $dryRun ? '  [--dry-run: 쓰지 않는다]' : '', "\n\n";
 
-foreach ($importer->sourceCounts() as $table => $count) {
+foreach (dti_migrate_source_counts($source) as $table => $count) {
     printf("  %-24s %d건\n", $table, $count);
 }
 echo "\n";
 
-$have = $importer->targetTopicCount();
+$have = dti_migrate_target_topic_count($target);
 if ($have && !$force) {
     // --dry-run 은 쓰지 않으므로 막지 않는다. 미리보기까지 막으면 확인할 방법이 없다
     $message = "dti_topics 에 이미 {$have}건이 있다. 덮어쓰려면 --force 를 준다\n"
@@ -56,7 +54,7 @@ if ($have && !$force) {
     echo '※ ', $message, "\n";
 }
 
-$report = $importer->run($dryRun, $force);
+$report = dti_migrate_run($source, $target, $config, $uploadDir, $dryRun, $force);
 
 echo "옮긴 결과\n";
 printf("  아티클  %d건\n", $report['topics']);
