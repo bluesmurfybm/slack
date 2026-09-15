@@ -45,9 +45,9 @@ final class Config
         ?array $adminEmails = null,
         ?array $teamsByEmail = null,
         public readonly ?string $slackWebhook = null,
-        public readonly string $portalUrl = '../index.php',
+        // 화면이 뒤에 /?view=profile 같은 걸 붙여 쓴다. 페이지가 아니라 기준 경로여야 한다
+        public readonly string $portalUrl = '..',
         public readonly string $slackUrl = '../slack/lists.php',
-        public readonly string $seedPath = '',
     ) {
         $this->adminEmails = array_map('strtolower', $adminEmails ?? self::DEFAULT_ADMINS);
         $this->teamsByEmail = $teamsByEmail ?? self::DEFAULT_TEAMS;
@@ -70,7 +70,6 @@ final class Config
             db: $db,
             uploadDir: __DIR__ . '/../var/uploads',
             slackWebhook: $cfg['dti_slack_webhook'] ?? null,
-            seedPath: __DIR__ . '/../../magazine/data/seed.json',
         );
     }
 

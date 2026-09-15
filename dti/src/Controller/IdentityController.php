@@ -27,9 +27,6 @@ final class IdentityController
             'teams' => $this->config->teamsOf($email),
             'all_teams' => Config::TEAMS,
             'all_magazines' => Config::MAGAZINES,
-            // 개발 로그인은 없앴지만 키는 남긴다 — core.js 가 401 분기에서 읽는다
-            'dev_login' => false,
-            'dev_accounts' => [],
             'portal_url' => $this->config->portalUrl,
             'slack_url' => $this->config->slackUrl,
         ]);

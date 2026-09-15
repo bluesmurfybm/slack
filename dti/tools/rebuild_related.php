@@ -13,13 +13,9 @@ if (PHP_SAPI !== 'cli') {
     exit("CLI 에서만 실행한다\n");
 }
 
-require __DIR__ . '/../../vendor/autoload.php';
+require __DIR__ . '/../bootstrap.php';
 
-$config = Dti\Config::fromPortal();
-$database = new Dti\Database($config);
-$database->migrate();
-
-$pdo = $database->pdo();
+$pdo = dti_database()->pdo();
 $service = new Dti\Service\RelatedService(
     new Dti\Repository\TopicRepository($pdo),
     new Dti\Repository\RelatedRepository($pdo),

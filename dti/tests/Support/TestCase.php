@@ -86,7 +86,6 @@ abstract class TestCase extends BaseTestCase
             maxUploadMb: $over['maxUploadMb'] ?? 50,
             adminEmails: $over['adminEmails'] ?? ['jian@bluesoft.co.kr'],
             slackWebhook: $over['slackWebhook'] ?? null,
-            seedPath: $over['seedPath'] ?? '',
         );
     }
 

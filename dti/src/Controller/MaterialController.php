@@ -53,7 +53,10 @@ final class MaterialController
         [$topic, $pres] = $this->guard($tid);
 
         $file = $files['file'] ?? null;
-        if (!is_array($file)) throw new ApiException('파일을 올려 주세요', 422);
+        if (!is_array($file)) {
+            // post_max_size 를 넘기면 PHP 가 $_FILES 를 통째로 비워 보낸다. 그것도 용량 초과다
+            throw new ApiException($this->config->maxUploadMb . 'MB 까지 올릴 수 있습니다', 413);
+        }
 
         $stored = $this->storage->save($tid, $file);
 

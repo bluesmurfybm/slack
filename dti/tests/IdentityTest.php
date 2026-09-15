@@ -57,10 +57,17 @@ final class IdentityTest extends TestCase
         $body = $this->whoami(new Identity('siyu@bluesoft.co.kr'));
         $this->assertSame(['APP', 'SQUARE', 'LAB'], $body['all_teams']);
         $this->assertSame(['DI', 'MIT TR', 'Etc'], $body['all_magazines']);
-        $this->assertFalse($body['dev_login']);
-        $this->assertSame([], $body['dev_accounts']);
-        $this->assertNotEmpty($body['portal_url']);
-        $this->assertNotEmpty($body['slack_url']);
+        // 화면은 여기에 /?view=profile, /logout.php 를 이어붙인다. 페이지가 아니라 기준 경로다
+        $this->assertSame('..', $body['portal_url']);
+        $this->assertSame('../slack/lists.php', $body['slack_url']);
+    }
+
+    public function test_개발_로그인_키는_없다(): void
+    {
+        // 포털 세션을 쓰면서 개발 로그인 자체가 없어졌다. 화면도 더 읽지 않는다
+        $body = $this->whoami(new Identity('siyu@bluesoft.co.kr'));
+        $this->assertArrayNotHasKey('dev_login', $body);
+        $this->assertArrayNotHasKey('dev_accounts', $body);
     }
 
     public function test_미로그인_whoami_는_빈_신원(): void
