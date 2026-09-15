@@ -1,0 +1,88 @@
+<?php
+
+namespace Dti\Tests;
+
+use Dti\Http\Request;
+use Dti\Identity\Identity;
+use Dti\Kernel;
+use Dti\Tests\Support\TestCase;
+
+final class IdentityTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seedPortalUsers([
+            ['김지안', 'jian@bluesoft.co.kr'],
+            ['유승인', 'siyu@bluesoft.co.kr'],
+            ['진소현', 'lenda83@bluesoft.co.kr'],
+        ]);
+    }
+
+    private function whoami(?Identity $identity): array
+    {
+        return (new Kernel($this->config, $this->db, $identity))
+            ->handle(new Request('GET', ['whoami']))->data;
+    }
+
+    public function test_관리자로_표시된다(): void
+    {
+        $body = $this->whoami(new Identity('jian@bluesoft.co.kr', '김지안'));
+        $this->assertSame('jian@bluesoft.co.kr', $body['email']);
+        $this->assertTrue($body['is_admin']);
+    }
+
+    public function test_일반_사용자는_관리자가_아니다(): void
+    {
+        $this->assertFalse($this->whoami(new Identity('siyu@bluesoft.co.kr'))['is_admin']);
+    }
+
+    public function test_내_팀이_실린다(): void
+    {
+        $this->assertSame(['APP'], $this->whoami(new Identity('siyu@bluesoft.co.kr'))['teams']);
+    }
+
+    public function test_두_팀에_걸치면_둘_다_실린다(): void
+    {
+        $this->assertSame(['APP', 'LAB'], $this->whoami(new Identity('lenda83@bluesoft.co.kr'))['teams']);
+    }
+
+    public function test_명단에_없으면_팀이_없다(): void
+    {
+        $this->assertSame([], $this->whoami(new Identity('nobody@bluesoft.co.kr'))['teams']);
+    }
+
+    public function test_화면이_읽는_상수가_전부_실린다(): void
+    {
+        $body = $this->whoami(new Identity('siyu@bluesoft.co.kr'));
+        $this->assertSame(['APP', 'SQUARE', 'LAB'], $body['all_teams']);
+        $this->assertSame(['DI', 'MIT TR', 'Etc'], $body['all_magazines']);
+        $this->assertFalse($body['dev_login']);
+        $this->assertSame([], $body['dev_accounts']);
+        $this->assertNotEmpty($body['portal_url']);
+        $this->assertNotEmpty($body['slack_url']);
+    }
+
+    public function test_미로그인_whoami_는_빈_신원(): void
+    {
+        $body = $this->whoami(null);
+        $this->assertNull($body['email']);
+        $this->assertNull($body['name']);
+        $this->assertFalse($body['is_admin']);
+    }
+
+    public function test_구성원_명단은_포털_계정에서_온다(): void
+    {
+        $res = (new Kernel($this->config, $this->db, new Identity('siyu@bluesoft.co.kr')))
+            ->handle(new Request('GET', ['members']));
+        $this->assertSame(200, $res->status);
+        $this->assertSame(['김지안', '유승인', '진소현'], array_column($res->data, 'name'));
+        $this->assertSame(['SQUARE'], $res->data[0]['teams']);
+    }
+
+    public function test_구성원_명단은_로그인이_필요하다(): void
+    {
+        $res = (new Kernel($this->config, $this->db, null))->handle(new Request('GET', ['members']));
+        $this->assertSame(401, $res->status);
+    }
+}

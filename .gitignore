@@ -42,6 +42,13 @@ learning/*.db
 # 폴더는 learn/var/.htaccess(직접 접근 차단)와 함께 앱이 만든다.
 learn/var/uploads/
 
+# composer (dti 모듈 오토로드·테스트)
+/vendor/
+/.phpunit.cache/
+
+# dti(DTI 발표) 업로드 원본·런타임 데이터
+dti/var/
+
 # 파이썬 캐시/가상환경 (저장소 전체)
 __pycache__/
 *.pyc
