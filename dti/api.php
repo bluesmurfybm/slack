@@ -9,7 +9,7 @@
 
 require_once __DIR__ . '/bootstrap.php';
 
-$identity = Dti\Identity\SessionIdentity::current();
+$identity = dti_identity();
 // 화면이 API 를 동시에 여러 개 부른다 — 세션 잠금을 쥐고 있으면 그게 직렬화된다
 if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
 

@@ -14,7 +14,7 @@ final class EmotionTest extends TestCase
         return $tid;
     }
 
-    private function react(int $tid, string $kind = 'like', ?object $who = null): Response
+    private function react(int $tid, string $kind = 'like', ?array $who = null): Response
     {
         return $this->post(['topics', (string)$tid, 'emotions', $kind], $who ?? $this->user());
     }

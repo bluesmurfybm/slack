@@ -5,7 +5,7 @@
  */
 require_once __DIR__ . '/bootstrap.php';
 
-if (!Dti\Identity\SessionIdentity::current()) {
+if (!dti_identity()) {
     header('Location: ../index.php');
     exit;
 }

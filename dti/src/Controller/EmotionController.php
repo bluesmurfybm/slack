@@ -6,13 +6,12 @@ use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
-use Dti\Identity\Identity;
 
 final class EmotionController
 {
     public function __construct(
         private readonly \PDO $pdo,
-        private readonly Identity $identity,
+        private readonly array $identity,
     ) {}
 
     public function toggle(int $tid, string $kind): Response
@@ -27,7 +26,7 @@ final class EmotionController
 
         $left = dti_emotion_toggle(
             $this->pdo,
-            (int)$pres['id'], $this->identity->email, $kind, date('Y-m-d H:i:s'));
+            (int)$pres['id'], $this->identity['email'], $kind, date('Y-m-d H:i:s'));
 
         return Response::json([
             'kind' => $kind,

@@ -79,10 +79,3 @@ function dti_score_empty_row($email, $name) {
         'breakdown' => array_fill_keys(DTI_SCORE_KINDS, 0),
     ];
 }
-
-function dti_members_name_of(array $members, $email) {
-    foreach ($members as $member) {
-        if (strcasecmp($member['email'], $email) === 0) return $member['name'];
-    }
-    return '';
-}

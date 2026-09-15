@@ -6,14 +6,13 @@ use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
-use Dti\Identity\Identity;
 
 final class FieldController
 {
     public function __construct(
         private readonly Config $config,
         private readonly \PDO $pdo,
-        private readonly Identity $identity,
+        private readonly array $identity,
     ) {}
 
     public function index(): Response
@@ -45,7 +44,7 @@ final class FieldController
 
     private function requireAdmin(): void
     {
-        if (!$this->config->isAdmin($this->identity->email)) {
+        if (!$this->config->isAdmin($this->identity['email'])) {
             throw new ApiException('관리자만 할 수 있습니다', 403);
         }
     }

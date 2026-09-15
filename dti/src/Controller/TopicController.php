@@ -6,24 +6,21 @@ use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
-use Dti\Identity\Identity;
-use Dti\Identity\Members;
 
 final class TopicController
 {
     public function __construct(
         private readonly Config $config,
         private readonly \PDO $pdo,
-        private readonly Members $members,
         private readonly ?\Closure $webhook,
-        private readonly Identity $identity,
+        private readonly array $identity,
     ) {}
 
     public function index(): Response
     {
         // 숨김·보관은 관리자 화면에만 있어야 한다. 목록에서 빼는 판정은 서버가 한다
-        $rows = dti_topic_list_with_presentations($this->pdo, $this->config->isAdmin($this->identity->email));
-        [$counts, $mine] = dti_emotion_summary($this->pdo, $this->identity->email);
+        $rows = dti_topic_list_with_presentations($this->pdo, $this->config->isAdmin($this->identity['email']));
+        [$counts, $mine] = dti_emotion_summary($this->pdo, $this->identity['email']);
 
         $out = [];
         foreach ($rows as [$topic, $pres]) {
@@ -44,7 +41,7 @@ final class TopicController
 
         $topic = dti_topic_new();
         $this->fill($topic, $body, defaults: true);
-        $topic['created_by'] = $this->identity->email;
+        $topic['created_by'] = $this->identity['email'];
         $topic['created_at'] = date('Y-m-d H:i:s');
         $tid = dti_topic_insert($this->pdo, $topic);
 
@@ -109,11 +106,11 @@ final class TopicController
 
         // 동시 예약 방지 — 조건부 UPDATE 한 방. 발표자 없는 행(자료만 등)이 있으면 그 행을 차지한다
         $taken = dti_presentation_claim(
-            $this->pdo, $tid, $this->identity->email, $this->identity->name, $plannedDate);
+            $this->pdo, $tid, $this->identity['email'], $this->identity['name'], $plannedDate);
 
         if (!$taken) {
             try {
-                $values = ['presenter_email' => $this->identity->email, 'presenter' => $this->identity->name];
+                $values = ['presenter_email' => $this->identity['email'], 'presenter' => $this->identity['name']];
                 if ($plannedDate !== null) $values['planned_date'] = $plannedDate;
                 dti_presentation_create($this->pdo, $tid, $values);
             } catch (\PDOException $e) {
@@ -133,7 +130,7 @@ final class TopicController
     {
         $topic = dti_topic_find_or_fail($this->pdo, $tid);
         $pres = dti_presentation_of_topic($this->pdo, $tid);
-        if (!dti_may_manage($pres, $this->identity->email, $this->config->isAdmin($this->identity->email))) {
+        if (!dti_may_manage($pres, $this->identity['email'], $this->config->isAdmin($this->identity['email']))) {
             throw new ApiException('본인이 예약한 아티클만 취소할 수 있습니다', 403);
         }
         if ($pres) dti_presentation_unassign($this->pdo, $this->config->uploadDir, $pres);
@@ -146,7 +143,7 @@ final class TopicController
         // claim 은 아무도 안 잡은 주제에만 걸려서, 예약 후 날짜를 넣을 경로가 따로 필요하다
         $topic = dti_topic_find_or_fail($this->pdo, $tid);
         $pres = dti_presentation_of_topic($this->pdo, $tid);
-        if (!dti_may_manage($pres, $this->identity->email, $this->config->isAdmin($this->identity->email))) {
+        if (!dti_may_manage($pres, $this->identity['email'], $this->config->isAdmin($this->identity['email']))) {
             throw new ApiException('본인이 예약한 아티클만 예정일을 정할 수 있습니다', 403);
         }
         if ($pres === null) throw new ApiException('예약이 없는 아티클입니다', 409);
@@ -177,7 +174,8 @@ final class TopicController
 
         $topic = dti_topic_find_or_fail($this->pdo, $tid);
         $email = Input::str($body, 'email', '발표자');
-        if ($email !== '' && !$this->members->has($email)) {
+        $members = dti_members_all($this->pdo, $this->config);
+        if ($email !== '' && !dti_members_has($members, $email)) {
             throw new ApiException('명단에 없는 사람입니다', 422);
         }
 
@@ -188,7 +186,7 @@ final class TopicController
             return Response::json(dti_topic_present($topic, dti_presentation_of_topic($this->pdo, $tid)));
         }
 
-        $values = ['presenter_email' => $email, 'presenter' => $this->members->nameOf($email)];
+        $values = ['presenter_email' => $email, 'presenter' => dti_members_name_of($members, $email)];
         if (array_key_exists('planned_date', $body)) {
             $values['planned_date'] = Input::date($body['planned_date'], '예정일');
         }
@@ -237,7 +235,7 @@ final class TopicController
 
     private function requireAdmin(): void
     {
-        if (!$this->config->isAdmin($this->identity->email)) {
+        if (!$this->config->isAdmin($this->identity['email'])) {
             throw new ApiException('관리자만 할 수 있습니다', 403);
         }
     }

@@ -4,25 +4,23 @@ namespace Dti\Controller;
 
 use Dti\Config;
 use Dti\Http\Response;
-use Dti\Identity\Identity;
-use Dti\Identity\Members;
 
 final class IdentityController
 {
     public function __construct(
         private readonly Config $config,
-        private readonly Members $members,
-        private readonly ?Identity $identity,
+        private readonly \PDO $pdo,
+        private readonly ?array $identity,
     ) {}
 
     public function whoami(): Response
     {
-        $email = $this->identity?->email;
+        $email = $this->identity['email'] ?? null;
 
         return Response::json([
             'email' => $email,
-            'name' => $this->identity?->name,
-            'color' => $this->identity?->color,
+            'name' => $this->identity['name'] ?? null,
+            'color' => $this->identity['color'] ?? null,
             'is_admin' => $this->config->isAdmin($email),
             'teams' => $this->config->teamsOf($email),
             'all_teams' => Config::TEAMS,
@@ -34,6 +32,6 @@ final class IdentityController
 
     public function members(): Response
     {
-        return Response::json($this->members->all());
+        return Response::json(dti_members_all($this->pdo, $this->config));
     }
 }

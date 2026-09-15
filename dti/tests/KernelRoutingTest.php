@@ -3,20 +3,19 @@
 namespace Dti\Tests;
 
 use Dti\Http\Request;
-use Dti\Identity\Identity;
 use Dti\Kernel;
 use Dti\Tests\Support\TestCase;
 
 final class KernelRoutingTest extends TestCase
 {
-    private function kernel(?Identity $identity): Kernel
+    private function kernel(?array $identity): Kernel
     {
         return new Kernel($this->config, $this->db, $identity);
     }
 
     public function test_없는_경로는_404(): void
     {
-        $res = $this->kernel(new Identity('siyu@bluesoft.co.kr'))->handle(new Request('GET', ['nope']));
+        $res = $this->kernel(['email' => 'siyu@bluesoft.co.kr', 'name' => ''])->handle(new Request('GET', ['nope']));
         $this->assertSame(404, $res->status);
         $this->assertSame('없는 API 입니다', $res->data['detail']);
     }

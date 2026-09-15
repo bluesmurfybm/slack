@@ -5,27 +5,25 @@ namespace Dti\Controller;
 use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Response;
-use Dti\Identity\Identity;
 
 final class ScoreController
 {
     public function __construct(
         private readonly Config $config,
         private readonly \PDO $pdo,
-        private readonly array $members,
-        private readonly Identity $identity,
+        private readonly array $identity,
     ) {}
 
     public function index(array $query): Response
     {
-        if (!$this->config->isAdmin($this->identity->email)) {
+        if (!$this->config->isAdmin($this->identity['email'])) {
             throw new ApiException('관리자만 할 수 있습니다', 403);
         }
 
         $start = $this->dateParam($query['start'] ?? '');
         $end = $this->dateParam($query['end'] ?? '');
 
-        return Response::json(dti_score_summary($this->pdo, $this->members, $start, $end));
+        return Response::json(dti_score_summary($this->pdo, dti_members_all($this->pdo, $this->config), $start, $end));
     }
 
     private function dateParam(mixed $value): string

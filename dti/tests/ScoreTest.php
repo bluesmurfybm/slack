@@ -2,7 +2,6 @@
 
 namespace Dti\Tests;
 
-use Dti\Identity\Identity;
 use Dti\Tests\Support\TestCase;
 
 final class ScoreTest extends TestCase
@@ -12,7 +11,7 @@ final class ScoreTest extends TestCase
         return $this->post(['topics'], $this->admin(), ['title' => '점수 검증', 'field' => 'AX', ...$over])->data['id'];
     }
 
-    private function done(?Identity $who = null, string $doneDate = '2026-09-01', array $over = []): int
+    private function done(?array $who = null, string $doneDate = '2026-09-01', array $over = []): int
     {
         $who ??= $this->user();
         $tid = $this->topic($over);
@@ -109,7 +108,7 @@ final class ScoreTest extends TestCase
 
     public function test_명단에_없는_발표자도_점수표에_나온다(): void
     {
-        $ghost = new Identity('ghost@bluesoft.co.kr', '유령');
+        $ghost = ['email' => 'ghost@bluesoft.co.kr', 'name' => '유령'];
         $this->done($ghost);
 
         $rows = $this->scores();

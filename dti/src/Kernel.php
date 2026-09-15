@@ -12,8 +12,6 @@ use Dti\Controller\TopicController;
 use Dti\Http\ApiException;
 use Dti\Http\Request;
 use Dti\Http\Response;
-use Dti\Identity\Identity;
-use Dti\Identity\Members;
 
 /**
  * 요청 하나를 처리하는 조립 지점. 컨트롤러·리포지터리·서비스를 여기서 만든다.
@@ -24,7 +22,7 @@ final class Kernel
     public function __construct(
         private readonly Config $config,
         private readonly Database $db,
-        private readonly ?Identity $identity,
+        private readonly ?array $identity,
         private readonly ?\Closure $mover = null,
         private readonly ?\Closure $webhook = null,
     ) {}
@@ -102,7 +100,7 @@ final class Kernel
 
     private function identityController(): IdentityController
     {
-        return new IdentityController($this->config, $this->members(), $this->identity);
+        return new IdentityController($this->config, $this->db->pdo(), $this->identity);
     }
 
     private function routeScore(Request $request): Response
@@ -111,8 +109,7 @@ final class Kernel
             throw new ApiException('없는 API 입니다', 404);
         }
 
-        return (new ScoreController($this->config, $this->db->pdo(), $this->members()->all(),
-                                   $this->identity))->index($request->query);
+        return (new ScoreController($this->config, $this->db->pdo(), $this->identity))->index($request->query);
     }
 
     private function routeFields(Request $request): Response
@@ -134,7 +131,6 @@ final class Kernel
         return new TopicController(
             $this->config,
             $pdo,
-            $this->members(),
             $this->webhook,
             $this->identity,
         );
@@ -148,10 +144,5 @@ final class Kernel
     private function materialController(): MaterialController
     {
         return new MaterialController($this->config, $this->db->pdo(), $this->mover, $this->identity);
-    }
-
-    private function members(): Members
-    {
-        return new Members($this->db->pdo(), $this->config);
     }
 }
