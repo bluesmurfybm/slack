@@ -60,7 +60,7 @@ function clearMatForm() {
   document.getElementById("mat-fileinput").value = "";
   document.getElementById("mat-url").value = "";
   document.getElementById("mat-name").value = "";
-  setPickedFile(null);
+  setPickedFiles(null);
 }
 
 function closeMaterial() {
@@ -76,24 +76,44 @@ function setMatMode(m) {
 }
 
 async function submitMaterial() {
+  const added = MAT_MODE === "link" ? await submitLink() : await submitFiles();
+  if (!added) return;
+
+  // 모달은 닫지 않는다 — 여러 건을 잇따라 올리는 게 흔하다
+  await reload();
+  renderMatList();
+  clearMatForm();
+}
+
+async function submitLink() {
+  const url = document.getElementById("mat-url").value.trim();
+  if (!url) { showToast("주소를 넣어 주세요"); return 0; }
   try {
-    if (MAT_MODE === "link") {
-      const url = document.getElementById("mat-url").value.trim();
-      if (!url) { showToast("주소를 넣어 주세요"); return; }
-      await postJSON(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}/link`,
-        { url, name: document.getElementById("mat-name").value.trim() });
-    } else {
-      if (!PICKED_FILE) { showToast("파일을 골라 주세요"); return; }
-      const fd = new FormData();
-      fd.append("file", PICKED_FILE);
-      await api(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}/file`, { method: "POST", body: fd });
-    }
+    await postJSON(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}/link`,
+      { url, name: document.getElementById("mat-name").value.trim() });
     showToast("자료를 올렸습니다");
-    // 모달은 닫지 않는다 — 여러 건을 잇따라 올리는 게 흔하다
-    await reload();
-    renderMatList();
-    clearMatForm();
-  } catch (e) { showToast(e.message); }
+    return 1;
+  } catch (e) { showToast(e.message); return 0; }
+}
+
+/** 하나씩 차례로 보낸다 — 한 건이 실패해도 나머지는 올라간다 */
+async function submitFiles() {
+  if (!PICKED_FILES.length) { showToast("파일을 골라 주세요"); return 0; }
+
+  const failed = [];
+  let done = 0;
+  for (const file of PICKED_FILES) {
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      await api(`/magazineapi/topics/${MAT_ID}/${MAT_SLOT}/file`, { method: "POST", body: fd });
+      done++;
+    } catch (e) { failed.push(`${file.name}: ${e.message}`); }
+  }
+
+  if (failed.length) showToast(failed.join(" / "));
+  else showToast(done === 1 ? "자료를 올렸습니다" : `${done}개를 올렸습니다`);
+  return done;
 }
 
 async function detachMaterial(mid) {
@@ -159,19 +179,22 @@ function closeViewer() {
 }
 
 
-let PICKED_FILE = null;
+let PICKED_FILES = [];
 
-function setPickedFile(f) {
-  PICKED_FILE = f || null;
+function setPickedFiles(files) {
+  PICKED_FILES = files ? Array.from(files) : [];
+  const names = PICKED_FILES.map(f => f.name);
   document.getElementById("mat-filename").textContent =
-    PICKED_FILE ? PICKED_FILE.name : "형식 제한 없음";
-  document.getElementById("mat-drop").classList.toggle("has", !!PICKED_FILE);
+    names.length === 0 ? "형식 제한 없음"
+      : names.length === 1 ? names[0]
+        : `${names.length}개 — ${names.join(", ")}`;
+  document.getElementById("mat-drop").classList.toggle("has", names.length > 0);
 }
 
 function initDropzone() {
   const dz = document.getElementById("mat-drop");
   const input = document.getElementById("mat-fileinput");
-  input.addEventListener("change", () => setPickedFile(input.files[0]));
+  input.addEventListener("change", () => setPickedFiles(input.files));
 
   ["dragenter", "dragover"].forEach(ev => dz.addEventListener(ev, e => {
     e.preventDefault();
@@ -183,8 +206,8 @@ function initDropzone() {
   dz.addEventListener("drop", e => {
     e.preventDefault();
     dz.classList.remove("over");
-    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (f) { setMatMode("file"); setPickedFile(f); }
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files.length) { setMatMode("file"); setPickedFiles(files); }
   });
 
   ["dragover", "drop"].forEach(ev => window.addEventListener(ev, e => {

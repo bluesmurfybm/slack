@@ -242,9 +242,9 @@ if (!dti_identity()) {
       </div>
       <div id="mat-file-box" class="mat-box">
         <label class="dropzone" id="mat-drop">
-          <input id="mat-fileinput" type="file" hidden>
+          <input id="mat-fileinput" type="file" hidden multiple>
           <span class="dz-icon">📎</span>
-          <span class="dz-main">파일을 끌어다 놓거나 <b>클릭해서 선택</b></span>
+          <span class="dz-main">파일을 끌어다 놓거나 <b>클릭해서 선택</b> (여러 개 가능)</span>
           <span class="dz-sub" id="mat-filename">형식 제한 없음</span>
         </label>
       </div>
