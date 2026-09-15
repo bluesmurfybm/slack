@@ -109,6 +109,7 @@ function dti_migrate_copy_rows(PDO $source, PDO $target, string $from, string $t
                                array $columns): int {
     $available = array_column($source->query("PRAGMA table_info(`{$from}`)")->fetchAll(), 'name');
     $columns = array_values(array_intersect($columns, $available));
+    $fallback = dti_migrate_not_null_defaults($target, $to);
 
     $sql = "INSERT INTO `{$to}` (`" . implode('`, `', $columns) . '`) VALUES ('
          . implode(', ', array_fill(0, count($columns), '?')) . ')';
@@ -116,8 +117,25 @@ function dti_migrate_copy_rows(PDO $source, PDO $target, string $from, string $t
 
     $count = 0;
     foreach ($source->query("SELECT * FROM `{$from}`") as $row) {
-        $insert->execute(array_map(static fn (string $column) => $row[$column], $columns));
+        $insert->execute(array_map(static function (string $column) use ($row, $fallback) {
+            $value = $row[$column];
+            return $value === null && array_key_exists($column, $fallback)
+                ? $fallback[$column] : $value;
+        }, $columns));
         $count++;
     }
     return $count;
+}
+
+/**
+ * NOT NULL 컬럼의 기본값. 파이썬 스키마는 NOT NULL 이 아니라 실데이터에 NULL 이 섞여 있고,
+ * 그대로 넣으면 MySQL 이 거부한다. 널 허용 컬럼(material_*·scan_*·year)은 빠지므로
+ * "값 없음(NULL)"과 "빈 값('')"의 구분은 그대로 유지된다.
+ */
+function dti_migrate_not_null_defaults(PDO $target, string $table): array {
+    $out = [];
+    foreach ($target->query("SHOW COLUMNS FROM `{$table}`") as $column) {
+        if ($column['Null'] === 'NO') $out[$column['Field']] = $column['Default'] ?? '';
+    }
+    return $out;
 }

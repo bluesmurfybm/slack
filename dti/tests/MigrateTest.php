@@ -95,6 +95,26 @@ final class MigrateTest extends TestCase
             dti_migrate_source_counts($this->source));
     }
 
+    public function test_원본의_NULL_을_컬럼_기본값으로_바꾼다(): void
+    {
+        // 파이썬 스키마는 NOT NULL 이 아니라 실데이터에 NULL 이 섞여 있다
+        $this->source->exec("INSERT INTO topics (id, title, created_by, note, team, active)
+            VALUES (30, '널', NULL, NULL, NULL, NULL)");
+
+        $this->migrate();
+
+        $row = $this->pdo->query("SELECT created_by, note, team, active, year, material_kind
+                                  FROM dti_topics WHERE id = 30")->fetch();
+
+        $this->assertSame('', $row['created_by']);
+        $this->assertSame('', $row['note']);
+        $this->assertSame('', $row['team']);
+        $this->assertSame(1, (int)$row['active']);
+        // 널 허용 컬럼은 그대로 NULL 이어야 한다
+        $this->assertNull($row['year']);
+        $this->assertNull($row['material_kind']);
+    }
+
     public function test_아티클_id_를_그대로_옮긴다(): void
     {
         $this->migrate();
