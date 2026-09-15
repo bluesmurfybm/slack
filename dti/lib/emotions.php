@@ -2,7 +2,7 @@
 /** 발표 반응(좋아요·적용해보고싶다·쉽다·새롭다). */
 
 function dti_emotion_empty_counts() {
-    return array_fill_keys(Dti\Config::EMOTIONS, 0);
+    return array_fill_keys(DTI_EMOTIONS, 0);
 }
 
 /**

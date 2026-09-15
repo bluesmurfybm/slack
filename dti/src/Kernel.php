@@ -20,8 +20,8 @@ use Dti\Http\Response;
 final class Kernel
 {
     public function __construct(
-        private readonly Config $config,
-        private readonly Database $db,
+        private readonly array $config,
+        private readonly \PDO $pdo,
         private readonly ?array $identity,
         private readonly ?\Closure $mover = null,
         private readonly ?\Closure $webhook = null,
@@ -78,7 +78,7 @@ final class Kernel
             ['POST', 'schedule'] => $topics->schedule((int)$tid, $request->body),
             ['POST', 'complete'] => $topics->complete((int)$tid, $request->body),
             ['POST', 'assign'] => $topics->assign((int)$tid, $request->body),
-            ['GET', 'related'] => (new RelatedController($this->db->pdo()))->index((int)$tid),
+            ['GET', 'related'] => (new RelatedController($this->pdo))->index((int)$tid),
             ['POST', 'emotions'] => $this->emotionController()->toggle((int)$tid, (string)$request->segment(3)),
             default => $this->routeMaterial($request, (int)$tid),
         };
@@ -100,7 +100,7 @@ final class Kernel
 
     private function identityController(): IdentityController
     {
-        return new IdentityController($this->config, $this->db->pdo(), $this->identity);
+        return new IdentityController($this->config, $this->pdo, $this->identity);
     }
 
     private function routeScore(Request $request): Response
@@ -109,12 +109,12 @@ final class Kernel
             throw new ApiException('없는 API 입니다', 404);
         }
 
-        return (new ScoreController($this->config, $this->db->pdo(), $this->identity))->index($request->query);
+        return (new ScoreController($this->config, $this->pdo, $this->identity))->index($request->query);
     }
 
     private function routeFields(Request $request): Response
     {
-        $fields = new FieldController($this->config, $this->db->pdo(), $this->identity);
+        $fields = new FieldController($this->config, $this->pdo, $this->identity);
         $fid = $request->segment(1);
 
         return match ([$request->method, $fid === null]) {
@@ -127,7 +127,7 @@ final class Kernel
 
     private function topicController(): TopicController
     {
-        $pdo = $this->db->pdo();
+        $pdo = $this->pdo;
         return new TopicController(
             $this->config,
             $pdo,
@@ -138,11 +138,11 @@ final class Kernel
 
     private function emotionController(): EmotionController
     {
-        return new EmotionController($this->db->pdo(), $this->identity);
+        return new EmotionController($this->pdo, $this->identity);
     }
 
     private function materialController(): MaterialController
     {
-        return new MaterialController($this->config, $this->db->pdo(), $this->mover, $this->identity);
+        return new MaterialController($this->config, $this->pdo, $this->mover, $this->identity);
     }
 }

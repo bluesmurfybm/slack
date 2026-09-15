@@ -2,7 +2,6 @@
 
 namespace Dti\Controller;
 
-use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
@@ -10,7 +9,7 @@ use Dti\Http\Response;
 final class FieldController
 {
     public function __construct(
-        private readonly Config $config,
+        private readonly array $config,
         private readonly \PDO $pdo,
         private readonly array $identity,
     ) {}
@@ -44,7 +43,7 @@ final class FieldController
 
     private function requireAdmin(): void
     {
-        if (!$this->config->isAdmin($this->identity['email'])) {
+        if (!dti_is_admin($this->config, $this->identity['email'])) {
             throw new ApiException('관리자만 할 수 있습니다', 403);
         }
     }

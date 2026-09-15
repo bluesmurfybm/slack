@@ -10,7 +10,7 @@ final class KernelRoutingTest extends TestCase
 {
     private function kernel(?array $identity): Kernel
     {
-        return new Kernel($this->config, $this->db, $identity);
+        return new Kernel($this->config, $this->pdo, $identity);
     }
 
     public function test_없는_경로는_404(): void

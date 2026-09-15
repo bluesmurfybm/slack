@@ -20,7 +20,7 @@ final class IdentityTest extends TestCase
 
     private function whoami(?array $identity): array
     {
-        return (new Kernel($this->config, $this->db, $identity))
+        return (new Kernel($this->config, $this->pdo, $identity))
             ->handle(new Request('GET', ['whoami']))->data;
     }
 
@@ -79,7 +79,7 @@ final class IdentityTest extends TestCase
 
     public function test_구성원_명단은_포털_계정에서_온다(): void
     {
-        $res = (new Kernel($this->config, $this->db, ['email' => 'siyu@bluesoft.co.kr', 'name' => '']))
+        $res = (new Kernel($this->config, $this->pdo, ['email' => 'siyu@bluesoft.co.kr', 'name' => '']))
             ->handle(new Request('GET', ['members']));
         $this->assertSame(200, $res->status);
         $this->assertSame(['김지안', '유승인', '진소현'], array_column($res->data, 'name'));
@@ -88,7 +88,7 @@ final class IdentityTest extends TestCase
 
     public function test_구성원_명단은_로그인이_필요하다(): void
     {
-        $res = (new Kernel($this->config, $this->db, null))->handle(new Request('GET', ['members']));
+        $res = (new Kernel($this->config, $this->pdo, null))->handle(new Request('GET', ['members']));
         $this->assertSame(401, $res->status);
     }
 }

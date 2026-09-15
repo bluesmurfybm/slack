@@ -138,12 +138,12 @@ final class TopicWriteTest extends TestCase
     {
         $tid = $this->makeTopic(['title' => '주제']);
         $pid = $this->makePresentation($tid, ['presenter_email' => 'siyu@bluesoft.co.kr', 'done_date' => '2026-03-01']);
-        $this->db->pdo()->exec("INSERT INTO dti_emotions (presentation_id, email, kind, created_at)
+        $this->pdo->exec("INSERT INTO dti_emotions (presentation_id, email, kind, created_at)
                                 VALUES ({$pid}, 'siyu@bluesoft.co.kr', 'like', '2026-03-02 10:00:00')");
 
         $this->delete(['topics', (string)$tid], $this->admin());
 
-        $this->assertSame(0, (int)$this->db->pdo()->query("SELECT COUNT(*) FROM dti_presentations")->fetchColumn());
-        $this->assertSame(0, (int)$this->db->pdo()->query("SELECT COUNT(*) FROM dti_emotions")->fetchColumn());
+        $this->assertSame(0, (int)$this->pdo->query("SELECT COUNT(*) FROM dti_presentations")->fetchColumn());
+        $this->assertSame(0, (int)$this->pdo->query("SELECT COUNT(*) FROM dti_emotions")->fetchColumn());
     }
 }

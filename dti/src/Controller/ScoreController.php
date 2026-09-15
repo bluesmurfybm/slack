@@ -2,21 +2,20 @@
 
 namespace Dti\Controller;
 
-use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Response;
 
 final class ScoreController
 {
     public function __construct(
-        private readonly Config $config,
+        private readonly array $config,
         private readonly \PDO $pdo,
         private readonly array $identity,
     ) {}
 
     public function index(array $query): Response
     {
-        if (!$this->config->isAdmin($this->identity['email'])) {
+        if (!dti_is_admin($this->config, $this->identity['email'])) {
             throw new ApiException('관리자만 할 수 있습니다', 403);
         }
 

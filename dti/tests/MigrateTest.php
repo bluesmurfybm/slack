@@ -85,7 +85,7 @@ final class MigrateTest extends TestCase
 
     private function importer(): MagazineImporter
     {
-        return new MagazineImporter($this->source, $this->db, $this->config, $this->sourceUploads);
+        return new MagazineImporter($this->source, $this->pdo, $this->config, $this->sourceUploads);
     }
 
     public function test_원본_건수를_읽는다(): void
@@ -99,14 +99,14 @@ final class MigrateTest extends TestCase
     {
         $this->importer()->run();
 
-        $ids = $this->db->pdo()->query("SELECT id FROM dti_topics ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+        $ids = $this->pdo->query("SELECT id FROM dti_topics ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
         $this->assertSame([7, 12, 20], $ids);
     }
 
     public function test_발표와_반응의_연결이_유지된다(): void
     {
         $this->importer()->run();
-        $pdo = $this->db->pdo();
+        $pdo = $this->pdo;
 
         $row = $pdo->query("SELECT id, topic_id, presenter_email FROM dti_presentations WHERE id = 3")->fetch();
         $this->assertSame(7, $row['topic_id']);
@@ -121,7 +121,7 @@ final class MigrateTest extends TestCase
     {
         $this->importer()->run();
 
-        $row = $this->db->pdo()->query("SELECT material_kind, material_name FROM dti_presentations WHERE id = 9")->fetch();
+        $row = $this->pdo->query("SELECT material_kind, material_name FROM dti_presentations WHERE id = 9")->fetch();
         $this->assertNull($row['material_kind']);
         $this->assertNull($row['material_name']);
     }
@@ -132,7 +132,7 @@ final class MigrateTest extends TestCase
 
         // 원본 3건 중 UI/UX·AX 는 시드에 이미 있다 — 보안만 늘어난다
         $this->assertSame(1, $report['fields']);
-        $names = $this->db->pdo()->query("SELECT name FROM dti_fields ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
+        $names = $this->pdo->query("SELECT name FROM dti_fields ORDER BY id")->fetchAll(PDO::FETCH_COLUMN);
         $this->assertSame(['UI/UX', 'Marketing', 'Trend', 'AX', 'Etc', '보안'], $names);
     }
 
@@ -141,7 +141,7 @@ final class MigrateTest extends TestCase
         $report = $this->importer()->run();
 
         $this->assertSame(1, $report['files']);
-        $this->assertFileExists($this->config->uploadDir . '/7_deck.pdf');
+        $this->assertFileExists($this->config['upload_dir'] . '/7_deck.pdf');
         $this->assertCount(1, $report['missing']);
         $this->assertStringContainsString('7_scan.pdf', $report['missing'][0]);
     }
@@ -152,7 +152,7 @@ final class MigrateTest extends TestCase
 
         // 원본에는 7→12 한 쌍뿐이지만, 다시 계산하면 양쪽 방향이 나온다
         $this->assertSame(2, $report['related']);
-        $pairs = $this->db->pdo()->query("SELECT topic_id, related_id FROM dti_related ORDER BY topic_id")
+        $pairs = $this->pdo->query("SELECT topic_id, related_id FROM dti_related ORDER BY topic_id")
             ->fetchAll(PDO::FETCH_NUM);
         $this->assertSame([[7, 12], [12, 7]], $pairs);
     }
@@ -163,7 +163,7 @@ final class MigrateTest extends TestCase
 
         $this->assertSame(3, $report['topics']);
         $this->assertSame(0, $this->importer()->targetTopicCount());
-        $this->assertFileDoesNotExist($this->config->uploadDir . '/7_deck.pdf');
+        $this->assertFileDoesNotExist($this->config['upload_dir'] . '/7_deck.pdf');
     }
 
     public function test_force_는_기존_데이터를_비우고_다시_넣는다(): void

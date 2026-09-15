@@ -72,7 +72,7 @@ final class PresentationTest extends TestCase
         $res = $this->post(['topics', (string)$tid, 'claim'], $this->user());
         $this->assertSame(200, $res->status);
         $this->assertSame('siyu@bluesoft.co.kr', $res->data['presenter_email']);
-        $this->assertSame(1, (int)$this->db->pdo()->query("SELECT COUNT(*) FROM dti_presentations")->fetchColumn());
+        $this->assertSame(1, (int)$this->pdo->query("SELECT COUNT(*) FROM dti_presentations")->fetchColumn());
     }
 
     /* ---------- 취소 ---------- */
@@ -108,7 +108,7 @@ final class PresentationTest extends TestCase
         $row = $this->get(['topics', (string)$tid])->data;
         $this->assertSame('발표완료', $row['status']);
         $this->assertSame('', $row['presenter_email']);
-        $this->assertSame(1, (int)$this->db->pdo()->query("SELECT COUNT(*) FROM dti_presentations")->fetchColumn());
+        $this->assertSame(1, (int)$this->pdo->query("SELECT COUNT(*) FROM dti_presentations")->fetchColumn());
     }
 
     /* ---------- 예정일 ---------- */

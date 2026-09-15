@@ -20,4 +20,8 @@ try {
     exit;
 }
 
-(new Dti\Kernel(dti_config(), dti_database(), $identity))->handle($request)->send();
+$config = dti_config_from_portal();
+$pdo = dti_connect($config);
+dti_migrate($pdo);
+
+(new Dti\Kernel($config, $pdo, $identity))->handle($request)->send();

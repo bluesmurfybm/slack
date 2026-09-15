@@ -2,7 +2,6 @@
 
 namespace Dti\Controller;
 
-use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
@@ -10,7 +9,7 @@ use Dti\Http\Response;
 final class TopicController
 {
     public function __construct(
-        private readonly Config $config,
+        private readonly array $config,
         private readonly \PDO $pdo,
         private readonly ?\Closure $webhook,
         private readonly array $identity,
@@ -19,7 +18,7 @@ final class TopicController
     public function index(): Response
     {
         // 숨김·보관은 관리자 화면에만 있어야 한다. 목록에서 빼는 판정은 서버가 한다
-        $rows = dti_topic_list_with_presentations($this->pdo, $this->config->isAdmin($this->identity['email']));
+        $rows = dti_topic_list_with_presentations($this->pdo, dti_is_admin($this->config, $this->identity['email']));
         [$counts, $mine] = dti_emotion_summary($this->pdo, $this->identity['email']);
 
         $out = [];
@@ -86,7 +85,7 @@ final class TopicController
 
         $topic = dti_topic_find_or_fail($this->pdo, $tid);
         $pres = dti_presentation_of_topic($this->pdo, $tid);
-        if ($pres) dti_presentation_purge($this->pdo, $this->config->uploadDir, $pres);
+        if ($pres) dti_presentation_purge($this->pdo, $this->config['upload_dir'], $pres);
         dti_topic_delete($this->pdo, (int)$topic['id']);
         dti_related_rebuild($this->pdo);
 
@@ -120,7 +119,7 @@ final class TopicController
         }
 
         $pres = dti_presentation_of_topic($this->pdo, $tid);
-        dti_notify_new_presenter($this->config->slackWebhook, $this->webhook,
+        dti_notify_new_presenter($this->config['slack_webhook'], $this->webhook,
             $topic['title'], $pres['presenter'], $pres['planned_date']);
 
         return Response::json(dti_topic_present($topic, $pres));
@@ -130,10 +129,10 @@ final class TopicController
     {
         $topic = dti_topic_find_or_fail($this->pdo, $tid);
         $pres = dti_presentation_of_topic($this->pdo, $tid);
-        if (!dti_may_manage($pres, $this->identity['email'], $this->config->isAdmin($this->identity['email']))) {
+        if (!dti_may_manage($pres, $this->identity['email'], dti_is_admin($this->config, $this->identity['email']))) {
             throw new ApiException('본인이 예약한 아티클만 취소할 수 있습니다', 403);
         }
-        if ($pres) dti_presentation_unassign($this->pdo, $this->config->uploadDir, $pres);
+        if ($pres) dti_presentation_unassign($this->pdo, $this->config['upload_dir'], $pres);
 
         return Response::json(dti_topic_present($topic, dti_presentation_of_topic($this->pdo, $tid)));
     }
@@ -143,7 +142,7 @@ final class TopicController
         // claim 은 아무도 안 잡은 주제에만 걸려서, 예약 후 날짜를 넣을 경로가 따로 필요하다
         $topic = dti_topic_find_or_fail($this->pdo, $tid);
         $pres = dti_presentation_of_topic($this->pdo, $tid);
-        if (!dti_may_manage($pres, $this->identity['email'], $this->config->isAdmin($this->identity['email']))) {
+        if (!dti_may_manage($pres, $this->identity['email'], dti_is_admin($this->config, $this->identity['email']))) {
             throw new ApiException('본인이 예약한 아티클만 예정일을 정할 수 있습니다', 403);
         }
         if ($pres === null) throw new ApiException('예약이 없는 아티클입니다', 409);
@@ -182,7 +181,7 @@ final class TopicController
         $pres = dti_presentation_of_topic($this->pdo, $tid);
 
         if ($email === '') {
-            if ($pres) dti_presentation_unassign($this->pdo, $this->config->uploadDir, $pres);
+            if ($pres) dti_presentation_unassign($this->pdo, $this->config['upload_dir'], $pres);
             return Response::json(dti_topic_present($topic, dti_presentation_of_topic($this->pdo, $tid)));
         }
 
@@ -199,7 +198,7 @@ final class TopicController
         } else {
             $pres = dti_presentation_create($this->pdo, $tid, $values);
         }
-        dti_notify_new_presenter($this->config->slackWebhook, $this->webhook,
+        dti_notify_new_presenter($this->config['slack_webhook'], $this->webhook,
             $topic['title'], $pres['presenter'], $pres['planned_date']);
 
         return Response::json(dti_topic_present($topic, $pres));
@@ -223,10 +222,10 @@ final class TopicController
             $topic['requirement'] = Input::str($body, 'requirement', '발표구분') ?: 'recommended';
         }
         if ($defaults || $has('magazine')) {
-            $topic['magazine'] = Input::oneOf($body['magazine'] ?? '', Config::MAGAZINES, '매거진');
+            $topic['magazine'] = Input::oneOf($body['magazine'] ?? '', DTI_MAGAZINES, '매거진');
         }
         if ($defaults || $has('team')) {
-            $topic['team'] = Input::oneOf($body['team'] ?? '', Config::TEAMS, '팀');
+            $topic['team'] = Input::oneOf($body['team'] ?? '', DTI_TEAMS, '팀');
         }
         if ($defaults || $has('year')) $topic['year'] = Input::nullableInt($body, 'year', '년도');
         if ($has('active')) $topic['active'] = Input::flag($body['active']);
@@ -235,7 +234,7 @@ final class TopicController
 
     private function requireAdmin(): void
     {
-        if (!$this->config->isAdmin($this->identity['email'])) {
+        if (!dti_is_admin($this->config, $this->identity['email'])) {
             throw new ApiException('관리자만 할 수 있습니다', 403);
         }
     }

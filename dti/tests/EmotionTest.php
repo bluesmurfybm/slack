@@ -118,7 +118,7 @@ final class EmotionTest extends TestCase
         $this->react($tid, 'easy');
         $this->delete(['topics', (string)$tid], $this->admin());
 
-        $left = (int)$this->db->pdo()->query("SELECT COUNT(*) FROM dti_emotions")->fetchColumn();
+        $left = (int)$this->pdo->query("SELECT COUNT(*) FROM dti_emotions")->fetchColumn();
         $this->assertSame(0, $left);
     }
 }

@@ -248,7 +248,7 @@ final class MaterialTest extends TestCase
     public function test_경로를_벗어난_파일명은_404(): void
     {
         $tid = $this->claimed();
-        $this->db->pdo()->exec("UPDATE dti_presentations SET material_kind='file', material_path='../../../etc/passwd'
+        $this->pdo->exec("UPDATE dti_presentations SET material_kind='file', material_path='../../../etc/passwd'
                                 WHERE topic_id = {$tid}");
         $this->assertSame(404, $this->get(['topics', (string)$tid, 'material', 'download'])->status);
     }

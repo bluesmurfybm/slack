@@ -2,7 +2,6 @@
 
 namespace Dti\Controller;
 
-use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
@@ -17,7 +16,7 @@ final class EmotionController
     public function toggle(int $tid, string $kind): Response
     {
         dti_topic_find_or_fail($this->pdo, $tid);
-        $kind = Input::oneOf($kind, Config::EMOTIONS, '반응', blankOk: false);
+        $kind = Input::oneOf($kind, DTI_EMOTIONS, '반응', blankOk: false);
 
         $pres = dti_presentation_of_topic($this->pdo, $tid);
         if ($pres === null || $pres['done_date'] === '') {

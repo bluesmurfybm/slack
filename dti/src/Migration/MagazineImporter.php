@@ -2,8 +2,6 @@
 
 namespace Dti\Migration;
 
-use Dti\Config;
-use Dti\Database;
 use PDO;
 
 /**
@@ -22,8 +20,8 @@ final class MagazineImporter
 
     public function __construct(
         private readonly PDO $source,
-        private readonly Database $target,
-        private readonly Config $config,
+        private readonly PDO $target,
+        private readonly array $config,
         private readonly string $sourceUploadDir,
     ) {}
 
@@ -39,7 +37,7 @@ final class MagazineImporter
 
     public function targetTopicCount(): int
     {
-        return (int)$this->target->pdo()->query("SELECT COUNT(*) FROM dti_topics")->fetchColumn();
+        return (int)$this->target->query("SELECT COUNT(*) FROM dti_topics")->fetchColumn();
     }
 
     /**
@@ -51,7 +49,7 @@ final class MagazineImporter
         $report = ['topics' => 0, 'presentations' => 0, 'emotions' => 0, 'fields' => 0,
                    'files' => 0, 'missing' => [], 'related' => 0];
 
-        $pdo = $this->target->pdo();
+        $pdo = $this->target;
         $pdo->beginTransaction();
 
         if ($force) $this->clear();
@@ -75,7 +73,7 @@ final class MagazineImporter
 
     public function clear(): void
     {
-        $pdo = $this->target->pdo();
+        $pdo = $this->target;
         foreach (self::TABLES as $table) {
             $pdo->exec("DELETE FROM `{$table}`");
         }
@@ -100,7 +98,7 @@ final class MagazineImporter
     /** 분야는 시드와 겹친다. 통째로 넣지 않고 이름으로 맞춰 없는 것만 넣는다. */
     private function copyFields(): int
     {
-        $pdo = $this->target->pdo();
+        $pdo = $this->target;
         $have = $pdo->query("SELECT name FROM dti_fields")->fetchAll(PDO::FETCH_COLUMN);
         $insert = $pdo->prepare("INSERT INTO dti_fields (name) VALUES (?)");
 
@@ -135,8 +133,8 @@ final class MagazineImporter
                 continue;
             }
             if (!$dryRun) {
-                if (!is_dir($this->config->uploadDir)) mkdir($this->config->uploadDir, 0777, true);
-                copy($from, $this->config->uploadDir . '/' . basename((string)$stored));
+                if (!is_dir($this->config['upload_dir'])) mkdir($this->config['upload_dir'], 0777, true);
+                copy($from, $this->config['upload_dir'] . '/' . basename((string)$stored));
             }
             $copied++;
         }
@@ -151,7 +149,7 @@ final class MagazineImporter
 
         $sql = "INSERT INTO `{$to}` (`" . implode('`, `', $columns) . '`) VALUES ('
              . implode(', ', array_fill(0, count($columns), '?')) . ')';
-        $insert = $this->target->pdo()->prepare($sql);
+        $insert = $this->target->prepare($sql);
 
         $count = 0;
         foreach ($this->source->query("SELECT * FROM `{$from}`") as $row) {

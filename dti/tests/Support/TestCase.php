@@ -2,15 +2,13 @@
 
 namespace Dti\Tests\Support;
 
-use Dti\Config;
-use Dti\Database;
 use Dti\Http\Request;
 use Dti\Http\Response;
 use Dti\Kernel;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 /**
- * DB 를 쓰는 테스트의 공통 바탕. 매 테스트마다 새 Config·Database 를 만들고
+ * DB 를 쓰는 테스트의 공통 바탕. 매 테스트마다 새 설정·연결을 만들고
  * dti_* 를 비운다 — 전역 캐시가 없으므로 초기화할 상태는 테이블뿐이다.
  */
 abstract class TestCase extends BaseTestCase
@@ -34,8 +32,8 @@ abstract class TestCase extends BaseTestCase
         ['이준영', 'jun0@bluesoft.co.kr'],
     ];
 
-    protected Config $config;
-    protected Database $db;
+    protected array $config;
+    protected \PDO $pdo;
     protected string $uploadDir;
     protected \Closure $mover;
     protected RecordingWebhook $webhook;
@@ -49,14 +47,14 @@ abstract class TestCase extends BaseTestCase
         // 진짜 업로드가 아니라 move_uploaded_file 이 통하지 않는다. 옮기는 방법만 갈아끼운다
         $this->mover = static fn (string $from, string $to) => rename($from, $to);
         $this->webhook = new RecordingWebhook();
-        $this->db = new Database($this->config);
+        $this->pdo = dti_connect($this->config);
         if (!self::$migrated) {
-            $this->db->migrate();
+            dti_migrate($this->pdo);
             $this->createPortalUsers();
             self::$migrated = true;
         }
         // 이 환경은 커밋마다 fsync 가 돌아 쓰기 한 건이 0.2초다. 준비 작업은 한 번에 커밋한다.
-        $pdo = $this->db->pdo();
+        $pdo = $this->pdo;
         $pdo->beginTransaction();
         $this->truncate();
         $this->seedPortalUsers();
@@ -69,25 +67,25 @@ abstract class TestCase extends BaseTestCase
         @rmdir($this->uploadDir);
     }
 
-    protected function makeConfig(array $over = []): Config
+    protected function makeConfig(array $over = []): array
     {
         $portal = require __DIR__ . '/../../../config.php';
         $db = $portal['db'];
         $db['name'] = DTI_TEST_DB;
 
-        return new Config(
-            db: $db,
-            uploadDir: $over['uploadDir'] ?? $this->uploadDir,
-            maxUploadMb: $over['maxUploadMb'] ?? 50,
-            adminEmails: $over['adminEmails'] ?? ['jian@bluesoft.co.kr'],
-            slackWebhook: $over['slackWebhook'] ?? null,
-        );
+        return dti_config([
+            'db' => $db,
+            'upload_dir' => $over['uploadDir'] ?? $this->uploadDir,
+            'max_upload_mb' => $over['maxUploadMb'] ?? 50,
+            'admin_emails' => $over['adminEmails'] ?? ['jian@bluesoft.co.kr'],
+            'slack_webhook' => $over['slackWebhook'] ?? null,
+        ]);
     }
 
     /** 포털 테이블이지만 테스트 DB 에도 있어야 명단·배정을 볼 수 있다 */
     private function createPortalUsers(): void
     {
-        $this->db->pdo()->exec("CREATE TABLE IF NOT EXISTS `portal_users` (
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS `portal_users` (
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `name` VARCHAR(60) NOT NULL,
             `email` VARCHAR(190) NOT NULL,
@@ -100,7 +98,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function seedPortalUsers(array $users = self::PORTAL_USERS): void
     {
-        $pdo = $this->db->pdo();
+        $pdo = $this->pdo;
         $own = !$pdo->inTransaction();
         if ($own) $pdo->beginTransaction();
         $pdo->exec("DELETE FROM portal_users");
@@ -117,11 +115,11 @@ abstract class TestCase extends BaseTestCase
      */
     protected function truncate(): void
     {
-        $pdo = $this->db->pdo();
+        $pdo = $this->pdo;
         foreach (['dti_related', 'dti_emotions', 'dti_presentations', 'dti_topics', 'dti_fields'] as $table) {
             $pdo->exec("DELETE FROM `{$table}`");
         }
-        $this->db->seedFields();
+        dti_seed_fields($this->pdo);
     }
 
     /* ---------- 요청 헬퍼 ---------- */
@@ -143,7 +141,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function call(string $method, array $segments, ?array $identity, array $body = [], array $query = [], array $files = []): Response
     {
-        $kernel = new Kernel($this->config, $this->db, $identity, $this->mover,
+        $kernel = new Kernel($this->config, $this->pdo, $identity, $this->mover,
                              \Closure::fromCallable($this->webhook));
         return $kernel->handle(new Request($method, $segments, $body, $query, $files));
     }
@@ -191,8 +189,8 @@ abstract class TestCase extends BaseTestCase
         $columns = array_keys($values);
         $sql = 'INSERT INTO dti_topics (`' . implode('`, `', $columns) . '`) VALUES ('
              . implode(', ', array_fill(0, count($columns), '?')) . ')';
-        $this->db->pdo()->prepare($sql)->execute(array_values($values));
-        return (int)$this->db->pdo()->lastInsertId();
+        $this->pdo->prepare($sql)->execute(array_values($values));
+        return (int)$this->pdo->lastInsertId();
     }
 
     protected function makePresentation(int $topicId, array $values = []): int
@@ -201,7 +199,7 @@ abstract class TestCase extends BaseTestCase
         $columns = array_keys($values);
         $sql = 'INSERT INTO dti_presentations (`' . implode('`, `', $columns) . '`) VALUES ('
              . implode(', ', array_fill(0, count($columns), '?')) . ')';
-        $this->db->pdo()->prepare($sql)->execute(array_values($values));
-        return (int)$this->db->pdo()->lastInsertId();
+        $this->pdo->prepare($sql)->execute(array_values($values));
+        return (int)$this->pdo->lastInsertId();
     }
 }

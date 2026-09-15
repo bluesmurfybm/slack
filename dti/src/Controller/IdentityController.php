@@ -2,13 +2,12 @@
 
 namespace Dti\Controller;
 
-use Dti\Config;
 use Dti\Http\Response;
 
 final class IdentityController
 {
     public function __construct(
-        private readonly Config $config,
+        private readonly array $config,
         private readonly \PDO $pdo,
         private readonly ?array $identity,
     ) {}
@@ -21,12 +20,12 @@ final class IdentityController
             'email' => $email,
             'name' => $this->identity['name'] ?? null,
             'color' => $this->identity['color'] ?? null,
-            'is_admin' => $this->config->isAdmin($email),
-            'teams' => $this->config->teamsOf($email),
-            'all_teams' => Config::TEAMS,
-            'all_magazines' => Config::MAGAZINES,
-            'portal_url' => $this->config->portalUrl,
-            'slack_url' => $this->config->slackUrl,
+            'is_admin' => dti_is_admin($this->config, $email),
+            'teams' => dti_teams_of($this->config, $email),
+            'all_teams' => DTI_TEAMS,
+            'all_magazines' => DTI_MAGAZINES,
+            'portal_url' => $this->config['portal_url'],
+            'slack_url' => $this->config['slack_url'],
         ]);
     }
 

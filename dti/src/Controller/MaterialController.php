@@ -2,7 +2,6 @@
 
 namespace Dti\Controller;
 
-use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
@@ -10,7 +9,7 @@ use Dti\Http\Response;
 final class MaterialController
 {
     public function __construct(
-        private readonly Config $config,
+        private readonly array $config,
         private readonly \PDO $pdo,
         private readonly ?\Closure $mover,
         private readonly array $identity,
@@ -44,10 +43,10 @@ final class MaterialController
         $file = $files['file'] ?? null;
         if (!is_array($file)) {
             // post_max_size 를 넘기면 PHP 가 $_FILES 를 통째로 비워 보낸다. 그것도 용량 초과다
-            throw new ApiException($this->config->maxUploadMb . 'MB 까지 올릴 수 있습니다', 413);
+            throw new ApiException($this->config['max_upload_mb'] . 'MB 까지 올릴 수 있습니다', 413);
         }
 
-        $stored = dti_save_upload($this->config->uploadDir, $this->config->maxUploadMb,
+        $stored = dti_save_upload($this->config['upload_dir'], $this->config['max_upload_mb'],
                                  $tid, $file, $this->mover);
 
         $holder = $this->holderForWrite($slot, $topic, $pres);
@@ -84,7 +83,7 @@ final class MaterialController
         $topic = dti_topic_find_or_fail($this->pdo, $tid);
         $holder = $this->slotHolder($slot, $topic, dti_presentation_of_topic($this->pdo, $tid));
 
-        $path = dti_resolve_upload($this->config->uploadDir, $this->slotGet($holder, $slot, 'path'));
+        $path = dti_resolve_upload($this->config['upload_dir'], $this->slotGet($holder, $slot, 'path'));
         $name = $this->slotGet($holder, $slot, 'name') ?? basename($path);
 
         return Response::file($path, $name);
@@ -94,7 +93,7 @@ final class MaterialController
     {
         $topic = dti_topic_find_or_fail($this->pdo, $tid);
         $pres = dti_presentation_of_topic($this->pdo, $tid);
-        if (!dti_may_manage($pres, $this->identity['email'], $this->config->isAdmin($this->identity['email']))) {
+        if (!dti_may_manage($pres, $this->identity['email'], dti_is_admin($this->config, $this->identity['email']))) {
             throw new ApiException('발표자 본인이나 관리자만 자료를 올릴 수 있습니다', 403);
         }
         return [$topic, $pres];
@@ -126,7 +125,7 @@ final class MaterialController
 
     private function removeFile(array $holder, string $slot): void
     {
-        dti_remove_upload($this->config->uploadDir, $this->slotGet($holder, $slot, 'path'));
+        dti_remove_upload($this->config['upload_dir'], $this->slotGet($holder, $slot, 'path'));
     }
 
     private function save(array $topic, array $holder, string $slot): Response

@@ -30,8 +30,11 @@ $source = new PDO('sqlite:' . $sqlitePath, null, null, [
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 ]);
 
-$importer = new Dti\Migration\MagazineImporter(
-    $source, dti_database(), dti_config(), $uploadDir);
+$config = dti_config_from_portal();
+$target = dti_connect($config);
+dti_migrate($target);
+
+$importer = new Dti\Migration\MagazineImporter($source, $target, $config, $uploadDir);
 
 echo '원본: ', realpath($sqlitePath), "\n";
 echo '대상: MySQL dti_* 테이블', $dryRun ? '  [--dry-run: 쓰지 않는다]' : '', "\n\n";
