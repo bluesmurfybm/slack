@@ -56,22 +56,21 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── static/, styles/         도메인별 js · css
 │   └── var/uploads/             이수증 원본 (gitignore, .htaccess 로 직접 접근 차단)
 │
-├── dti/                         DTI 발표 — magazine 의 PHP 이관본(객체지향). **전환 전**
+├── dti/                         DTI 발표 — magazine 의 PHP 이관본. **전환 전**
 │   ├── index.php                화면 한 장(SPA). magazine/web/index.html 이식
-│   ├── api.php                  진입점 — Kernel 을 조립하고 응답을 내보내기만 한다
-│   ├── autoload.php             PSR-4 오토로더(15줄). composer 없이도 돌아간다
-│   ├── bootstrap.php            오토로드 + Config·Database 조립 (전역은 이 둘뿐)
-│   ├── src/
-│   │   ├── Config.php           설정의 원본(팀·매거진·관리자·업로드 상한·웹훅)
-│   │   ├── Kernel.php           Request → 컨트롤러 → Response. 테스트 진입점
-│   │   ├── Database.php, Schema.php   dti_* 테이블 생성·마이그레이션·시드
-│   │   ├── Http/                Request · Response · ApiException · Input
-│   │   ├── Identity/            Identity · SessionIdentity(포털 세션) · Members
-│   │   ├── Entity/              Topic · Presentation (컬럼 정의의 원본)
-│   │   ├── Repository/          SQL 은 전부 여기
-│   │   ├── Service/             TopicPresenter · Storage · Related · Score · Notifier
-│   │   ├── Controller/          identity · topics · material · emotion · field · related · score
-│   │   └── Migration/           magazine 이관 (전환 후 삭제)
+│   ├── api.php                  프런트 컨트롤러 — 출력하는 유일한 자리
+│   ├── bootstrap.php            require 목록 + 시간대
+│   ├── db.php                   설정 · 연결 · 스키마 · 시드
+│   ├── guard.php                포털 세션 신원 · 관리자 판정
+│   ├── lib/
+│   │   ├── http.php             DtiError · 요청 파싱 · 응답 · 입력 검증 · 라우팅
+│   │   ├── topics.php           아티클 읽기/쓰기 · 상태 판정 · 화면용 배열
+│   │   ├── presentations.php    발표 행 생성 · 삭제 · 배정 해제
+│   │   ├── emotions.php, fields.php, members.php
+│   │   ├── related.php, score.php     연관 점수 · 멤버 점수
+│   │   ├── slots.php, storage.php, notify.php
+│   │   └── migrate.php          magazine 이관 (전환 후 삭제)
+│   ├── routes/                  topics · materials · fields · scores · identity
 │   ├── static/, styles/         magazine/web/ 이식 (core.js 에 경로 변환만 추가)
 │   ├── tools/                   migrate_from_magazine.php · rebuild_related.php
 │   ├── tests/                   PHPUnit 169건
@@ -188,18 +187,23 @@ magazine 을 포털과 같은 PHP 앱 안으로 옮긴 것이다(`learning/` →
 별도 프로세스라서 필요했던 uvicorn 유닛·nginx 프록시·venv·SSO 쿠키가 전부 사라진다).
 **동작은 1:1 로 옮겼고 화면 계약(경로·JSON 키·null 구분·상태코드)은 그대로다.**
 
-- **객체지향으로 짰다** — learn/ 처럼 함수를 나열하지 않는다. `Kernel` 이 `Request` 를 받아
-  컨트롤러로 보내고 `Response` 를 돌려준다. SQL 은 Repository 에만, 도메인 계산은 Service 에만
-  둔다. 전역 함수·전역 캐시·싱글턴을 쓰지 않고 의존성은 생성자로 주입한다. 설정은 `Config`
-  객체 하나가 원본이고, 테스트는 이것만 갈아끼운다.
+- **learn/ 과 같은 모양이다** — `lib/` 와 `routes/` 에 `dti_` 접두사 전역 함수를 나열한다.
+  소스에 도메인 클래스는 없고, 남는 클래스는 예외 하나(`DtiError`)와 PHPUnit 테스트뿐이다.
+  행은 PDO 연관 배열을 그대로 넘긴다.
+- **다만 라우트는 값을 돌려준다** — learn 의 `jsend()` 는 출력하고 `exit` 해서 라우트 단위
+  테스트를 붙일 자리가 없다. dti 의 라우트는 `['status' => .., 'data' => ..]` 를 반환하고
+  출력은 `api.php` 의 `dti_send()` 한 곳에서만 한다. 169건 중 129건이 이 덕분에 라우트를
+  통째로 검증한다.
+- **전역 `static` 캐시를 쓰지 않는다** — learn 의 `learn_policy()`·`body_json()` 같은 캐시는
+  테스트 간에 상태가 남는다. 설정·연결·신원은 `$ctx` 배열로, 요청은 `$req` 배열로 넘긴다.
 - **테이블은 `dti_*`** — `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`,
   `dti_related`. slackapi DB 를 포털·slack·learn 과 공유하므로 맨이름을 쓸 수 없다.
   컬럼 추가는 `add_column_if_missing()` 을 거친다.
 - **자료 슬롯은 NULL 을 유지한다** — `material_*`·`scan_*` 는 "없음"이 NULL 이고 화면이 그
   구분에 기댄다. learn 의 `NOT NULL DEFAULT ''` 관례를 여기 적용하면 안 된다.
   날짜는 VARCHAR 다(`''` 가 없음).
-- **인증은 포털 세션**(`SessionIdentity`). 구성원 명단은 `portal_users` 에서 오고, 팀 매핑과
-  관리자 명단만 `Config` 상수다. 개발 로그인(`DEV_LOGIN`)은 화면·API 에서 **없앴다** —
+- **인증은 포털 세션**(`guard.php` 의 `dti_identity()`). 구성원 명단은 `portal_users` 에서
+  오고, 팀 매핑과 관리자 명단만 `db.php` 의 `DTI_` 상수다. 개발 로그인(`DEV_LOGIN`)은 화면·API 에서 **없앴다** —
   포털 세션을 쓰는 이상 로그인 없이 화면을 보는 경로가 없다.
 - **화면은 거의 그대로다** — `core.js` 의 `dtiApiURL()` 이 `/magazineapi/topics/3` 을
   `api.php?p=/topics/3` 으로 바꾼다. 나머지 도메인 스크립트는 손대지 않았다(`material.js` 의
@@ -207,10 +211,10 @@ magazine 을 포털과 같은 PHP 앱 안으로 옮긴 것이다(`learning/` →
 - **연관 점수**는 `dti_related` 에 저장하고 등록·수정·삭제 때 다시 계산한다. 파이썬은 기동할
   때도 계산했지만 PHP 에는 기동 훅이 없으므로, 배점 상수를 바꾸면
   `php dti/tools/rebuild_related.php` 를 한 번 돌린다.
-- **런타임 의존성이 0이다** — 소스가 쓰는 외부 라이브러리는 PHP 내장 `PDO` 뿐이고, 클래스
-  로딩은 `dti/autoload.php`(15줄)가 한다. **composer 는 테스트에만 쓴다.** 서버에 composer 가
-  없어도, `vendor/` 를 올리지 않아도 파일만 복사하면 돌아간다(access·moodle·learn 과 같은 배포).
-  `vendor/` 를 통째로 치운 상태에서 화면·API·CLI 도구가 도는 것을 확인했다.
+- **런타임 의존성이 0이다** — 소스가 쓰는 외부 라이브러리는 PHP 내장 `PDO` 뿐이고, 파일
+  로딩은 `dti/bootstrap.php` 의 `require_once` 목록이 한다. **composer 는 테스트에만 쓴다.**
+  서버에 composer 가 없어도, `vendor/` 를 올리지 않아도 파일만 복사하면 돌아간다
+  (access·moodle·learn 과 같은 배포).
 - **테스트**: `vendor/bin/phpunit` (169건). 테스트를 돌릴 때만 `composer install` 이 필요하다. 테스트 DB 는 `slackapi_test` 를 쓴다
   (`dti/tests/bootstrap.php`, 환경변수 `DTI_TEST_DB` 로 바꿀 수 있다).
   **이 환경은 커밋마다 fsync 가 돌아 쓰기 한 건이 0.2초다** — 픽스처는 트랜잭션으로 묶고
@@ -227,7 +231,7 @@ magazine 을 포털과 같은 PHP 앱 안으로 옮긴 것이다(`learning/` →
 2. 포털 `index.php` 의 링크를 `dti/index.php` 로 교체 (`config.php` 의 `links.magazine` 제거)
 3. nginx 의 `/magazine/`·`/magazineapi/` 블록 제거
 4. `magazine.service`(uvicorn 8001) 중지·비활성화
-5. `dti/src/Migration/` 과 `dti/tools/migrate_from_magazine.php` 삭제 (일회성)
+5. `dti/lib/migrate.php` 와 `dti/tools/migrate_from_magazine.php` 삭제 (일회성)
 6. `magazine/` 디렉터리 정리 — `learning/` 처럼 당분간 남겨 둬도 된다
 7. `dti_topics` 의 죽은 컬럼(`presenter`·`planned_date`·`material_*` 등) 정리
 
