@@ -21,3 +21,18 @@ function dti_slot_column($slot, $field) {
 function dti_slot_on_topic($slot) {
     return $slot === 'scan';
 }
+
+function dti_slot_holder($slot, array $topic, $pres) {
+    return dti_slot_on_topic($slot) ? $topic : $pres;
+}
+
+function dti_slot_get($holder, $slot, $field) {
+    return $holder === null ? null : $holder[dti_slot_column($slot, $field)];
+}
+
+/** @param array $values kind·name·url·path 중 채울 것 */
+function dti_slot_set(array &$holder, $slot, array $values) {
+    foreach ($values as $field => $value) {
+        $holder[dti_slot_column($slot, $field)] = $value;
+    }
+}

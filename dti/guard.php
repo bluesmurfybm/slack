@@ -17,3 +17,9 @@ function dti_identity() {
         'color' => user_color($user),
     ];
 }
+
+function dti_require_admin(array $ctx): void {
+    if (!dti_is_admin($ctx['config'], $ctx['identity']['email'])) {
+        throw new Dti\Http\ApiException('관리자만 할 수 있습니다', 403);
+    }
+}

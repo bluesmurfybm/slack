@@ -4,15 +4,13 @@
 require_once __DIR__ . '/autoload.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/guard.php';
-require_once __DIR__ . '/lib/members.php';
-require_once __DIR__ . '/lib/emotions.php';
-require_once __DIR__ . '/lib/topics.php';
-require_once __DIR__ . '/lib/presentations.php';
-require_once __DIR__ . '/lib/related.php';
-require_once __DIR__ . '/lib/score.php';
-require_once __DIR__ . '/lib/fields.php';
-require_once __DIR__ . '/lib/storage.php';
-require_once __DIR__ . '/lib/slots.php';
-require_once __DIR__ . '/lib/notify.php';
+
+foreach (['members', 'emotions', 'topics', 'presentations', 'related', 'score',
+          'fields', 'storage', 'slots', 'notify'] as $__lib) {
+    require_once __DIR__ . '/lib/' . $__lib . '.php';
+}
+foreach (['identity', 'topics', 'materials', 'fields', 'scores'] as $__route) {
+    require_once __DIR__ . '/routes/' . $__route . '.php';
+}
 
 date_default_timezone_set('Asia/Seoul');
