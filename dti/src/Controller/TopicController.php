@@ -12,7 +12,6 @@ use Dti\Identity\Members;
 use Dti\Repository\EmotionRepository;
 use Dti\Repository\PresentationRepository;
 use Dti\Repository\TopicRepository;
-use Dti\Service\Notifier;
 use Dti\Service\PresentationService;
 use Dti\Service\RelatedService;
 use Dti\Service\TopicPresenter;
@@ -27,7 +26,7 @@ final class TopicController
         private readonly PresentationService $service,
         private readonly Members $members,
         private readonly RelatedService $related,
-        private readonly Notifier $notifier,
+        private readonly ?\Closure $webhook,
         private readonly Identity $identity,
     ) {}
 
@@ -135,7 +134,8 @@ final class TopicController
         }
 
         $pres = $this->presentations->ofTopic($tid);
-        $this->notifier->newPresenter($topic, $pres);
+        dti_notify_new_presenter($this->config->slackWebhook, $this->webhook,
+            $topic->title, $pres->presenter, $pres->planned_date);
 
         return Response::json(TopicPresenter::present($topic, $pres));
     }
@@ -212,7 +212,8 @@ final class TopicController
         } else {
             $pres = $this->service->create($tid, $values);
         }
-        $this->notifier->newPresenter($topic, $pres);
+        dti_notify_new_presenter($this->config->slackWebhook, $this->webhook,
+            $topic->title, $pres->presenter, $pres->planned_date);
 
         return Response::json(TopicPresenter::present($topic, $pres));
     }

@@ -2,7 +2,6 @@
 
 namespace Dti\Tests;
 
-use Dti\Service\Notifier;
 use Dti\Tests\Support\TestCase;
 
 final class NotifyTest extends TestCase
@@ -12,7 +11,6 @@ final class NotifyTest extends TestCase
         parent::setUp();
         // 웹훅 주소가 있어야 보낸다. 기본 Config 는 주소가 없어 아무 것도 보내지 않는다
         $this->config = $this->makeConfig(['slackWebhook' => 'https://hooks.slack.example/x']);
-        $this->notifier = new Notifier($this->config, $this->webhook);
     }
 
     private function newTopic(): int
@@ -98,7 +96,6 @@ final class NotifyTest extends TestCase
     public function test_웹훅_주소가_없으면_아무_것도_보내지_않는다(): void
     {
         $this->config = $this->makeConfig(['slackWebhook' => null]);
-        $this->notifier = new Notifier($this->config, $this->webhook);
 
         $tid = $this->newTopic();
         $this->post(['topics', (string)$tid, 'claim'], $this->user());

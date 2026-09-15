@@ -22,7 +22,6 @@ use Dti\Repository\TopicRepository;
 use Dti\Service\PresentationService;
 use Dti\Service\RelatedService;
 use Dti\Service\ScoreService;
-use Dti\Service\Storage;
 
 /**
  * 요청 하나를 처리하는 조립 지점. 컨트롤러·리포지터리·서비스를 여기서 만든다.
@@ -34,8 +33,8 @@ final class Kernel
         private readonly Config $config,
         private readonly Database $db,
         private readonly ?Identity $identity,
-        private readonly ?Service\Storage $storage = null,
-        private readonly ?Service\Notifier $notifier = null,
+        private readonly ?\Closure $mover = null,
+        private readonly ?\Closure $webhook = null,
     ) {}
 
     public function handle(Request $request): Response
@@ -158,7 +157,7 @@ final class Kernel
             $this->presentationService(),
             $this->members(),
             $this->relatedService(),
-            $this->notifier(),
+            $this->webhook,
             $this->identity,
         );
     }
@@ -188,7 +187,7 @@ final class Kernel
             new TopicRepository($pdo),
             new PresentationRepository($pdo),
             $this->presentationService(),
-            $this->storage(),
+            $this->mover,
             $this->identity,
         );
     }
@@ -199,20 +198,8 @@ final class Kernel
         return new PresentationService(
             new PresentationRepository($pdo),
             new EmotionRepository($pdo),
-            $this->storage(),
+            $this->config->uploadDir,
         );
-    }
-
-    /** 테스트는 진짜로 보내면 안 되므로 Notifier 를 넣어 준다 */
-    private function notifier(): Service\Notifier
-    {
-        return $this->notifier ?? new Service\Notifier($this->config);
-    }
-
-    /** 테스트는 업로드 임시파일을 옮기는 방법이 달라서 Storage 를 넣어 준다 */
-    private function storage(): Storage
-    {
-        return $this->storage ?? new Storage($this->config);
     }
 
     private function members(): Members

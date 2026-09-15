@@ -2,8 +2,6 @@
 
 namespace Dti\Http;
 
-use Dti\Service\Storage;
-
 final class Response
 {
     private function __construct(
@@ -29,7 +27,7 @@ final class Response
         http_response_code($this->status);
 
         if ($this->filePath !== null) {
-            [$type, $disposition] = Storage::disposition($this->fileName ?? basename($this->filePath));
+            [$type, $disposition] = dti_disposition($this->fileName ?? basename($this->filePath));
             header("Content-Type: {$type}");
             header("Content-Disposition: {$disposition}");
             header('Content-Length: ' . filesize($this->filePath));

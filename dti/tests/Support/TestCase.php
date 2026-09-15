@@ -8,8 +8,6 @@ use Dti\Http\Request;
 use Dti\Http\Response;
 use Dti\Identity\Identity;
 use Dti\Kernel;
-use Dti\Service\Notifier;
-use Dti\Service\Storage;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 /**
@@ -40,9 +38,8 @@ abstract class TestCase extends BaseTestCase
     protected Config $config;
     protected Database $db;
     protected string $uploadDir;
-    protected Storage $storage;
+    protected \Closure $mover;
     protected RecordingWebhook $webhook;
-    protected Notifier $notifier;
 
     protected function setUp(): void
     {
@@ -51,9 +48,8 @@ abstract class TestCase extends BaseTestCase
 
         $this->config = $this->makeConfig();
         // 진짜 업로드가 아니라 move_uploaded_file 이 통하지 않는다. 옮기는 방법만 갈아끼운다
-        $this->storage = new Storage($this->config, static fn (string $from, string $to) => rename($from, $to));
+        $this->mover = static fn (string $from, string $to) => rename($from, $to);
         $this->webhook = new RecordingWebhook();
-        $this->notifier = new Notifier($this->config, $this->webhook);
         $this->db = new Database($this->config);
         if (!self::$migrated) {
             $this->db->migrate();
@@ -148,7 +144,8 @@ abstract class TestCase extends BaseTestCase
 
     protected function call(string $method, array $segments, ?Identity $identity, array $body = [], array $query = [], array $files = []): Response
     {
-        $kernel = new Kernel($this->config, $this->db, $identity, $this->storage, $this->notifier);
+        $kernel = new Kernel($this->config, $this->db, $identity, $this->mover,
+                             \Closure::fromCallable($this->webhook));
         return $kernel->handle(new Request($method, $segments, $body, $query, $files));
     }
 

@@ -1,6 +1,9 @@
 <?php
 
 require __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../lib/storage.php';
+require_once __DIR__ . '/../lib/slots.php';
+require_once __DIR__ . '/../lib/notify.php';
 
 // 테스트는 실서버 DB 를 건드리지 않는다. 이름을 여기서 한 번만 정한다.
 define('DTI_TEST_DB', getenv('DTI_TEST_DB') ?: 'slackapi_test');

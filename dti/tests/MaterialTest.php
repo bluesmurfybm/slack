@@ -114,7 +114,7 @@ final class MaterialTest extends TestCase
             $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [], $this->upload($name, '<svg onload=1>'));
 
             $res = $this->get(['topics', (string)$tid, 'material', 'download']);
-            [$type, $disposition] = \Dti\Service\Storage::disposition($res->fileName);
+            [$type, $disposition] = dti_disposition($res->fileName);
             $this->assertSame('application/octet-stream', $type, $name);
             $this->assertStringStartsWith('attachment', $disposition, $name);
         }
@@ -122,7 +122,7 @@ final class MaterialTest extends TestCase
 
     public function test_pdf_는_인라인으로_연다(): void
     {
-        [$type, $disposition] = \Dti\Service\Storage::disposition('발표.pdf');
+        [$type, $disposition] = dti_disposition('발표.pdf');
         $this->assertSame('application/pdf', $type);
         $this->assertStringStartsWith('inline', $disposition);
         // 한글 파일명은 인코딩해서 내보낸다
@@ -132,7 +132,6 @@ final class MaterialTest extends TestCase
     public function test_상한을_넘는_업로드는_413(): void
     {
         $this->config = $this->makeConfig(['maxUploadMb' => 1]);
-        $this->storage = new \Dti\Service\Storage($this->config, static fn ($from, $to) => rename($from, $to));
 
         $tid = $this->claimed();
         $res = $this->post(['topics', (string)$tid, 'material', 'file'], $this->user(), [],

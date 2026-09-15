@@ -13,7 +13,7 @@ final class PresentationService
     public function __construct(
         private readonly PresentationRepository $presentations,
         private readonly EmotionRepository $emotions,
-        private readonly Storage $storage,
+        private readonly string $uploadDir,
     ) {}
 
     public function create(int $topicId, array $values = []): Presentation
@@ -31,7 +31,7 @@ final class PresentationService
     /** 발표를 통째로 지운다 — 자료 파일과 반응까지 같이 사라진다 */
     public function purge(Presentation $pres): void
     {
-        $this->storage->remove($pres->material_path);
+        dti_remove_upload($this->uploadDir, $pres->material_path);
         $this->emotions->deleteByPresentation((int)$pres->id);
         $this->presentations->delete((int)$pres->id);
     }

@@ -1,10 +1,10 @@
 <?php
-/**
- * dti 조립. 여기 두 함수만 전역이다 — 조립 지점이라서다.
- * 나머지는 전부 클래스이고 의존성은 생성자로 받는다.
- */
+/** dti 조립 — require 목록과 시간대, 설정·DB 를 만드는 함수. */
 
 require_once __DIR__ . '/autoload.php';
+require_once __DIR__ . '/lib/storage.php';
+require_once __DIR__ . '/lib/slots.php';
+require_once __DIR__ . '/lib/notify.php';
 
 date_default_timezone_set('Asia/Seoul');
 
