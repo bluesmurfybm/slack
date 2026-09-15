@@ -236,6 +236,7 @@ if (!dti_identity()) {
     <div class="cdialog">
       <h3 id="matTitle">발표용 자료</h3>
       <div id="matList"></div>
+      <div class="mat-add-head">자료 추가</div>
       <div class="seg" id="seg-mat">
         <button type="button" id="mat-file" class="on" onclick="setMatMode('file')">파일 올리기</button>
         <button type="button" id="mat-link" onclick="setMatMode('link')">링크</button>

@@ -42,7 +42,7 @@ function drawerHtml(t) {
       </dl>
 
       <section class="d-sec">
-        <h4>발표 자료</h4>
+        <h4>자료</h4>
         ${materialSlots(t)}
       </section>
 
@@ -68,6 +68,7 @@ function materialSlots(t) {
 function slotBox(t, slot, may) {
   const meta = SLOTS[slot];
   const list = slotList(t, slot);
+
   if (!list.length) {
     return `<div class="drop">
       <span class="ic">${meta.icon}</span>
@@ -76,12 +77,20 @@ function slotBox(t, slot, may) {
       : '<span class="chip ghost">미등록</span>'}
     </div>`;
   }
-  return list.map((m, i) => `<div class="drop filled">
+
+  const rows = list.map(m => `<div class="drop filled">
     <span class="ic">${m.kind === "link" ? "🔗" : meta.icon}</span>
-    <span class="t"><b>${esc(matName(m))}</b><span>${meta.label}</span></span>
+    <span class="t"><b>${esc(matName(m))}</b><span>${m.kind === "link" ? "링크" : "파일"}</span></span>
     <button class="btn-mini" onclick="openViewer(${t.id},'${slot}',${m.id})">열기</button>
-    ${may && i === 0 ? `<button class="btn-mini mat has" onclick="openMaterial(${t.id},'${slot}')">관리</button>` : ""}
   </div>`).join("");
+
+  return `<div class="slot-group">
+    <div class="slot-head">
+      <b>${meta.label} <span class="slot-n">${list.length}</span></b>
+      ${may ? `<button class="btn-mini slot-manage" onclick="openMaterial(${t.id},'${slot}')">관리</button>` : ""}
+    </div>
+    ${rows}
+  </div>`;
 }
 
 function adminDrawerActions(t) {

@@ -20,24 +20,45 @@ function canManageMaterial(t) {
   return mine || (APP.me.is_admin && APP.view.mode === "admin");
 }
 
+const CHIP_LIMIT = 2;
+
 function materialChips(t) {
-  return Object.keys(SLOTS).flatMap(s => slotList(t, s).map(m => {
-    const icon = m.kind === "link" ? "🔗" : SLOTS[s].icon;
-    return `<button class="chip material" onclick="openViewer(${t.id},'${s}',${m.id})"
-      title="${SLOTS[s].label} — ${esc(matName(m))}">${icon} ${esc(matName(m))}</button>`;
-  })).join("");
+  const all = Object.keys(SLOTS).flatMap(s => slotList(t, s).map(m => ({ slot: s, m })));
+  const chips = all.slice(0, CHIP_LIMIT).map(({ slot, m }) => {
+    const icon = m.kind === "link" ? "🔗" : SLOTS[slot].icon;
+    return `<button class="chip material" onclick="openViewer(${t.id},'${slot}',${m.id})"
+      title="${SLOTS[slot].label} — ${esc(matName(m))}">${icon} ${esc(matName(m))}</button>`;
+  });
+
+  const rest = all.length - chips.length;
+  if (rest > 0) {
+    chips.push(`<button class="chip material more" onclick="openDrawer(${t.id})"
+      title="자료 ${all.length}건 전체 보기">+${rest}</button>`);
+  }
+  return chips.join("");
+}
+
+function matRow(t, slot, m) {
+  const icon = m.kind === "link" ? "🔗" : SLOTS[slot].icon;
+  const sub = m.kind === "link" ? (m.url || "링크") : "파일";
+  return `<li class="mat-row">
+    <span class="ic">${icon}</span>
+    <button class="t" onclick="openViewer(${t.id},'${slot}',${m.id})" title="열기">
+      <b>${esc(matName(m))}</b><span>${esc(sub)}</span>
+    </button>
+    <button class="mat-x" onclick="detachMaterial(${m.id})" title="삭제">✕</button>
+  </li>`;
 }
 
 function matListHTML(t, slot) {
   const list = slotList(t, slot);
-  if (!list.length) return `<p class="muted">아직 올린 자료가 없습니다. (${SLOTS[slot].hint})</p>`;
-
-  return `<ul class="mat-list">` + list.map(m => `
-    <li>
-      <button class="mat-open" onclick="openViewer(${t.id},'${slot}',${m.id})"
-        title="${esc(matName(m))}">${m.kind === "link" ? "🔗" : SLOTS[slot].icon} ${esc(matName(m))}</button>
-      <button class="mat-del" onclick="detachMaterial(${m.id})" title="삭제">✕</button>
-    </li>`).join("") + `</ul>`;
+  if (!list.length) {
+    return `<div class="mat-empty">
+      <b>아직 올린 자료가 없습니다</b><span>${SLOTS[slot].hint}</span>
+    </div>`;
+  }
+  return `<div class="mat-count">올린 자료 ${list.length}건</div>
+    <ul class="mat-list">${list.map(m => matRow(t, slot, m)).join("")}</ul>`;
 }
 
 function renderMatList() {
