@@ -12,7 +12,7 @@ const DTI_RELATED_TOKEN_MATCH = 0.8;
 const DTI_RELATED_MIN_SCORE = 50;
 const DTI_MAX_RELATED = 3;
 
-function dti_related_score(array $a, array $b) {
+function dti_related_score(array $a, array $b): int {
     $total = 0;
     if ($a['field'] !== '' && $a['field'] === $b['field']) {
         $total += DTI_RELATED_SAME_FIELD;
@@ -35,7 +35,7 @@ function dti_related_score(array $a, array $b) {
     return $total;
 }
 
-function dti_related_rebuild(PDO $pdo) {
+function dti_related_rebuild(PDO $pdo): int {
     $topics = dti_topic_all($pdo);
 
     $pairs = [];
@@ -53,7 +53,7 @@ function dti_related_rebuild(PDO $pdo) {
     return count($pairs);
 }
 
-function dti_related_replace_all(PDO $pdo, array $pairs) {
+function dti_related_replace_all(PDO $pdo, array $pairs): void {
     // 한 트랜잭션으로 넣는다 — 커밋마다 fsync 가 도는 환경에서 건별 커밋은 너무 느리다
     $own = !$pdo->inTransaction();
     if ($own) $pdo->beginTransaction();
@@ -68,7 +68,7 @@ function dti_related_replace_all(PDO $pdo, array $pairs) {
 }
 
 /** 숨김·보관은 빼고 점수 높은 순으로. 화면 드로어가 쓰는 모양 그대로 돌려준다. */
-function dti_related_top_for(PDO $pdo, $topicId, $limit) {
+function dti_related_top_for(PDO $pdo, int $topicId, int $limit): array {
     $limit = (int)$limit;
     $sql = "SELECT t.id, t.title, t.field, t.magazine, t.volume, t.page, r.score
             FROM dti_related r
@@ -92,7 +92,7 @@ function dti_related_top_for(PDO $pdo, $topicId, $limit) {
 }
 
 /** 키워드 토큰별 bigram 집합 */
-function dti_related_keyword_grams(array $topic) {
+function dti_related_keyword_grams(array $topic): array {
     $out = [];
     foreach (preg_split('~[\s,/·]+~u', mb_strtolower($topic['keywords'])) as $token) {
         if ($token === '') continue;
@@ -103,7 +103,7 @@ function dti_related_keyword_grams(array $topic) {
 }
 
 /** bigram 집합. 키가 곧 원소다 */
-function dti_related_bigrams($text) {
+function dti_related_bigrams(string $text): array {
     $normalized = preg_replace('~[^0-9a-z가-힣]~u', '', mb_strtolower($text));
     // mb_str_split 이어야 한다 — substr 은 UTF-8 한글을 바이트로 잘라 점수가 달라진다
     $chars = mb_str_split((string)$normalized);
@@ -115,12 +115,12 @@ function dti_related_bigrams($text) {
     return $out;
 }
 
-function dti_related_dice(array $a, array $b) {
+function dti_related_dice(array $a, array $b): float {
     if (!$a || !$b) return 0.0;
     return 2 * count(array_intersect_key($a, $b)) / (count($a) + count($b));
 }
 
-function dti_related_overlap(array $a, array $b) {
+function dti_related_overlap(array $a, array $b): float {
     if (!$a || !$b) return 0.0;
     return count(array_intersect_key($a, $b)) / min(count($a), count($b));
 }

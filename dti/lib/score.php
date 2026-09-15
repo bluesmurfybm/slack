@@ -10,7 +10,7 @@ const DTI_SCORE_REACTION = 1;
 const DTI_SCORE_REACTION_DAILY_CAP = 3;
 const DTI_SCORE_KINDS = ['done', 'required', 'material', 'reaction'];
 
-function dti_score_events(PDO $pdo) {
+function dti_score_events(PDO $pdo): array {
     $topics = [];
     foreach (dti_topic_all($pdo) as $topic) {
         $topics[(int)$topic['id']] = $topic;
@@ -45,7 +45,7 @@ function dti_score_events(PDO $pdo) {
 }
 
 /** $members 는 구성원 명단이다 — 명단에서 빠진 사람도 기록이 있으면 보여 준다. */
-function dti_score_summary(PDO $pdo, array $members, $start = '', $end = '') {
+function dti_score_summary(PDO $pdo, array $members, string $start = '', string $end = ''): array {
     $rows = [];
     foreach ($members as $member) {
         $rows[$member['email']] = dti_score_empty_row($member['email'], $member['name']);
@@ -67,11 +67,11 @@ function dti_score_summary(PDO $pdo, array $members, $start = '', $end = '') {
     return $out;
 }
 
-function dti_score_event($email, $date, $kind, $points) {
+function dti_score_event(string $email, string $date, string $kind, int $points): array {
     return ['email' => $email, 'date' => $date, 'kind' => $kind, 'points' => $points];
 }
 
-function dti_score_empty_row($email, $name) {
+function dti_score_empty_row(string $email, string $name): array {
     return [
         'email' => $email,
         'name' => $name,

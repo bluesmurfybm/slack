@@ -5,7 +5,7 @@
  * 이제 같은 PHP 앱 안에 있으므로 세션을 그대로 쓴다(learn·access 와 같은 방식).
  */
 
-function dti_identity() {
+function dti_identity(): ?array {
     require_once __DIR__ . '/../auth.php';
 
     $user = current_portal_user();

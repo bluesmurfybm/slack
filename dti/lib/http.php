@@ -9,11 +9,11 @@
  */
 
 class DtiError extends RuntimeException {
-    public function __construct($detail, $status = 400) {
+    public function __construct(string $detail, int $status = 400) {
         parent::__construct($detail, $status);
     }
 
-    public function status() {
+    public function status(): int {
         return $this->getCode() ?: 400;
     }
 }
@@ -41,11 +41,11 @@ function dti_request_from_globals(): array {
 
 /* ---------- 응답 ---------- */
 
-function dti_json($data, $status = 200): array {
+function dti_json(mixed $data, int $status = 200): array {
     return ['status' => $status, 'data' => $data];
 }
 
-function dti_file($path, $name): array {
+function dti_file(string $path, string $name): array {
     return ['status' => 200, 'file' => $path, 'name' => $name];
 }
 
@@ -96,7 +96,7 @@ function dti_route(array $ctx, array $req): array {
 
 /* ---------- 입력 검증 ---------- */
 
-function dti_want_str(array $body, $key, $label, $required = false): string {
+function dti_want_str(array $body, string $key, string $label, bool $required = false): string {
     $value = trim((string)($body[$key] ?? ''));
     if ($required && $value === '') {
         throw new DtiError("{$label}을(를) 입력해 주세요", 422);
@@ -104,7 +104,7 @@ function dti_want_str(array $body, $key, $label, $required = false): string {
     return $value;
 }
 
-function dti_want_nullable_int(array $body, $key, $label): ?int {
+function dti_want_nullable_int(array $body, string $key, string $label): ?int {
     $value = $body[$key] ?? null;
     if ($value === null || $value === '') return null;
     if (!is_numeric($value)) {
@@ -113,7 +113,7 @@ function dti_want_nullable_int(array $body, $key, $label): ?int {
     return (int)$value;
 }
 
-function dti_want_date($value, $label): string {
+function dti_want_date(mixed $value, string $label): string {
     $date = trim((string)$value);
     if ($date === '') return '';
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
@@ -122,7 +122,7 @@ function dti_want_date($value, $label): string {
     return $date;
 }
 
-function dti_want_url($value, $label): string {
+function dti_want_url(mixed $value, string $label): string {
     $url = trim((string)$value);
     if ($url !== '' && !preg_match('~^https?://~i', $url)) {
         throw new DtiError('http(s) 로 시작하는 주소만 넣을 수 있습니다', 422);
@@ -130,7 +130,7 @@ function dti_want_url($value, $label): string {
     return $url;
 }
 
-function dti_want_one_of($value, array $allowed, $label, $blankOk = true): string {
+function dti_want_one_of(mixed $value, array $allowed, string $label, bool $blankOk = true): string {
     $picked = trim((string)$value);
     if ($picked === '' && $blankOk) return '';
     if (!in_array($picked, $allowed, true)) {
@@ -139,6 +139,6 @@ function dti_want_one_of($value, array $allowed, $label, $blankOk = true): strin
     return $picked;
 }
 
-function dti_flag($value): int {
+function dti_flag(mixed $value): int {
     return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ? 1 : 0;
 }

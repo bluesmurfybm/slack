@@ -17,11 +17,11 @@ const DTI_PRESENTATION_DEFAULTS = [
 
 const DTI_PRESENTATION_NULLABLE = ['material_kind', 'material_name', 'material_url', 'material_path'];
 
-function dti_presentation_columns() {
+function dti_presentation_columns(): array {
     return array_keys(DTI_PRESENTATION_DEFAULTS);
 }
 
-function dti_presentation_from_row(array $row) {
+function dti_presentation_from_row(array $row): array {
     $pres = DTI_PRESENTATION_DEFAULTS;
     foreach (dti_presentation_columns() as $column) {
         if (!array_key_exists($column, $row)) continue;
@@ -36,26 +36,26 @@ function dti_presentation_from_row(array $row) {
     return $pres;
 }
 
-function dti_presentation_find(PDO $pdo, $id) {
+function dti_presentation_find(PDO $pdo, int $id): ?array {
     $stmt = $pdo->prepare("SELECT * FROM dti_presentations WHERE id = ?");
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     return $row ? dti_presentation_from_row($row) : null;
 }
 
-function dti_presentation_of_topic(PDO $pdo, $topicId) {
+function dti_presentation_of_topic(PDO $pdo, int $topicId): ?array {
     $stmt = $pdo->prepare("SELECT * FROM dti_presentations WHERE topic_id = ?");
     $stmt->execute([$topicId]);
     $row = $stmt->fetch();
     return $row ? dti_presentation_from_row($row) : null;
 }
 
-function dti_presentation_all_with_topics(PDO $pdo) {
+function dti_presentation_all_with_topics(PDO $pdo): array {
     $sql = "SELECT p.* FROM dti_presentations p JOIN dti_topics t ON t.id = p.topic_id";
     return array_map('dti_presentation_from_row', $pdo->query($sql)->fetchAll());
 }
 
-function dti_presentation_insert(PDO $pdo, array &$pres) {
+function dti_presentation_insert(PDO $pdo, array &$pres): int {
     $columns = array_values(array_diff(dti_presentation_columns(), ['id']));
     $sql = 'INSERT INTO dti_presentations (`' . implode('`, `', $columns) . '`) VALUES ('
          . implode(', ', array_fill(0, count($columns), '?')) . ')';
@@ -65,7 +65,7 @@ function dti_presentation_insert(PDO $pdo, array &$pres) {
     return $pres['id'] = (int)$pdo->lastInsertId();
 }
 
-function dti_presentation_update(PDO $pdo, array $pres) {
+function dti_presentation_update(PDO $pdo, array $pres): void {
     $columns = array_values(array_diff(dti_presentation_columns(), ['id']));
     $sql = 'UPDATE dti_presentations SET ' . implode(', ', array_map(static fn ($c) => "`{$c}` = ?", $columns))
          . ' WHERE id = ?';
@@ -75,7 +75,7 @@ function dti_presentation_update(PDO $pdo, array $pres) {
     $pdo->prepare($sql)->execute($values);
 }
 
-function dti_presentation_delete(PDO $pdo, $id) {
+function dti_presentation_delete(PDO $pdo, int $id): void {
     $pdo->prepare("DELETE FROM dti_presentations WHERE id = ?")->execute([$id]);
 }
 
@@ -83,7 +83,8 @@ function dti_presentation_delete(PDO $pdo, $id) {
  * 아무도 잡지 않은 발표 행을 조건부 UPDATE 로 차지한다. 동시 선점은 여기서 갈린다.
  * 잡았으면 true, 이미 임자가 있거나 행이 없으면 false.
  */
-function dti_presentation_claim(PDO $pdo, $topicId, $email, $name, $plannedDate) {
+function dti_presentation_claim(PDO $pdo, int $topicId, string $email, string $name,
+                                ?string $plannedDate): bool {
     $sql = "UPDATE dti_presentations SET presenter_email = ?, presenter = ?"
          . ($plannedDate === null ? '' : ', planned_date = ?')
          . " WHERE topic_id = ? AND presenter_email = '' AND done_date = ''";
@@ -97,7 +98,7 @@ function dti_presentation_claim(PDO $pdo, $topicId, $email, $name, $plannedDate)
     return $stmt->rowCount() > 0;
 }
 
-function dti_presentation_create(PDO $pdo, $topicId, array $values = []) {
+function dti_presentation_create(PDO $pdo, int $topicId, array $values = []): array {
     $pres = DTI_PRESENTATION_DEFAULTS;
     $pres['topic_id'] = $topicId;
     $pres['created_at'] = date('Y-m-d H:i:s');
@@ -109,7 +110,7 @@ function dti_presentation_create(PDO $pdo, $topicId, array $values = []) {
 }
 
 /** 발표를 통째로 지운다 — 자료 파일과 반응까지 같이 사라진다 */
-function dti_presentation_purge(PDO $pdo, $uploadDir, array $pres) {
+function dti_presentation_purge(PDO $pdo, string $uploadDir, array $pres): void {
     dti_remove_upload($uploadDir, $pres['material_path']);
     dti_emotion_delete_by_presentation($pdo, (int)$pres['id']);
     dti_presentation_delete($pdo, (int)$pres['id']);
@@ -119,7 +120,7 @@ function dti_presentation_purge(PDO $pdo, $uploadDir, array $pres) {
  * 예약 취소·배정 해제. 발표가 이미 끝났으면 기록을 남겨야 하므로 발표자만 지우고,
  * 아직이면 발표 행 자체를 없앤다.
  */
-function dti_presentation_unassign(PDO $pdo, $uploadDir, array $pres) {
+function dti_presentation_unassign(PDO $pdo, string $uploadDir, array $pres): void {
     if ($pres['done_date'] !== '') {
         $pres['presenter'] = '';
         $pres['presenter_email'] = '';
@@ -130,6 +131,6 @@ function dti_presentation_unassign(PDO $pdo, $uploadDir, array $pres) {
     dti_presentation_purge($pdo, $uploadDir, $pres);
 }
 
-function dti_may_manage($pres, $email, $isAdmin) {
+function dti_may_manage(?array $pres, string $email, bool $isAdmin): bool {
     return ($pres !== null && $pres['presenter_email'] === $email) || $isAdmin;
 }

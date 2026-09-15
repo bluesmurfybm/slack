@@ -1,7 +1,7 @@
 <?php
 /** 발표 반응(좋아요·적용해보고싶다·쉽다·새롭다). */
 
-function dti_emotion_empty_counts() {
+function dti_emotion_empty_counts(): array {
     return array_fill_keys(DTI_EMOTIONS, 0);
 }
 
@@ -9,7 +9,7 @@ function dti_emotion_empty_counts() {
  * 목록용 집계. 화면은 아티클 단위로 그리므로 발표가 아니라 아티클 id 로 묶어 돌려준다.
  * [아티클별 종류별 개수, 내가 누른 종류] 두 벌을 준다.
  */
-function dti_emotion_summary(PDO $pdo, $me) {
+function dti_emotion_summary(PDO $pdo, string $me): array {
     $sql = "SELECT p.topic_id, e.kind, e.email
             FROM dti_emotions e
             JOIN dti_presentations p ON p.id = e.presentation_id";
@@ -27,14 +27,15 @@ function dti_emotion_summary(PDO $pdo, $me) {
     return [$counts, $mine];
 }
 
-function dti_emotion_count_for(PDO $pdo, $presentationId, $kind) {
+function dti_emotion_count_for(PDO $pdo, int $presentationId, string $kind): int {
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM dti_emotions WHERE presentation_id = ? AND kind = ?");
     $stmt->execute([$presentationId, $kind]);
     return (int)$stmt->fetchColumn();
 }
 
 /** 있으면 지우고 없으면 남긴다. 남겼으면 true. */
-function dti_emotion_toggle(PDO $pdo, $presentationId, $email, $kind, $now) {
+function dti_emotion_toggle(PDO $pdo, int $presentationId, string $email, string $kind,
+                            string $now): bool {
     $stmt = $pdo->prepare("DELETE FROM dti_emotions WHERE presentation_id = ? AND email = ? AND kind = ?");
     $stmt->execute([$presentationId, $email, $kind]);
     if ($stmt->rowCount() > 0) return false;
@@ -44,12 +45,12 @@ function dti_emotion_toggle(PDO $pdo, $presentationId, $email, $kind, $now) {
     return true;
 }
 
-function dti_emotion_delete_by_presentation(PDO $pdo, $presentationId) {
+function dti_emotion_delete_by_presentation(PDO $pdo, int $presentationId): void {
     $pdo->prepare("DELETE FROM dti_emotions WHERE presentation_id = ?")->execute([$presentationId]);
 }
 
 /** 사람·날짜별 반응 수 */
-function dti_emotion_daily_counts(PDO $pdo) {
+function dti_emotion_daily_counts(PDO $pdo): array {
     $sql = "SELECT email, LEFT(created_at, 10) AS day, COUNT(*) AS n
             FROM dti_emotions GROUP BY email, day";
 

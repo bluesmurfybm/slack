@@ -18,7 +18,7 @@ const DTI_INLINE_TYPES = [
     'txt' => 'text/plain',
 ];
 
-function dti_upload_dir($dir) {
+function dti_upload_dir(string $dir): string {
     if (!is_dir($dir)) mkdir($dir, 0777, true);
     return realpath($dir) ?: $dir;
 }
@@ -28,7 +28,8 @@ function dti_upload_dir($dir) {
  * $mover 는 임시파일을 옮기는 방법이다 — 운영은 move_uploaded_file 만 안전하고,
  * 테스트는 진짜 업로드가 아니라 이 자리를 갈아끼운다.
  */
-function dti_save_upload($dir, $maxUploadMb, $topicId, array $file, $mover = null) {
+function dti_save_upload(string $dir, int $maxUploadMb, int $topicId, array $file,
+                         ?callable $mover = null): string {
     $error = $file['error'] ?? UPLOAD_ERR_NO_FILE;
     if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
         throw dti_upload_too_large($maxUploadMb);
@@ -52,14 +53,14 @@ function dti_save_upload($dir, $maxUploadMb, $topicId, array $file, $mover = nul
     return $stored;
 }
 
-function dti_remove_upload($dir, $stored) {
+function dti_remove_upload(string $dir, ?string $stored): void {
     if (!$stored) return;
     $path = dti_upload_dir($dir) . '/' . basename($stored);
     if (is_file($path)) @unlink($path);
 }
 
 /** 경로 이탈 검사. DB 값이라도 그대로 붙이지 않는다. */
-function dti_resolve_upload($dir, $stored) {
+function dti_resolve_upload(string $dir, ?string $stored): string {
     if (!$stored) throw new DtiError('올라온 파일이 없습니다', 404);
 
     $root = dti_upload_dir($dir);
@@ -71,7 +72,7 @@ function dti_resolve_upload($dir, $stored) {
 }
 
 /** Content-Type 과 Content-Disposition */
-function dti_disposition($name) {
+function dti_disposition(string $name): array {
     $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
     $inline = isset(DTI_INLINE_TYPES[$extension]);
 
@@ -81,6 +82,6 @@ function dti_disposition($name) {
     ];
 }
 
-function dti_upload_too_large($maxUploadMb) {
+function dti_upload_too_large(int $maxUploadMb): DtiError {
     return new DtiError($maxUploadMb . 'MB 까지 올릴 수 있습니다', 413);
 }

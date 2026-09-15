@@ -46,16 +46,16 @@ const DTI_STATUS_OPEN = '미지정';
 const DTI_STATUS_PLANNED = '발표예정';
 const DTI_STATUS_DONE = '발표완료';
 
-function dti_topic_columns() {
+function dti_topic_columns(): array {
     return array_keys(DTI_TOPIC_DEFAULTS);
 }
 
-function dti_topic_new() {
+function dti_topic_new(): array {
     return DTI_TOPIC_DEFAULTS;
 }
 
 /** PDO 는 컬럼을 문자열로 줄 수 있다. 정수는 여기서 한 번만 캐스팅한다. */
-function dti_topic_from_row(array $row) {
+function dti_topic_from_row(array $row): array {
     $topic = DTI_TOPIC_DEFAULTS;
     foreach (dti_topic_columns() as $column) {
         if (!array_key_exists($column, $row)) continue;
@@ -71,18 +71,18 @@ function dti_topic_from_row(array $row) {
     return $topic;
 }
 
-function dti_topic_find(PDO $pdo, $id) {
+function dti_topic_find(PDO $pdo, int $id): ?array {
     $stmt = $pdo->prepare("SELECT * FROM dti_topics WHERE id = ?");
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     return $row ? dti_topic_from_row($row) : null;
 }
 
-function dti_topic_find_or_fail(PDO $pdo, $id) {
+function dti_topic_find_or_fail(PDO $pdo, int $id): array {
     return dti_topic_find($pdo, $id) ?? throw new DtiError('없는 아티클입니다', 404);
 }
 
-function dti_topic_all(PDO $pdo) {
+function dti_topic_all(PDO $pdo): array {
     return array_map('dti_topic_from_row', $pdo->query("SELECT * FROM dti_topics")->fetchAll());
 }
 
@@ -90,7 +90,7 @@ function dti_topic_all(PDO $pdo) {
  * 목록. 날짜(발표일 > 예정일) 없는 것이 먼저, 그다음 날짜 최신순, 마지막으로 등록 역순이다.
  * 아티클과 발표를 짝지어 돌려준다.
  */
-function dti_topic_list_with_presentations(PDO $pdo, $includeHidden) {
+function dti_topic_list_with_presentations(PDO $pdo, bool $includeHidden): array {
     $on = "COALESCE(NULLIF(p.done_date, ''), NULLIF(p.planned_date, ''))";
     $where = $includeHidden ? '' : 'WHERE t.active = 1 AND t.archived = 0';
 
@@ -119,7 +119,7 @@ function dti_topic_list_with_presentations(PDO $pdo, $includeHidden) {
     return $out;
 }
 
-function dti_topic_insert(PDO $pdo, array &$topic) {
+function dti_topic_insert(PDO $pdo, array &$topic): int {
     $columns = array_values(array_diff(dti_topic_columns(), ['id']));
     $sql = 'INSERT INTO dti_topics (`' . implode('`, `', $columns) . '`) VALUES ('
          . implode(', ', array_fill(0, count($columns), '?')) . ')';
@@ -129,7 +129,7 @@ function dti_topic_insert(PDO $pdo, array &$topic) {
     return $topic['id'] = (int)$pdo->lastInsertId();
 }
 
-function dti_topic_update(PDO $pdo, array $topic) {
+function dti_topic_update(PDO $pdo, array $topic): void {
     $columns = array_values(array_diff(dti_topic_columns(), ['id']));
     $sql = 'UPDATE dti_topics SET ' . implode(', ', array_map(static fn ($c) => "`{$c}` = ?", $columns))
          . ' WHERE id = ?';
@@ -139,7 +139,7 @@ function dti_topic_update(PDO $pdo, array $topic) {
     $pdo->prepare($sql)->execute($values);
 }
 
-function dti_topic_delete(PDO $pdo, $id) {
+function dti_topic_delete(PDO $pdo, int $id): void {
     $pdo->prepare("DELETE FROM dti_topics WHERE id = ?")->execute([$id]);
 }
 
@@ -147,14 +147,15 @@ function dti_topic_delete(PDO $pdo, $id) {
  * 상태는 저장하지 않고 발표 행에서 파생한다 — 원본 xlsx 에 "발표자·예정일이 있는데 비고는
  * 미지정" 인 행이 있어서 컬럼으로 들고 있으면 계속 어긋난다.
  */
-function dti_topic_status($pres) {
+function dti_topic_status(?array $pres): string {
     if ($pres && $pres['done_date'] !== '') return DTI_STATUS_DONE;
     if ($pres && $pres['presenter_email'] !== '') return DTI_STATUS_PLANNED;
     return DTI_STATUS_OPEN;
 }
 
 /** 아티클 하나를 화면 계약으로 옮긴다. */
-function dti_topic_present(array $topic, $pres, $emotions = null, $mine = null) {
+function dti_topic_present(array $topic, ?array $pres, ?array $emotions = null,
+                           ?array $mine = null): array {
     $flat = [
         'presenter' => '', 'presenter_email' => '', 'planned_date' => '', 'done_date' => '',
         'material_kind' => null, 'material_name' => null, 'material_url' => null,

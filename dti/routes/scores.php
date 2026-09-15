@@ -13,7 +13,7 @@ function dti_route_scores(array $ctx, array $req): array {
     return dti_json(dti_score_summary($ctx['pdo'], $members, $start, $end));
 }
 
-function dti_score_date_param($value): string {
+function dti_score_date_param(mixed $value): string {
     $date = trim((string)$value);
     if ($date !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
         throw new DtiError('기간은 YYYY-MM-DD 형식이어야 합니다', 422);
