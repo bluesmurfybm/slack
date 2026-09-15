@@ -53,9 +53,10 @@ final class IdentityTest extends TestCase
         $body = $this->whoami(['email' => 'siyu@bluesoft.co.kr', 'name' => '']);
         $this->assertSame(['APP', 'SQUARE', 'LAB'], $body['all_teams']);
         $this->assertSame(['DI', 'MIT TR', 'Etc'], $body['all_magazines']);
-        // 화면은 여기에 /?view=profile, /logout.php 를 이어붙인다. 페이지가 아니라 기준 경로다
+        // 화면은 여기에 /?view=profile, /api/logout.php 를 이어붙인다. 페이지가 아니라 기준 경로다
         $this->assertSame('..', $body['portal_url']);
-        $this->assertSame('../slack/lists.php', $body['slack_url']);
+        // 업무 시스템 링크는 상단바가 worksystems.json 에서 직접 받는다 — whoami 엔 없다
+        $this->assertArrayNotHasKey('slack_url', $body);
     }
 
     public function test_개발_로그인_키는_없다(): void

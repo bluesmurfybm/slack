@@ -14,7 +14,6 @@ function dti_route_identity(array $ctx, array $req): array {
             'all_teams' => DTI_TEAMS,
             'all_magazines' => DTI_MAGAZINES,
             'portal_url' => $ctx['config']['portal_url'],
-            'slack_url' => $ctx['config']['slack_url'],
         ]);
     }
 

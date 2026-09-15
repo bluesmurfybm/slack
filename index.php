@@ -21,8 +21,12 @@ $__current = $__u ? [
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
 ] : null;
-$__cfg   = require __DIR__ . '/config.php';
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'dti' => 'dti/index.php', 'learn' => 'learn/index.php', 'access' => 'access/access.php', 'moodle' => 'moodle/'];
+require_once __DIR__ . '/worksystems.php';
+// 대시보드 타일도 상단바 드롭다운과 같은 목록(worksystems.php)을 쓴다 — 한쪽만 늘어나는 일이 없게.
+$__links = [];
+foreach (work_systems() as $__sys) {
+    $__links[$__sys['key']] = $__sys['url'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -79,12 +83,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'dt
           <div class="dd-menu" id="userDd">
             <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
             <div class="dd-sep"></div>
-            <div class="dd-label">업무 시스템</div>
-            <a href="" id="dd-book" target="_blank" rel="noopener">📚 BlueBooks</a>
-            <a href="" id="dd-slack" target="_blank" rel="noopener">📥 Coursemos WorkHub</a>
-            <a href="" id="dd-dti" target="_blank" rel="noopener">📰 DTI 발표</a>
-            <a href="" id="dd-learning" target="_blank" rel="noopener">🎓 BlueLearn</a>
-            <a href="" id="dd-moodle" target="_blank" rel="noopener">🧭 MoodleUp?</a>
+            <?= work_systems_menu('', '', true) ?>
             <div class="dd-sep"></div>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
@@ -254,11 +253,6 @@ function renderShell(){
   av.textContent=first; av.style.background=current.color||avatarColor(current.name);
   document.getElementById("tb-name").textContent=current.name;
   document.getElementById("hero-hi").textContent=`${current.name}님, 환영합니다`;
-  document.getElementById("dd-book").href=LINKS.book;
-  document.getElementById("dd-slack").href=LINKS.slack;
-  document.getElementById("dd-dti").href=LINKS.dti;
-  document.getElementById("dd-learning").href=LINKS.learn;
-  document.getElementById("dd-moodle").href=LINKS.moodle;
 }
 
 function toggleUserMenu(e){

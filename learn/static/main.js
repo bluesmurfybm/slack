@@ -24,7 +24,6 @@ async function loadWhoami() {
   const portalUrl = (APP.me.portal_url || "").replace(/\/+$/, "");
   document.getElementById("hdrBrand").href = portalUrl || "#";
   document.getElementById("dd-mypage").href = portalUrl ? `${portalUrl}/?view=profile` : "#";
-  document.getElementById("dd-slack").href = APP.me.slack_url || "#";
   document.getElementById("dd-logout").href = portalUrl ? `${portalUrl}/api/logout.php` : "#";
   document.getElementById("hdrName").textContent = APP.me.name || "(로그인 필요)";
   const av = document.getElementById("hdrAvatar");

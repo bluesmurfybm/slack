@@ -4,6 +4,7 @@
  * 포털 로그인 없이 들어오면 포털 로그인 화면으로 보낸다.
  */
 require_once __DIR__ . '/guard.php';
+require_once __DIR__ . '/../worksystems.php';
 learn_require_page_login();
 ?>
 <!DOCTYPE html>
@@ -41,8 +42,7 @@ learn_require_page_login();
           <div class="dd-menu" id="hdrUserDd">
             <a href="#" id="dd-mypage">👤 마이페이지</a>
             <div class="dd-sep"></div>
-            <div class="dd-label">업무 시스템</div>
-            <a href="#" id="dd-slack">📥 업무현황판</a>
+            <?= work_systems_menu('../', 'learn') ?>
             <div class="dd-sep"></div>
             <a href="#" id="dd-logout">🚪 로그아웃</a>
           </div>

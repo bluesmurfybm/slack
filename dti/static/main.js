@@ -44,7 +44,6 @@ async function loadWhoami() {
   const portalUrl = (APP.me.portal_url || "").replace(/\/+$/, "");
   document.getElementById("hdrBrand").href = portalUrl || "#";
   document.getElementById("dd-mypage").href = portalUrl ? `${portalUrl}/?view=profile` : "#";
-  document.getElementById("dd-slack").href = APP.me.slack_url || "#";
   // 포털 루트에는 logout.php 가 없다(magazine 시절부터 깨져 있던 링크다). learn 과 같이 맞춘다
   document.getElementById("dd-logout").href = portalUrl ? `${portalUrl}/api/logout.php` : "#";
   document.getElementById("hdrName").textContent = APP.me.name || "(로그인 필요)";

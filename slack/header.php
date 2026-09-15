@@ -7,16 +7,14 @@
  * slack/ 바로 아래 페이지(lists.php 등)는 $__bwBase 안 정해도 됨(기본 '').
  * slack/xxx/ 하위 폴더 페이지(schools/schools_admin.php 등)는 include 전에
  * $__bwBase = '../'; 로 한 단계 더 위임을 알려줘야 링크가 안 깨진다.
+ *
+ * $__bwCurrent 는 드롭다운 "업무 시스템"에서 현재 위치로 표시할 key(worksystems.php 참고).
+ * 안 주면 아무 줄도 강조하지 않는다.
  */
-$__bwBase    = isset($__bwBase) ? $__bwBase : '';
-$__bwUser    = function_exists('current_portal_user') ? current_portal_user() : null;
-$__bwCfg     = require __DIR__ . '/../config.php';
-$__bwBookUrl = $__bwCfg['links']['book'] ?? '#';
-// config.php의 book 링크는 "포털 루트" 기준 상대경로일 수 있음(예: "book") — 절대주소(http...)가
-// 아니면 $__bwBase로 포털 루트까지 되짚어준다. 안 그러면 slack/ 하위 폴더에서 엉뚱한 곳으로 감.
-if (!preg_match('#^[a-z][a-z0-9+.-]*://#i', $__bwBookUrl)) {
-    $__bwBookUrl = $__bwBase . '../' . $__bwBookUrl;
-}
+require_once __DIR__ . '/../worksystems.php';
+$__bwBase = isset($__bwBase) ? $__bwBase : '';
+$__bwCurrent = isset($__bwCurrent) ? $__bwCurrent : '';
+$__bwUser = function_exists('current_portal_user') ? current_portal_user() : null;
 ?>
 <div class="topbar">
   <div class="topbar-in">
@@ -32,8 +30,7 @@ if (!preg_match('#^[a-z][a-z0-9+.-]*://#i', $__bwBookUrl)) {
         <div class="dd-menu" id="hdrUserDd">
           <a href="<?= $__bwBase ?>../index.php?view=profile">👤 마이페이지</a>
           <div class="dd-sep"></div>
-          <div class="dd-label">업무 시스템</div>
-          <a href="<?= htmlspecialchars($__bwBookUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">📚 BlueBooks</a>
+          <?= work_systems_menu($__bwBase . '../', $__bwCurrent) ?>
           <div class="dd-sep"></div>
           <a href="<?= $__bwBase ?>logout.php">🚪 로그아웃</a>
         </div>

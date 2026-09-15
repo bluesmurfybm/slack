@@ -1,4 +1,5 @@
 <?php
+$__bwCurrent = 'slack';   // 상단바 드롭다운에서 현재 시스템 표시
 require_once __DIR__ . '/auth.php';
 require_login();
 $me = current_user();

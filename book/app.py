@@ -30,7 +30,7 @@ FIELDS = ("year", "date", "applicant", "gubun", "title",
 # blue-iWorks 포털과 신원 공유(SSO). 포털(PHP)이 로그인 시 심는 서명 쿠키를 여기서 검증만 한다.
 # 전제: 포털·book이 같은 호스트(포트만 달라도 됨)에서 서빙되어야 브라우저가 쿠키를 같이 보낸다.
 PORTAL_URL       = os.environ.get("PORTAL_URL", "/")   # TODO: 실제 포털 주소로 설정
-SLACK_URL        = os.environ.get("SLACK_URL", "/slack/lists.php")  # 공통 헤더 드롭다운의 "업무현황판" 링크
+WORK_SYSTEMS = os.path.join(BASE, "..", "worksystems.json")  # 공통 상단바 드롭다운 목록 — 원본은 포털에 있다
 SSO_SECRET_PATH  = os.path.join(BASE, "..", "sso_secret.key")          # 포털 auth.php가 최초 실행 시 생성
 ADMIN_EMAIL      = "jian@bluesoft.co.kr"                               # 전체 수정/삭제/완료처리 권한
 
@@ -252,6 +252,21 @@ def init_db():
     conn.close()
 
 
+def work_systems():
+    """공통 상단바 "업무 시스템" 목록. 포털의 worksystems.json 이 유일한 원본이라 여기선 읽기만 하고,
+    포털 루트 기준 path 에 PORTAL_URL 을 붙여 절대주소로 만들어 준다.
+    포털 트리가 안 보이는 환경이면 목록만 비어 나온다 — book 자체는 계속 뜬다."""
+    try:
+        with open(WORK_SYSTEMS, encoding="utf-8") as f:
+            systems = json.load(f)
+    except OSError:
+        return []
+    portal = PORTAL_URL.rstrip("/")
+    for item in systems:
+        item["url"] = portal + "/" + item["path"]
+    return systems
+
+
 def row_to_dict(row):
     d = dict(row)
     d["done"] = bool(d["done"])
@@ -280,7 +295,7 @@ def whoami(request: Request):
     base = {"email": None, "name": None, "color": None}
     base.update(ident or {})
     base["portal_url"] = PORTAL_URL   # 공통 상단바(로고 클릭·로그아웃 링크)가 참조
-    base["slack_url"]  = SLACK_URL    # 공통 상단바 드롭다운의 "업무현황판" 링크
+    base["work_systems"] = work_systems()   # 공통 상단바 드롭다운의 "업무 시스템" 목록
     return base
 
 

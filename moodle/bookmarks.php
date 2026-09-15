@@ -7,6 +7,7 @@
  */
 date_default_timezone_set('Asia/Seoul');
 require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../worksystems.php';
 require_once __DIR__ . '/db.php';
 
 $me = current_portal_user();
@@ -60,8 +61,9 @@ foreach ($rows as $r) $byWeek[$r['week']][] = $r;
         <div class="dd-menu" id="hdrUserDd">
           <a href="../index.php?view=profile">👤 마이페이지</a>
           <div class="dd-sep"></div>
-          <a href="index.php">🧭 MoodleUp?</a>
           <a href="../index.php">🏠 대시보드</a>
+          <div class="dd-sep"></div>
+          <?= work_systems_menu('../', 'moodle') ?>
           <div class="dd-sep"></div>
           <a href="../api/logout.php">🚪 로그아웃</a>
         </div>

@@ -18,13 +18,24 @@ function setMode(mode) {
   if (admin) renderAdmin(); else renderList();
 }
 
+/* 공통 상단바 드롭다운의 "업무 시스템" 목록 — 원본은 포털의 worksystems.json,
+   whoami 가 그대로 내려준 걸 그리기만 한다 */
+function renderWorkSystems(list, current) {
+  const box = document.getElementById("dd-systems");
+  if (!box) return;
+  box.innerHTML = (list || []).length
+    ? `<div class="dd-sep"></div><div class="dd-label">업무 시스템</div>` + list.map(s =>
+        `<a href="${s.url}"${s.key === current ? ' class="on" aria-current="page"' : ""}>${s.emoji} ${s.label}</a>`).join("")
+    : "";
+}
+
 async function loadWhoami() {
   APP.me = await api("/learningapi/whoami");
   document.body.classList.toggle("is-admin", !!APP.me.is_admin);
   const portalUrl = (APP.me.portal_url || "").replace(/\/+$/, "");
   document.getElementById("hdrBrand").href = portalUrl || "#";
   document.getElementById("dd-mypage").href = portalUrl ? `${portalUrl}/?view=profile` : "#";
-  document.getElementById("dd-slack").href = APP.me.slack_url || "#";
+  renderWorkSystems(APP.me.work_systems, "learn");
   document.getElementById("dd-logout").href = portalUrl ? `${portalUrl}/logout.php` : "#";
   document.getElementById("hdrName").textContent = APP.me.name || "(로그인 필요)";
   const av = document.getElementById("hdrAvatar");

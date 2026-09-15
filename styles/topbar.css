@@ -38,3 +38,5 @@ html{scrollbar-gutter:stable}
 .topbar .dd-menu a:hover{background:#EEF3FB}
 .topbar .dd-menu .dd-sep{height:1px;background:#E2E9F6;margin:5px 6px}
 .topbar .dd-menu .dd-label{font-size:11px;color:#63719A;padding:6px 11px 2px}
+/* 지금 보고 있는 업무 시스템 — 드롭다운에서 자기 자리를 표시한다 */
+.topbar .dd-menu a.on{background:#EEF3FB;color:#1C5DE5;font-weight:600}

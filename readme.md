@@ -10,6 +10,7 @@ Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청
 D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── index.php                    로그인/대시보드/프로필 (SPA 한 페이지)
 ├── auth.php, db.php, config.php 포털 세션·DB·SSO 헬퍼
+├── worksystems.json/.php        상단바 드롭다운 "업무 시스템" 목록의 유일한 원본 + 렌더러
 ├── api/                         login.php, logout.php, me.php
 ├── styles/                      default.css, favicon.ico, logo-blue.png
 │
@@ -108,6 +109,17 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 - **공통 상단바**: `slack/header.php`(PHP include)와 `book/index.html`의 `.bw-topbar`가 시각적으로
   동일한 blue-iWorks 상단바(로고+사용자명+로그아웃)를 각자 방식으로 그린다. slack 하위 폴더
   페이지는 include 전에 `$__bwBase = '../';`를 반드시 설정해야 링크가 안 깨진다(폴더 깊이 보정용).
+- **상단바 드롭다운의 "업무 시스템" 목록**: 원본은 `worksystems.json` 하나다(key·이모지·라벨 +
+  포털 루트 기준 경로). 시스템이 늘거나 이름이 바뀌면 여기만 고치면 전 모듈 상단바와 포털
+  대시보드 타일이 같이 바뀐다.
+  - PHP 쪽(포털·slack·access·moodle·dti·learn)은 `worksystems.php::work_systems_menu($base, $current)`
+    로 서버에서 그린다. `$base`는 그 페이지에서 **포털 루트까지 되짚는 접두사**(포털 `''`,
+    dti/learn/moodle/slack `'../'`, slack 하위 폴더 `'../../'`), `$current`는 현재 시스템 key —
+    그 줄이 `.on`(`styles/topbar.css`)으로 표시된다. `slack/header.php`를 쓰는 페이지는
+    `$__bwCurrent`만 넘기면 된다.
+  - 별도 프로세스인 book·learning은 PHP를 못 쓰니 `app.py`/`router.py`가 **같은 json을 직접 읽어**
+    `whoami` 로 내려주고 화면 JS(`renderWorkSystems`)가 그린다. 포털 트리가 안 보이면 목록만
+    비고 화면은 정상 동작한다.
 
 ---
 

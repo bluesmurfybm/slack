@@ -38,7 +38,6 @@ function dti_config(array $over = []): array {
         'slack_webhook' => null,
         // 화면이 뒤에 /?view=profile 같은 걸 붙여 쓴다. 페이지가 아니라 기준 경로여야 한다
         'portal_url' => '..',
-        'slack_url' => '../slack/lists.php',
     ];
     $config['admin_emails'] = array_map('strtolower', $config['admin_emails']);
     dti_config_check($config);
