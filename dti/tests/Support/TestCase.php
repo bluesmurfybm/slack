@@ -8,6 +8,8 @@ use Dti\Http\Request;
 use Dti\Http\Response;
 use Dti\Identity\Identity;
 use Dti\Kernel;
+use Dti\Service\Notifier;
+use Dti\Service\Storage;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 /**
@@ -38,6 +40,9 @@ abstract class TestCase extends BaseTestCase
     protected Config $config;
     protected Database $db;
     protected string $uploadDir;
+    protected Storage $storage;
+    protected RecordingWebhook $webhook;
+    protected Notifier $notifier;
 
     protected function setUp(): void
     {
@@ -45,6 +50,10 @@ abstract class TestCase extends BaseTestCase
         mkdir($this->uploadDir, 0777, true);
 
         $this->config = $this->makeConfig();
+        // 진짜 업로드가 아니라 move_uploaded_file 이 통하지 않는다. 옮기는 방법만 갈아끼운다
+        $this->storage = new Storage($this->config, static fn (string $from, string $to) => rename($from, $to));
+        $this->webhook = new RecordingWebhook();
+        $this->notifier = new Notifier($this->config, $this->webhook);
         $this->db = new Database($this->config);
         if (!self::$migrated) {
             $this->db->migrate();
@@ -140,7 +149,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function call(string $method, array $segments, ?Identity $identity, array $body = [], array $query = [], array $files = []): Response
     {
-        $kernel = new Kernel($this->config, $this->db, $identity, $this->notifier ?? null);
+        $kernel = new Kernel($this->config, $this->db, $identity, $this->storage, $this->notifier);
         return $kernel->handle(new Request($method, $segments, $body, $query, $files));
     }
 
@@ -165,6 +174,20 @@ abstract class TestCase extends BaseTestCase
     }
 
     /* ---------- 데이터 헬퍼 ---------- */
+
+    /** $_FILES 모양의 업로드 한 건을 만든다 */
+    protected function upload(string $name, string $content): array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'dtiup');
+        file_put_contents($tmp, $content);
+
+        return ['file' => [
+            'name' => $name,
+            'tmp_name' => $tmp,
+            'size' => strlen($content),
+            'error' => UPLOAD_ERR_OK,
+        ]];
+    }
 
     /** API 를 거치지 않고 아티클을 심는다. 조회·권한 테스트가 준비 단계에서 쓴다. */
     protected function makeTopic(array $values = []): int

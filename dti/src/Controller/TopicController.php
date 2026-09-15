@@ -12,7 +12,9 @@ use Dti\Identity\Members;
 use Dti\Repository\EmotionRepository;
 use Dti\Repository\PresentationRepository;
 use Dti\Repository\TopicRepository;
+use Dti\Service\Notifier;
 use Dti\Service\PresentationService;
+use Dti\Service\RelatedService;
 use Dti\Service\TopicPresenter;
 
 final class TopicController
@@ -24,6 +26,8 @@ final class TopicController
         private readonly EmotionRepository $emotions,
         private readonly PresentationService $service,
         private readonly Members $members,
+        private readonly RelatedService $related,
+        private readonly Notifier $notifier,
         private readonly Identity $identity,
     ) {}
 
@@ -60,6 +64,7 @@ final class TopicController
         if ($plannedDate !== '') {
             $this->service->create($tid, ['planned_date' => $plannedDate]);
         }
+        $this->related->rebuild();
 
         return Response::json(
             TopicPresenter::present($topic, $this->presentations->ofTopic($tid)), 201);
@@ -85,6 +90,8 @@ final class TopicController
             }
         }
 
+        $this->related->rebuild();
+
         return Response::json(TopicPresenter::present($topic, $this->presentations->ofTopic($tid)));
     }
 
@@ -96,6 +103,7 @@ final class TopicController
         $pres = $this->presentations->ofTopic($tid);
         if ($pres) $this->service->purge($pres);
         $this->topics->delete((int)$topic->id);
+        $this->related->rebuild();
 
         return Response::json(['ok' => true]);
     }
@@ -127,6 +135,8 @@ final class TopicController
         }
 
         $pres = $this->presentations->ofTopic($tid);
+        $this->notifier->newPresenter($topic, $pres);
+
         return Response::json(TopicPresenter::present($topic, $pres));
     }
 
@@ -202,6 +212,7 @@ final class TopicController
         } else {
             $pres = $this->service->create($tid, $values);
         }
+        $this->notifier->newPresenter($topic, $pres);
 
         return Response::json(TopicPresenter::present($topic, $pres));
     }
