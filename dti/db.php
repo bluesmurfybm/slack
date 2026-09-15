@@ -7,7 +7,7 @@ const DTI_TEAMS = ['APP', 'SQUARE', 'LAB'];
 const DTI_MAGAZINES = ['DI', 'MIT TR', 'Etc'];
 const DTI_EMOTIONS = ['like', 'apply', 'easy', 'new'];
 const DTI_DEFAULT_FIELDS = ['UI/UX', 'Marketing', 'Trend', 'AX', 'Etc'];
-const DTI_DEFAULT_ADMINS = ['jian@bluesoft.co.kr', 'kimhy@bluesoft.co.kr'];
+const DTI_DEFAULT_ADMINS = ['jian@bluesoft.co.kr', 'kimhy@bluesoft.co.kr', 'jun0@bluesoft.co.kr'];
 
 // 분야는 DB 에서 동적으로 관리하지만 팀은 코드에 둔다. 입·퇴사 때 여기를 고친다.
 const DTI_DEFAULT_TEAMS = [
