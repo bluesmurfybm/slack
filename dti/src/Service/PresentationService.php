@@ -5,14 +5,13 @@ namespace Dti\Service;
 use Dti\Config;
 use Dti\Entity\Presentation;
 use Dti\Identity\Identity;
-use Dti\Repository\EmotionRepository;
 use Dti\Repository\PresentationRepository;
 
 final class PresentationService
 {
     public function __construct(
         private readonly PresentationRepository $presentations,
-        private readonly EmotionRepository $emotions,
+        private readonly \PDO $pdo,
         private readonly string $uploadDir,
     ) {}
 
@@ -32,7 +31,7 @@ final class PresentationService
     public function purge(Presentation $pres): void
     {
         dti_remove_upload($this->uploadDir, $pres->material_path);
-        $this->emotions->deleteByPresentation((int)$pres->id);
+        dti_emotion_delete_by_presentation($this->pdo, (int)$pres->id);
         $this->presentations->delete((int)$pres->id);
     }
 

@@ -7,19 +7,18 @@ use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
 use Dti\Identity\Identity;
-use Dti\Repository\FieldRepository;
 
 final class FieldController
 {
     public function __construct(
         private readonly Config $config,
-        private readonly FieldRepository $fields,
+        private readonly \PDO $pdo,
         private readonly Identity $identity,
     ) {}
 
     public function index(): Response
     {
-        return Response::json($this->fields->all());
+        return Response::json(dti_field_all($this->pdo));
     }
 
     public function create(array $body): Response
@@ -27,18 +26,18 @@ final class FieldController
         $this->requireAdmin();
 
         $name = Input::str($body, 'name', '분야 이름', required: true);
-        if ($this->fields->exists($name)) {
+        if (dti_field_exists($this->pdo, $name)) {
             throw new ApiException('이미 있는 분야입니다', 409);
         }
 
-        return Response::json(['id' => $this->fields->insert($name), 'name' => $name], 201);
+        return Response::json(['id' => dti_field_insert($this->pdo, $name), 'name' => $name], 201);
     }
 
     public function destroy(int $fid): Response
     {
         $this->requireAdmin();
 
-        if (!$this->fields->delete($fid)) {
+        if (!dti_field_delete($this->pdo, $fid)) {
             throw new ApiException('없는 분야입니다', 404);
         }
         return Response::json(['ok' => true]);

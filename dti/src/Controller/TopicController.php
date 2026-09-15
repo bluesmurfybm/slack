@@ -9,7 +9,6 @@ use Dti\Http\Input;
 use Dti\Http\Response;
 use Dti\Identity\Identity;
 use Dti\Identity\Members;
-use Dti\Repository\EmotionRepository;
 use Dti\Repository\PresentationRepository;
 use Dti\Repository\TopicRepository;
 use Dti\Service\PresentationService;
@@ -22,7 +21,7 @@ final class TopicController
         private readonly Config $config,
         private readonly TopicRepository $topics,
         private readonly PresentationRepository $presentations,
-        private readonly EmotionRepository $emotions,
+        private readonly \PDO $pdo,
         private readonly PresentationService $service,
         private readonly Members $members,
         private readonly RelatedService $related,
@@ -34,7 +33,7 @@ final class TopicController
     {
         // 숨김·보관은 관리자 화면에만 있어야 한다. 목록에서 빼는 판정은 서버가 한다
         $rows = $this->topics->listWithPresentations($this->config->isAdmin($this->identity->email));
-        [$counts, $mine] = $this->emotions->summary($this->identity->email);
+        [$counts, $mine] = dti_emotion_summary($this->pdo, $this->identity->email);
 
         $out = [];
         foreach ($rows as [$topic, $pres]) {

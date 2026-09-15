@@ -14,8 +14,6 @@ use Dti\Http\Request;
 use Dti\Http\Response;
 use Dti\Identity\Identity;
 use Dti\Identity\Members;
-use Dti\Repository\EmotionRepository;
-use Dti\Repository\FieldRepository;
 use Dti\Repository\PresentationRepository;
 use Dti\Repository\RelatedRepository;
 use Dti\Repository\TopicRepository;
@@ -126,7 +124,7 @@ final class Kernel
         $scores = new ScoreService(
             new TopicRepository($pdo),
             new PresentationRepository($pdo),
-            new EmotionRepository($pdo),
+            $pdo,
             $this->members(),
         );
 
@@ -135,7 +133,7 @@ final class Kernel
 
     private function routeFields(Request $request): Response
     {
-        $fields = new FieldController($this->config, new FieldRepository($this->db->pdo()), $this->identity);
+        $fields = new FieldController($this->config, $this->db->pdo(), $this->identity);
         $fid = $request->segment(1);
 
         return match ([$request->method, $fid === null]) {
@@ -153,7 +151,7 @@ final class Kernel
             $this->config,
             new TopicRepository($pdo),
             new PresentationRepository($pdo),
-            new EmotionRepository($pdo),
+            $pdo,
             $this->presentationService(),
             $this->members(),
             $this->relatedService(),
@@ -174,7 +172,7 @@ final class Kernel
         return new EmotionController(
             new TopicRepository($pdo),
             new PresentationRepository($pdo),
-            new EmotionRepository($pdo),
+            $pdo,
             $this->identity,
         );
     }
@@ -197,7 +195,7 @@ final class Kernel
         $pdo = $this->db->pdo();
         return new PresentationService(
             new PresentationRepository($pdo),
-            new EmotionRepository($pdo),
+            $pdo,
             $this->config->uploadDir,
         );
     }

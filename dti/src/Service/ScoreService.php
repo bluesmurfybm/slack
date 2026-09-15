@@ -3,7 +3,6 @@
 namespace Dti\Service;
 
 use Dti\Identity\Members;
-use Dti\Repository\EmotionRepository;
 use Dti\Repository\PresentationRepository;
 use Dti\Repository\TopicRepository;
 
@@ -23,7 +22,7 @@ final class ScoreService
     public function __construct(
         private readonly TopicRepository $topics,
         private readonly PresentationRepository $presentations,
-        private readonly EmotionRepository $emotions,
+        private readonly \PDO $pdo,
         private readonly Members $members,
     ) {}
 
@@ -55,7 +54,7 @@ final class ScoreService
             }
         }
 
-        foreach ($this->emotions->dailyCounts() as $row) {
+        foreach (dti_emotion_daily_counts($this->pdo) as $row) {
             $points = min($row['count'], self::REACTION_DAILY_CAP) * self::REACTION;
             $out[] = $this->event($row['email'], $row['date'], 'reaction', $points);
         }

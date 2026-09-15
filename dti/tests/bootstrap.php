@@ -1,6 +1,8 @@
 <?php
 
 require __DIR__ . '/../../vendor/autoload.php';
+require_once __DIR__ . '/../lib/emotions.php';
+require_once __DIR__ . '/../lib/fields.php';
 require_once __DIR__ . '/../lib/storage.php';
 require_once __DIR__ . '/../lib/slots.php';
 require_once __DIR__ . '/../lib/notify.php';

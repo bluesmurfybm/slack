@@ -4,7 +4,6 @@ namespace Dti\Service;
 
 use Dti\Entity\Presentation;
 use Dti\Entity\Topic;
-use Dti\Repository\EmotionRepository;
 
 /**
  * 아티클 하나를 화면 계약으로 옮긴다. 파이썬 features/topics/service.py 의 to_dict 자리다.
@@ -45,7 +44,7 @@ final class TopicPresenter
             ...$topic->toArray(),
             ...$flat,
             'status' => self::deriveStatus($pres),
-            'emotions' => $emotions ?? EmotionRepository::emptyCounts(),
+            'emotions' => $emotions ?? dti_emotion_empty_counts(),
             'my_emotions' => $mine ?? [],
         ];
     }
