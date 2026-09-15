@@ -14,12 +14,6 @@ use Dti\Http\Request;
 use Dti\Http\Response;
 use Dti\Identity\Identity;
 use Dti\Identity\Members;
-use Dti\Repository\PresentationRepository;
-use Dti\Repository\RelatedRepository;
-use Dti\Repository\TopicRepository;
-use Dti\Service\PresentationService;
-use Dti\Service\RelatedService;
-use Dti\Service\ScoreService;
 
 /**
  * 요청 하나를 처리하는 조립 지점. 컨트롤러·리포지터리·서비스를 여기서 만든다.
@@ -86,10 +80,7 @@ final class Kernel
             ['POST', 'schedule'] => $topics->schedule((int)$tid, $request->body),
             ['POST', 'complete'] => $topics->complete((int)$tid, $request->body),
             ['POST', 'assign'] => $topics->assign((int)$tid, $request->body),
-            ['GET', 'related'] => (new RelatedController(
-                new TopicRepository($this->db->pdo()),
-                new RelatedRepository($this->db->pdo()),
-            ))->index((int)$tid),
+            ['GET', 'related'] => (new RelatedController($this->db->pdo()))->index((int)$tid),
             ['POST', 'emotions'] => $this->emotionController()->toggle((int)$tid, (string)$request->segment(3)),
             default => $this->routeMaterial($request, (int)$tid),
         };
@@ -120,15 +111,8 @@ final class Kernel
             throw new ApiException('없는 API 입니다', 404);
         }
 
-        $pdo = $this->db->pdo();
-        $scores = new ScoreService(
-            new TopicRepository($pdo),
-            new PresentationRepository($pdo),
-            $pdo,
-            $this->members(),
-        );
-
-        return (new ScoreController($this->config, $scores, $this->identity))->index($request->query);
+        return (new ScoreController($this->config, $this->db->pdo(), $this->members()->all(),
+                                   $this->identity))->index($request->query);
     }
 
     private function routeFields(Request $request): Response
@@ -149,55 +133,21 @@ final class Kernel
         $pdo = $this->db->pdo();
         return new TopicController(
             $this->config,
-            new TopicRepository($pdo),
-            new PresentationRepository($pdo),
             $pdo,
-            $this->presentationService(),
             $this->members(),
-            $this->relatedService(),
             $this->webhook,
             $this->identity,
         );
     }
 
-    private function relatedService(): RelatedService
-    {
-        $pdo = $this->db->pdo();
-        return new RelatedService(new TopicRepository($pdo), new RelatedRepository($pdo));
-    }
-
     private function emotionController(): EmotionController
     {
-        $pdo = $this->db->pdo();
-        return new EmotionController(
-            new TopicRepository($pdo),
-            new PresentationRepository($pdo),
-            $pdo,
-            $this->identity,
-        );
+        return new EmotionController($this->db->pdo(), $this->identity);
     }
 
     private function materialController(): MaterialController
     {
-        $pdo = $this->db->pdo();
-        return new MaterialController(
-            $this->config,
-            new TopicRepository($pdo),
-            new PresentationRepository($pdo),
-            $this->presentationService(),
-            $this->mover,
-            $this->identity,
-        );
-    }
-
-    private function presentationService(): PresentationService
-    {
-        $pdo = $this->db->pdo();
-        return new PresentationService(
-            new PresentationRepository($pdo),
-            $pdo,
-            $this->config->uploadDir,
-        );
+        return new MaterialController($this->config, $this->db->pdo(), $this->mover, $this->identity);
     }
 
     private function members(): Members

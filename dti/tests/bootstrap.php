@@ -2,6 +2,10 @@
 
 require __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../lib/emotions.php';
+require_once __DIR__ . '/../lib/topics.php';
+require_once __DIR__ . '/../lib/presentations.php';
+require_once __DIR__ . '/../lib/related.php';
+require_once __DIR__ . '/../lib/score.php';
 require_once __DIR__ . '/../lib/fields.php';
 require_once __DIR__ . '/../lib/storage.php';
 require_once __DIR__ . '/../lib/slots.php';

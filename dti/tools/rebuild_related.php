@@ -15,11 +15,5 @@ if (PHP_SAPI !== 'cli') {
 
 require __DIR__ . '/../bootstrap.php';
 
-$pdo = dti_database()->pdo();
-$service = new Dti\Service\RelatedService(
-    new Dti\Repository\TopicRepository($pdo),
-    new Dti\Repository\RelatedRepository($pdo),
-);
-
-$count = $service->rebuild();
+$count = dti_related_rebuild(dti_database()->pdo());
 echo "연관 {$count}쌍을 다시 계산했다\n";

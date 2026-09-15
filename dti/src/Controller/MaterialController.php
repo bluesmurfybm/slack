@@ -3,24 +3,16 @@
 namespace Dti\Controller;
 
 use Dti\Config;
-use Dti\Entity\Presentation;
-use Dti\Entity\Topic;
 use Dti\Http\ApiException;
 use Dti\Http\Input;
 use Dti\Http\Response;
 use Dti\Identity\Identity;
-use Dti\Repository\PresentationRepository;
-use Dti\Repository\TopicRepository;
-use Dti\Service\PresentationService;
-use Dti\Service\TopicPresenter;
 
 final class MaterialController
 {
     public function __construct(
         private readonly Config $config,
-        private readonly TopicRepository $topics,
-        private readonly PresentationRepository $presentations,
-        private readonly PresentationService $service,
+        private readonly \PDO $pdo,
         private readonly ?\Closure $mover,
         private readonly Identity $identity,
     ) {}
@@ -42,7 +34,7 @@ final class MaterialController
             'path' => null,
         ]);
 
-        return $this->save($topic, $holder);
+        return $this->save($topic, $holder, $slot);
     }
 
     public function attachFile(int $tid, string $slotName, array $files): Response
@@ -68,7 +60,7 @@ final class MaterialController
             'name' => basename((string)($file['name'] ?? '자료')),
         ]);
 
-        return $this->save($topic, $holder);
+        return $this->save($topic, $holder, $slot);
     }
 
     public function detach(int $tid, string $slotName): Response
@@ -78,20 +70,20 @@ final class MaterialController
 
         $holder = $this->slotHolder($slot, $topic, $pres);
         if ($holder === null) {
-            return Response::json(TopicPresenter::present($topic, null));
+            return Response::json(dti_topic_present($topic, null));
         }
 
         $this->removeFile($holder, $slot);
         $this->slotSet($holder, $slot, ['kind' => null, 'name' => null, 'url' => null, 'path' => null]);
 
-        return $this->save($topic, $holder);
+        return $this->save($topic, $holder, $slot);
     }
 
     public function download(int $tid, string $slotName): Response
     {
         $slot = dti_slot_check($slotName);
-        $topic = $this->topics->findOrFail($tid);
-        $holder = $this->slotHolder($slot, $topic, $this->presentations->ofTopic($tid));
+        $topic = dti_topic_find_or_fail($this->pdo, $tid);
+        $holder = $this->slotHolder($slot, $topic, dti_presentation_of_topic($this->pdo, $tid));
 
         $path = dti_resolve_upload($this->config->uploadDir, $this->slotGet($holder, $slot, 'path'));
         $name = $this->slotGet($holder, $slot, 'name') ?? basename($path);
@@ -99,54 +91,56 @@ final class MaterialController
         return Response::file($path, $name);
     }
 
-    /** @return array{0: Topic, 1: ?Presentation} */
     private function guard(int $tid): array
     {
-        $topic = $this->topics->findOrFail($tid);
-        $pres = $this->presentations->ofTopic($tid);
-        if (!$this->service->mayManage($pres, $this->identity, $this->config)) {
+        $topic = dti_topic_find_or_fail($this->pdo, $tid);
+        $pres = dti_presentation_of_topic($this->pdo, $tid);
+        if (!dti_may_manage($pres, $this->identity->email, $this->config->isAdmin($this->identity->email))) {
             throw new ApiException('발표자 본인이나 관리자만 자료를 올릴 수 있습니다', 403);
         }
         return [$topic, $pres];
     }
 
-    private function holderForWrite(string $slot, Topic $topic, ?Presentation $pres): Topic|Presentation
+    private function holderForWrite(string $slot, array $topic, ?array $pres): array
     {
-        return $this->slotHolder($slot, $topic, $pres) ?? $this->service->create((int)$topic->id);
+        return $this->slotHolder($slot, $topic, $pres)
+            ?? dti_presentation_create($this->pdo, (int)$topic['id']);
     }
 
-    private function slotHolder(string $slot, Topic $topic, ?Presentation $pres): Topic|Presentation|null
+    private function slotHolder(string $slot, array $topic, ?array $pres): ?array
     {
         return dti_slot_on_topic($slot) ? $topic : $pres;
     }
 
-    private function slotGet(Topic|Presentation|null $holder, string $slot, string $field): ?string
+    private function slotGet(?array $holder, string $slot, string $field): ?string
     {
-        return $holder === null ? null : $holder->{dti_slot_column($slot, $field)};
+        return $holder === null ? null : $holder[dti_slot_column($slot, $field)];
     }
 
     /** @param array<string, ?string> $values kind·name·url·path 중 채울 것 */
-    private function slotSet(Topic|Presentation $holder, string $slot, array $values): void
+    private function slotSet(array &$holder, string $slot, array $values): void
     {
         foreach ($values as $field => $value) {
-            $holder->{dti_slot_column($slot, $field)} = $value;
+            $holder[dti_slot_column($slot, $field)] = $value;
         }
     }
 
-    private function removeFile(Topic|Presentation $holder, string $slot): void
+    private function removeFile(array $holder, string $slot): void
     {
         dti_remove_upload($this->config->uploadDir, $this->slotGet($holder, $slot, 'path'));
     }
 
-    private function save(Topic $topic, Topic|Presentation $holder): Response
+    private function save(array $topic, array $holder, string $slot): Response
     {
-        if ($holder instanceof Topic) {
-            $this->topics->update($holder);
+        if (dti_slot_on_topic($slot)) {
+            dti_topic_update($this->pdo, $holder);
+            // 스캔 칸은 아티클 행에 있다. 배열은 복사되므로 고친 쪽을 화면에 내보낸다
+            $topic = $holder;
         } else {
-            $this->presentations->update($holder);
+            dti_presentation_update($this->pdo, $holder);
         }
 
         return Response::json(
-            TopicPresenter::present($topic, $this->presentations->ofTopic((int)$topic->id)));
+            dti_topic_present($topic, dti_presentation_of_topic($this->pdo, (int)$topic['id'])));
     }
 }

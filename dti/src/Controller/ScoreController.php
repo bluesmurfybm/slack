@@ -6,13 +6,13 @@ use Dti\Config;
 use Dti\Http\ApiException;
 use Dti\Http\Response;
 use Dti\Identity\Identity;
-use Dti\Service\ScoreService;
 
 final class ScoreController
 {
     public function __construct(
         private readonly Config $config,
-        private readonly ScoreService $scores,
+        private readonly \PDO $pdo,
+        private readonly array $members,
         private readonly Identity $identity,
     ) {}
 
@@ -25,7 +25,7 @@ final class ScoreController
         $start = $this->dateParam($query['start'] ?? '');
         $end = $this->dateParam($query['end'] ?? '');
 
-        return Response::json($this->scores->summary($start, $end));
+        return Response::json(dti_score_summary($this->pdo, $this->members, $start, $end));
     }
 
     private function dateParam(mixed $value): string

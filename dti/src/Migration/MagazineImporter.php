@@ -4,11 +4,6 @@ namespace Dti\Migration;
 
 use Dti\Config;
 use Dti\Database;
-use Dti\Entity\Presentation;
-use Dti\Entity\Topic;
-use Dti\Repository\RelatedRepository;
-use Dti\Repository\TopicRepository;
-use Dti\Service\RelatedService;
 use PDO;
 
 /**
@@ -73,8 +68,7 @@ final class MagazineImporter
         }
 
         $pdo->commit();
-        $report['related'] = (new RelatedService(
-            new TopicRepository($pdo), new RelatedRepository($pdo)))->rebuild();
+        $report['related'] = dti_related_rebuild($pdo);
 
         return $report;
     }
@@ -89,12 +83,12 @@ final class MagazineImporter
 
     private function copyTopics(): int
     {
-        return $this->copyRows('topics', 'dti_topics', Topic::COLUMNS);
+        return $this->copyRows('topics', 'dti_topics', dti_topic_columns());
     }
 
     private function copyPresentations(): int
     {
-        return $this->copyRows('presentations', 'dti_presentations', Presentation::COLUMNS);
+        return $this->copyRows('presentations', 'dti_presentations', dti_presentation_columns());
     }
 
     private function copyEmotions(): int
