@@ -5,7 +5,6 @@
 
 const DTI_TEAMS = ['APP', 'SQUARE', 'LAB'];
 const DTI_MAGAZINES = ['DI', 'MIT TR', 'Etc'];
-const DTI_REQUIREMENTS = ['required', 'recommended', 'normal'];
 const DTI_EMOTIONS = ['like', 'apply', 'easy', 'new'];
 const DTI_DEFAULT_FIELDS = ['UI/UX', 'Marketing', 'Trend', 'AX', 'Etc'];
 const DTI_DEFAULT_ADMINS = ['jian@bluesoft.co.kr', 'kimhy@bluesoft.co.kr'];
