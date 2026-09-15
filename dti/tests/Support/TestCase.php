@@ -4,6 +4,10 @@ namespace Dti\Tests\Support;
 
 use Dti\Config;
 use Dti\Database;
+use Dti\Http\Request;
+use Dti\Http\Response;
+use Dti\Identity\Identity;
+use Dti\Kernel;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 /**
@@ -115,5 +119,71 @@ abstract class TestCase extends BaseTestCase
             $pdo->exec("DELETE FROM `{$table}`");
         }
         $this->db->seedFields();
+    }
+
+    /* ---------- 요청 헬퍼 ---------- */
+
+    protected function admin(): Identity
+    {
+        return new Identity('jian@bluesoft.co.kr', '김지안');
+    }
+
+    protected function user(): Identity
+    {
+        return new Identity('siyu@bluesoft.co.kr', '유승인');
+    }
+
+    protected function other(): Identity
+    {
+        return new Identity('hjlee@bluesoft.co.kr', '이한재');
+    }
+
+    protected function call(string $method, array $segments, ?Identity $identity, array $body = [], array $query = [], array $files = []): Response
+    {
+        $kernel = new Kernel($this->config, $this->db, $identity, $this->notifier ?? null);
+        return $kernel->handle(new Request($method, $segments, $body, $query, $files));
+    }
+
+    protected function get(array $segments, ?Identity $identity = null, array $query = []): Response
+    {
+        return $this->call('GET', $segments, $identity ?? $this->user(), [], $query);
+    }
+
+    protected function post(array $segments, ?Identity $identity = null, array $body = [], array $files = []): Response
+    {
+        return $this->call('POST', $segments, $identity ?? $this->user(), $body, [], $files);
+    }
+
+    protected function put(array $segments, ?Identity $identity = null, array $body = []): Response
+    {
+        return $this->call('PUT', $segments, $identity ?? $this->user(), $body);
+    }
+
+    protected function delete(array $segments, ?Identity $identity = null): Response
+    {
+        return $this->call('DELETE', $segments, $identity ?? $this->user());
+    }
+
+    /* ---------- 데이터 헬퍼 ---------- */
+
+    /** API 를 거치지 않고 아티클을 심는다. 조회·권한 테스트가 준비 단계에서 쓴다. */
+    protected function makeTopic(array $values = []): int
+    {
+        $values = array_merge(['title' => '주제', 'created_at' => '2026-01-01 09:00:00'], $values);
+        $columns = array_keys($values);
+        $sql = 'INSERT INTO dti_topics (`' . implode('`, `', $columns) . '`) VALUES ('
+             . implode(', ', array_fill(0, count($columns), '?')) . ')';
+        $this->db->pdo()->prepare($sql)->execute(array_values($values));
+        return (int)$this->db->pdo()->lastInsertId();
+    }
+
+    protected function makePresentation(int $topicId, array $values = []): int
+    {
+        $values = array_merge(['topic_id' => $topicId, 'created_at' => '2026-01-01 09:00:00'], $values);
+        $columns = array_keys($values);
+        $sql = 'INSERT INTO dti_presentations (`' . implode('`, `', $columns) . '`) VALUES ('
+             . implode(', ', array_fill(0, count($columns), '?')) . ')';
+        $this->db->pdo()->prepare($sql)->execute(array_values($values));
+        return (int)$this->db->pdo()->lastInsertId();
     }
 }
