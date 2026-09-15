@@ -4,7 +4,7 @@
  *
  *   php dti/tools/migrate_from_magazine.php [--db=경로] [--uploads=경로] [--force] [--dry-run]
  *
- * 전환이 끝나면 이 파일과 src/Migration/ 을 지운다.
+ * 전환이 끝나면 이 파일과 lib/migrate.php 를 지운다.
  */
 
 if (PHP_SAPI !== 'cli') {
