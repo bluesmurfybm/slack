@@ -2,8 +2,6 @@
 
 namespace Dti\Tests;
 
-use Dti\Http\Request;
-use Dti\Kernel;
 use Dti\Tests\Support\TestCase;
 
 final class IdentityTest extends TestCase
@@ -20,8 +18,7 @@ final class IdentityTest extends TestCase
 
     private function whoami(?array $identity): array
     {
-        return (new Kernel($this->config, $this->pdo, $identity))
-            ->handle(new Request('GET', ['whoami']))->data;
+        return $this->call('GET', ['whoami'], $identity)['data'];
     }
 
     public function test_관리자로_표시된다(): void
@@ -79,16 +76,15 @@ final class IdentityTest extends TestCase
 
     public function test_구성원_명단은_포털_계정에서_온다(): void
     {
-        $res = (new Kernel($this->config, $this->pdo, ['email' => 'siyu@bluesoft.co.kr', 'name' => '']))
-            ->handle(new Request('GET', ['members']));
-        $this->assertSame(200, $res->status);
-        $this->assertSame(['김지안', '유승인', '진소현'], array_column($res->data, 'name'));
-        $this->assertSame(['SQUARE'], $res->data[0]['teams']);
+        $res = $this->call('GET', ['members'], ['email' => 'siyu@bluesoft.co.kr', 'name' => '']);
+        $this->assertSame(200, $res['status']);
+        $this->assertSame(['김지안', '유승인', '진소현'], array_column($res['data'], 'name'));
+        $this->assertSame(['SQUARE'], $res['data'][0]['teams']);
     }
 
     public function test_구성원_명단은_로그인이_필요하다(): void
     {
-        $res = (new Kernel($this->config, $this->pdo, null))->handle(new Request('GET', ['members']));
-        $this->assertSame(401, $res->status);
+        $res = $this->call('GET', ['members'], null);
+        $this->assertSame(401, $res['status']);
     }
 }

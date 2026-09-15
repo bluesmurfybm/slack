@@ -34,7 +34,7 @@ function dti_save_upload($dir, $maxUploadMb, $topicId, array $file, $mover = nul
         throw dti_upload_too_large($maxUploadMb);
     }
     if ($error !== UPLOAD_ERR_OK) {
-        throw new Dti\Http\ApiException('파일을 올리지 못했습니다', 400);
+        throw new DtiError('파일을 올리지 못했습니다', 400);
     }
     if ((int)($file['size'] ?? 0) > $maxUploadMb * 1024 * 1024) {
         throw dti_upload_too_large($maxUploadMb);
@@ -47,7 +47,7 @@ function dti_save_upload($dir, $maxUploadMb, $topicId, array $file, $mover = nul
 
     $mover = $mover ?: static fn ($from, $to) => move_uploaded_file($from, $to);
     if (!$mover($file['tmp_name'] ?? '', dti_upload_dir($dir) . '/' . $stored)) {
-        throw new Dti\Http\ApiException('파일을 저장하지 못했습니다', 500);
+        throw new DtiError('파일을 저장하지 못했습니다', 500);
     }
     return $stored;
 }
@@ -60,12 +60,12 @@ function dti_remove_upload($dir, $stored) {
 
 /** 경로 이탈 검사. DB 값이라도 그대로 붙이지 않는다. */
 function dti_resolve_upload($dir, $stored) {
-    if (!$stored) throw new Dti\Http\ApiException('올라온 파일이 없습니다', 404);
+    if (!$stored) throw new DtiError('올라온 파일이 없습니다', 404);
 
     $root = dti_upload_dir($dir);
     $path = realpath($root . '/' . basename($stored));
     if (!$path || !str_starts_with($path, $root) || !is_file($path)) {
-        throw new Dti\Http\ApiException('파일을 찾을 수 없습니다', 404);
+        throw new DtiError('파일을 찾을 수 없습니다', 404);
     }
     return $path;
 }
@@ -82,5 +82,5 @@ function dti_disposition($name) {
 }
 
 function dti_upload_too_large($maxUploadMb) {
-    return new Dti\Http\ApiException($maxUploadMb . 'MB 까지 올릴 수 있습니다', 413);
+    return new DtiError($maxUploadMb . 'MB 까지 올릴 수 있습니다', 413);
 }

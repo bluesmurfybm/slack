@@ -1,10 +1,9 @@
 <?php
 /**
- * DTI 발표 JSON API — 진입점.
+ * DTI 발표 JSON API — 프런트 컨트롤러.
  *
  * 화면(static/*.js)은 FastAPI 시절 경로를 그대로 쓴다. core.js 의 dtiApiURL() 이
  * `/magazineapi/topics/3` 을 `api.php?p=/topics/3` 으로 바꿔 여기로 보낸다.
- * 라우팅과 처리는 Dti\Kernel 이 하고, 이 파일은 신원을 만들어 넘기고 응답을 내보내기만 한다.
  */
 
 require_once __DIR__ . '/bootstrap.php';
@@ -14,9 +13,9 @@ $identity = dti_identity();
 if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
 
 try {
-    $request = Dti\Http\Request::fromGlobals();
-} catch (Dti\Http\ApiException $e) {
-    Dti\Http\Response::json(['detail' => $e->getMessage()], $e->status())->send();
+    $req = dti_request_from_globals();
+} catch (DtiError $e) {
+    dti_send(dti_json(['detail' => $e->getMessage()], $e->status()));
     exit;
 }
 
@@ -24,4 +23,10 @@ $config = dti_config_from_portal();
 $pdo = dti_connect($config);
 dti_migrate($pdo);
 
-(new Dti\Kernel($config, $pdo, $identity))->handle($request)->send();
+dti_send(dti_handle([
+    'config' => $config,
+    'pdo' => $pdo,
+    'identity' => $identity,
+    'mover' => null,
+    'webhook' => null,
+], $req));

@@ -178,7 +178,7 @@ final class MigrateTest extends TestCase
     {
         $this->importer()->run();
 
-        $rows = array_column($this->get(['topics'], $this->admin())->data, null, 'id');
+        $rows = array_column($this->get(['topics'], $this->admin())['data'], null, 'id');
         $this->assertCount(3, $rows);
         $this->assertSame('발표완료', $rows[7]['status']);
         $this->assertSame('유승인', $rows[7]['presenter']);

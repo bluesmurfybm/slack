@@ -8,7 +8,7 @@ const DTI_SLOT_NAMES = ['material', 'scan'];
 
 function dti_slot_check($slot) {
     if (!in_array($slot, DTI_SLOT_NAMES, true)) {
-        throw new Dti\Http\ApiException('없는 자료 칸입니다', 404);
+        throw new DtiError('없는 자료 칸입니다', 404);
     }
     return $slot;
 }

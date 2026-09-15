@@ -2,9 +2,6 @@
 
 namespace Dti\Tests\Support;
 
-use Dti\Http\Request;
-use Dti\Http\Response;
-use Dti\Kernel;
 use PHPUnit\Framework\TestCase as BaseTestCase;
 
 /**
@@ -139,29 +136,34 @@ abstract class TestCase extends BaseTestCase
         return ['email' => 'hjlee@bluesoft.co.kr', 'name' => '이한재'];
     }
 
-    protected function call(string $method, array $segments, ?array $identity, array $body = [], array $query = [], array $files = []): Response
+    protected function call(string $method, array $segments, ?array $identity, array $body = [], array $query = [], array $files = []): array
     {
-        $kernel = new Kernel($this->config, $this->pdo, $identity, $this->mover,
-                             \Closure::fromCallable($this->webhook));
-        return $kernel->handle(new Request($method, $segments, $body, $query, $files));
+        return dti_handle([
+            'config' => $this->config,
+            'pdo' => $this->pdo,
+            'identity' => $identity,
+            'mover' => $this->mover,
+            'webhook' => \Closure::fromCallable($this->webhook),
+        ], ['method' => $method, 'seg' => $segments, 'body' => $body,
+            'query' => $query, 'files' => $files]);
     }
 
-    protected function get(array $segments, ?array $identity = null, array $query = []): Response
+    protected function get(array $segments, ?array $identity = null, array $query = []): array
     {
         return $this->call('GET', $segments, $identity ?? $this->user(), [], $query);
     }
 
-    protected function post(array $segments, ?array $identity = null, array $body = [], array $files = []): Response
+    protected function post(array $segments, ?array $identity = null, array $body = [], array $files = []): array
     {
         return $this->call('POST', $segments, $identity ?? $this->user(), $body, [], $files);
     }
 
-    protected function put(array $segments, ?array $identity = null, array $body = []): Response
+    protected function put(array $segments, ?array $identity = null, array $body = []): array
     {
         return $this->call('PUT', $segments, $identity ?? $this->user(), $body);
     }
 
-    protected function delete(array $segments, ?array $identity = null): Response
+    protected function delete(array $segments, ?array $identity = null): array
     {
         return $this->call('DELETE', $segments, $identity ?? $this->user());
     }

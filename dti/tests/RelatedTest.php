@@ -8,12 +8,12 @@ final class RelatedTest extends TestCase
 {
     private function newTopic(array $over = []): int
     {
-        return $this->post(['topics'], $this->admin(), ['title' => '베이스', ...$over])->data['id'];
+        return $this->post(['topics'], $this->admin(), ['title' => '베이스', ...$over])['data']['id'];
     }
 
     private function related(int $tid): array
     {
-        return $this->get(['topics', (string)$tid, 'related'])->data;
+        return $this->get(['topics', (string)$tid, 'related'])['data'];
     }
 
     private function hasRelated(int $tid, int $other): bool
@@ -23,12 +23,12 @@ final class RelatedTest extends TestCase
 
     public function test_연관은_로그인이_필요하다(): void
     {
-        $this->assertSame(401, $this->call('GET', ['topics', '1', 'related'], null)->status);
+        $this->assertSame(401, $this->call('GET', ['topics', '1', 'related'], null)['status']);
     }
 
     public function test_없는_아티클은_404(): void
     {
-        $this->assertSame(404, $this->get(['topics', '99999', 'related'])->status);
+        $this->assertSame(404, $this->get(['topics', '99999', 'related'])['status']);
     }
 
     public function test_분야와_키워드가_같으면_연관이다(): void
@@ -112,6 +112,6 @@ final class RelatedTest extends TestCase
     public function test_일반_사용자도_읽는다(): void
     {
         $a = $this->newTopic(['title' => '하나', 'field' => 'AX', 'keywords' => '쌍둥이시험']);
-        $this->assertSame(200, $this->get(['topics', (string)$a, 'related'], $this->user())->status);
+        $this->assertSame(200, $this->get(['topics', (string)$a, 'related'], $this->user())['status']);
     }
 }

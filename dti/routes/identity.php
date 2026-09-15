@@ -1,14 +1,11 @@
 <?php
 
-use Dti\Http\ApiException;
-use Dti\Http\Response;
-
-function dti_route_identity(array $ctx, array $req): Response {
+function dti_route_identity(array $ctx, array $req): array {
     $identity = $ctx['identity'];
     $email = $identity['email'] ?? null;
 
     if (($req['seg'][0] ?? '') === 'whoami') {
-        return Response::json([
+        return dti_json([
             'email' => $email,
             'name' => $identity['name'] ?? null,
             'color' => $identity['color'] ?? null,
@@ -21,5 +18,5 @@ function dti_route_identity(array $ctx, array $req): Response {
         ]);
     }
 
-    return Response::json(dti_members_all($ctx['pdo'], $ctx['config']));
+    return dti_json(dti_members_all($ctx['pdo'], $ctx['config']));
 }

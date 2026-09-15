@@ -79,7 +79,7 @@ function dti_topic_find(PDO $pdo, $id) {
 }
 
 function dti_topic_find_or_fail(PDO $pdo, $id) {
-    return dti_topic_find($pdo, $id) ?? throw new Dti\Http\ApiException('없는 아티클입니다', 404);
+    return dti_topic_find($pdo, $id) ?? throw new DtiError('없는 아티클입니다', 404);
 }
 
 function dti_topic_all(PDO $pdo) {

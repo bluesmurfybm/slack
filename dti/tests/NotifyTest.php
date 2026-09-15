@@ -15,7 +15,7 @@ final class NotifyTest extends TestCase
 
     private function newTopic(): int
     {
-        return $this->post(['topics'], $this->admin(), ['title' => '새 주제'])->data['id'];
+        return $this->post(['topics'], $this->admin(), ['title' => '새 주제'])['data']['id'];
     }
 
     private function texts(): array
@@ -34,7 +34,7 @@ final class NotifyTest extends TestCase
         $tid = $this->newTopic();
         $res = $this->post(['topics', (string)$tid, 'claim'], $this->user(), ['planned_date' => '2026-09-01']);
 
-        $this->assertSame(200, $res->status);
+        $this->assertSame(200, $res['status']);
         $this->assertCount(1, $this->webhook->sent);
 
         $text = $this->texts()[0];
@@ -56,7 +56,7 @@ final class NotifyTest extends TestCase
         $tid = $this->newTopic();
         $res = $this->post(['topics', (string)$tid, 'assign'], $this->admin(), ['email' => 'siyu@bluesoft.co.kr']);
 
-        $this->assertSame(200, $res->status);
+        $this->assertSame(200, $res['status']);
         $this->assertCount(1, $this->webhook->sent);
         $this->assertStringContainsString('유승인', $this->texts()[0]);
     }
@@ -68,7 +68,7 @@ final class NotifyTest extends TestCase
         $this->webhook->sent = [];
 
         $res = $this->post(['topics', (string)$tid, 'assign'], $this->admin(), ['email' => '']);
-        $this->assertSame(200, $res->status);
+        $this->assertSame(200, $res['status']);
         $this->assertSame([], $this->webhook->sent);
     }
 
@@ -79,7 +79,7 @@ final class NotifyTest extends TestCase
         $this->webhook->sent = [];
 
         $res = $this->post(['topics', (string)$tid, 'claim'], $this->other());
-        $this->assertSame(409, $res->status);
+        $this->assertSame(409, $res['status']);
         $this->assertSame([], $this->webhook->sent);
     }
 

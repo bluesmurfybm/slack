@@ -8,20 +8,20 @@ final class TopicReadTest extends TestCase
 {
     public function test_목록은_로그인이_필요하다(): void
     {
-        $this->assertSame(401, $this->call('GET', ['topics'], null)->status);
+        $this->assertSame(401, $this->call('GET', ['topics'], null)['status']);
     }
 
     public function test_상세는_없으면_404(): void
     {
         $res = $this->get(['topics', '99999']);
-        $this->assertSame(404, $res->status);
-        $this->assertSame('없는 아티클입니다', $res->data['detail']);
+        $this->assertSame(404, $res['status']);
+        $this->assertSame('없는 아티클입니다', $res['data']['detail']);
     }
 
     public function test_응답은_화면_계약을_지킨다(): void
     {
         $tid = $this->makeTopic(['title' => '주제', 'field' => 'AX']);
-        $row = $this->get(['topics', (string)$tid])->data;
+        $row = $this->get(['topics', (string)$tid])['data'];
 
         $this->assertSame($tid, $row['id']);
         $this->assertSame('주제', $row['title']);
@@ -52,9 +52,9 @@ final class TopicReadTest extends TestCase
         $done = $this->makeTopic(['title' => '완료']);
         $this->makePresentation($done, ['presenter_email' => 'siyu@bluesoft.co.kr', 'done_date' => '2026-03-01']);
 
-        $this->assertSame('미지정', $this->get(['topics', (string)$open])->data['status']);
-        $this->assertSame('발표예정', $this->get(['topics', (string)$planned])->data['status']);
-        $this->assertSame('발표완료', $this->get(['topics', (string)$done])->data['status']);
+        $this->assertSame('미지정', $this->get(['topics', (string)$open])['data']['status']);
+        $this->assertSame('발표예정', $this->get(['topics', (string)$planned])['data']['status']);
+        $this->assertSame('발표완료', $this->get(['topics', (string)$done])['data']['status']);
     }
 
     public function test_발표_행의_값이_아티클_값을_덮는다(): void
@@ -64,7 +64,7 @@ final class TopicReadTest extends TestCase
         $this->makePresentation($tid, ['presenter' => '유승인', 'presenter_email' => 'siyu@bluesoft.co.kr',
                                        'planned_date' => '2026-09-01']);
 
-        $row = $this->get(['topics', (string)$tid])->data;
+        $row = $this->get(['topics', (string)$tid])['data'];
         $this->assertSame('유승인', $row['presenter']);
         $this->assertSame('2026-09-01', $row['planned_date']);
     }
@@ -75,9 +75,9 @@ final class TopicReadTest extends TestCase
         $this->makeTopic(['title' => '숨김', 'active' => 0]);
         $this->makeTopic(['title' => '보관', 'archived' => 1]);
 
-        $mine = array_column($this->get(['topics'], $this->user())->data, 'title');
+        $mine = array_column($this->get(['topics'], $this->user())['data'], 'title');
         $this->assertSame(['보임'], $mine);
-        $this->assertCount(3, $this->get(['topics'], $this->admin())->data);
+        $this->assertCount(3, $this->get(['topics'], $this->admin())['data']);
     }
 
     public function test_목록은_날짜_없는_것부터_그다음_최신순(): void
@@ -89,7 +89,7 @@ final class TopicReadTest extends TestCase
         $d = $this->makeTopic(['title' => '최근']);
         $this->makePresentation($d, ['done_date' => '2026-06-01']);
 
-        $titles = array_column($this->get(['topics'])->data, 'title');
+        $titles = array_column($this->get(['topics'])['data'], 'title');
         $this->assertSame(['날짜없음2', '날짜없음1', '최근', '옛날'], $titles);
     }
 
@@ -98,7 +98,7 @@ final class TopicReadTest extends TestCase
         $tid = $this->makeTopic(['title' => '주제']);
         $this->makePresentation($tid, ['planned_date' => '2026-01-01', 'done_date' => '2026-05-05']);
 
-        $row = $this->get(['topics'])->data[0];
+        $row = $this->get(['topics'])['data'][0];
         $this->assertSame('2026-05-05', $row['done_date']);
         $this->assertSame('발표완료', $row['status']);
     }

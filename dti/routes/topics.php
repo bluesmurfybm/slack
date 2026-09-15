@@ -1,18 +1,14 @@
 <?php
 /** 아티클과 발표. /topics/{tid}/{slot}/... 은 routes/materials.php 로 넘긴다. */
 
-use Dti\Http\ApiException;
-use Dti\Http\Input;
-use Dti\Http\Response;
-
-function dti_route_topics(array $ctx, array $req): Response {
+function dti_route_topics(array $ctx, array $req): array {
     $tid = $req['seg'][1] ?? null;
 
     if ($tid === null) {
         return match ($req['method']) {
             'GET' => dti_topic_index($ctx),
             'POST' => dti_topic_create($ctx, $req['body']),
-            default => throw new ApiException('없는 API 입니다', 404),
+            default => throw new DtiError('없는 API 입니다', 404),
         };
     }
 
@@ -31,7 +27,7 @@ function dti_route_topics(array $ctx, array $req): Response {
     };
 }
 
-function dti_topic_index(array $ctx): Response {
+function dti_topic_index(array $ctx): array {
     $pdo = $ctx['pdo'];
     $email = $ctx['identity']['email'];
 
@@ -43,15 +39,15 @@ function dti_topic_index(array $ctx): Response {
     foreach ($rows as [$topic, $pres]) {
         $out[] = dti_topic_present($topic, $pres, $counts[$topic['id']] ?? null, $mine[$topic['id']] ?? null);
     }
-    return Response::json($out);
+    return dti_json($out);
 }
 
-function dti_topic_show(array $ctx, int $tid): Response {
+function dti_topic_show(array $ctx, int $tid): array {
     $topic = dti_topic_find_or_fail($ctx['pdo'], $tid);
-    return Response::json(dti_topic_present($topic, dti_presentation_of_topic($ctx['pdo'], $tid)));
+    return dti_json(dti_topic_present($topic, dti_presentation_of_topic($ctx['pdo'], $tid)));
 }
 
-function dti_topic_create(array $ctx, array $body): Response {
+function dti_topic_create(array $ctx, array $body): array {
     dti_require_admin($ctx);
     $pdo = $ctx['pdo'];
 
@@ -61,16 +57,16 @@ function dti_topic_create(array $ctx, array $body): Response {
     $topic['created_at'] = date('Y-m-d H:i:s');
     $tid = dti_topic_insert($pdo, $topic);
 
-    $plannedDate = Input::date($body['planned_date'] ?? '', '예정일');
+    $plannedDate = dti_want_date($body['planned_date'] ?? '', '예정일');
     if ($plannedDate !== '') {
         dti_presentation_create($pdo, $tid, ['planned_date' => $plannedDate]);
     }
     dti_related_rebuild($pdo);
 
-    return Response::json(dti_topic_present($topic, dti_presentation_of_topic($pdo, $tid)), 201);
+    return dti_json(dti_topic_present($topic, dti_presentation_of_topic($pdo, $tid)), 201);
 }
 
-function dti_topic_edit(array $ctx, int $tid, array $body): Response {
+function dti_topic_edit(array $ctx, int $tid, array $body): array {
     dti_require_admin($ctx);
     $pdo = $ctx['pdo'];
 
@@ -80,7 +76,7 @@ function dti_topic_edit(array $ctx, int $tid, array $body): Response {
 
     // 예정일은 아티클이 아니라 발표 행에 있다. 값이 왔을 때만 손댄다
     if (array_key_exists('planned_date', $body)) {
-        $plannedDate = Input::date($body['planned_date'], '예정일');
+        $plannedDate = dti_want_date($body['planned_date'], '예정일');
         $pres = dti_presentation_of_topic($pdo, $tid);
         if ($pres === null && $plannedDate !== '') {
             dti_presentation_create($pdo, $tid, ['planned_date' => $plannedDate]);
@@ -92,10 +88,10 @@ function dti_topic_edit(array $ctx, int $tid, array $body): Response {
 
     dti_related_rebuild($pdo);
 
-    return Response::json(dti_topic_present($topic, dti_presentation_of_topic($pdo, $tid)));
+    return dti_json(dti_topic_present($topic, dti_presentation_of_topic($pdo, $tid)));
 }
 
-function dti_topic_destroy(array $ctx, int $tid): Response {
+function dti_topic_destroy(array $ctx, int $tid): array {
     dti_require_admin($ctx);
     $pdo = $ctx['pdo'];
 
@@ -105,20 +101,20 @@ function dti_topic_destroy(array $ctx, int $tid): Response {
     dti_topic_delete($pdo, (int)$topic['id']);
     dti_related_rebuild($pdo);
 
-    return Response::json(['ok' => true]);
+    return dti_json(['ok' => true]);
 }
 
-function dti_topic_claim(array $ctx, int $tid, array $body): Response {
+function dti_topic_claim(array $ctx, int $tid, array $body): array {
     $pdo = $ctx['pdo'];
     $identity = $ctx['identity'];
 
     $topic = dti_topic_find_or_fail($pdo, $tid);
     if ($topic['active'] !== 1 || $topic['archived'] !== 0) {
-        throw new ApiException('지금은 예약할 수 없는 아티클입니다', 409);
+        throw new DtiError('지금은 예약할 수 없는 아티클입니다', 409);
     }
 
     $plannedDate = array_key_exists('planned_date', $body)
-        ? Input::date($body['planned_date'], '예정일') : null;
+        ? dti_want_date($body['planned_date'], '예정일') : null;
     if ($plannedDate === '') $plannedDate = null;
 
     // 동시 예약 방지 — 조건부 UPDATE 한 방. 발표자 없는 행(자료만 등)이 있으면 그 행을 차지한다
@@ -131,7 +127,7 @@ function dti_topic_claim(array $ctx, int $tid, array $body): Response {
             dti_presentation_create($pdo, $tid, $values);
         } catch (PDOException $e) {
             if ($e->getCode() !== '23000') throw $e;
-            throw new ApiException('이미 예약되었거나 발표가 끝난 아티클입니다', 409);
+            throw new DtiError('이미 예약되었거나 발표가 끝난 아티클입니다', 409);
         }
     }
 
@@ -139,24 +135,24 @@ function dti_topic_claim(array $ctx, int $tid, array $body): Response {
     dti_notify_new_presenter($ctx['config']['slack_webhook'], $ctx['webhook'] ?? null,
         $topic['title'], $pres['presenter'], $pres['planned_date']);
 
-    return Response::json(dti_topic_present($topic, $pres));
+    return dti_json(dti_topic_present($topic, $pres));
 }
 
-function dti_topic_release(array $ctx, int $tid): Response {
+function dti_topic_release(array $ctx, int $tid): array {
     $pdo = $ctx['pdo'];
     $email = $ctx['identity']['email'];
 
     $topic = dti_topic_find_or_fail($pdo, $tid);
     $pres = dti_presentation_of_topic($pdo, $tid);
     if (!dti_may_manage($pres, $email, dti_is_admin($ctx['config'], $email))) {
-        throw new ApiException('본인이 예약한 아티클만 취소할 수 있습니다', 403);
+        throw new DtiError('본인이 예약한 아티클만 취소할 수 있습니다', 403);
     }
     if ($pres) dti_presentation_unassign($pdo, $ctx['config']['upload_dir'], $pres);
 
-    return Response::json(dti_topic_present($topic, dti_presentation_of_topic($pdo, $tid)));
+    return dti_json(dti_topic_present($topic, dti_presentation_of_topic($pdo, $tid)));
 }
 
-function dti_topic_schedule(array $ctx, int $tid, array $body): Response {
+function dti_topic_schedule(array $ctx, int $tid, array $body): array {
     // claim 은 아무도 안 잡은 주제에만 걸려서, 예약 후 날짜를 넣을 경로가 따로 필요하다
     $pdo = $ctx['pdo'];
     $email = $ctx['identity']['email'];
@@ -164,51 +160,51 @@ function dti_topic_schedule(array $ctx, int $tid, array $body): Response {
     $topic = dti_topic_find_or_fail($pdo, $tid);
     $pres = dti_presentation_of_topic($pdo, $tid);
     if (!dti_may_manage($pres, $email, dti_is_admin($ctx['config'], $email))) {
-        throw new ApiException('본인이 예약한 아티클만 예정일을 정할 수 있습니다', 403);
+        throw new DtiError('본인이 예약한 아티클만 예정일을 정할 수 있습니다', 403);
     }
-    if ($pres === null) throw new ApiException('예약이 없는 아티클입니다', 409);
-    if ($pres['done_date'] !== '') throw new ApiException('이미 발표가 끝난 아티클입니다', 409);
+    if ($pres === null) throw new DtiError('예약이 없는 아티클입니다', 409);
+    if ($pres['done_date'] !== '') throw new DtiError('이미 발표가 끝난 아티클입니다', 409);
 
-    $pres['planned_date'] = Input::date($body['planned_date'] ?? '', '예정일');
+    $pres['planned_date'] = dti_want_date($body['planned_date'] ?? '', '예정일');
     dti_presentation_update($pdo, $pres);
 
-    return Response::json(dti_topic_present($topic, $pres));
+    return dti_json(dti_topic_present($topic, $pres));
 }
 
-function dti_topic_complete(array $ctx, int $tid, array $body): Response {
+function dti_topic_complete(array $ctx, int $tid, array $body): array {
     dti_require_admin($ctx);
     $pdo = $ctx['pdo'];
 
     $topic = dti_topic_find_or_fail($pdo, $tid);
     $pres = dti_presentation_of_topic($pdo, $tid) ?? dti_presentation_create($pdo, $tid);
-    $pres['done_date'] = Input::date($body['done_date'] ?? '', '발표일') ?: date('Y-m-d');
+    $pres['done_date'] = dti_want_date($body['done_date'] ?? '', '발표일') ?: date('Y-m-d');
     dti_presentation_update($pdo, $pres);
 
-    return Response::json(dti_topic_present($topic, $pres));
+    return dti_json(dti_topic_present($topic, $pres));
 }
 
-function dti_topic_assign(array $ctx, int $tid, array $body): Response {
+function dti_topic_assign(array $ctx, int $tid, array $body): array {
     // 예약과 달리 이미 예약된 주제도 덮어쓴다 — 배정 권한은 관리자에게 있다
     dti_require_admin($ctx);
     $pdo = $ctx['pdo'];
 
     $topic = dti_topic_find_or_fail($pdo, $tid);
-    $email = Input::str($body, 'email', '발표자');
+    $email = dti_want_str($body, 'email', '발표자');
     $members = dti_members_all($pdo, $ctx['config']);
     if ($email !== '' && !dti_members_has($members, $email)) {
-        throw new ApiException('명단에 없는 사람입니다', 422);
+        throw new DtiError('명단에 없는 사람입니다', 422);
     }
 
     $pres = dti_presentation_of_topic($pdo, $tid);
 
     if ($email === '') {
         if ($pres) dti_presentation_unassign($pdo, $ctx['config']['upload_dir'], $pres);
-        return Response::json(dti_topic_present($topic, dti_presentation_of_topic($pdo, $tid)));
+        return dti_json(dti_topic_present($topic, dti_presentation_of_topic($pdo, $tid)));
     }
 
     $values = ['presenter_email' => $email, 'presenter' => dti_members_name_of($members, $email)];
     if (array_key_exists('planned_date', $body)) {
-        $values['planned_date'] = Input::date($body['planned_date'], '예정일');
+        $values['planned_date'] = dti_want_date($body['planned_date'], '예정일');
     }
 
     if ($pres) {
@@ -222,29 +218,29 @@ function dti_topic_assign(array $ctx, int $tid, array $body): Response {
     dti_notify_new_presenter($ctx['config']['slack_webhook'], $ctx['webhook'] ?? null,
         $topic['title'], $pres['presenter'], $pres['planned_date']);
 
-    return Response::json(dti_topic_present($topic, $pres));
+    return dti_json(dti_topic_present($topic, $pres));
 }
 
-function dti_topic_related(array $ctx, int $tid): Response {
+function dti_topic_related(array $ctx, int $tid): array {
     dti_topic_find_or_fail($ctx['pdo'], $tid);
-    return Response::json(dti_related_top_for($ctx['pdo'], $tid, DTI_MAX_RELATED));
+    return dti_json(dti_related_top_for($ctx['pdo'], $tid, DTI_MAX_RELATED));
 }
 
-function dti_topic_emotion(array $ctx, int $tid, string $kind): Response {
+function dti_topic_emotion(array $ctx, int $tid, string $kind): array {
     $pdo = $ctx['pdo'];
 
     dti_topic_find_or_fail($pdo, $tid);
-    $kind = Input::oneOf($kind, DTI_EMOTIONS, '반응', blankOk: false);
+    $kind = dti_want_one_of($kind, DTI_EMOTIONS, '반응', blankOk: false);
 
     $pres = dti_presentation_of_topic($pdo, $tid);
     if ($pres === null || $pres['done_date'] === '') {
-        throw new ApiException('발표가 끝난 아티클에만 반응을 남길 수 있습니다', 409);
+        throw new DtiError('발표가 끝난 아티클에만 반응을 남길 수 있습니다', 409);
     }
 
     $left = dti_emotion_toggle($pdo, (int)$pres['id'], $ctx['identity']['email'], $kind,
                                date('Y-m-d H:i:s'));
 
-    return Response::json([
+    return dti_json([
         'kind' => $kind,
         'count' => dti_emotion_count_for($pdo, (int)$pres['id'], $kind),
         'mine' => $left,
@@ -258,22 +254,22 @@ function dti_topic_emotion(array $ctx, int $tid, string $kind): Response {
 function dti_topic_fill(array &$topic, array $body, bool $defaults): void {
     $has = static fn (string $key) => array_key_exists($key, $body);
 
-    if ($defaults || $has('title')) $topic['title'] = Input::str($body, 'title', '제목', required: true);
-    if ($defaults || $has('field')) $topic['field'] = Input::str($body, 'field', '분야');
-    if ($defaults || $has('keywords')) $topic['keywords'] = Input::str($body, 'keywords', '키워드');
-    if ($defaults || $has('volume')) $topic['volume'] = Input::str($body, 'volume', 'Volume');
-    if ($defaults || $has('page')) $topic['page'] = Input::str($body, 'page', 'Page');
-    if ($defaults || $has('note')) $topic['note'] = Input::str($body, 'note', '비고');
+    if ($defaults || $has('title')) $topic['title'] = dti_want_str($body, 'title', '제목', required: true);
+    if ($defaults || $has('field')) $topic['field'] = dti_want_str($body, 'field', '분야');
+    if ($defaults || $has('keywords')) $topic['keywords'] = dti_want_str($body, 'keywords', '키워드');
+    if ($defaults || $has('volume')) $topic['volume'] = dti_want_str($body, 'volume', 'Volume');
+    if ($defaults || $has('page')) $topic['page'] = dti_want_str($body, 'page', 'Page');
+    if ($defaults || $has('note')) $topic['note'] = dti_want_str($body, 'note', '비고');
     if ($defaults || $has('requirement')) {
-        $topic['requirement'] = Input::str($body, 'requirement', '발표구분') ?: 'recommended';
+        $topic['requirement'] = dti_want_str($body, 'requirement', '발표구분') ?: 'recommended';
     }
     if ($defaults || $has('magazine')) {
-        $topic['magazine'] = Input::oneOf($body['magazine'] ?? '', DTI_MAGAZINES, '매거진');
+        $topic['magazine'] = dti_want_one_of($body['magazine'] ?? '', DTI_MAGAZINES, '매거진');
     }
     if ($defaults || $has('team')) {
-        $topic['team'] = Input::oneOf($body['team'] ?? '', DTI_TEAMS, '팀');
+        $topic['team'] = dti_want_one_of($body['team'] ?? '', DTI_TEAMS, '팀');
     }
-    if ($defaults || $has('year')) $topic['year'] = Input::nullableInt($body, 'year', '년도');
-    if ($has('active')) $topic['active'] = Input::flag($body['active']);
-    if ($has('archived')) $topic['archived'] = Input::flag($body['archived']);
+    if ($defaults || $has('year')) $topic['year'] = dti_want_nullable_int($body, 'year', '년도');
+    if ($has('active')) $topic['active'] = dti_flag($body['active']);
+    if ($has('archived')) $topic['archived'] = dti_flag($body['archived']);
 }

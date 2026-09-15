@@ -8,7 +8,7 @@ final class ScoreTest extends TestCase
 {
     private function topic(array $over = []): int
     {
-        return $this->post(['topics'], $this->admin(), ['title' => '점수 검증', 'field' => 'AX', ...$over])->data['id'];
+        return $this->post(['topics'], $this->admin(), ['title' => '점수 검증', 'field' => 'AX', ...$over])['data']['id'];
     }
 
     private function done(?array $who = null, string $doneDate = '2026-09-01', array $over = []): int
@@ -22,7 +22,7 @@ final class ScoreTest extends TestCase
 
     private function scores(array $query = []): array
     {
-        return $this->get(['score'], $this->admin(), $query)->data;
+        return $this->get(['score'], $this->admin(), $query)['data'];
     }
 
     private function of(array $rows, string $email): array
@@ -35,8 +35,8 @@ final class ScoreTest extends TestCase
 
     public function test_점수는_관리자만_본다(): void
     {
-        $this->assertSame(401, $this->call('GET', ['score'], null)->status);
-        $this->assertSame(403, $this->get(['score'], $this->user())->status);
+        $this->assertSame(401, $this->call('GET', ['score'], null)['status']);
+        $this->assertSame(403, $this->get(['score'], $this->user())['status']);
     }
 
     public function test_발표완료는_10점(): void
@@ -92,8 +92,8 @@ final class ScoreTest extends TestCase
 
     public function test_형식이_틀린_기간은_422(): void
     {
-        $this->assertSame(422, $this->get(['score'], $this->admin(), ['start' => '2026'])->status);
-        $this->assertSame(422, $this->get(['score'], $this->admin(), ['end' => '2026-1-1'])->status);
+        $this->assertSame(422, $this->get(['score'], $this->admin(), ['start' => '2026'])['status']);
+        $this->assertSame(422, $this->get(['score'], $this->admin(), ['end' => '2026-1-1'])['status']);
     }
 
     public function test_발표자_없는_완료는_아무에게도_점수를_주지_않는다(): void
