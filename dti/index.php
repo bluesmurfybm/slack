@@ -265,7 +265,7 @@ if (!dti_identity()) {
       <div class="viewer-head">
         <span id="viewName"></span>
         <span class="viewer-act">
-          <button class="btn-mini" id="viewExpand" onclick="toggleViewerSize()">크게 보기</button>
+          <button class="btn-mini" id="viewFull" onclick="toggleViewerFull()">전체화면</button>
           <a id="viewNewTab" class="btn-mini" href="#" target="_blank" rel="noopener">새 탭</a>
           <a id="viewDownload" class="btn-mini" href="#" download>내려받기</a>
           <button class="btn-mini ghost" onclick="closeViewer()">닫기</button>

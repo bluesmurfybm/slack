@@ -337,8 +337,13 @@ body.admin-view .admin-view-only{display:inline-flex !important}
   border:1px solid var(--bo-primary);box-shadow:var(--shadow-lg);
   display:flex;flex-direction:column;height:88vh;animation:pop .16s ease;
 }
-/* 꽉 채워 보기 */
-.viewer.full{max-width:none;width:100%;height:100%;border-radius:var(--r8)}
+/* 전체화면(Fullscreen API) — 브라우저 UI 까지 걷고 화면을 꽉 채운다 */
+.viewer:fullscreen{max-width:none;width:100%;height:100%;border:none;border-radius:0}
+.viewer:fullscreen .viewer-body{padding:0;border-radius:0}
+.viewer:fullscreen .viewer-body iframe{border-radius:0}
+.viewer:-webkit-full-screen{max-width:none;width:100%;height:100%;border:none;border-radius:0}
+.viewer:-webkit-full-screen .viewer-body{padding:0;border-radius:0}
+.viewer:-webkit-full-screen .viewer-body iframe{border-radius:0}
 .viewer-head{
   display:flex;justify-content:space-between;align-items:center;gap:12px;
   padding:14px 18px;border-bottom:1px solid var(--bo-primary);
@@ -364,7 +369,6 @@ body.admin-view .admin-view-only{display:inline-flex !important}
 
 /* 뷰어는 여백을 줄여 더 크게 쓴다 */
 #viewOverlay{padding:24px 16px;align-items:stretch}
-#viewOverlay .viewer.full{margin:0}
 .viewer-body{min-height:0}
 
 /* 발표자 지정 다이얼로그 */

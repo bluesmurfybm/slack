@@ -175,26 +175,33 @@ function openViewer(id, slot = "material", mid = null) {
         <div class="muted">${esc(name)}</div>
       </div>`;
   }
-  applyViewerSize();
+  syncViewerFullBtn();
   document.getElementById("viewOverlay").classList.add("open");
 }
 
-function toggleViewerSize() {
+// 헤더째로 전체화면에 넣는다 — body 만 넣으면 전체화면에서 닫기·내려받기가 사라진다
+function toggleViewerFull() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+    return;
+  }
   const v = document.querySelector("#viewOverlay .viewer");
-  const full = v.classList.toggle("full");
-  document.getElementById("viewExpand").textContent = full ? "작게 보기" : "크게 보기";
-  try { localStorage.setItem("dti-viewer-full", full ? "1" : "0"); } catch (e) { }
+  if (!v.requestFullscreen) {
+    showToast("이 브라우저는 전체화면을 지원하지 않아요");
+    return;
+  }
+  v.requestFullscreen().catch(() => showToast("전체화면으로 바꾸지 못했어요"));
 }
 
-function applyViewerSize() {
-  let full = false;
-  try { full = localStorage.getItem("dti-viewer-full") === "1"; } catch (e) { }
-  const v = document.querySelector("#viewOverlay .viewer");
-  v.classList.toggle("full", full);
-  document.getElementById("viewExpand").textContent = full ? "작게 보기" : "크게 보기";
+// ESC·F11 로 브라우저가 직접 빠져나갈 때도 라벨이 틀어지지 않게 상태에서 다시 읽는다
+function syncViewerFullBtn() {
+  document.getElementById("viewFull").textContent =
+    document.fullscreenElement ? "전체화면 해제" : "전체화면";
 }
+document.addEventListener("fullscreenchange", syncViewerFullBtn);
 
 function closeViewer() {
+  if (document.fullscreenElement) document.exitFullscreen();
   document.getElementById("viewOverlay").classList.remove("open");
   document.getElementById("viewBody").innerHTML = ""; // iframe 정지
 }
