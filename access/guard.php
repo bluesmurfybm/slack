@@ -12,7 +12,7 @@ require_once __DIR__ . '/../auth.php';   // 세션 시작 + current_portal_user(
 function access_require_login() {
     $u = current_portal_user();
     if (!$u) {
-        header('Location: ../index.php');
+        header('Location: ../index.php?need_login=access');
         exit;
     }
     return $u;

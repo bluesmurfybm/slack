@@ -13,7 +13,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 // 공통 상단바(slack/header.php)는 "포털 루트까지 되짚는 접두사"를 $__bwBase 로 받는다.
 // access/ 에서 그 파일을 그대로 쓰려면 파일 위치(slack/) 기준으로 잡아줘야 링크가 안 깨진다.
 $__bwBase = '../slack/';
-$__bwCurrent = 'access';   // 상단바 드롭다운에서 현재 시스템 표시
+$__bwCurrent = 'access';
 ?>
 <!DOCTYPE html>
 <html lang="ko">

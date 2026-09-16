@@ -5,7 +5,7 @@
  *  - 유사도 계산은 similar_api.php (IDF 가중).
  */
 $__bwBase = '../';   // slack/ 하위 폴더 페이지 — require_login()/header.php 리다이렉트 경로 계산용
-$__bwCurrent = 'slack';   // 상단바 드롭다운에서 현재 시스템 표시
+$__bwCurrent = 'slack';
 require_once __DIR__ . '/../auth.php';
 require_once __DIR__ . '/../db.php';
 require_login();

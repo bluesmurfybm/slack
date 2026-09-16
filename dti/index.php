@@ -7,7 +7,7 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/../worksystems.php';
 
 if (!dti_identity()) {
-    header('Location: ../index.php');
+    header('Location: ../index.php?need_login=dti');
     exit;
 }
 ?>

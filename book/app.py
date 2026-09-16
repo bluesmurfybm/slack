@@ -30,7 +30,7 @@ FIELDS = ("year", "date", "applicant", "gubun", "title",
 # blue-iWorks 포털과 신원 공유(SSO). 포털(PHP)이 로그인 시 심는 서명 쿠키를 여기서 검증만 한다.
 # 전제: 포털·book이 같은 호스트(포트만 달라도 됨)에서 서빙되어야 브라우저가 쿠키를 같이 보낸다.
 PORTAL_URL       = os.environ.get("PORTAL_URL", "/")   # TODO: 실제 포털 주소로 설정
-WORK_SYSTEMS = os.path.join(BASE, "..", "worksystems.json")  # 공통 상단바 드롭다운 목록 — 원본은 포털에 있다
+WORK_SYSTEMS = os.path.join(BASE, "..", "worksystems.json") # 목록의 원본은 포털에 있다
 SSO_SECRET_PATH  = os.path.join(BASE, "..", "sso_secret.key")          # 포털 auth.php가 최초 실행 시 생성
 ADMIN_EMAIL      = "jian@bluesoft.co.kr"                               # 전체 수정/삭제/완료처리 권한
 
@@ -252,6 +252,11 @@ def init_db():
     conn.close()
 
 
+def portal_login_url(key):
+    """미로그인 사용자를 포털로 되돌려보낼 주소. 포털이 왜 튕겼는지 알릴 수 있게 key 를 싣는다."""
+    return PORTAL_URL.rstrip("/") + "/?need_login=" + key
+
+
 def work_systems():
     """공통 상단바 "업무 시스템" 목록. 포털의 worksystems.json 이 유일한 원본이라 여기선 읽기만 하고,
     포털 루트 기준 path 에 PORTAL_URL 을 붙여 절대주소로 만들어 준다.
@@ -285,7 +290,7 @@ app.mount("/shared-styles", StaticFiles(directory=os.path.join(BASE, "..", "styl
 @app.get("/")
 def index(request: Request):
     if not get_identity(request):
-        return RedirectResponse(PORTAL_URL)
+        return RedirectResponse(portal_login_url("book"))
     return FileResponse(INDEX)
 
 
@@ -295,7 +300,7 @@ def whoami(request: Request):
     base = {"email": None, "name": None, "color": None}
     base.update(ident or {})
     base["portal_url"] = PORTAL_URL   # 공통 상단바(로고 클릭·로그아웃 링크)가 참조
-    base["work_systems"] = work_systems()   # 공통 상단바 드롭다운의 "업무 시스템" 목록
+    base["work_systems"] = work_systems()
     return base
 
 

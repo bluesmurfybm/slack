@@ -14,7 +14,7 @@ require_once __DIR__ . '/db.php';
 
 $me = current_portal_user();
 if (!$me) {
-    header('Location: ../index.php');
+    header('Location: ../index.php?need_login=moodle');
     exit;
 }
 if (session_status() === PHP_SESSION_ACTIVE) session_write_close();   // 읽기 전용 — 세션 잠금 바로 해제

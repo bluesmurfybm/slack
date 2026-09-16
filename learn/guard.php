@@ -31,7 +31,7 @@ const SEED_ADMINS = ['jian@bluesoft.co.kr', 'kimhy@bluesoft.co.kr', 'venus@blues
 function learn_require_page_login() {
     $u = current_portal_user();
     if (!$u) {
-        header('Location: ../index.php');
+        header('Location: ../index.php?need_login=learn');
         exit;
     }
     return $u;

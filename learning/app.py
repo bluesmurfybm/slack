@@ -54,7 +54,8 @@ def create_app(settings: Settings = None) -> FastAPI:
     @app.get("/")
     def index(request: Request):
         if not settings.dev_login and not get_identity(request):
-            return RedirectResponse(settings.portal_url)
+            portal = settings.portal_url.rstrip("/")
+            return RedirectResponse(portal + "/?need_login=learn")
         return FileResponse(settings.index_path)
 
     return app

@@ -27,6 +27,8 @@ $__links = [];
 foreach (work_systems() as $__sys) {
     $__links[$__sys['key']] = $__sys['url'];
 }
+// 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
+$__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -178,6 +180,9 @@ foreach (work_systems() as $__sys) {
 /* ===== 타일 링크 ===== */
 /* config.php 의 links 설정을 그대로 씀(서버가 단일 소스) */
 const LINKS = <?= json_encode($__links, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+
+/* 모듈에서 미로그인으로 튕겨 온 경우에만 채워진다(?need_login=<key>) */
+const NOTICE = <?= json_encode($__notice, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 let current = <?= $__current ? json_encode($__current, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) : 'null' ?>; // {name, email, has_token, needs_setup}
 
@@ -522,6 +527,14 @@ async function askBot(text){
    반드시 스크립트의 모든 선언(const/let/function) 다음, 맨 마지막에 실행해야 한다.
    위쪽에서 실행하면 아직 초기화 안 된 뒤쪽의 const/let(arrow, toastT 등)을
    먼저 참조하게 돼 TDZ ReferenceError로 스크립트 전체가 죽는다. */
+/* 모듈에서 미로그인으로 튕겨 왔으면 왜 튕겼는지 알린다. need_login 만 지운다 —
+   pathname 으로 싹 지우면 enterApp() 이 읽는 need_token/view=profile 까지 날아간다. */
+if(NOTICE){
+  const p=new URLSearchParams(location.search);
+  p.delete("need_login");
+  history.replaceState(null,"",location.pathname+(p.toString()?"?"+p:""));
+  toast(NOTICE);
+}
 if(current){ renderShell(); enterApp(); }
 </script>
 </body>

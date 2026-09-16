@@ -32,6 +32,29 @@ function work_systems(string $base = ''): array {
     return $systems;
 }
 
+/** key 에 해당하는 업무 시스템 이름. 모르는 key 면 null. */
+function work_system_label(string $key): ?string {
+    foreach (work_systems() as $sys) {
+        if ($sys['key'] === $key) {
+            return $sys['label'];
+        }
+    }
+    return null;
+}
+
+/**
+ * 미로그인으로 포털에 되돌려보내진 사용자에게 보여줄 문구.
+ * 모듈들이 ?need_login=<key> 를 붙여 보내므로 왜 튕겼는지 이름까지 말해 줄 수 있다.
+ * key 가 없거나 모르는 값이면 이름 없이 알린다.
+ */
+function need_login_notice(?string $key): string {
+    if ($key === null || $key === '') {
+        return '';
+    }
+    $label = work_system_label($key);
+    return $label === null ? '로그인이 필요합니다' : '로그인이 필요합니다 — ' . $label;
+}
+
 /**
  * dd-menu 안에 넣을 "업무 시스템" 섹션 HTML.
  * $current 에 자기 모듈 key 를 주면 그 줄이 현재 위치로 표시된다(.on).
