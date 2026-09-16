@@ -44,6 +44,16 @@ final class ConfigTest extends TestCase
         $this->assertSame('/opt/libreoffice/soffice', $this->config(['soffice' => '/opt/libreoffice/soffice'])['soffice']);
     }
 
+    public function test_soffice_경로는_포털_설정에서_받아온다(): void
+    {
+        $config = dti_config_from_portal([], [
+            'db' => ['host' => '127.0.0.1', 'port' => 3306, 'user' => 'root', 'pass' => '', 'name' => 'slackapi_test', 'charset' => 'utf8mb4'],
+            'soffice' => '/opt/libreoffice/soffice',
+        ]);
+
+        $this->assertSame('/opt/libreoffice/soffice', $config['soffice']);
+    }
+
     public function test_팀_매핑에_없는_팀이_들어가면_거부한다(): void
     {
         $this->expectException(\InvalidArgumentException::class);

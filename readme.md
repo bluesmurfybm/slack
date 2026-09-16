@@ -465,6 +465,10 @@ return [
     'links' => [
         'book' => $localCfg['book_url'] ?? 'book',
     ],
+
+    // dti 의 발표자료 PDF 변환에 쓰는 LibreOffice 실행 파일. PATH 에서 찾는다.
+    // 웹 서버의 PATH 에 없으면 절대경로로 바꾼다(이 파일 자체가 서버마다 따로 만드는 파일이다).
+    'soffice' => 'soffice',
 ];
 ```
 

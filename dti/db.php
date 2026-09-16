@@ -48,12 +48,13 @@ function dti_config(array $over = []): array {
     return $config;
 }
 
-function dti_config_from_portal(array $over = []): array {
-    $portal = require __DIR__ . '/../config.php';
+function dti_config_from_portal(array $over = [], ?array $portal = null): array {
+    $portal = $portal ?? require __DIR__ . '/../config.php';
 
     return dti_config($over + [
         'db' => $portal['db'],
         'slack_webhook' => $portal['dti_slack_webhook'] ?? null,
+        'soffice' => $portal['soffice'] ?? 'soffice',
     ]);
 }
 

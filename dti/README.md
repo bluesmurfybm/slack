@@ -61,19 +61,26 @@ memory_limit = 256M
 
 ## 3. 설정값
 
-| 값 | 기본 | 자리 |
+| 값 | 기본 | 바꾸는 자리 |
 | --- | --- | --- |
-| `soffice` | `soffice` (PATH 에서 찾음) | `dti/db.php` |
+| `soffice` | `soffice` (PATH 에서 찾음) | 포털 `config.php` |
 | `soffice_timeout` | `60` (초) | `dti/db.php` |
 | `upload_dir` | `dti/var/uploads` | `dti/db.php` |
 | `max_upload_mb` | `50` | `dti/db.php` |
 
-DB 접속과 슬랙 웹훅은 포털 `config.php` 에서 받아온다(`dti_config_from_portal()`).
+웹 서버의 PATH 에 `soffice` 가 있으면 손댈 것이 없다. 경로가 다르면 **포털 `config.php`** 에서
+바꾼다 — 그 파일은 git 에 없고 서버마다 따로 만드는 파일이라 배포에 덮이지 않는다. dti 는 DB
+접속·슬랙 웹훅과 같은 길로 이 값을 받아온다(`dti_config_from_portal()`).
 
-**주의**: `soffice` 경로를 바꾸려면 git 에 추적되는 `dti/db.php` 를 고쳐야 한다. 배포가 파일
-복사 방식이라 서버에서 고치면 다음 배포에 덮인다. PATH 에 `soffice` 가 있으면 기본값으로
-동작하니, 경로가 다른 서버라면 심볼릭 링크를 걸거나 `config.local.php` 를 거치도록 코드를
-손보는 편이 낫다.
+```php
+// config.php
+'soffice' => '/usr/bin/soffice',
+```
+
+키가 없으면 `soffice` 로 동작한다(구 버전 `config.php` 를 쓰는 서버도 그대로 돌아간다).
+
+`soffice_timeout` 등 나머지는 `dti/db.php` 에 있다. 그 파일은 git 에 추적되므로 서버에서 고치면
+다음 배포에 덮인다 — 바꿀 일이 생기면 저장소에서 고쳐 배포한다.
 
 ---
 
