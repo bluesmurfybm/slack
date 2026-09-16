@@ -262,6 +262,7 @@ if (!dti_identity()) {
 
   <div class="overlay" id="viewOverlay" onclick="if(event.target===this)closeViewer()">
     <div class="viewer">
+      <div class="viewer-hot"></div>
       <div class="viewer-head">
         <span id="viewName"></span>
         <span class="viewer-act">
