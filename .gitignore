@@ -66,3 +66,5 @@ _info
 blueup_learning_summary.txt
 # 단, 루트 readme.md는 다른 개발자를 위한 프로젝트 현황 문서라 공유되어야 함
 !/readme.md
+# dti/README.md는 서버에 올리는 사람이 봐야 하는 설치·운영 문서라 공유되어야 함
+!/dti/README.md

@@ -58,15 +58,29 @@ function dti_material_attach_file(array $ctx, int $tid, string $slot, array $fil
         throw new DtiError($ctx['config']['max_upload_mb'] . 'MB 까지 올릴 수 있습니다', 413);
     }
 
-    $stored = dti_save_upload($ctx['config']['upload_dir'], $ctx['config']['max_upload_mb'],
+    $config = $ctx['config'];
+    $stored = dti_save_upload($config['upload_dir'], $config['max_upload_mb'],
                               $tid, $file, $ctx['mover'] ?? null);
+    $original = basename((string)($file['name'] ?? '자료'));
 
     dti_material_create($ctx['pdo'], $tid, $slot, [
         'kind' => 'file',
         'path' => $stored,
-        'name' => basename((string)($file['name'] ?? '자료')),
+        'name' => $original,
         'created_by' => $ctx['identity']['email'],
     ]);
+
+    $converter = $ctx['converter']
+        ?? dti_soffice_converter($config['soffice'], $config['soffice_timeout']);
+    $pdf = dti_pdf_companion($config['upload_dir'], $tid, $original, $stored, $converter);
+    if ($pdf !== null) {
+        dti_material_create($ctx['pdo'], $tid, $slot, [
+            'kind' => 'file',
+            'path' => $pdf['path'],
+            'name' => $pdf['name'],
+            'created_by' => $ctx['identity']['email'],
+        ]);
+    }
 
     return dti_material_payload($ctx, $topic);
 }

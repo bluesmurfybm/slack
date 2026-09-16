@@ -155,6 +155,13 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
   통째로 검증한다.
 - **전역 `static` 캐시를 쓰지 않는다** — learn 의 `learn_policy()`·`body_json()` 같은 캐시는
   테스트 간에 상태가 남는다. 설정·연결·신원은 `$ctx` 배열로, 요청은 `$req` 배열로 넘긴다.
+- **PPT 를 올리면 변환된 PDF 가 자료로 하나 더 들어간다** — pptx·ppt·odp 를 올리면 업로드
+  시점에 `soffice --headless` 로 PDF 를 만들어 **같은 칸에 별개 자료 행으로** 넣는다. 원본과
+  변환본은 **독립이다** — 각자 내려받고, 각자 지우고, PDF 는 기존 PDF 뷰어에 그대로 태워진다.
+  변환에 실패하면 PPT 만 올라가고 PDF 행이 안 생긴다(업로드는 성공). 변환기는
+  `$ctx['converter']` 로 갈아끼운다(`$ctx['mover']` 와 같은 자리). 키노트(`.key`)는 변환할 수
+  없어 제외한다. **설치·PHP 설정·증상별 확인은 `dti/README.md`** 에 있다(LibreOffice 패키지,
+  `max_execution_time` 과 `soffice_timeout` 관계 등).
 - **테이블은 `dti_*`** — `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`,
   `dti_related`. slackapi DB 를 포털·slack·learn 과 공유하므로 맨이름을 쓸 수 없다.
   컬럼 추가는 `add_column_if_missing()` 을 거친다.
@@ -668,9 +675,6 @@ sudo systemctl enable --now moodle-watch-refresh.path
 - [ ] dti: 자료 순서를 바꿀 수 없다(등록 순 고정). 필요해지면 `dti_materials` 에 정렬 컬럼 추가.
 - [ ] dti: 응답의 `material_*`·`scan_*` 파생 키는 화면이 `materials`·`scans` 배열만 보게
       정리되면 뺄 수 있다. 지금은 카드 정렬과 멤버 점수가 그 키에 걸려 있다.
-- [ ] dti: PPT 미리보기 없음 — 붙이려면 업로드 때 LibreOffice headless 로 PDF 로 변환해
-      기존 PDF iframe 뷰어에 태우면 된다. 저장 파일명 옆에 `.pdf` 를 두면 스키마 변경도 없다.
-      서버에 `libreoffice-impress`+`fonts-noto-cjk` 가 필요하고, 실제 PPT 비중을 보고 정한다.
 - [ ] slack 모듈 관리자 기능(회원 추가/삭제, 비번 초기화) 없음.
 - [ ] Gmail 연동은 계정 1개 고정(`config.local.php`) 기반 — 다계정 지원은 `gmail_lib.php` 주석의
       "[향후 회원가입]" 부분에 걸이 남아 있음.

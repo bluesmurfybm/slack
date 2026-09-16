@@ -37,6 +37,13 @@ final class ConfigTest extends TestCase
         $this->assertSame([], dti_teams_of($config, null));
     }
 
+    public function test_변환기_설정은_기본값이_있고_덮어쓸_수_있다(): void
+    {
+        $this->assertSame('soffice', $this->config()['soffice']);
+        $this->assertSame(60, $this->config()['soffice_timeout']);
+        $this->assertSame('/opt/libreoffice/soffice', $this->config(['soffice' => '/opt/libreoffice/soffice'])['soffice']);
+    }
+
     public function test_팀_매핑에_없는_팀이_들어가면_거부한다(): void
     {
         $this->expectException(\InvalidArgumentException::class);

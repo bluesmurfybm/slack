@@ -18,6 +18,20 @@ const DTI_INLINE_TYPES = [
     'txt' => 'text/plain',
 ];
 
+/* 키노트(.key)는 LibreOffice 가 변환하지 못해 넣지 않는다. */
+const DTI_PDF_CONVERTIBLE = ['pptx', 'ppt', 'odp'];
+
+function dti_pdf_convertible(string $name): bool {
+    return in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), DTI_PDF_CONVERTIBLE, true);
+}
+
+function dti_stored_name(int $topicId, string $original): string {
+    $extension = pathinfo(basename($original), PATHINFO_EXTENSION);
+    $suffix = $extension === '' ? '' : '.' . substr($extension, 0, 16);
+
+    return $topicId . '_' . bin2hex(random_bytes(16)) . $suffix;
+}
+
 function dti_upload_dir(string $dir): string {
     if (!is_dir($dir)) mkdir($dir, 0777, true);
     return realpath($dir) ?: $dir;
@@ -41,16 +55,74 @@ function dti_save_upload(string $dir, int $maxUploadMb, int $topicId, array $fil
         throw dti_upload_too_large($maxUploadMb);
     }
 
-    $original = basename((string)($file['name'] ?? '자료'));
-    $extension = pathinfo($original, PATHINFO_EXTENSION);
-    $suffix = $extension === '' ? '' : '.' . substr($extension, 0, 16);
-    $stored = $topicId . '_' . bin2hex(random_bytes(16)) . $suffix;
+    $stored = dti_stored_name($topicId, (string)($file['name'] ?? '자료'));
 
     $mover = $mover ?: static fn ($from, $to) => move_uploaded_file($from, $to);
     if (!$mover($file['tmp_name'] ?? '', dti_upload_dir($dir) . '/' . $stored)) {
         throw new DtiError('파일을 저장하지 못했습니다', 500);
     }
     return $stored;
+}
+
+/**
+ * soffice 는 쓸 수 있는 홈이 없으면 프로필을 만들다 실패하고, 같은 프로필을 공유하는
+ * 인스턴스끼리는 서로를 막는다. 그래서 -env:UserInstallation 을 호출마다 새로 준다.
+ */
+function dti_soffice_command(string $soffice, string $source, string $outDir, int $timeoutSec): string {
+    $profile = sys_get_temp_dir() . '/dti-soffice-' . bin2hex(random_bytes(8));
+
+    return 'timeout ' . $timeoutSec . ' ' . escapeshellarg($soffice)
+        . ' --headless --norestore'
+        . ' -env:UserInstallation=file://' . escapeshellarg($profile)
+        . ' --convert-to pdf --outdir ' . escapeshellarg($outDir)
+        . ' ' . escapeshellarg($source) . ' 2>&1';
+}
+
+/**
+ * 올라온 발표자료를 PDF 로 바꿔 별개 자료로 넣을 값을 돌려준다.
+ * 변환이 안 되면 null 이다 — PPT 업로드 자체는 성공시켜야 한다.
+ */
+function dti_pdf_companion(string $dir, int $topicId, string $original, string $stored,
+                           callable $converter): ?array {
+    if (!dti_pdf_convertible($original)) {
+        return null;
+    }
+
+    $root = dti_upload_dir($dir);
+    $name = pathinfo(basename($original), PATHINFO_FILENAME) . '.pdf';
+    $path = dti_stored_name($topicId, $name);
+    $out = $root . '/' . $path;
+    try {
+        $converter($root . '/' . basename($stored), $out);
+    } catch (Throwable $e) {
+        /* soffice 가 없거나 죽는다. */
+    }
+    /* soffice 는 변환에 실패해도 종료코드 0 으로 끝나는 경우가 있다. */
+    if (!is_file($out)) {
+        return null;
+    }
+
+    return ['name' => $name, 'path' => $path];
+}
+
+/* soffice 는 원본 확장자를 떼고 .pdf 를 붙인 이름으로 내놓는다. */
+function dti_soffice_converter(string $soffice, int $timeoutSec = 60, ?callable $run = null): callable {
+    $run = $run ?: static fn (string $cmd) => exec($cmd);
+
+    return static function (string $source, string $out) use ($soffice, $timeoutSec, $run): void {
+        $work = sys_get_temp_dir() . '/dti-convert-' . bin2hex(random_bytes(8));
+        mkdir($work, 0777, true);
+        try {
+            $run(dti_soffice_command($soffice, $source, $work, $timeoutSec));
+            $produced = $work . '/' . pathinfo($source, PATHINFO_FILENAME) . '.pdf';
+            if (is_file($produced)) rename($produced, $out);
+        } finally {
+            foreach (glob($work . '/*') ?: [] as $leftover) {
+                @unlink($leftover);
+            }
+            @rmdir($work);
+        }
+    };
 }
 
 function dti_remove_upload(string $dir, ?string $stored): void {

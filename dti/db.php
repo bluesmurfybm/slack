@@ -36,6 +36,10 @@ function dti_config(array $over = []): array {
         'admin_emails' => DTI_DEFAULT_ADMINS,
         'teams_by_email' => DTI_DEFAULT_TEAMS,
         'slack_webhook' => null,
+        /* 서버에 libreoffice-impress 가 없으면 미리보기만 실패하고 내려받기는 그대로 된다.
+           fonts-noto-cjk 가 없으면 변환된 PDF 의 한글이 빈 사각형으로 나온다. */
+        'soffice' => 'soffice',
+        'soffice_timeout' => 60,
         // 화면이 뒤에 /?view=profile 같은 걸 붙여 쓴다. 페이지가 아니라 기준 경로여야 한다
         'portal_url' => '..',
     ];
