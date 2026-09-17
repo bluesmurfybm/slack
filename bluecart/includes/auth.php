@@ -1,15 +1,18 @@
 <?php
 /**
- * iworks 세션 연동 어댑터.
+ * iworks 포털 인증 연동.
  *
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ 여기가 유일한 통합 지점입니다.                                     │
- * │ iworks 가 로그인 사용자를 어떻게 담아두는지에 맞춰 이 파일만        │
- * │ 고치면 나머지 코드는 손대지 않아도 됩니다.                         │
  * │                                                                  │
- * │ 1) 세션 키 이름이 다르면 config.php 의 iworks.session_keys 수정   │
- * │ 2) 세션이 아니라 함수/클래스로 제공한다면 bc_current_user() 안의   │
- * │    "직접 연동" 블록을 쓰면 됩니다.                                 │
+ * │ 포털 안에 있을 때는 learn/dti 와 같은 방식으로 붙습니다.            │
+ * │   <포털>/auth.php  →  세션(BLUEIWORK_SESSID) + current_portal_user()│
+ * │   portal_users 테이블이 곧 구성원 명단입니다.                      │
+ * │                                                                  │
+ * │ 사용자 식별자는 이메일을 씁니다. 포털의 다른 모듈(learn 등)도       │
+ * │ 이메일을 기준으로 관리자 명단을 관리하고 있어 맞췄습니다.           │
+ * │                                                                  │
+ * │ 포털이 없으면(단독 실행) config 의 session_keys 로 떨어집니다.      │
  * └──────────────────────────────────────────────────────────────────┘
  */
 
@@ -30,19 +33,23 @@ function bc_current_user(): ?array
     }
     $cached = true;
 
-    // ---- (A) 직접 연동 ------------------------------------------------
-    // iworks 에 공통 함수가 있다면 아래 주석을 해제하고 사용하세요.
-    //
-    // if (function_exists('iworks_login_user')) {
-    //     $u = iworks_login_user();
-    //     if ($u) {
-    //         $user = ['id' => (string)$u['id'], 'name' => (string)$u['name'],
-    //                  'email' => $u['email'] ?? null];
-    //         return $user;
-    //     }
-    // }
+    // ---- (A) 포털 연동 -------------------------------------------------
+    // bootstrap 이 포털 auth.php 를 먼저 읽었으면 이 함수가 있다.
+    if (function_exists('current_portal_user')) {
+        $row = current_portal_user();
+        if ($row) {
+            $user = [
+                'id'    => (string)$row['email'],   // 식별자는 이메일
+                'name'  => (string)$row['name'],
+                'email' => (string)$row['email'],
+                // 포털 상단바 아바타와 같은 색을 쓰기 위해 함께 들고 다닌다.
+                'color' => function_exists('user_color') ? user_color($row) : null,
+            ];
+        }
+        return $user;   // 포털이 있으면 여기서 끝. 아래 세션 탐색으로 내려가지 않는다.
+    }
 
-    // ---- (B) 세션 키 탐색 ---------------------------------------------
+    // ---- (B) 단독 실행: 세션 키 탐색 ------------------------------------
     $keys = bc_config('iworks.session_keys', []);
     $id   = bc_session_pick($keys['id']    ?? []);
     if ($id === null || $id === '') {
@@ -86,7 +93,10 @@ function bc_require_login(): array
 {
     $user = bc_current_user();
     if ($user === null) {
-        $login = bc_config('iworks.login_url', '/');
+        // 포털은 ?need_login=<모듈키> 를 받아 왜 튕겼는지 알려 준다.
+        $login = BC_PORTAL_ROOT !== ''
+            ? '../index.php?need_login=' . rawurlencode((string)bc_config('iworks.module_key', 'bluecart'))
+            : (string)bc_config('iworks.login_url', '/');
         header('Location: ' . $login);
         exit;
     }

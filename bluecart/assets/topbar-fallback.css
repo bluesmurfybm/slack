@@ -1,0 +1,57 @@
+/* =====================================================================
+   단독 실행(포털 밖)에서만 쓰는 상단바 스타일.
+
+   포털 안에서는 ../styles/topbar.css 가 원본이고 이 파일은 로드되지 않는다.
+   두 파일을 같이 읽으면 나중에 로드되는 쪽이 이기므로, 원본을 덮어쓰지
+   않도록 처음부터 갈라 둔다.
+
+   값은 포털 topbar.css 에서 옮겨 온 것이다. 포털 쪽이 바뀌면 여기도
+   따라와야 하지만, 로컬 개발 화면이라 정확히 같지 않아도 문제는 없다.
+   ===================================================================== */
+
+html { scrollbar-gutter: stable; }
+
+.topbar { background: #FFF; border-bottom: 1px solid #E2E9F6; position: sticky; top: 0; z-index: 200; }
+.topbar-in {
+  max-width: 1600px; margin: 0 auto; padding: 14px 22px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.logo {
+  font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
+  font-weight: 700; letter-spacing: -.01em; color: #0E1A33;
+  display: inline-flex; align-items: baseline;
+}
+.logo b { color: #1C5DE5; font-weight: 700; }
+.logo .dash { color: #4C8DFF; margin: 0 1px; }
+.topbar .logo { font-size: 21px; }
+.topbar .top-right { display: flex; align-items: center; gap: 10px; }
+.topbar .user-menu { position: relative; }
+.topbar .user-chip {
+  display: flex; align-items: center; gap: 9px; padding: 5px 6px 5px 5px;
+  border: 1px solid #E2E9F6; border-radius: 999px; cursor: pointer; background: #fff;
+  font-family: 'Pretendard', system-ui, sans-serif;
+}
+.topbar .user-chip:hover { border-color: #4C8DFF; }
+.topbar .avatar {
+  width: 30px; height: 30px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; color: #fff;
+}
+.topbar .user-chip .nm { font-size: 13.5px; font-weight: 600; color: #16223B; padding-right: 2px; }
+.topbar .user-caret { font-size: 9px; color: #63719A; margin-right: 4px; display: inline-block; }
+.topbar .user-menu.open .user-caret { transform: rotate(180deg); }
+.topbar .dd-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); min-width: 190px;
+  background: #fff; border: 1px solid #E2E9F6; border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16,35,90,.05), 0 12px 32px -18px rgba(16,35,90,.35);
+  padding: 6px; opacity: 0; visibility: hidden; transform: translateY(-4px); z-index: 60;
+  font-family: 'Pretendard', system-ui, sans-serif;
+}
+.topbar .user-menu.open .dd-menu { opacity: 1; visibility: visible; transform: none; }
+.topbar .dd-menu a {
+  display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px;
+  font-size: 13.5px; color: #16223B; text-decoration: none; white-space: nowrap;
+}
+.topbar .dd-menu a:hover { background: #EEF3FB; }
+.topbar .dd-menu .dd-sep { height: 1px; background: #E2E9F6; margin: 5px 6px; }
+.topbar .dd-menu .dd-label { font-size: 11px; color: #63719A; padding: 6px 11px 2px; }

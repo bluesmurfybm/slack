@@ -1,2 +1,14 @@
-# 설정/코드 디렉터리 직접 접근 차단 (Apache 2.4)
-RedirectMatch 404 ^/.*/bluecart/(config|includes|cron|sql|tests|dev)/
+# 모듈 내부 디렉터리 직접 접근 차단.
+#
+# RewriteRule 은 .htaccess 가 놓인 디렉터리 기준으로 매칭되므로 폴더 이름이
+# 무엇이든(bluecart, cart …) 그대로 동작한다. 각 디렉터리 안에도
+# `Require all denied` 짜리 .htaccess 를 따로 두어 이중으로 막는다.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(config|includes|cron|sql|tests|dev)(/|$) - [R=404,L]
+</IfModule>
+
+# mod_rewrite 가 없을 때를 위한 대비
+<IfModule !mod_rewrite.c>
+  RedirectMatch 404 /(config|includes|cron|sql|tests|dev)/
+</IfModule>

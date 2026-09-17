@@ -1,32 +1,60 @@
 /* =====================================================================
-   BlueCart — 사내 물품 구매 요청
-   iworks 안에 얹는 화면이라 전역 태그 셀렉터를 쓰지 않고
-   .bc- 네임스페이스로만 스타일을 건다.
+   BlueCart — iworks 포털 모듈
+   색과 글꼴은 포털 styles/default.css 의 값을 그대로 가져와 맞춥니다.
+   상단바는 포털 styles/topbar.css 를 그대로 씁니다(여기서 건드리지 않음).
+   .bc- 네임스페이스만 쓰므로 포털 스타일과 충돌하지 않습니다.
    ===================================================================== */
 
-.bc {
-  --ink:      #14202e;
-  --ink-soft: #5a6a7d;
-  --paper:    #ffffff;
-  --surface:  #f4f7fa;
-  --line:     #dce4ec;
-  --brand:    #1b5fa8;
-  --brand-dk: #14497f;
+/* 포털이 body 배경을 칠하지 않는 단독 실행일 때를 위한 최소 규칙 */
+body { margin: 0; background: #EEF3FB; }
 
+/* ---- 모듈 머리말 (learn/dti 의 header.site 에 해당) ------------------ */
+.bc-site {
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E9F6;
+}
+.bc-site__in {
+  max-width: 1600px; margin: 0 auto; padding: 22px 22px 20px;
+  font-family: 'Pretendard', system-ui, sans-serif; color: #16223B;
+}
+.bc-site__eyebrow {
+  font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
+  font-size: 12px; font-weight: 600; letter-spacing: .04em; color: #1C5DE5;
+  display: block; margin-bottom: 4px;
+}
+.bc-site__title { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
+.bc-site__desc  { margin: 6px 0 0; font-size: 13.5px; color: #63719A; }
+.bc-site__role {
+  display: inline-block; margin-left: 8px; padding: 2px 9px;
+  border-radius: 999px; background: #EEF3FB; color: #1C5DE5;
+  font-size: 12px; font-weight: 600;
+}
+
+.bc {
+  /* 포털 팔레트(styles/default.css :root)와 같은 값 */
+  --ink:      #16223b;
+  --ink-soft: #63719a;
+  --paper:    #ffffff;
+  --surface:  #eef3fb;
+  --line:     #e2e9f6;
+  --brand:    #1c5de5;
+  --brand-dk: #0f2e77;
+
+  /* 처리 단계별 색. 포털 파랑과 나란히 놓아도 튀지 않게 채도를 낮췄다. */
   --wait:  #8a6314;
-  --ready: #1b5fa8;
+  --ready: #1c5de5;
   --work:  #6a3d9e;
   --done:  #14704b;
   --stop:  #ab3535;
-  --off:   #78838f;
+  --off:   #63719a;
 
-  font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  font-family: 'Pretendard', system-ui, sans-serif;
   color: var(--ink);
   font-size: 14px;
   line-height: 1.55;
-  max-width: 1240px;
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 20px 16px 64px;
+  padding: 20px 22px 64px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -78,7 +106,8 @@
   align-items: stretch;
   gap: 0;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
   background: var(--paper);
   overflow: hidden;
   margin-bottom: 18px;
@@ -121,7 +150,7 @@
 .bc-filters {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   padding: 12px 14px; margin-bottom: 14px;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
 }
 .bc-filters .bc-spacer { margin-left: auto; }
 
@@ -131,9 +160,12 @@
 .bc input[type="text"], .bc input[type="number"], .bc input[type="date"],
 .bc input[type="search"], .bc select, .bc textarea {
   font: inherit; color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--line); border-radius: 4px;
-  padding: 6px 9px;
+  background: #FBFCFF;
+  border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 10px;
+}
+.bc input:focus, .bc select:focus, .bc textarea:focus {
+  outline: none; border-color: var(--brand); background: #fff;
 }
 .bc textarea { resize: vertical; min-height: 68px; width: 100%; }
 .bc input:disabled, .bc select:disabled { background: var(--surface); color: var(--ink-soft); }
@@ -164,7 +196,10 @@
 }
 
 /* ---- 표 ------------------------------------------------------------- */
-.bc-table-wrap { border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; background: var(--paper); }
+.bc-table-wrap {
+  border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; background: var(--paper);
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
+}
 .bc-table { width: 100%; border-collapse: collapse; }
 .bc-table th, .bc-table td {
   padding: 10px 12px; text-align: left; vertical-align: top;
@@ -196,8 +231,9 @@
 
 /* ---- 패널 ----------------------------------------------------------- */
 .bc-panel {
-  border: 1px solid var(--line); border-radius: 6px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: 12px; background: var(--paper);
   padding: 18px; margin-bottom: 18px;
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
 }
 .bc-panel > h2 { margin-bottom: 4px; }
 .bc-panel__hint { color: var(--ink-soft); font-size: 12.5px; margin-bottom: 14px; }
@@ -282,7 +318,8 @@
 /* ---- 통계 ----------------------------------------------------------- */
 .bc-stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
 .bc-stat {
-  border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; background: var(--paper);
+  border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: var(--paper);
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
 }
 .bc-stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .bc-stat span { font-size: 12.5px; color: var(--ink-soft); }

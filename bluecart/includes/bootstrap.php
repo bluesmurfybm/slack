@@ -7,6 +7,21 @@ declare(strict_types=1);
 
 define('BC_ROOT', dirname(__DIR__));
 
+/**
+ * iworks 포털 루트.
+ *
+ * 이 모듈은 포털 저장소 안의 한 폴더(<포털>/bluecart)로 들어간다.
+ * 한 칸 위에 포털의 auth.php / worksystems.php / config.php 가 모두 있으면
+ * 포털 모듈로 동작하고, 없으면 단독으로 동작한다(로컬 개발용).
+ */
+$__portal = dirname(BC_ROOT);
+define('BC_PORTAL_ROOT',
+    (is_file($__portal . '/auth.php')
+     && is_file($__portal . '/worksystems.php')
+     && is_file($__portal . '/config.php'))
+        ? $__portal : '');
+unset($__portal);
+
 // ---------------------------------------------------------------------
 // 설정 로드
 // ---------------------------------------------------------------------
@@ -60,8 +75,16 @@ function bc_config(string $path, mixed $default = null): mixed
 }
 
 // ---------------------------------------------------------------------
-// 세션 : iworks 가 이미 세션을 열었다면 그대로 사용한다.
+// 세션
+//
+// 포털은 세션 이름(BLUEIWORK_SESSID)과 저장 경로를 따로 지정한 뒤 세션을 연다.
+// 그래서 우리가 먼저 session_start() 를 부르면 기본 이름으로 열려 포털 세션을
+// 보지 못한다. 반드시 포털 auth.php 를 먼저 require 해야 한다.
 // ---------------------------------------------------------------------
+if (BC_PORTAL_ROOT !== '' && bc_config('iworks.use_portal_auth', true)) {
+    require_once BC_PORTAL_ROOT . '/auth.php';   // 세션 시작 + current_portal_user()
+}
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
