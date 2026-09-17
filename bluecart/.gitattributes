@@ -1,0 +1,18 @@
+# 기본은 저장소에 LF 로 저장
+* text=auto eol=lf
+
+# 배치 파일은 CP949(한글 Windows 기본 코드페이지) + CRLF 로 저장되어 있습니다.
+# git 이 인코딩을 건드리지 않도록 바이너리로 취급합니다.
+#
+# UTF-8 로 다시 저장하지 마세요. cmd.exe 가 UTF-8 배치 파일의 한글을 만나면
+# 줄을 중간에서 자르고, 잘린 뒷부분을 명령으로 해석해 오류가 납니다.
+# ("'를' is not recognized as an internal or external command")
+*.bat -text
+*.cmd -text
+
+# 바이너리
+*.png binary
+*.jpg binary
+*.pdf binary
+*.xlsx binary
+*.gz binary

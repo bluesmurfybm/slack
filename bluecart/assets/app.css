@@ -1,0 +1,372 @@
+/* =====================================================================
+   BlueCart — 사내 물품 구매 요청
+   iworks 안에 얹는 화면이라 전역 태그 셀렉터를 쓰지 않고
+   .bc- 네임스페이스로만 스타일을 건다.
+   ===================================================================== */
+
+.bc {
+  --ink:      #14202e;
+  --ink-soft: #5a6a7d;
+  --paper:    #ffffff;
+  --surface:  #f4f7fa;
+  --line:     #dce4ec;
+  --brand:    #1b5fa8;
+  --brand-dk: #14497f;
+
+  --wait:  #8a6314;
+  --ready: #1b5fa8;
+  --work:  #6a3d9e;
+  --done:  #14704b;
+  --stop:  #ab3535;
+  --off:   #78838f;
+
+  font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.55;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bc *, .bc *::before, .bc *::after { box-sizing: border-box; }
+
+.bc h1, .bc h2, .bc h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+.bc h1 { font-size: 20px; }
+.bc h2 { font-size: 16px; }
+.bc h3 { font-size: 14px; }
+.bc p  { margin: 0; }
+
+.bc :focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ---- 머리말 --------------------------------------------------------- */
+.bc-head {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding-bottom: 14px;
+}
+.bc-head__sub { color: var(--ink-soft); font-size: 13px; }
+.bc-head__me  { margin-left: auto; color: var(--ink-soft); font-size: 13px; }
+.bc-head__me b { color: var(--ink); font-weight: 600; }
+
+/* ---- 최상위 탭 ------------------------------------------------------ */
+.bc-tabs {
+  display: flex; gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+.bc-tabs button {
+  appearance: none; background: none; border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 9px 18px; margin-bottom: -1px;
+  font: inherit; font-weight: 600; color: var(--ink-soft);
+  cursor: pointer;
+}
+.bc-tabs button:hover { color: var(--ink); }
+.bc-tabs button[aria-selected="true"] {
+  color: var(--brand); border-bottom-color: var(--brand);
+}
+
+/* ---- 파이프라인 집계 ------------------------------------------------ */
+.bc-pipe {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) auto;
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+.bc-pipe__cell {
+  position: relative;
+  padding: 14px 18px 14px 22px;
+  border-right: 1px solid var(--line);
+  background: none; text-align: left; font: inherit;
+  cursor: pointer;
+}
+.bc-pipe__cell:last-child { border-right: 0; }
+.bc-pipe__cell::before {
+  content: ""; position: absolute; left: 0; top: 12px; bottom: 12px;
+  width: 3px; border-radius: 0 2px 2px 0; background: var(--tone, var(--off));
+}
+.bc-pipe__cell:hover { background: var(--surface); }
+.bc-pipe__cell[aria-pressed="true"] { background: var(--surface); }
+.bc-pipe__n {
+  display: block; font-size: 26px; font-weight: 700; line-height: 1.15;
+  color: var(--tone, var(--ink)); font-variant-numeric: tabular-nums;
+}
+.bc-pipe__l { display: block; font-size: 12.5px; color: var(--ink-soft); }
+.bc-pipe__aside {
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 2px; padding: 14px 20px;
+  background: var(--surface); border-left: 1px solid var(--line);
+  font-size: 12.5px; color: var(--ink-soft); white-space: nowrap;
+}
+.bc-pipe__aside b { color: var(--ink); font-weight: 600; }
+
+.bc-tone-wait  { --tone: var(--wait); }
+.bc-tone-ready { --tone: var(--ready); }
+.bc-tone-work  { --tone: var(--work); }
+.bc-tone-done  { --tone: var(--done); }
+.bc-tone-stop  { --tone: var(--stop); }
+.bc-tone-off   { --tone: var(--off); }
+
+/* ---- 필터 ----------------------------------------------------------- */
+.bc-filters {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 12px 14px; margin-bottom: 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+}
+.bc-filters .bc-spacer { margin-left: auto; }
+
+.bc-field { display: inline-flex; flex-direction: column; gap: 3px; }
+.bc-field > span { font-size: 12px; color: var(--ink-soft); }
+
+.bc input[type="text"], .bc input[type="number"], .bc input[type="date"],
+.bc input[type="search"], .bc select, .bc textarea {
+  font: inherit; color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 6px 9px;
+}
+.bc textarea { resize: vertical; min-height: 68px; width: 100%; }
+.bc input:disabled, .bc select:disabled { background: var(--surface); color: var(--ink-soft); }
+
+/* ---- 버튼 ----------------------------------------------------------- */
+.bc-btn {
+  appearance: none; font: inherit; font-weight: 600;
+  padding: 7px 14px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+}
+.bc-btn:hover { background: var(--surface); }
+.bc-btn--primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.bc-btn--primary:hover { background: var(--brand-dk); border-color: var(--brand-dk); }
+.bc-btn--danger { color: var(--stop); border-color: #e7c6c6; }
+.bc-btn--danger:hover { background: #fbf2f2; }
+.bc-btn--sm { padding: 4px 10px; font-size: 12.5px; }
+.bc-btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* ---- 하위 탭 -------------------------------------------------------- */
+.bc-subtabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.bc-subtabs button {
+  appearance: none; font: inherit; cursor: pointer;
+  padding: 5px 13px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft);
+}
+.bc-subtabs button[aria-selected="true"] {
+  background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600;
+}
+
+/* ---- 표 ------------------------------------------------------------- */
+.bc-table-wrap { border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; background: var(--paper); }
+.bc-table { width: 100%; border-collapse: collapse; }
+.bc-table th, .bc-table td {
+  padding: 10px 12px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.bc-table th {
+  font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
+  background: var(--surface); white-space: nowrap; position: sticky; top: 0;
+}
+.bc-table tbody tr:last-child td { border-bottom: 0; }
+.bc-table tbody tr:hover { background: #fafcfe; }
+.bc-table .bc-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bc-table .bc-item { font-weight: 600; }
+.bc-table .bc-muted { color: var(--ink-soft); font-size: 12.5px; }
+.bc-row-actions { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.bc-chip {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+  color: var(--tone); background: color-mix(in srgb, var(--tone) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--tone) 28%, white);
+}
+
+.bc-empty { padding: 44px 20px; text-align: center; color: var(--ink-soft); }
+.bc-empty b { display: block; color: var(--ink); margin-bottom: 4px; }
+
+.bc-pager { display: flex; gap: 8px; align-items: center; justify-content: center; padding: 14px 0; }
+.bc-pager span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+/* ---- 패널 ----------------------------------------------------------- */
+.bc-panel {
+  border: 1px solid var(--line); border-radius: 6px; background: var(--paper);
+  padding: 18px; margin-bottom: 18px;
+}
+.bc-panel > h2 { margin-bottom: 4px; }
+.bc-panel__hint { color: var(--ink-soft); font-size: 12.5px; margin-bottom: 14px; }
+.bc-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+
+/* ---- 드로어 ---------------------------------------------------------
+   사내 다른 프로그램과 맞추기 위해 가운데 팝업이 아니라 우측에서
+   밀려 나오는 방식을 씁니다. 목록을 보면서 상세를 열 수 있어
+   한 건 처리하고 다음 건으로 넘어가는 흐름에 맞습니다.
+   ------------------------------------------------------------------- */
+.bc-modal[hidden] { display: none; }
+.bc-modal {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(16, 26, 38, .38);
+  display: flex; align-items: stretch; justify-content: flex-end;
+  animation: bc-fade .16s ease-out;
+}
+.bc-modal__box {
+  background: var(--paper);
+  width: 560px; max-width: 100vw; height: 100%;
+  border-radius: 0;
+  border-left: 1px solid var(--line);
+  box-shadow: -16px 0 44px rgba(16, 26, 38, .18);
+  display: flex; flex-direction: column;
+  animation: bc-slide-in .2s cubic-bezier(.22, .68, .35, 1);
+}
+.bc-modal__box--narrow { width: 440px; }
+
+.bc-modal__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 20px; border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.bc-modal__head h2 { flex: 1; }
+.bc-modal__body {
+  padding: 20px;
+  flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain;
+}
+.bc-modal__foot {
+  display: flex; gap: 8px; justify-content: flex-end;
+  padding: 14px 20px; border-top: 1px solid var(--line);
+  background: var(--surface); border-radius: 0;
+  flex: 0 0 auto; flex-wrap: wrap;
+}
+.bc-close {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  font-size: 20px; line-height: 1; color: var(--ink-soft); padding: 4px 6px;
+}
+.bc-close:hover { color: var(--ink); }
+
+@keyframes bc-fade {
+  from { opacity: 0; } to { opacity: 1; }
+}
+@keyframes bc-slide-in {
+  from { transform: translateX(24px); opacity: .6; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ---- 폼 ------------------------------------------------------------- */
+.bc-form { display: grid; gap: 14px; }
+.bc-form label { display: grid; gap: 4px; font-size: 13px; }
+.bc-form label > span { font-weight: 600; }
+.bc-form label input, .bc-form label select { width: 100%; }
+.bc-form__req::after { content: " *"; color: var(--stop); }
+.bc-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.bc-form__help { font-size: 12px; color: var(--ink-soft); font-weight: 400; }
+
+/* ---- 상세 ----------------------------------------------------------- */
+.bc-dl { display: grid; grid-template-columns: 96px 1fr; gap: 7px 14px; font-size: 13px; }
+.bc-dl dt { color: var(--ink-soft); }
+.bc-dl dd { margin: 0; word-break: break-word; }
+
+.bc-trail { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.bc-trail li { padding: 10px 0 10px 14px; border-bottom: 1px solid var(--line); position: relative; font-size: 13px; }
+.bc-trail li::before {
+  content: ""; position: absolute; left: 0; top: 16px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--brand);
+}
+.bc-trail time { color: var(--ink-soft); font-size: 12px; margin-left: 6px; }
+.bc-trail .bc-trail__c { color: var(--ink-soft); display: block; margin-top: 2px; }
+
+/* ---- 통계 ----------------------------------------------------------- */
+.bc-stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.bc-stat {
+  border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; background: var(--paper);
+}
+.bc-stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.bc-stat span { font-size: 12.5px; color: var(--ink-soft); }
+
+.bc-bar { display: grid; grid-template-columns: 130px 1fr 60px; align-items: center; gap: 10px; padding: 4px 0; font-size: 13px; }
+.bc-bar__track { background: var(--surface); border-radius: 3px; height: 16px; overflow: hidden; }
+.bc-bar__fill { height: 100%; background: var(--brand); border-radius: 3px; }
+.bc-bar__n { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+
+/* ---- 역할 배정 ------------------------------------------------------ */
+.bc-picker { border: 1px solid var(--line); border-radius: 5px; max-height: 260px; overflow-y: auto; }
+.bc-picker label {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 12px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px;
+}
+.bc-picker label:last-child { border-bottom: 0; }
+.bc-picker label:hover { background: var(--surface); }
+.bc-picker .bc-picker__id { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
+
+/* ---- 알림 매트릭스 -------------------------------------------------- */
+.bc-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bc-matrix th, .bc-matrix td { border: 1px solid var(--line); padding: 8px 10px; text-align: center; }
+.bc-matrix th { background: var(--surface); font-weight: 600; }
+.bc-matrix td:first-child, .bc-matrix th:first-child { text-align: left; }
+.bc-matrix .bc-matrix__ev { font-weight: 600; background: #fbfcfd; }
+
+/* ---- 토스트 --------------------------------------------------------- */
+.bc-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  background: var(--ink); color: #fff; padding: 11px 20px; border-radius: 5px;
+  font-size: 13.5px; z-index: 9500; max-width: 90vw;
+}
+.bc-toast--bad { background: var(--stop); }
+.bc-toast[hidden] { display: none; }
+
+.bc-alert {
+  border: 1px solid #e7c6c6; background: #fdf5f5; color: var(--stop);
+  border-radius: 5px; padding: 9px 12px; font-size: 13px; white-space: pre-line;
+}
+.bc-alert[hidden] { display: none; }
+
+.bc-loading { padding: 40px; text-align: center; color: var(--ink-soft); }
+
+@media (max-width: 760px) {
+  .bc-modal__box, .bc-modal__box--narrow { width: 100vw; border-left: 0; }
+  .bc-pipe { grid-template-columns: repeat(2, 1fr); }
+  .bc-pipe__aside { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+  .bc-form__row { grid-template-columns: 1fr; }
+  .bc-dl { grid-template-columns: 1fr; gap: 2px 0; }
+  .bc-dl dt { margin-top: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc * { transition: none !important; animation: none !important; }
+  .bc-modal, .bc-modal__box { animation: none !important; }
+}
+
+/* ---- 첨부파일 ------------------------------------------------------- */
+.bc-filelist { display: grid; gap: 4px; margin-top: 6px; }
+.bc-filelist:empty { display: none; }
+.bc-file {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--paper);
+}
+.bc-file__name { flex: 1; word-break: break-all; }
+.bc-file__name a { color: var(--brand); }
+.bc-file__size { color: var(--ink-soft); font-size: 12px; white-space: nowrap; }
+.bc-file__x {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  color: var(--ink-soft); font-size: 16px; line-height: 1; padding: 0 2px;
+}
+.bc-file__x:hover { color: var(--stop); }
+.bc-file--bad { border-color: #e7c6c6; background: #fdf5f5; }
+
+.bc-clip {
+  display: inline-block; margin-left: 6px; font-size: 12px; color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.bc-upload-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.bc-upload-row input[type="file"] { font-size: 13px; flex: 1 1 200px; }
+
+/* ---- 담당 배지 ------------------------------------------------------ */
+.bc-assignee { font-size: 12.5px; }
+.bc-assignee--none { color: var(--ink-soft); font-style: normal; }
+.bc-assignee--me { font-weight: 600; color: var(--brand); }

@@ -1,0 +1,2 @@
+# 설정/코드 디렉터리 직접 접근 차단 (Apache 2.4)
+RedirectMatch 404 ^/.*/bluecart/(config|includes|cron|sql|tests|dev)/

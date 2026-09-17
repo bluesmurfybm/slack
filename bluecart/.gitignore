@@ -1,0 +1,19 @@
+# 실제 접속 정보 — 절대 커밋하지 않는다
+config/config.php
+.env
+
+# 런타임
+*.log
+uploads/
+tmp/
+
+# 편집기
+.vscode/
+.idea/
+.DS_Store
+
+# 로컬 개발 산출물
+bluecart-data/
+dev/php-path.txt
+dev/mysql-path.txt
+*.xlsx.tmp
