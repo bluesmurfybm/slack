@@ -233,17 +233,39 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 ### 남은 전환 작업
 
-파이썬 `learning/` 은 저장소에서 지웠다. 서버에 남은 건 이것뿐이다. **순서를 지킨다** —
-이관보다 폴더 삭제가 먼저면 원본 SQLite 가 사라진다.
+파이썬 `learning/` 은 저장소에서 지웠다. 서버 정리는 `learn/tools/cutover_learning.sh` 가
+순서대로 해 준다. **순서가 중요하다** — 이관보다 폴더 삭제가 먼저면 원본 SQLite 가 사라진다.
 
-1. `learning.service`(uvicorn 8002) 중지·비활성화
-2. nginx 의 `/learning/`·`/learningapi/` 블록 제거 후 `nginx -t && systemctl reload nginx`
-3. **이관** — `php learn/tools/migrate_from_learning.php --db=<learning.db 경로> --dry-run` 으로
-   먼저 확인하고, 이상 없으면 `--force` 로 실행한다. 신청·이수증·이력은 id 를 유지하고,
-   플랫폼·분류는 이름으로 맞춰 갱신한다(시드와 겹쳐 142행이 두 벌이 되지 않게)
-4. 이관을 확인한 뒤 `/home/blueapp_core/learning` 삭제. `git pull` 은 추적 파일만 지우므로
-   `learning/var/`(SQLite·이수증 원본)는 그대로 남아 있다 — 3번의 원본이 여기다
-5. 끝나면 `migrate_from_learning.php` 도 지운다(일회성 도구)
+```bash
+sudo -iu blueapp_core          # 저장소 소유 계정. 다른 계정이면 git 이 dubious ownership 으로 멈춘다
+cd /home/blueapp_core && ./deploy.sh
+
+./learn/tools/cutover_learning.sh             # 점검만 — 아무것도 쓰지 않는다
+./learn/tools/cutover_learning.sh --migrate   # 백업 → 이관 → 대조
+./learn/tools/cutover_learning.sh --remove    # 대조를 통과하면 learning/ 삭제
+```
+
+스크립트가 대신 막아 주는 것들이다.
+
+- **실행 계정이 저장소 소유자가 아니면 멈춘다.** `safe.directory` 로 넘기면 `.git` 에 쓰지 못해
+  곧 막히고, 통과하더라도 새로 생긴 파일이 서비스 계정 소유가 아니게 된다
+- **`learn` 에서 만들어진 신청이 있으면 멈춘다.** 이관은 `learn_requests` 를 비우고 다시 채우므로
+  추천·필수 강의로 들어온 신청(`catalog_id > 0`)이 있으면 그게 날아간다
+- **이관 전에 백업을 뜬다** — MySQL `learn_*` 전체를 `.sql` 로, SQLite 원본을 사본으로
+  (`learn/var/cutover-backup/`). 되돌리려면 `mysql <DB> < learn-<시각>.sql`
+- **대조를 통과해야 지운다.** `verify_migration.php` 가 SQLite 와 MySQL 을 값 단위로 비교하고
+  (신청·이수증·이력 전 컬럼, 이수증 파일 존재, 플랫폼·분류 누락, 관리자 명단), 불일치가 하나라도
+  있으면 `--remove` 는 거부한다. 지우기 직전에도 `learning/` 을 통째로 tar 로 남긴다
+
+`git pull` 은 추적 파일만 지우므로 `learning/var/`(SQLite·이수증 원본)는 남아 있다 — 이관의
+원본이 여기다.
+
+root 권한이 필요한 것들(`learning.service` 중지, nginx 블록 정리)은 스크립트가 건드리지 않고
+마지막에 할 일로 찍어 준다. 서버 `config.php` 의 `links` 에서 `'learning'` 을 지우는 것도
+잊지 않는다 — gitignore 라 `git pull` 로 오지 않는다.
+
+끝나면 `cutover_learning.sh`·`migrate_from_learning.php`·`verify_migration.php` 를 지운다
+(전부 일회성 도구다).
 
 ---
 
