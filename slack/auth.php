@@ -40,7 +40,7 @@ function require_login() {
     $base = $GLOBALS['__bwBase'] ?? '';
     $pu = current_portal_user();
     if (!$pu) {
-        header('Location: ' . $base . '../index.php');
+        header('Location: ' . $base . '../index.php?need_login=slack');
         exit;
     }
     if (empty($pu['slack_token_enc'])) {

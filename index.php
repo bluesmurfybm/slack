@@ -21,8 +21,14 @@ $__current = $__u ? [
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
 ] : null;
-$__cfg   = require __DIR__ . '/config.php';
-$__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'magazine' => $__cfg['links']['magazine'], 'learn' => 'learn/index.php', 'access' => 'access/access.php', 'moodle' => 'moodle/'];
+require_once __DIR__ . '/worksystems.php';
+// 대시보드 타일도 상단바 드롭다운과 같은 목록(worksystems.php)을 쓴다 — 한쪽만 늘어나는 일이 없게.
+$__links = [];
+foreach (work_systems() as $__sys) {
+    $__links[$__sys['key']] = $__sys['url'];
+}
+// 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
+$__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -37,6 +43,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="styles/topbar.css">
 <link rel="stylesheet" href="styles/default.css">
+<link rel="stylesheet" href="styles/chatbot.css">
 </head>
 <body>
 
@@ -78,12 +85,7 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
           <div class="dd-menu" id="userDd">
             <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
             <div class="dd-sep"></div>
-            <div class="dd-label">업무 시스템</div>
-            <a href="" id="dd-book" target="_blank" rel="noopener">📚 BlueBooks</a>
-            <a href="" id="dd-slack" target="_blank" rel="noopener">📥 Coursemos WorkHub</a>
-            <a href="" id="dd-magazine" target="_blank" rel="noopener">📰 DTI 발표</a>
-            <a href="" id="dd-learning" target="_blank" rel="noopener">🎓 BlueLearn</a>
-            <a href="" id="dd-moodle" target="_blank" rel="noopener">🧭 MoodleUp?</a>
+            <?= work_systems_menu('', '', true) ?>
             <div class="dd-sep"></div>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
@@ -151,6 +153,25 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
       </div>
     </div>
   </div>
+
+  <!-- chatbot -->
+  <div id="chat-panel" class="chat-panel hidden">
+    <div class="chat-head">
+      <span class="bot-av" id="chat-botav"></span>
+      <div class="tt">
+        <h3>blue chatbot</h3>
+        <div class="st">데모 챗봇입니다. 무엇이든 물어보세요</div>
+      </div>
+      <button class="chat-x" onclick="closeChat()" title="닫기">&times;</button>
+    </div>
+    <div class="chat-log" id="chat-log"></div>
+    <div class="chat-form">
+      <textarea id="chat-input" rows="1" placeholder="메시지를 입력하세요"
+        onkeydown="chatKeydown(event)" oninput="chatGrow(this)"></textarea>
+      <button class="chat-send" id="chat-send" onclick="sendChat()" title="보내기"></button>
+    </div>
+  </div>
+  <button id="chat-fab" class="chat-fab hidden" onclick="toggleChat()" title="챗봇"></button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -159,6 +180,9 @@ $__links = ['book' => $__cfg['links']['book'], 'slack' => 'slack/lists.php', 'ma
 /* ===== 타일 링크 ===== */
 /* config.php 의 links 설정을 그대로 씀(서버가 단일 소스) */
 const LINKS = <?= json_encode($__links, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+
+/* 모듈에서 미로그인으로 튕겨 온 경우에만 채워진다(?need_login=<key>) */
+const NOTICE = <?= json_encode($__notice, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 let current = <?= $__current ? json_encode($__current, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) : 'null' ?>; // {name, email, has_token, needs_setup}
 
@@ -222,6 +246,8 @@ async function logout(){
   try{ await fetch("api/logout.php",{method:"POST"}); }catch(e){}
   current=null;
   document.getElementById("lg-pw").value="";
+  closeChat();
+  document.getElementById("chat-log").innerHTML="";
   document.getElementById("app").classList.add("hidden");
   document.getElementById("login").classList.remove("hidden");
 }
@@ -232,11 +258,6 @@ function renderShell(){
   av.textContent=first; av.style.background=current.color||avatarColor(current.name);
   document.getElementById("tb-name").textContent=current.name;
   document.getElementById("hero-hi").textContent=`${current.name}님, 환영합니다`;
-  document.getElementById("dd-book").href=LINKS.book;
-  document.getElementById("dd-slack").href=LINKS.slack;
-  document.getElementById("dd-magazine").href=LINKS.magazine;
-  document.getElementById("dd-learning").href=LINKS.learn;
-  document.getElementById("dd-moodle").href=LINKS.moodle;
 }
 
 function toggleUserMenu(e){
@@ -261,6 +282,7 @@ function showDash(){
   document.getElementById("view-profile").classList.add("hidden");
   document.getElementById("view-dash").classList.remove("hidden");
   renderTiles();
+  setChatVisible(true);
 }
 const SWATCH_COLORS=["#B6574A","#BA7D4D","#A58838","#818C46","#548058","#458278","#457797","#5A64AD","#8164AB","#9B5797","#B25D7E","#8C7055","#606D79"];
 function hexOrDefault(c){ return /^#[0-9a-fA-F]{6}$/.test(c||"") ? c : "#1C5DE5"; }
@@ -300,6 +322,7 @@ function cancelEditProfile(){
 }
 
 function showProfile(alertMsg, forceEdit){
+  setChatVisible(false);
   document.getElementById("view-dash").classList.add("hidden");
   document.getElementById("view-profile").classList.remove("hidden");
   document.getElementById("pf-name").value=current.name;
@@ -317,7 +340,7 @@ const arrow=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-w
 function renderTiles(){
   const bookIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
   const slackIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-  const magazineIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
+  const dtiIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
   const learningIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg>`;
   const accessIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.1-8.1M17 6l2.5 2.5M14.5 8.5 17 11"/></svg>`;
   const moodleIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.3 6.1-6.1 2.3 2.3-6.1z"/></svg>`;
@@ -333,9 +356,9 @@ function renderTiles(){
       <span class="ic" style="background:#1F9D76">${slackIcon}</span>
       <div><h3>Coursemos WorkHub</h3><p>유지보수 요청 현황을 확인하고 관리합니다.</p></div>
     </a>
-    <a class="tile" href="${LINKS.magazine}" target="_blank" rel="noopener">
+    <a class="tile" href="${LINKS.dti}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:#7B5CF0">${magazineIcon}</span>
+      <span class="ic" style="background:#7B5CF0">${dtiIcon}</span>
       <div><h3>DTI 발표</h3><p>매거진을 읽고 지식을 공유합니다.</p></div>
     </a>
     <a class="tile" href="${LINKS.learn}" target="_blank" rel="noopener">
@@ -405,10 +428,113 @@ document.querySelectorAll('.eye').forEach(b=>{
   b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`;
 });
 
+/* ---- 챗봇 ---- */
+const CHAT_API="/chatapi/ask"; // nginx 가 chatbot 서버(8003)로 넘긴다
+let chatBusy=false;
+
+function setChatVisible(on){
+  document.getElementById("chat-fab").classList.toggle("hidden", !on);
+  if(!on) closeChat();
+}
+function openChat(){
+  document.getElementById("chat-panel").classList.remove("hidden");
+  document.getElementById("chat-fab").classList.add("open");
+  const log=document.getElementById("chat-log");
+  if(!log.children.length) chatAppend("bot", `${current?current.name+"님, ":""}무엇을 도와드릴까요?`);
+  document.getElementById("chat-input").focus();
+}
+function closeChat(){
+  document.getElementById("chat-panel").classList.add("hidden");
+  document.getElementById("chat-fab").classList.remove("open");
+}
+function toggleChat(){
+  if(document.getElementById("chat-panel").classList.contains("hidden")) openChat();
+  else closeChat();
+}
+
+function chatAppend(cls, text){
+  const log=document.getElementById("chat-log");
+  const el=document.createElement("div");
+  el.className="chat-msg "+cls;
+  el.textContent=text; // 서버가 준 문자열이라 HTML 로 해석시키지 않는다
+  log.appendChild(el);
+  log.scrollTop=log.scrollHeight;
+}
+function chatTypingOn(){
+  const log=document.getElementById("chat-log");
+  const el=document.createElement("div");
+  el.className="chat-typing"; el.id="chat-typing";
+  el.innerHTML="<i></i><i></i><i></i>";
+  log.appendChild(el);
+  log.scrollTop=log.scrollHeight;
+}
+function chatTypingOff(){
+  const el=document.getElementById("chat-typing");
+  if(el) el.remove();
+}
+
+function chatGrow(el){
+  el.style.height="auto";
+  el.style.height=Math.min(el.scrollHeight,96)+"px";
+}
+function chatKeydown(e){
+  if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendChat(); }
+}
+
+async function sendChat(){
+  if(chatBusy) return;
+  const box=document.getElementById("chat-input");
+  const text=box.value.trim();
+  if(!text) return;
+  box.value=""; chatGrow(box);
+  chatAppend("me", text);
+  chatBusy=true;
+  document.getElementById("chat-send").disabled=true;
+  chatTypingOn();
+  try{
+    chatAppend("bot", await askBot(text));
+  }catch(e){
+    chatAppend("err", e.message || "답변을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }finally{
+    chatTypingOff();
+    chatBusy=false;
+    document.getElementById("chat-send").disabled=false;
+    box.focus();
+  }
+}
+
+async function askBot(text){
+  const r=await fetch(CHAT_API,{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({question:text})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){
+    const detail=typeof d.detail==="string" ? d.detail : null; // 422 의 detail 은 배열이다
+    throw new Error(detail || `답변을 가져오지 못했습니다. (HTTP ${r.status})`);
+  }
+  if(!d.content) throw new Error("답변이 비어 있습니다.");
+  return d.content;
+}
+
+(function(){
+  document.getElementById("chat-botav").innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01"/></svg>`;
+  document.getElementById("chat-fab").innerHTML=
+    `<span class="ic-open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.6 8.6 0 0 1-3.9-.9L3 21l1.9-5.6A8.4 8.4 0 0 1 12.5 3 8.4 8.4 0 0 1 21 11.5z"/></svg></span>`+
+    `<span class="ic-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>`;
+  document.getElementById("chat-send").innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+})();
+
 /* ---- 로그인 여부는 PHP가 이미 판단해서 화면/현재사용자(current)를 내려줬다 ----
    반드시 스크립트의 모든 선언(const/let/function) 다음, 맨 마지막에 실행해야 한다.
    위쪽에서 실행하면 아직 초기화 안 된 뒤쪽의 const/let(arrow, toastT 등)을
    먼저 참조하게 돼 TDZ ReferenceError로 스크립트 전체가 죽는다. */
+/* 모듈에서 미로그인으로 튕겨 왔으면 왜 튕겼는지 알린다. need_login 만 지운다 —
+   pathname 으로 싹 지우면 enterApp() 이 읽는 need_token/view=profile 까지 날아간다. */
+if(NOTICE){
+  const p=new URLSearchParams(location.search);
+  p.delete("need_login");
+  history.replaceState(null,"",location.pathname+(p.toString()?"?"+p:""));
+  toast(NOTICE);
+}
 if(current){ renderShell(); enterApp(); }
 </script>
 </body>

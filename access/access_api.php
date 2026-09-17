@@ -2,6 +2,7 @@
 /**
  * Coursemos EnvHub API (포털 로그인 필요)
  *   GET                                → schools JOIN school_access 목록 (?all=1 이면 미사용 학교 포함)
+ *   POST {action:save_field}           → 한 칸만 저장(상세 화면의 인라인 편집)
  *   POST {action:create}               → 새 대학 등록: schools 에 넣고 그 id 로 접속 정보까지 생성
  *   POST {action:save}                 → 한 학교의 접속 정보 저장(없으면 생성) + 마스터(schools) 동기화
  *   POST {action:delete}               → 접속 정보만 삭제(학교 자체는 slack/schools 에서 관리하므로 남긴다)
@@ -63,6 +64,42 @@ try {
         if ($accessId <= 0) throw new Exception('잘못된 접속정보 id');
         $pdo->prepare("DELETE FROM school_access WHERE id=?")->execute([$accessId]);
         echo json_encode(['ok' => true]);
+        exit;
+    }
+
+    // 상세 화면에서 칸 하나만 고쳐 저장한다.
+    // 전체 저장(save)과 달리 나머지 칸은 손대지 않는다 — 같은 행을 다른 사람이 고치고 있어도
+    // 내가 건드린 칸만 반영되고, 실수로 빈 값이 덮어써지는 일도 없다.
+    if ($action === 'save_field') {
+        $key = (string)($in['key'] ?? '');
+        $val = trim((string)($in['value'] ?? ''));
+
+        // 대학명·버전·URL 은 마스터(schools) 소관이라 그쪽으로 보낸다
+        $master = ['name' => 'name', 'ver' => 'ver', 'dev' => 'dev', 'ops' => 'ops', 'log' => 'log'];
+        if (isset($master[$key])) {
+            if ($schoolId <= 0) throw new Exception('학교를 선택하세요.');
+            if ($key === 'name' && $val === '') throw new Exception('대학(기관)명을 입력하세요.');
+            $col = $master[$key];   // 화이트리스트를 거친 이름만 들어온다
+            $pdo->prepare("UPDATE schools SET `{$col}`=?, updated_at=NOW() WHERE id=?")
+                ->execute([$val, $schoolId]);
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
+        if (!in_array($key, $COLS, true)) throw new Exception('수정할 수 없는 항목입니다: ' . $key);
+        if ($schoolId <= 0) throw new Exception('학교를 선택하세요.');
+        if (in_array($key, access_secret_cols(), true)) $val = access_enc($val);
+
+        if ($accessId > 0) {
+            $pdo->prepare("UPDATE school_access SET `{$key}`=?, updated_at=NOW() WHERE id=? AND school_id=?")
+                ->execute([$val, $accessId, $schoolId]);
+            echo json_encode(['ok' => true, 'access_id' => $accessId]);
+        } else {
+            // 접속 정보가 아직 없던 학교 — 이 칸 하나로 행을 만든다
+            $pdo->prepare("INSERT INTO school_access (school_id, `{$key}`, created_at, updated_at)
+                           VALUES (?, ?, NOW(), NOW())")->execute([$schoolId, $val]);
+            echo json_encode(['ok' => true, 'access_id' => (int)$pdo->lastInsertId()]);
+        }
         exit;
     }
 

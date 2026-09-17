@@ -1,5 +1,6 @@
 <?php
 $__bwBase = '../';   // slack/ 하위 폴더 페이지 — require_login()/header.php 리다이렉트 경로 계산용
+$__bwCurrent = 'slack';
 require_once __DIR__ . '/../auth.php';
 require_login();
 $me = current_user();

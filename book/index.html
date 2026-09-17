@@ -26,9 +26,7 @@
         </div>
         <div class="dd-menu" id="hdrUserDd">
           <a href="#" id="dd-mypage">👤 마이페이지</a>
-          <div class="dd-sep"></div>
-          <div class="dd-label">업무 시스템</div>
-          <a href="#" id="dd-slack">📥 업무현황판</a>
+          <div id="dd-systems"></div>
           <div class="dd-sep"></div>
           <a href="#" id="dd-logout">🚪 로그아웃</a>
         </div>
@@ -539,13 +537,24 @@ async function loadWhoami(){
     const portalUrl=(who.portal_url||"").replace(/\/+$/,"");
     document.getElementById("hdrBrand").href=portalUrl||"#";
     document.getElementById("dd-mypage").href=portalUrl?`${portalUrl}/?view=profile`:"#";
-    document.getElementById("dd-slack").href=who.slack_url||"#";
+    renderWorkSystems(who.work_systems, "book");
     document.getElementById("dd-logout").href=portalUrl?`${portalUrl}/bookapi/logout.php`:"#";
     document.getElementById("hdrName").textContent=me.name;
     const av=document.getElementById("hdrAvatar");
     av.textContent=me.name.slice(0,1);
     av.style.background=me.color||colorFor(me.name).fg;
   }catch(e){ me={name:"",email:"",color:""}; }
+}
+
+/* 공통 상단바 드롭다운의 "업무 시스템" 목록 — 원본은 포털의 worksystems.json,
+   whoami 가 그대로 내려준 걸 그리기만 한다 */
+function renderWorkSystems(list, current){
+  const box=document.getElementById("dd-systems");
+  if(!box) return;
+  box.innerHTML=(list||[]).length
+    ? `<div class="dd-sep"></div><div class="dd-label">업무 시스템</div>`+list.map(s=>
+        `<a href="${s.url}"${s.key===current?' class="on" aria-current="page"':""}>${s.emoji} ${s.label}</a>`).join("")
+    : "";
 }
 
 function toggleUserMenu(e){

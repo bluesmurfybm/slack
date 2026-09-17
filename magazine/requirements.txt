@@ -1,7 +1,0 @@
-fastapi
-sqlmodel
-pydantic-settings
-uvicorn[standard]
-requests
-python-multipart
-anyio

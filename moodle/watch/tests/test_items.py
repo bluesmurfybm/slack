@@ -47,3 +47,10 @@ def test_item_round_trips_through_dict():
 def test_week_key_is_iso_week():
     assert week_key(datetime(2026, 9, 8, tzinfo=UTC)) == "2026-W37"
     assert week_key(datetime(2027, 1, 1, tzinfo=UTC)) == "2026-W53"
+
+
+def test_week_key_uses_kst_not_utc_for_monday_morning_runs():
+    """systemd timer 는 월요일 06:00 KST(=일요일 21:00 UTC)에 돈다. UTC 로 계산하면 아직
+    전주 일요일이라 방금 시작된 새 주차를 전주로 잘못 라벨링해 기존 최신 주차에 병합돼버린다."""
+    assert week_key(datetime(2026, 9, 6, 21, tzinfo=UTC)) == "2026-W37" # 9/7(월) 06:00 KST
+    assert week_key(datetime(2026, 9, 13, 21, tzinfo=UTC)) == "2026-W38" # 9/14(월) 06:00 KST

@@ -73,7 +73,8 @@ class Settings(BaseSettings):
     admin_emails: Annotated[frozenset[str], NoDecode] = frozenset(ADMINS)
     dev_login: bool = False
     portal_url: str = "/"
-    slack_url: str = "/slack/lists.php"
+    # 공통 상단바 드롭다운의 "업무 시스템" 목록 — 원본은 포털 루트의 이 json 하나다
+    work_systems_path: str = str(BASE.parent / "worksystems.json")
     slack_webhook: str | None = Field(default=None, validation_alias="SLACK_WEBHOOK_URL")
 
     index_path: str = str(BASE / "web" / "index.html")

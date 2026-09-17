@@ -42,6 +42,13 @@ learning/*.db
 # 폴더는 learn/var/.htaccess(직접 접근 차단)와 함께 앱이 만든다.
 learn/var/uploads/
 
+# composer (dti 모듈 오토로드·테스트)
+/vendor/
+/.phpunit.cache/
+
+# dti(DTI 발표) 업로드 원본·런타임 데이터
+dti/var/
+
 # 파이썬 캐시/가상환경 (저장소 전체)
 __pycache__/
 *.pyc
@@ -59,3 +66,5 @@ _info
 blueup_learning_summary.txt
 # 단, 루트 readme.md는 다른 개발자를 위한 프로젝트 현황 문서라 공유되어야 함
 !/readme.md
+# dti/README.md는 서버에 올리는 사람이 봐야 하는 설치·운영 문서라 공유되어야 함
+!/dti/README.md

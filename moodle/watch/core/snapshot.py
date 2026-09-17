@@ -1,12 +1,17 @@
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 from core.config import Settings
 
+KST = timezone(timedelta(hours=9)) # 서머타임이 없어 고정 오프셋으로 충분하다(tzdata 불필요)
+
 
 def week_key(dt: datetime) -> str:
-    y, w, _ = dt.isocalendar()
+    """ISO 주차. 배치는 KST 월요일 새벽에 도는데 그 시각의 UTC 는 아직 전주 일요일이라, UTC 기준으로
+    계산하면 방금 막 시작된 새 주차를 전주로 잘못 라벨링하게 된다 — KST 로 변환해서 본다.
+    """
+    y, w, _ = dt.astimezone(KST).isocalendar()
     return f"{y}-W{w:02d}"
 
 

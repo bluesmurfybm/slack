@@ -1,6 +1,6 @@
 # blue-iWorks — 사내 업무 포털
 
-Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **DTI 발표(magazine)**,
+Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **DTI 발표(dti)**,
 **BlueLearn(learning)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
@@ -10,6 +10,7 @@ Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청
 D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── index.php                    로그인/대시보드/프로필 (SPA 한 페이지)
 ├── auth.php, db.php, config.php 포털 세션·DB·SSO 헬퍼
+├── worksystems.json/.php        상단바 드롭다운 "업무 시스템" 목록의 유일한 원본 + 렌더러
 ├── api/                         login.php, logout.php, me.php
 ├── styles/                      default.css, favicon.ico, logo-blue.png
 │
@@ -17,15 +18,6 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── app.py
 │   ├── index.html
 │   └── styles/
-│
-├── magazine/                    DTI 발표 — Python/FastAPI, 별도 프로세스(포트 8001)
-│   ├── app.py                   조립만(create_app 팩토리)
-│   ├── core/                    config(pydantic-settings), db(SQLModel)
-│   ├── features/                identity · topics · material · notify
-│   ├── web/                     index.html, static/(도메인별 js), styles/
-│   ├── data/seed.json           초기 데이터 31건
-│   ├── var/                     DB·업로드 (gitignore)
-│   └── tests/
 │
 ├── moodle/                      MoodleUp?(무들 동향) — PHP 뷰어 + Python 주간 배치
 │   ├── index.php, db.php        주차별 리포트 화면(읽기 전용, 포털 세션)
@@ -57,6 +49,25 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── static/, styles/         도메인별 js · css
 │   └── var/uploads/             이수증 원본 (gitignore, .htaccess 로 직접 접근 차단)
 │
+├── dti/                         DTI 발표 — PHP, 포털 세션·DB 공유
+│   ├── index.php                화면 한 장(SPA). magazine/web/index.html 이식
+│   ├── api.php                  프런트 컨트롤러 — 출력하는 유일한 자리
+│   ├── bootstrap.php            require 목록 + 시간대
+│   ├── db.php                   설정 · 연결 · 스키마 · 시드
+│   ├── guard.php                포털 세션 신원 · 관리자 판정
+│   ├── lib/
+│   │   ├── http.php             DtiError · 요청 파싱 · 응답 · 입력 검증 · 라우팅
+│   │   ├── topics.php           아티클 읽기/쓰기 · 상태 판정 · 화면용 배열
+│   │   ├── presentations.php    발표 행 생성 · 삭제 · 배정 해제
+│   │   ├── emotions.php, fields.php, members.php
+│   │   ├── related.php, score.php     연관 점수 · 멤버 점수
+│   │   ├── slots.php, storage.php, notify.php
+│   ├── routes/                  topics · materials · fields · scores · identity
+│   ├── static/, styles/         magazine/web/ 이식 (core.js 에 경로 변환만 추가)
+│   ├── tools/                   rebuild_related.php · backfill_materials.php(일회성)
+│   ├── tests/                   PHPUnit 169건
+│   └── var/uploads/             발표자료 원본 (gitignore, .htaccess 로 직접 접근 차단)
+│
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
     ├── auth.php, db.php, config.php, slack_lib.php, header.php   (공통)
     ├── lists.php, comments.php, data.php, assign.php, ...        (핵심 요청 목록 기능)
@@ -68,7 +79,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
     └── styles/       페이지별 css + header.css(공통 상단바)
 ```
 
-**book(8000)과 magazine(8001)만 다른 프로세스/포트**(FastAPI)다. **portal과 slack은 완전히 같은
+**book(8000)만 다른 프로세스/포트**(FastAPI)다. **portal과 slack은 완전히 같은
 PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 뿐, 세션도 같은 걸 공유한다.
 
 ---
@@ -85,22 +96,38 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
   book은 토큰 없이도 써야 하기 때문. 토큰이 필요한 건 slack 진입 시점뿐.
 - **slack 모듈**: 별도 로그인 없음. `slack/auth.php::require_login()`이 포털 세션을 그대로 읽고,
   `portal_users.slack_token_enc`(AES-256-GCM 암호화된 개인 Slack 토큰)를 복호화해 Slack
-  `auth.test`로 검증한 뒤 세션에 캐시한다. 포털 로그인이 없으면 `../index.php`로,
+  `auth.test`로 검증한 뒤 세션에 캐시한다. 포털 로그인이 없으면 `../index.php?need_login=slack`로,
   토큰이 없거나 무효면 `../index.php?need_token=1`로 리다이렉트 → 포털이 알림과 함께 프로필
   화면을 띄운다.
-- **book / magazine 모듈(다른 프로세스)**: 포털이 로그인 시 `blueiwork_id` 쿠키를 심는다 — 이메일+이름을
+- **미로그인으로 튕길 때는 이유를 알린다**: 화면(뷰) 라우트는 미로그인 사용자를 포털로 되돌릴 때
+  `?need_login=<key>`를 붙인다(key는 `worksystems.json`의 key). 포털은 `need_login_notice()`로
+  이름까지 붙인 문구를 만들어 로그인 화면에 토스트로 띄우고, URL에서 그 플래그만 지운다
+  (`pathname`으로 싹 지우면 `need_token`·`view=profile`까지 날아간다). 붙이는 곳은
+  slack `auth.php`, dti·moodle `index.php`, moodle `bookmarks.php`, learn·access `guard.php`,
+  book·learning `app.py` — 여덟 곳이다. **API는 다르다** — 401을 그대로 응답하고, 화면 JS가
+  그 401을 받아 포털로 보낸다(book `authedFetch`).
+- **book 모듈(다른 프로세스)**: 포털이 로그인 시 `blueiwork_id` 쿠키를 심는다 — 이메일+이름을
   HMAC-SHA256으로 서명한 값(`auth.php::issue_sso_cookie()`). book(Python, `app.py`)은 같은
   비밀키(`sso_secret.key`, 포털이 최초 실행 시 자동 생성)로 **서명만 검증**해서 이메일/이름을
   얻는다. book은 MySQL에 붙지 않는다 — 쿠키 자체가 신원 증명.
-  - magazine도 같은 방식이다(`features/identity/auth.py`). 쿠키 형식·서명 키를 book과 공유하므로
-    포털에서 한 번 로그인하면 셋 다 통한다.
-  - **전제: 포털과 book/magazine이 같은 호스트**(포트만 달라도 됨)여야 브라우저가 쿠키를 같이
+  - **전제: 포털과 book이 같은 호스트**(포트만 달라도 됨)여야 브라우저가 쿠키를 같이
     보낸다. 다른 PC에서 띄우면 SSO가 동작하지 않는다.
   - book 쪽 로그아웃 링크는 포털의 `api/logout.php`를 GET으로 직접 연다(`api/logout.php`가
     POST면 JSON, GET이면 `index.php`로 리다이렉트하도록 나뉘어 있음).
 - **공통 상단바**: `slack/header.php`(PHP include)와 `book/index.html`의 `.bw-topbar`가 시각적으로
   동일한 blue-iWorks 상단바(로고+사용자명+로그아웃)를 각자 방식으로 그린다. slack 하위 폴더
   페이지는 include 전에 `$__bwBase = '../';`를 반드시 설정해야 링크가 안 깨진다(폴더 깊이 보정용).
+- **상단바 드롭다운의 "업무 시스템" 목록**: 원본은 `worksystems.json` 하나다(key·이모지·라벨 +
+  포털 루트 기준 경로). 시스템이 늘거나 이름이 바뀌면 여기만 고치면 전 모듈 상단바와 포털
+  대시보드 타일이 같이 바뀐다.
+  - PHP 쪽(포털·slack·access·moodle·dti·learn)은 `worksystems.php::work_systems_menu($base, $current)`
+    로 서버에서 그린다. `$base`는 그 페이지에서 **포털 루트까지 되짚는 접두사**(포털 `''`,
+    dti/learn/moodle/slack `'../'`, slack 하위 폴더 `'../../'`), `$current`는 현재 시스템 key —
+    그 줄이 `.on`(`styles/topbar.css`)으로 표시된다. `slack/header.php`를 쓰는 페이지는
+    `$__bwCurrent`만 넘기면 된다.
+  - 별도 프로세스인 book·learning은 PHP를 못 쓰니 `app.py`/`router.py`가 **같은 json을 직접 읽어**
+    `whoami` 로 내려주고 화면 JS(`renderWorkSystems`)가 그린다. 포털 트리가 안 보이면 목록만
+    비고 화면은 정상 동작한다.
 
 ---
 
@@ -114,46 +141,72 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 ---
 
-## magazine (DTI 발표)
+## dti (DTI 발표)
 
-매거진(DI, MIT TR) 아티클 발표 주제를 관리한다. 원래 xlsx로 돌리던 걸 옮긴 것.
+매거진(DI, MIT TR) 아티클 발표 주제를 관리한다. 원래 xlsx 로 돌리던 걸 파이썬(FastAPI/SQLite)
+으로 옮겼다가, 다시 포털과 같은 PHP 앱 안으로 들여왔다(`learning/` → `learn/` 과 같은 이유 —
+별도 프로세스라서 필요했던 uvicorn 유닛·nginx 프록시·venv·SSO 쿠키가 전부 사라진다).
 
-- **상태는 저장하지 않고 파생한다** — `done_date`면 발표완료, `presenter_email`이면 발표예정,
-  둘 다 없으면 미지정(`features/topics/service.py`). 원본 xlsx에 "발표자·예정일이 있는데
-  비고는 미지정"인 행이 실제로 있어서, 컬럼으로 저장하면 계속 어긋난다.
-- **DB 접근은 SQLModel ORM** — `core/db.py`의 `Topic` 모델 하나가 스키마의 원본이다.
-  엔진은 `create_app`이 만들어 `app.state.engine`에 두고, 라우터는 `get_session` 의존성으로
-  세션을 받는다. 마이그레이션은 모델에 있고 테이블에 없는 컬럼만 `ALTER TABLE`로 붙이는
-  방식이라, 컬럼을 추가할 때 모델만 고치면 된다. **기존 행까지 값이 채워져야 하는 컬럼은
-  `sa_column_kwargs={"server_default": ...}`를 반드시 준다** — 파이썬 기본값만으로는
-  운영 DB의 기존 행에 NULL이 남는다(`tests/test_db.py`가 이걸 지킨다).
-- **선점(claim)**: 미지정 주제를 일반 사용자가 직접 가져간다. 동시 선점은 조건부 UPDATE
-  한 방으로 막고 409를 준다. 발표가 끝난 주제는 발표자가 비어 있어도 선점 대상이 아니다.
-  숨김(`active=0`)·보관(`archived=1`) 주제도 선점 대상이 아니다.
-- **노출과 보관**: `active`는 구성원 화면 노출 스위치, `archived`는 보관함이다. 목록 API가
-  관리자가 아닌 요청에서 둘을 걸러낸다 — 화면에서만 숨기지 않는다.
-- **발표 구분은 3단계**: `required`(필수) / `recommended`(권장) / `normal`(일반).
-- **화면**: 구성원 화면은 내 활동 스트립 + 진행 레일(미지정 → 발표예정 → 자료준비 완료 →
-  발표완료) + 리스트/카드 전환 + 상세 드로어. 관리자는 상단에서 관리자 화면으로 전환하면
-  아티클 관리·보관함 탭이 뜬다. **'자료준비 완료'는 서버 상태가 아니라 화면에서 파생한다**
-  (발표예정 + 자료 등록). 서버 `status`는 그대로 3단계다.
-- **연관 아티클**(드로어): 분야·키워드·팀·매거진 일치로 점수를 매겨 상위 3건(`web/static/related.js`).
-  난수를 쓰지 않는다 — 같은 두 주제는 언제 봐도 같은 점수여야 한다.
-- **등록 폼 자동 입력**: 매거진을 고르면 그 매거진의 **가장 최근 호**(Volume 앞머리 숫자 →
-  년도 → 등록 순) Volume/Page를 채운다. 등록 순(`id`)을 먼저 보면 안 된다 — xlsx에서 넘어온
-  행의 `id`는 등록 시점이 아니라 시트 행 순서라서 DI가 279가 아니라 2024년 275호로 잡힌다.
-  년도를 먼저 봐도 안 된다 — 년도는 비워 둘 수 있어서, 년도 없이 등록한 새 호가 옛 호보다
-  뒤로 밀린다. 수정 중에는 채우지 않는다.
-- **권한**: 주제 등록·수정·삭제·발표자 지정·발표완료 처리는 관리자만. 관리자 명단은
-  `core/config.py` 의 `Settings.admin_emails` 기본값이 출처다. 선점·선점취소·예정일 변경은
-  본인 또는 관리자. **판정은 항상 서버에서** 하고 화면은 버튼을 감추기만 한다.
-- **발표 자료**: 주제당 하나(파일 또는 링크). 발표자 본인이나 관리자만 올린다. 저장 파일명은
-  서버가 만들고, HTML/SVG는 같은 오리진 인라인 시 XSS가 되므로 강제로 내려받기 처리한다
-  (`features/material/storage.py`).
-- **구성원 명단**: 발표자 지정 드롭다운용으로 `core/config.py`의 `MEMBERS`에 하드코딩.
-  magazine은 포털 MySQL을 보지 않기 때문. 입·퇴사 시 이 목록을 고친다.
-- **테스트**: `cd magazine && python -m pytest` (82건). 앱은 `create_app(settings)` 팩토리라
-  테스트가 `Settings`만 갈아끼워 새 앱을 만든다.
+- **learn/ 과 같은 모양이다** — `lib/` 와 `routes/` 에 `dti_` 접두사 전역 함수를 나열한다.
+  소스에 도메인 클래스는 없고, 남는 클래스는 예외 하나(`DtiError`)와 PHPUnit 테스트뿐이다.
+  행은 PDO 연관 배열을 그대로 넘긴다.
+- **다만 라우트는 값을 돌려준다** — learn 의 `jsend()` 는 출력하고 `exit` 해서 라우트 단위
+  테스트를 붙일 자리가 없다. dti 의 라우트는 `['status' => .., 'data' => ..]` 를 반환하고
+  출력은 `api.php` 의 `dti_send()` 한 곳에서만 한다. 169건 중 129건이 이 덕분에 라우트를
+  통째로 검증한다.
+- **전역 `static` 캐시를 쓰지 않는다** — learn 의 `learn_policy()`·`body_json()` 같은 캐시는
+  테스트 간에 상태가 남는다. 설정·연결·신원은 `$ctx` 배열로, 요청은 `$req` 배열로 넘긴다.
+- **PPT 를 올리면 변환된 PDF 가 자료로 하나 더 들어간다** — pptx·ppt·odp 를 올리면 업로드
+  시점에 `soffice --headless` 로 PDF 를 만들어 **같은 칸에 별개 자료 행으로** 넣는다. 원본과
+  변환본은 **독립이다** — 각자 내려받고, 각자 지우고, PDF 는 기존 PDF 뷰어에 그대로 태워진다.
+  변환에 실패하면 PPT 만 올라가고 PDF 행이 안 생긴다(업로드는 성공). 변환기는
+  `$ctx['converter']` 로 갈아끼운다(`$ctx['mover']` 와 같은 자리). 키노트(`.key`)는 변환할 수
+  없어 제외한다. **설치·PHP 설정·증상별 확인은 `dti/README.md`** 에 있다(LibreOffice 패키지,
+  `max_execution_time` 과 `soffice_timeout` 관계 등).
+- **테이블은 `dti_*`** — `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`,
+  `dti_related`. slackapi DB 를 포털·slack·learn 과 공유하므로 맨이름을 쓸 수 없다.
+  컬럼 추가는 `add_column_if_missing()` 을 거친다.
+- **자료는 칸(slot)당 여러 건이다** — `dti_materials` 가 원본이고 `topic_id + slot` 으로 건다
+  (발표는 아티클과 1:1 이라 발표자료도 topic_id 로 잡는다). 응답의 `material_kind`·`material_name`
+  ·`material_url`·`material_path` 는 **첫 자료에서 파생한 값**이고, 목록은 `materials`·`scans`
+  배열에 실린다. 파생 키를 남겨 둔 건 카드 정렬(`topics.js`)과 멤버 점수가 그걸 보고 있어서다.
+  멤버 점수의 "자료 3점" 은 몇 건을 올리든 한 번이다.
+- **자료 슬롯은 NULL 을 유지한다** — `material_*`·`scan_*` 는 "없음"이 NULL 이고 화면이 그
+  구분에 기댄다. learn 의 `NOT NULL DEFAULT ''` 관례를 여기 적용하면 안 된다.
+  날짜는 VARCHAR 다(`''` 가 없음).
+- **인증은 포털 세션**(`guard.php` 의 `dti_identity()`). 구성원 명단은 `portal_users` 에서
+  오고, 팀 매핑과 관리자 명단만 `db.php` 의 `DTI_` 상수다. 개발 로그인(`DEV_LOGIN`)은 화면·API 에서 **없앴다** —
+  포털 세션을 쓰는 이상 로그인 없이 화면을 보는 경로가 없다.
+- **화면은 거의 그대로다** — `core.js` 의 `dtiApiURL()` 이 `/magazineapi/topics/3` 을
+  `api.php?p=/topics/3` 으로 바꾼다. 나머지 도메인 스크립트는 손대지 않았다(`material.js` 의
+  다운로드 URL 한 줄만 같은 함수를 쓴다).
+- **연관 점수**는 `dti_related` 에 저장하고 등록·수정·삭제 때 다시 계산한다. 파이썬은 기동할
+  때도 계산했지만 PHP 에는 기동 훅이 없으므로, 배점 상수를 바꾸면
+  `php dti/tools/rebuild_related.php` 를 한 번 돌린다.
+- **런타임 의존성이 0이다** — 소스가 쓰는 외부 라이브러리는 PHP 내장 `PDO` 뿐이고, 파일
+  로딩은 `dti/bootstrap.php` 의 `require_once` 목록이 한다. **composer 는 테스트에만 쓴다.**
+  서버에 composer 가 없어도, `vendor/` 를 올리지 않아도 파일만 복사하면 돌아간다
+  (access·moodle·learn 과 같은 배포).
+- **테스트**: `vendor/bin/phpunit` (169건). 테스트를 돌릴 때만 `composer install` 이 필요하다. 테스트 DB 는 `slackapi_test` 를 쓴다
+  (`dti/tests/bootstrap.php`, 환경변수 `DTI_TEST_DB` 로 바꿀 수 있다).
+  **이 환경은 커밋마다 fsync 가 돌아 쓰기 한 건이 0.2초다** — 픽스처는 트랜잭션으로 묶고
+  테이블은 TRUNCATE 가 아니라 DELETE 로 비운다(TRUNCATE 는 InnoDB 에서 DDL 이라 3초 가까이
+  걸린다). 로컬을 더 빠르게 하려면 MySQL 에서
+  `SET GLOBAL innodb_flush_log_at_trx_commit=2, sync_binlog=0` (내구성 대신 속도, 개발 전용).
+- **이관 검증**: 실데이터 사본으로 파이썬 앱과 PHP 의 응답을 통째로 비교해 **차이가 없음을
+  확인했다**(아티클 31건 전체 키·값, 목록 순서, 분야, 멤버 점수 13행, 연관 31건).
+  연관 점수는 파이썬이 저장해 둔 106쌍과 점수까지 일치한다.
+
+### 남은 전환 작업
+
+파이썬 magazine 은 저장소에서 지웠고 실데이터도 `dti_*` 로 옮겼다. 서버에 남은 건 이것뿐이다.
+
+1. nginx 의 `/magazine/`·`/magazineapi/` 블록 제거
+2. `magazine.service`(uvicorn 8001) 중지·비활성화, `/home/blueapp_core/magazine` 정리
+3. `php dti/tools/backfill_materials.php` — 컬럼에 있던 자료를 `dti_materials` 로 옮긴다
+   (`--dry-run` 으로 먼저 확인, 여러 번 돌려도 안전). 끝나면 이 도구도 지운다
+4. `dti_topics`·`dti_presentations` 의 죽은 컬럼(`presenter`·`planned_date`·`material_*`
+   ·`scan_*`) 정리
 
 ---
 
@@ -362,7 +415,7 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 | `slack/config.local.php` | Gmail IMAP 계정 정보 | **직접 생성 필요**, 아래 형식 |
 | `book/config_local.py` | Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성 |
 | `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
-| `magazine/config_local.py` | Slack 웹훅 URL(선택) | `config_local.exam.py` 복사해서 사용 |
+| `config.php` 의 `dti_slack_webhook` | dti 모듈 Slack 웹훅 URL(선택) | 없으면 발표자 등록 알림만 비활성 |
 | `SVN_배포_디비정보(블루내부공유).xlsx` (루트) | access 모듈 초기 데이터 | **직접 가져다 둘 것.** 전 대학 계정/비번이 들어 있어 커밋 금지 |
 
 `slack/config.php` 형식:
@@ -402,14 +455,21 @@ return [
     'comment_channel' => 'C083TU7F0BZ',
     'list_url'        => 'https://coursemos.slack.com/lists/T04LNBX6L/F083TU7F0BZ',
 
+    // dti(DTI 발표) 슬랙 알림 웹훅 — 선택. 없으면 발표자 등록 알림만 조용히 꺼진다.
+    // (파이썬 magazine 의 config_local.py 에 있던 SLACK_WEBHOOK_URL 자리다)
+    'dti_slack_webhook' => null,
+
     // 대시보드/공통 헤더 드롭다운이 참조하는 외부 모듈 링크. book은 별도 프로세스라 절대주소 필요.
     // 실제 배포 주소가 다르면 config.local.php 에 'book_url' => '...' 을 넣어 덮어쓸 수 있음.
-    // learn(BlueLearn)은 포털과 같은 PHP 앱이라 여기 주소가 없다 — index.php가
-    // slack·access처럼 상대경로(learn/index.php)로 직접 건다.
+    // dti·learn 은 포털과 같은 PHP 앱이라 여기 주소가 없다 — index.php가
+    // slack·access처럼 상대경로(dti/index.php)로 직접 건다.
     'links' => [
         'book' => $localCfg['book_url'] ?? 'book',
-        'magazine' => $localCfg['magazine_url'] ?? 'magazine',
     ],
+
+    // dti 의 발표자료 PDF 변환에 쓰는 LibreOffice 실행 파일. PATH 에서 찾는다.
+    // 웹 서버의 PATH 에 없으면 절대경로로 바꾼다(이 파일 자체가 서버마다 따로 만드는 파일이다).
+    'soffice' => 'soffice',
 ];
 ```
 
@@ -427,17 +487,8 @@ return [
 
 - **`PORTAL_URL`** (book 실행 시 환경변수) — book이 "로그인 안 됨" 상태에서 리다이렉트할 포털 주소.
   기본값 `http://localhost/` 플레이스홀더 그대로면 실제 배포에서 안 맞을 수 있음.
-- **`index.php`의 `LINKS.book` / `LINKS.magazine`** — 대시보드 타일이 여는 실제 주소.
-  둘 다 `config.php`의 `links`에서 읽는다. magazine을 추가했으면 `'magazine' => 'http://호스트:8001'`
-  한 줄이 있어야 한다(없으면 PHP 경고).
-- **magazine 환경변수** — `PORTAL_URL`, `SLACK_URL`, `DB_PATH`,
-  `UPLOAD_DIR`, `SSO_SECRET_PATH`, `MAX_UPLOAD_MB`(기본 50). 전부 `core/config.py`의
-  `Settings`(pydantic-settings)가 읽는다. **설정을 읽는 곳은 여기 한 군데다.**
-  **관리자 명단(`ADMIN_EMAILS`)은 환경변수로 주지 않는다** — pydantic-settings 는 환경변수를
-  필드 기본값보다 우선하므로, 한 번 넣어두면 `config.py` 에서 명단을 고쳐도 조용히 무시된다.
-  명단은 `Settings.admin_emails` 기본값에서만 관리한다.
-  `DEV_LOGIN=1`은 포털 없이 화면을 보기 위한 개발 전용 스위치라 **운영에서는 절대 켜지 않는다**
-  (켜면 로그인 없이 계정 전환 바가 뜬다).
+- **`index.php`의 `LINKS.book`** — 대시보드 타일이 여는 실제 주소. `config.php`의 `links`에서
+  읽는다. 나머지 모듈은 같은 PHP 앱이라 `index.php` 가 상대경로로 직접 건다.
 - **moodle/watch 환경변수** — 전부 선택. 서버는 systemd 유닛의 `Environment=` 로 주고, 로컬은
   `moodle/watch/.env`(`.env.example` 복사, git 제외)에 적어 두면 CLI 와 `--serve` 가 같이 읽는다.
   환경변수가 있으면 `.env` 보다 우선한다. `MOODLE_ORG_TOKEN`(없으면 PAG 코스 skipped), `ANTHROPIC_API_KEY`
@@ -460,6 +511,8 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 - `requests` — slack 유지보수 요청 목록(Slack Lists 동기화본)
 - `schools`, `user_reads`, `user_pins`, `user_hides`, `local_assignments`, `sync_meta` — slack 부가기능
 - `gmail_mails` — Gmail 캐시(계정별 구분, `account` 컬럼)
+- `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`, `dti_related`,
+  `dti_materials` — dti 모듈
 - `school_access` — 대학별 접속·배포 정보(access 모듈). `schools` 가 마스터이고 여기는 상세라
   `school_id` 로 붙는다. 한 대학이 버전군별로 여러 행을 가질 수 있어(강원대 3.5 + 4.5)
   키는 `(school_id, grp)` 다.
@@ -472,41 +525,33 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 
 ## 배포 (systemd)
 
-book·magazine은 각각 uvicorn 프로세스로 돈다. 유닛 파일은 서버에만 두고 저장소에는 올리지
-않는다(실제 호스트명이 들어가기 때문). `/etc/systemd/system/magazine.service`:
+book 은 uvicorn 프로세스로 돈다. 유닛 파일은 서버에만 두고 저장소에는 올리지
+않는다(실제 호스트명이 들어가기 때문). `/etc/systemd/system/book.service`:
 
 ```ini
 [Unit]
-Description=magazine (BlueUP-DTI 발표)
+Description=book (BlueBooks 도서구매신청)
 After=network-online.target
 
 [Service]
-WorkingDirectory=/home/blueapp_core/magazine
-ExecStart=/home/blueapp_core/magazine/venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8001
+WorkingDirectory=/home/blueapp_core/book
+ExecStart=/home/blueapp_core/book/venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000
 Restart=always
 User=blueapp_core
 Environment=PORTAL_URL=http://포털주소/
-Environment=SLACK_URL=http://포털주소/slack/lists.php
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-`DEV_LOGIN` 은 넣지 않는다 — 켜면 로그인 없이 계정 전환 바가 뜬다.
-`ADMIN_EMAILS` 도 넣지 않는다 — 넣으면 `config.py` 의 관리자 명단이 무시된다(위 환경변수 항목 참고).
-
-- `WorkingDirectory`가 `/home/blueapp_core/magazine`이고, DB·업로드가 그 아래 `var/`에 생긴다.
-  실행 사용자(`blueapp_core`)에게 쓰기 권한이 있어야 한다.
-- SSO 서명 키는 `../sso_secret.key`(= `/home/blueapp_core/sso_secret.key`)를 본다. book과 같은
-  파일이다.
-- 포털 공용 상단바 CSS는 `../styles/`를 마운트한다. 없으면 상단바만 스타일이 빠진 채 뜬다
-  (book과 달리 magazine은 없어도 기동은 된다).
-
-learning 도 같은 모양이다 — `magazine` → `learning`, 포트 `8001` → `8002` 만 바꾼다.
+- `WorkingDirectory` 아래에 런타임 산출물이 생긴다. 실행 사용자(`blueapp_core`)에게 쓰기
+  권한이 있어야 한다.
+- SSO 서명 키는 `../sso_secret.key`(= `/home/blueapp_core/sso_secret.key`)를 본다. 포털이
+  최초 실행 때 만든 그 파일이다.
 
 ### nginx
 
-book·magazine·learning 은 nginx 가 경로 접두사로 각 포트에 넘긴다(`/etc/nginx/sites-available/slack`).
+book 은 nginx 가 경로 접두사로 포트에 넘긴다(`/etc/nginx/sites-available/slack`).
 새 FastAPI 모듈을 올리면 **화면 경로와 API 접두사 두 블록**을 함께 추가해야 한다. 빠지면 그 경로가
 문서루트의 소스 폴더에 떨어져 403 이 난다.
 
@@ -515,8 +560,8 @@ location /learning/    { proxy_pass http://127.0.0.1:8002/; }
 location /learningapi/ { proxy_pass http://127.0.0.1:8002/learningapi/; }
 ```
 
-(magazine 블록의 `proxy_set_header`·`client_max_body_size` 줄을 그대로 복사한다 — 업로드가 50MB 까지다.)
-moodle 은 PHP 라 블록이 필요 없다. 대신 배치 소스가 문서루트 아래(`moodle/watch/`)에 있으니
+(`proxy_set_header`·`client_max_body_size` 줄을 같이 둔다 — 업로드가 50MB 까지다.)
+dti·learn·moodle 은 PHP 라 블록이 필요 없다. 대신 배치 소스가 문서루트 아래(`moodle/watch/`)에 있으니
 정적으로 새지 않게 막아둔다:
 
 ```nginx
@@ -631,9 +676,10 @@ sudo systemctl enable --now moodle-watch-refresh.path
 - [ ] book이 포털과 다른 호스트에 있으면 SSO 쿠키가 전달되지 않음 — 같은 서버로 이전 필요.
 - [ ] `PORTAL_URL`, `LINKS.book` 플레이스홀더를 실제 주소로 확정.
 - [ ] 관리자(`ADMIN_EMAIL`)가 book `app.py`에 하드코딩 — 여러 명이 되면 배열/DB 플래그로 전환 고려.
-      magazine은 `core/config.py` 의 `admin_emails`(frozenset)로 이미 분리해뒀다.
-- [ ] magazine의 구성원 명단(`core/config.py` `MEMBERS`)이 포털 `portal_users`와 따로 논다 —
-      입·퇴사 때 두 곳을 고쳐야 한다.
+      dti 는 `db.php` 의 `DTI_DEFAULT_ADMINS` 로 분리돼 있다.
+- [ ] dti: 자료 순서를 바꿀 수 없다(등록 순 고정). 필요해지면 `dti_materials` 에 정렬 컬럼 추가.
+- [ ] dti: 응답의 `material_*`·`scan_*` 파생 키는 화면이 `materials`·`scans` 배열만 보게
+      정리되면 뺄 수 있다. 지금은 카드 정렬과 멤버 점수가 그 키에 걸려 있다.
 - [ ] slack 모듈 관리자 기능(회원 추가/삭제, 비번 초기화) 없음.
 - [ ] Gmail 연동은 계정 1개 고정(`config.local.php`) 기반 — 다계정 지원은 `gmail_lib.php` 주석의
       "[향후 회원가입]" 부분에 걸이 남아 있음.
@@ -651,9 +697,7 @@ sudo systemctl enable --now moodle-watch-refresh.path
 - PHP 파일 수정 후 `php -l 파일명`으로 문법 검사만이라도 하고 커밋할 것.
 - 포털·slack은 `php -S 127.0.0.1:PORT`로 즉석 기동 가능(세션/DB만 붙어 있으면 됨).
   book은 `PORTAL_URL=http://127.0.0.1:PORT/ python -m uvicorn app:app --port 8098`.
-- magazine은 포털 없이도 볼 수 있다 — `cd magazine && DEV_LOGIN=1 python -m uvicorn app:app --port 8001`
-  로 띄우면 상단에 계정 전환 바가 뜬다. 도커도 있다: `cd magazine && docker compose up --build`.
-  (Docker Desktop + WSL에서 `error getting credentials`가 나면
-  `ln -s /Docker/host/bin/docker-credential-desktop.exe ~/.local/bin/docker-credential-desktop`)
-- magazine 코드에는 주석을 거의 달지 않는다. 이름으로 설명하고, 주석은 "코드를 잘못 고치는 걸
-  막는 정보"(동시성·보안·외부 제약)일 때만 그 줄 옆에 남긴다.
+- dti·learn 은 포털과 같은 앱이라 포털을 띄우면 같이 뜬다 — `php -S 127.0.0.1:PORT` 로 루트를
+  서빙하고 `/dti/index.php` 로 들어가면 된다. 포털 로그인이 있어야 화면이 뜬다.
+- 주석은 거의 달지 않는다. 이름으로 설명하고, 주석은 "코드를 잘못 고치는 걸 막는
+  정보"(동시성·보안·외부 제약)일 때만 그 줄 옆에 남긴다.

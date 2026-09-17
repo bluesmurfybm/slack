@@ -6,6 +6,7 @@
  *  - 읽기 전용 분석 보드 (수정/댓글 없음). lists.php 에서 "난이도 분석" 버튼으로 진입.
  */
 $__bwBase = '../';   // slack/ 하위 폴더 페이지 — require_login()/header.php 리다이렉트 경로 계산용
+$__bwCurrent = 'slack';
 require_once __DIR__ . '/../auth.php';
 require_login();
 $me = current_user();
