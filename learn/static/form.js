@@ -1,4 +1,5 @@
 let EDIT_ID = null;
+let FROM_CATALOG = null;   // 추천·필수 강의에서 연 신청이면 그 카탈로그
 let ACCOUNT = "개인계정";
 
 // values 는 문자열 배열이거나 {value, label} 배열이다
@@ -83,28 +84,35 @@ function buildDurationSelects(min) {
   document.getElementById("i-minutes").value = Math.round((m % 60) / 5) * 5;
 }
 
-function openForm(req) {
+// cat 이 있으면 추천·필수 강의에서 연 것이다. 강의 정보는 서버가 카탈로그 값으로
+// 강제하므로 화면에서도 잠가 둔다 — 고쳐 봐야 저장되지 않는데 입력칸만 열려 있으면
+// 고친 대로 저장된 줄 안다.
+function openForm(req, cat) {
   EDIT_ID = req ? req.id : null;
-  document.getElementById("formTitle").textContent = req ? "신청 수정" : "강의 신청";
+  FROM_CATALOG = cat || null;
+  const src = req || cat || null;
+  document.getElementById("formTitle").textContent =
+    req ? "신청 수정" : cat ? `${cat.grade} 강의 신청` : "강의 신청";
   document.getElementById("formSave").textContent = req ? "수정" : "신청";
 
-  fillSelect("i-site", activeSiteNames(), req?.site ?? activeSiteNames()[0] ?? "");
-  fillSelect("i-level", APP.me.levels || [], req?.level ?? "", "선택");
-  onSiteChange({ large: req?.category_large, medium: req?.category_medium });
+  fillSelect("i-site", activeSiteNames(), src?.site ?? activeSiteNames()[0] ?? "");
+  fillSelect("i-level", APP.me.levels || [], src?.level ?? "", "선택");
+  onSiteChange({ large: src?.category_large, medium: src?.category_medium });
 
-  document.getElementById("i-title").value = req?.title || "";
-  document.getElementById("i-url").value = req?.url || "";
+  document.getElementById("i-title").value = src?.title || "";
+  document.getElementById("i-url").value = src?.url || "";
   document.getElementById("i-applicant").value = req?.applicant || APP.me.name || "";
-  document.getElementById("i-price").value = req && !req.is_free ? (req.price || "") : "";
-  document.getElementById("i-free").checked = !!req?.is_free;
+  document.getElementById("i-price").value = src && !src.is_free ? (src.price || "") : "";
+  document.getElementById("i-free").checked = !!src?.is_free;
   document.getElementById("i-start").value = req?.start_date || "";
   document.getElementById("i-end").value = req?.end_date || "";
-  buildDurationSelects(req?.duration_min);
+  buildDurationSelects(src?.duration_min);
   pickAccount(req?.account_type || "개인계정");
 
   document.getElementById("capNote").textContent =
     `수강료 중 ${won(APP.policy.partial_cap)}까지 환급됩니다. 초과분은 본인 부담입니다.`;
   onFreeChange();
+  lockCatalogFields(cat);
 
   document.getElementById("titleSuggest").innerHTML =
     [...new Set(APP.requests.map(r => r.title))]
@@ -112,6 +120,25 @@ function openForm(req) {
 
   openSheet();
   setTimeout(() => document.getElementById("i-title").focus(), 60);
+}
+
+// 관리자가 정한 강의 정보는 만지지 못하게 한다. 무료 체크와 수강료는 onFreeChange 가
+// 따로 건드리므로 잠금을 나중에 걸어야 덮어써지지 않는다.
+const CATALOG_LOCKED = ["i-site", "i-level", "i-large", "i-medium", "i-title", "i-url",
+                        "i-hours", "i-minutes", "i-price", "i-free"];
+
+function lockCatalogFields(cat) {
+  for (const id of CATALOG_LOCKED) document.getElementById(id).disabled = !!cat;
+  document.getElementById("catalogNote").style.display = cat ? "" : "none";
+  if (cat) {
+    document.getElementById("catalogNote").innerHTML =
+      `<b>${esc(cat.grade)} 강의</b> — 강의 정보는 관리자가 등록한 값이라 고칠 수 없습니다. ` +
+      `수강 기간과 계정 구분만 확인해 주세요.` +
+      (cat.grade === "필수"
+        ? " 필수 강의는 수강 승인 없이 바로 수강 상태로 등록됩니다."
+        : "") +
+      (cat.reason ? `<br><span class="muted">${esc(cat.reason)}</span>` : "");
+  }
 }
 
 function readForm() {
@@ -131,6 +158,8 @@ function readForm() {
     price: free ? 0 : (Number(document.getElementById("i-price").value) || 0),
     start_date: document.getElementById("i-start").value,
     end_date: document.getElementById("i-end").value,
+    // 서버가 이 id 로 강의 정보를 다시 채운다 — 화면 값은 보여주기용일 뿐이다
+    catalog_id: FROM_CATALOG ? FROM_CATALOG.id : 0,
   };
 }
 
@@ -145,7 +174,9 @@ async function saveForm() {
     if (EDIT_ID) await putJSON(`/learningapi/requests/${EDIT_ID}`, body);
     else await postJSON("/learningapi/requests", body);
     closeSheet();
-    showToast(EDIT_ID ? "수정했습니다" : "신청했습니다");
+    showToast(EDIT_ID ? "수정했습니다"
+      : FROM_CATALOG?.grade === "필수" ? "신청했습니다 — 바로 수강하실 수 있습니다"
+      : "신청했습니다");
     await reload();
   } catch (e) {
     showToast(e.message);

@@ -10,6 +10,7 @@ const ADMIN_NAV = [
     ["stats", "통계", "◨"],
   ]],
   ["구성", [
+    ["catalog", "추천 · 필수 강의", "★"],
     ["categories", "강의 분류", "≡"],
     ["sites", "교육 플랫폼", "◈"],
     ["policy", "환급 정책", "₩"],
@@ -20,7 +21,7 @@ const ADMIN_NAV = [
 const ADMIN_PANELS = {
   manage: managePanel, archive: archivePanel, stats: statsPanel,
   categories: categoriesPanel, sites: sitesPanel, policy: policyPanel,
-  admins: adminsPanel,
+  admins: adminsPanel, catalog: catalogPanel,
 };
 
 // 처리 대기 건수 — 어느 메뉴에 있어도 사이드바에 상주한다.

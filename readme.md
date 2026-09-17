@@ -51,8 +51,9 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── db.php, guard.php        learn_* 테이블 · 시드 · 포털 로그인 가드
 │   ├── lib/                     http(응답·검증) · status(요청상태 파생·전이) ·
 │   │                            policy(환급 정책) · storage(이수증 파일)
-│   ├── routes/                  identity · requests · certs · review ·
-│   │                            sites · categories · policy · admins
+│   ├── routes/                  identity · requests · certs · review · sites ·
+│   │                            categories · policy · admins · catalog(추천·필수 강의)
+│   ├── tools/                   migrate_from_learning.php (SQLite → MySQL 이관)
 │   ├── static/, styles/         도메인별 js · css
 │   └── var/uploads/             이수증 원본 (gitignore, .htaccess 로 직접 접근 차단)
 │

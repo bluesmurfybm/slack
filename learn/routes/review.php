@@ -38,6 +38,5 @@ function learn_route_review(PDO $pdo, array $identity, $rid, $method) {
     }
 
     learn_update_request($pdo, $rid, $patch);
-    jsend(learn_request_out(learn_fetch_request($pdo, $rid),
-                            learn_cert_names_map($pdo, [$rid])[$rid] ?? []));
+    jsend(learn_one_out($pdo, learn_fetch_request($pdo, $rid)));
 }

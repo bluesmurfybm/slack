@@ -103,7 +103,13 @@ header.site{background:var(--bg-page)}
   background:var(--bg-card);color:var(--tx-tertiary);
   border:1px solid var(--bo-tertiary);border-radius:var(--r8);cursor:pointer;white-space:nowrap;
   transition:background .15s ease,border-color .15s ease,color .15s ease;
+  /* a 로도 쓴다(이어보기·이수증 열기) — 그때 기본 밑줄이 생기면 버튼으로 안 읽힌다 */
+  text-decoration:none;
 }
+a.btn-mini{
+  display:inline-flex;align-items:center;justify-content:center;
+}
+a.btn-mini:hover{text-decoration:none}
 .btn-mini:hover{background:var(--bg-subtle);border-color:var(--gray80)}
 .btn-mini.primary{background:var(--cos50);border-color:var(--cos50);color:#fff}
 .btn-mini.primary:hover{background:var(--cos45);border-color:var(--cos45)}
@@ -384,7 +390,11 @@ body.admin-view .admin-view-only{display:inline-flex !important}
 
 /* ---------- 페이지 헤더 보조 ---------- */
 .brand .lede{font-size:13px;color:var(--tx-quaternary);margin:6px 0 0}
-.site-act{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* 탭과 밑선을 공유한다 — 버튼이 선에 딱 붙으면 눌리는 자리가 답답해 보여 살짝 띄운다 */
+.site-act{
+  display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;
+  margin:0 0 8px auto;
+}
 
 .seg-mode{
   display:inline-flex;background:var(--gray95);border-radius:var(--r8);padding:3px;gap:2px;
@@ -1393,17 +1403,14 @@ ul.cards .l-score{
 .ms-fold:hover{background:var(--bg-hover);color:var(--tx-secondary)}
 .ms-fold:focus-visible{outline:2px solid var(--cos50);outline-offset:1px}
 /* 접히면 화살표가 오른쪽을 가리켜 "펼치면 더 있다"를 알린다 */
-.mystrip.fold .ms-fold svg{transform:rotate(-90deg)}
-.mystrip.fold .ms-body{display:none}
 .mystrip .ms-id span{font-size:12px;font-weight:600;color:var(--tx-quaternary)}
-.mystrip .ms-act{display:flex;align-items:center;gap:8px;flex:none}
 /* 좁혀 보는 중이면 버튼이 눌린 채로 남아 지금 상태를 알린다 */
-.mystrip .ms-act .btn-ghost.on{
+.site-act .btn-ghost.on{
   background:var(--cos95);border-color:var(--cos50);color:var(--cos40);
 }
 
 /* 칸을 세로줄로만 끊는다 — 칸마다 상자를 두르면 카드 안에 카드가 생긴다 */
-.mystrip .ms-nums{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr}
+.mystrip .ms-nums{display:grid;grid-template-columns:repeat(4,1fr)}
 .ms-col{
   padding:16px 20px;min-width:0;
   border-left:1px solid var(--bo-primary);border-top:3px solid var(--bo-primary);
@@ -1436,43 +1443,25 @@ ul.cards .l-score{
 .ms-lead .tip{display:block;padding:5px 0;margin:-5px 0;cursor:help}
 .ms-cap .ms-end{color:var(--tx-quaternary)}
 
-/* 알림 줄 — 카드 맨 아래에 붙어 "지금 걸린 것"을 한 줄로 말한다 */
-/* 바탕색만으로 위 칸과 이어진다 — 왼쪽 액센트 바는 두지 않는다.
-   글자 시작점은 칸 라벨과 같은 20px 에 맞춘다. */
-.ms-note{
-  display:flex;align-items:center;gap:9px;
-  padding:11px 20px;font-size:12.5px;font-weight:600;
-  border-top:1px solid var(--bo-primary);
-  /* 카드가 더는 잘라주지 않으므로(툴팁이 나가야 한다) 스스로 둥글린다.
-     테두리 1px 안쪽이라 12px 이 아니라 11px 이다. */
-  border-radius:0 0 11px 11px;
+/* 네 칸은 어떤 폭에서도 한 줄이다. 좁아지면 접는 대신 글자와 여백을 줄인다 —
+   두 줄로 접히면 머리선 네 색이 끊겨 어느 칸의 색인지 알 수 없게 된다. */
+@media (max-width:1100px){
+  .ms-col{padding:14px 12px}
+  .ms-vl b{font-size:22px}
 }
-.ms-note .grow{flex:1;min-width:0}
-.ms-note .ms-dot{flex:none;width:6px;height:6px;border-radius:50%;background:currentColor}
-.ms-note .ms-go{
-  flex:none;font-family:var(--sans);font-size:12.5px;font-weight:700;
-  background:none;border:none;padding:0;color:inherit;cursor:pointer;
-  text-decoration:underline;text-underline-offset:3px;
-}
-.ms-note .ms-go:hover{text-decoration-thickness:2px}
-/* 바탕은 그 칸 색을 아주 옅게 깐 것이고, 글자는 같은 색을 어둡게 눌러 4.5:1 을 넘긴다 */
-.ms-note.run{background:#fdf5ee;color:#8a4d17}
-.ms-note.done{background:#eef8f2;color:#2c6a4a}
-/* 반려는 세는 칸이 없다 — 급함을 색이 대신 말해야 하는 하나뿐인 예외 */
-.ms-note.no{background:var(--nega95);color:var(--nega40)}
-
 @media (max-width:820px){
-  .mystrip .ms-nums{grid-template-columns:1fr 1fr}
-  /* 두 줄로 접혀도 머리선 색은 칸의 표시니 지운다 — 세로줄만 다시 짠다 */
-  .ms-col{border-left:none}
-  .ms-col:nth-child(2n){border-left:1px solid var(--bo-primary)}
-  .ms-col:first-child{grid-column:1/-1}
+  .ms-col{padding:12px 9px}
+  .ms-lb{font-size:11px}
+  .ms-vl b{font-size:19px}
+  .ms-vl i{font-size:12px}
 }
 @media (max-width:560px){
   .mystrip .ms-head{flex-wrap:wrap}
-  .mystrip .ms-act{width:100%}
-  .mystrip .ms-act .btn-ghost,.mystrip .ms-act .btn-new{flex:1}
-  .ms-vl b{font-size:22px}
+  .site-act{width:100%;justify-content:flex-end}
+  .site-act .btn-ghost,.site-act .btn-new{flex:1}
+  .ms-col{padding:10px 7px}
+  .ms-lb{font-size:10.5px;letter-spacing:-.02em}
+  .ms-vl b{font-size:17px}
 }
 
 /* ---------- 상세 · 진행 상황 ---------- */
@@ -1544,62 +1533,411 @@ ul.cards .l-score{
 }
 .dp-pfoot b{font-size:11.5px;font-weight:800;color:var(--cos40)}
 
-/* ---------- 관리자 알림 줄 ---------- */
-/* 구성원 화면에 얹는 한 줄. 짙은 남색 단색인 이유는 이 화면의 다른 모든 것(흰 카드, 흰 페이지,
-   옅은 색 라인)이 밝아서, 어두운 덩어리 하나가 가장 적은 면적으로 가장 크게 튀기 때문이다.
-   의미색(노랑=대기, 초록=완료, 발간=반려)을 하나도 안 쓰므로 뜻이 겹칠 일도 없다.
-   숫자만 앰버로 빼서 "몇 건"이 바 안에서 다시 한 번 도드라진다. */
+/* ---------- 추천 · 필수 강의 ---------- */
+
+/* 구성원 화면의 두 탭. 신청 목록과 카탈로그는 성격이 달라 한 목록에 섞지 않는다 */
+/* 두 목록을 오가는 자리라 눈에 먼저 걸려야 한다. 글자를 키우고, 줄 전체에 밑선을
+   깔아 고른 쪽만 굵은 파란 선으로 끊는다 — 어느 쪽을 보고 있는지 멀리서도 읽힌다. */
+/* 탭과 동작 버튼이 한 밑선 위에 나란히 선다 */
+.pane-bar{
+  display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;
+  margin:18px 0 0;border-bottom:2px solid var(--bo-primary);
+}
+.pane-tabs{display:flex;gap:4px}
+.pane-tab{
+  display:flex;align-items:center;gap:8px;padding:12px 20px;margin-bottom:-2px;
+  background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;
+  border-radius:var(--r8) var(--r8) 0 0;
+  font-family:inherit;font-size:16.5px;font-weight:700;letter-spacing:-.02em;
+  color:var(--tx-quaternary);transition:background .15s ease,color .15s ease;
+}
+.pane-tab:hover{background:var(--bg-subtle);color:var(--tx-secondary)}
+.pane-tab.on{color:var(--cos40);border-bottom-color:var(--cos50)}
+.pane-tab:focus-visible{outline:2px solid var(--cos50);outline-offset:-2px}
+.pane-n{font-size:11.5px}
+.pane-n{
+  display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;
+  padding:0 6px;border-radius:999px;background:var(--nega50);color:#fff;
+  font-size:11px;font-weight:700;letter-spacing:0;
+}
+
+ul.catalog{list-style:none;margin:0;padding:0}
+
+/* 미이수 필수가 있을 때만 뜬다 — 없는 알림은 알림이 아니다 */
+.cat-alert{
+  display:flex;align-items:center;gap:10px;margin-top:18px;padding:13px 16px;
+  border:1px solid #f4d2d5;border-radius:var(--r10);background:var(--nega95);
+  color:#b3271c;font-size:13.5px;font-weight:600;
+}
+.cat-alert .ca-ic{
+  display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;
+  border-radius:999px;background:var(--nega50);color:#fff;font-size:12px;font-weight:800;
+  flex-shrink:0;
+}
+
+.cat-sech{display:flex;align-items:baseline;gap:9px;margin:26px 0 12px}
+.cat-sech h2{margin:0;font-size:16px;font-weight:700;letter-spacing:-.02em}
+.cat-sech .n{font-size:12.5px;font-weight:600;color:var(--tx-quaternary)}
+
+.cat-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media (max-width:1080px){.cat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:720px){.cat-grid{grid-template-columns:1fr}}
+
+.cat-c{
+  display:flex;flex-direction:column;gap:9px;padding:18px;
+  background:var(--bg-card);border:1px solid var(--bo-primary);border-radius:var(--r12);
+}
+/* 필수는 테두리로도 구분한다 — 배지 색만으로는 카드 더미에서 묻힌다 */
+.cat-c.req{border-color:#f6d9db}
+.cat-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cat-top .sp{margin-left:auto}
+
+.badge.gr-req{background:var(--nega50);color:#fff;--pulse:rgba(240,68,56,.55)}
+/* 인프런 배지도 초록 계열이라 연한 초록이면 섞인다 — 진한 초록으로 채워 구분한다
+   (흰 글자 대비 5.2:1). */
+.badge.gr-pick{background:var(--posi40);color:#fff;--pulse:rgba(24,131,81,.45)}
+
+/* 등급 배지는 눈에 걸려야 한다 — 테두리 고리가 한 번 번졌다 사라진다.
+   색을 더 칠하는 대신 움직임으로 끈다: 목록이 길어도 배경은 그대로 조용하다.
+   움직임을 꺼 둔 사람에게는 아무것도 하지 않는다(멀미·집중 방해). */
+@keyframes gradePulse{
+  0%   {box-shadow:0 0 0 0 var(--pulse)}
+  55%  {box-shadow:0 0 0 5px rgba(0,0,0,0)}
+  100% {box-shadow:0 0 0 0 rgba(0,0,0,0)}
+}
+@media (prefers-reduced-motion:no-preference){
+  .badge.gr-req{animation:gradePulse 2.4s ease-out infinite}
+  /* 추천은 한 박자 느리고 옅게 — 필수보다 급할 이유가 없다 */
+  .badge.gr-pick{animation:gradePulse 3.4s ease-out infinite}
+  /* 한 화면에 여럿이면 한꺼번에 깜빡여 소란스럽다 — 조금씩 어긋나게 둔다 */
+  li:nth-child(2n) .badge.gr-req,li:nth-child(2n) .badge.gr-pick{animation-delay:.6s}
+  li:nth-child(3n) .badge.gr-req,li:nth-child(3n) .badge.gr-pick{animation-delay:1.2s}
+  .cs-i:nth-child(odd) .badge.gr-req,.cs-i:nth-child(odd) .badge.gr-pick{animation-delay:.9s}
+}
+
+.dday{
+  display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:var(--r6);
+  font-size:11.5px;font-weight:700;letter-spacing:-.01em;
+}
+.dd-hot{background:var(--nega95);color:var(--nega40)}
+.dd-warn{background:var(--warn90);color:var(--warn30)}
+.dd-ok{background:var(--gray95);color:var(--tx-quaternary)}
+
+.badge.st-wait{background:var(--warn90);color:var(--warn30)}
+
+.cat-ttl{font-size:15px;font-weight:700;letter-spacing:-.02em;line-height:1.4}
+.cat-ttl a{color:inherit;text-decoration:none}
+.cat-ttl a:hover{text-decoration:underline}
+.cat-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
+.cat-path{color:var(--tx-quaternary);font-weight:600}
+.cat-lv{
+  padding:1px 6px;border-radius:var(--r4);background:var(--bg-subtle);
+  color:var(--tx-tertiary);font-weight:600;
+}
+.cat-sub{
+  display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;
+  color:var(--tx-tertiary);
+}
+.cat-sub .sep{color:var(--gray88)}
+.cat-sub .money{color:var(--tx-secondary)}
+
+/* 왜 들어야 하는지 — 이게 없으면 그냥 링크 모음이 된다 */
+.cat-why{
+  display:flex;flex-direction:column;gap:3px;padding:10px 12px;
+  border-radius:var(--r8);background:var(--bg-subtle);
+}
+.cat-why .l{font-size:11px;font-weight:700;color:var(--tx-quinary);letter-spacing:.01em}
+.cat-why .t{font-size:12.5px;line-height:1.55;color:var(--tx-secondary)}
+
+.cat-foot{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:3px}
+.cat-peers{font-size:12px;font-weight:600;color:var(--tx-quinary)}
+.cat-acts{display:flex;gap:6px;margin-left:auto}
+.cat-foot .btn-mini{margin-left:auto}
+.cat-acts .btn-mini{margin-left:0}
+.cat-done{margin-left:auto;font-size:13px;font-weight:700;color:var(--posi40)}
+.btn-p-sm{
+  margin-left:auto;height:32px;padding:0 14px;border:none;border-radius:var(--r8);
+  background:var(--cos50);color:#fff;font-family:inherit;font-size:13px;font-weight:600;
+  cursor:pointer;white-space:nowrap;
+}
+.btn-p-sm:hover{background:var(--cos45)}
+
+/* 신청 폼에서 카탈로그 값이 잠겼을 때의 안내 */
+.note.catalog{
+  margin:0 0 14px;background:var(--cos95);border-color:#cfe2fb;color:var(--cos35);
+}
+
+/* ---------- 관리자 패널 ---------- */
+
+.cat-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.cat-tile{
+  padding:14px 16px;border:1px solid var(--bo-primary);border-radius:var(--r10);
+  background:var(--bg-card);
+}
+.cat-tile .k{font-size:11.5px;font-weight:700;color:var(--tx-quinary)}
+.cat-tile .v{margin-top:5px;font-size:24px;font-weight:800;letter-spacing:-.03em}
+.cat-tile .v small{margin-left:3px;font-size:12px;font-weight:600;color:var(--tx-quaternary)}
+
+.cat-tb{width:100%;border-collapse:collapse;font-size:13px}
+.cat-tb th{
+  padding:8px 10px;border-bottom:1px solid var(--bo-primary);text-align:left;
+  font-size:11.5px;font-weight:700;color:var(--tx-quinary);white-space:nowrap;
+}
+.cat-tb td{padding:11px 10px;border-bottom:1px solid var(--bo-primary);vertical-align:top}
+.cat-tb tr.off{background:var(--bg-subtle);color:var(--tx-quaternary)}
+.cat-tb tr.off .cat-tname{color:var(--tx-quaternary)}
+.cat-tb .row-act{display:flex;gap:6px;justify-content:flex-end}
+.cat-tname{font-size:13.5px;font-weight:700;letter-spacing:-.01em;color:var(--tx-primary)}
+.cat-tname.sm{font-size:12.5px}
+.cat-tmeta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;font-size:11.5px}
+
+.cat-prog{display:flex;align-items:center;gap:7px;font-size:12px;white-space:nowrap}
+.cat-prog .pb{
+  flex:1;min-width:52px;height:7px;border-radius:999px;background:var(--gray95);overflow:hidden;
+}
+.cat-prog .pb i{display:block;height:100%;border-radius:999px;background:var(--cos50)}
+.cat-prog .pb.low i{background:var(--warn50)}
+.cat-prog .pb.ok i{background:var(--posi50)}
+
+/* 등록 드로어 */
+.cf-sec{
+  display:flex;align-items:center;gap:8px;margin:6px 0 14px;
+  font-size:14px;font-weight:700;letter-spacing:-.02em;
+}
+.cf-sec:not(:first-child){
+  margin-top:24px;padding-top:20px;border-top:1px solid var(--bo-primary);
+}
+.cf-sec i{
+  display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+  border-radius:999px;background:var(--cos50);color:#fff;
+  font-style:normal;font-size:11.5px;font-weight:800;
+}
+.cf-sec .tag{
+  padding:2px 7px;border-radius:var(--r4);background:var(--bg-subtle);
+  color:var(--tx-quinary);font-size:11px;font-weight:600;
+}
+.cf-targets{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:6px 10px;margin-top:8px;
+  padding:12px;border:1px solid var(--bo-primary);border-radius:var(--r8);
+  background:var(--bg-subtle);
+}
+/* 필수를 고르면 기한이 선택이 아니라 필수가 된다 */
+#cfDueWrap.need label::after{content:" *";color:var(--nega50);font-weight:800}
+
+.cat-cmph{margin-bottom:14px}
+
+/* ---------- 첫 화면 2단 ---------- */
+
+/* 왼쪽은 내 현황, 오른쪽은 회사가 권하는 강의. 좁아지면 추천이 아래로 내려간다. */
+.home{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:stretch}
+.home > *{min-width:0}
+/* 두 박스의 위·아래 선을 맞춘다. 사이드바가 짧으면 남는 자리는 비워 둔다.
+   .mystrip 의 margin-top:18px 은 이 카드가 화면 맨 위에 혼자 있던 때의 값이다 —
+   그대로 두면 왼쪽만 18px 내려가 두 박스의 시작 선이 어긋난다. */
+.mystrip,.cat-side{height:100%}
+.home .mystrip{margin:0}
+.mystrip{display:flex;flex-direction:column}
+.ms-body{flex:1;display:flex;flex-direction:column}
+@media (max-width:1060px){.home{grid-template-columns:1fr}}
+
+.mystrip .ms-head{align-items:center}
+.ms-chip{
+  margin-left:8px;padding:3px 9px;border-radius:999px;background:var(--bg-subtle);
+  color:var(--tx-tertiary);font-size:11.5px;font-weight:600;white-space:nowrap;
+}
+.ms-hours{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--tx-quaternary)}
+.ms-hours b{color:var(--tx-secondary);font-weight:700}
+
+/* 두 박스의 머리줄을 같은 높이에 세운다. 왼쪽은 아바타(38px)가 높이를 정하므로
+   오른쪽 머리에도 같은 최소 높이를 줘 둘의 글줄이 같은 선에 오게 한다. */
+.mystrip .ms-head{min-height:38px}
+.cat-side .cs-head{min-height:38px;margin:0 0 12px}
+
+/* 청구 대기가 있으면 그 칸만 테두리로 집어낸다 — 내가 돈을 기다리는 자리다 */
+.ms-col.hot{
+  border:1px solid var(--warn50);border-radius:var(--r10);
+  background:var(--warn95);margin:-1px;
+}
+
+/* ---------- 진행 중인 강의 ---------- */
+
+.ms-running{padding:4px 20px 0}
+.msr-head{
+  display:flex;align-items:baseline;gap:8px;margin:14px 0 8px;
+  font-size:13px;font-weight:700;letter-spacing:-.01em;
+}
+.msr-head .muted{font-size:11.5px;font-weight:600}
+.msr{
+  padding:11px 13px;margin-bottom:8px;
+  border:1px solid var(--bo-primary);border-radius:var(--r10);background:var(--bg-card);
+}
+.msr-top{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.msr-cat{
+  padding:2px 7px;border-radius:var(--r4);background:var(--cos95);color:var(--cos35);
+  font-size:11px;font-weight:700;white-space:nowrap;
+}
+.msr-ttl{
+  flex:1;min-width:0;background:none;border:none;padding:0;cursor:pointer;
+  font-family:inherit;font-size:13.5px;font-weight:700;letter-spacing:-.01em;
+  color:var(--tx-primary);text-align:left;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.msr-ttl:hover{color:var(--cos50)}
+.msr-d{font-size:12px;font-weight:800;color:var(--tx-quaternary);white-space:nowrap}
+.msr-d.warn{color:var(--warn30)}
+.msr-d.hot{color:var(--nega40)}
+
+.msr-bar{display:flex;align-items:center;gap:9px}
+.msr-tr{
+  flex:0 0 150px;height:7px;border-radius:999px;background:var(--gray95);overflow:hidden;
+}
+@media (max-width:820px){.msr-tr{flex:0 0 90px}}
+.msr-tr i{display:block;height:100%;border-radius:999px;background:var(--cos50)}
+.msr-pct{font-size:12px;font-weight:700;color:var(--tx-tertiary);min-width:30px;text-align:right}
+.msr-cap{
+  flex:1;min-width:0;font-size:11.5px;font-weight:600;color:var(--tx-quinary);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.msr-bar .btn-mini{margin-left:auto}
+.msr-fold{
+  width:100%;height:30px;margin-top:2px;
+  border:1px solid var(--bo-primary);border-radius:var(--r8);background:var(--bg-card);
+  cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--tx-tertiary);
+}
+.msr-fold:hover{background:var(--bg-subtle)}
+
+/* ---------- 오른쪽 추천 사이드바 ---------- */
+
+.cat-side{
+  padding:16px;border:1px solid var(--bo-primary);border-radius:var(--r12);
+  background:var(--bg-card);
+}
+.cs-head{display:flex;align-items:center;gap:7px;margin-bottom:12px}
+
+.cs-head b{font-size:13.5px;font-weight:700;letter-spacing:-.01em}
+.cs-n{
+  display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;
+  padding:0 6px;border-radius:999px;background:var(--bg-subtle);
+  color:var(--tx-quaternary);font-size:11px;font-weight:700;
+}
+.cs-more{
+  margin-left:auto;background:none;border:none;cursor:pointer;padding:0;
+  font-family:inherit;font-size:12px;font-weight:700;color:var(--cos50);
+}
+.cs-more:hover{text-decoration:underline}
+
+.cs-i{
+  display:flex;flex-direction:column;gap:7px;padding:13px;margin-bottom:9px;
+  border:1px solid var(--bo-primary);border-radius:var(--r10);background:var(--bg-subtle);
+}
+/* 필수는 배경까지 바꾼다 — 사이드바에서는 배지 하나로는 눈에 안 걸린다 */
+.cs-i.req{border-color:#f4d2d5;background:var(--nega95)}
+.cs-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px}
+.cs-price{margin-left:auto;font-size:12.5px;font-weight:800;color:var(--tx-secondary)}
+.cs-ttl{font-size:13.5px;font-weight:700;letter-spacing:-.02em;line-height:1.4}
+.cs-meta{display:flex;align-items:center;gap:6px;font-size:11.5px}
+.cs-state{display:flex;align-items:center;gap:7px}
+.cs-state .btn-mini{margin-left:auto}
+.cs-go{
+  height:34px;border:none;border-radius:var(--r8);cursor:pointer;
+  background:var(--cos50);color:#fff;font-family:inherit;font-size:13px;font-weight:700;
+}
+.cs-go:hover{background:var(--cos45)}
+.cs-go.req{background:var(--nega50)}
+.cs-go.req:hover{background:var(--nega40)}
+.cs-fold{
+  width:100%;height:32px;border:1px solid var(--bo-primary);border-radius:var(--r8);
+  background:var(--bg-card);cursor:pointer;
+  font-family:inherit;font-size:12.5px;font-weight:600;color:var(--tx-tertiary);
+}
+.cs-fold:hover{background:var(--bg-subtle)}
+
+/* 추천·필수 강의 목록의 사유 줄 — 행 안에서 한 단 낮게 */
+.l-why{
+  margin-top:6px;padding:7px 10px;border-radius:var(--r6);background:var(--bg-subtle);
+  font-size:11.5px;line-height:1.5;color:var(--tx-tertiary);
+}
+.l-why b{color:var(--tx-quinary);font-weight:700;margin-right:4px}
+.card .l-why{margin-top:8px}
+/* 이수한 건은 흐리게 — 목록에서 빼진 않되 눈이 먼저 가지 않게 한다 */
+li.row.dim,li.card.dim{opacity:.62}
+#catAlert:empty{display:none}
+
+/* ---------- 관리자 처리 대기 줄 ---------- */
+
+/* 학습 현황 줄 아래 한 줄. 첫 화면 위쪽을 길게 쓰면 정작 목록이 밀려 내려간다. */
 .adminbar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  margin:12px 0 0;padding:11px 16px;
+  margin:14px 0 0;padding:9px 14px;
   background:#12263f;border-radius:var(--r10);color:#fff;
   box-shadow:var(--shadow-sm);
 }
-.adminbar .ab-tag{
-  flex:none;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:var(--r6);
+.ab-tag{
+  flex:none;font-size:11px;font-weight:700;padding:3px 8px;border-radius:var(--r6);
   background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.26);color:#fff;
 }
-.adminbar .ab-sum{font-size:13px;font-weight:800;letter-spacing:-.01em}
-.adminbar .ab-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1}
+.ab-sum{font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap}
+.ab-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1}
 .ab-chip{
-  font-family:var(--sans);font-size:12px;font-weight:600;line-height:1.5;
-  display:inline-flex;align-items:center;gap:6px;padding:4px 10px;
-  background:rgba(255,255,255,.1);color:#fff;
-  border:1px solid rgba(255,255,255,.24);border-radius:var(--r32);cursor:pointer;
-  transition:background .12s ease,border-color .12s ease;
+  font-family:var(--sans);font-size:11.5px;font-weight:600;line-height:1.5;
+  display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);
+  border-radius:999px;color:#fff;cursor:pointer;
 }
 .ab-chip:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5)}
-/* 앰버(#ffc107)는 이 남색 위에서 대비 9:1 을 넘긴다 */
 .ab-chip b{font-weight:800;color:var(--warn50);font-variant-numeric:tabular-nums}
+/* 오래 기다린 건 — 숫자만으로는 어느 것이 급한지 알 수 없다 */
+.ab-stale{
+  padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700;
+  background:rgba(240,68,56,.22);border:1px solid rgba(240,68,56,.45);color:#ffc9c4;
+}
 .ab-go{
-  flex:none;font-family:var(--sans);font-size:12.5px;font-weight:700;
-  background:none;border:none;padding:0;color:#fff;cursor:pointer;
+  flex:none;background:none;border:none;cursor:pointer;padding:0;
+  font-family:var(--sans);font-size:12.5px;font-weight:700;color:#fff;
   text-decoration:underline;text-underline-offset:3px;
 }
 .ab-go:hover{text-decoration-thickness:2px}
-.ab-chip:focus-visible,.ab-go:focus-visible{
-  outline:2px solid var(--warn50);outline-offset:2px;
-}
+.ab-chip:focus-visible,.ab-go:focus-visible{outline:2px solid #fff;outline-offset:2px}
 
-/* 좁아지면 칩 줄이 아래로 내려가고, 넘어갈 길은 오른쪽에 남는다 */
-@media (max-width:680px){
-  .adminbar .ab-chips{flex:1 1 100%;order:3}
-  .ab-go{margin-left:auto}
-}
+/* 관리자 패널 머리줄 — 등록 버튼을 float 로 띄우면 아래 타일과 겹칠 여지가 있다 */
+.adm-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.adm-head h4{margin:0;flex:1;min-width:0}
+.adm-head h4 .muted{font-weight:600;margin-left:8px}
+.adm-add{flex:none;height:32px;padding:0 13px;font-size:13px}
+.cat-filters{margin-bottom:14px}
 
-/* 신청 버튼은 현황 카드로 올라갔다 — 여기는 제목과 건수만 남는다 */
-.ledger-head{align-items:center;padding:14px 4px 12px}
-.ledger-head .title{display:inline-flex;align-items:baseline;gap:8px}
-.ledger-head .title .count{font-size:12.5px;font-weight:600;color:var(--tx-quaternary)}
-.ledger-head .btn-new{height:36px;font-size:13.5px;padding:0 16px}
-
-/* 이수증 — 아이콘 + 개수. 파일명은 올렸을 때만 뜬다 */
-.certchip{
-  display:inline-flex;align-items:center;gap:4px;padding:2px 8px 2px 6px;
-  background:var(--bg-subtle);border:1px solid var(--bo-primary);border-radius:var(--r6);
-  color:var(--tx-tertiary);font-size:11.5px;cursor:default;
+/* 검색칸 — 지우기 버튼을 칸 안 오른쪽에 겹쳐 둔다 */
+.cat-q{position:relative;flex:1;min-width:160px;display:flex}
+.cat-q input{width:100%;padding-right:30px}
+.cat-qx{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  width:20px;height:20px;display:grid;place-items:center;
+  border:none;border-radius:50%;background:var(--gray95);color:var(--tx-quinary);
+  font-family:inherit;font-size:14px;line-height:1;cursor:pointer;
 }
-.certchip svg{width:13px;height:13px;flex:none}
-.certchip b{font-weight:800;font-variant-numeric:tabular-nums}
-/* 파일명이 여러 줄일 수 있어 nowrap 을 푼다 */
-.tip > em.multi{white-space:normal;max-width:260px;line-height:1.7;text-align:left}
+.cat-qx:hover{background:var(--gray88);color:var(--tx-secondary)}
+
+/* 대상 '지정' — 눌러서 대상자 목록을 연다 */
+.tgt-btn{
+  display:inline-flex;align-items:center;gap:4px;margin-top:3px;padding:2px 7px 2px 5px;
+  border:1px solid var(--bo-tertiary);border-radius:999px;background:var(--bg-card);
+  color:var(--tx-quaternary);font-family:inherit;font-size:11.5px;font-weight:600;
+  cursor:pointer;line-height:1.6;
+}
+.tgt-btn:hover{border-color:var(--cos50);color:var(--cos40);background:var(--cos95)}
+.tgt-btn svg{width:13px;height:13px;flex:none}
+
+/* 아이콘 바로 옆에 뜨는 작은 팝. 이름만 짚으면 되는 자리라 상자를 크게 열지 않는다. */
+.tgt-wrap{position:relative;display:inline-block}
+.tgt-pop{
+  display:none;position:absolute;top:calc(100% + 5px);left:0;z-index:150;
+  min-width:96px;max-width:200px;padding:5px;
+  background:var(--bg-card);border:1px solid var(--bo-tertiary);border-radius:var(--r8);
+  box-shadow:var(--shadow-md);
+}
+.tgt-pop.on{display:block}
+.tgt-pop i{
+  display:block;padding:4px 8px;border-radius:var(--r4);
+  font-style:normal;font-size:12px;font-weight:600;color:var(--tx-secondary);white-space:nowrap;
+}
+.tgt-pop i:nth-child(2n){background:var(--bg-subtle)}

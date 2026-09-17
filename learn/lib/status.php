@@ -133,10 +133,10 @@ function learn_history(PDO $pdo, $rid) {
 
 // PDO 는 숫자 컬럼도 문자열로 준다. 화면은 is_free/archived 를 그대로 참·거짓으로 쓰는데
 // JS 에서 "0" 은 참이라 캐스팅을 빠뜨리면 무료 건과 보관 건이 통째로 뒤집힌다.
-const REQUEST_INT_COLS = ['id', 'duration_min', 'is_free', 'price',
+const REQUEST_INT_COLS = ['id', 'catalog_id', 'duration_min', 'is_free', 'price',
                           'refund_cap_at_request', 'refund_amount', 'active', 'archived'];
 
-function learn_request_out(array $r, array $cert_names = []) {
+function learn_request_out(array $r, array $cert_names = [], array $catalog = []) {
     foreach (REQUEST_INT_COLS as $c) $r[$c] = (int)$r[$c];
     $r['rating']    = $r['rating']    === null ? null : (float)$r['rating'];
     $r['recommend'] = $r['recommend'] === null ? null : (float)$r['recommend'];
@@ -147,6 +147,10 @@ function learn_request_out(array $r, array $cert_names = []) {
     $r['expected_refund'] = learn_expected_refund($r);
     $r['cert_count'] = count($cert_names);
     $r['cert_names'] = array_values($cert_names);
+    // 추천·필수 강의에서 온 신청이면 그 등급과 이수 기한. 화면이 APP.catalog 에서 찾아
+    // 쓰면 대상에서 빠진 뒤의 지난 신청에는 사라지므로 서버가 실어 보낸다.
+    $r['catalog_grade'] = $catalog['grade'] ?? '';
+    $r['catalog_due']   = $catalog['due'] ?? '';
     return $r;
 }
 

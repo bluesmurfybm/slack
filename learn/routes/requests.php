@@ -28,21 +28,32 @@ function learn_route_requests(PDO $pdo, array $identity, array $seg, $method) {
 
 /* ---------- 조회 ---------- */
 
+/** 한 건을 응답 모양으로. 이수증 이름과 카탈로그 등급을 함께 붙인다. */
+function learn_one_out(PDO $pdo, array $req) {
+    $rid = (int)$req['id'];
+    return learn_request_out($req, learn_cert_names_map($pdo, [$rid])[$rid] ?? [],
+        learn_catalog_grades($pdo)[(int)$req['catalog_id']] ?? []);
+}
+
 function learn_requests_list(PDO $pdo, array $identity) {
     $sql = "SELECT * FROM learn_requests";
     // 숨김·보관은 관리자 화면에만 있어야 한다. 목록에서 빼는 판정은 서버가 한다.
     if (!learn_is_admin($identity['email'])) $sql .= " WHERE active=1 AND archived=0";
-    $rows  = $pdo->query($sql . " ORDER BY id DESC")->fetchAll();
-    $names = learn_cert_names_map($pdo);
+    $rows   = $pdo->query($sql . " ORDER BY id DESC")->fetchAll();
+    $names  = learn_cert_names_map($pdo);
+    $grades = learn_catalog_grades($pdo);
 
     $out = [];
-    foreach ($rows as $r) $out[] = learn_request_out($r, $names[(int)$r['id']] ?? []);
+    foreach ($rows as $r) {
+        $out[] = learn_request_out($r, $names[(int)$r['id']] ?? [],
+            $grades[(int)$r['catalog_id']] ?? []);
+    }
     jsend($out);
 }
 
 function learn_requests_detail(PDO $pdo, $rid) {
     $req = learn_fetch_request($pdo, $rid);
-    $out = learn_request_out($req, learn_cert_names_map($pdo, [$rid])[$rid] ?? []);
+    $out = learn_one_out($pdo, $req);
     $out['certs']   = learn_cert_listing($pdo, $rid);
     $out['history'] = learn_history($pdo, $rid);
     jsend($out);
@@ -99,13 +110,22 @@ function learn_ensure_site(PDO $pdo, $name) {
 }
 
 function learn_requests_create(PDO $pdo, array $identity) {
-    $v = learn_read_request_body(body_json(), false);
+    $body = body_json();
+    $v = learn_read_request_body($body, false);
     learn_ensure_site($pdo, $v['site']);
     if ($v['is_free']) $v['price'] = 0;
 
     $policy = learn_policy($pdo);
     $stamp  = now_stamp();
     $email  = $identity['email'];
+
+    // 추천·필수 강의에서 온 신청이면 그 카탈로그를 따른다. 강의 정보는 클라이언트가 보낸
+    // 값이 아니라 카탈로그 쪽을 쓴다 — 화면에서 잠가 두어도 요청은 고쳐 보낼 수 있다.
+    $catalog = learn_catalog_for_request($pdo, $identity, (int)($body['catalog_id'] ?? 0));
+    if ($catalog) {
+        $v = array_merge($v, learn_catalog_fields($catalog));
+        $v['catalog_id'] = $catalog['id'];
+    }
 
     // 신청자는 클라이언트가 보낸 값을 쓰지 않는다 — 세션의 신원으로 강제한다
     $v['applicant_email']       = $email;
@@ -116,9 +136,18 @@ function learn_requests_create(PDO $pdo, array $identity) {
     $v['created_by']            = $email;
     $v['created_at']            = $stamp;
 
-    // 한도를 넘으면 행을 만들지 않는다 — 검사가 INSERT 보다 먼저다
-    learn_ensure_within_limits($pdo, $policy, $email,
-        $v + ['refund_amount' => 0, 'rejected_at' => '']);
+    // 필수 강의는 회사가 시킨 것이라 개인 연간 한도를 소모시키지 않는다.
+    // 추천 강의와 직접 신청은 평소대로 검사한다.
+    if (!$catalog || $catalog['grade'] !== GRADE_REQUIRED) {
+        // 한도를 넘으면 행을 만들지 않는다 — 검사가 INSERT 보다 먼저다
+        learn_ensure_within_limits($pdo, $policy, $email,
+            $v + ['refund_amount' => 0, 'rejected_at' => '']);
+    }
+
+    // 필수 강의는 승인 절차를 두지 않는다 — 회사가 이미 들으라고 지정한 건이다.
+    // 무료 건은 요청상태 자체가 없어 도장을 찍어도 의미가 없으므로 건너뛴다.
+    $auto = $catalog && $catalog['grade'] === GRADE_REQUIRED && !$v['is_free'];
+    if ($auto) $v['approved_at'] = $stamp;
 
     $cols = array_keys($v);
     $pdo->prepare('INSERT INTO learn_requests (`' . implode('`,`', $cols) . '`) VALUES ('
@@ -127,8 +156,42 @@ function learn_requests_create(PDO $pdo, array $identity) {
     $rid = (int)$pdo->lastInsertId();
 
     $req = learn_fetch_request($pdo, $rid);
-    learn_record($pdo, $rid, learn_derive_status($req), $identity);
-    jsend(learn_request_out($req), 201);
+    if ($auto) {
+        learn_record($pdo, $rid, S_REQUESTED, $identity, '필수 강의 신청');
+        learn_record($pdo, $rid, S_APPROVED, $identity, '필수 강의라 승인 없이 수강 시작');
+    } else {
+        learn_record($pdo, $rid, learn_derive_status($req), $identity);
+    }
+    jsend(learn_one_out($pdo, $req), 201);
+}
+
+/** 카탈로그에서 온 신청인지 확인한다. 노출이 끝났거나 내 대상이 아니면 받지 않는다. */
+function learn_catalog_for_request(PDO $pdo, array $identity, $cid) {
+    if (!$cid) return null;
+    $c = learn_catalog_out(learn_fetch_catalog($pdo, $cid));
+    if (!learn_is_open($c, date('Y-m-d'))) {
+        throw new LearnError('지금은 신청할 수 없는 강의입니다', 409);
+    }
+    if (!learn_is_target($c, $identity['email'])) {
+        throw new LearnError('이 강의의 대상이 아닙니다', 403);
+    }
+    // 같은 강의를 두 번 신청하면 이수 현황이 중복으로 잡힌다
+    $st = $pdo->prepare("SELECT COUNT(*) FROM learn_requests
+                         WHERE catalog_id=? AND applicant_email=? AND rejected_at=''");
+    $st->execute([$cid, $identity['email']]);
+    if ((int)$st->fetchColumn()) throw new LearnError('이미 신청한 강의입니다', 409);
+    return $c;
+}
+
+/** 강의 정보는 카탈로그가 원본이다 */
+function learn_catalog_fields(array $c) {
+    return [
+        'site' => $c['site'], 'category_large' => $c['category_large'],
+        'category_medium' => $c['category_medium'], 'level' => $c['level'],
+        'title' => $c['title'], 'url' => $c['url'],
+        'duration_min' => $c['duration_min'], 'is_free' => $c['is_free'],
+        'price' => $c['is_free'] ? 0 : $c['price'],
+    ];
 }
 
 function learn_requests_update(PDO $pdo, array $identity, $rid) {
@@ -145,8 +208,7 @@ function learn_requests_update(PDO $pdo, array $identity, $rid) {
     learn_ensure_within_limits($pdo, learn_policy($pdo), $identity['email'], $after, $rid);
 
     learn_update_request($pdo, $rid, $patch);
-    jsend(learn_request_out(learn_fetch_request($pdo, $rid),
-                            learn_cert_names_map($pdo, [$rid])[$rid] ?? []));
+    jsend(learn_one_out($pdo, learn_fetch_request($pdo, $rid)));
 }
 
 function learn_requests_delete(PDO $pdo, array $identity, $rid) {
@@ -270,6 +332,5 @@ function learn_requests_action(PDO $pdo, array $identity, $rid, $action) {
     }
 
     learn_update_request($pdo, $rid, $fields);
-    jsend(learn_request_out(learn_fetch_request($pdo, $rid),
-                            learn_cert_names_map($pdo, [$rid])[$rid] ?? []));
+    jsend(learn_one_out($pdo, learn_fetch_request($pdo, $rid)));
 }

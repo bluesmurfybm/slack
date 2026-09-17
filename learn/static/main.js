@@ -33,16 +33,18 @@ async function loadWhoami() {
 }
 
 async function reload({ keepDrawer = false } = {}) {
-  const [requests, sites, categories, policy] = await Promise.all([
+  const [requests, sites, categories, policy, catalog] = await Promise.all([
     api("/learningapi/requests"),
     api("/learningapi/sites"),
     api("/learningapi/categories"),
     api("/learningapi/policy"),
+    api("/learningapi/catalog"),
   ]);
   APP.requests = requests;
   APP.sites = sites;
   APP.categories = categories;
   APP.policy = policy;
+  APP.catalog = catalog;
   // 관리자 전용 엔드포인트라 일반 사용자는 부르지 않는다
   APP.admins = APP.me.is_admin ? await api("/learningapi/admins") : null;
   buildFilters();

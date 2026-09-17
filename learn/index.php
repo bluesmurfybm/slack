@@ -63,35 +63,46 @@ learn_require_page_login();
   <div class="wrap">
     <!-- ===================== 구성원 화면 ===================== -->
     <section id="userView">
-      <section class="mystrip" id="myStrip">
-        <div class="ms-head">
-          <span class="ms-ava" id="msAva"></span>
-          <div class="ms-id">
-            <span class="ms-name">
-              <b id="msName"></b>
-              <button type="button" class="ms-fold" id="msFold" aria-expanded="true"
-                title="현황 접기/펼치기" onclick="toggleStrip()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                  stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-              </button>
-            </span>
-            <span id="msSub"></span>
+      <!-- 왼쪽은 내 현황, 오른쪽은 회사가 권하는 강의. 추천을 탭 안에 두면 거기까지
+           들어가야만 보여서 아무도 안 본다 — 첫 화면에 나란히 둔다 -->
+      <div class="home">
+        <section class="mystrip" id="myStrip">
+          <div class="ms-head">
+            <span class="ms-ava" id="msAva"></span>
+            <div class="ms-id">
+              <span class="ms-name">
+                <b id="msName"></b>
+                <span class="ms-chip" id="msSub"></span>
+              </span>
+            </div>
+            <span class="ms-hours" id="msHours"></span>
           </div>
-          <div class="ms-act">
-            <button class="btn-ghost" type="button" id="msMine"
-              onclick="toggleMineOnly()">내 신청 내역</button>
-            <button class="btn-new" id="btnNew" onclick="openForm()">＋ 강의 신청</button>
+          <div class="ms-body" id="msBody">
+            <div class="ms-nums" id="msNums"></div>
+            <div class="ms-running" id="msRunning"></div>
           </div>
-        </div>
-        <div class="ms-body" id="msBody">
-          <div class="ms-nums" id="msNums"></div>
-          <div class="ms-note" id="msNote" style="display:none"></div>
-        </div>
-      </section>
-      <div class="adminbar" id="adminBar" style="display:none"></div>
+        </section>
+
+        <aside id="catPreview"></aside>
+      </div>
+
+      <!-- 관리자 처리 대기 줄. 관리자가 아니거나 처리할 게 없으면 비어 있다 -->
+      <div id="todoRow"></div>
+
       <p class="note" id="policyNote" style="display:none"></p>
 
-      <div class="toolbar">
+      <!-- 신청 목록과 추천·필수 강의는 성격이 달라 한 목록에 섞지 않는다.
+           동작 버튼도 같은 밑선 위에 올려 "여기가 목록의 머리"임을 한 줄로 만든다 -->
+      <div class="pane-bar">
+        <div class="pane-tabs" id="paneTabs"></div>
+        <div class="site-act" id="siteAct">
+          <button class="btn-ghost" type="button" id="msMine"
+            onclick="toggleMineOnly()">내 신청 내역</button>
+          <button class="btn-new" id="btnNew" onclick="openForm()">＋ 강의 신청</button>
+        </div>
+      </div>
+
+      <div class="toolbar" id="listTools">
         <div class="search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round">
@@ -123,8 +134,12 @@ learn_require_page_login();
         </div>
       </div>
 
-      <div class="ledger-head">
-        <span class="title">신청 목록 <span class="count" id="listCount"></span></span>
+      <!-- 미이수 필수 알림. 추천·필수 강의 탭에서만 채워진다 -->
+      <div id="catAlert"></div>
+
+      <div class="ledger-head" id="ledgerHead">
+        <span class="title"><span id="ledgerTitle">신청 목록</span>
+          <span class="count" id="listCount"></span></span>
       </div>
       <ul class="list" id="board"></ul>
       <div id="listPager"></div>
@@ -165,6 +180,7 @@ learn_require_page_login();
           style="background:none;border:none;font-size:22px;color:var(--tx-quinary);cursor:pointer">×</button>
       </div>
       <div class="sheet-body">
+        <p class="note catalog" id="catalogNote" style="display:none"></p>
         <div class="two">
           <div class="field">
             <label for="i-site">교육 플랫폼</label>
@@ -269,6 +285,123 @@ learn_require_page_login();
     </div>
   </div>
 
+  <!-- ============ 추천 · 필수 강의 등록 (관리자) ============ -->
+  <div class="overlay" id="cfOverlay">
+    <div class="sheet">
+      <div class="sheet-head">
+        <div>
+          <span class="k">BlueLearn · 관리자</span>
+          <h2 id="cfTitle">추천 · 필수 강의 등록</h2>
+        </div>
+        <button class="x" onclick="closeCatalogForm()" aria-label="닫기"
+          style="background:none;border:none;font-size:22px;color:var(--tx-quinary);cursor:pointer">×</button>
+      </div>
+      <div class="sheet-body">
+        <div class="cf-sec"><i>1</i>강의 정보<span class="tag">강의 신청 폼과 동일</span></div>
+        <div class="two">
+          <div class="field">
+            <label for="cf-site">교육 플랫폼</label>
+            <select id="cf-site" onchange="cfSiteChange()"></select>
+          </div>
+          <div class="field">
+            <label for="cf-level">학습수준</label>
+            <select id="cf-level"></select>
+          </div>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="cf-large">강의 대분류</label>
+            <select id="cf-large" onchange="cfLargeChange()"></select>
+          </div>
+          <div class="field">
+            <label for="cf-medium">강의 중분류</label>
+            <select id="cf-medium"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="cf-title">강의/교육명</label>
+          <input id="cf-title" type="text" placeholder="강의명을 입력하세요">
+        </div>
+        <div class="field">
+          <label for="cf-url">수강주소</label>
+          <input id="cf-url" type="text" placeholder="https://">
+        </div>
+        <div class="two">
+          <div class="field">
+            <label>강의 기간</label>
+            <div class="triple" style="grid-template-columns:1fr 1fr">
+              <select id="cf-hours"></select>
+              <select id="cf-minutes"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="cf-price">수강료</label>
+            <input id="cf-price" type="number" min="0" step="1000" placeholder="0">
+            <label class="check" style="margin-top:2px">
+              <input type="checkbox" id="cf-free" onchange="cfFreeChange()"> 무료 강의입니다
+            </label>
+          </div>
+        </div>
+
+        <div class="cf-sec"><i>2</i>노출 설정</div>
+        <div class="field">
+          <label>등급</label>
+          <div class="seg" id="cf-grade">
+            <button type="button" data-v="추천" onclick="pickGrade('추천')">추천</button>
+            <button type="button" data-v="필수" onclick="pickGrade('필수')">필수</button>
+          </div>
+          <p class="note" id="cfGradeNote" style="display:none">
+            필수로 지정하면 이수 기한이 반드시 필요하고, 직원이 신청할 때 수강 승인 없이
+            바로 수강 상태로 등록됩니다. 개인 연간 한도도 소모하지 않습니다.
+          </p>
+        </div>
+        <div class="field">
+          <label>대상 범위</label>
+          <div class="seg" id="cf-scope">
+            <button type="button" data-v="전사" onclick="pickScope('전사')">전사</button>
+            <button type="button" data-v="지정" onclick="pickScope('지정')">구성원 지정</button>
+          </div>
+          <div class="cf-targets" id="cfTargets" style="display:none"></div>
+        </div>
+        <div class="two">
+          <div class="field" id="cfDueWrap">
+            <label for="cf-due">이수 기한</label>
+            <input id="cf-due" type="date">
+          </div>
+          <div class="field">
+            <label for="cf-sort">정렬 순서</label>
+            <input id="cf-sort" type="number" min="0" step="1">
+          </div>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="cf-from">노출 시작일</label>
+            <input id="cf-from" type="date">
+          </div>
+          <div class="field">
+            <label for="cf-to">노출 종료일</label>
+            <input id="cf-to" type="date">
+          </div>
+        </div>
+        <div class="field">
+          <label for="cf-reason">사유</label>
+          <textarea id="cf-reason" class="date-field" rows="2"
+            placeholder="왜 들어야 하는지 한 줄로 적어 주세요"></textarea>
+          <span class="muted">직원 화면의 강의 카드에 그대로 노출됩니다.</span>
+        </div>
+        <label class="check">
+          <input type="checkbox" id="cf-active"> 지금 바로 노출 (끄면 임시 저장 상태로만 보관됩니다)
+        </label>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn-mini danger" id="cfDelete" onclick="deleteCatalog()"
+          style="margin-right:auto">삭제</button>
+        <button class="btn-ghost" onclick="closeCatalogForm()">취소</button>
+        <button class="btn-submit" id="cfSave" onclick="saveCatalogForm()">등록</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== 사유 입력 ===================== -->
   <div class="overlay" id="reasonOverlay">
     <div class="cdialog">
@@ -300,6 +433,7 @@ learn_require_page_login();
   <script src="static/list.js"></script>
   <script src="static/form.js"></script>
   <script src="static/cats.js"></script>
+  <script src="static/catalog.js"></script>
   <script src="static/drawer.js"></script>
   <script src="static/manage.js"></script>
   <script src="static/stats.js"></script>

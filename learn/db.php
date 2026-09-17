@@ -198,8 +198,61 @@ function learn_db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
+
+    // 관리자가 등록하는 추천·필수 강의. 신청(learn_requests)과 별개다 — 이쪽은 "회사가 권하는
+    // 강의 카탈로그"고, 신청은 "그 강의를 듣겠다는 개별 건"이다. 둘을 한 테이블에 두면
+    // 아직 아무도 신청하지 않은 강의에 요청상태·환급액 같은 빈 칸이 줄줄이 생긴다.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `learn_catalog` (
+            `id`              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `site`            VARCHAR(100)  NOT NULL DEFAULT '',
+            `category_large`  VARCHAR(150)  NOT NULL DEFAULT '',
+            `category_medium` VARCHAR(150)  NOT NULL DEFAULT '',
+            `level`           VARCHAR(20)   NOT NULL DEFAULT '',
+            `title`           VARCHAR(500)  NOT NULL,
+            `url`             VARCHAR(1000) NOT NULL DEFAULT '',
+            `duration_min`    INT           NOT NULL DEFAULT 0,
+            `is_free`         TINYINT(1)    NOT NULL DEFAULT 0,
+            `price`           INT           NOT NULL DEFAULT 0,
+            `grade`           VARCHAR(10)   NOT NULL DEFAULT '추천' COMMENT '필수 | 추천',
+            `reason`          VARCHAR(500)  NOT NULL DEFAULT ''     COMMENT '카드에 그대로 노출되는 지정·추천 사유',
+            `due_date`        VARCHAR(10)   NOT NULL DEFAULT ''     COMMENT '필수일 때 이수 기한',
+            `target_scope`    VARCHAR(10)   NOT NULL DEFAULT '전사' COMMENT '전사 | 지정',
+            `target_emails`   TEXT              NULL                COMMENT \"'지정'일 때 대상자 이메일, 콤마 구분\",
+            `open_from`       VARCHAR(10)   NOT NULL DEFAULT ''     COMMENT '노출 시작일. 비우면 즉시',
+            `open_to`         VARCHAR(10)   NOT NULL DEFAULT ''     COMMENT '노출 종료일. 비우면 무기한',
+            `sort_order`      INT           NOT NULL DEFAULT 0,
+            `active`          TINYINT(1)    NOT NULL DEFAULT 1      COMMENT '0=임시 저장(직원 화면에 안 보인다)',
+            `created_by`      VARCHAR(190)  NOT NULL DEFAULT '',
+            `created_at`      VARCHAR(19)   NOT NULL DEFAULT '',
+            `updated_by`      VARCHAR(190)  NOT NULL DEFAULT '',
+            `updated_at`      VARCHAR(19)   NOT NULL DEFAULT '',
+            PRIMARY KEY (`id`),
+            KEY `idx_grade` (`grade`),
+            KEY `idx_active` (`active`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+
+    // 신청이 어느 카탈로그에서 나왔는지. 0 이면 직원이 직접 올린 신청이다.
+    // 이 연결 하나로 이수 여부·동료 수강 현황이 따라 나오므로 별도 이수 테이블을 두지 않는다.
+    add_column_if_missing($pdo, "ALTER TABLE `learn_requests`
+        ADD COLUMN `catalog_id` INT UNSIGNED NOT NULL DEFAULT 0
+        COMMENT '추천·필수 강의(learn_catalog)에서 신청한 건이면 그 id' AFTER `id`");
+    learn_add_index($pdo, "learn_requests", "idx_catalog", "(`catalog_id`)");
+
     learn_seed($pdo);
     return $pdo;
+}
+
+
+/** ADD KEY 안전 실행 — 이미 있으면 아무 일도 안 한다.
+ *  add_column_if_missing 은 중복 컬럼(42S21)만 무시하고 중복 인덱스(42000)는 그대로 던진다. */
+function learn_add_index(PDO $pdo, $table, $name, $cols) {
+    $st = $pdo->prepare("SELECT COUNT(*) FROM information_schema.STATISTICS
+                         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?");
+    $st->execute([$table, $name]);
+    if ((int)$st->fetchColumn()) return;
+    $pdo->exec("ALTER TABLE `{$table}` ADD KEY `{$name}` {$cols}");
 }
 
 /** 초기 데이터는 각 테이블이 비어 있을 때만 넣는다 */

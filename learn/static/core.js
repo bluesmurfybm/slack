@@ -4,9 +4,11 @@ const APP = {
   requests: [],
   sites: [],
   categories: [],
+  catalog: [],
   policy: {},
   admins: null,
-  view: { mode: "user", tab: "manage", layout: "list" },
+  // pane 은 구성원 화면의 탭 — 신청 목록과 추천·필수 강의를 오간다
+  view: { mode: "user", tab: "manage", layout: "list", pane: "list" },
   filter: { q: "", site: "", level: "", status: "", mine: false },
   page: { list: 1, manage: 1 },
   size: { list: 30, manage: 30 },

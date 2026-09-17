@@ -250,6 +250,7 @@ function manageRowHTML(r) {
     <div class="c-title">
       <button class="linkish" onclick="openDrawer(${r.id})">${esc(r.title)}</button>
       <div class="sub">
+        ${gradeTag(r)}
         ${siteBadge(r.site)}
         ${whoHTML(r.applicant)}
         <span class="muted">${esc(r.is_free ? "무료" : r.account_type)}</span>
@@ -274,7 +275,7 @@ function manageCardHTML(r) {
       ? '<span class="badge off">보관</span>' : ""}
       ${p.waited ? `<i class="mc-wait">${p.waited}일 대기</i>` : ""}</div>
     <button class="linkish mc-title" onclick="openDrawer(${r.id})">${esc(r.title)}</button>
-    <div class="mc-sub">${siteBadge(r.site)}${p.cat
+    <div class="mc-sub">${gradeTag(r)}${siteBadge(r.site)}${p.cat
       ? `<span class="muted">${esc(p.cat)}</span>` : ""}</div>
     <div class="mc-who">${whoHTML(r.applicant)}
       <span class="muted">${esc(r.is_free ? "무료" : r.account_type)}</span>${certChip(r)}</div>

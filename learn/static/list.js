@@ -15,21 +15,32 @@ function buildFilters() {
     (APP.me.levels || []).map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
   selectValue(level, APP.filter.level);
 
+  // 신청 목록은 요청상태로, 추천·필수 강의 탭은 등급으로 거른다 — 칸 하나를 돌려 쓴다
+  const catalogPane = APP.view.pane === "catalog";
   const status = document.getElementById("f-status");
-  status.innerHTML = '<option value="">전체 상태</option>' +
-    '<option value="무료">무료</option>' +
-    STATUSES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
-  selectValue(status, APP.filter.status);
+  status.innerHTML = catalogPane
+    ? '<option value="">전체 등급</option><option value="필수">필수</option>'
+      + '<option value="추천">추천</option>'
+    : '<option value="">전체 상태</option><option value="무료">무료</option>'
+      + STATUSES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  selectValue(status, catalogPane ? APP.filter.grade : APP.filter.status);
+
+  // "내 신청만"은 신청 목록에만 뜻이 있다
+  document.getElementById("f-mine").parentElement.style.display = catalogPane ? "none" : "";
 }
 
 function applyFilters() {
+  const pick = document.getElementById("f-status").value;
   APP.filter = {
+    ...APP.filter,
     q: document.getElementById("f-q").value.trim(),
     site: document.getElementById("f-site").value,
     level: document.getElementById("f-level").value,
-    status: document.getElementById("f-status").value,
     mine: document.getElementById("f-mine").checked,
   };
+  // 상태 칸은 탭에 따라 뜻이 달라진다 — 다른 탭의 값을 건드리지 않는다
+  if (APP.view.pane === "catalog") APP.filter.grade = pick;
+  else APP.filter.status = pick;
   APP.page.list = 1; // 조건이 바뀌면 첫 장부터 다시 본다
   renderList();
 }
@@ -48,29 +59,6 @@ function visibleRequests() {
   });
 }
 
-// 내 학습 현황 카드 — 흰 바탕에 파랑은 액센트로만 쓴다.
-// 숫자 넷 중 첫 칸(수강 중)이 주역이라 그 칸만 강의 이름과 기간 진척을 함께 낸다.
-const IN_PROGRESS = [S.REQUESTED, S.APPROVED, S.CLAIMED, S.CLAIM_APPROVED];
-
-// 카드 아래 알림 줄 — 내가 움직여야 하는 것을 위에 둔다.
-// 먼저 걸리는 하나만 낸다: 줄을 여러 개 쌓으면 무엇부터 할지가 다시 흐려진다.
-// hue 는 이 알림이 가리키는 칸의 머리선 색이다 — 줄과 칸이 한 몸임을 색으로 잇는다.
-// 반려만 예외로 발간을 쓴다: 반려는 어느 칸에도 세지 않는 상태이고,
-// 그 하나는 색이 급함을 대신 말해줘야 하는 자리라서다.
-const NOTICES = [
-  { sts: [S.REJECTED, S.CLAIM_REJECTED], hue: "no",
-    text: n => `반려된 신청 ${n}건이 있습니다` },
-  { sts: [S.APPROVED], hue: "run",
-    text: n => `수강 중인 신청 ${n}건 — 이수 후 수강료를 청구하세요` },
-  { sts: [S.REQUESTED], hue: "run",
-    text: n => `내 신청 ${n}건이 수강 승인 대기 중입니다` },
-  { sts: [S.CLAIMED], hue: "run",
-    text: n => `내 청구 ${n}건이 청구 승인 대기 중입니다` },
-  // 곧 환급 완료로 넘어갈 건이라 "환급 완료" 칸의 초록을 쓴다
-  { sts: [S.CLAIM_APPROVED], hue: "done",
-    text: n => `환급을 기다리는 신청 ${n}건이 있습니다` },
-];
-
 // 기간이 얼마나 지났는지 — 환급 기한을 놓치지 않게 첫 칸에만 낸다
 function periodPct(r) {
   if (!r.start_date || !r.end_date) return null;
@@ -85,26 +73,59 @@ const monthDay = d => {
   return p.length === 3 ? `${+p[1]}/${+p[2]}` : "";
 };
 
-function renderMyStrip() {
-  const mine = APP.requests.filter(isMine);
-  const n = f => mine.filter(f).length;
-  const at = st => mine.filter(r => !r.is_free && r.status === st).length;
-  const refunded = mine.filter(r => r.status === S.REFUNDED)
-    .reduce((sum, r) => sum + (r.refund_amount || 0), 0);
+/* ---------- 내 학습 현황 ---------- */
 
-  document.getElementById("msMine").classList.toggle("on", !!APP.filter.mine);
-  renderStripHead(mine);
-  renderStripNums(mine, n, refunded);
-  renderStripNote(at);
+// 네 칸은 절차 단계로 나눠 서로 겹치지 않게 한다. 예전처럼 "진행 중"과 알림 줄이
+// 같은 건을 다르게 세면 두 숫자가 어긋난 것처럼 보인다.
+//   수강 중   승인을 기다리거나 승인받아 듣는 중
+//   청구 대기 청구를 넣고 돈을 기다리는 중
+//   이수 완료 절차가 끝났거나 이수증을 올린 건
+const STAGE_RUNNING = [S.REQUESTED, S.APPROVED];
+const STAGE_CLAIM = [S.CLAIMED, S.CLAIM_APPROVED, S.CLAIM_REJECTED];
+const STAGE_DONE = [S.REFUNDED, S.NO_REFUND];
+
+// 무료 건은 요청상태가 없다 — 진행상태로 가른다
+const stageOf = r => {
+  if (r.is_free) return r.progress === "완료" ? "done" : "running";
+  if (STAGE_DONE.includes(r.status) || (r.cert_count && r.status === S.REJECTED)) return "done";
+  if (STAGE_CLAIM.includes(r.status)) return "claim";
+  if (STAGE_RUNNING.includes(r.status)) return "running";
+  return "";   // 수강반려 — 알림 줄이 따로 말한다
+};
+
+// 이수한 강의의 강의시간을 더한다. 올해 신청한 건만.
+function learnedMinutes(mine) {
+  const year = String(new Date().getFullYear());
+  return mine.filter(r => (r.created_at || "").startsWith(year) && stageOf(r) === "done")
+    .reduce((sum, r) => sum + (Number(r.duration_min) || 0), 0);
 }
 
-// 머리 — 누구의 현황인지, 올해 어느 플랫폼을 쓰고 있는지
+// 필수 강의의 마감은 회사가 정한 이수 기한이다. 내가 적은 수강 종료일이 더 빨라도
+// 그건 내 계획일 뿐이라 기한이 아니다 — 오른쪽 추천 카드와 같은 날짜를 보여야
+// 같은 강의에 D-45 와 D-75 가 함께 뜨는 일이 없다. 종료일은 캡션에 그대로 남는다.
+function dueDayOf(r) {
+  return r.catalog_due || r.end_date || "";
+}
+
+function daysTo(day) {
+  if (!day) return null;
+  return Math.round((new Date(`${day}T00:00:00`).getTime()
+    - new Date(new Date().toDateString()).getTime()) / 86400000);
+}
+
+function renderMyStrip() {
+  const mine = APP.requests.filter(isMine);
+  document.getElementById("msMine").classList.toggle("on", !!APP.filter.mine);
+  renderStripHead(mine);
+  renderStripNums(mine);
+  renderStripRunning(mine);
+}
+
 function renderStripHead(mine) {
   const name = APP.me.name || "";
   const ava = document.getElementById("msAva");
   ava.textContent = (name || "?").slice(0, 1);
   ava.style.background = APP.me.color || colorFor(name).fg;
-
   document.getElementById("msName").textContent = name ? `${name} 님의 학습 현황` : "학습 현황";
 
   // 많이 쓴 곳부터 — 데이터가 들어온 순서에 부제가 흔들리지 않게
@@ -114,116 +135,144 @@ function renderStripHead(mine) {
   const siteText = sites.length > 2 ? `${sites[0]} 외 ${sites.length - 1}곳` : sites.join(" · ");
   document.getElementById("msSub").textContent =
     [`${new Date().getFullYear()}년`, siteText].filter(Boolean).join(" · ");
+
+  const mins = learnedMinutes(mine);
+  document.getElementById("msHours").innerHTML = mins
+    ? `올해 학습 시간 <b>${esc(durationText(mins))}</b>` : "";
 }
 
-// 숫자 넷. 첫 칸만 진척 줄을 달고, 나머지는 값과 라벨만 낸다
-function renderStripNums(mine, n, refunded) {
-  const inflight = mine.filter(r => !r.is_free && IN_PROGRESS.includes(r.status));
-  // hue 는 칸 머리선 색. 알림 줄이 이 색을 물려받아 어느 칸의 이야기인지 알린다
+function renderStripNums(mine) {
+  const n = stage => mine.filter(r => stageOf(r) === stage).length;
+  const refunded = mine.filter(r => r.status === S.REFUNDED)
+    .reduce((sum, r) => sum + (r.refund_amount || 0), 0);
+
+  const claim = n("claim");
   const cols = [
-    { label: "수강 중", value: inflight.length, unit: "건", hue: "run", lead: true },
-    { label: "내 강좌", value: mine.length, unit: "건", hue: "all" },
-    { label: "환급 완료", value: n(r => r.status === S.REFUNDED), unit: "건", hue: "done" },
+    { label: "수강 중", value: n("running"), unit: "건", hue: "run" },
+    { label: "이수 완료", value: n("done"), unit: "건", hue: "all" },
+    // 내가 기다리는 돈이라 하나라도 있으면 눈에 걸리게 둔다
+    { label: "청구 대기", value: claim, unit: "건", hue: "done", hot: !!claim },
     { label: "받은 환급액", value: refunded.toLocaleString("ko-KR"), unit: "원", hue: "paid" },
   ];
 
-  // 기한이 가장 급한 것을 대표로 세운다 — 끝나는 날이 빠른 순
-  const soonest = inflight.filter(r => r.end_date)
-    .sort((a, b) => a.end_date.localeCompare(b.end_date))[0] || inflight[0];
-
   document.getElementById("msNums").innerHTML = cols.map(c => `
-    <div class="ms-col ${c.hue}${c.lead ? " lead" : ""}">
+    <div class="ms-col ${c.hue}${c.hot ? " hot" : ""}">
       <span class="ms-lb">${esc(c.label)}</span>
       <span class="ms-vl"><b>${esc(c.value)}</b><i>${esc(c.unit)}</i></span>
-      ${c.lead && soonest ? stripLead(soonest) : ""}
     </div>`).join("");
 }
 
-// 막대만 보면 무엇의 몇 %인지 알 수 없다 — 올렸을 때 말로 풀어준다.
-// 목록 행의 rail 과 같은 .tip>em 툴팁을 쓴다: 이 화면의 설명 방식이 한 가지로 남게.
-function periodTip(r, pct) {
-  if (pct === 0) return "수강 기간이 아직 시작되지 않았습니다";
-  if (pct === 100) return "수강 기간이 끝났습니다";
-  return `수강 기간의 ${pct}%가 지났습니다`;
+/* ---------- 진행 중인 강의 ---------- */
+
+// 막대는 수강 기간이 얼마나 지났는지다 — 외부 플랫폼의 실제 진도는 알 수 없다.
+// 라벨로 "기간"임을 못 박아 진도로 오해하지 않게 한다.
+const RUNNING_N = 1;      // 처음 보여줄 개수. 나머지는 더보기로 — 첫 화면을 짧게 둔다
+let RUNNING_OPEN = false;
+
+function renderStripRunning(mine) {
+  const rows = mine.filter(r => stageOf(r) === "running")
+    .sort((a, b) => {
+      const [x, y] = [dueDayOf(a), dueDayOf(b)];
+      if (!x !== !y) return x ? -1 : 1;       // 기한 없는 건은 뒤로
+      return x.localeCompare(y);
+    });
+
+  const box = document.getElementById("msRunning");
+  if (!rows.length) { box.innerHTML = ""; return; }
+
+  const shown = RUNNING_OPEN ? rows : rows.slice(0, RUNNING_N);
+  const rest = rows.length - shown.length;
+
+  box.innerHTML = `<div class="msr-head">진행 중인 강의
+      <span class="muted">마감 임박순</span></div>
+    ${shown.map(runningRowHTML).join("")}
+    ${rest > 0 || RUNNING_OPEN ? `<button type="button" class="msr-fold"
+      onclick="toggleRunning()">${RUNNING_OPEN ? "접기 ⌃" : `${rest}건 더 보기 ⌄`}</button>` : ""}`;
 }
 
-function stripLead(r) {
+function toggleRunning() {
+  RUNNING_OPEN = !RUNNING_OPEN;
+  renderStripRunning(APP.requests.filter(isMine));
+}
+
+function runningRowHTML(r) {
   const pct = periodPct(r);
-  const end = monthDay(r.end_date);
-  return `<div class="ms-lead">
-    ${pct == null ? "" : `<span class="tip">
-      <span class="ms-bar"><i style="width:${pct}%"></i></span>
-      <em>${esc(periodTip(r, pct))}<br>${esc(periodText(r))}</em></span>`}
-    <span class="ms-cap" title="${esc(r.title)}">${esc(r.title)}${
-      end ? `<span class="ms-end"> · ${esc(end)} 종료</span>` : ""}</span>
+  const due = dueDayOf(r);
+  const left = daysTo(due);
+  const tag = r.catalog_grade === "필수"
+    ? `<span class="badge gr-req">필수</span>`
+    : r.category_large
+      ? `<span class="msr-cat">${esc(r.category_large)}</span>` : "";
+
+  return `<div class="msr">
+    <div class="msr-top">
+      ${tag}
+      <button class="msr-ttl" onclick="openDrawer(${r.id})"
+        title="${esc(r.title)}">${esc(r.title)}</button>
+      ${left == null ? "" : `<span class="msr-d ${left <= 7 ? "hot"
+        : left <= 30 ? "warn" : ""}">${left < 0 ? "기한 지남"
+        : left === 0 ? "오늘 마감" : `D-${left}`}</span>`}
+    </div>
+    <div class="msr-bar">
+      <span class="msr-tr"><i style="width:${pct == null ? 0 : pct}%"></i></span>
+      <span class="msr-pct">${pct == null ? "—" : `${pct}%`}</span>
+      <span class="msr-cap">${esc(runningCaption(r, pct))}</span>
+      ${r.url ? `<a class="btn-mini" href="${esc(r.url)}" target="_blank"
+        rel="noopener">이어보기</a>` : ""}
+    </div>
   </div>`;
 }
 
-// 알림 줄 — 걸리는 것이 없으면 줄 자체를 내지 않는다
-function renderStripNote(at) {
-  const box = document.getElementById("msNote");
-  const hit = NOTICES
-    .map(nt => ({ nt, sts: nt.sts.filter(st => at(st)) }))
-    .find(x => x.sts.length);
-
-  if (!hit) { box.style.display = "none"; return; }
-
-  const total = hit.sts.reduce((sum, st) => sum + at(st), 0);
-  box.style.display = "";
-  box.className = `ms-note ${hit.nt.hue}`;
-  box.innerHTML = `<span class="ms-dot"></span>
-    <span class="grow">${esc(hit.nt.text(total))}</span>
-    <button type="button" class="ms-go" onclick="filterMine('${esc(hit.sts[0])}')">확인</button>`;
+function runningCaption(r, pct) {
+  const total = durationText(r.duration_min);
+  const when = r.end_date ? `${monthDay(r.end_date)} 종료` : "";
+  const how = pct == null ? "기간 미정" : pct === 0 ? "시작 전" : `기간 ${pct}% 지남`;
+  return [total && `총 ${total}`, how, when].filter(Boolean).join(" · ");
 }
 
-// 현황 카드 접기 — 매일 보는 화면이라 다 본 사람은 접어두고 목록부터 볼 수 있게 한다.
-// 기본은 펼침이고, 고른 상태는 그 사람 브라우저에만 남는다(layout·page size 와 같은 방식).
-const STRIP_KEY = "learning-strip-fold";
-
-function applyStripFold(fold) {
-  document.getElementById("myStrip").classList.toggle("fold", fold);
-  document.getElementById("msFold").setAttribute("aria-expanded", String(!fold));
-}
-
-function toggleStrip() {
-  const fold = !document.getElementById("myStrip").classList.contains("fold");
-  applyStripFold(fold);
-  try { localStorage.setItem(STRIP_KEY, fold ? "1" : "0"); } catch (e) { }
-}
-
-// 스크립트가 body 끝에서 돌므로 여기서 바로 DOM 을 만져도 된다
-try {
-  if (localStorage.getItem(STRIP_KEY) === "1") applyStripFold(true);
-} catch (e) { }
-
-// 관리자 알림 줄 — 구성원 화면에서도 처리할 일이 몇 건인지 한 줄로 알린다.
-// 관리 탭의 대기 카드와 같은 숫자지만, 여기서는 "넘어갈 길"이 목적이라 카드가 아니라 줄로 둔다.
+// 관리자 대기 칸 — 신청 관리 탭의 대기 카드와 같은 셈법을 쓴다
 const ADMIN_TODO = [
   ["수강 승인", S.REQUESTED], ["청구 승인", S.CLAIMED], ["환급", S.CLAIM_APPROVED],
 ];
 
-function renderAdminBar() {
-  const box = document.getElementById("adminBar");
-  if (!APP.me.is_admin) { box.style.display = "none"; return; }
+/* ---------- 관리자 처리 대기 줄 ---------- */
+
+// 학습 현황 줄 아래에 한 줄. 관리자가 아니거나 처리할 게 없으면 줄 자체를 내지 않는다.
+// 내 할 일은 따로 두지 않는다 — 신청 목록이 바로 아래에 있고, 급한 건은 목록의
+// 상태 배지가 이미 말한다. 첫 화면 위쪽을 알림으로 채우면 정작 목록이 밀린다.
+const STALE_DAYS = 3;
+
+function renderTodoRow() {
+  const box = document.getElementById("todoRow");
+  box.innerHTML = adminBarHTML();
+}
+
+function adminBarHTML() {
+  if (!APP.me.is_admin) return "";
 
   // 보관한 건은 처리 대상이 아니다 — 관리 탭의 대기 카드와 같은 셈법을 쓴다
-  const n = st => APP.requests.filter(r => r.status === st && !r.archived).length;
-  const todo = ADMIN_TODO.map(([label, st]) => [label, st, n(st)]);
+  const open = APP.requests.filter(r => !r.archived);
+  const todo = ADMIN_TODO.map(([label, st]) =>
+    [label, st, open.filter(r => r.status === st).length]);
   const total = todo.reduce((sum, [, , c]) => sum + c, 0);
+  if (!total) return "";
 
-  // 처리할 것이 없으면 줄을 내지 않는다 — 빈 알림은 알림이 아니다
-  if (!total) { box.style.display = "none"; return; }
+  // 며칠 기다렸는지는 신청 관리 화면의 waitedDays(manage.js)를 그대로 쓴다
+  const pending = ADMIN_TODO.map(([, st]) => st);
+  const stale = open.filter(r =>
+    pending.includes(r.status) && (waitedDays(r) || 0) >= STALE_DAYS).length;
 
-  box.style.display = "";
-  box.innerHTML = `<span class="ab-tag">관리자</span>
+  return `<div class="adminbar">
+    <span class="ab-tag">관리자</span>
     <b class="ab-sum">처리 대기 ${total}건</b>
     <span class="ab-chips">${todo.filter(([, , c]) => c).map(([label, st, c]) =>
       `<button type="button" class="ab-chip" onclick="goManage('${esc(st)}')"
-        title="${esc(st)} 상태만 걸어서 신청 관리로">${esc(label)}<b>${c}</b></button>`).join("")}</span>
-    <button type="button" class="ab-go" onclick="goManage('')">처리하러 가기 →</button>`;
+        title="${esc(st)} 상태만 걸어서 신청 관리로">${esc(label)}<b>${c}</b></button>`).join("")}
+      ${stale ? `<span class="ab-stale">${STALE_DAYS}일 넘게 ${stale}건</span>` : ""}</span>
+    <button type="button" class="ab-go" onclick="goManage('')">처리하러 가기 →</button>
+  </div>`;
 }
 
-// 신청 관리 탭으로 넘긴다 — 상태를 주면 그 상태만 걸어 둔 채로 연다
 function goManage(st) {
   MANAGE.status = st || "";
   APP.page.manage = 1;
@@ -233,6 +282,8 @@ function goManage(st) {
 
 // "내 신청 내역" — 목록을 내 것만으로 좁힌다. 다시 누르면 전체로 돌아간다
 function toggleMineOnly() {
+  // 신청 목록 쪽 필터다 — 카탈로그 탭에서 누르면 안 보이는 곳이 바뀌므로 탭부터 옮긴다
+  APP.view.pane = "list";
   const box = document.getElementById("f-mine");
   box.checked = !box.checked;
   document.getElementById("f-status").value = "";
@@ -296,7 +347,7 @@ function rowParts(r) {
 function cardHTML(r) {
   const p = rowParts(r);
   return `<li class="card${r.archived ? " dim" : ""}">
-    <div class="card-top">${statusBadge(r)}
+    <div class="card-top">${gradeTag(r)}${statusBadge(r)}
       <span class="card-rail">${railHTML(r, false, false)}</span></div>
     <div class="card-title">${p.title}</div>
     <div class="row-sub card-tags">${p.where}</div>
@@ -316,6 +367,7 @@ function rowHTML(r) {
   const p = rowParts(r);
   return `<li class="row lrow${r.archived ? " dim" : ""}">
     <div class="c-state">
+      ${gradeTag(r)}
       ${statusBadge(r)}
       ${railHTML(r, false, false)}
     </div>
@@ -336,18 +388,61 @@ function rowHTML(r) {
   </li>`;
 }
 
+// 구성원 화면의 두 탭. 현황 카드와 관리자 줄은 두 탭 모두에 남는다 —
+// 어느 탭에 있든 내가 처리할 일의 개수는 같은 자리에서 보여야 한다.
+function setPane(pane) {
+  APP.view.pane = pane;
+  APP.page.list = 1;
+  buildFilters();   // 상태 칸의 뜻이 탭마다 다르다
+  renderList();
+}
+
+function renderPaneTabs() {
+  const undone = pendingRequired().length;
+  const tabs = [
+    ["list", "신청 목록", 0],
+    ["catalog", "추천 · 필수 강의", undone],
+  ];
+  document.getElementById("paneTabs").innerHTML = tabs.map(([key, label, n]) =>
+    `<button type="button" class="pane-tab${APP.view.pane === key ? " on" : ""}"
+      onclick="setPane('${key}')">${esc(label)}
+      ${n ? `<span class="pane-n">${n}</span>` : ""}</button>`).join("");
+}
+
 function renderList() {
   renderMyStrip();
-  renderAdminBar();
+  renderTodoRow();
   renderPolicyNote();
+  renderPaneTabs();
+
+  // 사이드바는 탭과 무관하게 늘 서 있다. 탭을 옮길 때 오른쪽이 사라지면 화면이 통째로
+  // 흔들리고, 무엇이 없어진 건지 알 수 없다.
+  document.getElementById("catPreview").innerHTML = catalogPreviewHTML();
+
+  const cards0 = APP.view.layout === "card";
+  document.getElementById("vList").classList.toggle("on", !cards0);
+  document.getElementById("vCard").classList.toggle("on", cards0);
+
+  if (APP.view.pane === "catalog") {
+    const rows = visibleCatalog();
+    document.getElementById("listCount").textContent =
+      `${rows.length}건 / 전체 ${myCatalog().length}건`;
+    document.getElementById("ledgerTitle").textContent = "추천 · 필수 강의";
+    document.getElementById("catAlert").innerHTML = requiredAlertHTML();
+    const board = document.getElementById("board");
+    board.className = cards0 ? "cards" : "list";
+    board.innerHTML = catalogTabHTML();
+    document.getElementById("listPager").innerHTML = "";
+    return;
+  }
+  document.getElementById("ledgerTitle").textContent = "신청 목록";
+  document.getElementById("catAlert").innerHTML = "";
+
   const all = visibleRequests();
   const info = pageSlice(all, "list");
   document.getElementById("listCount").textContent =
     `${all.length}건 / 전체 ${APP.requests.length}건`;
-  const cards = APP.view.layout === "card";
-  document.getElementById("vList").classList.toggle("on", !cards);
-  document.getElementById("vCard").classList.toggle("on", cards);
-
+  const cards = cards0;
   const board = document.getElementById("board");
   board.className = cards ? "cards" : "list";
   board.innerHTML = info.rows.length

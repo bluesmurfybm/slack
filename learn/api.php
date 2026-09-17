@@ -20,6 +20,9 @@
  *   DELETE /requests/{rid}/certs/{cid}             이수증 삭제
  *   GET    /requests/{rid}/certs/{cid}/download    이수증 열기
  *   POST   /requests/{rid}/review                  강의평가·추천도·후기 (본인)
+ *   GET      /catalog                              추천·필수 강의 (직원은 노출·대상 건만)
+ *   POST|PUT|DELETE /catalog[/{cid}]               카탈로그 관리 (관리자)
+ *   GET      /catalog/{cid}/completion             필수 강의 이수 현황 (관리자)
  *   GET|POST /sites, PUT|DELETE /sites/{sid}       교육 플랫폼 (관리자)
  *   GET|POST /categories, PUT /categories/recommended,
  *   PUT|DELETE /categories/{cid}, DELETE /categories/{cid}/purge
@@ -38,6 +41,7 @@ require_once __DIR__ . '/routes/requests.php';
 require_once __DIR__ . '/routes/certs.php';
 require_once __DIR__ . '/routes/review.php';
 require_once __DIR__ . '/routes/sites.php';
+require_once __DIR__ . '/routes/catalog.php';
 require_once __DIR__ . '/routes/categories.php';
 require_once __DIR__ . '/routes/policy.php';
 require_once __DIR__ . '/routes/admins.php';
@@ -64,6 +68,7 @@ try {
         case 'members':    learn_route_members(); break;
         case 'requests':   learn_route_requests($pdo, $identity, $seg, $method); break;
         case 'sites':      learn_route_sites($pdo, $identity, $seg, $method); break;
+        case 'catalog':    learn_route_catalog($pdo, $identity, $seg, $method); break;
         case 'categories': learn_route_categories($pdo, $identity, $seg, $method); break;
         case 'policy':     learn_route_policy($pdo, $identity, $method); break;
         case 'admins':     learn_route_admins($pdo, $identity, $method); break;

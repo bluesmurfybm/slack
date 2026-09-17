@@ -223,7 +223,7 @@ function renderDrawer() {
   if (!r) return;
   // rail 은 아래 "진행 상황" 스테퍼가 크게 대신한다 — 머리에서는 배지만 낸다
   document.getElementById("dTags").innerHTML =
-    siteBadge(r.site) + statusBadge(r, true);
+    gradeTag(r) + siteBadge(r.site) + statusBadge(r, true);
   document.getElementById("dTitle").innerHTML = r.url
     ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a>`
     : esc(r.title);
