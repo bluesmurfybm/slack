@@ -1,7 +1,7 @@
 # blue-iWorks — 사내 업무 포털
 
 Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **DTI 발표(dti)**,
-**BlueLearn(learning)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
+**BlueLearn(learn)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
 ## 전체 구조
@@ -104,7 +104,7 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
   이름까지 붙인 문구를 만들어 로그인 화면에 토스트로 띄우고, URL에서 그 플래그만 지운다
   (`pathname`으로 싹 지우면 `need_token`·`view=profile`까지 날아간다). 붙이는 곳은
   slack `auth.php`, dti·moodle `index.php`, moodle `bookmarks.php`, learn·access `guard.php`,
-  book·learning `app.py` — 여덟 곳이다. **API는 다르다** — 401을 그대로 응답하고, 화면 JS가
+  book `app.py` — 일곱 곳이다. **API는 다르다** — 401을 그대로 응답하고, 화면 JS가
   그 401을 받아 포털로 보낸다(book `authedFetch`).
 - **book 모듈(다른 프로세스)**: 포털이 로그인 시 `blueiwork_id` 쿠키를 심는다 — 이메일+이름을
   HMAC-SHA256으로 서명한 값(`auth.php::issue_sso_cookie()`). book(Python, `app.py`)은 같은
@@ -125,7 +125,7 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
     dti/learn/moodle/slack `'../'`, slack 하위 폴더 `'../../'`), `$current`는 현재 시스템 key —
     그 줄이 `.on`(`styles/topbar.css`)으로 표시된다. `slack/header.php`를 쓰는 페이지는
     `$__bwCurrent`만 넘기면 된다.
-  - 별도 프로세스인 book·learning은 PHP를 못 쓰니 `app.py`/`router.py`가 **같은 json을 직접 읽어**
+  - 별도 프로세스인 book 은 PHP 를 못 쓰니 `app.py` 가 **같은 json 을 직접 읽어**
     `whoami` 로 내려주고 화면 JS(`renderWorkSystems`)가 그린다. 포털 트리가 안 보이면 목록만
     비고 화면은 정상 동작한다.
 
@@ -207,6 +207,43 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
    (`--dry-run` 으로 먼저 확인, 여러 번 돌려도 안전). 끝나면 이 도구도 지운다
 4. `dti_topics`·`dti_presentations` 의 죽은 컬럼(`presenter`·`planned_date`·`material_*`
    ·`scan_*`) 정리
+
+---
+
+## learn (BlueLearn · 강의 수강료 지원)
+
+파이썬 `learning/`(FastAPI + SQLModel/SQLite, 포트 8002)을 **기능 그대로 PHP + MySQL 로 옮긴 것**이다
+(dti 와 같은 이유 — 포털과 세션·DB 를 공유하면 SSO 쿠키 검증도, 별도 프로세스도, nginx 프록시
+블록도 필요 없어진다).
+
+- **스키마는 1:1 이다.** 테이블 이름만 `learning_*` → `learn_*` 로 바뀌었고 컬럼은 그대로다.
+  **날짜를 VARCHAR 로 둔 건 의도다** — 신청 상태를 저장하지 않고 날짜 문자열 비교로 파생시키기
+  때문이다(`lib/status.php::learn_derive_status`). 상태를 컬럼으로 들고 있으면 날짜를 고칠 때마다
+  둘이 어긋난다.
+- **PDO 는 모든 값을 문자열로 준다.** JS 에서 `"0"` 은 참이라, `is_free`·`archived` 를 그대로
+  내보내면 무료/보관 행이 뒤집힌다. `REQUEST_INT_COLS` 로 캐스팅해서 내보내고 테스트가 이를 잠근다.
+- **추천·필수 강의(`learn_catalog`)**: 관리자가 외부 플랫폼 강의를 등록해 **추천/필수** 등급을
+  매기면 직원 화면에 목록으로 뜬다. 필수 강의는 개인 연간 한도를 쓰지 않고 승인 절차도 없다
+  (`routes/requests.php`). 신청이 카탈로그에서 나오면 `catalog_id` 로 묶인다.
+- **진도율은 만들어내지 않는다.** 외부 플랫폼의 실제 수강률은 알 방법이 없으므로, 막대는
+  **수강 기간 경과율**이고 라벨도 `기간 N% 지남` 이다. "N시간 남음" 류 문구가 생기지 않는지
+  테스트가 확인한다.
+- **이수증은 문서루트 아래(`learn/var/uploads/`)에 있다.** nginx 차단 블록이 필수다 — 위
+  [nginx](#nginx) 참고.
+
+### 남은 전환 작업
+
+파이썬 `learning/` 은 저장소에서 지웠다. 서버에 남은 건 이것뿐이다. **순서를 지킨다** —
+이관보다 폴더 삭제가 먼저면 원본 SQLite 가 사라진다.
+
+1. `learning.service`(uvicorn 8002) 중지·비활성화
+2. nginx 의 `/learning/`·`/learningapi/` 블록 제거 후 `nginx -t && systemctl reload nginx`
+3. **이관** — `php learn/tools/migrate_from_learning.php --db=<learning.db 경로> --dry-run` 으로
+   먼저 확인하고, 이상 없으면 `--force` 로 실행한다. 신청·이수증·이력은 id 를 유지하고,
+   플랫폼·분류는 이름으로 맞춰 갱신한다(시드와 겹쳐 142행이 두 벌이 되지 않게)
+4. 이관을 확인한 뒤 `/home/blueapp_core/learning` 삭제. `git pull` 은 추적 파일만 지우므로
+   `learning/var/`(SQLite·이수증 원본)는 그대로 남아 있다 — 3번의 원본이 여기다
+5. 끝나면 `migrate_from_learning.php` 도 지운다(일회성 도구)
 
 ---
 
@@ -556,17 +593,23 @@ book 은 nginx 가 경로 접두사로 포트에 넘긴다(`/etc/nginx/sites-ava
 문서루트의 소스 폴더에 떨어져 403 이 난다.
 
 ```nginx
-location /learning/    { proxy_pass http://127.0.0.1:8002/; }
-location /learningapi/ { proxy_pass http://127.0.0.1:8002/learningapi/; }
+location /book/    { proxy_pass http://127.0.0.1:8000/; }
+location /bookapi/ { proxy_pass http://127.0.0.1:8000/bookapi/; }
 ```
 
 (`proxy_set_header`·`client_max_body_size` 줄을 같이 둔다 — 업로드가 50MB 까지다.)
-dti·learn·moodle 은 PHP 라 블록이 필요 없다. 대신 배치 소스가 문서루트 아래(`moodle/watch/`)에 있으니
-정적으로 새지 않게 막아둔다:
+dti·learn·moodle 은 PHP 라 프록시 블록이 필요 없다. 대신 **문서루트 아래에 있으면 안 되는 것들을
+막아둔다.** 배치 소스(`moodle/watch/`)와 업로드 보관함(`learn/var/`)이 그렇다 — 후자에는 이수증
+원본이 들어가므로 URL 로 바로 열리면 안 된다:
 
 ```nginx
 location ^~ /moodle/watch/ { deny all; }
+location ^~ /learn/var/    { deny all; }
 ```
+
+`learn/var/.htaccess` 가 같은 내용을 담고 있지만 **nginx 는 .htaccess 를 읽지 않는다.** 위 블록이
+없으면 아무 보호도 걸리지 않는다. 그리고 learn 은 이수증을 50MB 까지 받으므로 server 블록에
+`client_max_body_size 52m;` 가 있어야 한다(없으면 413).
 
 ### moodle-watch (systemd timer)
 
