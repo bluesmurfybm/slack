@@ -559,27 +559,47 @@ let SIDE_OPEN = false;
 
 function catalogPreviewHTML() {
   const mine = APP.catalog.filter(c => c.is_open && c.is_target);
-  if (!mine.length) return "";
 
   // 필수가 먼저, 그다음 최근 등록순. 이미 이수한 건은 뺀다 —
   // 여기는 "아직 안 들은 것을 권하는 자리"다.
   const rows = mine
     .filter(c => c.me.state !== MY_DONE)
     .sort((a, b) => (b.grade === G_REQ) - (a.grade === G_REQ) || b.id - a.id);
-  if (!rows.length) return "";
 
   const shown = SIDE_OPEN ? rows : rows.slice(0, SIDE_N);
   const rest = rows.length - shown.length;
 
+  // 보여 줄 게 없어도 박스와 제목은 남긴다. 통째로 사라지면 왼쪽 칸만 덩그러니 남아
+  // 화면이 무너진 것처럼 보이고, 이런 자리가 있다는 것 자체를 알 수 없다.
   return `<div class="cat-side">
     <div class="cs-head">
       <b>추천 · 필수 강의</b>
-      <span class="cs-n">${rows.length}</span>
-      <button type="button" class="cs-more" onclick="setPane('catalog')">전체 보기 →</button>
+      ${rows.length ? `<span class="cs-n">${rows.length}</span>` : ""}
+      ${mine.length
+        ? `<button type="button" class="cs-more" onclick="setPane('catalog')">전체 보기 →</button>`
+        : ""}
     </div>
-    ${shown.map(csItemHTML).join("")}
-    ${rest > 0 || SIDE_OPEN ? `<button type="button" class="cs-fold" onclick="toggleSide()">
-      ${SIDE_OPEN ? "접기 ⌃" : `${rest}건 더 보기 ⌄`}</button>` : ""}
+    ${rows.length ? `${shown.map(csItemHTML).join("")}
+      ${rest > 0 || SIDE_OPEN ? `<button type="button" class="cs-fold" onclick="toggleSide()">
+        ${SIDE_OPEN ? "접기 ⌃" : `${rest}건 더 보기 ⌄`}</button>` : ""}`
+      : csEmptyHTML(mine.length > 0)}
+  </div>`;
+}
+
+// 두 가지 빈 상태를 가른다. 아직 아무것도 지정되지 않은 것과, 지정된 걸 다 들은 것은
+// 사용자가 할 일이 다르다 — 전자는 기다리면 되고, 후자는 이미 끝냈다는 뜻이다.
+function csEmptyHTML(allDone) {
+  return `<div class="cs-empty">
+    <span class="cse-ic">${allDone
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+           stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/>
+           <path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>`}</span>
+    <b>${allDone ? "권장 강의를 모두 이수했습니다" : "지정된 추천 · 필수 강의가 없습니다"}</b>
+    <span>${allDone
+      ? "새 강의가 등록되면 여기에 표시됩니다"
+      : "관리자가 강의를 등록하면 여기에 표시됩니다"}</span>
   </div>`;
 }
 

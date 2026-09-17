@@ -1811,8 +1811,22 @@ ul.catalog{list-style:none;margin:0;padding:0}
 .cat-side{
   padding:16px;border:1px solid var(--bo-primary);border-radius:var(--r12);
   background:var(--bg-card);
+  /* 빈 상태를 남는 높이 한가운데에 세우기 위해 세로 flex 로 둔다.
+     내용이 있을 때는 지금까지처럼 위에서부터 쌓인다. */
+  display:flex;flex-direction:column;
 }
 .cs-head{display:flex;align-items:center;gap:7px;margin-bottom:12px}
+
+/* 보여 줄 강의가 없을 때. 박스와 제목은 남기고 이 자리만 바꾼다. */
+.cs-empty{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;padding:28px 12px;text-align:center;
+  border:1px dashed var(--bo-primary);border-radius:var(--r10);background:var(--bg-subtle);
+}
+.cse-ic{display:grid;place-items:center;width:34px;height:34px;margin-bottom:2px;color:var(--tx-quinary)}
+.cse-ic svg{width:100%;height:100%}
+.cs-empty b{font-size:13px;font-weight:700;color:var(--tx-secondary);letter-spacing:-.01em}
+.cs-empty span{font-size:11.5px;font-weight:500;color:var(--tx-quinary);line-height:1.5}
 
 .cs-head b{font-size:13.5px;font-weight:700;letter-spacing:-.01em}
 .cs-n{
