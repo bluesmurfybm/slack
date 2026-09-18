@@ -1,0 +1,36 @@
+- id: bluelearn-sites
+  question: 어떤 교육 플랫폼 강의를 신청할 수 있나요?
+  answer: 인프런과 패스트캠퍼스가 등록되어 있습니다.
+- id: bluelearn-category
+  question: 강의 분류는 어떻게 고르나요?
+  answer: 플랫폼별로 대분류와 중분류가 등록되어 있어 그중에서 고릅니다. 분류 목록은 플랫폼마다 다릅니다.
+- id: bluelearn-level
+  question: 강의 난이도는 어떻게 표시하나요?
+  answer: 초급, 중급, 고급으로 구분합니다.
+- id: bluelearn-account-type
+  question: 회사 계정으로 결제한 강의도 등록하나요?
+  answer: 네. 신청할 때 회사계정과 개인계정 중 하나를 고릅니다. 회사계정 건은 환급 대상이 아닙니다.
+- id: bluelearn-progress
+  question: 수강 진행 상태는 어떻게 관리하나요?
+  answer: 시작전, 진행중, 완료로 표시하고 마지막으로 상태를 바꾼 시각이 함께 기록됩니다.
+- id: bluelearn-rating
+  question: 들은 강의를 평가할 수 있나요?
+  answer: 강의 평가와 추천도를 각각 0.5점에서 5.0점까지 매기고 후기를 남길 수 있습니다. 입력하지 않으면 미입력으로 남고 0점으로 처리되지 않습니다.
+- id: bluelearn-free-vs-zero
+  question: 무료 강의와 수강료 0원은 같은 건가요?
+  answer: 다릅니다. 무료 강의는 따로 표시하고 수강료 금액과는 별개로 관리합니다.
+- id: bluelearn-policy-items
+  question: 수강료 지원 정책에서 정할 수 있는 게 뭔가요?
+  answer: 건당 상한을 두는 부분환급, 연간 환급 금액 한도, 연간 환급 건수 한도, 수강료 청구 기한 네 가지를 관리자가 각각 켜고 끄며 값을 정합니다.
+- id: bluelearn-history
+  question: 내 신청이 어떻게 처리됐는지 지나온 과정을 볼 수 있나요?
+  answer: 네. 상태가 바뀔 때마다 바뀐 상태와 처리한 사람, 시각이 남습니다. 반려 사유나 확정된 환급액도 함께 기록됩니다.
+- id: bluelearn-admin
+  question: BlueLearn 승인은 누가 하나요?
+  answer: 따로 지정된 BlueLearn 관리자가 승인과 반려, 환급 처리를 합니다.
+- id: bluelearn-cert-file
+  question: 올린 이수증 파일은 어떻게 보관되나요?
+  answer: 올린 원본 파일명과 서버에 저장된 파일명을 나눠서 보관하고, 누가 언제 올렸는지 함께 기록합니다.
+- id: bluelearn-catalog
+  question: 회사가 지정하거나 추천하는 강의도 있나요?
+  answer: 관리자가 필수 또는 추천 강의를 등록할 수 있습니다. 지정 사유와 이수 기한, 전사 대상인지 특정 대상자인지, 노출 기간을 함께 정합니다.

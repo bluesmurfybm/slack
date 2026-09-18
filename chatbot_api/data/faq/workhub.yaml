@@ -1,0 +1,39 @@
+- id: workhub-status-list
+  question: 요청은 어떤 상태로 관리되나요?
+  answer: 등록, 시작 전, 공수산정요청, 진행중, 보류, 확인요청(개발서버반영), 확인요청(검토완료), 확인요청(운영서버반영), 운영배포요청, 재확인필요, 처리불가, 완료를 사용합니다.
+- id: workhub-priority-list
+  question: 요청 우선순위는 어떻게 구분하나요?
+  answer: 일반, 긴급, 중요 세 가지입니다.
+- id: workhub-board
+  question: 업무현황판 목록이 두 개로 나뉘어 있어요.
+  answer: 블루소프트와 와이오즈 두 리스트로 구분해 관리합니다.
+- id: workhub-team-list
+  question: 개발담당팀에는 어떤 값이 있나요?
+  answer: 블루소프트, 시스템개발, 달빛소프트, 미지정과 W > B, B > W 를 사용합니다. 팀이 지정되지 않은 요청도 있습니다.
+- id: workhub-ai-difficulty
+  question: 난이도 분석은 어떻게 표시되나요?
+  answer: 별 1개에서 5개까지 난이도를 매기고 그렇게 판단한 근거를 함께 보여줍니다. 판정 신뢰도는 high, medium, low 로 구분합니다.
+- id: workhub-assignee
+  question: 요청 담당자는 어떻게 정해지나요?
+  answer: 요청마다 담당자를 지정할 수 있고 누가 언제 배정했는지 함께 기록됩니다.
+- id: workhub-pin-hide
+  question: 특정 요청을 위로 올리거나 목록에서 빼둘 수 있나요?
+  answer: 고정과 숨김을 사용할 수 있습니다. 둘 다 본인 화면에만 적용되고 다른 사람 목록에는 영향을 주지 않습니다.
+- id: workhub-read
+  question: 읽은 요청과 안 읽은 요청이 구분되나요?
+  answer: 네. 읽은 시점이 사람별로 기록되어 본인 기준으로 구분됩니다.
+- id: workhub-filter-preset
+  question: 자주 쓰는 필터를 저장해 둘 수 있나요?
+  answer: 네. 필터와 화면 설정을 사람별로 저장해 두고 다시 불러 쓸 수 있습니다.
+- id: workhub-archived
+  question: 보관된 요청은 어떻게 되나요?
+  answer: 보관 표시가 붙어 기본 목록과 분리됩니다. 삭제되는 것은 아니라 내용은 그대로 남습니다.
+- id: workhub-dates
+  question: 요청에는 어떤 날짜가 기록되나요?
+  answer: 요청일과 완료예정일, 완료일이 기록됩니다. 완료예정일은 정해지지 않은 요청도 있습니다.
+- id: workhub-attachment
+  question: 슬랙에 올린 첨부파일도 업무현황판에서 볼 수 있나요?
+  answer: 네. 요청에 달린 첨부파일 목록이 함께 보관되어 화면에서 확인할 수 있습니다.
+- id: workhub-local-edit
+  question: 업무현황판에서 고친 내용이 슬랙 동기화 때 지워지지 않나요?
+  answer: 지워지지 않습니다. 화면에서 고친 요청은 따로 표시해 두고 다시 동기화할 때 고친 내용을 유지합니다. 마지막 수정자와 수정 시각도 남습니다.

@@ -1,0 +1,18 @@
+- id: envhub-versions
+  question: EnvHub에는 어떤 버전이 등록되어 있나요?
+  answer: 2.9, 3.2, 3.5, 3.9, 4.5 버전이 등록되어 있습니다. 버전이 아직 비어 있는 사이트도 있습니다.
+- id: envhub-vpn
+  question: 대학에 접속하려면 VPN을 꼭 써야 하나요?
+  answer: 대학마다 다릅니다. HIWARE, Arcon, FortiClient, WinNGS, SecuwaySSL, Citrix 같은 접근제어 프로그램이 등록되어 있고 두 가지를 함께 쓰는 곳도 있습니다. VPN 칸이 비어 있으면 별도로 실행할 것이 없다는 뜻입니다.
+- id: envhub-repo
+  question: 대학 소스 저장소는 svn인가요 git인가요?
+  answer: 대부분 svn이고 일부는 git입니다. EnvHub의 저장소 주소 칸에서 대학별로 확인할 수 있습니다.
+- id: envhub-deploy
+  question: 대학별 배포 방법은 어디서 보나요?
+  answer: EnvHub의 배포 방법 칸에 대학별로 적혀 있습니다. 주의할 점은 비고 칸에 함께 기록합니다.
+- id: envhub-inactive
+  question: 목록에 안 보이는 대학이 있어요.
+  answer: 비활성으로 처리된 사이트는 목록에서 빠집니다. 기록 자체는 지우지 않고 남겨 둡니다.
+- id: envhub-open-date
+  question: 그 대학을 언제부터 맡았는지 알 수 있나요?
+  answer: 사업시작 또는 최초 운영오픈 시점이 대학별로 기록되어 있습니다.

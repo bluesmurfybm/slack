@@ -1,0 +1,3 @@
+- id: portal-token-storage
+  question: 등록한 슬랙 토큰은 안전하게 보관되나요?
+  answer: 암호화해서 보관하며 저장한 뒤에는 화면에 원문이 다시 표시되지 않습니다.

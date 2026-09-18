@@ -7,5 +7,5 @@ router = APIRouter()
 
 
 @router.get("/health")
-def health(entries: list[FaqEntry] = Depends(get_faq)) -> dict:
+def health(entries: list[FaqEntry] = Depends(get_faq)) -> dict[str, object]:
     return {"status": "ok", "faq_count": len(entries)}

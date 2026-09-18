@@ -1,0 +1,24 @@
+- id: moodleup-sources
+  question: MoodleUp?은 어디서 정보를 모으나요?
+  answer: 무들 트래커, GitHub, moodle.com, 개발 문서 네 곳에서 모읍니다.
+- id: moodleup-item-kinds
+  question: 리포트에는 어떤 종류의 항목이 담기나요?
+  answer: 이슈, 릴리스, 소식, 개발 문서 변경이 담깁니다. 항목마다 원문 주소와 발행 시각이 함께 기록됩니다.
+- id: moodleup-impact
+  question: 항목마다 붙은 영향도는 뭔가요?
+  answer: 코스모스 관점에서 얼마나 중요한지를 고, 중, 저로 판정한 값이며 그렇게 본 근거가 함께 붙습니다. 판정되지 않은 항목도 있습니다.
+- id: moodleup-week
+  question: 리포트는 어떤 단위로 만들어지나요?
+  answer: 주 단위로 만들고 2026-W37 같은 ISO 주차로 구분합니다. 리포트마다 어느 기간을 다뤘는지 시작과 끝이 기록됩니다.
+- id: moodleup-run
+  question: 리포트가 몇 번 갱신됐는지 알 수 있나요?
+  answer: 네. 갱신할 때마다 실행 번호와 시각, 새로 들어온 항목 수가 남습니다. 자동 실행인지 화면에서 직접 실행한 것인지도 구분됩니다.
+- id: moodleup-status
+  question: 리포트 상태가 partial로 보여요.
+  answer: 일부 출처만 수집된 경우입니다. 모두 정상이면 ok, 수집에 실패하면 failed로 표시하고 어느 출처에서 무슨 일이 있었는지 함께 기록합니다.
+- id: moodleup-updates
+  question: 지난번에 본 다음에 뭐가 새로 들어왔는지 보고 싶어요.
+  answer: 마지막 갱신에서 새로 들어온 항목만 따로 요약해 보여줍니다. 리포트에서 눈여겨볼 항목은 따로 표시됩니다.
+- id: moodleup-note
+  question: 리포트에 메모를 남길 수 있나요?
+  answer: 요약 글에서 원하는 부분을 골라 형광펜을 칠하거나 북마크할 수 있고 색을 골라 메모를 붙일 수 있습니다. 누가 남긴 메모인지 함께 기록됩니다.
