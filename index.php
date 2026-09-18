@@ -889,33 +889,55 @@ const eventSlider =makeSlider("board-events-list", 4200, "ev-nav");
 /* 한 번에 한 건씩, 크게 보여 준다. 왼쪽 D-day 는 달력 한 장 모양으로 두르고
    (위쪽 굵은 띠 + 고리 두 개) 오른쪽에 제목과 날짜를 놓는다.
    카드로 감싸지는 않는다 — 바탕을 깔면 그 칸만 무겁게 튄다. */
-/* D-day 숫자를 점으로 찍어 보여 준다(3×5 픽셀 글자).
-   숫자 하나가 열다섯 칸이고, 꺼진 칸도 아주 흐리게 남겨 '점판' 이라는 게
-   읽히게 했다. 검은 판에 네온을 얹으면 포털의 다른 화면과 겉돌아서,
-   바탕은 그대로 두고 점만 일정 종류 색으로 찍는다. */
+/* D-day 를 통째로 점으로 찍는다(3×5 픽셀 글자).
+
+   판은 다섯 글자 자리로 붙박이다 — D-3 이든 D-128 이든 점 개수와 판 크기가
+   같아서, 넘어갈 때 글자만 바뀌고 판은 그대로 있는 것처럼 보인다.
+   켜진 점만 일정 종류 색을 입고 꺼진 점은 언제나 같은 색이라, 색이 바뀌는 것이
+   곧 '무슨 일정인지' 가 된다. */
 const PIX_FONT={
   "0":"111101101101111","1":"010110010010111","2":"111001111100111",
   "3":"111001111001111","4":"101101111001001","5":"111100111001111",
   "6":"111100111101111","7":"111001001001001","8":"111101111101111",
-  "9":"111101111001111"
+  "9":"111101111001111",
+  "D":"110101101101110","A":"010101111101101","Y":"101101010010010",
+  "N":"101111111101101","O":"111101101101111","W":"101101101111101",
+  "-":"000000111000000","+":"000010111010000"," ":"000000000000000"
 };
-function pixDigit(ch){
-  const bits=PIX_FONT[ch];
-  if(!bits) return "";
-  let dots="";
-  for(let i=0;i<15;i++){
-    const x=i%3, y=(i-x)/3;
-    dots+=`<rect class="${bits[i]==="1"?"on":"off"}" `+
-          `x="${x+0.09}" y="${y+0.09}" width="0.82" height="0.82" rx="0.17"/>`;
-  }
-  return `<svg viewBox="0 0 3 5" aria-hidden="true">${dots}</svg>`;
+const PIX_CELLS=5;                    // 판에 들어가는 글자 수(붙박이)
+const PIX_W=PIX_CELLS*4-1;            // 글자 3칸 + 글자 사이 1칸
+
+/** 점으로 찍을 수 있는 글자로 바꾼다. 한글은 못 찍으므로 짧은 말로 옮긴다. */
+function pixText(label){
+  if(label==="진행중") return "NOW";
+  const t=String(label).toUpperCase().replace(/[^0-9A-Z+-]/g,"");
+  return t.slice(0, PIX_CELLS) || "?";
 }
+
 function ddayPix(label){
-  const m=/^D-(\d+)$/.exec(label);
-  if(m) return `<b class="d">D-</b><span class="pix">`+
-               Array.prototype.map.call(m[1], pixDigit).join("")+`</span>`;
-  // 오늘(D-DAY)·진행중·지난 것(D+n)은 숫자가 아니라 글자 그대로 둔다
-  return `<b class="txt">${esc(label)}</b>`;
+  const txt=pixText(label);
+  const pad=PIX_CELLS-txt.length;
+  const left=Math.floor(pad/2);                       // 짧으면 가운데로
+  const cells=" ".repeat(left)+txt+" ".repeat(pad-left);
+
+  // 먼저 판 전체를 꺼진 점으로 채우고, 글자에 해당하는 칸만 켠다.
+  // 이렇게 해야 글자 사이 빈 칸에도 점이 남아 '판' 으로 보인다.
+  const on=[];
+  for(let y=0;y<5;y++) on.push(new Array(PIX_W).fill(false));
+  for(let c=0;c<PIX_CELLS;c++){
+    const g=PIX_FONT[cells[c]]||PIX_FONT[" "];
+    for(let i=0;i<15;i++){
+      if(g[i]!=="1") continue;
+      const x=i%3, y=(i-x)/3;
+      on[y][c*4+x]=true;
+    }
+  }
+  let dots="";
+  for(let y=0;y<5;y++) for(let x=0;x<PIX_W;x++){
+    dots+=`<rect class="${on[y][x]?"on":"off"}" `+
+          `x="${x+0.1}" y="${y+0.1}" width="0.8" height="0.8" rx="0.16"/>`;
+  }
+  return `<svg class="pix" viewBox="0 0 ${PIX_W} 5" aria-hidden="true">${dots}</svg>`;
 }
 
 function renderBoardEvents(rows){
@@ -928,9 +950,7 @@ function renderBoardEvents(rows){
   box.innerHTML=`<div class="slide-win" id="board-events-list"><div class="slide-track">`+
     rows.map(e=>`
       <div class="ev-item k-${e.kind.key} ${e.heat}">
-        <span class="cal" aria-label="${esc(e.dday_label)}">
-          <i></i><i></i>${ddayPix(e.dday_label)}
-        </span>
+        <span class="cal" aria-label="${esc(e.dday_label)}"><i></i><i></i>${ddayPix(e.dday_label)}</span>
         <span class="tt">
           <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
           <div class="sub">${esc(fmtWhen(e))}${e.place?` <em>|</em> `+esc(e.place):""}</div>

@@ -121,29 +121,25 @@
   animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
 
 /* 달력 한 장 — 위쪽 굵은 띠와 고리 두 개로 '달력' 이라는 걸 알린다.
-   고리를 위 테두리에 걸치게 두면 벽에 걸린 것처럼 보인다. */
+   고리를 위 테두리에 걸치게 두면 벽에 걸린 것처럼 보인다.
+   안쪽은 통째로 점판이라 크기가 늘 같다 — D-3 이든 D-128 이든. */
 .ev-item .cal{position:relative;flex-shrink:0;
-  min-width:62px;height:54px;padding:0 8px;
-  display:flex;align-items:center;justify-content:center;gap:5px;
-  background:var(--paper);border-radius:7px;
+  width:92px;height:48px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--paper);border-radius:8px;
   border:1.5px solid var(--k-ink);border-top-width:5px}
 .ev-item .cal i{position:absolute;top:-4px;width:7px;height:7px;
   border-radius:50%;background:var(--paper);border:1.5px solid var(--k-ink)}
-.ev-item .cal i:nth-child(1){left:11px}
-.ev-item .cal i:nth-child(2){right:11px}
-/* 'D-' 는 글자로, 숫자는 점으로. 둘의 크기를 맞춰 한 덩어리로 읽히게 한다. */
-.ev-item .cal .d{font-family:var(--disp);font-size:15px;font-weight:700;line-height:1;
-  color:var(--k-ink);letter-spacing:-.05em;margin-top:1px}
-.ev-item .cal .txt{font-family:var(--disp);font-size:15px;font-weight:700;line-height:1;
-  color:var(--k-ink);letter-spacing:-.02em;margin-top:1px}
+.ev-item .cal i:nth-child(1){left:16px}
+.ev-item .cal i:nth-child(2){right:16px}
 
-/* ---------- 픽셀 숫자 ----------
-   3×5 점판. 켜진 점은 종류 색, 꺼진 점은 같은 색을 아주 옅게 남겨
-   '점으로 찍는 판' 이라는 결이 보이게 한다. */
-.pix{display:flex;align-items:center;gap:2.5px;margin-top:1px}
-.pix svg{height:19px;width:auto;display:block;overflow:visible}
+/* ---------- 픽셀 판 ----------
+   다섯 글자 자리가 붙박이라 판 크기와 점 개수가 늘 같다.
+   켜진 점만 일정 종류 색을 입고, 꺼진 점은 무슨 일정이든 같은 색이다 —
+   글자만 색이 바뀌고 판은 그대로 있는 것처럼 보이게 하려는 것이다. */
+.pix{display:block;width:74px;height:auto;margin-top:1px}
 .pix .on{fill:var(--k-ink)}
-.pix .off{fill:var(--k-ink);opacity:.14}
+.pix .off{fill:#D7DFEC}
 
 .ev-item .tt{flex:1;min-width:0}
 .ev-item .nm{font-size:15px;font-weight:700;color:var(--navy);
@@ -155,10 +151,10 @@
 .ev-item .ki{font-style:normal;font-size:14px;margin-right:6px;vertical-align:1px}
 
 /* 오늘 것만 점이 아주 천천히 숨 쉰다. 깜빡이면 업무 화면에서 성가시다. */
-.ev-item.today .pix .on,.ev-item.today .cal .txt{animation:pixBreathe 2.4s ease-in-out infinite}
+.ev-item.today .pix .on{animation:pixBreathe 2.4s ease-in-out infinite}
 @keyframes pixBreathe{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){
-  .ev-item,.ev-item.today .pix .on,.ev-item.today .cal .txt{animation:none !important}
+  .ev-item,.ev-item.today .pix .on{animation:none !important}
 }
 
 /* 종류별 색. 제목에서 낱말을 보고 board_event_kind() 가 고른다.
