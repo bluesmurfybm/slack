@@ -121,14 +121,18 @@
    점은 한 번만 그려 두고 켜짐/꺼짐만 갈아 끼우므로, 일정이 바뀌어도
    판은 그 자리에 있고 글자만 스르르 물든다(fill 전이).
 
-   켜진 점은 종류 색을 그대로 쓰지 않고 '밝은 발광색'(--k-lit)을 따로 둔다.
-   짙은 바탕 위에서는 회의(#1C5DE5)나 조사(#5B6577) 같은 어두운 종류 색이
-   대비 3.5 밖에 안 나와 글자가 뭉개진다. 밝게 올리면 6.8~8.9 가 된다. */
-.ev-pix{--k-lit:#79B0FF;display:block;flex-shrink:0}
+   꺼진 점은 연한 네이비(#C9D2E2)다. 검정에 가깝던 것을 밝게 올렸다 —
+   판이 화면에서 검은 구멍처럼 튀지 않고, 켜진 점이 '그 위에 찍힌 글자' 로
+   읽힌다. 카드 흰 바탕과는 1.52 라 판의 네모꼴도 그대로 보인다.
+
+   바탕을 밝혔으니 켜진 점은 거꾸로 진해야 한다(--k-ink). 종류의 본래 색을
+   그대로 쓰면 마감(#D9820B)·행사(#E2622A)·휴무(#0F9B8E)가 대비 2 언저리라
+   글자가 바탕에 녹는다. 한 단 내린 값으로 4.8~6.7 을 맞췄다. */
+.ev-pix{--k-ink:#12409E;display:block;flex-shrink:0}
 .pix{display:block;width:122px;height:auto}
 .pix rect{transition:fill .3s ease}
-.pix .on{fill:var(--k-lit)}
-.pix .off{fill:#1C2433}
+.pix .on{fill:var(--k-ink)}
+.pix .off{fill:#C9D2E2}
 
 .ev-text{height:var(--win-h);display:flex;flex-direction:column;justify-content:center;
   animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
@@ -148,17 +152,19 @@
   .pix rect{transition:none}
 }
 
-/* 종류별 발광색. 제목에서 낱말을 보고 board_event_kind() 가 고른다.
-   종류의 본래 색을 밝게 올린 값이라 어느 종류인지는 그대로 구분된다. */
-.ev-pix.k-condolence{--k-lit:#B3BECF}   /* 조사 — 차분하게 */
-.ev-pix.k-congrats  {--k-lit:#FF86AE}   /* 경사 */
-.ev-pix.k-holiday   {--k-lit:#3FD9C7}   /* 휴무 */
-.ev-pix.k-deadline  {--k-lit:#FFB43F}   /* 마감 */
-.ev-pix.k-edu       {--k-lit:#B79BFF}   /* 교육 */
-.ev-pix.k-ops       {--k-lit:#93B9DB}   /* 작업 */
-.ev-pix.k-event     {--k-lit:#FF9457}   /* 행사 */
-.ev-pix.k-meeting   {--k-lit:#79B0FF}   /* 회의 */
-.ev-pix.k-etc       {--k-lit:#ABBFE6}   /* 그 밖 */
+/* 종류별 글자색. 제목에서 낱말을 보고 board_event_kind() 가 고른다.
+   같은 종류끼리는 같은 색이라 목록이 돌아가도 무슨 일정인지 바로 읽힌다.
+   종류의 본래 색을 한 단 내린 값이라 어느 것이 어느 종류인지는 그대로다.
+   괄호 안은 연한 네이비 바탕(#C9D2E2)에서의 대비. */
+.ev-pix.k-condolence{--k-ink:#384152}   /* 조사 — 차분하게 6.7 */
+.ev-pix.k-congrats  {--k-ink:#961643}   /* 경사 5.5 */
+.ev-pix.k-holiday   {--k-ink:#0A5F57}   /* 휴무 5.0 */
+.ev-pix.k-deadline  {--k-ink:#7E4A05}   /* 마감 4.8 */
+.ev-pix.k-edu       {--k-ink:#5227A8}   /* 교육 6.2 */
+.ev-pix.k-ops       {--k-ink:#2D445D}   /* 작업 6.6 */
+.ev-pix.k-event     {--k-ink:#8E390F}   /* 행사 5.0 */
+.ev-pix.k-meeting   {--k-ink:#12409E}   /* 회의 6.1 */
+.ev-pix.k-etc       {--k-ink:#36496F}   /* 그 밖 5.9 */
 
 /* ---------- 공지 목록 화면 ---------- */
 .list-card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
