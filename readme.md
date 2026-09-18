@@ -9,10 +9,18 @@ Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청
 ```
 D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── index.php                    로그인/대시보드/프로필 (SPA 한 페이지)
-├── auth.php, db.php, config.php 포털 세션·DB·SSO 헬퍼
-├── worksystems.json/.php        상단바 드롭다운 "업무 시스템" 목록의 유일한 원본 + 렌더러
+├── core/                        모듈들이 공유하는 포털 공용 소스 (아래 참고)
+│   ├── auth.php                 세션·SSO·current_portal_user()
+│   ├── db.php                   portal_db() · 테이블 자동 생성
+│   ├── board.php                알림판 — 공지·중요 일정·포털 관리자
+│   └── worksystems.php/.json    상단바 "업무 시스템" 목록의 렌더러 + 유일한 원본
+├── config.php                   접속 정보 (gitignore, 루트에 그대로 둔다)
+├── sso_secret.key               book 과 나눠 쓰는 HMAC 키 (자동 생성, 루트)
+├── .sessions/                   PHP 세션 저장 경로 (루트)
 ├── api/                         login.php, logout.php, me.php
-├── styles/                      default.css, favicon.ico, logo-blue.png
+│                                notices.php, notice_file.php, events.php, admins.php
+├── styles/                      default.css, board.css, favicon.ico, logo-blue.png
+├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
 │
 ├── book/                        BlueBooks(도서구매신청) — Python/FastAPI, 별도 프로세스(포트 8000)
 │   ├── app.py
@@ -84,6 +92,43 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
 
 ---
 
+## core/ — 공용 소스의 자리
+
+모듈이 늘면서 포털 루트에 공용 소스와 설정·산출물이 뒤섞였다. 여러 모듈이 함께
+쓰는 **소스만** `core/` 로 내렸다.
+
+| core/ 에 있는 것 | 쓰는 곳 |
+|---|---|
+| `auth.php` | api, access, dti, learn, moodle, slack, bluecart |
+| `db.php` | access, dti, learn, moodle (`add_column_if_missing()` 재사용) |
+| `worksystems.php` / `.json` | index, dti, learn, moodle, slack/header, bluecart, book |
+| `board.php` | api/notices·notice_file·events·admins |
+
+모듈에서는 한 단계 위의 `core/` 를 부른다.
+
+```php
+require_once __DIR__ . '/../core/auth.php';        // 모듈 폴더에서
+require_once __DIR__ . '/core/worksystems.php';    // 포털 루트(index.php)에서
+```
+
+**루트에 그대로 두는 것들** — `core/` 안에서는 `dirname(__DIR__)` 으로 짚는다.
+
+- `config.php` — 서버마다 사람이 직접 만드는 파일이다. 자리를 옮기면 이미 돌고 있는
+  설치본을 전부 손봐야 한다. `slack`, `learn`, `dti` 도 루트 기준으로 읽고 있다.
+- `sso_secret.key` — `book/app.py` 가 `../sso_secret.key` 로 같은 파일을 직접 읽는다.
+  자리를 옮기면 키가 새로 생겨 book 쪽 SSO 검증이 전부 깨진다.
+- `.sessions/` — 옮기면 열려 있던 세션을 못 찾아 전원이 로그아웃된다.
+- `var/` — 공지 첨부 원본. 직접 접근을 막는 `.htaccess` 가 여기 있다.
+
+`book` 은 PHP 가 아니라 경로를 직접 적는다. 목록 원본을 옮겼으니 같이 고쳐 뒀다.
+
+```python
+WORK_SYSTEMS = os.path.join(BASE, "..", "core", "worksystems.json")
+SSO_SECRET_PATH = os.path.join(BASE, "..", "sso_secret.key")   # 루트 그대로
+```
+
+---
+
 ## 로그인 / SSO 구조 (제일 먼저 이해해야 할 부분)
 
 - **회원 저장소**: MySQL `slackapi` DB의 `portal_users` 테이블 하나. 이메일이 유일한 식별자.
@@ -128,6 +173,79 @@ PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 
   - 별도 프로세스인 book 은 PHP 를 못 쓰니 `app.py` 가 **같은 json 을 직접 읽어**
     `whoami` 로 내려주고 화면 JS(`renderWorkSystems`)가 그린다. 포털 트리가 안 보이면 목록만
     비고 화면은 정상 동작한다.
+
+---
+
+## 알림판 (주요 공지 · 중요 일정)
+
+로그인하면 첫 화면 타일 위에 두 칸이 뜬다. 왼쪽이 **주요 공지**, 오른쪽이
+**중요 일정(D-day)** 이다. 둘 다 포털 본체 기능이라 모듈 폴더가 따로 없고
+`core/board.php` 하나가 도메인 계층을 전부 들고 있다.
+
+### 누가 등록할 수 있나
+
+`portal_admin` 테이블이 명단이고, 화면(포털 관리 → 관리자)에서 늘리고 줄인다.
+**`core/board.php` 의 `OWNER_ADMINS` 는 코드에 고정**이라 DB 가 비거나 잘못 저장돼도
+관리자 없는 상태로 잠기지 않는다. learn 의 `OWNER_EMAILS` 와 같은 생각이다.
+
+```php
+const OWNER_ADMINS = ['kimhy@bluesoft.co.kr'];   // 화면에서 뺄 수 없다
+const SEED_ADMINS  = ['kimhy@bluesoft.co.kr'];   // 최초 1회만 심는다
+```
+
+명단을 옮기려면 `OWNER_ADMINS` 를 고치고 배포한다. 그 외 인원은 화면에서 바꾼다.
+포털 계정(`portal_users`)에 없는 이메일은 추가되지 않는다 — 오타로 아무 주소나
+들어가면 명단이 지저분해지기 때문.
+
+**화면에서 버튼을 감추는 것은 거들 뿐이고, 막는 쪽은 언제나 서버다.**
+`api/*.php` 가 매번 `board_require_admin()` 을 다시 부른다.
+
+### 공지
+
+- 본문은 **일반 텍스트**다. 화면에서 이스케이프한 뒤 줄바꿈만 살리고 주소만
+  링크로 바꾼다(`linkify`). 이스케이프를 먼저 하고 링크를 나중에 만든다 —
+  순서를 뒤집으면 만들어 둔 `<a>` 까지 이스케이프돼 글자로 보인다.
+- 고정(`is_pinned`)한 공지는 목록 맨 위로 온다. 올린 지 사흘이 안 지났으면 NEW.
+- 첨부는 공지 하나에 10개, 파일당 20MB. 확장자 화이트리스트 밖은 아예 받지 않는다.
+  **HTML/SVG 를 받으면 같은 오리진에서 열려 포털 세션을 노린 XSS 가 된다.**
+
+### 공지 첨부 저장
+
+learn 과 같은 방식이다.
+
+- 저장 위치는 `var/notice`, 저장 이름은 서버가 난수로 짓고 원본명은 DB 에만 둔다
+- 웹으로 직접 못 받게 `var/.htaccess` 가 막고, 열람은 반드시
+  `api/notice_file.php`(로그인 검사 + Content-Disposition 판정)를 거친다
+- 이미지·PDF 만 브라우저에서 바로 열고(`inline`) 나머지는 강제로 내려받게 한다
+- 공지를 지우면 첨부 실물도 함께 지운다(`board_delete_notice`)
+
+> **nginx 로 서비스한다면** `.htaccess` 는 읽히지 않는다. 서버 설정에
+> `location ~ ^/var/ { deny all; }` 를 따로 넣어야 한다. 저장 이름이 난수라
+> 주소를 찍어 맞히기는 어렵지만, 막아 두는 편이 확실하다.
+
+### 중요 일정 · D-day
+
+- `starts_on` 이 D-day 기준일이다. `ends_on` 을 주면 그 날까지 "진행중" 으로 남는다
+  — 워크숍 둘째 날에 목록에서 사라지면 곤란하다.
+- 첫 화면에는 **다가오는 것만** 가까운 순으로 4건. 지난 일정은 관리 화면에만 남는다.
+- D-day 는 `board_decorate_event()` 가 계산한다. 시각을 자정으로 맞춰 날짜만
+  비교한다 — 그러지 않으면 오후에 본 '내일' 이 D-0 으로 나온다.
+- 임박도(`heat`)에 따라 색이 달라진다: `today`(빨강) · `soon`(7일 이내, 주황) ·
+  `later`(파랑) · `past`(회색). 가장 가까운 한 건만 크게 세우고 나머지는 줄글로 둔다.
+
+### 화면
+
+| 화면 | 가는 길 |
+|---|---|
+| 대시보드 알림판 | 로그인 직후 |
+| 공지 목록 | 알림판 `전체 보기` 또는 사용자 메뉴 `📢 공지사항` |
+| 공지 상세 | 목록에서 제목 클릭 |
+| 공지 작성/수정 | 관리자만. `+ 새 공지` / 상세의 `수정` |
+| 포털 관리 | 관리자만. 사용자 메뉴 `⚙️ 포털 관리` (중요 일정 · 공지 · 관리자 3개 탭) |
+
+화면 전환은 `index.php` 의 `showView(id)` 한 곳을 거친다. 화면을 새로 추가하면
+`VIEWS` 배열에 id 를 넣어야 한다 — 화면마다 서로를 숨기게 두면 하나 추가할 때마다
+빠뜨리는 곳이 생긴다.
 
 ---
 
@@ -567,6 +685,7 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 자동 생성/마이그레이션(`db.php`의 `db()`/`portal_db()`). 주요 테이블:
 
 - `portal_users` — 포털 계정(이메일/비번해시/암호화된 슬랙 토큰)
+- `portal_admin`, `portal_notice`, `portal_notice_file`, `portal_event` — 알림판(아래 참고)
 - `requests` — slack 유지보수 요청 목록(Slack Lists 동기화본)
 - `schools`, `user_reads`, `user_pins`, `user_hides`, `local_assignments`, `sync_meta` — slack 부가기능
 - `gmail_mails` — Gmail 캐시(계정별 구분, `account` 컬럼)
@@ -576,7 +695,7 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
   `school_id` 로 붙는다. 한 대학이 버전군별로 여러 행을 가질 수 있어(강원대 3.5 + 4.5)
   키는 `(school_id, grp)` 다.
 
-컬럼 추가 마이그레이션은 전부 `add_column_if_missing()`(`slack/db.php`)을 거쳐 동시 요청에도
+컬럼 추가 마이그레이션은 전부 `add_column_if_missing()`(`core/db.php`)을 거쳐 동시 요청에도
 안전하게(이미 있으면 조용히 무시) 처리하도록 통일돼 있다. **새로 컬럼 추가 마이그레이션을 짤 때
 "확인 후 ALTER" 패턴을 직접 쓰지 말 것** — 페이지 로드 시 여러 AJAX가 동시에 뜨면서 레이스가 난다.
 

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../core/auth.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $body     = json_decode(file_get_contents('php://input'), true) ?: [];

@@ -6,7 +6,7 @@
  * │ 여기가 유일한 통합 지점입니다.                                     │
  * │                                                                  │
  * │ 포털 안에 있을 때는 learn/dti 와 같은 방식으로 붙습니다.            │
- * │   <포털>/auth.php  →  세션(BLUEIWORK_SESSID) + current_portal_user()│
+ * │   <포털>/core/auth.php → 세션(BLUEIWORK_SESSID) + current_portal_user()│
  * │   portal_users 테이블이 곧 구성원 명단입니다.                      │
  * │                                                                  │
  * │ 사용자 식별자는 이메일을 씁니다. 포털의 다른 모듈(learn 등)도       │

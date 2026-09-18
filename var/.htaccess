@@ -1,0 +1,14 @@
+# 공지 첨부 원본이 여기 쌓인다. 웹루트 아래이므로 직접 접근을 막고, 열람은 반드시
+# api/notice_file.php 의 다운로드 엔드포인트(로그인 검사 + Content-Disposition 판정)를
+# 거치게 한다. 저장 이름도 서버가 난수로 지어 주소를 찍어 맞힐 수 없다.
+#
+# 주의: nginx 는 .htaccess 를 읽지 않는다. nginx 로 서비스한다면
+#   location ~ ^/var/ { deny all; }
+# 를 서버 설정에 따로 넣어야 한다.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

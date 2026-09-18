@@ -6,7 +6,7 @@
  */
 
 function dti_identity(): ?array {
-    require_once __DIR__ . '/../auth.php';
+    require_once __DIR__ . '/../core/auth.php';
 
     $user = current_portal_user();
     if (!$user) return null;

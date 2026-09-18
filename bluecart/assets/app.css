@@ -14,23 +14,36 @@ body { margin: 0; background: #EEF3FB; }
   border-bottom: 1px solid #E2E9F6;
 }
 .bc-site__in {
-  max-width: 1600px; margin: 0 auto; padding: 22px 22px 20px;
+  max-width: 1600px; margin: 0 auto; padding: 20px 22px 18px;
   font-family: 'Pretendard', system-ui, sans-serif; color: #16223B;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px 24px; flex-wrap: wrap;
 }
+.bc-site__lead  { min-width: 0; }
+.bc-site__aside {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap; padding-top: 6px;
+}
+/* 작은 설명이 위, 이름이 아래. 이름 쪽을 크게 둬 어느 모듈인지 먼저 읽힌다. */
 .bc-site__eyebrow {
-  font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
-  font-size: 12px; font-weight: 600; letter-spacing: .04em; color: #1C5DE5;
-  display: block; margin-bottom: 4px;
+  display: block; margin-bottom: 1px;
+  font-size: 13px; font-weight: 500; color: #63719A;
 }
-.bc-site__title { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.01em; }
-.bc-site__desc  { margin: 6px 0 0; font-size: 13.5px; color: #63719A; }
+.bc-site__title {
+  margin: 0;
+  font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
+  font-size: 30px; font-weight: 700; line-height: 1.15;
+  letter-spacing: -.015em; color: #1C5DE5;
+}
+.bc-site__desc  { margin: 5px 0 0; font-size: 13.5px; color: #63719A; }
 .bc-site__role {
-  display: inline-block; margin-left: 8px; padding: 2px 9px;
+  display: inline-block; padding: 4px 11px;
   border-radius: 999px; background: #EEF3FB; color: #1C5DE5;
   font-size: 12px; font-weight: 600;
 }
 
-.bc {
+/* 화면 탭이 머리말로 올라가 .bc 바깥에 놓이므로 팔레트를 둘 다에 준다. */
+.bc, .bc-site {
   /* 포털 팔레트(styles/default.css :root)와 같은 값 */
   --ink:      #16223b;
   --ink-soft: #63719a;
@@ -47,7 +60,9 @@ body { margin: 0; background: #EEF3FB; }
   --done:  #14704b;
   --stop:  #ab3535;
   --off:   #63719a;
+}
 
+.bc {
   font-family: 'Pretendard', system-ui, sans-serif;
   color: var(--ink);
   font-size: 14px;
@@ -84,67 +99,87 @@ body { margin: 0; background: #EEF3FB; }
 /* ---- 최상위 탭 ------------------------------------------------------ */
 .bc-tabs {
   display: flex; gap: 2px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 20px;
+  padding: 3px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--line);
 }
 .bc-tabs button {
-  appearance: none; background: none; border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 9px 18px; margin-bottom: -1px;
-  font: inherit; font-weight: 600; color: var(--ink-soft);
-  cursor: pointer;
+  appearance: none; background: none; border: 0; border-radius: 999px;
+  padding: 6px 18px;
+  font: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink-soft);
+  cursor: pointer; white-space: nowrap;
+  transition: background .14s ease, color .14s ease;
 }
 .bc-tabs button:hover { color: var(--ink); }
 .bc-tabs button[aria-selected="true"] {
-  color: var(--brand); border-bottom-color: var(--brand);
+  background: var(--paper); color: var(--brand);
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .12);
 }
 
 /* ---- 파이프라인 집계 ------------------------------------------------ */
 .bc-pipe {
   display: grid;
-  grid-template-columns: repeat(4, 1fr) auto;
+  grid-template-columns: repeat(4, 1fr) minmax(150px, .8fr);
   align-items: stretch;
-  gap: 0;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
-  background: var(--paper);
-  overflow: hidden;
+  gap: 10px;
   margin-bottom: 18px;
 }
+/* 네 칸은 누르면 그 단계만 걸러 주는 버튼이다. 눌린 상태가 한눈에 보이도록
+   단계 색을 테두리·배경·숫자 세 곳에 함께 쓴다. */
 .bc-pipe__cell {
-  position: relative;
-  padding: 14px 18px 14px 22px;
-  border-right: 1px solid var(--line);
-  background: none; text-align: left; font: inherit;
+  position: relative; overflow: hidden;
+  padding: 15px 16px 14px;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--paper); text-align: left; font: inherit;
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
   cursor: pointer;
+  transition: transform .14s ease, box-shadow .14s ease,
+              border-color .14s ease, background .14s ease;
 }
-.bc-pipe__cell:last-child { border-right: 0; }
 .bc-pipe__cell::before {
-  content: ""; position: absolute; left: 0; top: 12px; bottom: 12px;
-  width: 3px; border-radius: 0 2px 2px 0; background: var(--tone, var(--off));
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+  background: var(--tone, var(--off));
 }
-.bc-pipe__cell:hover { background: var(--surface); }
-.bc-pipe__cell[aria-pressed="true"] { background: var(--surface); }
+.bc-pipe__cell:hover {
+  transform: translateY(-1px);
+  border-color: #cdd9f0;
+  box-shadow: 0 4px 12px rgba(16, 35, 90, .09);
+}
+.bc-pipe__cell[aria-pressed="true"] {
+  background: var(--tone-soft, var(--surface));
+  border-color: var(--tone, var(--brand));
+  box-shadow: 0 2px 8px rgba(16, 35, 90, .10);
+}
 .bc-pipe__n {
-  display: block; font-size: 26px; font-weight: 700; line-height: 1.15;
+  display: block; font-size: 30px; font-weight: 700; line-height: 1.1;
   color: var(--tone, var(--ink)); font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
 }
-.bc-pipe__l { display: block; font-size: 12.5px; color: var(--ink-soft); }
+.bc-pipe__l {
+  display: block; margin-top: 3px;
+  font-size: 12.5px; font-weight: 500; color: var(--ink-soft);
+}
+.bc-pipe__l::before {
+  content: ""; display: inline-block;
+  width: 6px; height: 6px; border-radius: 50%;
+  margin-right: 6px; vertical-align: 1px;
+  background: var(--tone, var(--off));
+}
 .bc-pipe__aside {
   display: flex; flex-direction: column; justify-content: center;
-  gap: 2px; padding: 14px 20px;
-  background: var(--surface); border-left: 1px solid var(--line);
+  gap: 3px; padding: 14px 18px;
+  border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface);
   font-size: 12.5px; color: var(--ink-soft); white-space: nowrap;
 }
 .bc-pipe__aside b { color: var(--ink); font-weight: 600; }
 
-.bc-tone-wait  { --tone: var(--wait); }
-.bc-tone-ready { --tone: var(--ready); }
-.bc-tone-work  { --tone: var(--work); }
-.bc-tone-done  { --tone: var(--done); }
-.bc-tone-stop  { --tone: var(--stop); }
-.bc-tone-off   { --tone: var(--off); }
+/* --tone 은 글자/테두리용, --tone-soft 는 배경용 */
+.bc-tone-wait  { --tone: var(--wait);  --tone-soft: #fbf4e4; }
+.bc-tone-ready { --tone: var(--ready); --tone-soft: #e9f0fe; }
+.bc-tone-work  { --tone: var(--work);  --tone-soft: #f2ecfa; }
+.bc-tone-done  { --tone: var(--done);  --tone-soft: #e6f4ee; }
+.bc-tone-stop  { --tone: var(--stop);  --tone-soft: #faecec; }
+.bc-tone-off   { --tone: var(--off);   --tone-soft: #edf0f6; }
 
 /* ---- 필터 ----------------------------------------------------------- */
 .bc-filters {
@@ -184,6 +219,55 @@ body { margin: 0; background: #EEF3FB; }
 .bc-btn--sm { padding: 4px 10px; font-size: 12.5px; }
 .bc-btn[disabled] { opacity: .5; cursor: not-allowed; }
 
+/* ---- 목록 도구 줄 --------------------------------------------------- */
+/* 왼쪽은 목록 구분, 오른쪽은 지금 보는 목록을 다루는 것들
+   (내 신청만 · 보기 방식 · 엑셀 받기). 필터 상자와 층을 나눴다. */
+.bc-listbar {
+  display: flex; align-items: center; gap: 10px 14px;
+  flex-wrap: wrap; margin-bottom: 12px;
+}
+.bc-listbar .bc-subtabs { margin-bottom: 0; }
+.bc-listbar__tools {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+/* 체크상자 한 개짜리 알약. 켜면 파랗게 물들어 걸려 있다는 걸 알린다. */
+.bc-check {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 13px 6px 11px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--paper); color: var(--ink-soft);
+  font-size: 13px; cursor: pointer; user-select: none;
+  transition: background .14s ease, border-color .14s ease, color .14s ease;
+}
+.bc-check:hover { border-color: #cdd9f0; color: var(--ink); }
+.bc-check input {
+  width: 15px; height: 15px; margin: 0;
+  accent-color: var(--brand); cursor: pointer;
+}
+.bc-check:has(input:checked) {
+  background: #e9f0fe; border-color: var(--brand);
+  color: var(--brand); font-weight: 600;
+}
+
+/* 보기 방식 — 목록 / 카드 */
+.bc-viewtog {
+  display: inline-flex;
+  border: 1px solid var(--line); border-radius: 9px;
+  background: var(--paper); overflow: hidden;
+}
+.bc-viewtog button {
+  appearance: none; border: 0; background: none;
+  display: inline-flex; align-items: center;
+  padding: 7px 11px; cursor: pointer; color: var(--ink-soft);
+  transition: background .14s ease, color .14s ease;
+}
+.bc-viewtog button + button { border-left: 1px solid var(--line); }
+.bc-viewtog svg { width: 15px; height: 15px; fill: currentColor; display: block; }
+.bc-viewtog button:hover { background: var(--surface); color: var(--ink); }
+.bc-viewtog button[aria-pressed="true"] { background: var(--brand); color: #fff; }
+
 /* ---- 하위 탭 -------------------------------------------------------- */
 .bc-subtabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .bc-subtabs button {
@@ -195,7 +279,55 @@ body { margin: 0; background: #EEF3FB; }
   background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600;
 }
 
+/* ---- 카드 보기 ------------------------------------------------------ */
+/* 표와 같은 데이터를 담는다. 좁은 화면이나 훑어볼 때 쓰라고 둔 것이다. */
+.bc-cards {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  align-items: start;
+}
+.bc-cards[hidden] { display: none; }
+.bc-card {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 14px 16px 15px;
+  border: 1px solid var(--line); border-top: 3px solid var(--tone, var(--line));
+  border-radius: 14px; background: var(--paper);
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
+  transition: transform .14s ease, box-shadow .14s ease;
+}
+.bc-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 35, 90, .09);
+}
+.bc-card__top { display: flex; align-items: center; gap: 8px; }
+.bc-card__no {
+  font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-soft); text-decoration: none;
+}
+.bc-card__no:hover { color: var(--brand); text-decoration: underline; }
+.bc-card__top .bc-chip { margin-left: auto; }
+.bc-card__item {
+  margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35;
+  color: var(--ink); cursor: pointer;
+}
+.bc-card__item:hover { color: var(--brand); }
+.bc-card__meta { font-size: 12.5px; color: var(--ink-soft); }
+.bc-card__note {
+  font-size: 12.5px; color: var(--ink-soft);
+  padding: 7px 10px; border-radius: 8px; background: var(--surface);
+}
+.bc-card__who {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; color: var(--ink);
+}
+.bc-card__who time { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
+.bc-card__actions {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 2px; padding-top: 10px; border-top: 1px solid var(--line);
+}
+
 /* ---- 표 ------------------------------------------------------------- */
+.bc-table-wrap[hidden] { display: none; }
 .bc-table-wrap {
   border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; background: var(--paper);
   box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
@@ -366,7 +498,11 @@ body { margin: 0; background: #EEF3FB; }
 @media (max-width: 760px) {
   .bc-modal__box, .bc-modal__box--narrow { width: 100vw; border-left: 0; }
   .bc-pipe { grid-template-columns: repeat(2, 1fr); }
-  .bc-pipe__aside { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+  .bc-pipe__aside { grid-column: 1 / -1; }
+  .bc-site__in { flex-direction: column; }
+  .bc-site__aside { padding-top: 0; }
+  .bc-listbar__tools { margin-left: 0; width: 100%; }
+  .bc-cards { grid-template-columns: 1fr; }
   .bc-form__row { grid-template-columns: 1fr; }
   .bc-dl { grid-template-columns: 1fr; gap: 2px 0; }
   .bc-dl dt { margin-top: 8px; }

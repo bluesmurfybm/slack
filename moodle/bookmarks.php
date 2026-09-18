@@ -6,8 +6,8 @@
  *  - 단락을 누르면 해당 주차 요약의 그 위치(#note-ID)로 간다.
  */
 date_default_timezone_set('Asia/Seoul');
-require_once __DIR__ . '/../auth.php';
-require_once __DIR__ . '/../worksystems.php';
+require_once __DIR__ . '/../core/auth.php';
+require_once __DIR__ . '/../core/worksystems.php';
 require_once __DIR__ . '/db.php';
 
 $me = current_portal_user();

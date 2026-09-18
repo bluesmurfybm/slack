@@ -311,7 +311,7 @@ DB 접속 정보를 묻지 않고 포털 `config.php` 에서 물려받고, mysql
 (포털 DB 의 실제 요청을 지우기 때문입니다).
 
 클론 직후에는 포털 `config.php` 가 없습니다(`.gitignore` 대상).
-포털 담당자에게 받거나 `db.php` 형식에 맞춰 직접 만들어야 합니다.
+포털 담당자에게 받거나 `core/db.php` 형식에 맞춰 직접 만들어야 합니다.
 
 ```php
 <?php
@@ -532,11 +532,12 @@ BlueCart 는 iworks 포털(`bluesmurfybm/slack`) 저장소 안의 한 폴더로 
 
 ```
 <포털 루트>/
-├── auth.php            ← 세션(BLUEIWORK_SESSID) + current_portal_user()
-├── db.php              ← portal_db(), portal_users
+├── core/
+│   ├── auth.php        ← 세션(BLUEIWORK_SESSID) + current_portal_user()
+│   ├── db.php          ← portal_db(), portal_users
 ├── config.php          ← DB 접속 정보 (.gitignore 대상)
-├── worksystems.php     ← 상단바 "업무 시스템" 메뉴
-├── worksystems.json    ← 그 목록의 원본
+│   ├── worksystems.php ← 상단바 "업무 시스템" 메뉴
+│   └── worksystems.json ← 그 목록의 원본
 ├── styles/topbar.css   ← 공통 상단바 스타일
 ├── learn/  dti/  book/ ...
 └── bluecart/           ← 여기
@@ -550,7 +551,7 @@ cd <포털 루트>
 ```
 
 폴더 이름은 `bluecart` 를 기준으로 맞춰 두었습니다. 바꾸려면
-`config/config.php` 의 `iworks.module_key` 와 `worksystems.json` 의 `path` 도
+`config/config.php` 의 `iworks.module_key` 와 `core/worksystems.json` 의 `path` 도
 함께 고치세요.
 
 ### 3.2 설정
@@ -600,7 +601,7 @@ chmod 750 /var/www/iworks-data/bluecart
 
 ### 3.5 포털에 등록
 
-상단바 메뉴와 포털 홈 타일에 나오게 하려면 `worksystems.json` 에 한 줄 추가합니다.
+상단바 메뉴와 포털 홈 타일에 나오게 하려면 `core/worksystems.json` 에 한 줄 추가합니다.
 `book` 다음 자리가 무난합니다.
 
 ```json
@@ -624,7 +625,7 @@ chmod 750 /var/www/iworks-data/bluecart
 php dev/check.php
 ```
 
-"포털 모듈로 동작합니다" 와 "worksystems.json 에 등록됨" 이 나와야 합니다.
+"포털 모듈로 동작합니다" 와 "core/worksystems.json 에 등록됨" 이 나와야 합니다.
 
 ---
 
@@ -632,10 +633,10 @@ php dev/check.php
 
 ### 4.1 로그인
 
-자체 로그인이 없습니다. 포털 `auth.php` 를 읽어 세션과 사용자 정보를 씁니다.
+자체 로그인이 없습니다. 포털 `core/auth.php` 를 읽어 세션과 사용자 정보를 씁니다.
 
 ```php
-require_once BC_PORTAL_ROOT . '/auth.php';   // includes/bootstrap.php
+require_once BC_PORTAL_ROOT . '/core/auth.php';   // includes/bootstrap.php
 $row = current_portal_user();                // includes/auth.php
 ```
 
@@ -757,9 +758,13 @@ SELECT * FROM bc_notify_log WHERE status='FAILED' ORDER BY id DESC LIMIT 20;
 - 검토승인 권한자에게는 **승인없이 구매진행** 버튼이 함께 보입니다 (7.1 참고)
 - **집계 영역** — 검토 대기 / 구매 대기 / 구매 진행 / 구비 완료 건수.
   각 칸을 누르면 그 상태로 목록이 걸러집니다
-- **필터** — 연도(기본값 올해), 사용처, 요청일 범위, 키워드, 정렬, 내 요청만
+- **필터** — 연도(기본값 올해), 사용처, 요청일 범위, 키워드, 정렬
 - **목록 탭** — 구매 진행중 물품 / 구비완료 물품 / 반려·철회 / 전체
 - 기본 정렬은 최신 요청 순
+- 목록 탭 오른쪽에 **내 신청만 · 보기 방식 · 엑셀 받기** 가 함께 있습니다
+- **내 신청만** — 처리 역할(검토승인자/구매담당자/관리자)이 없는 사람은 기본으로 켜집니다.
+  끄면 전체가 보입니다
+- **보기 방식** — 목록(표)과 카드 중에서 고릅니다. 담는 내용은 같습니다
 - **엑셀 받기** — 화면에 걸린 필터 그대로 내보냅니다
 
 ### 6.2 관리자 탭

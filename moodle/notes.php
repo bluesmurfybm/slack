@@ -8,7 +8,7 @@
  *  사용자가 누를 때만 INSERT/DELETE 한 번씩 — 폴링은 없다.
  */
 date_default_timezone_set('Asia/Seoul');
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/db.php';
 
 header('Content-Type: application/json; charset=utf-8');

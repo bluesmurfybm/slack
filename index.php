@@ -5,7 +5,7 @@
  *    로그인 화면이 한 번 번쩍였다가 대시보드로 바뀌는 깜빡임이 생긴다. 그걸 없애기 위해
  *    PHP가 세션을 먼저 확인하고 처음부터 올바른 화면 상태로 HTML을 내려준다.
  */
-require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/core/auth.php';
 // 로그인 상태에 따라 매번 다르게 그려지는 페이지라 브라우저/중간 캐시에 절대 남으면 안 됨.
 // 캐시된 옛 버전이 남아 있으면 "저장 후 대시보드로 안 돌아간다"/"그리드가 가끔 안 보인다" 처럼
 // 예전 코드가 실행되는 것처럼 보이는 현상이 생긴다.
@@ -21,7 +21,11 @@ $__current = $__u ? [
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
 ] : null;
-require_once __DIR__ . '/worksystems.php';
+require_once __DIR__ . '/core/worksystems.php';
+require_once __DIR__ . '/core/board.php';
+// 공지·일정을 등록할 수 있는 사람인지 서버가 먼저 판정한다. 화면을 그린 뒤
+// 자바스크립트가 버튼을 붙였다 떼면 한 번 번쩍인다.
+$__isAdmin = $__u ? board_is_admin($__u['email']) : false;
 // 대시보드 타일도 상단바 드롭다운과 같은 목록(worksystems.php)을 쓴다 — 한쪽만 늘어나는 일이 없게.
 $__links = [];
 foreach (work_systems() as $__sys) {
@@ -44,6 +48,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <link rel="stylesheet" href="styles/topbar.css">
 <link rel="stylesheet" href="styles/default.css">
 <link rel="stylesheet" href="styles/chatbot.css">
+<link rel="stylesheet" href="styles/board.css">
 </head>
 <body>
 
@@ -84,6 +89,10 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           </div>
           <div class="dd-menu" id="userDd">
             <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
+            <a href="javascript:void(0)" onclick="closeUserMenu();showNotices(1)">📢 공지사항</a>
+<?php if ($__isAdmin): ?>
+            <a href="javascript:void(0)" onclick="closeUserMenu();showManage('events')">⚙️ 포털 관리</a>
+<?php endif; ?>
             <div class="dd-sep"></div>
             <?= work_systems_menu('', '', true) ?>
             <div class="dd-sep"></div>
@@ -100,7 +109,151 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
       <h1 id="hero-hi">환영합니다</h1>
       <p>사용할 업무 시스템을 선택하세요.</p>
     </div>
+
+    <!-- 알림판 — 타일보다 위. 공지와 다가오는 일정은 들어오자마자 봐야 하는 것들이다. -->
+    <div class="board">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>📢 주요 공지</h2>
+          <span class="sp"></span>
+<?php if ($__isAdmin): ?>
+          <button class="panel-act add" onclick="showNoticeEdit(0)">+ 새 공지</button>
+<?php endif; ?>
+          <button class="panel-act" onclick="showNotices(1)">전체 보기 →</button>
+        </div>
+        <div class="panel-body" id="board-notices">
+          <div class="panel-empty">불러오는 중…</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>📅 중요 일정</h2>
+          <span class="sp"></span>
+<?php if ($__isAdmin): ?>
+          <button class="panel-act add" onclick="openEventModal(0)">+ 등록</button>
+          <button class="panel-act" onclick="showManage('events')">관리</button>
+<?php endif; ?>
+        </div>
+        <div class="panel-body" id="board-events">
+          <div class="panel-empty">불러오는 중…</div>
+        </div>
+      </section>
+    </div>
+
     <div class="grid" id="tiles"></div>
+  </div>
+
+  <!-- 공지 목록 -->
+  <div id="view-notices" class="wrap hidden">
+    <div class="page-head">
+      <h1>공지사항</h1>
+      <span style="flex:1"></span>
+<?php if ($__isAdmin): ?>
+      <button class="btn-sm" onclick="showNoticeEdit(0)">+ 새 공지</button>
+<?php endif; ?>
+      <button class="btn-sm" onclick="showDash()">대시보드</button>
+    </div>
+    <div class="list-card" id="nl-list"></div>
+    <div class="pager" id="nl-pager"></div>
+  </div>
+
+  <!-- 공지 상세 -->
+  <div id="view-notice" class="wrap hidden">
+    <div class="page-head">
+      <h1>공지사항</h1>
+      <span style="flex:1"></span>
+      <span id="nd-admin-btns"></span>
+      <button class="btn-sm" onclick="showNotices(nlPage)">목록</button>
+    </div>
+    <div class="detail-card" id="nd-card"></div>
+  </div>
+
+  <!-- 공지 작성 / 수정 -->
+  <div id="view-notice-edit" class="wrap hidden">
+    <div class="page-head">
+      <h1 id="ne-title">새 공지</h1>
+    </div>
+    <div class="edit-card">
+      <div class="err hidden" id="ne-err"></div>
+      <div class="fld">
+        <label>제목</label>
+        <input type="text" id="ne-subject" maxlength="200" placeholder="예) 9월 전사 워크숍 안내">
+      </div>
+      <div class="fld">
+        <label>내용</label>
+        <textarea id="ne-body" maxlength="20000" placeholder="쓴 그대로 보입니다. 줄바꿈은 살아 있고, 주소는 자동으로 링크가 됩니다."></textarea>
+      </div>
+      <div class="fld">
+        <label>첨부파일</label>
+        <input type="file" id="ne-files" multiple>
+        <div class="hintline">한 건에 10개, 파일당 20MB 까지. 이미지·PDF·문서·압축파일만 올라갑니다.</div>
+        <div class="files" id="ne-filelist" style="border:0;padding:0;margin-top:10px"></div>
+      </div>
+      <div class="fld">
+        <label class="check"><input type="checkbox" id="ne-pinned"> 목록 맨 위에 고정</label>
+      </div>
+      <div class="form-actions">
+        <button class="btn-ghost" onclick="cancelNoticeEdit()">취소</button>
+        <button class="btn-primary" id="ne-save" style="width:auto;padding:11px 22px;margin:0" onclick="saveNotice()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 포털 관리 -->
+  <div id="view-manage" class="wrap hidden">
+    <div class="page-head">
+      <h1>포털 관리</h1>
+      <span style="flex:1"></span>
+      <button class="btn-sm" onclick="showDash()">대시보드</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-mtab="events"   aria-selected="true"  onclick="showManage('events')">중요 일정</button>
+      <button role="tab" data-mtab="notices"  aria-selected="false" onclick="showManage('notices')">공지</button>
+      <button role="tab" data-mtab="admins"   aria-selected="false" onclick="showManage('admins')">관리자</button>
+    </div>
+    <div id="mg-body"></div>
+  </div>
+
+  <!-- 일정 등록 / 수정 -->
+  <div class="modal hidden" id="ev-modal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="ev-title">일정 등록</h3>
+        <button class="modal-x" onclick="closeEventModal()" aria-label="닫기">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="err hidden" id="ev-err"></div>
+        <div class="edit-card" style="border:0;padding:0;max-width:none">
+          <div class="fld">
+            <label>일정 이름</label>
+            <input type="text" id="ev-name" maxlength="200" placeholder="예) 전사 워크숍">
+          </div>
+          <div class="two">
+            <div class="fld">
+              <label>시작일 (D-day 기준)</label>
+              <input type="date" id="ev-start">
+            </div>
+            <div class="fld">
+              <label>종료일 <span style="font-weight:400">· 하루짜리면 비워 두세요</span></label>
+              <input type="date" id="ev-end">
+            </div>
+          </div>
+          <div class="fld">
+            <label>장소</label>
+            <input type="text" id="ev-place" maxlength="120" placeholder="예) 본사 대회의실">
+          </div>
+          <div class="fld">
+            <label>메모</label>
+            <input type="text" id="ev-memo" maxlength="500" placeholder="한 줄 설명 (선택)">
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-ghost" onclick="closeEventModal()">취소</button>
+        <button class="btn-primary" id="ev-save" style="width:auto;padding:10px 20px;margin:0" onclick="saveEvent()">저장</button>
+      </div>
+    </div>
   </div>
 
   <!-- profile -->
@@ -183,6 +336,10 @@ const LINKS = <?= json_encode($__links, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | 
 
 /* 모듈에서 미로그인으로 튕겨 온 경우에만 채워진다(?need_login=<key>) */
 const NOTICE = <?= json_encode($__notice, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+
+/* 공지·일정을 등록할 수 있는 사람인가. 화면을 숨기는 용도일 뿐이고,
+   실제 차단은 api/*.php 가 board_require_admin() 으로 다시 한다. */
+const IS_ADMIN = <?= $__isAdmin ? 'true' : 'false' ?>;
 
 let current = <?= $__current ? json_encode($__current, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) : 'null' ?>; // {name, email, has_token, needs_setup}
 
@@ -274,16 +431,27 @@ document.addEventListener("click",(e)=>{
 });
 
 /* ---- views ---- */
+/* 화면이 늘어나면서 "이것만 보이고 나머지는 숨긴다"를 한 곳에서 처리한다.
+   화면마다 서로를 숨기게 두면 하나 추가할 때마다 빠뜨리는 곳이 생긴다. */
+const VIEWS=["view-dash","view-profile","view-notices","view-notice","view-notice-edit","view-manage"];
+function showView(id){
+  VIEWS.forEach(v=>{
+    const el=document.getElementById(v);
+    if(el) el.classList.toggle("hidden", v!==id);
+  });
+  setChatVisible(id==="view-dash");
+  window.scrollTo(0,0);
+}
+
 function showDash(){
   // 초기 비밀번호 미변경 상태면 대시보드로 못 나감 — 토큰 미등록만으로는 막지 않음(book은 접근 가능해야 함)
   if(current && current.needs_setup){
     showProfile("초기 비밀번호를 변경해야 계속 사용할 수 있습니다");
     return;
   }
-  document.getElementById("view-profile").classList.add("hidden");
-  document.getElementById("view-dash").classList.remove("hidden");
+  showView("view-dash");
   renderTiles();
-  setChatVisible(true);
+  loadBoard();
 }
 const SWATCH_COLORS=["#B6574A","#BA7D4D","#A58838","#818C46","#548058","#458278","#457797","#5A64AD","#8164AB","#9B5797","#B25D7E","#8C7055","#606D79"];
 function hexOrDefault(c){ return /^#[0-9a-fA-F]{6}$/.test(c||"") ? c : "#1C5DE5"; }
@@ -323,9 +491,7 @@ function cancelEditProfile(){
 }
 
 function showProfile(alertMsg, forceEdit){
-  setChatVisible(false);
-  document.getElementById("view-dash").classList.add("hidden");
-  document.getElementById("view-profile").classList.remove("hidden");
+  showView("view-profile");
   document.getElementById("pf-name").value=current.name;
   document.getElementById("pf-email").value=current.email;
   document.getElementById("pf-pw").value="";
@@ -419,6 +585,481 @@ async function saveProfile(){
     toast("회원정보가 저장되었습니다");
   }
 }
+
+/* =====================================================================
+   알림판 — 주요 공지 / 중요 일정
+   서버는 api/notices.php, api/notice_file.php, api/events.php, api/admins.php.
+   관리자만 쓰는 버튼은 화면에서도 감추지만, 막는 쪽은 언제나 서버다.
+   ===================================================================== */
+
+/** JSON 주고받기 한 곳. 서버가 준 error 문구를 그대로 띄운다. */
+async function bapi(url, opt){
+  const o=Object.assign({headers:{}}, opt||{});
+  if(o.body && typeof o.body==="string") o.headers["Content-Type"]="application/json";
+  const r=await fetch(url,o);
+  let data=null;
+  try{ data=await r.json(); }catch(e){}
+  if(!r.ok) throw new Error((data&&data.error)||`요청에 실패했습니다 (HTTP ${r.status})`);
+  return data;
+}
+
+function fmtDate(s){ return (s||"").slice(0,10); }
+function fmtDateDot(s){ return fmtDate(s).replace(/-/g,"."); }
+function fmtSize(n){
+  n=+n||0;
+  if(n<1024) return n+"B";
+  if(n<1048576) return Math.round(n/1024)+"KB";
+  return (n/1048576).toFixed(1)+"MB";
+}
+/* 본문은 일반 텍스트다. 이스케이프를 먼저 하고, 그 결과에서 주소만 링크로 바꾼다.
+   순서를 뒤집으면 만들어 둔 <a> 까지 이스케이프돼 그대로 글자로 보인다. */
+function linkify(text){
+  return esc(text).replace(/https?:\/\/[^\s<]+/g, u=>
+    `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+}
+/* 요일까지 붙여 준다. 일정은 "몇 일" 보다 "무슨 요일" 이 먼저 궁금하다. */
+const WEEKDAYS=["일","월","화","수","목","금","토"];
+function fmtWhen(e){
+  const d=new Date(e.starts_on+"T00:00:00");
+  let out=`${fmtDateDot(e.starts_on)}(${WEEKDAYS[d.getDay()]})`;
+  if(e.ends_on && e.ends_on!==e.starts_on) out+=` ~ ${fmtDateDot(e.ends_on)}`;
+  return out;
+}
+
+/* ---- 대시보드 위 두 칸 ---- */
+async function loadBoard(){
+  try{
+    const d=await bapi("api/notices.php?size=5&page=1");
+    renderBoardNotices(d.rows);
+  }catch(e){
+    document.getElementById("board-notices").innerHTML=
+      `<div class="panel-empty">공지를 불러오지 못했습니다.<br>${esc(e.message)}</div>`;
+  }
+  try{
+    const d=await bapi("api/events.php?scope=upcoming&limit=4");
+    renderBoardEvents(d.rows);
+  }catch(e){
+    document.getElementById("board-events").innerHTML=
+      `<div class="panel-empty">일정을 불러오지 못했습니다.<br>${esc(e.message)}</div>`;
+  }
+}
+
+const PIN_ICON=`<svg class="nt-pin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M14 2v6l3 3v2h-4v7l-1 2-1-2v-7H7v-2l3-3V2z"/></svg>`;
+
+function renderBoardNotices(rows){
+  const box=document.getElementById("board-notices");
+  if(!rows.length){
+    box.innerHTML=`<div class="panel-empty">아직 올라온 공지가 없습니다.</div>`;
+    return;
+  }
+  box.innerHTML=rows.map(n=>`
+    <button class="nt-row" onclick="showNotice(${n.id})">
+      ${n.is_pinned?PIN_ICON:""}
+      <span class="tt">${esc(n.title)}</span>
+      ${n.file_count?`<span class="nt-clip">📎${n.file_count}</span>`:""}
+      ${n.is_new?`<span class="nt-new">NEW</span>`:""}
+      <span class="dt">${fmtDateDot(n.created_at)}</span>
+    </button>`).join("");
+}
+
+function renderBoardEvents(rows){
+  const box=document.getElementById("board-events");
+  if(!rows.length){
+    box.innerHTML=`<div class="panel-empty">다가오는 일정이 없습니다.</div>`;
+    return;
+  }
+  // 가장 가까운 한 건만 크게 세우고 나머지는 줄글로 — 훑을 때 눈이 갈 곳을 하나로 둔다.
+  const [first,...rest]=rows;
+  let html=`
+    <div class="ev-hero ${first.heat}">
+      <span class="big">${esc(first.dday_label)}</span>
+      <span class="tt">
+        <div class="nm">${esc(first.title)}</div>
+        <div class="sub">${esc(fmtWhen(first))}${first.place?" · "+esc(first.place):""}</div>
+      </span>
+    </div>`;
+  if(rest.length){
+    html+=`<div class="ev-list">`+rest.map(e=>`
+      <div class="ev ${e.heat}">
+        <span class="tt">
+          <div class="nm">${esc(e.title)}</div>
+          <div class="sub">${esc(fmtWhen(e))}${e.place?" · "+esc(e.place):""}</div>
+        </span>
+        <span class="dday">${esc(e.dday_label)}</span>
+      </div>`).join("")+`</div>`;
+  }
+  box.innerHTML=html;
+}
+
+/* ---- 공지 목록 ---- */
+let nlPage=1;
+async function showNotices(page){
+  nlPage=page||1;
+  showView("view-notices");
+  const list=document.getElementById("nl-list");
+  list.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
+  document.getElementById("nl-pager").innerHTML="";
+  try{
+    const d=await bapi(`api/notices.php?size=10&page=${nlPage}`);
+    if(!d.rows.length){
+      list.innerHTML=`<div class="panel-empty">아직 올라온 공지가 없습니다.</div>`;
+      return;
+    }
+    list.innerHTML=d.rows.map(n=>`
+      <button class="nl" onclick="showNotice(${n.id})">
+        ${n.is_pinned?PIN_ICON:""}
+        <span class="tt">${esc(n.title)}</span>
+        ${n.file_count?`<span class="nt-clip">📎${n.file_count}</span>`:""}
+        ${n.is_new?`<span class="nt-new">NEW</span>`:""}
+        <span class="who">${esc(n.author_name)}</span>
+        <span class="dt">${fmtDateDot(n.created_at)}</span>
+        <span class="vw">${n.view_count}회</span>
+      </button>`).join("");
+
+    const pages=Math.max(1,Math.ceil(d.total/d.size));
+    document.getElementById("nl-pager").innerHTML=
+      `<button class="btn-sm" onclick="showNotices(${nlPage-1})"${nlPage<=1?" disabled":""}>이전</button>`+
+      `<span>${nlPage} / ${pages} · 전체 ${d.total}건</span>`+
+      `<button class="btn-sm" onclick="showNotices(${nlPage+1})"${nlPage>=pages?" disabled":""}>다음</button>`;
+  }catch(e){
+    list.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`;
+  }
+}
+
+/* ---- 공지 상세 ---- */
+async function showNotice(id){
+  showView("view-notice");
+  document.getElementById("nd-admin-btns").innerHTML="";
+  const card=document.getElementById("nd-card");
+  card.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
+  try{
+    const d=await bapi(`api/notices.php?id=${id}`);
+    const n=d.notice;
+    card.innerHTML=`
+      <h2>${n.is_pinned?PIN_ICON+" ":""}${esc(n.title)}</h2>
+      <div class="detail-meta">
+        <span>${esc(n.author_name)}</span>
+        <span>${esc(n.created_at)}</span>
+        ${n.updated_at?`<span>수정 ${esc(n.updated_at)}</span>`:""}
+        <span>조회 ${n.view_count}</span>
+      </div>
+      <div class="detail-body">${linkify(n.body)}</div>
+      ${n.files.length?`
+        <div class="files">
+          <h3>첨부파일 ${n.files.length}개</h3>
+          ${n.files.map(f=>`
+            <a class="file" href="api/notice_file.php?id=${f.id}" target="_blank" rel="noopener">
+              <span>📎</span><span>${esc(f.orig_name)}</span>
+              <span class="sz">${fmtSize(f.file_size)}</span>
+            </a>`).join("")}
+        </div>`:""}`;
+    if(d.can_edit){
+      document.getElementById("nd-admin-btns").innerHTML=
+        `<button class="btn-sm" onclick="showNoticeEdit(${n.id})">수정</button> `+
+        `<button class="btn-sm danger" onclick="deleteNotice(${n.id})">삭제</button> `;
+    }
+  }catch(e){
+    card.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`;
+  }
+}
+
+async function deleteNotice(id){
+  if(!confirm("이 공지를 삭제할까요? 첨부파일도 함께 지워지고 되돌릴 수 없습니다.")) return;
+  try{
+    await bapi(`api/notices.php?id=${id}`,{method:"DELETE"});
+    toast("공지를 삭제했습니다");
+    showNotices(nlPage);
+  }catch(e){ toast(e.message); }
+}
+
+/* ---- 공지 작성 / 수정 ---- */
+let neId=0;          // 0 이면 새 글
+let nePending=[];    // 아직 서버로 안 보낸 파일(새 글일 때는 저장 후에 올린다)
+
+function showNoticeEdit(id){
+  neId=id||0;
+  nePending=[];
+  showView("view-notice-edit");
+  const err=document.getElementById("ne-err");
+  err.classList.add("hidden");
+  document.getElementById("ne-title").textContent=neId?"공지 수정":"새 공지";
+  document.getElementById("ne-files").value="";
+
+  if(!neId){
+    document.getElementById("ne-subject").value="";
+    document.getElementById("ne-body").value="";
+    document.getElementById("ne-pinned").checked=false;
+    renderNeFiles([]);
+    return;
+  }
+  bapi(`api/notices.php?id=${neId}`).then(d=>{
+    const n=d.notice;
+    document.getElementById("ne-subject").value=n.title;
+    document.getElementById("ne-body").value=n.body;
+    document.getElementById("ne-pinned").checked=n.is_pinned;
+    renderNeFiles(n.files);
+  }).catch(e=>toast(e.message));
+}
+
+function cancelNoticeEdit(){
+  if(neId) showNotice(neId); else showNotices(nlPage);
+}
+
+/* 저장된 첨부(지울 수 있음)와 아직 안 올린 파일(뺄 수 있음)을 한 줄씩 보여 준다. */
+function renderNeFiles(saved){
+  document.getElementById("ne-filelist").innerHTML=
+    saved.map(f=>`
+      <div class="file">
+        <span>📎</span><span>${esc(f.orig_name)}</span>
+        <span class="sz">${fmtSize(f.file_size)}</span>
+        <button class="rm" onclick="deleteNoticeFile(${f.id})" title="삭제">&times;</button>
+      </div>`).join("")+
+    nePending.map((f,i)=>`
+      <div class="file" style="border-style:dashed">
+        <span>📎</span><span>${esc(f.name)}</span>
+        <span class="sz">${fmtSize(f.size)} · 저장 시 올라감</span>
+        <button class="rm" onclick="dropPendingFile(${i})" title="빼기">&times;</button>
+      </div>`).join("");
+}
+
+function dropPendingFile(i){
+  nePending.splice(i,1);
+  if(neId) bapi(`api/notices.php?id=${neId}`).then(d=>renderNeFiles(d.notice.files));
+  else renderNeFiles([]);
+}
+
+document.getElementById("ne-files").addEventListener("change", function(){
+  nePending=nePending.concat(Array.prototype.slice.call(this.files));
+  this.value="";
+  if(neId) bapi(`api/notices.php?id=${neId}`).then(d=>renderNeFiles(d.notice.files));
+  else renderNeFiles([]);
+});
+
+async function deleteNoticeFile(fileId){
+  if(!confirm("첨부파일을 삭제할까요?")) return;
+  try{
+    await bapi(`api/notice_file.php?id=${fileId}`,{method:"DELETE"});
+    const d=await bapi(`api/notices.php?id=${neId}`);
+    renderNeFiles(d.notice.files);
+    toast("첨부파일을 삭제했습니다");
+  }catch(e){ toast(e.message); }
+}
+
+async function saveNotice(){
+  const err=document.getElementById("ne-err");
+  const btn=document.getElementById("ne-save");
+  err.classList.add("hidden");
+  btn.disabled=true;
+  try{
+    const body=JSON.stringify({
+      title:document.getElementById("ne-subject").value.trim(),
+      body:document.getElementById("ne-body").value.trim(),
+      is_pinned:document.getElementById("ne-pinned").checked
+    });
+    // 새 글은 먼저 저장해 번호를 받은 뒤 파일을 붙인다. 업로드가 실패해도 글은 남는다.
+    const res=neId
+      ? await bapi(`api/notices.php?id=${neId}`,{method:"PUT",body})
+      : await bapi("api/notices.php",{method:"POST",body});
+    const id=res.id;
+
+    if(nePending.length){
+      const fd=new FormData();
+      nePending.forEach(f=>fd.append("files[]",f));
+      const up=await bapi(`api/notice_file.php?notice_id=${id}`,{method:"POST",body:fd});
+      if(up.errors && up.errors.length) toast(up.errors.join(" / "));
+    }
+    nePending=[];
+    toast(neId?"공지를 수정했습니다":"공지를 등록했습니다");
+    showNotice(id);
+  }catch(e){
+    err.textContent=e.message;
+    err.classList.remove("hidden");
+  }finally{
+    btn.disabled=false;
+  }
+}
+
+/* ---- 포털 관리 ---- */
+function showManage(tab){
+  showView("view-manage");
+  document.querySelectorAll("[data-mtab]").forEach(b=>
+    b.setAttribute("aria-selected", String(b.dataset.mtab===tab)));
+  const box=document.getElementById("mg-body");
+  box.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
+  if(tab==="events")  return renderManageEvents(box);
+  if(tab==="notices") return renderManageNotices(box);
+  return renderManageAdmins(box);
+}
+
+async function renderManageEvents(box){
+  try{
+    const d=await bapi("api/events.php?scope=all");
+    box.innerHTML=
+      `<div class="page-head" style="padding:0 0 14px">
+         <span style="flex:1"></span>
+         <button class="btn-sm" onclick="openEventModal(0)">+ 일정 등록</button>
+       </div>`+
+      (d.rows.length?`<div class="list-card">`+d.rows.map(e=>`
+        <div class="mrow">
+          <span class="dday heat-${e.heat}" style="min-width:64px;text-align:center">${esc(e.dday_label)}</span>
+          <span class="tt">
+            <div class="nm">${esc(e.title)}</div>
+            <div class="sub">${esc(fmtWhen(e))}${e.place?" · "+esc(e.place):""}${e.memo?" · "+esc(e.memo):""}</div>
+          </span>
+          <span class="btns">
+            <button class="btn-sm" onclick="openEventModal(${e.id})">수정</button>
+            <button class="btn-sm danger" onclick="deleteEvent(${e.id})">삭제</button>
+          </span>
+        </div>`).join("")+`</div>`
+      :`<div class="list-card"><div class="panel-empty">등록된 일정이 없습니다.</div></div>`);
+  }catch(e){ box.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
+}
+
+async function renderManageNotices(box){
+  try{
+    const d=await bapi("api/notices.php?size=50&page=1");
+    box.innerHTML=
+      `<div class="page-head" style="padding:0 0 14px">
+         <span style="flex:1"></span>
+         <button class="btn-sm" onclick="showNoticeEdit(0)">+ 새 공지</button>
+       </div>`+
+      (d.rows.length?`<div class="list-card">`+d.rows.map(n=>`
+        <div class="mrow">
+          <span class="tt">
+            <div class="nm">${n.is_pinned?PIN_ICON+" ":""}${esc(n.title)}</div>
+            <div class="sub">${esc(n.author_name)} · ${fmtDateDot(n.created_at)} · 조회 ${n.view_count}${n.file_count?` · 첨부 ${n.file_count}`:""}</div>
+          </span>
+          <span class="btns">
+            <button class="btn-sm" onclick="showNotice(${n.id})">보기</button>
+            <button class="btn-sm" onclick="showNoticeEdit(${n.id})">수정</button>
+            <button class="btn-sm danger" onclick="deleteNotice(${n.id})">삭제</button>
+          </span>
+        </div>`).join("")+`</div>`
+      :`<div class="list-card"><div class="panel-empty">등록된 공지가 없습니다.</div></div>`);
+  }catch(e){ box.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
+}
+
+async function renderManageAdmins(box){
+  try{
+    const d=await bapi("api/admins.php");
+    const picked=d.rows.map(r=>r.email.toLowerCase());
+    const opts=d.members.filter(m=>!picked.includes(m.email.toLowerCase()))
+      .map(m=>`<option value="${esc(m.email)}">${esc(m.name)} · ${esc(m.email)}</option>`).join("");
+    box.innerHTML=
+      `<div class="list-card" style="margin-bottom:16px">`+d.rows.map(r=>`
+        <div class="mrow">
+          <span class="tt">
+            <div class="nm">${esc(r.name)} ${r.is_owner?`<span class="tag-owner">고정</span>`:""}</div>
+            <div class="sub">${esc(r.email)}</div>
+          </span>
+          <span class="btns">
+            <button class="btn-sm danger" onclick="removeAdmin('${esc(r.email)}')"${r.is_owner?" disabled title='고정 관리자는 뺄 수 없습니다'":""}>빼기</button>
+          </span>
+        </div>`).join("")+`</div>`+
+      (opts?`<div class="mrow" style="background:var(--card);border:1px solid var(--line);border-radius:16px">
+         <span class="tt"><select id="mg-newadmin" style="width:100%;font-family:var(--sans);font-size:14px;padding:9px 11px;border:1.5px solid var(--line);border-radius:10px;background:#FBFCFF">${opts}</select></span>
+         <span class="btns"><button class="btn-sm" onclick="addAdmin()">관리자로 추가</button></span>
+       </div>`
+      :`<div class="panel-empty">포털 계정 전원이 이미 관리자입니다.</div>`)+
+      `<div class="hintline" style="margin-top:12px">관리자는 공지와 중요 일정을 등록·수정·삭제할 수 있습니다. '고정' 은 코드에 박아 둔 사람이라 화면에서 뺄 수 없습니다.</div>`;
+  }catch(e){ box.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
+}
+
+async function addAdmin(){
+  const sel=document.getElementById("mg-newadmin");
+  if(!sel || !sel.value) return;
+  try{
+    await bapi("api/admins.php",{method:"POST",body:JSON.stringify({email:sel.value})});
+    toast("관리자로 추가했습니다");
+    showManage("admins");
+  }catch(e){ toast(e.message); }
+}
+
+async function removeAdmin(email){
+  if(!confirm(`${email} 를 관리자에서 뺄까요?`)) return;
+  try{
+    await bapi(`api/admins.php?email=${encodeURIComponent(email)}`,{method:"DELETE"});
+    toast("관리자에서 뺐습니다");
+    showManage("admins");
+  }catch(e){ toast(e.message); }
+}
+
+/* ---- 일정 등록 / 수정 ---- */
+let evId=0;
+function openEventModal(id){
+  evId=id||0;
+  const err=document.getElementById("ev-err");
+  err.classList.add("hidden");
+  document.getElementById("ev-title").textContent=evId?"일정 수정":"일정 등록";
+  document.getElementById("ev-modal").classList.remove("hidden");
+
+  const set=(k,v)=>{document.getElementById(k).value=v||"";};
+  if(!evId){
+    set("ev-name",""); set("ev-start",""); set("ev-end",""); set("ev-place",""); set("ev-memo","");
+    document.getElementById("ev-name").focus();
+    return;
+  }
+  // 목록 전체를 받아 그중 하나를 고른다. 일정은 많아야 수십 건이라 따로 단건 API 를 두지 않았다.
+  bapi("api/events.php?scope=all").then(d=>{
+    const e=d.rows.find(x=>x.id===evId);
+    if(!e){ toast("일정을 찾을 수 없습니다"); closeEventModal(); return; }
+    set("ev-name",e.title); set("ev-start",e.starts_on); set("ev-end",e.ends_on);
+    set("ev-place",e.place); set("ev-memo",e.memo);
+  }).catch(e=>toast(e.message));
+}
+
+function closeEventModal(){
+  document.getElementById("ev-modal").classList.add("hidden");
+}
+
+async function saveEvent(){
+  const err=document.getElementById("ev-err");
+  const btn=document.getElementById("ev-save");
+  err.classList.add("hidden");
+  btn.disabled=true;
+  try{
+    const body=JSON.stringify({
+      title:document.getElementById("ev-name").value.trim(),
+      starts_on:document.getElementById("ev-start").value,
+      ends_on:document.getElementById("ev-end").value,
+      place:document.getElementById("ev-place").value.trim(),
+      memo:document.getElementById("ev-memo").value.trim()
+    });
+    if(evId) await bapi(`api/events.php?id=${evId}`,{method:"PUT",body});
+    else     await bapi("api/events.php",{method:"POST",body});
+    closeEventModal();
+    toast(evId?"일정을 수정했습니다":"일정을 등록했습니다");
+    refreshAfterEvent();
+  }catch(e){
+    err.textContent=e.message;
+    err.classList.remove("hidden");
+  }finally{
+    btn.disabled=false;
+  }
+}
+
+async function deleteEvent(id){
+  if(!confirm("이 일정을 삭제할까요?")) return;
+  try{
+    await bapi(`api/events.php?id=${id}`,{method:"DELETE"});
+    toast("일정을 삭제했습니다");
+    refreshAfterEvent();
+  }catch(e){ toast(e.message); }
+}
+
+/** 일정을 고친 뒤 지금 보고 있는 화면만 다시 그린다. */
+function refreshAfterEvent(){
+  if(!document.getElementById("view-manage").classList.contains("hidden")) showManage("events");
+  else loadBoard();
+}
+
+/* 겹쳐 뜬 창은 바깥을 누르거나 Esc 로 닫는다 */
+document.getElementById("ev-modal").addEventListener("click",e=>{
+  if(e.target.id==="ev-modal") closeEventModal();
+});
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape") closeEventModal();
+});
 
 let toastT;
 function toast(m){const el=document.getElementById("toast");el.textContent=m;el.classList.add("show");

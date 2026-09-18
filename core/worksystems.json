@@ -4,5 +4,6 @@
   { "key": "dti", "emoji": "📰", "label": "DTI 발표", "path": "dti/index.php" },
   { "key": "learn", "emoji": "🎓", "label": "BlueLearn", "path": "learn/index.php" },
   { "key": "access", "emoji": "🔑", "label": "Coursemos EnvHub", "path": "access/access.php" },
-  { "key": "moodle", "emoji": "🧭", "label": "MoodleUp?", "path": "moodle/" }
+  { "key": "moodle", "emoji": "🧭", "label": "MoodleUp?", "path": "moodle/" },
+  { "key": "bluecart", "emoji": "🛒", "label": "BlueCart", "path": "bluecart/index.php" }
 ]

@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../core/auth.php';
 
 $_SESSION = [];
 if (isset($_COOKIE[session_name()])) {

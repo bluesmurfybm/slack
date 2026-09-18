@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../core/auth.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $u = require_portal_login();

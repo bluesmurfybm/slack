@@ -8,7 +8,7 @@ function portal_db() {
     static $pdo = null;
     if ($pdo) return $pdo;
 
-    $cfg = require __DIR__ . '/config.php';
+    $cfg = require dirname(__DIR__) . '/config.php';
     $d   = $cfg['db'];
     $opt = [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -37,6 +37,74 @@ function portal_db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `color` VARCHAR(7) NULL COMMENT '고유색상(#rrggbb) — 아바타/뱃지 표시용' AFTER `slack_token_enc`");
+
+    // -----------------------------------------------------------------
+    // 알림판 — 공지 / 중요 일정 / 포털 관리자
+    //
+    // 모듈(learn, bluecart …)이 저마다 관리자 명단을 들고 있지만, 공지와 일정은
+    // 포털 첫 화면의 것이라 포털이 직접 명단을 갖는다. board.php 가 읽고 쓴다.
+    // -----------------------------------------------------------------
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_admin` (
+            `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `email`      VARCHAR(190) NOT NULL COMMENT 'portal_users.email',
+            `added_by`   VARCHAR(190) NULL     COMMENT '추가한 사람',
+            `created_at` DATETIME     NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uq_admin_email` (`email`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='포털 공지·일정을 관리할 수 있는 사람'
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_notice` (
+            `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `title`        VARCHAR(200) NOT NULL,
+            `body`         MEDIUMTEXT   NOT NULL COMMENT '일반 텍스트. 화면에서 이스케이프 후 줄바꿈만 살린다',
+            `is_pinned`    TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1이면 목록 맨 위에 고정',
+            `author_email` VARCHAR(190) NOT NULL,
+            `author_name`  VARCHAR(60)  NOT NULL COMMENT '작성 시점 이름 스냅샷',
+            `view_count`   INT UNSIGNED NOT NULL DEFAULT 0,
+            `created_at`   DATETIME     NOT NULL,
+            `updated_at`   DATETIME     NULL,
+            PRIMARY KEY (`id`),
+            KEY `ix_notice_list` (`is_pinned`, `id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='포털 공지'
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_notice_file` (
+            `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `notice_id`   INT UNSIGNED NOT NULL,
+            `orig_name`   VARCHAR(255) NOT NULL COMMENT '올린 사람이 보던 이름',
+            `stored_name` VARCHAR(190) NOT NULL COMMENT '서버가 지은 이름(난수). var/notice 아래',
+            `file_size`   INT UNSIGNED NOT NULL,
+            `created_at`  DATETIME     NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `ix_nfile_notice` (`notice_id`),
+            CONSTRAINT `fk_nfile_notice` FOREIGN KEY (`notice_id`)
+                REFERENCES `portal_notice` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='공지 첨부파일'
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_event` (
+            `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `title`        VARCHAR(200) NOT NULL,
+            `starts_on`    DATE         NOT NULL COMMENT 'D-day 를 세는 기준일',
+            `ends_on`      DATE         NULL     COMMENT '여러 날짜에 걸치면 마지막 날',
+            `place`        VARCHAR(120) NULL,
+            `memo`         VARCHAR(500) NULL,
+            `author_email` VARCHAR(190) NOT NULL,
+            `created_at`   DATETIME     NOT NULL,
+            `updated_at`   DATETIME     NULL,
+            PRIMARY KEY (`id`),
+            KEY `ix_event_when` (`starts_on`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='포털 첫 화면에 D-day 로 뜨는 중요 일정'
+    ");
 
     // 사내 인원 13명 + book 모듈에서 쓰던 개인별 고유색을 이어받되, 아바타처럼 큰 면적을 단색으로
     // 채우면 book의 원래 뱃지(연한 배경 위 작은 글자)보다 훨씬 쨍하게 보여서 채도를 낮추고

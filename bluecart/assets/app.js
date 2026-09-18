@@ -239,6 +239,50 @@
       '</tr>';
   }
 
+  /**
+   * 카드 한 장. 표의 rowHtml 과 같은 데이터·같은 data-* 훅을 쓴다.
+   * onRowClick 이 data-detail / data-edit / data-act 만 보므로 그대로 공용이다.
+   */
+  function cardHtml(r, withAssignee) {
+    var actions = (r.actions || []).map(function (a) {
+      var m = ACTION_META[a];
+      if (!m) return '';
+      return '<button type="button" class="bc-btn bc-btn--sm ' + (m.cls || '') +
+             '" data-act="' + a + '" data-id="' + r.id +
+             '" data-assignee="' + esc(r.assignee_id || '') + '">' + m.label + '</button>';
+    }).join('');
+
+    if (r.is_mine && (r.status === 'REQUESTED' || r.status === 'REJECTED')) {
+      actions = '<button type="button" class="bc-btn bc-btn--sm" data-edit="' + r.id + '">수정</button>' + actions;
+    }
+
+    var meta = [esc(r.category_name), num(r.quantity) + esc(r.unit)];
+    if (withAssignee && r.assignee_label) meta.push('담당 ' + esc(r.assignee_label));
+
+    var clip = r.attach_count
+      ? ' <span class="bc-clip" title="첨부 ' + r.attach_count + '개">📎 ' + r.attach_count + '</span>' : '';
+
+    return '<article class="bc-card bc-tone-' + r.status_tone + '">' +
+      '<div class="bc-card__top">' +
+        '<a href="#" class="bc-card__no" data-detail="' + r.id + '">' + esc(r.req_no) + '</a>' +
+        '<span class="bc-chip bc-tone-' + r.status_tone + '">' + esc(r.status_label) + '</span>' +
+      '</div>' +
+      '<h3 class="bc-card__item" data-detail="' + r.id + '">' + esc(r.item_name) + clip + '</h3>' +
+      '<p class="bc-card__meta">' + meta.join(' · ') + '</p>' +
+      (r.note ? '<p class="bc-card__note">' + esc(r.note.slice(0, 80)) + (r.note.length > 80 ? '…' : '') + '</p>' : '') +
+      '<p class="bc-card__who">' + esc(r.requester_name) + '<time>' + esc(r.requested_at) + '</time></p>' +
+      (actions ? '<div class="bc-card__actions">' + actions + '</div>' : '') +
+      '</article>';
+  }
+
+  function renderCards(el, rows, emptyMsg, withAssignee) {
+    if (!rows.length) {
+      el.innerHTML = '<div class="bc-empty"><b>' + esc(emptyMsg.title) + '</b>' + esc(emptyMsg.body) + '</div>';
+      return;
+    }
+    el.innerHTML = rows.map(function (r) { return cardHtml(r, withAssignee); }).join('');
+  }
+
   function renderList(tbody, rows, emptyMsg, withAssignee) {
     var cols = withAssignee ? 10 : 9;
     if (!rows.length) {
@@ -265,7 +309,7 @@
   // 구성원 화면
   // =====================================================================
   var member = {
-    state: { tab: 'progress', page: 1, status: null },
+    state: { tab: 'progress', page: 1, status: null, view: 'list' },
 
     init: function () {
       var self = this;
@@ -298,21 +342,27 @@
         download('api/export.php?type=list&' + qs(p));
       });
 
-      $('#bc-f-reset').addEventListener('click', function () {
-        $('#bc-f-year').value = THIS_YEAR;
-        $('#bc-f-category').value = '';
-        $('#bc-f-from').value = '';
-        $('#bc-f-to').value = '';
-        $('#bc-f-keyword').value = '';
-        $('#bc-f-sort').value = 'recent';
-        $('#bc-f-mine').checked = false;
-        self.state.status = null;
-        self.state.page = 1;
-        self.load();
+      // 처리 역할이 없는 사람은 남의 요청까지 볼 일이 드물다. 자기 것만 켜 두고
+      // 시작하되 잠그지는 않는다 — 끄면 전체가 보인다.
+      $('#bc-f-mine').checked = !CAN_ADMIN;
+
+      $$('[data-view-mode]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (self.state.view === b.dataset.viewMode) return;
+          self.state.view = b.dataset.viewMode;
+          $$('[data-view-mode]').forEach(function (x) {
+            x.setAttribute('aria-pressed', String(x === b));
+          });
+          self.applyView();
+          self.load();
+        });
       });
 
-      $('#bc-list').addEventListener('click', onRowClick(function () { self.load(); }));
+      var pick = onRowClick(function () { self.load(); });
+      $('#bc-list').addEventListener('click', pick);
+      $('#bc-cards').addEventListener('click', pick);
 
+      this.applyView();
       this.load();
     },
 
@@ -334,10 +384,22 @@
       return p;
     },
 
+    /** 표와 카드 중 한쪽만 띄운다. */
+    applyView: function () {
+      var card = this.state.view === 'card';
+      $('#bc-list').closest('.bc-table-wrap').hidden = card;
+      $('#bc-cards').hidden = !card;
+    },
+
     load: function () {
       var self = this;
       var tbody = $('#bc-list tbody');
-      tbody.innerHTML = '<tr><td colspan="9" class="bc-loading">불러오는 중…</td></tr>';
+      var cardBox = $('#bc-cards');
+      if (self.state.view === 'card') {
+        cardBox.innerHTML = '<p class="bc-loading">불러오는 중…</p>';
+      } else {
+        tbody.innerHTML = '<tr><td colspan="9" class="bc-loading">불러오는 중…</td></tr>';
+      }
 
       api('api/requests.php?' + qs(this.params())).then(function (res) {
         renderPipe($('#bc-pipe'), res.counts, self.state.status, function (status) {
@@ -345,17 +407,26 @@
           self.state.page = 1;
           self.load();
         });
-        renderList(tbody, res.rows, {
+        var empty = {
           title: '조건에 맞는 요청이 없습니다.',
           body: '필터를 넓히거나 새 구매 요청을 올려 보세요.'
-        }, false);
+        };
+        if (self.state.view === 'card') {
+          renderCards(cardBox, res.rows, empty, false);
+        } else {
+          renderList(tbody, res.rows, empty, false);
+        }
         renderPager($('#bc-pager'), res.total, res.page, res.size, function (p) {
           self.state.page = p; self.load();
           $('#bc-view-member').scrollIntoView({ block: 'start' });
         });
       }).catch(function (e) {
-        tbody.innerHTML = '<tr><td colspan="9"><div class="bc-empty"><b>목록을 불러오지 못했습니다.</b>' +
-                          esc(e.message) + '</div></td></tr>';
+        var msg = '<div class="bc-empty"><b>목록을 불러오지 못했습니다.</b>' + esc(e.message) + '</div>';
+        if (self.state.view === 'card') {
+          cardBox.innerHTML = msg;
+        } else {
+          tbody.innerHTML = '<tr><td colspan="9">' + msg + '</td></tr>';
+        }
       });
     }
   };

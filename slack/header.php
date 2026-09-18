@@ -11,7 +11,7 @@
  * $__bwCurrent 는 드롭다운 "업무 시스템"에서 현재 위치로 표시할 key(worksystems.php 참고).
  * 안 주면 아무 줄도 강조하지 않는다.
  */
-require_once __DIR__ . '/../worksystems.php';
+require_once __DIR__ . '/../core/worksystems.php';
 $__bwBase = isset($__bwBase) ? $__bwBase : '';
 $__bwCurrent = isset($__bwCurrent) ? $__bwCurrent : '';
 $__bwUser = function_exists('current_portal_user') ? current_portal_user() : null;

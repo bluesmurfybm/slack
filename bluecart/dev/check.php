@@ -127,13 +127,13 @@ head('iworks 포털 연동');
 $root      = dirname(__DIR__);
 $portalDir = dirname($root);
 $portalHas = array(
-    'auth.php'        => is_file($portalDir . '/auth.php'),
-    'worksystems.php' => is_file($portalDir . '/worksystems.php'),
+    'core/auth.php'        => is_file($portalDir . '/core/auth.php'),
+    'core/worksystems.php' => is_file($portalDir . '/core/worksystems.php'),
     'config.php'      => is_file($portalDir . '/config.php'),
-    'db.php'          => is_file($portalDir . '/db.php'),
+    'core/db.php'          => is_file($portalDir . '/core/db.php'),
     'styles/topbar.css' => is_file($portalDir . '/styles/topbar.css'),
 );
-$inPortal = $portalHas['auth.php'] && $portalHas['worksystems.php'] && $portalHas['config.php'];
+$inPortal = $portalHas['core/auth.php'] && $portalHas['core/worksystems.php'] && $portalHas['config.php'];
 
 line('  모듈 폴더: ' . basename($root));
 line('  상위 폴더: ' . $portalDir);
@@ -144,7 +144,7 @@ if ($inPortal) {
         if (!$yes) { warn_('포털 파일 없음: ' . $f, ''); }
     }
     // worksystems.json 등록 여부
-    $wsPath = $portalDir . '/worksystems.json';
+    $wsPath = $portalDir . '/core/worksystems.json';
     if (is_file($wsPath)) {
         $ws = json_decode(file_get_contents($wsPath), true);
         $keys = array();
@@ -154,7 +154,7 @@ if ($inPortal) {
         if (in_array('bluecart', $keys, true)) {
             ok_('worksystems.json 에 등록됨', '');
         } else {
-            warn_('worksystems.json 에 등록되지 않았습니다', '— 상단바 메뉴에 안 나옵니다');
+            warn_('core/worksystems.json 에 등록되지 않았습니다', '— 상단바 메뉴에 안 나옵니다');
             line('         등록할 항목:');
             line('           { "key": "bluecart", "emoji": "ð", "label": "BlueCart", "path": "bluecart/index.php" }');
         }

@@ -9,7 +9,7 @@
  *     그 비교가 문자열 비교로 성립해야 하기 때문 — 화면·API 도 이 형식을 그대로 쓴다.
  */
 
-require_once __DIR__ . '/../db.php';   // 포털 연결 + 나중에 컬럼을 붙일 때 쓸 add_column_if_missing()
+require_once __DIR__ . '/../core/db.php';   // 포털 연결 + 나중에 컬럼을 붙일 때 쓸 add_column_if_missing()
 
 const POLICY_ID = 1;
 

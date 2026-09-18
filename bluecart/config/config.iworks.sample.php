@@ -7,7 +7,7 @@
  * DB 접속 정보는 포털 config.php 를 그대로 가져다 씁니다.
  * 접속 정보가 두 군데 적혀 있으면 한쪽만 바뀌었을 때 원인을 찾기 어렵습니다.
  *
- * 포털 config.php 의 형식(db.php 참고):
+ * 포털 config.php 의 형식(core/db.php 참고):
  *   ['db' => ['host','port','name','user','pass','charset'], ...]
  */
 
@@ -34,7 +34,7 @@ return [
     // 포털 연동
     // -----------------------------------------------------------------
     'iworks' => [
-        // 포털 auth.php 로 세션과 로그인 사용자를 가져온다.
+        // 포털 core/auth.php 로 세션과 로그인 사용자를 가져온다.
         'use_portal_auth' => true,
 
         // worksystems.json 에 등록한 key. 상단바에서 현재 위치 표시와

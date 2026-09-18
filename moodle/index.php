@@ -8,8 +8,8 @@
  *  - PAG(Technical Transformation) 코스가 요약의 중심이라 소스 칩·원문 묶음·요약 절을 따로 강조한다.
  */
 date_default_timezone_set('Asia/Seoul');
-require_once __DIR__ . '/../auth.php';
-require_once __DIR__ . '/../worksystems.php';
+require_once __DIR__ . '/../core/auth.php';
+require_once __DIR__ . '/../core/worksystems.php';
 require_once __DIR__ . '/db.php';
 
 $me = current_portal_user();

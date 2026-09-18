@@ -10,7 +10,9 @@ require_once __DIR__ . '/db.php';
 $SESS_LIFETIME = 60 * 60 * 24 * 30;
 
 if (session_status() === PHP_SESSION_NONE) {
-    $sessDir = __DIR__ . '/.sessions';
+    // 세션 저장 경로는 포털 루트다. core/ 로 옮기면 열려 있던 세션을 못 찾아
+        // 전원이 로그아웃된다.
+        $sessDir = dirname(__DIR__) . '/.sessions';
     if (!is_dir($sessDir)) @mkdir($sessDir, 0777, true);
     if (is_dir($sessDir) && is_writable($sessDir)) {
         session_save_path($sessDir);
@@ -80,7 +82,9 @@ function needs_setup($u) {
 function sso_secret() {
     static $secret = null;
     if ($secret !== null) return $secret;
-    $path = __DIR__ . '/sso_secret.key';
+    // book/app.py 가 '../sso_secret.key' 로 같은 파일을 직접 읽는다. 위치를
+    // 옮기면 키가 새로 생겨 book 쪽 SSO 검증이 전부 깨진다.
+    $path = dirname(__DIR__) . '/sso_secret.key';
     if (!is_file($path)) {
         file_put_contents($path, bin2hex(random_bytes(32)));
     }
@@ -139,7 +143,7 @@ function require_portal_login() {
 /** 슬랙 토큰 암호화 (AES-256-GCM). 원문은 DB/응답 어디에도 남기지 않음. */
 function enc_token($plain) {
     if ($plain === null || $plain === '') return null;
-    $cfg = require __DIR__ . '/config.php';
+    $cfg = require dirname(__DIR__) . '/config.php';
     $key = base64_decode($cfg['key']);
     $iv  = random_bytes(12);
     $tag = '';
@@ -149,7 +153,7 @@ function enc_token($plain) {
 
 function dec_token($enc) {
     if (!$enc) return '';
-    $cfg = require __DIR__ . '/config.php';
+    $cfg = require dirname(__DIR__) . '/config.php';
     $key = base64_decode($cfg['key']);
     $raw = base64_decode($enc);
     $iv     = substr($raw, 0, 12);

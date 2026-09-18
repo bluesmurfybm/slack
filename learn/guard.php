@@ -9,7 +9,7 @@
  */
 
 date_default_timezone_set('Asia/Seoul');
-require_once __DIR__ . '/../auth.php';   // 세션 시작 + current_portal_user()
+require_once __DIR__ . '/../core/auth.php';   // 세션 시작 + current_portal_user()
 require_once __DIR__ . '/lib/http.php';  // LearnError
 
 const LEVELS = ['초급', '중급', '고급'];

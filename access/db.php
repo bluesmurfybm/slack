@@ -16,7 +16,7 @@
  *    schools 테이블은 CREATE TABLE IF NOT EXISTS 라 어느 쪽이 먼저 떠도 결과가 같다.
  */
 
-require_once __DIR__ . '/../db.php';   // add_column_if_missing() 재사용
+require_once __DIR__ . '/../core/db.php';   // add_column_if_missing() 재사용
 
 function access_db() {
     static $pdo = null;

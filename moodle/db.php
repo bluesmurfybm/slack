@@ -6,7 +6,7 @@
  *    컬럼을 바꾸면 두 곳을 같이 고칠 것.
  */
 
-require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../core/db.php';
 
 /** 요약하기·갱신 이력·상태 배지를 볼 수 있는 계정. 나머지는 요약과 원문만 본다. */
 const MOODLE_ADMINS = ['amitoa@bluesoft.co.kr'];

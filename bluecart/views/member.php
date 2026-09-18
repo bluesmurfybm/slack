@@ -39,7 +39,7 @@ declare(strict_types=1);
     <input type="date" id="bc-f-to">
   </label>
 
-  <label class="bc-field" style="flex:1 1 200px">
+  <label class="bc-field" style="flex:1 1 220px;max-width:420px">
     <span>검색</span>
     <input type="search" id="bc-f-keyword" placeholder="물품명, 요청번호, 요청자, 비고">
   </label>
@@ -54,23 +54,43 @@ declare(strict_types=1);
     </select>
   </label>
 
-  <label class="bc-field" style="align-self:flex-end">
-    <span>&nbsp;</span>
-    <span style="display:inline-flex;align-items:center;gap:6px;padding:6px 0">
-      <input type="checkbox" id="bc-f-mine"> 내 요청만
-    </span>
-  </label>
-
-  <span class="bc-spacer"></span>
-  <button type="button" class="bc-btn" id="bc-f-export">엑셀 받기</button>
-  <button type="button" class="bc-btn" id="bc-f-reset">필터 초기화</button>
 </div>
 
-<div class="bc-subtabs" role="tablist" aria-label="목록 구분">
-  <button type="button" role="tab" data-tab="progress" aria-selected="true">구매 진행중 물품</button>
-  <button type="button" role="tab" data-tab="stocked"  aria-selected="false">구비완료 물품</button>
-  <button type="button" role="tab" data-tab="rejected" aria-selected="false">반려·철회</button>
-  <button type="button" role="tab" data-tab="all"      aria-selected="false">전체</button>
+<div class="bc-listbar">
+  <div class="bc-subtabs" role="tablist" aria-label="목록 구분">
+    <button type="button" role="tab" data-tab="progress" aria-selected="true">구매 진행중 물품</button>
+    <button type="button" role="tab" data-tab="stocked"  aria-selected="false">구비완료 물품</button>
+    <button type="button" role="tab" data-tab="rejected" aria-selected="false">반려·철회</button>
+    <button type="button" role="tab" data-tab="all"      aria-selected="false">전체</button>
+  </div>
+
+  <div class="bc-listbar__tools">
+    <!-- 처리 역할이 없는 사람은 대개 자기 신청만 보므로 app.js 가 기본으로 켜 둔다. -->
+    <label class="bc-check" for="bc-f-mine">
+      <input type="checkbox" id="bc-f-mine">
+      <span>내 신청만</span>
+    </label>
+
+    <div class="bc-viewtog" role="group" aria-label="보기 방식">
+      <button type="button" data-view-mode="list" aria-pressed="true" title="목록으로 보기" aria-label="목록으로 보기">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <rect x="1" y="3"  width="14" height="1.6" rx=".8"/>
+          <rect x="1" y="7.2" width="14" height="1.6" rx=".8"/>
+          <rect x="1" y="11.4" width="14" height="1.6" rx=".8"/>
+        </svg>
+      </button>
+      <button type="button" data-view-mode="card" aria-pressed="false" title="카드로 보기" aria-label="카드로 보기">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <rect x="1.5" y="1.5" width="5.6" height="5.6" rx="1.4"/>
+          <rect x="8.9" y="1.5" width="5.6" height="5.6" rx="1.4"/>
+          <rect x="1.5" y="8.9" width="5.6" height="5.6" rx="1.4"/>
+          <rect x="8.9" y="8.9" width="5.6" height="5.6" rx="1.4"/>
+        </svg>
+      </button>
+    </div>
+
+    <button type="button" class="bc-btn" id="bc-f-export">엑셀 받기</button>
+  </div>
 </div>
 
 <div class="bc-table-wrap">
@@ -91,5 +111,7 @@ declare(strict_types=1);
     <tbody><tr><td colspan="9" class="bc-loading">불러오는 중…</td></tr></tbody>
   </table>
 </div>
+
+<div class="bc-cards" id="bc-cards" hidden></div>
 
 <div class="bc-pager" id="bc-pager"></div>

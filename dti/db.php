@@ -102,7 +102,7 @@ function dti_migrate(PDO $pdo): void {
         $pdo->exec($sql);
     }
     // 컬럼 추가는 저장소 공통 헬퍼로만 한다 — 동시 요청에서 "확인 후 ALTER" 는 레이스가 난다
-    require_once __DIR__ . '/../db.php';
+    require_once __DIR__ . '/../core/db.php';
     foreach (dti_schema_alters() as $sql) {
         add_column_if_missing($pdo, $sql);
     }

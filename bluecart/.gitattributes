@@ -10,6 +10,9 @@
 *.bat -text
 *.cmd -text
 
+# 경로 지정 예시 파일도 Windows 에서 그대로 복사해 쓰므로 CRLF 로 둔다.
+*.sample -text
+
 # 바이너리
 *.png binary
 *.jpg binary

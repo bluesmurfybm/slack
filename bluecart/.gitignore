@@ -17,3 +17,9 @@ bluecart-data/
 dev/php-path.txt
 dev/mysql-path.txt
 *.xlsx.tmp
+
+# iworks 저장소(bluesmurfybm/slack) 하위 모듈로 들어갈 때를 위한 예외.
+# 그 저장소 루트 .gitignore 가 *.md 를 통째로 제외하므로,
+# 이 폴더의 문서만 다시 포함시킨다. 단독 저장소로 쓸 때는 영향이 없다.
+!*.md
+!*/*.md

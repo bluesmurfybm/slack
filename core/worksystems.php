@@ -16,7 +16,7 @@ function work_systems(string $base = ''): array {
     static $bookUrl = null;
     if ($table === null) {
         $table = json_decode(file_get_contents(__DIR__ . '/worksystems.json'), true);
-        $cfg = require __DIR__ . '/config.php';
+        $cfg = require dirname(__DIR__) . '/config.php';
         $bookUrl = $cfg['links']['book'] ?? null;
     }
 

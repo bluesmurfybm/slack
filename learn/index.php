@@ -4,7 +4,7 @@
  * 포털 로그인 없이 들어오면 포털 로그인 화면으로 보낸다.
  */
 require_once __DIR__ . '/guard.php';
-require_once __DIR__ . '/../worksystems.php';
+require_once __DIR__ . '/../core/worksystems.php';
 learn_require_page_login();
 ?>
 <!DOCTYPE html>

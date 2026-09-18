@@ -27,7 +27,7 @@ $moduleKey = (string)bc_config('iworks.module_key', 'bluecart');
 
 // 상단바의 "업무 시스템" 목록은 포털의 worksystems.json 하나가 원본이다.
 if ($inPortal) {
-    require_once BC_PORTAL_ROOT . '/worksystems.php';
+    require_once BC_PORTAL_ROOT . '/core/worksystems.php';
 }
 
 // 아바타 글자와 색 — 포털 상단바와 같은 규칙을 쓴다.
@@ -57,7 +57,7 @@ $roleLabels = array_map(
 <?php else: ?>
 <link rel="stylesheet" href="assets/topbar-fallback.css">
 <?php endif; ?>
-<link rel="stylesheet" href="assets/app.css?v=3">
+<link rel="stylesheet" href="assets/app.css?v=4">
 </head>
 <body>
 
@@ -91,17 +91,25 @@ $roleLabels = array_map(
   </div>
 </div>
 
-<!-- ================= 모듈 머리말 ================= -->
+<!-- ================= 모듈 머리말 =================
+     오른쪽에 역할 배지와 화면 탭(구성원/관리자)을 함께 둔다.
+     탭이 본문 맨 위에 있으면 집계·필터와 층이 겹쳐 보여서 머리말로 올렸다. -->
 <header class="bc-site">
   <div class="bc-site__in">
-    <span class="bc-site__eyebrow">BlueUP-Cart</span>
-    <h1 class="bc-site__title">물품 구매 요청</h1>
-    <p class="bc-site__desc">
-      필요한 물품을 요청하고 구비까지 진행 상황을 확인합니다.
-      <?php if ($roleLabels): ?>
-        <span class="bc-site__role"><?= h(implode(' · ', $roleLabels)) ?></span>
+    <div class="bc-site__lead">
+      <span class="bc-site__eyebrow">물품 구매 요청</span>
+      <h1 class="bc-site__title">BlueCart</h1>
+      <p class="bc-site__desc">필요한 물품을 요청하고 구비까지 진행 상황을 확인합니다.</p>
+    </div>
+
+    <div class="bc-site__aside">
+      <?php if ($showAdmin): ?>
+      <nav class="bc-tabs" role="tablist" aria-label="화면 구분">
+        <button type="button" role="tab" id="bc-tab-member" data-view="member" aria-selected="true">구성원</button>
+        <button type="button" role="tab" id="bc-tab-admin" data-view="admin" aria-selected="false">관리자</button>
+      </nav>
       <?php endif; ?>
-    </p>
+    </div>
   </div>
 </header>
 
@@ -114,13 +122,6 @@ $roleLabels = array_map(
      data-is-admin="<?= in_array('ADMIN', $roles, true) ? '1' : '0' ?>"
      data-can-review="<?= array_intersect($roles, ['REVIEWER', 'ADMIN']) ? '1' : '0' ?>"
      data-needs-assignee="<?= bc_needs_assignee() ? '1' : '0' ?>">
-
-  <nav class="bc-tabs" role="tablist" aria-label="화면 구분">
-    <button type="button" role="tab" id="bc-tab-member" data-view="member" aria-selected="true">구성원</button>
-    <?php if ($showAdmin): ?>
-    <button type="button" role="tab" id="bc-tab-admin" data-view="admin" aria-selected="false">관리자</button>
-    <?php endif; ?>
-  </nav>
 
   <section id="bc-view-member" role="tabpanel" aria-labelledby="bc-tab-member">
     <?php require __DIR__ . '/views/member.php'; ?>
@@ -148,6 +149,6 @@ document.addEventListener('click', function (e) {
   if (um && !um.contains(e.target)) um.classList.remove('open');
 });
 </script>
-<script src="assets/app.js?v=3"></script>
+<script src="assets/app.js?v=4"></script>
 </body>
 </html>

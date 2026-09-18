@@ -31,16 +31,16 @@ if (!in_array($remote, ['127.0.0.1', '::1'], true)) {
 
 // 포털 안에 들어와 있으면 포털 루트를 문서 루트로 삼아야 한다.
 // ../styles/topbar.css, ../api/logout.php 같은 상대경로가 실제로 열려야 하고,
-// 세션도 포털 auth.php 가 열어야 로그인이 이어진다.
+// 세션도 포털 core/auth.php 가 열어야 로그인이 이어진다.
 $module = dirname(__DIR__);                 // <...>/bluecart
 $portal = dirname($module);                 // <...>/  (포털 루트 후보)
-$inPortal = is_file($portal . '/auth.php')
-         && is_file($portal . '/worksystems.php')
+$inPortal = is_file($portal . '/core/auth.php')
+         && is_file($portal . '/core/worksystems.php')
          && is_file($portal . '/config.php');
 
 if ($inPortal) {
     // 포털이 세션 이름과 저장 경로를 정한 뒤 세션을 연다. 우리가 먼저 열면 안 된다.
-    require_once $portal . '/auth.php';
+    require_once $portal . '/core/auth.php';
 } else {
     session_start();
 }

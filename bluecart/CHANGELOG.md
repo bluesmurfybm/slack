@@ -11,6 +11,79 @@ php dev\verify.php
 
 ---
 
+## 2026-09-18 · 포털 공용 소스가 core/ 로 내려갔습니다
+
+포털 쪽 변경에 맞춘 것입니다. bluecart 자체 기능은 그대로입니다.
+
+```
+<포털>/auth.php          →  <포털>/core/auth.php
+<포털>/db.php            →  <포털>/core/db.php
+<포털>/worksystems.php   →  <포털>/core/worksystems.php
+<포털>/worksystems.json  →  <포털>/core/worksystems.json
+```
+
+`config.php` 와 `styles/` 는 포털 루트에 그대로 있습니다. 그래서 `BC_PORTAL_ROOT`
+도 계속 포털 루트를 가리키고, 그 아래 `core/` 를 부르는 식으로 바꿨습니다.
+
+**포털 없이 단독으로 쓰던 분은 손댈 것이 없습니다.**
+
+**바뀐 파일**
+
+```
+includes/bootstrap.php           (포털 탐지 · auth.php 경로)
+index.php                        (worksystems.php 경로)
+dev/check.php, dev/router.php    (포털 탐지)
+config/config.iworks.sample.php  (주석)
+```
+
+---
+
+## 2026-09-18 · 구성원 화면 정리
+
+**1. 머리말**
+
+`BlueUP-Cart / 물품 구매 요청` 이던 두 줄을 `물품 구매 요청 / BlueCart` 로 뒤집었습니다.
+어느 모듈인지가 먼저 읽히도록 이름 쪽을 크게 뒀습니다.
+
+**2. 화면 탭이 오른쪽 위로**
+
+`구성원 / 관리자` 탭을 본문 맨 위에서 머리말 오른쪽으로 옮기고 분절 버튼으로 바꿨습니다.
+본문 맨 위에 있으면 바로 아래 집계·필터와 층이 겹쳐 보였습니다.
+관리자 탭을 볼 수 없는 사람에게는 탭 줄 자체가 나오지 않습니다.
+
+역할 배지(`관리자` 등)는 뺐습니다. 바로 옆 `관리자` 탭과 같은 말이 두 번 나왔습니다.
+역할은 관리자 화면의 `처리 역할 배정` 에서 봅니다.
+
+**3. 집계**
+
+한 덩어리 표에서 카드 네 장으로 바꿨습니다. 단계 색을 위쪽 띠·점·숫자 세 곳에 함께 쓰고,
+누른 칸은 그 색으로 테두리와 배경이 물듭니다. 어느 단계로 걸러 놨는지 한눈에 보입니다.
+
+**4. 목록 도구 줄**
+
+`내 신청만` · 보기 방식 · `엑셀 받기` 를 필터 상자에서 빼내어 목록 구분 탭과 같은 줄
+오른쪽에 모았습니다. 셋 다 "지금 보는 목록"을 다루는 것이라 필터와 층을 나눴습니다.
+
+- `내 요청만` → **`내 신청만`**. 알약 모양으로 바꿔 켜져 있으면 파랗게 물듭니다.
+- 처리 역할이 없는 사람은 **기본으로 켜집니다.** 끄면 전체가 보입니다.
+- **보기 방식**(목록 / 카드)을 새로 넣었습니다. 카드는 표와 같은 데이터를 담고
+  처리 버튼도 그대로 붙습니다.
+
+**5. 필터 초기화 삭제**
+
+값을 하나씩 되돌리면 되는 일이라 뺐습니다. 관리자 화면에는 그대로 있습니다.
+
+**바뀐 파일**
+
+```
+index.php            (머리말, 탭 위치)
+views/member.php     (도구 줄, 카드 자리)
+assets/app.css       (머리말·탭·집계·도구 줄·카드)
+assets/app.js        (보기 전환, 카드 렌더, 내 신청만 기본값)
+```
+
+---
+
 ## 2026-09-17 · 수령 장소를 목록에서 선택
 
 구매 요청 화면의 **수령 장소** 를 자유 입력에서 목록 선택으로 바꿨습니다.
@@ -50,7 +123,7 @@ tests/workflow_test.php          (검증 시험 4건)
 
 **물려받는 것**
 
-- 로그인 — 포털 `auth.php` 의 세션과 `current_portal_user()`.
+- 로그인 — 포털 `core/auth.php` 의 세션과 `current_portal_user()`.
   자체 로그인 없음. 미로그인이면 `../index.php?need_login=bluecart` 로 보냄.
 - 로그아웃 — 포털 `../api/logout.php`
 - 상단바 — 포털 `styles/topbar.css`, 로고·사용자 칩·아바타 색·업무 시스템 드롭다운
@@ -60,7 +133,7 @@ tests/workflow_test.php          (검증 시험 4건)
 **바뀐 것**
 
 - 사용자 식별자가 **이메일**입니다. `learn` 의 관리자 명단도 이메일 기준이라 맞췄습니다.
-- `bootstrap.php` 가 포털 `auth.php` 를 먼저 require 합니다.
+- `bootstrap.php` 가 포털 `core/auth.php` 를 먼저 require 합니다.
   포털이 세션 이름(`BLUEIWORK_SESSID`)과 저장 경로를 정한 뒤 세션을 열기 때문에,
   우리가 먼저 `session_start()` 를 부르면 포털 세션을 보지 못합니다.
 - `.htaccess` 를 폴더 이름에 의존하지 않도록 `RewriteRule` 로 바꿨습니다.
@@ -93,7 +166,7 @@ dev/seed_dev.sql          포털 DB 에 실행하지 말라는 경고
 README.md
 ```
 
-**포털에 등록** — `worksystems.json` 에 추가해야 상단바 메뉴에 나옵니다.
+**포털에 등록** — `core/worksystems.json` 에 추가해야 상단바 메뉴에 나옵니다.
 
 ```json
 { "key": "bluecart", "emoji": "🛒", "label": "BlueCart", "path": "bluecart/index.php" }

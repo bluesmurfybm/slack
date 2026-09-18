@@ -7,7 +7,7 @@
  *  로컬에서는 `python run_weekly.py --serve` 가 이 파일을 집어 배치를 돌린다.
  */
 date_default_timezone_set('Asia/Seoul');
-require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/db.php';
 
 $me = current_portal_user();

@@ -6,7 +6,7 @@
  */
 
 date_default_timezone_set('Asia/Seoul');
-require_once __DIR__ . '/../auth.php';   // 세션 시작 + current_portal_user()
+require_once __DIR__ . '/../core/auth.php';   // 세션 시작 + current_portal_user()
 
 /** 화면(HTML) 페이지용 — 미로그인이면 포털 로그인 화면으로 보낸다 */
 function access_require_login() {

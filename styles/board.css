@@ -1,0 +1,169 @@
+/* =====================================================================
+   blue-iWorks 알림판 — 주요 공지 / 중요 일정(D-day)
+   색·글꼴 토큰은 default.css :root 를 그대로 쓴다.
+   ===================================================================== */
+
+/* 대시보드에서 타일 위에 놓이는 두 칸. 공지가 넓고 일정이 좁다 —
+   공지는 글줄이 길고 일정은 숫자 하나가 주인공이라서. */
+.board{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-bottom:26px;align-items:start}
+@media (max-width:1000px){.board{grid-template-columns:1fr}}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  display:flex;flex-direction:column;overflow:hidden}
+.panel-head{display:flex;align-items:center;gap:9px;padding:15px 18px 12px}
+.panel-head h2{font-family:var(--disp);font-size:15px;font-weight:600;margin:0;color:var(--navy)}
+.panel-head .cnt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.panel-head .sp{margin-left:auto}
+.panel-act{font-family:var(--sans);font-size:12.5px;background:none;border:0;color:var(--muted);
+  cursor:pointer;padding:4px 8px;border-radius:7px}
+.panel-act:hover{background:var(--bg);color:var(--blue)}
+.panel-act.add{color:var(--blue);font-weight:600}
+.panel-body{padding:0 8px 8px;flex:1}
+.panel-empty{padding:26px 14px;text-align:center;color:var(--muted);font-size:13px}
+
+/* ---------- 공지 목록(대시보드 안) ---------- */
+.nt-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  background:none;border:0;font-family:var(--sans);font-size:14px;color:var(--ink);
+  padding:10px 10px;border-radius:10px;cursor:pointer}
+.nt-row:hover{background:var(--bg)}
+.nt-row .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nt-row .dt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.nt-pin{color:#E8890C;flex-shrink:0}
+.nt-new{background:#E8F0FE;color:var(--blue);font-size:10px;font-weight:700;
+  border-radius:999px;padding:2px 6px;flex-shrink:0;letter-spacing:.02em}
+.nt-clip{color:var(--muted);font-size:11.5px;flex-shrink:0}
+
+/* ---------- 중요 일정 ---------- */
+.ev-list{display:flex;flex-direction:column;gap:6px;padding:2px 10px 10px}
+.ev{display:flex;align-items:center;gap:12px;padding:9px 11px;border-radius:12px;
+  border:1px solid transparent;background:var(--bg)}
+.ev .tt{flex:1;min-width:0}
+.ev .nm{font-size:13.5px;font-weight:600;color:var(--navy);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev .sub{font-size:11.5px;color:var(--muted);margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* D-day 알약. 임박할수록 뜨겁게 — 훑어볼 때 색만 보고도 급한 게 뭔지 안다. */
+.dday{font-family:var(--disp);font-size:13px;font-weight:700;letter-spacing:-.01em;
+  border-radius:999px;padding:5px 11px;white-space:nowrap;flex-shrink:0;
+  background:#E7EDF9;color:var(--muted)}
+.ev.later .dday{background:#E8F0FE;color:var(--blue)}
+.ev.soon  {background:#FFF6EA;border-color:#FAE0BC}
+.ev.soon  .dday{background:#FBE3C2;color:#96590B}
+.ev.today {background:#FDEDEC;border-color:#F6C9C4}
+.ev.today .dday{background:var(--blue);color:#fff}
+.ev.past  {opacity:.55}
+
+/* 관리 목록의 알약은 .ev 로 감싸지 않으므로 색을 따로 준다 */
+.dday.heat-later{background:#E8F0FE;color:var(--blue)}
+.dday.heat-soon {background:#FBE3C2;color:#96590B}
+.dday.heat-today{background:var(--blue);color:#fff}
+.dday.heat-past {background:#ECEFF5;color:#8994AF}
+
+/* 가장 가까운 일정 한 건은 크게 세운다. 나머지는 줄글로. */
+.ev-hero{display:flex;align-items:center;gap:14px;margin:2px 10px 10px;padding:14px 16px;
+  border-radius:14px;background:linear-gradient(135deg,#1C5DE5,#0F2E77);color:#fff;
+  position:relative;overflow:hidden}
+.ev-hero::after{content:"";position:absolute;right:-30px;top:-40px;width:130px;height:130px;
+  border-radius:50%;background:rgba(255,255,255,.07)}
+.ev-hero .big{font-family:var(--disp);font-size:30px;font-weight:700;line-height:1;
+  letter-spacing:-.02em;position:relative}
+.ev-hero .tt{position:relative;min-width:0}
+.ev-hero .nm{font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-hero .sub{font-size:12px;opacity:.82;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-hero.today{background:linear-gradient(135deg,#E04B3C,#9C2C20)}
+.ev-hero.today .big{animation:ddayPulse 1.8s ease-in-out infinite}
+@keyframes ddayPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@media (prefers-reduced-motion:reduce){.ev-hero.today .big{animation:none}}
+
+/* ---------- 공지 목록 화면 ---------- */
+.list-card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.nl{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:none;border:0;
+  border-bottom:1px solid var(--line-soft);font-family:var(--sans);font-size:14.5px;color:var(--ink);
+  padding:14px 18px;cursor:pointer}
+.nl:last-child{border-bottom:0}
+.nl:hover{background:var(--bg)}
+.nl .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.nl .who{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.nl .dt{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:84px;text-align:right}
+.nl .vw{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;min-width:44px;text-align:right}
+@media (max-width:760px){.nl .who,.nl .vw{display:none}}
+
+.pager{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px 0 0;
+  font-size:13px;color:var(--muted)}
+
+/* ---------- 공지 상세 ---------- */
+.detail-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 28px}
+.detail-card h2{font-family:var(--sans);font-size:20px;font-weight:700;margin:0;color:var(--navy);line-height:1.4}
+.detail-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:10px;
+  padding-bottom:18px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.detail-body{padding:22px 0 4px;font-size:14.5px;line-height:1.8;white-space:pre-wrap;word-break:break-word}
+.detail-body a{color:var(--blue)}
+.files{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.files h3{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 4px}
+.file{display:flex;align-items:center;gap:9px;padding:8px 11px;border:1px solid var(--line);
+  border-radius:10px;font-size:13px;color:var(--ink);text-decoration:none;background:#FBFCFF}
+.file:hover{border-color:var(--blue-soft);background:#fff}
+.file .sz{margin-left:auto;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.file .rm{background:none;border:0;color:var(--muted);cursor:pointer;font-size:15px;padding:0 2px;line-height:1}
+.file .rm:hover{color:#C0392B}
+
+/* ---------- 관리 화면 ---------- */
+.tabs{display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--bg);
+  border:1px solid var(--line);margin-bottom:20px;width:fit-content}
+.tabs button{font-family:var(--sans);font-size:13.5px;font-weight:600;color:var(--muted);
+  background:none;border:0;border-radius:999px;padding:7px 18px;cursor:pointer;white-space:nowrap}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{background:var(--card);color:var(--blue);
+  box-shadow:0 1px 2px rgba(16,35,90,.12)}
+
+.mrow{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--line-soft)}
+.mrow:last-child{border-bottom:0}
+.mrow .tt{flex:1;min-width:0}
+.mrow .nm{font-size:14px;font-weight:600;color:var(--navy);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.mrow .btns{display:flex;gap:6px;flex-shrink:0}
+
+.btn-sm{font-family:var(--sans);font-size:12.5px;background:var(--card);color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;padding:5px 11px;cursor:pointer}
+.btn-sm:hover{background:var(--bg);border-color:var(--blue-soft)}
+.btn-sm.danger{color:#C0392B;border-color:#EBC9C4}
+.btn-sm.danger:hover{background:#FDF3F2}
+.btn-sm[disabled]{opacity:.45;cursor:not-allowed}
+
+.tag-owner{font-size:10.5px;font-weight:700;color:var(--muted);background:var(--bg);
+  border-radius:999px;padding:2px 8px}
+
+/* ---------- 입력 화면(공지 작성 / 일정 등록) ---------- */
+.edit-card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+  padding:26px 28px 22px;max-width:860px}
+.edit-card .fld{margin-bottom:18px}
+.edit-card label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px}
+.edit-card input[type=text],.edit-card input[type=date],.edit-card textarea{
+  width:100%;font-family:var(--sans);font-size:14px;padding:11px 13px;
+  border:1.5px solid var(--line);border-radius:10px;background:#FBFCFF;color:var(--ink)}
+.edit-card textarea{min-height:240px;resize:vertical;line-height:1.75}
+.edit-card input:focus,.edit-card textarea:focus{outline:none;border-color:var(--blue);background:#fff}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:640px){.two{grid-template-columns:1fr}}
+.check{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);cursor:pointer}
+.check input{width:16px;height:16px;accent-color:var(--blue);margin:0}
+.err{background:#FDF3F2;border:1px solid #EBC9C4;color:#C0392B;border-radius:10px;
+  padding:10px 13px;font-size:13px;margin-bottom:16px;white-space:pre-line}
+.err.hidden{display:none}
+
+/* ---------- 겹쳐 뜨는 작은 창(일정 등록) ---------- */
+.modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  background:rgba(14,26,51,.42);padding:20px}
+.modal.hidden{display:none !important}
+.modal-box{background:var(--card);border-radius:16px;width:100%;max-width:520px;
+  box-shadow:0 24px 64px -20px rgba(16,35,90,.5);max-height:90vh;overflow:auto}
+.modal-head{display:flex;align-items:center;padding:18px 22px 0}
+.modal-head h3{font-family:var(--disp);font-size:16px;font-weight:600;margin:0;color:var(--navy)}
+.modal-x{margin-left:auto;background:none;border:0;font-size:22px;line-height:1;color:var(--muted);
+  cursor:pointer;padding:0 2px}
+.modal-x:hover{color:var(--ink)}
+.modal-body{padding:18px 22px 4px}
+.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:8px 22px 20px}
