@@ -116,7 +116,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     <div class="board">
       <section class="panel">
         <div class="panel-head">
-          <h2>📢 주요 공지</h2>
+          <h2>Notice</h2>
           <span class="slide-nav" id="nt-nav" hidden>
             <button type="button" data-dir="-1" title="이전 공지" aria-label="이전 공지"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
             <span class="pos" aria-live="off"></span>
@@ -137,7 +137,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 
       <section class="panel">
         <div class="panel-head">
-          <h2>📅 중요 일정</h2>
+          <h2>Schedule</h2>
           <span class="slide-nav" id="ev-nav" hidden>
             <button type="button" data-dir="-1" title="이전 일정" aria-label="이전 일정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
             <span class="pos" aria-live="off"></span>
@@ -682,7 +682,8 @@ async function loadBoard(){
       `<div class="panel-empty">공지를 불러오지 못했습니다.<br>${esc(e.message)}</div>`;
   }
   try{
-    const d=await bapi("api/events.php?scope=upcoming&limit=4");
+    // 카드가 한 장씩 돌아가므로 넉넉히 받아 둔다. 칸 높이는 그대로다.
+    const d=await bapi("api/events.php?scope=upcoming&limit=12");
     renderBoardEvents(d.rows);
   }catch(e){
     document.getElementById("board-events").innerHTML=
@@ -873,10 +874,10 @@ function renderBoardEvents(rows){
   }
   box.innerHTML=`<div class="ev-list slide-win" id="board-events-list"><div class="slide-track">`+
     rows.map(e=>`
-      <div class="ev-hero ${e.heat}">
+      <div class="ev-hero k-${e.kind.key} ${e.heat}">
         <span class="big">${esc(e.dday_label)}</span>
         <span class="tt">
-          <div class="nm">${esc(e.title)}</div>
+          <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
           <div class="sub">${esc(fmtWhen(e))}${e.place?" · "+esc(e.place):""}</div>
         </span>
       </div>`).join("")+`</div></div>`;

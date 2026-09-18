@@ -502,6 +502,48 @@ function board_disposition($name)
 // ---------------------------------------------------------------------
 
 /**
+ * 일정 종류. 제목·메모에서 낱말을 보고 고른다.
+ *
+ * 모든 카드가 같은 색이면 "다른 일정" 이라는 게 안 읽힌다. 종류마다 색과
+ * 그림을 달리해 훑기만 해도 무슨 일인지 알게 하려는 것이다.
+ *
+ * 순서가 곧 우선순위다. 위에서부터 먼저 걸리는 것이 이긴다 —
+ * '장례'(조사)가 '행사' 보다 위에 있어야 축하 색이 붙는 일이 없다.
+ * 아무것도 안 걸리면 'etc' 로 떨어진다. 낱말은 그냥 덧붙이면 된다.
+ */
+const BOARD_EVENT_KINDS = [
+    'condolence' => ['label' => '조사',   'icon' => '🕯',
+                     'words' => ['장례', '부고', '발인', '빈소', '조문', '별세', '상중']],
+    'congrats'   => ['label' => '경사',   'icon' => '🎉',
+                     'words' => ['결혼', '청첩', '혼례', '돌잔치', '출산', '승진', '개업', '생일', '축 ', '축!']],
+    'holiday'    => ['label' => '휴무',   'icon' => '🌴',
+                     'words' => ['휴무', '연휴', '휴가', '창립', '공휴일', '대체휴일', '워라밸']],
+    'deadline'   => ['label' => '마감',   'icon' => '⏳',
+                     'words' => ['마감', '제출', '만료', '접수', '신청 기한', '기한', '까지']],
+    'edu'        => ['label' => '교육',   'icon' => '🎓',
+                     'words' => ['교육', '세미나', '특강', '연수', '강의', '수료', '자격']],
+    'ops'        => ['label' => '작업',   'icon' => '🛠',
+                     'words' => ['점검', '배포', '릴리스', '오픈', '이전', '이사', '서버', '작업']],
+    'event'      => ['label' => '행사',   'icon' => '🎈',
+                     'words' => ['워크숍', '워크샵', 'MT', '행사', '체육대회', '회식', '송년', '신년', '축제', '간담회']],
+    'meeting'    => ['label' => '회의',   'icon' => '📋',
+                     'words' => ['회의', '미팅', '보고', '리뷰', '킥오프', '발표', '면담', '평가']],
+];
+
+function board_event_kind($text)
+{
+    $text = (string)$text;
+    foreach (BOARD_EVENT_KINDS as $key => $def) {
+        foreach ($def['words'] as $w) {
+            if (mb_stripos($text, $w) !== false) {
+                return ['key' => $key, 'label' => $def['label'], 'icon' => $def['icon']];
+            }
+        }
+    }
+    return ['key' => 'etc', 'label' => '일정', 'icon' => '📅'];
+}
+
+/**
  * 첫 화면에 띄울 일정.
  *
  * 오늘 이후로 다가오는 것만, 가까운 순으로 준다. 여러 날에 걸친 일정은
@@ -538,6 +580,7 @@ function board_decorate_event(array $e)
     $days = (int)$today->diff($starts)->format('%r%a');
 
     $e['id']       = (int)$e['id'];
+    $e['kind']     = board_event_kind($e['title'] . ' ' . (string)$e['memo']);
     $e['dday']     = $days;
     $e['ongoing']  = $days <= 0 && $today <= $ends;   // 시작했고 아직 안 끝남
     $e['dday_label'] = $days > 0 ? 'D-' . $days : ($days === 0 ? 'D-DAY' : 'D+' . abs($days));

@@ -18,15 +18,19 @@
   gap:16px;margin-bottom:26px;align-items:stretch}
 @media (max-width:1000px){.board{grid-template-columns:1fr}}
 
-/* 아래 타일과 구별되게 알림판만 살짝 띄운다. 타일은 평평하게 있다가
-   hover 할 때 떠오르니, 읽는 곳(늘 떠 있음) / 가는 곳(누르면 반응)으로 갈린다. */
-.panel{background:var(--card);border:1px solid #E8EEF9;border-radius:16px;
-  box-shadow:var(--shadow);
+/* 아래 타일과 구별되는 방법 — 그림자가 아니라 '생김새' 로 가른다.
+   그림자는 장식이라 포털의 다른 화면과 겉돌았다.
+
+   타일은 테두리 하나짜리 흰 판이고, 알림판은 머리말 띠가 얹힌 판이다.
+   띠 하나로 "이건 누르는 게 아니라 읽는 칸" 이라는 게 읽힌다. 색도 새로 만들지
+   않고 페이지 바탕(--surface)과 흰색 사이 값 하나만 쓴다. */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;
   display:flex;flex-direction:column;overflow:hidden}
-/* 머리에 가는 선을 넣으면 '머리말 있는 판'으로 읽힌다. 타일에는 이 선이 없다. */
-.panel-head{display:flex;align-items:center;gap:9px;padding:14px 18px 11px;flex-shrink:0;
-  border-bottom:1px solid var(--line-soft)}
-.panel-head h2{font-family:var(--disp);font-size:15px;font-weight:600;margin:0;color:var(--navy)}
+.panel-head{display:flex;align-items:center;gap:9px;padding:13px 18px 12px;flex-shrink:0;
+  background:#F4F7FD;border-bottom:1px solid var(--line)}
+/* 제목은 로고와 같은 글꼴로 둔다 — 한글 제목보다 칸 이름처럼 읽힌다. */
+.panel-head h2{font-family:var(--disp);font-size:14px;font-weight:600;margin:0;
+  color:var(--navy);letter-spacing:.01em}
 .panel-head .cnt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .panel-head .sp{margin-left:auto}
 
@@ -38,14 +42,14 @@
   width:19px;height:19px;padding:0;border:0;border-radius:6px;
   background:none;color:var(--muted);cursor:pointer;
   transition:background .12s ease,color .12s ease}
-.slide-nav button:hover{background:var(--bg);color:var(--blue)}
+.slide-nav button:hover{background:#E6EDF9;color:var(--blue)}
 .slide-nav button svg{width:13px;height:13px;fill:none;stroke:currentColor;
   stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .slide-nav .pos{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;
   min-width:30px;text-align:center;letter-spacing:-.01em}
 .panel-act{font-family:var(--sans);font-size:12.5px;background:none;border:0;color:var(--muted);
   cursor:pointer;padding:4px 8px;border-radius:7px}
-.panel-act:hover{background:var(--bg);color:var(--blue)}
+.panel-act:hover{background:#E6EDF9;color:var(--blue)}
 .panel-act.add{color:var(--blue);font-weight:600}
 .panel-body{padding:6px 8px 8px;flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 .panel-empty{padding:26px 14px;text-align:center;color:var(--muted);font-size:13px}
@@ -119,31 +123,64 @@
 .dday.heat-today{background:var(--blue);color:#fff}
 .dday.heat-past {background:#ECEFF5;color:#8994AF}
 
-/* 가장 가까운 일정 한 건은 크게 세운다. 나머지는 줄글로. */
-.ev-hero{display:flex;align-items:center;gap:13px;margin:0;padding:0 15px;
+/* ---------- 일정 카드 ----------
+   진한 단색이면 카드 하나가 화면의 시선을 다 가져간다. 옅은 바탕에 글자로
+   읽히게 두고, 힘은 왼쪽 띠와 D-day 숫자에만 준다.
+
+   색은 '종류'(--k-ink)가 정하고, 진하기는 '임박도'가 정한다.
+   두 가지를 한 색에 섞으면 둘 다 안 읽힌다. */
+.ev-hero{--k-ink:#1C5DE5;
+  display:flex;align-items:center;gap:13px;margin:0;padding:0 15px;
   height:var(--win-h);box-sizing:border-box;
-  border-radius:14px;background:linear-gradient(135deg,#1C5DE5,#0F2E77);color:#fff;
+  border-radius:14px;color:var(--ink);
+  background:#EEF3FB;                                   /* color-mix 못 쓰는 곳 대비 */
+  background:color-mix(in srgb, var(--k-ink) 8%, #fff);
+  border:1px solid #DCE6F7;
+  border:1px solid color-mix(in srgb, var(--k-ink) 20%, #fff);
+  border-left:3px solid var(--k-ink);
   position:relative;overflow:hidden;flex-shrink:0;
   animation:evRise .42s cubic-bezier(.22,1,.36,1) both}
-/* 배경 원이 아주 천천히 돈다. 멈춰 있는 카드보다 살아 있어 보인다. */
-.ev-hero::before{content:"";position:absolute;right:-34px;top:-46px;width:140px;height:140px;
-  border-radius:50%;background:rgba(255,255,255,.08);
+/* 종류 색을 옅게 깐 얼룩이 아주 천천히 돈다. 멈춰 있는 카드보다 살아 있어 보인다.
+   옅은 바탕에서는 원의 가장자리가 띠처럼 보여서, 테두리 없이 번지는
+   radial-gradient 로 둔다. */
+.ev-hero::before{content:"";position:absolute;right:-50px;top:-60px;width:180px;height:180px;
+  background:radial-gradient(circle,
+    color-mix(in srgb, var(--k-ink) 13%, transparent) 0%,
+    transparent 68%);
   animation:evDrift 9s ease-in-out infinite}
 /* hover 하면 빛이 한 번 쓸고 지나간다 */
 .ev-hero::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.22) 50%,transparent 62%);
+  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.55) 50%,transparent 62%);
   transform:translateX(-120%)}
 .ev-hero:hover::after{animation:evShine .8s ease-out}
-.ev-hero .big{font-family:var(--disp);font-size:27px;font-weight:700;line-height:1;
-  letter-spacing:-.02em;position:relative;white-space:nowrap}
+.ev-hero .big{font-family:var(--disp);font-size:26px;font-weight:700;line-height:1;
+  letter-spacing:-.02em;position:relative;white-space:nowrap;color:var(--k-ink)}
 .ev-hero .tt{position:relative;min-width:0}
-.ev-hero .nm{font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev-hero .sub{font-size:12px;opacity:.82;margin-top:2px;
+.ev-hero .nm{font-size:14.5px;font-weight:700;color:var(--navy);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev-hero.today{background:linear-gradient(135deg,#E04B3C,#9C2C20)}
+.ev-hero .sub{font-size:12px;color:var(--muted);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 종류 그림. 글자 크기에 묻히지 않게 조금 키운다. */
+.ev-hero .ki{font-style:normal;font-size:13px;margin-right:5px;vertical-align:1px}
+
+/* 임박할수록 바탕이 짙어지고 왼쪽 띠가 굵어진다 */
+.ev-hero.soon{background:color-mix(in srgb, var(--k-ink) 13%, #fff);border-left-width:4px}
+.ev-hero.today{background:color-mix(in srgb, var(--k-ink) 18%, #fff);border-left-width:5px}
 .ev-hero.today .big{animation:ddayPulse 1.8s ease-in-out infinite}
 /* 일주일 안으로 들어오면 숫자가 아주 약하게 숨 쉰다 */
 .ev-hero.soon .big{animation:ddayBreathe 3.2s ease-in-out infinite}
+
+/* 종류별 색. 제목에서 낱말을 보고 board_event_kind() 가 고른다.
+   같은 종류끼리는 같은 색이라 목록이 돌아가도 무슨 일인지 바로 읽힌다. */
+.ev-hero.k-condolence{--k-ink:#5B6577}   /* 조사 — 차분하게 */
+.ev-hero.k-congrats  {--k-ink:#D6336C}   /* 경사 */
+.ev-hero.k-holiday   {--k-ink:#0F9B8E}   /* 휴무 */
+.ev-hero.k-deadline  {--k-ink:#D9820B}   /* 마감 */
+.ev-hero.k-edu       {--k-ink:#7B4DD8}   /* 교육 */
+.ev-hero.k-ops       {--k-ink:#4A6B8A}   /* 작업 */
+.ev-hero.k-event     {--k-ink:#E2622A}   /* 행사 */
+.ev-hero.k-meeting   {--k-ink:#1C5DE5}   /* 회의 */
+.ev-hero.k-etc       {--k-ink:#5A73A8}   /* 그 밖 */
 
 /* 아랫줄은 한 박자씩 밀려 들어온다 — 한꺼번에 튀어나오는 것보다 덜 시끄럽다 */
 .ev{animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
