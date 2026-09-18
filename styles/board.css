@@ -102,37 +102,33 @@
 
    종류는 왼쪽 D-day 글자색(--k-ink)과 그림으로만 구분한다. 바탕까지 칠하면
    줄 여덟 개가 알록달록해져 오히려 안 읽힌다. */
-.ev-row{--k-ink:#1C5DE5;
-  display:flex;align-items:center;gap:10px;
-  height:var(--row-h);padding:0 10px;border-radius:10px;
+/* 한 건이 창을 꽉 채운다 — 크게 하나씩 보여 주려는 것이다.
+   바탕도 테두리도 없이 글자만 남긴다. 누를 수 있는 줄이 아니라 hover 반응도 없다. */
+.ev-item{--k-ink:#1C5DE5;
+  display:flex;align-items:center;gap:13px;
+  height:var(--win-h);padding:0 10px;box-sizing:border-box;
   animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
-/* 누를 수 있는 줄이 아니라 hover 배경을 주지 않는다 — 공지 줄과 달리
-   일정은 상세가 없다. 반응이 있으면 눌러도 되는 줄로 오해한다. */
-.ev-row .dd{font-family:var(--disp);font-size:13px;font-weight:700;
-  color:var(--k-ink);letter-spacing:-.01em;
-  min-width:46px;flex-shrink:0;font-variant-numeric:tabular-nums}
-.ev-row .tt{flex:1;min-width:0;font-size:14px;color:var(--ink);
+.ev-item .big{font-family:var(--disp);font-size:26px;font-weight:700;line-height:1;
+  color:var(--k-ink);letter-spacing:-.02em;
+  white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}
+.ev-item .tt{flex:1;min-width:0}
+.ev-item .nm{font-size:14.5px;font-weight:700;color:var(--navy);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev-row .ki{font-style:normal;font-size:12.5px;margin-right:5px;vertical-align:1px}
-.ev-row .when{font-size:12px;color:var(--muted);white-space:nowrap;flex-shrink:0}
-@media (max-width:1180px){.ev-row .when{display:none}}
+.ev-item .sub{font-size:12px;color:var(--muted);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 종류 그림. 글자 크기에 묻히지 않게 조금 키운다. */
+.ev-item .ki{font-style:normal;font-size:13px;margin-right:5px;vertical-align:1px}
 
-/* 임박한 것만 조금 더 힘을 준다. 색은 종류가 정하므로 여기서는 굵기만 건드린다. */
-.ev-row.today .tt{font-weight:700;color:var(--navy)}
-.ev-row.today .dd{animation:ddayPulse 1.8s ease-in-out infinite}
-.ev-row.soon  .dd{animation:ddayBreathe 3.2s ease-in-out infinite}
-
-/* 한 박자씩 밀려 들어온다 — 한꺼번에 튀어나오는 것보다 덜 시끄럽다 */
-.ev-row:nth-child(1){animation-delay:.05s}
-.ev-row:nth-child(2){animation-delay:.11s}
-.ev-row:nth-child(n+3){animation-delay:.16s}
+/* 임박한 것만 조금 더 힘을 준다. 색은 종류가 정하므로 여기서는 움직임만 건드린다. */
+.ev-item.today .big{animation:ddayPulse 1.8s ease-in-out infinite}
+.ev-item.soon  .big{animation:ddayBreathe 3.2s ease-in-out infinite}
 
 @keyframes evRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes ddayPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 @keyframes ddayBreathe{0%,100%{opacity:1}50%{opacity:.62}}
 
 @media (prefers-reduced-motion:reduce){
-  .ev-row,.ev-row .dd{animation:none !important}
+  .ev-item,.ev-item .big{animation:none !important}
 }
 
 /* 관리 화면의 D-day 알약. 거기서는 줄이 넓어 알약이 어울린다. */
@@ -146,15 +142,15 @@
 
 /* 종류별 색. 제목에서 낱말을 보고 board_event_kind() 가 고른다.
    같은 종류끼리는 같은 색이라 목록이 돌아가도 무슨 일인지 바로 읽힌다. */
-.ev-row.k-condolence{--k-ink:#5B6577}   /* 조사 — 차분하게 */
-.ev-row.k-congrats  {--k-ink:#D6336C}   /* 경사 */
-.ev-row.k-holiday   {--k-ink:#0F9B8E}   /* 휴무 */
-.ev-row.k-deadline  {--k-ink:#D9820B}   /* 마감 */
-.ev-row.k-edu       {--k-ink:#7B4DD8}   /* 교육 */
-.ev-row.k-ops       {--k-ink:#4A6B8A}   /* 작업 */
-.ev-row.k-event     {--k-ink:#E2622A}   /* 행사 */
-.ev-row.k-meeting   {--k-ink:#1C5DE5}   /* 회의 */
-.ev-row.k-etc       {--k-ink:#5A73A8}   /* 그 밖 */
+.ev-item.k-condolence{--k-ink:#5B6577}   /* 조사 — 차분하게 */
+.ev-item.k-congrats  {--k-ink:#D6336C}   /* 경사 */
+.ev-item.k-holiday   {--k-ink:#0F9B8E}   /* 휴무 */
+.ev-item.k-deadline  {--k-ink:#D9820B}   /* 마감 */
+.ev-item.k-edu       {--k-ink:#7B4DD8}   /* 교육 */
+.ev-item.k-ops       {--k-ink:#4A6B8A}   /* 작업 */
+.ev-item.k-event     {--k-ink:#E2622A}   /* 행사 */
+.ev-item.k-meeting   {--k-ink:#1C5DE5}   /* 회의 */
+.ev-item.k-etc       {--k-ink:#5A73A8}   /* 그 밖 */
 
 /* ---------- 공지 목록 화면 ---------- */
 .list-card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}

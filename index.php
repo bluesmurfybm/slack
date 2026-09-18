@@ -668,16 +668,6 @@ function fmtWhen(e){
   if(e.ends_on && e.ends_on!==e.starts_on) out+=` ~ ${fmtDateDot(e.ends_on)}`;
   return out;
 }
-/* 좁은 칸용. 올해면 연도를 뗀다 — 거의 다 올해라 네 글자가 자리만 차지한다.
-   해가 넘어가는 일정은 연도를 남겨야 헷갈리지 않는다. */
-function fmtWhenShort(e){
-  const thisYear=String(new Date().getFullYear());
-  const cut=t=>t.startsWith(thisYear+".") ? t.slice(5) : t;
-  const d=new Date(e.starts_on+"T00:00:00");
-  let out=`${cut(fmtDateDot(e.starts_on))}(${WEEKDAYS[d.getDay()]})`;
-  if(e.ends_on && e.ends_on!==e.starts_on) out+=`~${cut(fmtDateDot(e.ends_on))}`;
-  return out;
-}
 
 /* ---- 대시보드 위 두 칸 ---- */
 let boardTotal=0;
@@ -876,9 +866,8 @@ function makeSlider(winId, interval, navId){
 const noticeSlider=makeSlider("board-notices", 3600, "nt-nav");
 const eventSlider =makeSlider("board-events-list", 4200, "ev-nav");
 
-/* 한 줄에 한 건. 카드로 감싸면 그 칸만 무겁게 튀어서 내용만 남겼다.
-   공지 줄과 같은 높이·같은 생김새라 두 칸이 한 덩어리로 읽힌다.
-   종류는 왼쪽 D-day 글자색과 그림으로만 구분한다. */
+/* 한 번에 한 건씩, 크게 보여 준다. 카드로 감싸면 그 칸만 무겁게 튀므로
+   바탕과 테두리는 두지 않고 글자만 남겼다. 종류는 D-day 글자색과 그림으로 구분한다. */
 function renderBoardEvents(rows){
   const box=document.getElementById("board-events");
   if(!rows.length){
@@ -888,10 +877,12 @@ function renderBoardEvents(rows){
   }
   box.innerHTML=`<div class="slide-win" id="board-events-list"><div class="slide-track">`+
     rows.map(e=>`
-      <div class="ev-row k-${e.kind.key} ${e.heat}">
-        <span class="dd">${esc(e.dday_label)}</span>
-        <span class="tt"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</span>
-        <span class="when">${esc(fmtWhenShort(e))}${e.place?" · "+esc(e.place):""}</span>
+      <div class="ev-item k-${e.kind.key} ${e.heat}">
+        <span class="big">${esc(e.dday_label)}</span>
+        <span class="tt">
+          <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
+          <div class="sub">${esc(fmtWhen(e))}${e.place?" · "+esc(e.place):""}</div>
+        </span>
       </div>`).join("")+`</div></div>`;
   eventSlider.reset();
 }
