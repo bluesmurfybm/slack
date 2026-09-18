@@ -75,17 +75,23 @@ function portal_db() {
           COMMENT='포털 공지'
     ");
 
-    // 이미 설치된 곳에도 노출 기간을 붙인다.
-    add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `starts_on` DATE NULL COMMENT '노출 시작일. NULL 이면 등록 즉시' AFTER `is_important`");
-    add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `ends_on` DATE NULL COMMENT '노출 종료일. NULL 이면 내릴 때까지' AFTER `starts_on`");
-
+    // ---- portal_notice 이관 -------------------------------------------
+    // 순서가 중요하다. 이름 바꾸기를 먼저 해야 아래 ADD COLUMN 의
+    // `AFTER is_important` 가 실제로 있는 컬럼을 가리킨다. 순서를 뒤집으면
+    // "Unknown column 'is_important'"(42S22) 로 포털 전체가 500 이 된다.
+    //
     // '맨 위 고정' 을 없애고 '중요 표시' 로 바꿨다. 값은 그대로 두고 이름만 간다.
     // CHANGE 는 한 번만 먹히므로 옛 이름이 남아 있을 때만 부른다.
-    if ($pdo->query("SHOW COLUMNS FROM `portal_notice` LIKE 'is_pinned'")->fetch()) {
+    $cols = $pdo->query("SHOW COLUMNS FROM `portal_notice`")->fetchAll(PDO::FETCH_COLUMN);
+    if (in_array('is_pinned', $cols, true) && !in_array('is_important', $cols, true)) {
         $pdo->exec("ALTER TABLE `portal_notice`
                     CHANGE COLUMN `is_pinned` `is_important` TINYINT(1) NOT NULL DEFAULT 0
                     COMMENT '1이면 목록에 중요 표시'");
     }
+
+    // 이미 설치된 곳에도 노출 기간을 붙인다.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `starts_on` DATE NULL COMMENT '노출 시작일. NULL 이면 등록 즉시' AFTER `is_important`");
+    add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `ends_on` DATE NULL COMMENT '노출 종료일. NULL 이면 내릴 때까지' AFTER `starts_on`");
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `portal_notice_file` (
