@@ -904,8 +904,12 @@ const PIX_FONT={
   "N":"101111111101101","O":"111101101101111","W":"101101101111101",
   "-":"000000111000000","+":"000010111010000"," ":"000000000000000"
 };
-const PIX_CELLS=5;                    // 판에 들어가는 글자 수(붙박이)
-const PIX_W=PIX_CELLS*4-1;            // 글자 3칸 + 글자 사이 1칸
+/* 판은 점으로만 이루어진 네모다 — 테두리도 고리도 없다.
+   글자가 놓이는 칸 바깥에도 꺼진 점을 깔아 판 전체를 채운다. */
+const PIX_CELLS=5;                         // 글자 자리 수(붙박이)
+const PIX_PAD_X=1, PIX_PAD_Y=3;            // 글자 둘레로 깔아 두는 점 줄 수
+const PIX_W=PIX_CELLS*4-1+PIX_PAD_X*2;     // 글자 3칸 + 사이 1칸 + 좌우 여백
+const PIX_H=5+PIX_PAD_Y*2;                 // 글자 5줄 + 위아래 여백
 
 /** 점으로 찍을 수 있는 글자로 바꾼다. 한글은 못 찍으므로 짧은 말로 옮긴다. */
 function pixText(label){
@@ -916,28 +920,29 @@ function pixText(label){
 
 function ddayPix(label){
   const txt=pixText(label);
-  const pad=PIX_CELLS-txt.length;
-  const left=Math.floor(pad/2);                       // 짧으면 가운데로
-  const cells=" ".repeat(left)+txt+" ".repeat(pad-left);
+  // 글자 수가 아니라 '점 칸' 으로 가운데를 잡는다. 칸 단위로 맞추면
+  // D-43 처럼 네 글자일 때 한쪽으로 한 칸 치우친다.
+  const cols=txt.length*4-1;                          // 글자 3칸 + 사이 1칸
+  const x0=PIX_PAD_X+Math.round((PIX_CELLS*4-1-cols)/2);
 
   // 먼저 판 전체를 꺼진 점으로 채우고, 글자에 해당하는 칸만 켠다.
-  // 이렇게 해야 글자 사이 빈 칸에도 점이 남아 '판' 으로 보인다.
+  // 여백 줄까지 점을 깔아야 테두리 없이도 네모난 '판' 으로 보인다.
   const on=[];
-  for(let y=0;y<5;y++) on.push(new Array(PIX_W).fill(false));
-  for(let c=0;c<PIX_CELLS;c++){
-    const g=PIX_FONT[cells[c]]||PIX_FONT[" "];
+  for(let y=0;y<PIX_H;y++) on.push(new Array(PIX_W).fill(false));
+  for(let c=0;c<txt.length;c++){
+    const g=PIX_FONT[txt[c]]||PIX_FONT[" "];
     for(let i=0;i<15;i++){
       if(g[i]!=="1") continue;
       const x=i%3, y=(i-x)/3;
-      on[y][c*4+x]=true;
+      on[y+PIX_PAD_Y][x0+c*4+x]=true;
     }
   }
   let dots="";
-  for(let y=0;y<5;y++) for(let x=0;x<PIX_W;x++){
+  for(let y=0;y<PIX_H;y++) for(let x=0;x<PIX_W;x++){
     dots+=`<rect class="${on[y][x]?"on":"off"}" `+
-          `x="${x+0.1}" y="${y+0.1}" width="0.8" height="0.8" rx="0.16"/>`;
+          `x="${x+0.12}" y="${y+0.12}" width="0.76" height="0.76" rx="0.16"/>`;
   }
-  return `<svg class="pix" viewBox="0 0 ${PIX_W} 5" aria-hidden="true">${dots}</svg>`;
+  return `<svg class="pix" viewBox="0 0 ${PIX_W} ${PIX_H}" aria-hidden="true">${dots}</svg>`;
 }
 
 function renderBoardEvents(rows){
@@ -950,7 +955,7 @@ function renderBoardEvents(rows){
   box.innerHTML=`<div class="slide-win" id="board-events-list"><div class="slide-track">`+
     rows.map(e=>`
       <div class="ev-item k-${e.kind.key} ${e.heat}">
-        <span class="cal" aria-label="${esc(e.dday_label)}"><i></i><i></i>${ddayPix(e.dday_label)}</span>
+        <span class="cal" role="img" aria-label="${esc(e.dday_label)}">${ddayPix(e.dday_label)}</span>
         <span class="tt">
           <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
           <div class="sub">${esc(fmtWhen(e))}${e.place?` <em>|</em> `+esc(e.place):""}</div>

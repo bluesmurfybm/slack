@@ -120,24 +120,14 @@
   height:var(--win-h);padding:0 4px 0 6px;box-sizing:border-box;
   animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
 
-/* 달력 한 장 — 위쪽 굵은 띠와 고리 두 개로 '달력' 이라는 걸 알린다.
-   고리를 위 테두리에 걸치게 두면 벽에 걸린 것처럼 보인다.
-   안쪽은 통째로 점판이라 크기가 늘 같다 — D-3 이든 D-128 이든. */
-.ev-item .cal{position:relative;flex-shrink:0;
-  width:92px;height:48px;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--paper);border-radius:8px;
-  border:1.5px solid var(--k-ink);border-top-width:5px}
-.ev-item .cal i{position:absolute;top:-4px;width:7px;height:7px;
-  border-radius:50%;background:var(--paper);border:1.5px solid var(--k-ink)}
-.ev-item .cal i:nth-child(1){left:16px}
-.ev-item .cal i:nth-child(2){right:16px}
-
 /* ---------- 픽셀 판 ----------
-   다섯 글자 자리가 붙박이라 판 크기와 점 개수가 늘 같다.
+   테두리도 바탕도 없다. 점만으로 네모를 이룬다.
+
+   다섯 글자 자리가 붙박이라 판 크기와 점 개수(21×11=231)가 늘 같다.
    켜진 점만 일정 종류 색을 입고, 꺼진 점은 무슨 일정이든 같은 색이다 —
-   글자만 색이 바뀌고 판은 그대로 있는 것처럼 보이게 하려는 것이다. */
-.pix{display:block;width:74px;height:auto;margin-top:1px}
+   글자만 갈아입고 판은 그대로 있는 것처럼 보이게 하려는 것이다. */
+.ev-item .cal{display:block;flex-shrink:0}
+.pix{display:block;width:96px;height:auto}
 .pix .on{fill:var(--k-ink)}
 .pix .off{fill:#D7DFEC}
 
