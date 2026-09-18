@@ -29,6 +29,10 @@ $__isAdmin = $__u ? board_is_admin($__u['email']) : false;
 // 화면에 적는 첨부 한계는 php.ini 를 반영한 실제 값이어야 한다.
 // 20MB 라 적어 놓고 2MB 에서 막히면 "왜 안 되지" 가 된다.
 $__uploadMax = board_max_upload_label();
+// 날씨는 브라우저가 Open-Meteo 에서 직접 받는다. 서버는 좌표만 알려 준다.
+$__weather = board_office_weather();
+// 배경 설정은 서버가 먼저 내려 줘야 화면이 한 번 번쩍이지 않는다.
+$__bgPref  = board_bg_pref($__u);
 // 대시보드 타일도 상단바 드롭다운과 같은 목록(worksystems.php)을 쓴다 — 한쪽만 늘어나는 일이 없게.
 $__links = [];
 foreach (work_systems() as $__sys) {
@@ -53,7 +57,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <link rel="stylesheet" href="styles/chatbot.css">
 <link rel="stylesheet" href="styles/board.css">
 </head>
-<body>
+<body data-bg="<?= htmlspecialchars($__bgPref, ENT_QUOTES, 'UTF-8') ?>">
 
 <!-- ================= LOGIN ================= -->
 <section id="login" class="<?= $__current ? 'hidden' : '' ?>">
@@ -84,6 +88,11 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     <div class="topbar-in">
       <div class="logo" style="cursor:pointer" onclick="showDash()"><b>blue</b><span class="dash">-</span>iWorks</div>
       <div class="top-right">
+<?php if ($__current): ?>
+        <!-- 대시보드 배경을 날씨에 맞출지 고르는 단추. 고른 값은 계정에 남는다. -->
+        <button type="button" class="bg-btn" id="bgBtn" onclick="toggleBg()"
+                title="대시보드 배경" aria-label="대시보드 배경 바꾸기"></button>
+<?php endif; ?>
         <div class="user-menu" id="userMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
             <span class="avatar" id="tb-avatar"></span>
@@ -153,6 +162,11 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           <div class="panel-empty">불러오는 중…</div>
         </div>
       </section>
+
+      <!-- 날씨. 제목 줄 없이 그림과 숫자만 두어 위젯처럼 보이게 한다. -->
+      <aside class="wx" id="wx" aria-label="사무실 날씨">
+        <div class="wx-load">…</div>
+      </aside>
     </div>
 
     <!-- 알림판과 타일은 하는 일이 다르다(읽는 곳 / 가는 곳). 구역 이름과
@@ -384,6 +398,10 @@ const NOTICE = <?= json_encode($__notice, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG 
    실제 차단은 api/*.php 가 board_require_admin() 으로 다시 한다. */
 const IS_ADMIN = <?= $__isAdmin ? 'true' : 'false' ?>;
 
+/* 사무실 좌표. 자료는 브라우저가 Open-Meteo 에서 직접 받는다 —
+   서버가 밖으로 못 나가는 곳에서도 날씨가 뜨게 하려는 것이다. */
+const OFFICE = <?= json_encode($__weather, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+
 let current = <?= $__current ? json_encode($__current, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) : 'null' ?>; // {name, email, has_token, needs_setup}
 
 function avatarColor(name){
@@ -495,6 +513,7 @@ function showDash(){
   showView("view-dash");
   renderTiles();
   loadBoard();
+  loadWeather();
 }
 const SWATCH_COLORS=["#B6574A","#BA7D4D","#A58838","#818C46","#548058","#458278","#457797","#5A64AD","#8164AB","#9B5797","#B25D7E","#8C7055","#606D79"];
 function hexOrDefault(c){ return /^#[0-9a-fA-F]{6}$/.test(c||"") ? c : "#1C5DE5"; }
@@ -866,8 +885,9 @@ function makeSlider(winId, interval, navId){
 const noticeSlider=makeSlider("board-notices", 3600, "nt-nav");
 const eventSlider =makeSlider("board-events-list", 4200, "ev-nav");
 
-/* 한 번에 한 건씩, 크게 보여 준다. 카드로 감싸면 그 칸만 무겁게 튀므로
-   바탕과 테두리는 두지 않고 글자만 남겼다. 종류는 D-day 글자색과 그림으로 구분한다. */
+/* 한 번에 한 건씩, 크게 보여 준다. 왼쪽 D-day 는 달력 한 장 모양으로 두르고
+   (위쪽 굵은 띠 + 고리 두 개) 오른쪽에 제목과 날짜를 놓는다.
+   카드로 감싸지는 않는다 — 바탕을 깔면 그 칸만 무겁게 튄다. */
 function renderBoardEvents(rows){
   const box=document.getElementById("board-events");
   if(!rows.length){
@@ -878,10 +898,10 @@ function renderBoardEvents(rows){
   box.innerHTML=`<div class="slide-win" id="board-events-list"><div class="slide-track">`+
     rows.map(e=>`
       <div class="ev-item k-${e.kind.key} ${e.heat}">
-        <span class="big">${esc(e.dday_label)}</span>
+        <span class="cal" aria-hidden="true"><i></i><i></i><b>${esc(e.dday_label)}</b></span>
         <span class="tt">
           <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
-          <div class="sub">${esc(fmtWhen(e))}${e.place?" · "+esc(e.place):""}</div>
+          <div class="sub">${esc(fmtWhen(e))}${e.place?` <em>|</em> `+esc(e.place):""}</div>
         </span>
       </div>`).join("")+`</div></div>`;
   eventSlider.reset();
@@ -1313,6 +1333,115 @@ document.addEventListener("keydown",e=>{
   }
 });
 
+/* =====================================================================
+   날씨 위젯 + 대시보드 배경
+
+   Open-Meteo 는 열쇠 없이 쓰는 무료 서비스이고 CORS 를 열어 두어서
+   브라우저가 바로 부를 수 있다. 서버를 거치지 않으므로 사내망이 밖으로
+   못 나가도 각자의 브라우저에서는 뜬다.
+   ===================================================================== */
+
+/* WMO 날씨 코드 → 우리가 쓰는 갈래.
+   https://open-meteo.com/en/docs 의 weather_code 표를 묶은 것이다. */
+function wxKind(code, isDay){
+  if(code===0)                      return isDay ? "clear" : "night";
+  if(code===1||code===2)            return isDay ? "partly" : "night";
+  if(code===3)                      return "cloud";
+  if(code===45||code===48)          return "fog";
+  if(code>=51&&code<=57)            return "drizzle";
+  if(code>=61&&code<=67)            return "rain";
+  if(code>=71&&code<=77)            return "snow";
+  if(code>=80&&code<=82)            return "rain";
+  if(code===85||code===86)          return "snow";
+  if(code>=95)                      return "storm";
+  return "cloud";
+}
+const WX_TEXT={clear:"맑음",night:"맑은 밤",partly:"구름 조금",cloud:"흐림",
+               fog:"안개",drizzle:"이슬비",rain:"비",snow:"눈",storm:"뇌우"};
+
+/* 그림은 선으로만 그린다 — 이모지는 기기마다 모양이 달라 위젯이 들쭉날쭉해진다. */
+const WX_ICON={
+  clear:`<circle cx="12" cy="12" r="4.6"/><path d="M12 2.4v2.2M12 19.4v2.2M2.4 12h2.2M19.4 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>`,
+  night:`<path d="M20 14.6A8.4 8.4 0 0 1 9.4 4 8.4 8.4 0 1 0 20 14.6z"/>`,
+  partly:`<circle cx="8.4" cy="8.4" r="3.4"/><path d="M8.4 1.8v1.7M1.8 8.4h1.7M3.9 3.9l1.2 1.2M12.9 3.9l-1.2 1.2"/><path d="M17.6 20.5H9.1a3.9 3.9 0 0 1-.4-7.8 5.3 5.3 0 0 1 10.1 1.2 3.4 3.4 0 0 1-1.2 6.6z"/>`,
+  cloud:`<path d="M17.6 19.5H8.4a4.2 4.2 0 0 1-.4-8.4 5.7 5.7 0 0 1 10.9 1.3 3.7 3.7 0 0 1-1.3 7.1z"/>`,
+  fog:`<path d="M17 13.5H8.2a3.9 3.9 0 0 1-.4-7.8 5.3 5.3 0 0 1 10.1 1.2 3.4 3.4 0 0 1-.9 6.6z"/><path d="M4 17.5h16M6.5 21h11"/>`,
+  drizzle:`<path d="M17.2 14.4H8.4a3.9 3.9 0 0 1-.4-7.8 5.3 5.3 0 0 1 10.1 1.2 3.4 3.4 0 0 1-.9 6.6z"/><path d="M9.2 18v1.6M13 17.6v2.2M16.8 18v1.6"/>`,
+  rain:`<path d="M17.2 13.6H8.4A3.9 3.9 0 0 1 8 5.8a5.3 5.3 0 0 1 10.1 1.2 3.4 3.4 0 0 1-.9 6.6z"/><path d="M8.8 16.6 7.6 20M13 16.6 11.8 20M17.2 16.6 16 20"/>`,
+  snow:`<path d="M17.2 13.6H8.4A3.9 3.9 0 0 1 8 5.8a5.3 5.3 0 0 1 10.1 1.2 3.4 3.4 0 0 1-.9 6.6z"/><path d="M9 17.6v.02M13 17v.02M17 17.6v.02M11 20.4v.02M15 20.4v.02"/>`,
+  storm:`<path d="M17.2 13.2H8.4A3.9 3.9 0 0 1 8 5.4a5.3 5.3 0 0 1 10.1 1.2 3.4 3.4 0 0 1-.9 6.6z"/><path d="m12.6 15.4-2.4 3.6h3l-2 3.4"/>`
+};
+
+function wxSvg(kind){
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${WX_ICON[kind]||WX_ICON.cloud}</svg>`;
+}
+
+let wxKindNow="";
+async function loadWeather(){
+  const box=document.getElementById("wx");
+  if(!box) return;
+  const url="https://api.open-meteo.com/v1/forecast"+
+    `?latitude=${OFFICE.lat}&longitude=${OFFICE.lon}`+
+    "&current=temperature_2m,apparent_temperature,weather_code,is_day"+
+    "&daily=temperature_2m_max,temperature_2m_min"+
+    "&timezone=Asia%2FSeoul&forecast_days=1";
+  try{
+    const r=await fetch(url);
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const w=await r.json();
+    const c=w.current, dmax=w.daily.temperature_2m_max[0], dmin=w.daily.temperature_2m_min[0];
+    const kind=wxKind(c.weather_code, c.is_day===1);
+    wxKindNow=kind;
+    box.className="wx wx-"+kind;
+    box.innerHTML=
+      `<div class="wx-ic">${wxSvg(kind)}</div>`+
+      `<div class="wx-t">${Math.round(c.temperature_2m)}<span>°</span></div>`+
+      `<div class="wx-s">${esc(WX_TEXT[kind]||"")}</div>`+
+      `<div class="wx-b"><span>${esc(OFFICE.label)}</span>`+
+        `<span class="wx-mm">${Math.round(dmin)}° / ${Math.round(dmax)}°</span></div>`;
+    applyBg();
+  }catch(e){
+    // 날씨는 있으면 좋은 것이라 실패해도 화면을 막지 않는다. 칸만 조용히 비운다.
+    box.className="wx wx-off";
+    box.innerHTML=`<div class="wx-ic">${wxSvg("cloud")}</div>`+
+                  `<div class="wx-s">날씨를 불러오지 못했습니다</div>`;
+  }
+}
+
+/* ---- 대시보드 배경 ---- */
+function applyBg(){
+  const on = document.body.dataset.bg !== "plain";
+  document.body.classList.toggle("bg-on", on && !!wxKindNow);
+  document.body.dataset.wx = on ? (wxKindNow||"") : "";
+  paintBgBtn();
+}
+
+const BG_ICON={
+  weather:`<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>`,
+  plain:`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M3.5 15.5 9 11l4 3.2 3.2-2.4 4.3 3.4"/></svg>`
+};
+function paintBgBtn(){
+  const b=document.getElementById("bgBtn");
+  if(!b) return;
+  const on = document.body.dataset.bg !== "plain";
+  b.innerHTML = on ? BG_ICON.weather : BG_ICON.plain;
+  b.classList.toggle("on", on);
+  b.title = on ? "배경: 날씨에 따라 — 눌러서 끄기" : "배경: 기본 — 눌러서 날씨에 맞추기";
+  b.setAttribute("aria-pressed", String(on));
+}
+
+async function toggleBg(){
+  const next = document.body.dataset.bg === "plain" ? "weather" : "plain";
+  document.body.dataset.bg = next;
+  applyBg();
+  try{
+    await bapi("api/me.php",{method:"PUT",body:JSON.stringify({bg_pref:next})});
+    toast(next==="plain" ? "기본 배경으로 두었습니다" : "배경을 날씨에 맞춥니다");
+  }catch(e){
+    toast("설정을 저장하지 못했습니다: "+e.message);
+  }
+}
+
 let toastT;
 function toast(m){const el=document.getElementById("toast");el.textContent=m;el.classList.add("show");
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("show"),2200);}
@@ -1468,7 +1597,7 @@ if(NOTICE){
   history.replaceState(null,"",location.pathname+(p.toString()?"?"+p:""));
   toast(NOTICE);
 }
-if(current){ renderShell(); enterApp(); }
+if(current){ renderShell(); paintBgBtn(); enterApp(); }
 </script>
 </body>
 </html>

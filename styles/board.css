@@ -14,8 +14,19 @@
    더 보여 주고 싶으면 --win-h 의 곱셈수만 바꾸면 된다. */
 .board{--row-h:36px;
   --win-h:calc(var(--row-h) * 2);
-  display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);
+  display:grid;
+  /* 공지 · 일정 · 날씨.
+     날씨 칸은 정사각이라 폭이 곧 높이다. 높이는 옆 칸(머리말 + 창)을 따라가므로
+     --win-h 에 머리말·안쪽 여백(65px)을 더한 값이 한 변이 된다.
+     --win-h 를 바꾸면 날씨 칸도 같이 따라온다. */
+  --wx-size:calc(var(--win-h) + 65px);
+  grid-template-columns:minmax(0,1.45fr) minmax(0,1fr) var(--wx-size);
   gap:16px;margin-bottom:26px;align-items:stretch}
+@media (max-width:1180px){
+  .board{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+  .board .wx{display:none}          /* 좁아지면 날씨부터 접는다 */
+}
+@media (prefers-reduced-motion:reduce){ body.bg-on{transition:none} }
 @media (max-width:1000px){.board{grid-template-columns:1fr}}
 
 /* 아래 타일과 구별되는 방법 — 그림자가 아니라 '생김새' 로 가른다.
@@ -103,32 +114,46 @@
    종류는 왼쪽 D-day 글자색(--k-ink)과 그림으로만 구분한다. 바탕까지 칠하면
    줄 여덟 개가 알록달록해져 오히려 안 읽힌다. */
 /* 한 건이 창을 꽉 채운다 — 크게 하나씩 보여 주려는 것이다.
-   바탕도 테두리도 없이 글자만 남긴다. 누를 수 있는 줄이 아니라 hover 반응도 없다. */
+   카드로 감싸지는 않는다. 힘은 왼쪽 달력 한 장에만 준다. */
 .ev-item{--k-ink:#1C5DE5;
-  display:flex;align-items:center;gap:13px;
-  height:var(--win-h);padding:0 10px;box-sizing:border-box;
+  display:flex;align-items:center;gap:14px;
+  height:var(--win-h);padding:0 4px 0 6px;box-sizing:border-box;
   animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
-.ev-item .big{font-family:var(--disp);font-size:26px;font-weight:700;line-height:1;
-  color:var(--k-ink);letter-spacing:-.02em;
-  white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}
+
+/* 달력 한 장 — 위쪽 굵은 띠와 고리 두 개로 '달력' 이라는 걸 알린다.
+   고리를 위 테두리에 걸치게 두면 벽에 걸린 것처럼 보인다. */
+.ev-item .cal{position:relative;flex-shrink:0;
+  width:62px;height:54px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--paper);border-radius:7px;
+  border:1.5px solid var(--k-ink);border-top-width:5px}
+.ev-item .cal i{position:absolute;top:-4px;width:7px;height:7px;
+  border-radius:50%;background:var(--paper);border:1.5px solid var(--k-ink)}
+.ev-item .cal i:nth-child(1){left:11px}
+.ev-item .cal i:nth-child(2){right:11px}
+.ev-item .cal b{font-family:var(--disp);font-size:18px;font-weight:700;line-height:1;
+  color:var(--k-ink);letter-spacing:-.03em;font-variant-numeric:tabular-nums;
+  margin-top:1px}
+
 .ev-item .tt{flex:1;min-width:0}
-.ev-item .nm{font-size:14.5px;font-weight:700;color:var(--navy);
+.ev-item .nm{font-size:15px;font-weight:700;color:var(--navy);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev-item .sub{font-size:12px;color:var(--muted);margin-top:2px;
+.ev-item .sub{font-size:12px;color:var(--muted);margin-top:4px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-item .sub em{font-style:normal;opacity:.5;margin:0 4px}
 /* 종류 그림. 글자 크기에 묻히지 않게 조금 키운다. */
-.ev-item .ki{font-style:normal;font-size:13px;margin-right:5px;vertical-align:1px}
+.ev-item .ki{font-style:normal;font-size:14px;margin-right:6px;vertical-align:1px}
 
 /* 임박한 것만 조금 더 힘을 준다. 색은 종류가 정하므로 여기서는 움직임만 건드린다. */
-.ev-item.today .big{animation:ddayPulse 1.8s ease-in-out infinite}
-.ev-item.soon  .big{animation:ddayBreathe 3.2s ease-in-out infinite}
+.ev-item.today .cal b{animation:ddayPulse 1.8s ease-in-out infinite}
+.ev-item.soon  .cal b{animation:ddayBreathe 3.2s ease-in-out infinite}
 
 @keyframes evRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes ddayPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
 @keyframes ddayBreathe{0%,100%{opacity:1}50%{opacity:.62}}
 
 @media (prefers-reduced-motion:reduce){
-  .ev-item,.ev-item .big{animation:none !important}
+  .ev-item,.ev-item .cal b{animation:none !important}
 }
 
 /* 관리 화면의 D-day 알약. 거기서는 줄이 넓어 알약이 어울린다. */
@@ -282,3 +307,73 @@
 .sec-hint{font-size:12.5px;color:var(--muted);white-space:nowrap}
 .sec::after{content:"";flex:1;height:1px;background:var(--line);margin-left:2px}
 @media (max-width:560px){.sec-hint{display:none}}
+
+/* =====================================================================
+   날씨 위젯
+   제목 줄 없이 그림과 숫자만 둬서 '칸' 이 아니라 '위젯' 으로 읽히게 한다.
+   자료는 브라우저가 Open-Meteo 에서 직접 받는다(core/board.php 참고).
+   ===================================================================== */
+.wx{--wx-ink:#1C5DE5;--wx-a:#EAF1FE;--wx-b:#D6E4FB;
+  display:flex;flex-direction:column;
+  padding:12px 14px;border-radius:16px;overflow:hidden;position:relative;
+  background:linear-gradient(150deg,var(--wx-a),var(--wx-b));
+  border:1px solid rgba(255,255,255,.7);
+  color:var(--wx-ink)}
+
+/* 그림은 오른쪽 위에 크게 깔고 숫자를 그 위에 얹는다 — 위젯다운 얼개다. */
+/* 그림은 오른쪽 위에 크게 깔고 숫자를 그 위에 얹는다 — 위젯다운 얼개다. */
+.wx-ic{position:absolute;right:-16px;top:-14px;opacity:.2;pointer-events:none;line-height:0}
+.wx-ic svg{width:88px;height:88px;fill:none;stroke:currentColor;
+  stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.wx-t{position:relative;margin-top:auto;
+  font-family:var(--disp);font-size:31px;font-weight:700;
+  line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.wx-t span{font-size:19px;font-weight:600;vertical-align:top;margin-left:1px}
+.wx-s{position:relative;font-size:12.5px;font-weight:600;margin-top:2px;opacity:.9}
+.wx-b{position:relative;display:flex;align-items:baseline;gap:6px;margin-top:6px;
+  font-size:11px;opacity:.75;white-space:nowrap}
+.wx-b .wx-mm{margin-left:auto;font-variant-numeric:tabular-nums}
+.wx-load{margin:auto;color:inherit;opacity:.6;font-size:13px}
+
+/* 날씨마다 색을 달리한다. 위젯과 대시보드 배경이 같은 색을 쓴다. */
+.wx-clear  {--wx-ink:#B15E12;--wx-a:#FFF3DC;--wx-b:#FFE0B0}
+.wx-partly {--wx-ink:#1C5DE5;--wx-a:#EAF2FE;--wx-b:#CFE0FA}
+.wx-cloud  {--wx-ink:#4A5772;--wx-a:#EFF2F7;--wx-b:#DBE1EC}
+.wx-fog    {--wx-ink:#5B6577;--wx-a:#F0F2F5;--wx-b:#DEE2E8}
+.wx-drizzle{--wx-ink:#25667F;--wx-a:#E9F3F8;--wx-b:#CCE3EE}
+.wx-rain   {--wx-ink:#1F5B78;--wx-a:#E4F0F6;--wx-b:#C2DCE9}
+.wx-snow   {--wx-ink:#3E6C8E;--wx-a:#F2F7FB;--wx-b:#DCEAF4}
+.wx-storm  {--wx-ink:#4B3C86;--wx-a:#EDEAF8;--wx-b:#D6CFF0}
+.wx-night  {--wx-ink:#EDF1FA;--wx-a:#3A4670;--wx-b:#222B4B;border-color:rgba(255,255,255,.12)}
+.wx-off    {--wx-ink:#63719A;--wx-a:#F2F5FA;--wx-b:#E6EBF4}
+.wx-off .wx-s{margin:auto;font-weight:500;text-align:center}
+.wx-off .wx-ic{opacity:.14}
+
+/* =====================================================================
+   날씨에 따른 대시보드 배경
+   포털 기본 배경(#EEF3FB) 위에 아주 옅은 물을 들이는 정도로만 둔다.
+   업무 화면이라 읽는 데 방해가 되면 안 된다.
+   ===================================================================== */
+/* 위쪽만 물들이고 아래로 가면서 본래 색으로 돌아온다. 화면을 통째로 칠하면
+   글 읽기가 나빠지고, 위만 물들이면 '오늘 날씨' 라는 느낌만 남는다. */
+body.bg-on{transition:background-color .6s ease, background-image .6s ease;
+  background-repeat:no-repeat;background-attachment:fixed}
+body.bg-on[data-wx]{background-image:linear-gradient(180deg,var(--sky,transparent) 0,transparent 520px)}
+body.bg-on[data-wx="clear"]  {--sky:#FCE9C4}
+body.bg-on[data-wx="partly"] {--sky:#DCE9FC}
+body.bg-on[data-wx="cloud"]  {--sky:#E0E5EE}
+body.bg-on[data-wx="fog"]    {--sky:#E3E6EA}
+body.bg-on[data-wx="drizzle"]{--sky:#D6E7F1}
+body.bg-on[data-wx="rain"]   {--sky:#CEE1EE}
+body.bg-on[data-wx="snow"]   {--sky:#E4EFF8}
+body.bg-on[data-wx="storm"]  {--sky:#DFDAF1}
+body.bg-on[data-wx="night"]  {--sky:#CFD6E8}
+/* ---------- 상단바: 배경 설정 단추 ---------- */
+.bg-btn{display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:32px;padding:0;border-radius:999px;
+  border:1px solid #E2E9F6;background:#fff;color:#63719A;cursor:pointer;
+  transition:border-color .14s ease,color .14s ease,background .14s ease}
+.bg-btn:hover{border-color:#4C8DFF;color:#1C5DE5}
+.bg-btn.on{color:#1C5DE5;background:#EEF3FB;border-color:#CFE0FA}
+.bg-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}

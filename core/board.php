@@ -19,6 +19,36 @@ require_once __DIR__ . '/auth.php';   // 세션 + current_portal_user() + portal
 // 명단이 어떻게 되든 이 사람들은 항상 관리자다.
 const OWNER_ADMINS = ['kimhy@bluesoft.co.kr'];
 
+/**
+ * 날씨를 보여 줄 사무실 위치.
+ *
+ * 자료는 브라우저가 Open-Meteo 에서 직접 받는다(열쇠 없이 쓰는 무료 서비스).
+ * 서버가 밖으로 못 나가는 곳에서도 동작하라고 그렇게 했다.
+ * 옮기려면 여기만 고치거나, config.php 에 'weather' 를 넣어 덮어쓴다.
+ */
+// 충북 청주시 청원구 내덕동. Open-Meteo 지오코딩으로 확인한 값이다.
+const OFFICE_WEATHER = ['lat' => 36.6553, 'lon' => 127.4890, 'label' => '청주'];
+
+function board_office_weather()
+{
+    $cfg = require dirname(__DIR__) . '/config.php';
+    $w   = isset($cfg['weather']) && is_array($cfg['weather']) ? $cfg['weather'] : [];
+    return [
+        'lat'   => isset($w['lat'])   ? (float)$w['lat']   : OFFICE_WEATHER['lat'],
+        'lon'   => isset($w['lon'])   ? (float)$w['lon']   : OFFICE_WEATHER['lon'],
+        'label' => isset($w['label']) ? (string)$w['label'] : OFFICE_WEATHER['label'],
+    ];
+}
+
+/** 대시보드 배경 설정. 아무것도 안 고른 사람은 날씨를 따라간다. */
+const BG_PREFS = ['weather', 'plain'];
+
+function board_bg_pref($u)
+{
+    $v = is_array($u) && isset($u['bg_pref']) ? (string)$u['bg_pref'] : '';
+    return in_array($v, BG_PREFS, true) ? $v : 'weather';
+}
+
 // 최초 기동 때 portal_admin 에 심을 초기 명단. 그 뒤로는 DB 가 원본이다.
 const SEED_ADMINS = ['kimhy@bluesoft.co.kr'];
 

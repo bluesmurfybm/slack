@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../core/auth.php';
+require_once __DIR__ . '/../core/board.php';   // board_bg_pref()
 header('Content-Type: application/json; charset=utf-8');
 
 $u = require_portal_login();
@@ -11,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'has_token'   => !empty($u['slack_token_enc']),
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
+        'bg_pref'     => board_bg_pref($u),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -29,6 +31,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if (isset($body['slack_token']) && trim((string)$body['slack_token']) !== '') {
         $fields[] = 'slack_token_enc=?';
         $vals[]   = enc_token(trim($body['slack_token']));
+    }
+    // 대시보드 배경 설정. 화면 우상단 아이콘이 이것만 따로 보낸다.
+    if (isset($body['bg_pref'])) {
+        require_once __DIR__ . '/../core/board.php';
+        $pref = (string)$body['bg_pref'];
+        if (!in_array($pref, BG_PREFS, true)) {
+            http_response_code(400);
+            echo json_encode(['error' => '알 수 없는 배경 설정입니다'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $fields[] = 'bg_pref=?';
+        $vals[]   = $pref;
     }
     if (!empty($body['color'])) {
         $color = trim((string)$body['color']);
@@ -63,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         'has_token'   => !empty($u['slack_token_enc']),
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
+        'bg_pref'     => board_bg_pref($u),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }

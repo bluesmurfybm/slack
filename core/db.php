@@ -37,6 +37,8 @@ function portal_db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `color` VARCHAR(7) NULL COMMENT '고유색상(#rrggbb) — 아바타/뱃지 표시용' AFTER `slack_token_enc`");
+    // 대시보드 배경을 날씨에 따라 바꿀지 말지. 사람마다 다르게 두고 계정에 남긴다.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `bg_pref` VARCHAR(20) NULL COMMENT '대시보드 배경: weather|plain' AFTER `color`");
 
     // -----------------------------------------------------------------
     // 알림판 — 공지 / 중요 일정 / 포털 관리자
