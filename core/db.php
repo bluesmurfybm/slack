@@ -21,6 +21,10 @@ function portal_db() {
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$d['name']}`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `{$d['name']}`");
+    // PHP 쪽(Asia/Seoul)과 같은 시간대로 맞춘다. 서버 시간대에 기대면
+    // NOW()/CURDATE() 가 PHP 의 오늘과 어긋난다. bluecart 도 같은 DB 에
+    // 이렇게 붙는다.
+    $pdo->exec("SET time_zone = '+09:00'");
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `portal_users` (

@@ -4,6 +4,13 @@
  *  - slack 모듈도 PHP 세션을 쓰므로 쿠키명/저장경로를 분리해 서로 겹치지 않게 함.
  */
 
+/* 모든 진입점이 이 파일을 거친다. 시간대를 여기서 못 박아 둔다.
+   php.ini 에 date.timezone 이 없으면 PHP 는 UTC 로 돌고, MySQL 은 서버 시간대로
+   돈다. 그러면 자정부터 아홉 시간 동안 두 쪽의 '오늘' 이 하루 어긋나
+   D-day 가 하루씩 틀리고 공지 노출 기간도 맞지 않는다.
+   learn/dti/moodle 은 이미 각자 이렇게 하고 있었다. */
+date_default_timezone_set('Asia/Seoul');
+
 require_once __DIR__ . '/db.php';
 
 // 로그인 유지(자동로그인): 로그아웃 전까지 30일 슬라이딩 만료 — 방문할 때마다 갱신.
