@@ -144,26 +144,22 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         </div>
       </section>
 
-      <!-- 일정 — 위젯. 머리말 줄 없이 내용이 칸을 꽉 채우고,
-           위아래 화살표로 넘긴다(달력 장을 넘기듯). -->
-      <section class="sch" id="ev-nav" aria-label="중요 일정">
-        <div id="board-events">
-          <div class="panel-empty">불러오는 중…</div>
-        </div>
-        <div class="sch-ui">
-          <div class="sch-top">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Schedule</h2>
+          <span class="slide-nav no-more" id="ev-nav">
+            <button type="button" data-dir="-1" title="이전 일정" aria-label="이전 일정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
             <span class="pos" aria-live="off"></span>
-            <button type="button" class="sch-arw" data-dir="-1" title="이전 일정" aria-label="이전 일정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 15 7-7 7 7"/></svg></button>
-            <span class="sch-acts">
+            <button type="button" data-dir="1" title="다음 일정" aria-label="다음 일정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          </span>
+          <span class="sp"></span>
 <?php if ($__isAdmin): ?>
-              <button class="panel-act add" onclick="openEventModal(0)">+ 등록</button>
-              <button class="panel-act" onclick="showManage('events')">관리</button>
+          <button class="panel-act add" onclick="openEventModal(0)">+ 등록</button>
+          <button class="panel-act" onclick="showManage('events')">관리</button>
 <?php endif; ?>
-            </span>
-          </div>
-          <div class="sch-bot">
-            <button type="button" class="sch-arw" data-dir="1" title="다음 일정" aria-label="다음 일정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 9 7 7 7-7"/></svg></button>
-          </div>
+        </div>
+        <div class="panel-body" id="board-events">
+          <div class="panel-empty">불러오는 중…</div>
         </div>
       </section>
 
@@ -893,34 +889,33 @@ const eventSlider =makeSlider("board-events-list", 4200, "ev-nav");
 /* 한 번에 한 건씩, 크게 보여 준다. 왼쪽 D-day 는 달력 한 장 모양으로 두르고
    (위쪽 굵은 띠 + 고리 두 개) 오른쪽에 제목과 날짜를 놓는다.
    카드로 감싸지는 않는다 — 바탕을 깔면 그 칸만 무겁게 튄다. */
-/* D-day 를 전광판처럼 보여 준다. 숫자면 7세그먼트로 그리고,
-   'D-DAY' 나 '진행중' 처럼 글자면 같은 판에 빛나는 글씨로 얹는다. */
-const SEG_ON={ "0":"abcdef","1":"bc","2":"abdeg","3":"abcdg","4":"bcfg",
-               "5":"acdfg","6":"acdefg","7":"abc","8":"abcdefg","9":"abcdfg" };
-const SEG_PTS={
-  a:"12,3 36,3 40,7 36,11 12,11 8,7",
-  g:"12,38 36,38 40,42 36,46 12,46 8,42",
-  d:"12,73 36,73 40,77 36,81 12,81 8,77",
-  f:"6,9 10,13 10,36 6,40 2,36 2,13",
-  b:"42,9 46,13 46,36 42,40 38,36 38,13",
-  e:"6,44 10,48 10,71 6,75 2,71 2,44",
-  c:"42,44 46,48 46,71 42,75 38,71 38,44"
+/* D-day 숫자를 점으로 찍어 보여 준다(3×5 픽셀 글자).
+   숫자 하나가 열다섯 칸이고, 꺼진 칸도 아주 흐리게 남겨 '점판' 이라는 게
+   읽히게 했다. 검은 판에 네온을 얹으면 포털의 다른 화면과 겉돌아서,
+   바탕은 그대로 두고 점만 일정 종류 색으로 찍는다. */
+const PIX_FONT={
+  "0":"111101101101111","1":"010110010010111","2":"111001111100111",
+  "3":"111001111001111","4":"101101111001001","5":"111100111001111",
+  "6":"111100111101111","7":"111001001001001","8":"111101111101111",
+  "9":"111101111001111"
 };
-function ledDigits(text){
-  return Array.prototype.map.call(text, ch=>{
-    const on=SEG_ON[ch]||"";
-    return `<svg class="seg" viewBox="0 0 48 84" aria-hidden="true">`+
-      Object.keys(SEG_PTS).map(k=>
-        `<polygon class="${on.indexOf(k)>=0?"on":"off"}" points="${SEG_PTS[k]}"/>`
-      ).join("")+`</svg>`;
-  }).join("");
+function pixDigit(ch){
+  const bits=PIX_FONT[ch];
+  if(!bits) return "";
+  let dots="";
+  for(let i=0;i<15;i++){
+    const x=i%3, y=(i-x)/3;
+    dots+=`<rect class="${bits[i]==="1"?"on":"off"}" `+
+          `x="${x+0.09}" y="${y+0.09}" width="0.82" height="0.82" rx="0.17"/>`;
+  }
+  return `<svg viewBox="0 0 3 5" aria-hidden="true">${dots}</svg>`;
 }
-function ddayLed(label){
+function ddayPix(label){
   const m=/^D-(\d+)$/.exec(label);
-  if(m) return `<span class="dd-pre">D-</span>`+
-               `<span class="led">${ledDigits(m[1])}</span>`;
-  // 오늘(D-DAY)·진행중·지난 것(D+n)은 숫자가 아니라 글자로 얹는다
-  return `<span class="led led--txt">${esc(label)}</span>`;
+  if(m) return `<b class="d">D-</b><span class="pix">`+
+               Array.prototype.map.call(m[1], pixDigit).join("")+`</span>`;
+  // 오늘(D-DAY)·진행중·지난 것(D+n)은 숫자가 아니라 글자 그대로 둔다
+  return `<b class="txt">${esc(label)}</b>`;
 }
 
 function renderBoardEvents(rows){
@@ -933,9 +928,13 @@ function renderBoardEvents(rows){
   box.innerHTML=`<div class="slide-win" id="board-events-list"><div class="slide-track">`+
     rows.map(e=>`
       <div class="ev-item k-${e.kind.key} ${e.heat}">
-        <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
-        <div class="dd" aria-label="${esc(e.dday_label)}">${ddayLed(e.dday_label)}</div>
-        <div class="sub">${esc(fmtWhen(e))}${e.place?` · `+esc(e.place):""}</div>
+        <span class="cal" aria-label="${esc(e.dday_label)}">
+          <i></i><i></i>${ddayPix(e.dday_label)}
+        </span>
+        <span class="tt">
+          <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
+          <div class="sub">${esc(fmtWhen(e))}${e.place?` <em>|</em> `+esc(e.place):""}</div>
+        </span>
       </div>`).join("")+`</div></div>`;
   eventSlider.reset();
 }

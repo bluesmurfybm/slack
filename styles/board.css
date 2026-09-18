@@ -13,7 +13,7 @@
    늘어나지 않고 안에서 한 칸씩 돌아간다 — 공지가 쌓여도 타일이 안 밀린다.
    더 보여 주고 싶으면 --win-h 의 곱셈수만 바꾸면 된다. */
 .board{--row-h:36px;
-  --win-h:calc(var(--row-h) * 3);            /* 공지 3줄 */
+  --win-h:calc(var(--row-h) * 2);            /* 공지 2줄 */
   /* 공지 칸의 바깥 높이 = 머리말 + 안쪽 여백(65px) + 창.
      일정 위젯과 날씨 칸이 이 값을 그대로 쓰므로 세 칸 높이가 저절로 맞는다.
      --win-h 만 바꾸면 셋 다 따라온다. */
@@ -113,73 +113,52 @@
 
    종류는 왼쪽 D-day 글자색(--k-ink)과 그림으로만 구분한다. 바탕까지 칠하면
    줄 여덟 개가 알록달록해져 오히려 안 읽힌다. */
-/* =====================================================================
-   일정 위젯
-   머리말 줄 없이 내용이 칸을 꽉 채운다. 바탕은 일정 종류 색을 아주 옅게 깔아
-   무슨 일인지 색으로 먼저 읽히게 하고, 위아래 화살표로 한 건씩 넘긴다.
-   ===================================================================== */
-.sch{position:relative;border-radius:16px;overflow:hidden;
-  border:1px solid var(--line);background:var(--card)}
-.sch .slide-win{height:var(--panel-h)}
-
-/* 화살표와 단추는 내용 위에 떠 있다. 바탕이 종류 색을 따라가므로
-   이것들만 따로 칠하지 않고 얹어 둔다. */
-.sch-ui{position:absolute;inset:0;pointer-events:none;
-  display:flex;flex-direction:column;justify-content:space-between}
-.sch-ui > *{pointer-events:none}
-/* 숫자 · 화살표 · 단추를 셋으로 나눠 화살표가 언제나 한가운데 오게 한다. */
-.sch-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
-  padding:7px 12px 0 14px}
-.sch-bot{display:flex;justify-content:center;padding:0 0 3px}
-.sch-top .pos{justify-self:start;font-size:11px;color:var(--muted);
-  font-variant-numeric:tabular-nums;pointer-events:auto}
-.sch-top .sch-acts{justify-self:end;display:flex;gap:2px;pointer-events:auto}
-.sch-arw{pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;
-  width:26px;height:18px;padding:0;border:0;border-radius:6px;
-  background:none;color:var(--muted);cursor:pointer;
-  transition:background .12s ease,color .12s ease}
-.sch-arw:hover{background:rgba(255,255,255,.55);color:var(--blue)}
-.sch-arw svg{width:15px;height:15px;fill:none;stroke:currentColor;
-  stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-.sch.no-more .sch-arw,.sch.no-more .pos{visibility:hidden}
-
-/* 한 건이 칸을 꽉 채운다. 제목 / 전광판 / 날짜를 가는 선으로 나눈다. */
+/* 한 건이 창을 꽉 채운다 — 크게 하나씩 보여 주려는 것이다.
+   카드로 감싸지는 않는다. 힘은 왼쪽 달력 한 장에만 준다. */
 .ev-item{--k-ink:#1C5DE5;
-  height:var(--panel-h);box-sizing:border-box;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:6px;padding:25px 16px 20px;
-  background:#EEF3FB;
-  background:color-mix(in srgb, var(--k-ink) 14%, #fff);
+  display:flex;align-items:center;gap:14px;
+  height:var(--win-h);padding:0 4px 0 6px;box-sizing:border-box;
   animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
-.ev-item .nm{width:100%;font-size:14.5px;font-weight:700;color:var(--navy);
-  text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev-item .ki{font-style:normal;font-size:14px;margin-right:6px;vertical-align:1px}
-.ev-item .sub{width:100%;font-size:11.5px;color:var(--muted);text-align:center;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* ---------- 전광판 ----------
-   위아래 가는 선으로 제목·날짜와 나눈다. 선을 제목에 붙이면 제목의
-   overflow:hidden 에 잘려 안 보인다 — 그래서 전광판 쪽에 준다. */
-.ev-item .dd{display:flex;align-items:center;justify-content:center;gap:8px;
-  width:100%;padding:8px 0;
-  border-top:1px solid color-mix(in srgb, var(--k-ink) 20%, transparent);
-  border-bottom:1px solid color-mix(in srgb, var(--k-ink) 20%, transparent)}
-.dd-pre{font-family:var(--disp);font-size:27px;font-weight:700;line-height:1;
-  color:var(--k-ink);letter-spacing:-.03em}
-.led{display:inline-flex;align-items:center;gap:3px;
-  background:#150d11;border-radius:5px;padding:5px 7px;
-  box-shadow:inset 0 1px 5px rgba(0,0,0,.65), 0 1px 0 rgba(255,255,255,.5)}
-.led .seg{height:26px;width:auto;display:block}
-/* 켜진 칸은 빛나고, 꺼진 칸도 아주 흐리게 남는다 — 진짜 전광판이 그렇다. */
-.led .seg .on{fill:#FF3B4E;filter:drop-shadow(0 0 3px rgba(255,59,78,.8))}
-.led .seg .off{fill:#3A1A22}
-.led--txt{font-family:var(--disp);font-size:19px;font-weight:700;letter-spacing:.06em;
-  color:#FF3B4E;text-shadow:0 0 7px rgba(255,59,78,.7);padding:7px 11px}
 
-/* 임박한 것만 조금 더 힘을 준다. */
-.ev-item.today .led .seg .on,.ev-item.today .led--txt{animation:ledPulse 1.6s ease-in-out infinite}
-@keyframes ledPulse{0%,100%{opacity:1}50%{opacity:.55}}
+/* 달력 한 장 — 위쪽 굵은 띠와 고리 두 개로 '달력' 이라는 걸 알린다.
+   고리를 위 테두리에 걸치게 두면 벽에 걸린 것처럼 보인다. */
+.ev-item .cal{position:relative;flex-shrink:0;
+  min-width:62px;height:54px;padding:0 8px;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  background:var(--paper);border-radius:7px;
+  border:1.5px solid var(--k-ink);border-top-width:5px}
+.ev-item .cal i{position:absolute;top:-4px;width:7px;height:7px;
+  border-radius:50%;background:var(--paper);border:1.5px solid var(--k-ink)}
+.ev-item .cal i:nth-child(1){left:11px}
+.ev-item .cal i:nth-child(2){right:11px}
+/* 'D-' 는 글자로, 숫자는 점으로. 둘의 크기를 맞춰 한 덩어리로 읽히게 한다. */
+.ev-item .cal .d{font-family:var(--disp);font-size:15px;font-weight:700;line-height:1;
+  color:var(--k-ink);letter-spacing:-.05em;margin-top:1px}
+.ev-item .cal .txt{font-family:var(--disp);font-size:15px;font-weight:700;line-height:1;
+  color:var(--k-ink);letter-spacing:-.02em;margin-top:1px}
+
+/* ---------- 픽셀 숫자 ----------
+   3×5 점판. 켜진 점은 종류 색, 꺼진 점은 같은 색을 아주 옅게 남겨
+   '점으로 찍는 판' 이라는 결이 보이게 한다. */
+.pix{display:flex;align-items:center;gap:2.5px;margin-top:1px}
+.pix svg{height:19px;width:auto;display:block;overflow:visible}
+.pix .on{fill:var(--k-ink)}
+.pix .off{fill:var(--k-ink);opacity:.14}
+
+.ev-item .tt{flex:1;min-width:0}
+.ev-item .nm{font-size:15px;font-weight:700;color:var(--navy);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-item .sub{font-size:12px;color:var(--muted);margin-top:4px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-item .sub em{font-style:normal;opacity:.5;margin:0 4px}
+/* 종류 그림. 글자 크기에 묻히지 않게 조금 키운다. */
+.ev-item .ki{font-style:normal;font-size:14px;margin-right:6px;vertical-align:1px}
+
+/* 오늘 것만 점이 아주 천천히 숨 쉰다. 깜빡이면 업무 화면에서 성가시다. */
+.ev-item.today .pix .on,.ev-item.today .cal .txt{animation:pixBreathe 2.4s ease-in-out infinite}
+@keyframes pixBreathe{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){
-  .ev-item,.ev-item.today .led .seg .on,.ev-item.today .led--txt{animation:none !important}
+  .ev-item,.ev-item.today .pix .on,.ev-item.today .cal .txt{animation:none !important}
 }
 
 /* 종류별 색. 제목에서 낱말을 보고 board_event_kind() 가 고른다.
