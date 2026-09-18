@@ -62,6 +62,8 @@ function portal_db() {
             `title`        VARCHAR(200) NOT NULL,
             `body`         MEDIUMTEXT   NOT NULL COMMENT '일반 텍스트. 화면에서 이스케이프 후 줄바꿈만 살린다',
             `is_pinned`    TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1이면 목록 맨 위에 고정',
+            `starts_on`    DATE         NULL     COMMENT '노출 시작일. NULL 이면 등록 즉시',
+            `ends_on`      DATE         NULL     COMMENT '노출 종료일. NULL 이면 내릴 때까지',
             `author_email` VARCHAR(190) NOT NULL,
             `author_name`  VARCHAR(60)  NOT NULL COMMENT '작성 시점 이름 스냅샷',
             `view_count`   INT UNSIGNED NOT NULL DEFAULT 0,
@@ -72,6 +74,10 @@ function portal_db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='포털 공지'
     ");
+
+    // 이미 설치된 곳에도 노출 기간을 붙인다.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `starts_on` DATE NULL COMMENT '노출 시작일. NULL 이면 등록 즉시' AFTER `is_pinned`");
+    add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `ends_on` DATE NULL COMMENT '노출 종료일. NULL 이면 내릴 때까지' AFTER `starts_on`");
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `portal_notice_file` (

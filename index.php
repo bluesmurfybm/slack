@@ -107,7 +107,6 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
   <div id="view-dash" class="wrap">
     <div class="hero">
       <h1 id="hero-hi">환영합니다</h1>
-      <p>사용할 업무 시스템을 선택하세요.</p>
     </div>
 
     <!-- 알림판 — 타일보다 위. 공지와 다가오는 일정은 들어오자마자 봐야 하는 것들이다. -->
@@ -117,12 +116,17 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           <h2>📢 주요 공지</h2>
           <span class="sp"></span>
 <?php if ($__isAdmin): ?>
-          <button class="panel-act add" onclick="showNoticeEdit(0)">+ 새 공지</button>
+          <button class="panel-act add" onclick="openNoticeDrawer(0)">+ 새 공지</button>
 <?php endif; ?>
           <button class="panel-act" onclick="showNotices(1)">전체 보기 →</button>
         </div>
-        <div class="panel-body" id="board-notices">
-          <div class="panel-empty">불러오는 중…</div>
+        <div class="panel-body">
+          <!-- 고정 공지는 스크롤 밖. 아래가 길어져도 늘 보인다. -->
+          <div class="nt-pinned" id="board-pinned"></div>
+          <div class="nt-scroll" id="board-notices">
+            <div class="panel-empty">불러오는 중…</div>
+          </div>
+          <div class="nt-fade" id="board-fade"></div>
         </div>
       </section>
 
@@ -141,6 +145,12 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
       </section>
     </div>
 
+    <!-- 알림판과 타일은 하는 일이 다르다(읽는 곳 / 가는 곳). 구역 이름과
+         가는 선 하나로 경계를 준다 — 색을 더 쓰면 화면이 시끄러워진다. -->
+    <div class="sec">
+      <h2>업무 시스템</h2>
+      <span class="sec-hint">사용할 시스템을 선택하세요</span>
+    </div>
     <div class="grid" id="tiles"></div>
   </div>
 
@@ -150,54 +160,12 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
       <h1>공지사항</h1>
       <span style="flex:1"></span>
 <?php if ($__isAdmin): ?>
-      <button class="btn-sm" onclick="showNoticeEdit(0)">+ 새 공지</button>
+      <button class="btn-sm" onclick="openNoticeDrawer(0)">+ 새 공지</button>
 <?php endif; ?>
       <button class="btn-sm" onclick="showDash()">대시보드</button>
     </div>
     <div class="list-card" id="nl-list"></div>
     <div class="pager" id="nl-pager"></div>
-  </div>
-
-  <!-- 공지 상세 -->
-  <div id="view-notice" class="wrap hidden">
-    <div class="page-head">
-      <h1>공지사항</h1>
-      <span style="flex:1"></span>
-      <span id="nd-admin-btns"></span>
-      <button class="btn-sm" onclick="showNotices(nlPage)">목록</button>
-    </div>
-    <div class="detail-card" id="nd-card"></div>
-  </div>
-
-  <!-- 공지 작성 / 수정 -->
-  <div id="view-notice-edit" class="wrap hidden">
-    <div class="page-head">
-      <h1 id="ne-title">새 공지</h1>
-    </div>
-    <div class="edit-card">
-      <div class="err hidden" id="ne-err"></div>
-      <div class="fld">
-        <label>제목</label>
-        <input type="text" id="ne-subject" maxlength="200" placeholder="예) 9월 전사 워크숍 안내">
-      </div>
-      <div class="fld">
-        <label>내용</label>
-        <textarea id="ne-body" maxlength="20000" placeholder="쓴 그대로 보입니다. 줄바꿈은 살아 있고, 주소는 자동으로 링크가 됩니다."></textarea>
-      </div>
-      <div class="fld">
-        <label>첨부파일</label>
-        <input type="file" id="ne-files" multiple>
-        <div class="hintline">한 건에 10개, 파일당 20MB 까지. 이미지·PDF·문서·압축파일만 올라갑니다.</div>
-        <div class="files" id="ne-filelist" style="border:0;padding:0;margin-top:10px"></div>
-      </div>
-      <div class="fld">
-        <label class="check"><input type="checkbox" id="ne-pinned"> 목록 맨 위에 고정</label>
-      </div>
-      <div class="form-actions">
-        <button class="btn-ghost" onclick="cancelNoticeEdit()">취소</button>
-        <button class="btn-primary" id="ne-save" style="width:auto;padding:11px 22px;margin:0" onclick="saveNotice()">저장</button>
-      </div>
-    </div>
   </div>
 
   <!-- 포털 관리 -->
@@ -215,9 +183,74 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     <div id="mg-body"></div>
   </div>
 
-  <!-- 일정 등록 / 수정 -->
-  <div class="modal hidden" id="ev-modal">
-    <div class="modal-box">
+  <!-- 공지 상세 — 가운데 팝업. 읽기만 하는 화면이라 굳이 화면을 옮기지 않는다. -->
+  <div class="modal modal--center hidden" id="nd-modal">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="nd-modal-title">
+      <div class="modal-head">
+        <h3 id="nd-modal-title">공지사항</h3>
+        <button class="modal-x" onclick="closeNoticeModal()" aria-label="닫기">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="detail-card" id="nd-card"></div>
+      </div>
+      <div class="modal-foot">
+        <span class="left" id="nd-admin-btns"></span>
+        <button class="btn-sm" onclick="closeNoticeModal();showNotices(1)">전체보기 페이지로 이동</button>
+        <button class="btn-primary" style="width:auto;padding:9px 20px;margin:0" onclick="closeNoticeModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 공지 작성 / 수정 — 오른쪽 드로어 -->
+  <div class="modal modal--right hidden" id="ne-modal">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="ne-title">
+      <div class="modal-head">
+        <h3 id="ne-title">새 공지</h3>
+        <button class="modal-x" onclick="closeNoticeDrawer()" aria-label="닫기">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="err hidden" id="ne-err"></div>
+        <div class="edit-card" style="border:0;padding:0;max-width:none">
+          <div class="fld">
+            <label>제목</label>
+            <input type="text" id="ne-subject" maxlength="200" placeholder="예) 9월 전사 워크숍 안내">
+          </div>
+          <div class="fld">
+            <label>내용</label>
+            <textarea id="ne-body" maxlength="20000" placeholder="쓴 그대로 보입니다. 줄바꿈은 살아 있고, 주소는 자동으로 링크가 됩니다."></textarea>
+          </div>
+          <div class="two">
+            <div class="fld">
+              <label>노출 시작일 <span style="font-weight:400">· 비우면 바로</span></label>
+              <input type="date" id="ne-from">
+            </div>
+            <div class="fld">
+              <label>노출 종료일 <span style="font-weight:400">· 비우면 계속</span></label>
+              <input type="date" id="ne-to">
+            </div>
+          </div>
+          <div class="fld">
+            <label>첨부파일</label>
+            <input type="file" id="ne-files" multiple>
+            <div class="hintline">한 건에 10개, 파일당 20MB 까지. 이미지·PDF·문서·압축파일만 올라갑니다.</div>
+            <div class="files" id="ne-filelist" style="border:0;padding:0;margin-top:10px"></div>
+          </div>
+          <div class="fld">
+            <label class="check"><input type="checkbox" id="ne-pinned"> 목록 맨 위에 고정</label>
+            <div class="hintline">고정한 공지는 대시보드에서 스크롤과 상관없이 늘 보입니다.</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-ghost" onclick="closeNoticeDrawer()">취소</button>
+        <button class="btn-primary" id="ne-save" style="width:auto;padding:10px 20px;margin:0" onclick="saveNotice()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 일정 등록 / 수정 — 오른쪽 드로어 -->
+  <div class="modal modal--right hidden" id="ev-modal">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="ev-title">
       <div class="modal-head">
         <h3 id="ev-title">일정 등록</h3>
         <button class="modal-x" onclick="closeEventModal()" aria-label="닫기">&times;</button>
@@ -433,7 +466,7 @@ document.addEventListener("click",(e)=>{
 /* ---- views ---- */
 /* 화면이 늘어나면서 "이것만 보이고 나머지는 숨긴다"를 한 곳에서 처리한다.
    화면마다 서로를 숨기게 두면 하나 추가할 때마다 빠뜨리는 곳이 생긴다. */
-const VIEWS=["view-dash","view-profile","view-notices","view-notice","view-notice-edit","view-manage"];
+const VIEWS=["view-dash","view-profile","view-notices","view-manage"];
 function showView(id){
   VIEWS.forEach(v=>{
     const el=document.getElementById(v);
@@ -627,9 +660,12 @@ function fmtWhen(e){
 }
 
 /* ---- 대시보드 위 두 칸 ---- */
+let boardTotal=0;
 async function loadBoard(){
   try{
-    const d=await bapi("api/notices.php?size=5&page=1");
+    // 칸 안에서 스크롤되므로 몇 건을 받아도 바깥 높이는 그대로다.
+    const d=await bapi("api/notices.php?size=20&page=1");
+    boardTotal=d.total;
     renderBoardNotices(d.rows);
   }catch(e){
     document.getElementById("board-notices").innerHTML=
@@ -645,22 +681,52 @@ async function loadBoard(){
 }
 
 const PIN_ICON=`<svg class="nt-pin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M14 2v6l3 3v2h-4v7l-1 2-1-2v-7H7v-2l3-3V2z"/></svg>`;
+/* 첨부 표시. 이모지는 기기마다 모양이 달라 클립을 직접 그린다. */
+function clipTag(n){
+  if(!n) return "";
+  return `<span class="clip" title="첨부 ${n}개">`+
+    `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.05 12.3 20.2a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.1 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg>`+
+    `${n}</span>`;
+}
 
+function noticeRow(n){
+  return `<button class="nt-row" onclick="openNotice(${n.id})">
+      ${n.is_pinned?PIN_ICON:""}
+      <span class="tt">${esc(n.title)}</span>
+      ${clipTag(n.file_count)}
+      ${n.is_new?`<span class="nt-new">NEW</span>`:""}
+      <span class="dt">${fmtDateDot(n.created_at)}</span>
+    </button>`;
+}
+
+/* 고정 공지는 스크롤 밖에 따로 그린다. 나머지만 안에서 스크롤된다 —
+   자동으로 돌아가는 배너도 생각해 봤지만, 읽는 중에 글이 바뀌고 몇 건인지
+   알 수 없어 스크롤이 낫다고 봤다. */
 function renderBoardNotices(rows){
+  const pinned=rows.filter(n=>n.is_pinned);
+  const rest  =rows.filter(n=>!n.is_pinned);
+  document.getElementById("board-pinned").innerHTML=pinned.map(noticeRow).join("");
   const box=document.getElementById("board-notices");
   if(!rows.length){
     box.innerHTML=`<div class="panel-empty">아직 올라온 공지가 없습니다.</div>`;
     return;
   }
-  box.innerHTML=rows.map(n=>`
-    <button class="nt-row" onclick="showNotice(${n.id})">
-      ${n.is_pinned?PIN_ICON:""}
-      <span class="tt">${esc(n.title)}</span>
-      ${n.file_count?`<span class="nt-clip">📎${n.file_count}</span>`:""}
-      ${n.is_new?`<span class="nt-new">NEW</span>`:""}
-      <span class="dt">${fmtDateDot(n.created_at)}</span>
-    </button>`).join("");
+  box.innerHTML=rest.map(noticeRow).join("")+
+    (boardTotal>rows.length
+      ? `<button class="nt-more" onclick="showNotices(1)">전체 ${boardTotal}건 보기</button>` : "");
+  updateNoticeFade();
 }
+
+/** 아래에 더 있는지 알리는 그라데이션. 끝까지 내리면 지운다. */
+function updateNoticeFade(){
+  const box=document.getElementById("board-notices");
+  const fade=document.getElementById("board-fade");
+  if(!box||!fade) return;
+  const more=box.scrollHeight-box.clientHeight-box.scrollTop>4;
+  fade.classList.toggle("on", more);
+}
+document.getElementById("board-notices").addEventListener("scroll", updateNoticeFade);
+window.addEventListener("resize", updateNoticeFade);
 
 function renderBoardEvents(rows){
   const box=document.getElementById("board-events");
@@ -706,10 +772,10 @@ async function showNotices(page){
       return;
     }
     list.innerHTML=d.rows.map(n=>`
-      <button class="nl" onclick="showNotice(${n.id})">
+      <button class="nl" onclick="openNotice(${n.id})">
         ${n.is_pinned?PIN_ICON:""}
         <span class="tt">${esc(n.title)}</span>
-        ${n.file_count?`<span class="nt-clip">📎${n.file_count}</span>`:""}
+        ${clipTag(n.file_count)}
         ${n.is_new?`<span class="nt-new">NEW</span>`:""}
         <span class="who">${esc(n.author_name)}</span>
         <span class="dt">${fmtDateDot(n.created_at)}</span>
@@ -726,9 +792,13 @@ async function showNotices(page){
   }
 }
 
-/* ---- 공지 상세 ---- */
-async function showNotice(id){
-  showView("view-notice");
+/* ---- 공지 상세 — 가운데 팝업 ---- */
+let ndId=0;
+function closeNoticeModal(){ document.getElementById("nd-modal").classList.add("hidden"); }
+
+async function openNotice(id){
+  ndId=id;
+  document.getElementById("nd-modal").classList.remove("hidden");
   document.getElementById("nd-admin-btns").innerHTML="";
   const card=document.getElementById("nd-card");
   card.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
@@ -742,6 +812,7 @@ async function showNotice(id){
         <span>${esc(n.created_at)}</span>
         ${n.updated_at?`<span>수정 ${esc(n.updated_at)}</span>`:""}
         <span>조회 ${n.view_count}</span>
+        ${n.window.label?`<span class="win win-${n.window.state}">${esc(n.window.label)}</span>`:""}
       </div>
       <div class="detail-body">${linkify(n.body)}</div>
       ${n.files.length?`
@@ -755,7 +826,7 @@ async function showNotice(id){
         </div>`:""}`;
     if(d.can_edit){
       document.getElementById("nd-admin-btns").innerHTML=
-        `<button class="btn-sm" onclick="showNoticeEdit(${n.id})">수정</button> `+
+        `<button class="btn-sm" onclick="openNoticeDrawer(${n.id})">수정</button> `+
         `<button class="btn-sm danger" onclick="deleteNotice(${n.id})">삭제</button> `;
     }
   }catch(e){
@@ -767,8 +838,9 @@ async function deleteNotice(id){
   if(!confirm("이 공지를 삭제할까요? 첨부파일도 함께 지워지고 되돌릴 수 없습니다.")) return;
   try{
     await bapi(`api/notices.php?id=${id}`,{method:"DELETE"});
+    closeNoticeModal();
     toast("공지를 삭제했습니다");
-    showNotices(nlPage);
+    refreshAfterNotice();
   }catch(e){ toast(e.message); }
 }
 
@@ -776,33 +848,45 @@ async function deleteNotice(id){
 let neId=0;          // 0 이면 새 글
 let nePending=[];    // 아직 서버로 안 보낸 파일(새 글일 때는 저장 후에 올린다)
 
-function showNoticeEdit(id){
+function openNoticeDrawer(id){
   neId=id||0;
   nePending=[];
-  showView("view-notice-edit");
-  const err=document.getElementById("ne-err");
-  err.classList.add("hidden");
+  // 상세 팝업 위에 드로어가 겹치면 어지럽다. 수정으로 들어오면 팝업은 닫는다.
+  closeNoticeModal();
+  document.getElementById("ne-modal").classList.remove("hidden");
+  document.getElementById("ne-err").classList.add("hidden");
   document.getElementById("ne-title").textContent=neId?"공지 수정":"새 공지";
   document.getElementById("ne-files").value="";
 
   if(!neId){
-    document.getElementById("ne-subject").value="";
-    document.getElementById("ne-body").value="";
+    ["ne-subject","ne-body","ne-from","ne-to"].forEach(k=>document.getElementById(k).value="");
     document.getElementById("ne-pinned").checked=false;
     renderNeFiles([]);
+    document.getElementById("ne-subject").focus();
     return;
   }
   bapi(`api/notices.php?id=${neId}`).then(d=>{
     const n=d.notice;
     document.getElementById("ne-subject").value=n.title;
     document.getElementById("ne-body").value=n.body;
+    document.getElementById("ne-from").value=n.starts_on||"";
+    document.getElementById("ne-to").value=n.ends_on||"";
     document.getElementById("ne-pinned").checked=n.is_pinned;
     renderNeFiles(n.files);
   }).catch(e=>toast(e.message));
 }
 
-function cancelNoticeEdit(){
-  if(neId) showNotice(neId); else showNotices(nlPage);
+function closeNoticeDrawer(){
+  document.getElementById("ne-modal").classList.add("hidden");
+}
+
+/** 공지를 고친 뒤 지금 보고 있는 화면만 다시 그린다. */
+function refreshAfterNotice(){
+  const manage=!document.getElementById("view-manage").classList.contains("hidden");
+  const list  =!document.getElementById("view-notices").classList.contains("hidden");
+  if(manage)     showManage("notices");
+  else if(list)  showNotices(nlPage);
+  else           loadBoard();
 }
 
 /* 저장된 첨부(지울 수 있음)와 아직 안 올린 파일(뺄 수 있음)을 한 줄씩 보여 준다. */
@@ -854,6 +938,8 @@ async function saveNotice(){
     const body=JSON.stringify({
       title:document.getElementById("ne-subject").value.trim(),
       body:document.getElementById("ne-body").value.trim(),
+      starts_on:document.getElementById("ne-from").value,
+      ends_on:document.getElementById("ne-to").value,
       is_pinned:document.getElementById("ne-pinned").checked
     });
     // 새 글은 먼저 저장해 번호를 받은 뒤 파일을 붙인다. 업로드가 실패해도 글은 남는다.
@@ -869,8 +955,10 @@ async function saveNotice(){
       if(up.errors && up.errors.length) toast(up.errors.join(" / "));
     }
     nePending=[];
+    closeNoticeDrawer();
     toast(neId?"공지를 수정했습니다":"공지를 등록했습니다");
-    showNotice(id);
+    refreshAfterNotice();
+    openNotice(id);
   }catch(e){
     err.textContent=e.message;
     err.classList.remove("hidden");
@@ -917,21 +1005,23 @@ async function renderManageEvents(box){
 
 async function renderManageNotices(box){
   try{
-    const d=await bapi("api/notices.php?size=50&page=1");
+    // 관리 화면에서만 예약·종료된 공지까지 본다.
+    const d=await bapi("api/notices.php?scope=manage&size=50&page=1");
     box.innerHTML=
       `<div class="page-head" style="padding:0 0 14px">
          <span style="flex:1"></span>
-         <button class="btn-sm" onclick="showNoticeEdit(0)">+ 새 공지</button>
+         <button class="btn-sm" onclick="openNoticeDrawer(0)">+ 새 공지</button>
        </div>`+
       (d.rows.length?`<div class="list-card">`+d.rows.map(n=>`
-        <div class="mrow">
+        <div class="mrow${n.window.state==='ended'?" dim":""}">
           <span class="tt">
-            <div class="nm">${n.is_pinned?PIN_ICON+" ":""}${esc(n.title)}</div>
+            <div class="nm">${n.is_pinned?PIN_ICON+" ":""}${esc(n.title)}
+              ${n.window.label?`<span class="win win-${n.window.state}">${esc(n.window.label)}</span>`:""}</div>
             <div class="sub">${esc(n.author_name)} · ${fmtDateDot(n.created_at)} · 조회 ${n.view_count}${n.file_count?` · 첨부 ${n.file_count}`:""}</div>
           </span>
           <span class="btns">
-            <button class="btn-sm" onclick="showNotice(${n.id})">보기</button>
-            <button class="btn-sm" onclick="showNoticeEdit(${n.id})">수정</button>
+            <button class="btn-sm" onclick="openNotice(${n.id})">보기</button>
+            <button class="btn-sm" onclick="openNoticeDrawer(${n.id})">수정</button>
             <button class="btn-sm danger" onclick="deleteNotice(${n.id})">삭제</button>
           </span>
         </div>`).join("")+`</div>`
@@ -1053,12 +1143,22 @@ function refreshAfterEvent(){
   else loadBoard();
 }
 
-/* 겹쳐 뜬 창은 바깥을 누르거나 Esc 로 닫는다 */
-document.getElementById("ev-modal").addEventListener("click",e=>{
-  if(e.target.id==="ev-modal") closeEventModal();
+/* 겹쳐 뜬 창은 바깥을 누르거나 Esc 로 닫는다.
+   여러 겹이면 맨 위 하나만 닫는다 — 상세를 보다 수정을 열었을 때
+   Esc 한 번에 둘 다 닫히면 당황스럽다. */
+const OVERLAYS=[
+  ["ne-modal", closeNoticeDrawer],
+  ["ev-modal", closeEventModal],
+  ["nd-modal", closeNoticeModal]
+];
+OVERLAYS.forEach(([id,close])=>{
+  document.getElementById(id).addEventListener("click",e=>{ if(e.target.id===id) close(); });
 });
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape") closeEventModal();
+  if(e.key!=="Escape") return;
+  for(const [id,close] of OVERLAYS){
+    if(!document.getElementById(id).classList.contains("hidden")){ close(); return; }
+  }
 });
 
 let toastT;

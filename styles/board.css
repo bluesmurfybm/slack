@@ -4,13 +4,22 @@
    ===================================================================== */
 
 /* 대시보드에서 타일 위에 놓이는 두 칸. 공지가 넓고 일정이 좁다 —
-   공지는 글줄이 길고 일정은 숫자 하나가 주인공이라서. */
-.board{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;margin-bottom:26px;align-items:start}
-@media (max-width:1000px){.board{grid-template-columns:1fr}}
+   공지는 글줄이 길고 일정은 숫자 하나가 주인공이라서.
+   두 칸 높이는 --panel-h 로 묶어 둔다. 내용이 넘치면 칸이 늘어나는 게 아니라
+   안에서 스크롤된다 — 공지가 쌓일수록 타일이 아래로 밀려나면 안 되기 때문. */
+.board{--panel-h:286px;
+  display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);
+  gap:16px;margin-bottom:26px;align-items:stretch}
+@media (max-width:1000px){.board{grid-template-columns:1fr;--panel-h:auto}}
 
-.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;
-  display:flex;flex-direction:column;overflow:hidden}
-.panel-head{display:flex;align-items:center;gap:9px;padding:15px 18px 12px}
+/* 아래 타일과 구별되게 알림판만 살짝 띄운다. 타일은 평평하게 있다가
+   hover 할 때 떠오르니, 읽는 곳(늘 떠 있음) / 가는 곳(누르면 반응)으로 갈린다. */
+.panel{background:var(--card);border:1px solid #E8EEF9;border-radius:16px;
+  box-shadow:var(--shadow);
+  display:flex;flex-direction:column;overflow:hidden;height:var(--panel-h)}
+/* 머리에 가는 선을 넣으면 '머리말 있는 판'으로 읽힌다. 타일에는 이 선이 없다. */
+.panel-head{display:flex;align-items:center;gap:9px;padding:14px 18px 11px;flex-shrink:0;
+  border-bottom:1px solid var(--line-soft)}
 .panel-head h2{font-family:var(--disp);font-size:15px;font-weight:600;margin:0;color:var(--navy)}
 .panel-head .cnt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .panel-head .sp{margin-left:auto}
@@ -18,8 +27,23 @@
   cursor:pointer;padding:4px 8px;border-radius:7px}
 .panel-act:hover{background:var(--bg);color:var(--blue)}
 .panel-act.add{color:var(--blue);font-weight:600}
-.panel-body{padding:0 8px 8px;flex:1}
+.panel-body{padding:6px 8px 8px;flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+/* 아래에 더 있는지 한눈에 알리는 그라데이션. 끝까지 내리면 사라진다. */
+.nt-fade{position:absolute;left:8px;right:8px;bottom:8px;height:28px;pointer-events:none;
+  background:linear-gradient(transparent,var(--card));opacity:0;transition:opacity .2s ease}
+.nt-fade.on{opacity:1}
 .panel-empty{padding:26px 14px;text-align:center;color:var(--muted);font-size:13px}
+
+/* 고정 공지는 스크롤 밖에 둔다. 아래가 아무리 길어져도 늘 보인다. */
+.nt-pinned{flex-shrink:0;border-bottom:1px solid var(--line-soft);padding-bottom:4px;margin-bottom:4px}
+.nt-pinned:empty{display:none}
+.nt-scroll{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin}
+.nt-scroll::-webkit-scrollbar{width:6px}
+.nt-scroll::-webkit-scrollbar-thumb{background:#D8E1F1;border-radius:3px}
+.nt-scroll::-webkit-scrollbar-thumb:hover{background:#C2CFE6}
+.nt-more{display:block;width:100%;background:none;border:0;font-family:var(--sans);
+  font-size:12px;color:var(--muted);padding:8px 0 4px;cursor:pointer}
+.nt-more:hover{color:var(--blue)}
 
 /* ---------- 공지 목록(대시보드 안) ---------- */
 .nt-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
@@ -31,7 +55,14 @@
 .nt-pin{color:#E8890C;flex-shrink:0}
 .nt-new{background:#E8F0FE;color:var(--blue);font-size:10px;font-weight:700;
   border-radius:999px;padding:2px 6px;flex-shrink:0;letter-spacing:.02em}
-.nt-clip{color:var(--muted);font-size:11.5px;flex-shrink:0}
+/* 첨부 표시. 이모지는 기기마다 모양이 달라 SVG 클립으로 그린다. */
+.clip{display:inline-flex;align-items:center;gap:3px;flex-shrink:0;
+  font-size:11px;font-weight:600;color:var(--muted);
+  background:var(--bg);border-radius:999px;padding:2px 7px 2px 5px}
+.clip svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;
+  stroke-linecap:round;stroke-linejoin:round}
+.nl .clip,.nt-row .clip{transition:background .14s ease,color .14s ease}
+.nt-row:hover .clip,.nl:hover .clip{background:#E1EAFB;color:var(--blue)}
 
 /* ---------- 중요 일정 ---------- */
 .ev-list{display:flex;flex-direction:column;gap:6px;padding:2px 10px 10px}
@@ -63,19 +94,53 @@
 /* 가장 가까운 일정 한 건은 크게 세운다. 나머지는 줄글로. */
 .ev-hero{display:flex;align-items:center;gap:14px;margin:2px 10px 10px;padding:14px 16px;
   border-radius:14px;background:linear-gradient(135deg,#1C5DE5,#0F2E77);color:#fff;
-  position:relative;overflow:hidden}
-.ev-hero::after{content:"";position:absolute;right:-30px;top:-40px;width:130px;height:130px;
-  border-radius:50%;background:rgba(255,255,255,.07)}
+  position:relative;overflow:hidden;flex-shrink:0;
+  animation:evRise .42s cubic-bezier(.22,1,.36,1) both}
+/* 배경 원이 아주 천천히 돈다. 멈춰 있는 카드보다 살아 있어 보인다. */
+.ev-hero::before{content:"";position:absolute;right:-34px;top:-46px;width:140px;height:140px;
+  border-radius:50%;background:rgba(255,255,255,.08);
+  animation:evDrift 9s ease-in-out infinite}
+/* hover 하면 빛이 한 번 쓸고 지나간다 */
+.ev-hero::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.22) 50%,transparent 62%);
+  transform:translateX(-120%)}
+.ev-hero:hover::after{animation:evShine .8s ease-out}
 .ev-hero .big{font-family:var(--disp);font-size:30px;font-weight:700;line-height:1;
-  letter-spacing:-.02em;position:relative}
+  letter-spacing:-.02em;position:relative;white-space:nowrap}
 .ev-hero .tt{position:relative;min-width:0}
 .ev-hero .nm{font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ev-hero .sub{font-size:12px;opacity:.82;margin-top:2px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ev-hero.today{background:linear-gradient(135deg,#E04B3C,#9C2C20)}
 .ev-hero.today .big{animation:ddayPulse 1.8s ease-in-out infinite}
+/* 일주일 안으로 들어오면 숫자가 아주 약하게 숨 쉰다 */
+.ev-hero.soon .big{animation:ddayBreathe 3.2s ease-in-out infinite}
+
+/* 아랫줄은 한 박자씩 밀려 들어온다 — 한꺼번에 튀어나오는 것보다 덜 시끄럽다 */
+.ev{animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
+.ev:nth-child(1){animation-delay:.05s}
+.ev:nth-child(2){animation-delay:.11s}
+.ev:nth-child(3){animation-delay:.17s}
+.ev:nth-child(n+4){animation-delay:.22s}
+.ev,.ev .dday{transition:transform .16s cubic-bezier(.22,1,.36,1),
+              box-shadow .16s ease,background .16s ease}
+.ev:hover{transform:translateX(3px);box-shadow:0 3px 10px rgba(16,35,90,.08)}
+.ev:hover .dday{transform:scale(1.06)}
+
+@keyframes evRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes evDrift{0%,100%{transform:translate(0,0) scale(1)}
+                   50%{transform:translate(-12px,10px) scale(1.12)}}
+@keyframes evShine{to{transform:translateX(120%)}}
 @keyframes ddayPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-@media (prefers-reduced-motion:reduce){.ev-hero.today .big{animation:none}}
+@keyframes ddayBreathe{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.03);opacity:.9}}
+
+/* 움직임을 줄여 달라고 한 사람에게는 전부 끈다 */
+@media (prefers-reduced-motion:reduce){
+  .ev-hero,.ev,.ev-hero::before,.ev-hero .big{animation:none !important}
+  .ev:hover{transform:none}
+  .ev:hover .dday{transform:none}
+  .ev-hero:hover::after{animation:none}
+}
 
 /* ---------- 공지 목록 화면 ---------- */
 .list-card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
@@ -154,16 +219,56 @@
   padding:10px 13px;font-size:13px;margin-bottom:16px;white-space:pre-line}
 .err.hidden{display:none}
 
-/* ---------- 겹쳐 뜨는 작은 창(일정 등록) ---------- */
-.modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
-  background:rgba(14,26,51,.42);padding:20px}
+/* ---------- 겹쳐 뜨는 창 ----------
+   읽기(공지 상세)는 가운데 팝업, 쓰기(공지 작성·일정 등록)는 오른쪽 드로어.
+   쓰는 동안 뒤쪽 목록이 보이는 편이 낫고, bluecart 도 같은 방식이다. */
+/* 상단바가 z-index 200 이라 그보다 위로 올려야 머리말이 가리지 않는다 */
+.modal{position:fixed;inset:0;z-index:300;display:flex;background:rgba(14,26,51,.42);
+  animation:mdFade .16s ease both}
 .modal.hidden{display:none !important}
-.modal-box{background:var(--card);border-radius:16px;width:100%;max-width:520px;
-  box-shadow:0 24px 64px -20px rgba(16,35,90,.5);max-height:90vh;overflow:auto}
-.modal-head{display:flex;align-items:center;padding:18px 22px 0}
-.modal-head h3{font-family:var(--disp);font-size:16px;font-weight:600;margin:0;color:var(--navy)}
+.modal--center{align-items:center;justify-content:center;padding:20px}
+.modal--right{align-items:stretch;justify-content:flex-end}
+@keyframes mdFade{from{opacity:0}to{opacity:1}}
+
+.modal-box{background:var(--card);display:flex;flex-direction:column;
+  box-shadow:0 24px 64px -20px rgba(16,35,90,.5)}
+.modal--center .modal-box{border-radius:16px;width:100%;max-width:720px;max-height:86vh;
+  animation:mdPop .2s cubic-bezier(.22,1,.36,1) both}
+.modal--right .modal-box{width:100%;max-width:560px;height:100%;border-left:1px solid var(--line);
+  animation:mdSlide .24s cubic-bezier(.22,1,.36,1) both}
+@keyframes mdPop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes mdSlide{from{transform:translateX(100%)}to{transform:none}}
+@media (max-width:640px){.modal--right .modal-box{max-width:100%;border-left:0}}
+@media (prefers-reduced-motion:reduce){
+  .modal,.modal-box{animation:none !important}
+}
+
+.modal-head{display:flex;align-items:center;gap:10px;padding:18px 22px 14px;
+  border-bottom:1px solid var(--line);flex-shrink:0}
+.modal-head h3{font-family:var(--disp);font-size:16px;font-weight:600;margin:0;color:var(--navy);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .modal-x{margin-left:auto;background:none;border:0;font-size:22px;line-height:1;color:var(--muted);
-  cursor:pointer;padding:0 2px}
+  cursor:pointer;padding:0 2px;flex-shrink:0}
 .modal-x:hover{color:var(--ink)}
-.modal-body{padding:18px 22px 4px}
-.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:8px 22px 20px}
+.modal-body{padding:18px 22px 4px;overflow-y:auto;flex:1;min-height:0}
+.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:14px 22px 18px;
+  border-top:1px solid var(--line);flex-shrink:0}
+.modal-foot .left{margin-right:auto}
+
+/* ---------- 노출 기간 딱지 (관리 화면) ---------- */
+.win{font-size:10.5px;font-weight:600;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.win-scheduled{background:#EAF1FE;color:var(--blue)}
+.win-ended{background:#ECEFF5;color:#8994AF}
+.win-live{background:#E7F4EE;color:#14704B}
+.mrow.dim .nm{color:var(--muted)}
+
+/* 상세 팝업 안에서는 제목 줄이 두 줄까지 늘어나도 된다 */
+.modal--center .detail-card{border:0;border-radius:0;padding:0}
+
+/* ---------- 구역 이름 (알림판과 타일 사이) ---------- */
+.sec{display:flex;align-items:baseline;gap:10px;margin:0 2px 13px}
+.sec h2{font-family:var(--disp);font-size:14px;font-weight:600;color:var(--navy);margin:0;
+  white-space:nowrap}
+.sec-hint{font-size:12.5px;color:var(--muted);white-space:nowrap}
+.sec::after{content:"";flex:1;height:1px;background:var(--line);margin-left:2px}
+@media (max-width:560px){.sec-hint{display:none}}

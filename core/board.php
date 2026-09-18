@@ -178,17 +178,30 @@ function board_remove_admin($email)
 // ---------------------------------------------------------------------
 
 /**
+ * 지금 구성원에게 보여야 하는 공지인가.
+ *
+ * 노출 기간을 안 적으면(둘 다 NULL) 올린 즉시부터 내릴 때까지 계속 보인다.
+ * 예전처럼 쓰고 싶으면 그냥 비워 두면 된다.
+ */
+const NOTICE_LIVE_WHERE = "(n.starts_on IS NULL OR n.starts_on <= CURDATE())
+                       AND (n.ends_on   IS NULL OR n.ends_on   >= CURDATE())";
+
+/**
  * 목록. 고정된 공지가 언제나 먼저 온다.
  *
- * @param int $limit 0 이면 전체(페이징용 $offset 과 함께 쓴다)
+ * @param int  $limit 0 이면 전체(페이징용 $offset 과 함께 쓴다)
+ * @param bool $all   true 면 예약·종료된 것까지 — 관리 화면 전용
  */
-function board_notices($limit = 5, $offset = 0)
+function board_notices($limit = 5, $offset = 0, $all = false)
 {
-    $sql = "SELECT n.id, n.title, n.is_pinned, n.author_name, n.view_count,
-                   n.created_at, n.updated_at,
+    $sql = "SELECT n.id, n.title, n.is_pinned, n.starts_on, n.ends_on,
+                   n.author_name, n.view_count, n.created_at, n.updated_at,
                    (SELECT COUNT(*) FROM portal_notice_file f WHERE f.notice_id = n.id) AS file_count
-              FROM portal_notice n
-             ORDER BY n.is_pinned DESC, n.id DESC";
+              FROM portal_notice n";
+    if (!$all) {
+        $sql .= ' WHERE ' . NOTICE_LIVE_WHERE;
+    }
+    $sql .= " ORDER BY n.is_pinned DESC, n.id DESC";
     if ($limit > 0) {
         $sql .= ' LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset;
     }
@@ -198,13 +211,37 @@ function board_notices($limit = 5, $offset = 0)
         $r['file_count'] = (int)$r['file_count'];
         $r['view_count'] = (int)$r['view_count'];
         $r['is_new']     = board_is_new($r['created_at']);
+        $r['window']     = board_window_label($r);
     }
     return $rows;
 }
 
-function board_notice_count()
+function board_notice_count($all = false)
 {
-    return (int)portal_db()->query("SELECT COUNT(*) FROM portal_notice")->fetchColumn();
+    $sql = "SELECT COUNT(*) FROM portal_notice n";
+    if (!$all) {
+        $sql .= ' WHERE ' . NOTICE_LIVE_WHERE;
+    }
+    return (int)portal_db()->query($sql)->fetchColumn();
+}
+
+/**
+ * 관리 화면에서 한눈에 보라고 붙이는 딱지.
+ * 노출중인 건에는 아무 딱지도 안 붙인다 — 그게 보통 상태라서.
+ */
+function board_window_label(array $n)
+{
+    $today = date('Y-m-d');
+    if (!empty($n['starts_on']) && $n['starts_on'] > $today) {
+        return ['state' => 'scheduled', 'label' => $n['starts_on'] . ' 공개 예정'];
+    }
+    if (!empty($n['ends_on']) && $n['ends_on'] < $today) {
+        return ['state' => 'ended', 'label' => $n['ends_on'] . ' 내림'];
+    }
+    if (!empty($n['ends_on'])) {
+        return ['state' => 'live', 'label' => $n['ends_on'] . ' 까지'];
+    }
+    return ['state' => 'live', 'label' => ''];
 }
 
 /** 올린 지 사흘이 안 지났으면 NEW. 목록에서 눈에 띄게 하려는 것뿐이다. */
@@ -229,6 +266,7 @@ function board_notice($id, $countView = false)
     $n['is_pinned']  = (int)$n['is_pinned'] === 1;
     $n['view_count'] = (int)$n['view_count'];
     $n['files']      = board_notice_files($id);
+    $n['window']     = board_window_label($n);
     return $n;
 }
 
@@ -246,34 +284,45 @@ function board_notice_files($noticeId)
     return $rows;
 }
 
-function board_validate_notice($title, $body)
+/** @return array [제목, 본문, 노출 시작일|null, 노출 종료일|null] */
+function board_validate_notice(array $in)
 {
-    $title = trim((string)$title);
-    $body  = trim((string)$body);
-    if ($title === '')                { throw new BoardError('제목을 입력하세요', 422); }
-    if (mb_strlen($title) > 200)      { throw new BoardError('제목은 200자 이내로 입력하세요', 422); }
-    if ($body === '')                 { throw new BoardError('내용을 입력하세요', 422); }
-    if (mb_strlen($body) > 20000)     { throw new BoardError('내용은 20,000자 이내로 입력하세요', 422); }
-    return [$title, $body];
+    $title = trim((string)(isset($in['title']) ? $in['title'] : ''));
+    $body  = trim((string)(isset($in['body']) ? $in['body'] : ''));
+    $from  = trim((string)(isset($in['starts_on']) ? $in['starts_on'] : ''));
+    $to    = trim((string)(isset($in['ends_on']) ? $in['ends_on'] : ''));
+
+    if ($title === '')            { throw new BoardError('제목을 입력하세요', 422); }
+    if (mb_strlen($title) > 200)  { throw new BoardError('제목은 200자 이내로 입력하세요', 422); }
+    if ($body === '')             { throw new BoardError('내용을 입력하세요', 422); }
+    if (mb_strlen($body) > 20000) { throw new BoardError('내용은 20,000자 이내로 입력하세요', 422); }
+    if ($from !== '' && !board_is_date($from)) { throw new BoardError('노출 시작일을 올바르게 입력하세요', 422); }
+    if ($to   !== '' && !board_is_date($to))   { throw new BoardError('노출 종료일을 올바르게 입력하세요', 422); }
+    if ($from !== '' && $to !== '' && $to < $from) {
+        throw new BoardError('노출 종료일이 시작일보다 빠릅니다', 422);
+    }
+    return [$title, $body, $from ?: null, $to ?: null];
 }
 
-function board_create_notice($title, $body, $pinned, array $u)
+function board_create_notice(array $in, array $u)
 {
-    list($title, $body) = board_validate_notice($title, $body);
+    list($title, $body, $from, $to) = board_validate_notice($in);
     portal_db()->prepare(
-        "INSERT INTO portal_notice (title, body, is_pinned, author_email, author_name, created_at)
-         VALUES (?, ?, ?, ?, ?, NOW())"
-    )->execute([$title, $body, $pinned ? 1 : 0, $u['email'], $u['name']]);
+        "INSERT INTO portal_notice (title, body, is_pinned, starts_on, ends_on,
+                                    author_email, author_name, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())"
+    )->execute([$title, $body, empty($in['is_pinned']) ? 0 : 1, $from, $to, $u['email'], $u['name']]);
     return (int)portal_db()->lastInsertId();
 }
 
-function board_update_notice($id, $title, $body, $pinned)
+function board_update_notice($id, array $in)
 {
-    list($title, $body) = board_validate_notice($title, $body);
+    list($title, $body, $from, $to) = board_validate_notice($in);
     board_notice($id);   // 없으면 404
     portal_db()->prepare(
-        "UPDATE portal_notice SET title = ?, body = ?, is_pinned = ?, updated_at = NOW() WHERE id = ?"
-    )->execute([$title, $body, $pinned ? 1 : 0, (int)$id]);
+        "UPDATE portal_notice SET title = ?, body = ?, is_pinned = ?, starts_on = ?, ends_on = ?,
+                updated_at = NOW() WHERE id = ?"
+    )->execute([$title, $body, empty($in['is_pinned']) ? 0 : 1, $from, $to, (int)$id]);
 }
 
 /** 행을 지우기 전에 실물 파일부터 지운다. 행만 사라지면 파일이 영영 남는다. */

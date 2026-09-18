@@ -29,9 +29,14 @@ try {
     if ($method === 'GET') {
         $size = isset($_GET['size']) ? max(1, min(50, (int)$_GET['size'])) : 10;
         $page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+        // 관리 화면에서만 예약·종료된 공지까지 본다. 구성원 목록에는 안 섞인다.
+        $all  = (isset($_GET['scope']) ? $_GET['scope'] : '') === 'manage';
+        if ($all) {
+            board_require_admin($u);
+        }
         echo json_encode([
-            'rows'     => board_notices($size, ($page - 1) * $size),
-            'total'    => board_notice_count(),
+            'rows'     => board_notices($size, ($page - 1) * $size, $all),
+            'total'    => board_notice_count($all),
             'page'     => $page,
             'size'     => $size,
             'can_edit' => board_is_admin($u['email']),
@@ -43,23 +48,12 @@ try {
     $body = json_decode(file_get_contents('php://input'), true) ?: [];
 
     if ($method === 'POST') {
-        $newId = board_create_notice(
-            isset($body['title']) ? $body['title'] : '',
-            isset($body['body']) ? $body['body'] : '',
-            !empty($body['is_pinned']),
-            $u
-        );
-        echo json_encode(['id' => $newId], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['id' => board_create_notice($body, $u)], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
     if ($method === 'PUT' && $id) {
-        board_update_notice(
-            $id,
-            isset($body['title']) ? $body['title'] : '',
-            isset($body['body']) ? $body['body'] : '',
-            !empty($body['is_pinned'])
-        );
+        board_update_notice($id, $body);
         echo json_encode(['id' => $id], JSON_UNESCAPED_UNICODE);
         exit;
     }
