@@ -205,7 +205,10 @@ const SEED_ADMINS  = ['kimhy@bluesoft.co.kr'];   // 최초 1회만 심는다
 - 본문은 **일반 텍스트**다. 화면에서 이스케이프한 뒤 줄바꿈만 살리고 주소만
   링크로 바꾼다(`linkify`). 이스케이프를 먼저 하고 링크를 나중에 만든다 —
   순서를 뒤집으면 만들어 둔 `<a>` 까지 이스케이프돼 글자로 보인다.
-- 고정(`is_pinned`)한 공지는 목록 맨 위로 온다. 올린 지 사흘이 안 지났으면 NEW.
+- **맨 위 고정은 없다.** 목록은 언제나 최신순이다. `is_important` 를 켜면 제목 앞에
+  중요 표시(▲)만 붙고 순서는 그대로다 — 고정을 쓰기 시작하면 중요한 글이 계속
+  쌓여 맨 위가 굳어 버린다.
+- 올린 지 사흘이 안 지났으면 NEW.
 - 첨부는 공지 하나에 10개, 파일당 20MB. 확장자 화이트리스트 밖은 아예 받지 않는다.
   **HTML/SVG 를 받으면 같은 오리진에서 열려 포털 세션을 노린 XSS 가 된다.**
   첨부가 있으면 목록에 클립 아이콘과 개수가 붙는다(`clipTag`).
@@ -230,19 +233,32 @@ AND (ends_on IS NULL OR ends_on >= CURDATE())
 안내처럼 **행사가 끝나면 자동으로 내려가야 하는 공지**가 실제로 많아서다.
 등록할 때 안 적으면 예전과 똑같으니 부담도 없다.
 
-### 대시보드 두 칸의 높이
+### 대시보드 두 칸의 높이와 자동 슬라이딩
 
-`--panel-h`(기본 286px) 하나로 공지와 일정 칸의 높이를 묶는다. 공지가 쌓여도
-바깥 높이는 그대로고 **안에서 스크롤**된다 — 공지 수에 따라 업무 시스템 타일이
-아래로 밀려나면 안 되기 때문.
+`--panel-h`(기본 198px) 하나로 공지와 일정 칸의 높이를 묶는다. 내용이 쌓여도
+바깥 높이는 그대로다 — 공지 수에 따라 업무 시스템 타일이 아래로 밀려나면 안 된다.
+좁은 화면(≤1000px)에서는 `--panel-h: auto` 로 풀어 두 칸을 세로로 쌓는다.
 
-- **고정 공지는 스크롤 영역 밖**(`.nt-pinned`)에 그려서 아무리 내려도 늘 보인다.
-- 아래에 더 있으면 밑단이 흐려진다(`.nt-fade`). 끝까지 내리면 사라진다.
-- 좁은 화면(≤1000px)에서는 `--panel-h: auto` 로 풀어 두 칸을 세로로 쌓는다.
+넘치는 만큼은 **한 줄씩 위로 올라가며 돌아간다**(`makeSlider`).
+공지는 3.6초, 일정은 4.2초 간격이다. 일정은 가장 가까운 한 건(큰 카드)은 세워 두고
+나머지 줄만 돈다.
 
-> **자동으로 돌아가는 배너(캐러셀)는 쓰지 않았다.** 읽는 도중에 글이 바뀌고,
-> 전부 몇 건인지 알 수 없고, 원하는 줄을 다시 보려면 한 바퀴를 기다려야 한다.
-> 스크롤은 몇 건인지 바로 보이고 원하는 속도로 읽을 수 있다.
+```
+.slide-win   고정 높이 창 (overflow:hidden)
+  └ .slide-track   실제 목록. transform 으로 한 줄 높이만큼 위로 민 뒤,
+                   맨 윗줄을 appendChild 로 맨 아래에 옮겨 붙인다.
+```
+
+목록을 복제하지 않아 줄이 늘어도 DOM 이 두 배가 되지 않는다.
+
+**멈추는 조건** — 마우스를 올리거나 키보드 초점이 들어오면 멈춘다(읽는 중에 바뀌면
+안 된다). `prefers-reduced-motion: reduce` 면 아예 돌리지 않고 `overflow-y:auto` 로
+직접 넘기게 둔다.
+
+> **한 칸 옮기는 일이 끝났는지를 `transitionend` 만으로 판단하면 안 된다.**
+> 창이 숨어 있으면(다른 화면에 가 있을 때) 전이가 시작조차 안 해 이벤트가 영영
+> 오지 않고, `busy` 가 풀리지 않아 슬라이더가 죽는다. 시간 제한(`SLIDE_MS+250`)을
+> 같이 걸어 두 경로 중 먼저 오는 쪽이 정리하게 했다. 실제로 이것 때문에 한 번 멎었다.
 
 ### 겹쳐 뜨는 창
 
@@ -282,6 +298,30 @@ learn 과 같은 방식이다.
   `api/notice_file.php`(로그인 검사 + Content-Disposition 판정)를 거친다
 - 이미지·PDF 만 브라우저에서 바로 열고(`inline`) 나머지는 강제로 내려받게 한다
 - 공지를 지우면 첨부 실물도 함께 지운다(`board_delete_notice`)
+
+**첨부가 안 올라갈 때 볼 곳** — 조용히 실패하기 쉬운 자리가 셋 있어 전부 막아 뒀다.
+
+| 원인 | 증상 | 대응 |
+|---|---|---|
+| `var/notice` 가 없거나 쓰기 불가 | `move_uploaded_file` 만 실패 | `board_upload_dir()` 이 먼저 잡아 경로와 함께 알린다 |
+| `post_max_size` 초과 | PHP 가 본문을 통째로 버려 `$_FILES` 가 빔. **아무 오류도 안 남** | `api/notice_file.php` 가 `CONTENT_LENGTH` 를 보고 잡는다 |
+| `upload_max_filesize` 초과 | `UPLOAD_ERR_INI_SIZE` | 실제 한계와 ini 값을 같이 알린다 |
+
+`var/notice` 는 `.gitignore` 대상이라 **배포 직후에는 없다.** 웹서버 계정이 포털
+루트에 못 쓰면 `@mkdir` 이 조용히 실패한다. 배포할 때 한 번 만들어 두는 편이 낫다.
+
+```bash
+mkdir -p <포털루트>/var/notice
+chown -R www-data:www-data <포털루트>/var
+```
+
+화면에 적는 한계(`파일당 NMB`)는 `board_max_upload_label()` 이 **php.ini 를 반영해**
+계산한다. `NOTICE_MAX_MB` 는 20 이지만 php.ini 기본값이 `upload_max_filesize=2M`,
+`post_max_size=8M` 이라 그대로 두면 2MB 에서 막힌다. 20MB 를 쓰려면 php.ini 를
+올려야 하고, 안 올리면 화면에도 2MB 로 정직하게 표시된다.
+
+첨부가 실패하면 **드로어를 닫지 않는다.** 글은 이미 저장됐으므로 그 글의 수정
+상태로 남겨 두고 이유를 오류 상자에 띄운다 — 토스트는 2초면 사라져 놓치기 쉽다.
 
 > **nginx 로 서비스한다면** `.htaccess` 는 읽히지 않는다. 서버 설정에
 > `location ~ ^/var/ { deny all; }` 를 따로 넣어야 한다. 저장 이름이 난수라
@@ -750,7 +790,9 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 자동 생성/마이그레이션(`db.php`의 `db()`/`portal_db()`). 주요 테이블:
 
 - `portal_users` — 포털 계정(이메일/비번해시/암호화된 슬랙 토큰)
-- `portal_admin`, `portal_notice`, `portal_notice_file`, `portal_event` — 알림판(아래 참고)
+- `portal_admin`, `portal_notice`, `portal_notice_file`, `portal_event` — 알림판(아래 참고).
+  `portal_notice.is_pinned` 는 `is_important` 로 이름이 바뀌었다(`db.php` 가 `CHANGE COLUMN` 으로
+  한 번만 처리). 값은 그대로 넘어간다.
 - `requests` — slack 유지보수 요청 목록(Slack Lists 동기화본)
 - `schools`, `user_reads`, `user_pins`, `user_hides`, `local_assignments`, `sync_meta` — slack 부가기능
 - `gmail_mails` — Gmail 캐시(계정별 구분, `account` 컬럼)

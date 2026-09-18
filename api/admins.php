@@ -43,4 +43,9 @@ try {
 } catch (BoardError $e) {
     http_response_code($e->getCode());
     echo json_encode(['error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+} catch (Throwable $e) {
+    error_log('[board] ' . basename(__FILE__) . ': ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['error' => '처리 중 오류가 났습니다: ' . $e->getMessage()],
+                     JSON_UNESCAPED_UNICODE);
 }

@@ -26,6 +26,9 @@ require_once __DIR__ . '/core/board.php';
 // 공지·일정을 등록할 수 있는 사람인지 서버가 먼저 판정한다. 화면을 그린 뒤
 // 자바스크립트가 버튼을 붙였다 떼면 한 번 번쩍인다.
 $__isAdmin = $__u ? board_is_admin($__u['email']) : false;
+// 화면에 적는 첨부 한계는 php.ini 를 반영한 실제 값이어야 한다.
+// 20MB 라 적어 놓고 2MB 에서 막히면 "왜 안 되지" 가 된다.
+$__uploadMax = board_max_upload_label();
 // 대시보드 타일도 상단바 드롭다운과 같은 목록(worksystems.php)을 쓴다 — 한쪽만 늘어나는 일이 없게.
 $__links = [];
 foreach (work_systems() as $__sys) {
@@ -121,12 +124,9 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           <button class="panel-act" onclick="showNotices(1)">전체 보기 →</button>
         </div>
         <div class="panel-body">
-          <!-- 고정 공지는 스크롤 밖. 아래가 길어져도 늘 보인다. -->
-          <div class="nt-pinned" id="board-pinned"></div>
-          <div class="nt-scroll" id="board-notices">
-            <div class="panel-empty">불러오는 중…</div>
+          <div class="slide-win" id="board-notices">
+            <div class="slide-track"><div class="panel-empty">불러오는 중…</div></div>
           </div>
-          <div class="nt-fade" id="board-fade"></div>
         </div>
       </section>
 
@@ -232,12 +232,12 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           <div class="fld">
             <label>첨부파일</label>
             <input type="file" id="ne-files" multiple>
-            <div class="hintline">한 건에 10개, 파일당 20MB 까지. 이미지·PDF·문서·압축파일만 올라갑니다.</div>
+            <div class="hintline">한 건에 10개, 파일당 <?= htmlspecialchars($__uploadMax, ENT_QUOTES, 'UTF-8') ?> 까지. 이미지·PDF·문서·압축파일만 올라갑니다.</div>
             <div class="files" id="ne-filelist" style="border:0;padding:0;margin-top:10px"></div>
           </div>
           <div class="fld">
-            <label class="check"><input type="checkbox" id="ne-pinned"> 목록 맨 위에 고정</label>
-            <div class="hintline">고정한 공지는 대시보드에서 스크롤과 상관없이 늘 보입니다.</div>
+            <label class="check"><input type="checkbox" id="ne-important"> 중요 공지</label>
+            <div class="hintline">목록에서 제목 앞에 중요 표시가 붙습니다. 순서는 바뀌지 않습니다.</div>
           </div>
         </div>
       </div>
@@ -680,7 +680,8 @@ async function loadBoard(){
   }
 }
 
-const PIN_ICON=`<svg class="nt-pin" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M14 2v6l3 3v2h-4v7l-1 2-1-2v-7H7v-2l3-3V2z"/></svg>`;
+/* 중요 표시. 맨 위 고정을 없앴으니 순서는 그대로 두고 눈에만 띄게 한다. */
+const IMP_ICON=`<svg class="nt-imp" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-label="중요"><path d="M12 2 1.6 20.5h20.8L12 2Zm0 6.2c.6 0 1 .5 1 1.1l-.2 4.6a.8.8 0 0 1-1.6 0l-.2-4.6c0-.6.4-1.1 1-1.1Zm0 8.1a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Z"/></svg>`;
 /* 첨부 표시. 이모지는 기기마다 모양이 달라 클립을 직접 그린다. */
 function clipTag(n){
   if(!n) return "";
@@ -691,7 +692,7 @@ function clipTag(n){
 
 function noticeRow(n){
   return `<button class="nt-row" onclick="openNotice(${n.id})">
-      ${n.is_pinned?PIN_ICON:""}
+      ${n.is_important?IMP_ICON:""}
       <span class="tt">${esc(n.title)}</span>
       ${clipTag(n.file_count)}
       ${n.is_new?`<span class="nt-new">NEW</span>`:""}
@@ -699,34 +700,92 @@ function noticeRow(n){
     </button>`;
 }
 
-/* 고정 공지는 스크롤 밖에 따로 그린다. 나머지만 안에서 스크롤된다 —
-   자동으로 돌아가는 배너도 생각해 봤지만, 읽는 중에 글이 바뀌고 몇 건인지
-   알 수 없어 스크롤이 낫다고 봤다. */
 function renderBoardNotices(rows){
-  const pinned=rows.filter(n=>n.is_pinned);
-  const rest  =rows.filter(n=>!n.is_pinned);
-  document.getElementById("board-pinned").innerHTML=pinned.map(noticeRow).join("");
-  const box=document.getElementById("board-notices");
+  const win=document.getElementById("board-notices");
   if(!rows.length){
-    box.innerHTML=`<div class="panel-empty">아직 올라온 공지가 없습니다.</div>`;
+    win.innerHTML=`<div class="slide-track"><div class="panel-empty">아직 올라온 공지가 없습니다.</div></div>`;
+    noticeSlider.stop();
     return;
   }
-  box.innerHTML=rest.map(noticeRow).join("")+
-    (boardTotal>rows.length
-      ? `<button class="nt-more" onclick="showNotices(1)">전체 ${boardTotal}건 보기</button>` : "");
-  updateNoticeFade();
+  win.innerHTML=`<div class="slide-track">`+rows.map(noticeRow).join("")+`</div>`;
+  noticeSlider.reset();
 }
 
-/** 아래에 더 있는지 알리는 그라데이션. 끝까지 내리면 지운다. */
-function updateNoticeFade(){
-  const box=document.getElementById("board-notices");
-  const fade=document.getElementById("board-fade");
-  if(!box||!fade) return;
-  const more=box.scrollHeight-box.clientHeight-box.scrollTop>4;
-  fade.classList.toggle("on", more);
+/* ---- 자동 세로 슬라이딩 ----
+   맨 윗줄을 한 칸 위로 밀어 올린 뒤 맨 아래로 옮겨 붙인다. 목록을 복제하지
+   않으므로 줄이 늘어도 DOM 이 두 배가 되지 않는다.
+
+   한 칸 옮기는 일이 끝났는지는 transitionend 로 알지만, 그것만 믿으면 안 된다.
+   창이 숨어 있으면(다른 화면에 가 있을 때) 전이가 아예 시작되지 않아 이벤트가
+   영영 안 오고, 그러면 busy 가 풀리지 않아 슬라이더가 멎는다. 시간 제한을 같이 건다. */
+const SLIDE_MS=550;
+function makeSlider(winId, interval){
+  let timer=null, busy=false, paused=false, bound=false;
+  const calm=window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  const win  =()=>document.getElementById(winId);
+  const track=()=>{ const w=win(); return w && w.querySelector(".slide-track"); };
+
+  /** 읽는 중에 바뀌면 안 된다 — 올려 두거나 초점이 들어오면 멈춘다.
+      목록을 다시 그릴 때마다 창이 새로 생길 수 있어 그때마다 걸어 준다. */
+  function bind(){
+    const w=win();
+    if(!w || w.dataset.slideBound) return;
+    w.dataset.slideBound="1";
+    ["mouseenter","focusin"].forEach(ev=>w.addEventListener(ev,()=>{paused=true;}));
+    ["mouseleave","focusout"].forEach(ev=>w.addEventListener(ev,()=>{paused=false;}));
+    bound=true;
+  }
+
+  function step(){
+    const w=win(), t=track();
+    if(busy || paused || !w || !t || t.children.length<2) return;
+    if(w.offsetParent===null) return;                       // 숨어 있으면 건너뛴다
+    if(t.scrollHeight - w.clientHeight <= 2) return;        // 다 보이면 돌릴 것도 없다
+
+    busy=true;
+    const first=t.children[0];
+    const gap=parseFloat(getComputedStyle(t).rowGap)||0;
+    const h=first.getBoundingClientRect().height+gap;
+
+    let settled=false;
+    const finish=()=>{
+      if(settled) return;
+      settled=true;
+      t.removeEventListener("transitionend",finish);
+      t.style.transition="none";
+      t.style.transform="none";
+      t.appendChild(first);   // 올라간 줄을 맨 뒤로
+      void t.offsetHeight;    // 되돌린 위치를 즉시 반영(깜빡임 방지)
+      busy=false;
+    };
+    t.addEventListener("transitionend",finish);
+    setTimeout(finish, SLIDE_MS+250);   // 전이가 안 와도 반드시 풀린다
+
+    t.style.transition=`transform ${SLIDE_MS}ms cubic-bezier(.4,0,.2,1)`;
+    t.style.transform=`translateY(-${h}px)`;
+  }
+
+  function start(){
+    stop();
+    if(calm.matches) return;   // 움직임을 줄여 달라고 했으면 돌리지 않는다(직접 넘길 수 있다)
+    timer=setInterval(step, interval);
+  }
+  function stop(){ if(timer){ clearInterval(timer); timer=null; } }
+
+  return {
+    reset(){
+      bind();
+      const t=track();
+      if(t){ t.style.transition="none"; t.style.transform="none"; }
+      busy=false; paused=false;
+      start();
+    },
+    stop(){ stop(); }
+  };
 }
-document.getElementById("board-notices").addEventListener("scroll", updateNoticeFade);
-window.addEventListener("resize", updateNoticeFade);
+const noticeSlider=makeSlider("board-notices", 3600);
+const eventSlider =makeSlider("board-events-list", 4200);
 
 function renderBoardEvents(rows){
   const box=document.getElementById("board-events");
@@ -745,16 +804,19 @@ function renderBoardEvents(rows){
       </span>
     </div>`;
   if(rest.length){
-    html+=`<div class="ev-list">`+rest.map(e=>`
+    // 가장 가까운 한 건은 위에 세워 두고, 나머지가 돌아간다.
+    html+=`<div class="ev-list slide-win" id="board-events-list"><div class="slide-track">`+
+      rest.map(e=>`
       <div class="ev ${e.heat}">
         <span class="tt">
           <div class="nm">${esc(e.title)}</div>
           <div class="sub">${esc(fmtWhen(e))}${e.place?" · "+esc(e.place):""}</div>
         </span>
         <span class="dday">${esc(e.dday_label)}</span>
-      </div>`).join("")+`</div>`;
+      </div>`).join("")+`</div></div>`;
   }
   box.innerHTML=html;
+  eventSlider.reset();
 }
 
 /* ---- 공지 목록 ---- */
@@ -773,7 +835,7 @@ async function showNotices(page){
     }
     list.innerHTML=d.rows.map(n=>`
       <button class="nl" onclick="openNotice(${n.id})">
-        ${n.is_pinned?PIN_ICON:""}
+        ${n.is_important?IMP_ICON:""}
         <span class="tt">${esc(n.title)}</span>
         ${clipTag(n.file_count)}
         ${n.is_new?`<span class="nt-new">NEW</span>`:""}
@@ -806,7 +868,7 @@ async function openNotice(id){
     const d=await bapi(`api/notices.php?id=${id}`);
     const n=d.notice;
     card.innerHTML=`
-      <h2>${n.is_pinned?PIN_ICON+" ":""}${esc(n.title)}</h2>
+      <h2>${n.is_important?IMP_ICON+" ":""}${esc(n.title)}</h2>
       <div class="detail-meta">
         <span>${esc(n.author_name)}</span>
         <span>${esc(n.created_at)}</span>
@@ -860,7 +922,7 @@ function openNoticeDrawer(id){
 
   if(!neId){
     ["ne-subject","ne-body","ne-from","ne-to"].forEach(k=>document.getElementById(k).value="");
-    document.getElementById("ne-pinned").checked=false;
+    document.getElementById("ne-important").checked=false;
     renderNeFiles([]);
     document.getElementById("ne-subject").focus();
     return;
@@ -871,7 +933,7 @@ function openNoticeDrawer(id){
     document.getElementById("ne-body").value=n.body;
     document.getElementById("ne-from").value=n.starts_on||"";
     document.getElementById("ne-to").value=n.ends_on||"";
-    document.getElementById("ne-pinned").checked=n.is_pinned;
+    document.getElementById("ne-important").checked=n.is_important;
     renderNeFiles(n.files);
   }).catch(e=>toast(e.message));
 }
@@ -940,7 +1002,7 @@ async function saveNotice(){
       body:document.getElementById("ne-body").value.trim(),
       starts_on:document.getElementById("ne-from").value,
       ends_on:document.getElementById("ne-to").value,
-      is_pinned:document.getElementById("ne-pinned").checked
+      is_important:document.getElementById("ne-important").checked
     });
     // 새 글은 먼저 저장해 번호를 받은 뒤 파일을 붙인다. 업로드가 실패해도 글은 남는다.
     const res=neId
@@ -948,11 +1010,33 @@ async function saveNotice(){
       : await bapi("api/notices.php",{method:"POST",body});
     const id=res.id;
 
+    // 첨부가 실패해도 글은 이미 저장됐다. 그때는 드로어를 닫지 않고
+    // 그 글의 수정 상태로 남겨 이유를 보여 준다 — 토스트는 2초면 사라져서
+    // "첨부가 왜 안 되지" 로 끝나 버린다.
     if(nePending.length){
       const fd=new FormData();
       nePending.forEach(f=>fd.append("files[]",f));
-      const up=await bapi(`api/notice_file.php?notice_id=${id}`,{method:"POST",body:fd});
-      if(up.errors && up.errors.length) toast(up.errors.join(" / "));
+      let up;
+      try{
+        up=await bapi(`api/notice_file.php?notice_id=${id}`,{method:"POST",body:fd});
+      }catch(upErr){
+        neId=id;
+        document.getElementById("ne-title").textContent="공지 수정";
+        err.textContent="글은 저장했지만 첨부에 실패했습니다.\n"+upErr.message;
+        err.classList.remove("hidden");
+        refreshAfterNotice();
+        return;
+      }
+      if(up.errors && up.errors.length){
+        neId=id;
+        document.getElementById("ne-title").textContent="공지 수정";
+        err.textContent="글은 저장했지만 일부 첨부에 실패했습니다.\n"+up.errors.join("\n");
+        err.classList.remove("hidden");
+        nePending=[];
+        renderNeFiles(up.files||[]);
+        refreshAfterNotice();
+        return;
+      }
     }
     nePending=[];
     closeNoticeDrawer();
@@ -1015,7 +1099,7 @@ async function renderManageNotices(box){
       (d.rows.length?`<div class="list-card">`+d.rows.map(n=>`
         <div class="mrow${n.window.state==='ended'?" dim":""}">
           <span class="tt">
-            <div class="nm">${n.is_pinned?PIN_ICON+" ":""}${esc(n.title)}
+            <div class="nm">${n.is_important?IMP_ICON+" ":""}${esc(n.title)}
               ${n.window.label?`<span class="win win-${n.window.state}">${esc(n.window.label)}</span>`:""}</div>
             <div class="sub">${esc(n.author_name)} · ${fmtDateDot(n.created_at)} · 조회 ${n.view_count}${n.file_count?` · 첨부 ${n.file_count}`:""}</div>
           </span>

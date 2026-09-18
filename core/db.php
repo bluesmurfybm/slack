@@ -61,7 +61,7 @@ function portal_db() {
             `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `title`        VARCHAR(200) NOT NULL,
             `body`         MEDIUMTEXT   NOT NULL COMMENT '일반 텍스트. 화면에서 이스케이프 후 줄바꿈만 살린다',
-            `is_pinned`    TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1이면 목록 맨 위에 고정',
+            `is_important` TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1이면 목록에 중요 표시',
             `starts_on`    DATE         NULL     COMMENT '노출 시작일. NULL 이면 등록 즉시',
             `ends_on`      DATE         NULL     COMMENT '노출 종료일. NULL 이면 내릴 때까지',
             `author_email` VARCHAR(190) NOT NULL,
@@ -70,14 +70,22 @@ function portal_db() {
             `created_at`   DATETIME     NOT NULL,
             `updated_at`   DATETIME     NULL,
             PRIMARY KEY (`id`),
-            KEY `ix_notice_list` (`is_pinned`, `id`)
+            KEY `ix_notice_list` (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='포털 공지'
     ");
 
     // 이미 설치된 곳에도 노출 기간을 붙인다.
-    add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `starts_on` DATE NULL COMMENT '노출 시작일. NULL 이면 등록 즉시' AFTER `is_pinned`");
+    add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `starts_on` DATE NULL COMMENT '노출 시작일. NULL 이면 등록 즉시' AFTER `is_important`");
     add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `ends_on` DATE NULL COMMENT '노출 종료일. NULL 이면 내릴 때까지' AFTER `starts_on`");
+
+    // '맨 위 고정' 을 없애고 '중요 표시' 로 바꿨다. 값은 그대로 두고 이름만 간다.
+    // CHANGE 는 한 번만 먹히므로 옛 이름이 남아 있을 때만 부른다.
+    if ($pdo->query("SHOW COLUMNS FROM `portal_notice` LIKE 'is_pinned'")->fetch()) {
+        $pdo->exec("ALTER TABLE `portal_notice`
+                    CHANGE COLUMN `is_pinned` `is_important` TINYINT(1) NOT NULL DEFAULT 0
+                    COMMENT '1이면 목록에 중요 표시'");
+    }
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `portal_notice_file` (

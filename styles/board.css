@@ -7,7 +7,7 @@
    공지는 글줄이 길고 일정은 숫자 하나가 주인공이라서.
    두 칸 높이는 --panel-h 로 묶어 둔다. 내용이 넘치면 칸이 늘어나는 게 아니라
    안에서 스크롤된다 — 공지가 쌓일수록 타일이 아래로 밀려나면 안 되기 때문. */
-.board{--panel-h:286px;
+.board{--panel-h:198px;
   display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);
   gap:16px;margin-bottom:26px;align-items:stretch}
 @media (max-width:1000px){.board{grid-template-columns:1fr;--panel-h:auto}}
@@ -28,19 +28,22 @@
 .panel-act:hover{background:var(--bg);color:var(--blue)}
 .panel-act.add{color:var(--blue);font-weight:600}
 .panel-body{padding:6px 8px 8px;flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
-/* 아래에 더 있는지 한눈에 알리는 그라데이션. 끝까지 내리면 사라진다. */
-.nt-fade{position:absolute;left:8px;right:8px;bottom:8px;height:28px;pointer-events:none;
-  background:linear-gradient(transparent,var(--card));opacity:0;transition:opacity .2s ease}
-.nt-fade.on{opacity:1}
 .panel-empty{padding:26px 14px;text-align:center;color:var(--muted);font-size:13px}
 
-/* 고정 공지는 스크롤 밖에 둔다. 아래가 아무리 길어져도 늘 보인다. */
-.nt-pinned{flex-shrink:0;border-bottom:1px solid var(--line-soft);padding-bottom:4px;margin-bottom:4px}
-.nt-pinned:empty{display:none}
-.nt-scroll{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin}
-.nt-scroll::-webkit-scrollbar{width:6px}
-.nt-scroll::-webkit-scrollbar-thumb{background:#D8E1F1;border-radius:3px}
-.nt-scroll::-webkit-scrollbar-thumb:hover{background:#C2CFE6}
+/* ---------- 자동 세로 슬라이딩 ----------
+   창은 고정 높이(.slide-win)고, 안쪽 목록(.slide-track)이 한 줄씩 위로 올라간다.
+   맨 위 줄은 올라간 뒤 맨 아래로 옮겨 붙여 끝없이 돈다.
+   마우스를 올리거나 키보드 초점이 들어오면 멈춘다 — 읽는 중에 바뀌면 안 된다. */
+.slide-win{flex:1;min-height:0;overflow:hidden;position:relative}
+.slide-track{display:flex;flex-direction:column;will-change:transform}
+/* 움직임을 줄여 달라고 한 사람에게는 돌리지 않고 직접 넘기게 둔다 */
+@media (prefers-reduced-motion:reduce){
+  .slide-win{overflow-y:auto;scrollbar-width:thin}
+  .slide-track{transform:none !important;transition:none !important}
+}
+.slide-win::-webkit-scrollbar{width:6px}
+.slide-win::-webkit-scrollbar-thumb{background:#D8E1F1;border-radius:3px}
+
 .nt-more{display:block;width:100%;background:none;border:0;font-family:var(--sans);
   font-size:12px;color:var(--muted);padding:8px 0 4px;cursor:pointer}
 .nt-more:hover{color:var(--blue)}
@@ -52,7 +55,9 @@
 .nt-row:hover{background:var(--bg)}
 .nt-row .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nt-row .dt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.nt-pin{color:#E8890C;flex-shrink:0}
+/* 중요 표시. 맨 위 고정 대신 자기 자리에서 눈에 띄게만 한다. */
+.nt-imp{flex-shrink:0;color:#D84A3A}
+.nl .nt-imp,.mrow .nt-imp{vertical-align:-2px}
 .nt-new{background:#E8F0FE;color:var(--blue);font-size:10px;font-weight:700;
   border-radius:999px;padding:2px 6px;flex-shrink:0;letter-spacing:.02em}
 /* 첨부 표시. 이모지는 기기마다 모양이 달라 SVG 클립으로 그린다. */
@@ -65,7 +70,8 @@
 .nt-row:hover .clip,.nl:hover .clip{background:#E1EAFB;color:var(--blue)}
 
 /* ---------- 중요 일정 ---------- */
-.ev-list{display:flex;flex-direction:column;gap:6px;padding:2px 10px 10px}
+.ev-list{padding:2px 10px 10px;display:flex;flex-direction:column;min-height:0}
+.ev-list .slide-track{gap:6px}
 .ev{display:flex;align-items:center;gap:12px;padding:9px 11px;border-radius:12px;
   border:1px solid transparent;background:var(--bg)}
 .ev .tt{flex:1;min-width:0}
@@ -92,7 +98,7 @@
 .dday.heat-past {background:#ECEFF5;color:#8994AF}
 
 /* 가장 가까운 일정 한 건은 크게 세운다. 나머지는 줄글로. */
-.ev-hero{display:flex;align-items:center;gap:14px;margin:2px 10px 10px;padding:14px 16px;
+.ev-hero{display:flex;align-items:center;gap:13px;margin:2px 10px 8px;padding:12px 15px;
   border-radius:14px;background:linear-gradient(135deg,#1C5DE5,#0F2E77);color:#fff;
   position:relative;overflow:hidden;flex-shrink:0;
   animation:evRise .42s cubic-bezier(.22,1,.36,1) both}
@@ -105,7 +111,7 @@
   background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.22) 50%,transparent 62%);
   transform:translateX(-120%)}
 .ev-hero:hover::after{animation:evShine .8s ease-out}
-.ev-hero .big{font-family:var(--disp);font-size:30px;font-weight:700;line-height:1;
+.ev-hero .big{font-family:var(--disp);font-size:27px;font-weight:700;line-height:1;
   letter-spacing:-.02em;position:relative;white-space:nowrap}
 .ev-hero .tt{position:relative;min-width:0}
 .ev-hero .nm{font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

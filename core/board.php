@@ -23,8 +23,9 @@ const OWNER_ADMINS = ['kimhy@bluesoft.co.kr'];
 const SEED_ADMINS = ['kimhy@bluesoft.co.kr'];
 
 // 첨부 원본은 포털 루트의 var/ 아래다. 거기에 직접 접근을 막는 .htaccess 가 있다.
+// 첨부 원본은 포털 루트의 var/ 아래다. 거기에 직접 접근을 막는 .htaccess 가 있다.
 const NOTICE_UPLOAD_DIR = __DIR__ . '/../var/notice';
-const NOTICE_MAX_MB     = 20;
+const NOTICE_MAX_MB     = 20;   // 우리가 바라는 상한. 실제 한계는 php.ini 가 더 낮을 수 있다.
 const NOTICE_MAX_FILES  = 10;
 
 // HTML/SVG 는 같은 오리진에서 열리면 포털 세션을 노린 XSS 가 된다.
@@ -194,20 +195,21 @@ const NOTICE_LIVE_WHERE = "(n.starts_on IS NULL OR n.starts_on <= CURDATE())
  */
 function board_notices($limit = 5, $offset = 0, $all = false)
 {
-    $sql = "SELECT n.id, n.title, n.is_pinned, n.starts_on, n.ends_on,
+    $sql = "SELECT n.id, n.title, n.is_important, n.starts_on, n.ends_on,
                    n.author_name, n.view_count, n.created_at, n.updated_at,
                    (SELECT COUNT(*) FROM portal_notice_file f WHERE f.notice_id = n.id) AS file_count
               FROM portal_notice n";
     if (!$all) {
         $sql .= ' WHERE ' . NOTICE_LIVE_WHERE;
     }
-    $sql .= " ORDER BY n.is_pinned DESC, n.id DESC";
+    // 맨 위 고정은 없앴다. 중요 공지도 자기 자리에 있고 표시만 붙는다.
+    $sql .= " ORDER BY n.id DESC";
     if ($limit > 0) {
         $sql .= ' LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset;
     }
     $rows = portal_db()->query($sql)->fetchAll();
     foreach ($rows as &$r) {
-        $r['is_pinned']  = (int)$r['is_pinned'] === 1;
+        $r['is_important'] = (int)$r['is_important'] === 1;
         $r['file_count'] = (int)$r['file_count'];
         $r['view_count'] = (int)$r['view_count'];
         $r['is_new']     = board_is_new($r['created_at']);
@@ -263,7 +265,7 @@ function board_notice($id, $countView = false)
                    ->execute([(int)$id]);
         $n['view_count'] = (int)$n['view_count'] + 1;
     }
-    $n['is_pinned']  = (int)$n['is_pinned'] === 1;
+    $n['is_important'] = (int)$n['is_important'] === 1;
     $n['view_count'] = (int)$n['view_count'];
     $n['files']      = board_notice_files($id);
     $n['window']     = board_window_label($n);
@@ -308,10 +310,10 @@ function board_create_notice(array $in, array $u)
 {
     list($title, $body, $from, $to) = board_validate_notice($in);
     portal_db()->prepare(
-        "INSERT INTO portal_notice (title, body, is_pinned, starts_on, ends_on,
+        "INSERT INTO portal_notice (title, body, is_important, starts_on, ends_on,
                                     author_email, author_name, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, NOW())"
-    )->execute([$title, $body, empty($in['is_pinned']) ? 0 : 1, $from, $to, $u['email'], $u['name']]);
+    )->execute([$title, $body, empty($in['is_important']) ? 0 : 1, $from, $to, $u['email'], $u['name']]);
     return (int)portal_db()->lastInsertId();
 }
 
@@ -320,9 +322,9 @@ function board_update_notice($id, array $in)
     list($title, $body, $from, $to) = board_validate_notice($in);
     board_notice($id);   // 없으면 404
     portal_db()->prepare(
-        "UPDATE portal_notice SET title = ?, body = ?, is_pinned = ?, starts_on = ?, ends_on = ?,
+        "UPDATE portal_notice SET title = ?, body = ?, is_important = ?, starts_on = ?, ends_on = ?,
                 updated_at = NOW() WHERE id = ?"
-    )->execute([$title, $body, empty($in['is_pinned']) ? 0 : 1, $from, $to, (int)$id]);
+    )->execute([$title, $body, empty($in['is_important']) ? 0 : 1, $from, $to, (int)$id]);
 }
 
 /** 행을 지우기 전에 실물 파일부터 지운다. 행만 사라지면 파일이 영영 남는다. */
@@ -338,12 +340,67 @@ function board_delete_notice($id)
 // 공지 첨부
 // ---------------------------------------------------------------------
 
+/**
+ * 첨부를 쌓아 둘 폴더. 없으면 만든다.
+ *
+ * var/notice 는 .gitignore 대상이라 배포 직후에는 없다. 웹서버 계정이 포털
+ * 루트에 쓸 수 없으면 mkdir 이 조용히 실패하고, 그 뒤 move_uploaded_file 만
+ * 실패해 "왜 안 되는지 모르겠다" 가 된다. 여기서 미리 붙잡아 이유를 말한다.
+ */
 function board_upload_dir()
 {
     if (!is_dir(NOTICE_UPLOAD_DIR)) {
         @mkdir(NOTICE_UPLOAD_DIR, 0777, true);
     }
-    return realpath(NOTICE_UPLOAD_DIR) ?: NOTICE_UPLOAD_DIR;
+    $dir = realpath(NOTICE_UPLOAD_DIR) ?: NOTICE_UPLOAD_DIR;
+
+    if (!is_dir($dir)) {
+        throw new BoardError(
+            '첨부 저장 폴더를 만들지 못했습니다: ' . $dir .
+            "\n웹서버 계정에 쓰기 권한을 주세요 (mkdir -p + chown).", 500);
+    }
+    if (!is_writable($dir)) {
+        throw new BoardError(
+            '첨부 저장 폴더에 쓸 수 없습니다: ' . $dir .
+            "\n웹서버 계정 소유로 바꾸거나 쓰기 권한을 주세요.", 500);
+    }
+    return $dir;
+}
+
+/**
+ * 실제로 올릴 수 있는 크기.
+ *
+ * php.ini 의 upload_max_filesize / post_max_size 기본값은 2M / 8M 이라
+ * 우리가 20MB 를 허용해도 그 전에 막힌다. 게다가 post_max_size 를 넘기면
+ * PHP 가 본문을 통째로 버려서 $_FILES 가 비고 아무 오류도 안 남는다.
+ * 화면에 적는 한계와 서버가 실제로 받는 한계를 같게 맞추려고 여기서 계산한다.
+ */
+function board_max_upload_bytes()
+{
+    $ours = NOTICE_MAX_MB * 1024 * 1024;
+    $ini  = min(board_ini_bytes(ini_get('upload_max_filesize')),
+                board_ini_bytes(ini_get('post_max_size')));
+    return $ini > 0 ? min($ours, $ini) : $ours;
+}
+
+/** '2M', '8M', '512K' 같은 php.ini 표기를 바이트로 */
+function board_ini_bytes($v)
+{
+    $v = trim((string)$v);
+    if ($v === '') return 0;
+    $n = (int)$v;
+    switch (strtolower(substr($v, -1))) {
+        case 'g': return $n * 1024 * 1024 * 1024;
+        case 'm': return $n * 1024 * 1024;
+        case 'k': return $n * 1024;
+    }
+    return $n;
+}
+
+function board_max_upload_label()
+{
+    $mb = board_max_upload_bytes() / 1024 / 1024;
+    return ($mb >= 1 ? round($mb) : round($mb, 1)) . 'MB';
 }
 
 function board_ensure_allowed($filename)
@@ -366,12 +423,19 @@ function board_save_file($noticeId, array $file)
     $code = isset($file['error']) ? $file['error'] : UPLOAD_ERR_NO_FILE;
     if ($code !== UPLOAD_ERR_OK) {
         if ($code === UPLOAD_ERR_INI_SIZE || $code === UPLOAD_ERR_FORM_SIZE) {
-            throw new BoardError(NOTICE_MAX_MB . 'MB 까지 올릴 수 있습니다', 413);
+            throw new BoardError(board_max_upload_label() . ' 까지 올릴 수 있습니다 '
+                . '(php.ini upload_max_filesize=' . ini_get('upload_max_filesize') . ')', 413);
         }
-        throw new BoardError('파일을 올리지 못했습니다', 400);
+        if ($code === UPLOAD_ERR_NO_TMP_DIR) {
+            throw new BoardError('서버에 임시 폴더가 없습니다 (php.ini upload_tmp_dir)', 500);
+        }
+        if ($code === UPLOAD_ERR_CANT_WRITE) {
+            throw new BoardError('서버가 임시 파일을 쓰지 못했습니다 (디스크/권한 확인)', 500);
+        }
+        throw new BoardError('파일을 올리지 못했습니다 (오류 코드 ' . $code . ')', 400);
     }
-    if ((int)$file['size'] > NOTICE_MAX_MB * 1024 * 1024) {
-        throw new BoardError(NOTICE_MAX_MB . 'MB 까지 올릴 수 있습니다', 413);
+    if ((int)$file['size'] > board_max_upload_bytes()) {
+        throw new BoardError(board_max_upload_label() . ' 까지 올릴 수 있습니다', 413);
     }
 
     $original = basename((string)(isset($file['name']) ? $file['name'] : '첨부'));
