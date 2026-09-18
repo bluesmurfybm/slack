@@ -247,6 +247,7 @@ async function logout(){
   current=null;
   document.getElementById("lg-pw").value="";
   closeChat();
+  chatReady=null;
   document.getElementById("chat-log").innerHTML="";
   document.getElementById("app").classList.add("hidden");
   document.getElementById("login").classList.remove("hidden");
@@ -429,8 +430,29 @@ document.querySelectorAll('.eye').forEach(b=>{
 });
 
 /* ---- 챗봇 ---- */
-const CHAT_API="/chatapi/ask"; // nginx 가 chatbot 서버(8003)로 넘긴다
+const CHAT_API="/chatapi"; // nginx 가 chatbot 서버(8003)로 넘긴다
 let chatBusy=false;
+
+/* POST /ask 는 GET /conversations 가 발급한 쿠키를 요구한다. 부트스트랩 약속을
+   하나만 들고 있다가 열기·보내기가 같이 기다리게 해서, 패널을 열기 전에 친 첫
+   메시지가 404 로 튕기거나 두 번 열었을 때 이력이 겹쳐 그려지는 일을 막는다. */
+let chatReady=null;
+
+function chatBootstrap(){
+  if(!chatReady) chatReady=chatLoadConversation().catch(e=>{ chatReady=null; throw e; });
+  return chatReady;
+}
+async function chatLoadConversation(){
+  const r=await fetch(`${CHAT_API}/conversations`,{credentials:"same-origin"});
+  if(!r.ok) throw new Error(`대화를 시작하지 못했습니다. (HTTP ${r.status})`);
+  const d=await r.json().catch(()=>({}));
+  chatRestore(d.messages || []);
+}
+function chatRestore(messages){
+  document.getElementById("chat-log").innerHTML="";
+  for(const m of messages) chatAppend(m.role==="user" ? "me" : "bot", m.content);
+  if(!messages.length) chatAppend("bot", `${current?current.name+"님, ":""}무엇을 도와드릴까요?`);
+}
 
 function setChatVisible(on){
   document.getElementById("chat-fab").classList.toggle("hidden", !on);
@@ -439,8 +461,7 @@ function setChatVisible(on){
 function openChat(){
   document.getElementById("chat-panel").classList.remove("hidden");
   document.getElementById("chat-fab").classList.add("open");
-  const log=document.getElementById("chat-log");
-  if(!log.children.length) chatAppend("bot", `${current?current.name+"님, ":""}무엇을 도와드릴까요?`);
+  chatBootstrap().catch(e=>chatAppend("err", e.message)); // 실패해도 보낼 때 다시 시도한다
   document.getElementById("chat-input").focus();
 }
 function closeChat(){
@@ -486,12 +507,13 @@ async function sendChat(){
   const box=document.getElementById("chat-input");
   const text=box.value.trim();
   if(!text) return;
-  box.value=""; chatGrow(box);
-  chatAppend("me", text);
   chatBusy=true;
   document.getElementById("chat-send").disabled=true;
-  chatTypingOn();
   try{
+    await chatBootstrap(); // 쿠키가 있어야 /ask 가 받는다. 실패하면 입력은 남겨 둔다
+    box.value=""; chatGrow(box);
+    chatAppend("me", text);
+    chatTypingOn();
     chatAppend("bot", await askBot(text));
   }catch(e){
     chatAppend("err", e.message || "답변을 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.");
@@ -503,16 +525,34 @@ async function sendChat(){
   }
 }
 
-async function askBot(text){
-  const r=await fetch(CHAT_API,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({question:text})});
+async function askBot(text, retried){
+  const r=await fetch(`${CHAT_API}/ask`,{method:"POST",credentials:"same-origin",
+    headers:{"Content-Type":"application/json"},body:JSON.stringify({question:text})});
   const d=await r.json().catch(()=>({}));
-  if(!r.ok){
-    const detail=typeof d.detail==="string" ? d.detail : null; // 422 의 detail 은 배열이다
-    throw new Error(detail || `답변을 가져오지 못했습니다. (HTTP ${r.status})`);
+  if(r.ok){
+    if(!d.content) throw new Error("답변이 비어 있습니다.");
+    return d.content; // matched_id 도 함께 오지만 화면에는 쓰지 않는다
   }
-  if(!d.content) throw new Error("답변이 비어 있습니다.");
-  return d.content;
+  /* 대화가 없거나(404) 만료됐으면(409) 새 대화를 발급받아 딱 한 번만 다시 보낸다.
+     chatBootstrap 이 로그를 비우고 다시 그리므로 안내와 질문은 그 뒤에 얹는다. */
+  if((r.status===404 || r.status===409) && !retried){
+    chatTypingOff();
+    chatReady=null;
+    await chatBootstrap();
+    if(r.status===409) chatAppend("err", "대화가 만료되어 새로 시작했습니다.");
+    chatAppend("me", text);
+    chatTypingOn();
+    return askBot(text, true);
+  }
+  // 새 대화로도 안 되면 서버 안내문(개발자용 문구)을 그대로 보여주지 않는다
+  if(r.status===404 || r.status===409) throw new Error("대화를 이어갈 수 없습니다. 페이지를 새로고침해 주세요.");
+  const detail=typeof d.detail==="string" ? d.detail : null; // 422 의 detail 은 배열이다
+  if(r.status===429){
+    const after=parseInt(r.headers.get("retry-after"), 10);
+    throw new Error(after>0 ? `요청이 많습니다. ${after}초 후에 다시 시도해 주세요.`
+      : detail || "요청이 많습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  throw new Error(detail || `답변을 가져오지 못했습니다. (HTTP ${r.status})`);
 }
 
 (function(){
