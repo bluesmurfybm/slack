@@ -731,13 +731,33 @@ function renderBoardNotices(rows){
    창이 숨어 있으면(다른 화면에 가 있을 때) 전이가 아예 시작되지 않아 이벤트가
    영영 안 오고, 그러면 busy 가 풀리지 않아 슬라이더가 멎는다. 시간 제한을 같이 건다. */
 const SLIDE_MS=550;
-function makeSlider(winId, interval, navId){
+const FLIP_MS =520;
+/**
+ * @param mode "slide" 면 한 줄씩 밀어 올리고, "flip" 이면 달력 장을 넘긴다.
+ *             넘기기는 한 번에 한 장만 보이는 칸(일정)에 쓴다.
+ */
+function makeSlider(winId, interval, navId, mode){
   let timer=null, busy=false, paused=false, pos=0;
+  const flip=(mode==="flip");
   const calm=window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const win  =()=>document.getElementById(winId);
   const track=()=>{ const w=win(); return w && w.querySelector(".slide-track"); };
   const nav  =()=>navId ? document.getElementById(navId) : null;
+
+  /** 넘기기 방식에서는 장이 겹쳐 쌓인다. 맨 앞 장이 제일 위에 오게 다시 쌓는다. */
+  function restack(){
+    const t=track(); if(!t) return;
+    const n=t.children.length;
+    for(let i=0;i<n;i++){
+      const c=t.children[i];
+      c.style.zIndex=String(n-i);
+      c.style.transition="none";
+      c.style.transform="none";
+      c.style.opacity="";
+      c.style.filter="";
+    }
+  }
 
   /** 읽는 중에 바뀌면 안 된다 — 올려 두거나 초점이 들어오면 멈춘다.
       목록을 다시 그릴 때마다 창이 새로 생길 수 있어 그때마다 걸어 준다.
@@ -760,7 +780,9 @@ function makeSlider(winId, interval, navId){
   }
 
   function count(){ const t=track(); return t ? t.children.length : 0; }
-  function overflows(){
+  /** 더 볼 게 남았는가. 넘기기는 장이 겹쳐 있어 높이로는 알 수 없다. */
+  function hasMore(){
+    if(flip) return count() > 1;
     const w=win(), t=track();
     return !!(w && t && t.scrollHeight - w.clientHeight > 2);
   }
@@ -769,7 +791,7 @@ function makeSlider(winId, interval, navId){
   function paint(){
     const n=nav();
     if(!n) return;
-    const many = overflows() && count() > 1;
+    const many = hasMore() && count() > 1;
     n.hidden = !many;
     if(!many) return;
     const label=n.querySelector(".pos");
@@ -787,13 +809,22 @@ function makeSlider(winId, interval, navId){
     const w=win(), t=track();
     if(busy || !w || !t || t.children.length<2) return;
     if(w.offsetParent===null) return;   // 숨어 있으면 건너뛴다
-    if(!overflows()) return;            // 다 보이면 옮길 것도 없다
+    if(!hasMore()) return;              // 다 보이면 옮길 것도 없다
 
     busy=true;
+    (flip ? moveFlip : moveSlide)(t, dir);
+
+    const n=count();
+    pos=((pos + dir) % n + n) % n;
+    paint();
+  }
+
+  /** 한 줄씩 위로 밀어 올린다(공지). */
+  function moveSlide(t, dir){
     const gap=parseFloat(getComputedStyle(t).rowGap)||0;
     const ease=`transform ${SLIDE_MS}ms cubic-bezier(.4,0,.2,1)`;
 
-    let settled=false;
+    let settled=false, fin;
     const finish=(moveFirstToEnd)=>()=>{
       if(settled) return;
       settled=true;
@@ -805,7 +836,6 @@ function makeSlider(winId, interval, navId){
       busy=false;
     };
 
-    let fin;
     if(dir > 0){
       const first=t.children[0];
       const h=first.getBoundingClientRect().height+gap;
@@ -827,10 +857,56 @@ function makeSlider(winId, interval, navId){
       t.style.transition=ease;
       t.style.transform="none";
     }
+  }
 
-    const n=count();
-    pos=((pos + dir) % n + n) % n;
-    paint();
+  /**
+   * 달력 장을 넘긴다(일정).
+   *
+   * 벽걸이 달력처럼 위쪽을 경첩으로 삼는다. 다음으로 갈 때는 지금 장이 위로
+   * 젖혀지며 아래에 있던 장이 드러나고, 이전으로 갈 때는 그 반대로 내려와 덮는다.
+   * 움직이는 건 언제나 한 장뿐이라 장이 많아도 가볍다.
+   */
+  function moveFlip(t, dir){
+    const ease=`transform ${FLIP_MS}ms cubic-bezier(.45,.05,.3,1),`+
+               ` opacity ${FLIP_MS}ms ease-in, filter ${FLIP_MS}ms ease-in`;
+    const AWAY="rotateX(-96deg)";
+
+    let settled=false, fin;
+    const done=(card, toEnd)=>()=>{
+      if(settled) return;
+      settled=true;
+      card.removeEventListener("transitionend",fin);
+      if(toEnd) t.appendChild(card);
+      restack();
+      busy=false;
+    };
+
+    if(dir > 0){
+      const cur=t.children[0];
+      fin=done(cur, true);
+      cur.addEventListener("transitionend",fin);
+      setTimeout(fin, FLIP_MS+250);
+      cur.style.transition=ease;
+      cur.style.transform=AWAY;
+      cur.style.opacity="0";
+      cur.style.filter="brightness(.88)";   // 젖혀질수록 그늘이 진다
+    }else{
+      const last=t.children[t.children.length-1];
+      t.insertBefore(last, t.children[0]);
+      restack();                             // 넘어올 장을 맨 위로 올려 놓고
+      last.style.transition="none";
+      last.style.transform=AWAY;
+      last.style.opacity="0";
+      last.style.filter="brightness(.88)";
+      void last.offsetHeight;                // 젖혀진 상태를 확정한 뒤 내려와야 움직인다
+      fin=done(last, false);
+      last.addEventListener("transitionend",fin);
+      setTimeout(fin, FLIP_MS+250);
+      last.style.transition=ease;
+      last.style.transform="none";
+      last.style.opacity="1";
+      last.style.filter="none";
+    }
   }
 
   /** 시계가 부르는 쪽. 마우스를 올려 두면 건너뛴다. */
@@ -852,6 +928,7 @@ function makeSlider(winId, interval, navId){
       bind();
       const t=track();
       if(t){ t.style.transition="none"; t.style.transform="none"; }
+      if(flip) restack();
       busy=false; paused=false; pos=0;
       paint();
       start();
@@ -859,8 +936,8 @@ function makeSlider(winId, interval, navId){
     stop(){ stop(); const n=nav(); if(n) n.hidden=true; }
   };
 }
-const noticeSlider=makeSlider("board-notices", 3600, "nt-nav");
-const eventSlider =makeSlider("board-events-list", 4200, "ev-nav");
+const noticeSlider=makeSlider("board-notices", 3600, "nt-nav", "slide");
+const eventSlider =makeSlider("board-events-list", 4200, "ev-nav", "flip");
 
 /* 한 번에 카드 한 장만 보여 주고 가까운 순으로 돌린다.
    여러 개를 줄글로 늘어놓으면 칸이 길어지고, 한 장만 세워 두면 나머지를
@@ -872,7 +949,7 @@ function renderBoardEvents(rows){
     eventSlider.stop();
     return;
   }
-  box.innerHTML=`<div class="ev-list slide-win" id="board-events-list"><div class="slide-track">`+
+  box.innerHTML=`<div class="ev-list flip-win" id="board-events-list"><div class="slide-track">`+
     rows.map(e=>`
       <div class="ev-hero k-${e.kind.key} ${e.heat}">
         <span class="big">${esc(e.dday_label)}</span>
