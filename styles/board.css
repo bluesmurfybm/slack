@@ -5,24 +5,44 @@
 
 /* 대시보드에서 타일 위에 놓이는 두 칸. 공지가 넓고 일정이 좁다 —
    공지는 글줄이 길고 일정은 숫자 하나가 주인공이라서.
-   두 칸 높이는 --panel-h 로 묶어 둔다. 내용이 넘치면 칸이 늘어나는 게 아니라
-   안에서 스크롤된다 — 공지가 쌓일수록 타일이 아래로 밀려나면 안 되기 때문. */
-.board{--panel-h:198px;
+
+   높이는 픽셀로 박지 않고 "한 번에 보여 줄 것" 으로 정한다.
+     공지  = 줄 2개
+     일정  = 카드 1장
+   둘이 같은 --win-h 를 쓰므로 두 칸 높이가 저절로 맞는다. 넘치는 만큼은
+   늘어나지 않고 안에서 한 칸씩 돌아간다 — 공지가 쌓여도 타일이 안 밀린다.
+   더 보여 주고 싶으면 --win-h 의 곱셈수만 바꾸면 된다. */
+.board{--row-h:36px;
+  --win-h:calc(var(--row-h) * 2);
   display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);
   gap:16px;margin-bottom:26px;align-items:stretch}
-@media (max-width:1000px){.board{grid-template-columns:1fr;--panel-h:auto}}
+@media (max-width:1000px){.board{grid-template-columns:1fr}}
 
 /* 아래 타일과 구별되게 알림판만 살짝 띄운다. 타일은 평평하게 있다가
    hover 할 때 떠오르니, 읽는 곳(늘 떠 있음) / 가는 곳(누르면 반응)으로 갈린다. */
 .panel{background:var(--card);border:1px solid #E8EEF9;border-radius:16px;
   box-shadow:var(--shadow);
-  display:flex;flex-direction:column;overflow:hidden;height:var(--panel-h)}
+  display:flex;flex-direction:column;overflow:hidden}
 /* 머리에 가는 선을 넣으면 '머리말 있는 판'으로 읽힌다. 타일에는 이 선이 없다. */
 .panel-head{display:flex;align-items:center;gap:9px;padding:14px 18px 11px;flex-shrink:0;
   border-bottom:1px solid var(--line-soft)}
 .panel-head h2{font-family:var(--disp);font-size:15px;font-weight:600;margin:0;color:var(--navy)}
 .panel-head .cnt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .panel-head .sp{margin-left:auto}
+
+/* 자동으로 돌기를 기다리지 않고 바로 넘길 수 있게. 몇 번째인지도 같이 보여 준다 —
+   개수를 모르면 "다 본 건가" 싶어 계속 기다리게 된다. 다 보이면 통째로 감춘다. */
+.slide-nav{display:inline-flex;align-items:center;gap:1px;margin-left:1px}
+.slide-nav[hidden]{display:none}
+.slide-nav button{display:inline-flex;align-items:center;justify-content:center;
+  width:19px;height:19px;padding:0;border:0;border-radius:6px;
+  background:none;color:var(--muted);cursor:pointer;
+  transition:background .12s ease,color .12s ease}
+.slide-nav button:hover{background:var(--bg);color:var(--blue)}
+.slide-nav button svg{width:13px;height:13px;fill:none;stroke:currentColor;
+  stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.slide-nav .pos{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;
+  min-width:30px;text-align:center;letter-spacing:-.01em}
 .panel-act{font-family:var(--sans);font-size:12.5px;background:none;border:0;color:var(--muted);
   cursor:pointer;padding:4px 8px;border-radius:7px}
 .panel-act:hover{background:var(--bg);color:var(--blue)}
@@ -34,7 +54,7 @@
    창은 고정 높이(.slide-win)고, 안쪽 목록(.slide-track)이 한 줄씩 위로 올라간다.
    맨 위 줄은 올라간 뒤 맨 아래로 옮겨 붙여 끝없이 돈다.
    마우스를 올리거나 키보드 초점이 들어오면 멈춘다 — 읽는 중에 바뀌면 안 된다. */
-.slide-win{flex:1;min-height:0;overflow:hidden;position:relative}
+.slide-win{height:var(--win-h);flex:none;overflow:hidden;position:relative}
 .slide-track{display:flex;flex-direction:column;will-change:transform}
 /* 움직임을 줄여 달라고 한 사람에게는 돌리지 않고 직접 넘기게 둔다 */
 @media (prefers-reduced-motion:reduce){
@@ -51,13 +71,16 @@
 /* ---------- 공지 목록(대시보드 안) ---------- */
 .nt-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
   background:none;border:0;font-family:var(--sans);font-size:14px;color:var(--ink);
-  padding:10px 10px;border-radius:10px;cursor:pointer}
+  height:var(--row-h);padding:0 10px;border-radius:10px;cursor:pointer}
 .nt-row:hover{background:var(--bg)}
 .nt-row .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nt-row .dt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-/* 중요 표시. 맨 위 고정 대신 자기 자리에서 눈에 띄게만 한다. */
-.nt-imp{flex-shrink:0;color:#D84A3A}
+/* 중요 표시. 맨 위 고정 대신 자기 자리에서 눈에 띄게만 한다.
+   별 하나로는 훑을 때 잘 안 걸려서 제목도 같이 굵게 한다. */
+.nt-imp{flex-shrink:0;color:#F0A422}
 .nl .nt-imp,.mrow .nt-imp{vertical-align:-2px}
+.nt-row.imp .tt,.nl.imp .tt{font-weight:700;color:var(--navy)}
+.mrow .nm.imp{font-weight:700}
 .nt-new{background:#E8F0FE;color:var(--blue);font-size:10px;font-weight:700;
   border-radius:999px;padding:2px 6px;flex-shrink:0;letter-spacing:.02em}
 /* 첨부 표시. 이모지는 기기마다 모양이 달라 SVG 클립으로 그린다. */
@@ -70,8 +93,7 @@
 .nt-row:hover .clip,.nl:hover .clip{background:#E1EAFB;color:var(--blue)}
 
 /* ---------- 중요 일정 ---------- */
-.ev-list{padding:2px 10px 10px;display:flex;flex-direction:column;min-height:0}
-.ev-list .slide-track{gap:6px}
+.ev-list .slide-track{gap:8px}
 .ev{display:flex;align-items:center;gap:12px;padding:9px 11px;border-radius:12px;
   border:1px solid transparent;background:var(--bg)}
 .ev .tt{flex:1;min-width:0}
@@ -98,7 +120,8 @@
 .dday.heat-past {background:#ECEFF5;color:#8994AF}
 
 /* 가장 가까운 일정 한 건은 크게 세운다. 나머지는 줄글로. */
-.ev-hero{display:flex;align-items:center;gap:13px;margin:2px 10px 8px;padding:12px 15px;
+.ev-hero{display:flex;align-items:center;gap:13px;margin:0;padding:0 15px;
+  height:var(--win-h);box-sizing:border-box;
   border-radius:14px;background:linear-gradient(135deg,#1C5DE5,#0F2E77);color:#fff;
   position:relative;overflow:hidden;flex-shrink:0;
   animation:evRise .42s cubic-bezier(.22,1,.36,1) both}

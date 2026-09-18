@@ -117,6 +117,11 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
       <section class="panel">
         <div class="panel-head">
           <h2>📢 주요 공지</h2>
+          <span class="slide-nav" id="nt-nav" hidden>
+            <button type="button" data-dir="-1" title="이전 공지" aria-label="이전 공지"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
+            <span class="pos" aria-live="off"></span>
+            <button type="button" data-dir="1" title="다음 공지" aria-label="다음 공지"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          </span>
           <span class="sp"></span>
 <?php if ($__isAdmin): ?>
           <button class="panel-act add" onclick="openNoticeDrawer(0)">+ 새 공지</button>
@@ -133,6 +138,11 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
       <section class="panel">
         <div class="panel-head">
           <h2>📅 중요 일정</h2>
+          <span class="slide-nav" id="ev-nav" hidden>
+            <button type="button" data-dir="-1" title="이전 일정" aria-label="이전 일정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
+            <span class="pos" aria-live="off"></span>
+            <button type="button" data-dir="1" title="다음 일정" aria-label="다음 일정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+          </span>
           <span class="sp"></span>
 <?php if ($__isAdmin): ?>
           <button class="panel-act add" onclick="openEventModal(0)">+ 등록</button>
@@ -680,8 +690,9 @@ async function loadBoard(){
   }
 }
 
-/* 중요 표시. 맨 위 고정을 없앴으니 순서는 그대로 두고 눈에만 띄게 한다. */
-const IMP_ICON=`<svg class="nt-imp" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-label="중요"><path d="M12 2 1.6 20.5h20.8L12 2Zm0 6.2c.6 0 1 .5 1 1.1l-.2 4.6a.8.8 0 0 1-1.6 0l-.2-4.6c0-.6.4-1.1 1-1.1Zm0 8.1a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2Z"/></svg>`;
+/* 중요 표시. 맨 위 고정을 없앴으니 순서는 그대로 두고 눈에만 띄게 한다.
+   경고 삼각형은 "문제가 생겼다" 로 읽혀서 공지에는 별이 맞다. */
+const IMP_ICON=`<svg class="nt-imp" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" role="img" aria-label="중요"><path d="M12 1.8l3.1 6.3 6.9 1-5 4.9 1.2 6.9-6.2-3.3-6.2 3.3L7 14l-5-4.9 6.9-1z"/></svg>`;
 /* 첨부 표시. 이모지는 기기마다 모양이 달라 클립을 직접 그린다. */
 function clipTag(n){
   if(!n) return "";
@@ -691,7 +702,7 @@ function clipTag(n){
 }
 
 function noticeRow(n){
-  return `<button class="nt-row" onclick="openNotice(${n.id})">
+  return `<button class="nt-row${n.is_important?" imp":""}" onclick="openNotice(${n.id})">
       ${n.is_important?IMP_ICON:""}
       <span class="tt">${esc(n.title)}</span>
       ${clipTag(n.file_count)}
@@ -719,57 +730,119 @@ function renderBoardNotices(rows){
    창이 숨어 있으면(다른 화면에 가 있을 때) 전이가 아예 시작되지 않아 이벤트가
    영영 안 오고, 그러면 busy 가 풀리지 않아 슬라이더가 멎는다. 시간 제한을 같이 건다. */
 const SLIDE_MS=550;
-function makeSlider(winId, interval){
-  let timer=null, busy=false, paused=false, bound=false;
+function makeSlider(winId, interval, navId){
+  let timer=null, busy=false, paused=false, pos=0;
   const calm=window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const win  =()=>document.getElementById(winId);
   const track=()=>{ const w=win(); return w && w.querySelector(".slide-track"); };
+  const nav  =()=>navId ? document.getElementById(navId) : null;
 
   /** 읽는 중에 바뀌면 안 된다 — 올려 두거나 초점이 들어오면 멈춘다.
-      목록을 다시 그릴 때마다 창이 새로 생길 수 있어 그때마다 걸어 준다. */
+      목록을 다시 그릴 때마다 창이 새로 생길 수 있어 그때마다 걸어 준다.
+      이동 단추는 머리말에 붙박이라 한 번만 걸면 된다. */
   function bind(){
     const w=win();
-    if(!w || w.dataset.slideBound) return;
-    w.dataset.slideBound="1";
-    ["mouseenter","focusin"].forEach(ev=>w.addEventListener(ev,()=>{paused=true;}));
-    ["mouseleave","focusout"].forEach(ev=>w.addEventListener(ev,()=>{paused=false;}));
-    bound=true;
+    if(w && !w.dataset.slideBound){
+      w.dataset.slideBound="1";
+      ["mouseenter","focusin"].forEach(ev=>w.addEventListener(ev,()=>{paused=true;}));
+      ["mouseleave","focusout"].forEach(ev=>w.addEventListener(ev,()=>{paused=false;}));
+    }
+    const n=nav();
+    if(n && !n.dataset.slideBound){
+      n.dataset.slideBound="1";
+      n.querySelectorAll("[data-dir]").forEach(b=>
+        b.addEventListener("click",()=>manual(parseInt(b.dataset.dir,10))));
+      ["mouseenter","focusin"].forEach(ev=>n.addEventListener(ev,()=>{paused=true;}));
+      ["mouseleave","focusout"].forEach(ev=>n.addEventListener(ev,()=>{paused=false;}));
+    }
   }
 
-  function step(){
+  function count(){ const t=track(); return t ? t.children.length : 0; }
+  function overflows(){
     const w=win(), t=track();
-    if(busy || paused || !w || !t || t.children.length<2) return;
-    if(w.offsetParent===null) return;                       // 숨어 있으면 건너뛴다
-    if(t.scrollHeight - w.clientHeight <= 2) return;        // 다 보이면 돌릴 것도 없다
+    return !!(w && t && t.scrollHeight - w.clientHeight > 2);
+  }
+
+  /** 지금 맨 위에 있는 게 몇 번째인지 보여 준다. 다 보이면 단추째 감춘다. */
+  function paint(){
+    const n=nav();
+    if(!n) return;
+    const many = overflows() && count() > 1;
+    n.hidden = !many;
+    if(!many) return;
+    const label=n.querySelector(".pos");
+    if(label) label.textContent=(pos+1)+" / "+count();
+  }
+
+  /**
+   * 한 칸 옮긴다. dir 이 1 이면 다음, -1 이면 이전.
+   *
+   * 다음은 맨 윗줄을 위로 민 뒤 맨 뒤로 옮겨 붙이고,
+   * 이전은 맨 뒷줄을 먼저 앞에 붙여 놓고 위로 밀린 상태에서 제자리로 내린다.
+   * 어느 쪽이든 목록을 복제하지 않는다.
+   */
+  function move(dir){
+    const w=win(), t=track();
+    if(busy || !w || !t || t.children.length<2) return;
+    if(w.offsetParent===null) return;   // 숨어 있으면 건너뛴다
+    if(!overflows()) return;            // 다 보이면 옮길 것도 없다
 
     busy=true;
-    const first=t.children[0];
     const gap=parseFloat(getComputedStyle(t).rowGap)||0;
-    const h=first.getBoundingClientRect().height+gap;
+    const ease=`transform ${SLIDE_MS}ms cubic-bezier(.4,0,.2,1)`;
 
     let settled=false;
-    const finish=()=>{
+    const finish=(moveFirstToEnd)=>()=>{
       if(settled) return;
       settled=true;
-      t.removeEventListener("transitionend",finish);
+      t.removeEventListener("transitionend",fin);
       t.style.transition="none";
       t.style.transform="none";
-      t.appendChild(first);   // 올라간 줄을 맨 뒤로
-      void t.offsetHeight;    // 되돌린 위치를 즉시 반영(깜빡임 방지)
+      if(moveFirstToEnd) t.appendChild(moveFirstToEnd);
+      void t.offsetHeight;   // 되돌린 위치를 즉시 반영(깜빡임 방지)
       busy=false;
     };
-    t.addEventListener("transitionend",finish);
-    setTimeout(finish, SLIDE_MS+250);   // 전이가 안 와도 반드시 풀린다
 
-    t.style.transition=`transform ${SLIDE_MS}ms cubic-bezier(.4,0,.2,1)`;
-    t.style.transform=`translateY(-${h}px)`;
+    let fin;
+    if(dir > 0){
+      const first=t.children[0];
+      const h=first.getBoundingClientRect().height+gap;
+      fin=finish(first);
+      t.addEventListener("transitionend",fin);
+      setTimeout(fin, SLIDE_MS+250);     // 전이가 안 와도 반드시 풀린다
+      t.style.transition=ease;
+      t.style.transform=`translateY(-${h}px)`;
+    }else{
+      const last=t.children[t.children.length-1];
+      t.insertBefore(last, t.children[0]);
+      const h=last.getBoundingClientRect().height+gap;
+      t.style.transition="none";
+      t.style.transform=`translateY(-${h}px)`;
+      void t.offsetHeight;               // 밀린 상태를 먼저 확정한 뒤 되돌려야 움직인다
+      fin=finish(null);
+      t.addEventListener("transitionend",fin);
+      setTimeout(fin, SLIDE_MS+250);
+      t.style.transition=ease;
+      t.style.transform="none";
+    }
+
+    const n=count();
+    pos=((pos + dir) % n + n) % n;
+    paint();
   }
+
+  /** 시계가 부르는 쪽. 마우스를 올려 두면 건너뛴다. */
+  function tick(){ if(!paused) move(1); }
+
+  /** 사람이 누른 쪽. 올려 둔 상태여도 움직이고, 타이머를 다시 센다 —
+      누르자마자 자동으로 또 넘어가면 두 칸이 지나간 것처럼 보인다. */
+  function manual(dir){ move(dir); start(); }
 
   function start(){
     stop();
-    if(calm.matches) return;   // 움직임을 줄여 달라고 했으면 돌리지 않는다(직접 넘길 수 있다)
-    timer=setInterval(step, interval);
+    if(calm.matches) return;   // 움직임을 줄여 달라고 했으면 자동으로는 돌리지 않는다
+    timer=setInterval(tick, interval);
   }
   function stop(){ if(timer){ clearInterval(timer); timer=null; } }
 
@@ -778,44 +851,35 @@ function makeSlider(winId, interval){
       bind();
       const t=track();
       if(t){ t.style.transition="none"; t.style.transform="none"; }
-      busy=false; paused=false;
+      busy=false; paused=false; pos=0;
+      paint();
       start();
     },
-    stop(){ stop(); }
+    stop(){ stop(); const n=nav(); if(n) n.hidden=true; }
   };
 }
-const noticeSlider=makeSlider("board-notices", 3600);
-const eventSlider =makeSlider("board-events-list", 4200);
+const noticeSlider=makeSlider("board-notices", 3600, "nt-nav");
+const eventSlider =makeSlider("board-events-list", 4200, "ev-nav");
 
+/* 한 번에 카드 한 장만 보여 주고 가까운 순으로 돌린다.
+   여러 개를 줄글로 늘어놓으면 칸이 길어지고, 한 장만 세워 두면 나머지를
+   영영 못 본다. 한 장씩 돌리면 칸은 짧고 전부 눈에 들어온다. */
 function renderBoardEvents(rows){
   const box=document.getElementById("board-events");
   if(!rows.length){
     box.innerHTML=`<div class="panel-empty">다가오는 일정이 없습니다.</div>`;
+    eventSlider.stop();
     return;
   }
-  // 가장 가까운 한 건만 크게 세우고 나머지는 줄글로 — 훑을 때 눈이 갈 곳을 하나로 둔다.
-  const [first,...rest]=rows;
-  let html=`
-    <div class="ev-hero ${first.heat}">
-      <span class="big">${esc(first.dday_label)}</span>
-      <span class="tt">
-        <div class="nm">${esc(first.title)}</div>
-        <div class="sub">${esc(fmtWhen(first))}${first.place?" · "+esc(first.place):""}</div>
-      </span>
-    </div>`;
-  if(rest.length){
-    // 가장 가까운 한 건은 위에 세워 두고, 나머지가 돌아간다.
-    html+=`<div class="ev-list slide-win" id="board-events-list"><div class="slide-track">`+
-      rest.map(e=>`
-      <div class="ev ${e.heat}">
+  box.innerHTML=`<div class="ev-list slide-win" id="board-events-list"><div class="slide-track">`+
+    rows.map(e=>`
+      <div class="ev-hero ${e.heat}">
+        <span class="big">${esc(e.dday_label)}</span>
         <span class="tt">
           <div class="nm">${esc(e.title)}</div>
           <div class="sub">${esc(fmtWhen(e))}${e.place?" · "+esc(e.place):""}</div>
         </span>
-        <span class="dday">${esc(e.dday_label)}</span>
       </div>`).join("")+`</div></div>`;
-  }
-  box.innerHTML=html;
   eventSlider.reset();
 }
 
@@ -834,7 +898,7 @@ async function showNotices(page){
       return;
     }
     list.innerHTML=d.rows.map(n=>`
-      <button class="nl" onclick="openNotice(${n.id})">
+      <button class="nl${n.is_important?" imp":""}" onclick="openNotice(${n.id})">
         ${n.is_important?IMP_ICON:""}
         <span class="tt">${esc(n.title)}</span>
         ${clipTag(n.file_count)}
@@ -1099,7 +1163,7 @@ async function renderManageNotices(box){
       (d.rows.length?`<div class="list-card">`+d.rows.map(n=>`
         <div class="mrow${n.window.state==='ended'?" dim":""}">
           <span class="tt">
-            <div class="nm">${n.is_important?IMP_ICON+" ":""}${esc(n.title)}
+            <div class="nm${n.is_important?" imp":""}">${n.is_important?IMP_ICON+" ":""}${esc(n.title)}
               ${n.window.label?`<span class="win win-${n.window.state}">${esc(n.window.label)}</span>`:""}</div>
             <div class="sub">${esc(n.author_name)} · ${fmtDateDot(n.created_at)} · 조회 ${n.view_count}${n.file_count?` · 첨부 ${n.file_count}`:""}</div>
           </span>
