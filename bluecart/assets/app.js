@@ -156,9 +156,16 @@
              '<span class="bc-pipe__l">' + p.label + '</span></button>';
     }).join('');
 
+    // 네 단계를 합친 요약. 앞 칸들과 같은 얼개(큰 숫자 + 라벨)로 두되
+    // 누르는 칸이 아니라는 게 드러나게 배경과 테두리를 달리한다.
     html += '<div class="bc-pipe__aside">' +
-            '<span>올해 전체 <b>' + num(counts.TOTAL || 0) + '</b>건</span>' +
-            '<span>반려 <b>' + num(counts.REJECTED || 0) + '</b> · 철회 <b>' + num(counts.CANCELED || 0) + '</b></span>' +
+            '<span class="bc-sum__k">올해 전체</span>' +
+            '<span class="bc-sum__n">' + num(counts.TOTAL || 0) +
+              '<em>건</em></span>' +
+            '<span class="bc-sum__x">' +
+              '<i class="bc-tone-stop">반려 <b>' + num(counts.REJECTED || 0) + '</b></i>' +
+              '<i class="bc-tone-off">철회 <b>' + num(counts.CANCELED || 0) + '</b></i>' +
+            '</span>' +
             '</div>';
     el.innerHTML = html;
 

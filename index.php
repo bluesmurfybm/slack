@@ -668,6 +668,16 @@ function fmtWhen(e){
   if(e.ends_on && e.ends_on!==e.starts_on) out+=` ~ ${fmtDateDot(e.ends_on)}`;
   return out;
 }
+/* 좁은 칸용. 올해면 연도를 뗀다 — 거의 다 올해라 네 글자가 자리만 차지한다.
+   해가 넘어가는 일정은 연도를 남겨야 헷갈리지 않는다. */
+function fmtWhenShort(e){
+  const thisYear=String(new Date().getFullYear());
+  const cut=t=>t.startsWith(thisYear+".") ? t.slice(5) : t;
+  const d=new Date(e.starts_on+"T00:00:00");
+  let out=`${cut(fmtDateDot(e.starts_on))}(${WEEKDAYS[d.getDay()]})`;
+  if(e.ends_on && e.ends_on!==e.starts_on) out+=`~${cut(fmtDateDot(e.ends_on))}`;
+  return out;
+}
 
 /* ---- 대시보드 위 두 칸 ---- */
 let boardTotal=0;
@@ -731,33 +741,13 @@ function renderBoardNotices(rows){
    창이 숨어 있으면(다른 화면에 가 있을 때) 전이가 아예 시작되지 않아 이벤트가
    영영 안 오고, 그러면 busy 가 풀리지 않아 슬라이더가 멎는다. 시간 제한을 같이 건다. */
 const SLIDE_MS=550;
-const FLIP_MS =520;
-/**
- * @param mode "slide" 면 한 줄씩 밀어 올리고, "flip" 이면 달력 장을 넘긴다.
- *             넘기기는 한 번에 한 장만 보이는 칸(일정)에 쓴다.
- */
-function makeSlider(winId, interval, navId, mode){
+function makeSlider(winId, interval, navId){
   let timer=null, busy=false, paused=false, pos=0;
-  const flip=(mode==="flip");
   const calm=window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const win  =()=>document.getElementById(winId);
   const track=()=>{ const w=win(); return w && w.querySelector(".slide-track"); };
   const nav  =()=>navId ? document.getElementById(navId) : null;
-
-  /** 넘기기 방식에서는 장이 겹쳐 쌓인다. 맨 앞 장이 제일 위에 오게 다시 쌓는다. */
-  function restack(){
-    const t=track(); if(!t) return;
-    const n=t.children.length;
-    for(let i=0;i<n;i++){
-      const c=t.children[i];
-      c.style.zIndex=String(n-i);
-      c.style.transition="none";
-      c.style.transform="none";
-      c.style.opacity="";
-      c.style.filter="";
-    }
-  }
 
   /** 읽는 중에 바뀌면 안 된다 — 올려 두거나 초점이 들어오면 멈춘다.
       목록을 다시 그릴 때마다 창이 새로 생길 수 있어 그때마다 걸어 준다.
@@ -780,9 +770,7 @@ function makeSlider(winId, interval, navId, mode){
   }
 
   function count(){ const t=track(); return t ? t.children.length : 0; }
-  /** 더 볼 게 남았는가. 넘기기는 장이 겹쳐 있어 높이로는 알 수 없다. */
   function hasMore(){
-    if(flip) return count() > 1;
     const w=win(), t=track();
     return !!(w && t && t.scrollHeight - w.clientHeight > 2);
   }
@@ -812,7 +800,7 @@ function makeSlider(winId, interval, navId, mode){
     if(!hasMore()) return;              // 다 보이면 옮길 것도 없다
 
     busy=true;
-    (flip ? moveFlip : moveSlide)(t, dir);
+    moveSlide(t, dir);
 
     const n=count();
     pos=((pos + dir) % n + n) % n;
@@ -859,56 +847,6 @@ function makeSlider(winId, interval, navId, mode){
     }
   }
 
-  /**
-   * 달력 장을 넘긴다(일정).
-   *
-   * 벽걸이 달력처럼 위쪽을 경첩으로 삼는다. 다음으로 갈 때는 지금 장이 위로
-   * 젖혀지며 아래에 있던 장이 드러나고, 이전으로 갈 때는 그 반대로 내려와 덮는다.
-   * 움직이는 건 언제나 한 장뿐이라 장이 많아도 가볍다.
-   */
-  function moveFlip(t, dir){
-    const ease=`transform ${FLIP_MS}ms cubic-bezier(.45,.05,.3,1),`+
-               ` opacity ${FLIP_MS}ms ease-in, filter ${FLIP_MS}ms ease-in`;
-    const AWAY="rotateX(-96deg)";
-
-    let settled=false, fin;
-    const done=(card, toEnd)=>()=>{
-      if(settled) return;
-      settled=true;
-      card.removeEventListener("transitionend",fin);
-      if(toEnd) t.appendChild(card);
-      restack();
-      busy=false;
-    };
-
-    if(dir > 0){
-      const cur=t.children[0];
-      fin=done(cur, true);
-      cur.addEventListener("transitionend",fin);
-      setTimeout(fin, FLIP_MS+250);
-      cur.style.transition=ease;
-      cur.style.transform=AWAY;
-      cur.style.opacity="0";
-      cur.style.filter="brightness(.88)";   // 젖혀질수록 그늘이 진다
-    }else{
-      const last=t.children[t.children.length-1];
-      t.insertBefore(last, t.children[0]);
-      restack();                             // 넘어올 장을 맨 위로 올려 놓고
-      last.style.transition="none";
-      last.style.transform=AWAY;
-      last.style.opacity="0";
-      last.style.filter="brightness(.88)";
-      void last.offsetHeight;                // 젖혀진 상태를 확정한 뒤 내려와야 움직인다
-      fin=done(last, false);
-      last.addEventListener("transitionend",fin);
-      setTimeout(fin, FLIP_MS+250);
-      last.style.transition=ease;
-      last.style.transform="none";
-      last.style.opacity="1";
-      last.style.filter="none";
-    }
-  }
-
   /** 시계가 부르는 쪽. 마우스를 올려 두면 건너뛴다. */
   function tick(){ if(!paused) move(1); }
 
@@ -928,7 +866,6 @@ function makeSlider(winId, interval, navId, mode){
       bind();
       const t=track();
       if(t){ t.style.transition="none"; t.style.transform="none"; }
-      if(flip) restack();
       busy=false; paused=false; pos=0;
       paint();
       start();
@@ -936,12 +873,12 @@ function makeSlider(winId, interval, navId, mode){
     stop(){ stop(); const n=nav(); if(n) n.hidden=true; }
   };
 }
-const noticeSlider=makeSlider("board-notices", 3600, "nt-nav", "slide");
-const eventSlider =makeSlider("board-events-list", 4200, "ev-nav", "flip");
+const noticeSlider=makeSlider("board-notices", 3600, "nt-nav");
+const eventSlider =makeSlider("board-events-list", 4200, "ev-nav");
 
-/* 한 번에 카드 한 장만 보여 주고 가까운 순으로 돌린다.
-   여러 개를 줄글로 늘어놓으면 칸이 길어지고, 한 장만 세워 두면 나머지를
-   영영 못 본다. 한 장씩 돌리면 칸은 짧고 전부 눈에 들어온다. */
+/* 한 줄에 한 건. 카드로 감싸면 그 칸만 무겁게 튀어서 내용만 남겼다.
+   공지 줄과 같은 높이·같은 생김새라 두 칸이 한 덩어리로 읽힌다.
+   종류는 왼쪽 D-day 글자색과 그림으로만 구분한다. */
 function renderBoardEvents(rows){
   const box=document.getElementById("board-events");
   if(!rows.length){
@@ -949,14 +886,12 @@ function renderBoardEvents(rows){
     eventSlider.stop();
     return;
   }
-  box.innerHTML=`<div class="ev-list flip-win" id="board-events-list"><div class="slide-track">`+
+  box.innerHTML=`<div class="slide-win" id="board-events-list"><div class="slide-track">`+
     rows.map(e=>`
-      <div class="ev-hero k-${e.kind.key} ${e.heat}">
-        <span class="big">${esc(e.dday_label)}</span>
-        <span class="tt">
-          <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
-          <div class="sub">${esc(fmtWhen(e))}${e.place?" · "+esc(e.place):""}</div>
-        </span>
+      <div class="ev-row k-${e.kind.key} ${e.heat}">
+        <span class="dd">${esc(e.dday_label)}</span>
+        <span class="tt"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</span>
+        <span class="when">${esc(fmtWhenShort(e))}${e.place?" · "+esc(e.place):""}</span>
       </div>`).join("")+`</div></div>`;
   eventSlider.reset();
 }

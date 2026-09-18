@@ -96,128 +96,65 @@
 .nl .clip,.nt-row .clip{transition:background .14s ease,color .14s ease}
 .nt-row:hover .clip,.nl:hover .clip{background:#E1EAFB;color:var(--blue)}
 
-/* ---------- 중요 일정 ---------- */
-/* ---------- 달력 넘기기(일정) ----------
-   장이 겹쳐 쌓여 있고 맨 위 것만 보인다. 위쪽을 경첩으로 삼아 젖혀지므로
-   transform-origin 은 위쪽 가운데다. perspective 가 있어야 3차원으로 접힌다. */
-.flip-win{height:var(--win-h);flex:none;position:relative;perspective:1100px}
-.flip-win .slide-track{position:relative;height:100%;transform-style:preserve-3d}
-.flip-win .slide-track > *{position:absolute;inset:0;
-  transform-origin:top center;backface-visibility:hidden;will-change:transform,opacity}
-/* 겹쳐 있는 장은 들어올 때 따로 떠오르지 않는다 — 넘기는 동작과 겹쳐 어지럽다 */
-.flip-win .ev-hero{animation:none}
-@media (prefers-reduced-motion:reduce){
-  .flip-win .slide-track > *{transition:none !important;transform:none !important}
-}
-.ev{display:flex;align-items:center;gap:12px;padding:9px 11px;border-radius:12px;
-  border:1px solid transparent;background:var(--bg)}
-.ev .tt{flex:1;min-width:0}
-.ev .nm{font-size:13.5px;font-weight:600;color:var(--navy);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev .sub{font-size:11.5px;color:var(--muted);margin-top:1px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ---------- 중요 일정 ----------
+   카드로 감싸면 그 칸만 무겁게 튀어서 내용만 남겼다. 공지 줄과 같은 높이·같은
+   생김새라 두 칸이 한 덩어리로 읽힌다.
 
-/* D-day 알약. 임박할수록 뜨겁게 — 훑어볼 때 색만 보고도 급한 게 뭔지 안다. */
+   종류는 왼쪽 D-day 글자색(--k-ink)과 그림으로만 구분한다. 바탕까지 칠하면
+   줄 여덟 개가 알록달록해져 오히려 안 읽힌다. */
+.ev-row{--k-ink:#1C5DE5;
+  display:flex;align-items:center;gap:10px;
+  height:var(--row-h);padding:0 10px;border-radius:10px;
+  animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
+/* 누를 수 있는 줄이 아니라 hover 배경을 주지 않는다 — 공지 줄과 달리
+   일정은 상세가 없다. 반응이 있으면 눌러도 되는 줄로 오해한다. */
+.ev-row .dd{font-family:var(--disp);font-size:13px;font-weight:700;
+  color:var(--k-ink);letter-spacing:-.01em;
+  min-width:46px;flex-shrink:0;font-variant-numeric:tabular-nums}
+.ev-row .tt{flex:1;min-width:0;font-size:14px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-row .ki{font-style:normal;font-size:12.5px;margin-right:5px;vertical-align:1px}
+.ev-row .when{font-size:12px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+@media (max-width:1180px){.ev-row .when{display:none}}
+
+/* 임박한 것만 조금 더 힘을 준다. 색은 종류가 정하므로 여기서는 굵기만 건드린다. */
+.ev-row.today .tt{font-weight:700;color:var(--navy)}
+.ev-row.today .dd{animation:ddayPulse 1.8s ease-in-out infinite}
+.ev-row.soon  .dd{animation:ddayBreathe 3.2s ease-in-out infinite}
+
+/* 한 박자씩 밀려 들어온다 — 한꺼번에 튀어나오는 것보다 덜 시끄럽다 */
+.ev-row:nth-child(1){animation-delay:.05s}
+.ev-row:nth-child(2){animation-delay:.11s}
+.ev-row:nth-child(n+3){animation-delay:.16s}
+
+@keyframes evRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ddayPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes ddayBreathe{0%,100%{opacity:1}50%{opacity:.62}}
+
+@media (prefers-reduced-motion:reduce){
+  .ev-row,.ev-row .dd{animation:none !important}
+}
+
+/* 관리 화면의 D-day 알약. 거기서는 줄이 넓어 알약이 어울린다. */
 .dday{font-family:var(--disp);font-size:13px;font-weight:700;letter-spacing:-.01em;
   border-radius:999px;padding:5px 11px;white-space:nowrap;flex-shrink:0;
   background:#E7EDF9;color:var(--muted)}
-.ev.later .dday{background:#E8F0FE;color:var(--blue)}
-.ev.soon  {background:#FFF6EA;border-color:#FAE0BC}
-.ev.soon  .dday{background:#FBE3C2;color:#96590B}
-.ev.today {background:#FDEDEC;border-color:#F6C9C4}
-.ev.today .dday{background:var(--blue);color:#fff}
-.ev.past  {opacity:.55}
-
-/* 관리 목록의 알약은 .ev 로 감싸지 않으므로 색을 따로 준다 */
 .dday.heat-later{background:#E8F0FE;color:var(--blue)}
 .dday.heat-soon {background:#FBE3C2;color:#96590B}
 .dday.heat-today{background:var(--blue);color:#fff}
 .dday.heat-past {background:#ECEFF5;color:#8994AF}
 
-/* ---------- 일정 카드 ----------
-   진한 단색이면 카드 하나가 화면의 시선을 다 가져간다. 옅은 바탕에 글자로
-   읽히게 두고, 힘은 왼쪽 띠와 D-day 숫자에만 준다.
-
-   색은 '종류'(--k-ink)가 정하고, 진하기는 '임박도'가 정한다.
-   두 가지를 한 색에 섞으면 둘 다 안 읽힌다. */
-.ev-hero{--k-ink:#1C5DE5;
-  display:flex;align-items:center;gap:13px;margin:0;padding:0 15px;
-  height:var(--win-h);box-sizing:border-box;
-  border-radius:14px;color:var(--ink);
-  background:#EEF3FB;                                   /* color-mix 못 쓰는 곳 대비 */
-  background:color-mix(in srgb, var(--k-ink) 8%, #fff);
-  border:1px solid #DCE6F7;
-  border:1px solid color-mix(in srgb, var(--k-ink) 20%, #fff);
-  border-left:3px solid var(--k-ink);
-  position:relative;overflow:hidden;flex-shrink:0;
-  animation:evRise .42s cubic-bezier(.22,1,.36,1) both}
-/* 종류 색을 옅게 깐 얼룩이 아주 천천히 돈다. 멈춰 있는 카드보다 살아 있어 보인다.
-   옅은 바탕에서는 원의 가장자리가 띠처럼 보여서, 테두리 없이 번지는
-   radial-gradient 로 둔다. */
-.ev-hero::before{content:"";position:absolute;right:-50px;top:-60px;width:180px;height:180px;
-  background:radial-gradient(circle,
-    color-mix(in srgb, var(--k-ink) 13%, transparent) 0%,
-    transparent 68%);
-  animation:evDrift 9s ease-in-out infinite}
-/* hover 하면 빛이 한 번 쓸고 지나간다 */
-.ev-hero::after{content:"";position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.55) 50%,transparent 62%);
-  transform:translateX(-120%)}
-.ev-hero:hover::after{animation:evShine .8s ease-out}
-.ev-hero .big{font-family:var(--disp);font-size:26px;font-weight:700;line-height:1;
-  letter-spacing:-.02em;position:relative;white-space:nowrap;color:var(--k-ink)}
-.ev-hero .tt{position:relative;min-width:0}
-.ev-hero .nm{font-size:14.5px;font-weight:700;color:var(--navy);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ev-hero .sub{font-size:12px;color:var(--muted);margin-top:2px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* 종류 그림. 글자 크기에 묻히지 않게 조금 키운다. */
-.ev-hero .ki{font-style:normal;font-size:13px;margin-right:5px;vertical-align:1px}
-
-/* 임박할수록 바탕이 짙어지고 왼쪽 띠가 굵어진다 */
-.ev-hero.soon{background:color-mix(in srgb, var(--k-ink) 13%, #fff);border-left-width:4px}
-.ev-hero.today{background:color-mix(in srgb, var(--k-ink) 18%, #fff);border-left-width:5px}
-.ev-hero.today .big{animation:ddayPulse 1.8s ease-in-out infinite}
-/* 일주일 안으로 들어오면 숫자가 아주 약하게 숨 쉰다 */
-.ev-hero.soon .big{animation:ddayBreathe 3.2s ease-in-out infinite}
-
 /* 종류별 색. 제목에서 낱말을 보고 board_event_kind() 가 고른다.
    같은 종류끼리는 같은 색이라 목록이 돌아가도 무슨 일인지 바로 읽힌다. */
-.ev-hero.k-condolence{--k-ink:#5B6577}   /* 조사 — 차분하게 */
-.ev-hero.k-congrats  {--k-ink:#D6336C}   /* 경사 */
-.ev-hero.k-holiday   {--k-ink:#0F9B8E}   /* 휴무 */
-.ev-hero.k-deadline  {--k-ink:#D9820B}   /* 마감 */
-.ev-hero.k-edu       {--k-ink:#7B4DD8}   /* 교육 */
-.ev-hero.k-ops       {--k-ink:#4A6B8A}   /* 작업 */
-.ev-hero.k-event     {--k-ink:#E2622A}   /* 행사 */
-.ev-hero.k-meeting   {--k-ink:#1C5DE5}   /* 회의 */
-.ev-hero.k-etc       {--k-ink:#5A73A8}   /* 그 밖 */
-
-/* 아랫줄은 한 박자씩 밀려 들어온다 — 한꺼번에 튀어나오는 것보다 덜 시끄럽다 */
-.ev{animation:evRise .4s cubic-bezier(.22,1,.36,1) both}
-.ev:nth-child(1){animation-delay:.05s}
-.ev:nth-child(2){animation-delay:.11s}
-.ev:nth-child(3){animation-delay:.17s}
-.ev:nth-child(n+4){animation-delay:.22s}
-.ev,.ev .dday{transition:transform .16s cubic-bezier(.22,1,.36,1),
-              box-shadow .16s ease,background .16s ease}
-.ev:hover{transform:translateX(3px);box-shadow:0 3px 10px rgba(16,35,90,.08)}
-.ev:hover .dday{transform:scale(1.06)}
-
-@keyframes evRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-@keyframes evDrift{0%,100%{transform:translate(0,0) scale(1)}
-                   50%{transform:translate(-12px,10px) scale(1.12)}}
-@keyframes evShine{to{transform:translateX(120%)}}
-@keyframes ddayPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
-@keyframes ddayBreathe{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.03);opacity:.9}}
-
-/* 움직임을 줄여 달라고 한 사람에게는 전부 끈다 */
-@media (prefers-reduced-motion:reduce){
-  .ev-hero,.ev,.ev-hero::before,.ev-hero .big{animation:none !important}
-  .ev:hover{transform:none}
-  .ev:hover .dday{transform:none}
-  .ev-hero:hover::after{animation:none}
-}
+.ev-row.k-condolence{--k-ink:#5B6577}   /* 조사 — 차분하게 */
+.ev-row.k-congrats  {--k-ink:#D6336C}   /* 경사 */
+.ev-row.k-holiday   {--k-ink:#0F9B8E}   /* 휴무 */
+.ev-row.k-deadline  {--k-ink:#D9820B}   /* 마감 */
+.ev-row.k-edu       {--k-ink:#7B4DD8}   /* 교육 */
+.ev-row.k-ops       {--k-ink:#4A6B8A}   /* 작업 */
+.ev-row.k-event     {--k-ink:#E2622A}   /* 행사 */
+.ev-row.k-meeting   {--k-ink:#1C5DE5}   /* 회의 */
+.ev-row.k-etc       {--k-ink:#5A73A8}   /* 그 밖 */
 
 /* ---------- 공지 목록 화면 ---------- */
 .list-card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}

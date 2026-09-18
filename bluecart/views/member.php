@@ -54,6 +54,14 @@ declare(strict_types=1);
     </select>
   </label>
 
+  <span class="bc-spacer"></span>
+
+  <!-- 처리 역할이 없는 사람은 대개 자기 신청만 보므로 app.js 가 기본으로 켜 둔다. -->
+  <label class="bc-check" for="bc-f-mine">
+    <input type="checkbox" id="bc-f-mine">
+    <span>내 신청만</span>
+  </label>
+  <button type="button" class="bc-btn" id="bc-f-export">엑셀 받기</button>
 </div>
 
 <div class="bc-listbar">
@@ -65,12 +73,6 @@ declare(strict_types=1);
   </div>
 
   <div class="bc-listbar__tools">
-    <!-- 처리 역할이 없는 사람은 대개 자기 신청만 보므로 app.js 가 기본으로 켜 둔다. -->
-    <label class="bc-check" for="bc-f-mine">
-      <input type="checkbox" id="bc-f-mine">
-      <span>내 신청만</span>
-    </label>
-
     <div class="bc-viewtog" role="group" aria-label="보기 방식">
       <button type="button" data-view-mode="list" aria-pressed="true" title="목록으로 보기" aria-label="목록으로 보기">
         <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -88,8 +90,6 @@ declare(strict_types=1);
         </svg>
       </button>
     </div>
-
-    <button type="button" class="bc-btn" id="bc-f-export">엑셀 받기</button>
   </div>
 </div>
 

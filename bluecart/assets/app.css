@@ -164,14 +164,33 @@ body { margin: 0; background: #EEF3FB; }
   margin-right: 6px; vertical-align: 1px;
   background: var(--tone, var(--off));
 }
+/* 네 단계를 합친 요약. 앞 칸들과 같은 얼개(라벨 + 큰 숫자)로 맞추되,
+   테두리를 점선으로 두고 배경을 깔아 '누르는 칸이 아니다' 를 드러낸다. */
 .bc-pipe__aside {
   display: flex; flex-direction: column; justify-content: center;
-  gap: 3px; padding: 14px 18px;
-  border: 1px solid var(--line); border-radius: 14px;
+  gap: 2px; padding: 13px 16px;
+  border: 1px dashed #cdd9f0; border-radius: 14px;
   background: var(--surface);
-  font-size: 12.5px; color: var(--ink-soft); white-space: nowrap;
+  white-space: nowrap;
 }
-.bc-pipe__aside b { color: var(--ink); font-weight: 600; }
+.bc-sum__k { font-size: 12px; color: var(--ink-soft); }
+.bc-sum__n {
+  font-size: 26px; font-weight: 700; line-height: 1.1; color: var(--ink);
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+}
+.bc-sum__n em {
+  font-style: normal; font-size: 12.5px; font-weight: 500;
+  color: var(--ink-soft); margin-left: 3px;
+}
+/* 반려·철회는 본 흐름에서 빠진 것들이라 작은 알약으로 따로 묶는다 */
+.bc-sum__x { display: flex; gap: 5px; margin-top: 5px; }
+.bc-sum__x i {
+  font-style: normal; font-size: 11.5px; font-weight: 500;
+  color: var(--tone, var(--ink-soft));
+  background: var(--tone-soft, var(--paper));
+  border-radius: 999px; padding: 2px 8px;
+}
+.bc-sum__x b { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* --tone 은 글자/테두리용, --tone-soft 는 배경용 */
 .bc-tone-wait  { --tone: var(--wait);  --tone-soft: #fbf4e4; }
