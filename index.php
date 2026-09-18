@@ -750,7 +750,7 @@ function renderBoardNotices(rows){
    창이 숨어 있으면(다른 화면에 가 있을 때) 전이가 아예 시작되지 않아 이벤트가
    영영 안 오고, 그러면 busy 가 풀리지 않아 슬라이더가 멎는다. 시간 제한을 같이 건다. */
 const SLIDE_MS=550;
-function makeSlider(winId, interval, navId){
+function makeSlider(winId, interval, navId, onMove){
   let timer=null, busy=false, paused=false, pos=0;
   const calm=window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -786,6 +786,8 @@ function makeSlider(winId, interval, navId){
 
   /** 지금 맨 위에 있는 게 몇 번째인지 보여 준다. 다 보이면 단추째 감춘다. */
   function paint(){
+    // 창 바깥에 따로 그려 두는 것(일정 점판)이 있으면 먼저 알린다.
+    if(onMove) onMove(pos);
     const n=nav();
     if(!n) return;
     // 넘길 게 없으면 화살표와 숫자만 감춘다. 칸 자체를 숨기면 안 된다 —
@@ -884,7 +886,7 @@ function makeSlider(winId, interval, navId){
   };
 }
 const noticeSlider=makeSlider("board-notices", 3600, "nt-nav");
-const eventSlider =makeSlider("board-events-list", 4200, "ev-nav");
+const eventSlider =makeSlider("board-events-list", 4200, "ev-nav", paintPix);
 
 /* 한 번에 한 건씩, 크게 보여 준다. 왼쪽 D-day 는 달력 한 장 모양으로 두르고
    (위쪽 굵은 띠 + 고리 두 개) 오른쪽에 제목과 날짜를 놓는다.
@@ -907,7 +909,8 @@ const PIX_FONT={
 /* 판은 점으로만 이루어진 네모다 — 테두리도 고리도 없다.
    글자가 놓이는 칸 바깥에도 꺼진 점을 깔아 판 전체를 채운다. */
 const PIX_CELLS=5;                         // 글자 자리 수(붙박이)
-const PIX_PAD_X=1, PIX_PAD_Y=3;            // 글자 둘레로 깔아 두는 점 줄 수
+// 위아래 여백은 한 줄씩만. 글자가 판 높이의 70% 남짓을 차지해 크게 읽힌다.
+const PIX_PAD_X=1, PIX_PAD_Y=1;
 const PIX_W=PIX_CELLS*4-1+PIX_PAD_X*2;     // 글자 3칸 + 사이 1칸 + 좌우 여백
 const PIX_H=5+PIX_PAD_Y*2;                 // 글자 5줄 + 위아래 여백
 
@@ -918,31 +921,49 @@ function pixText(label){
   return t.slice(0, PIX_CELLS) || "?";
 }
 
-function ddayPix(label){
+/* 점 하나하나는 한 번만 그려 두고, 일정이 바뀌면 켜짐/꺼짐만 갈아 끼운다.
+   DOM 을 새로 만들지 않으므로 판은 그 자리에 가만히 있고 글자만 바뀐다.
+   fill 에 전이를 걸어 뒀으니 바뀌는 점만 스르르 물든다. */
+function pixSkeleton(){
+  let dots="";
+  for(let y=0;y<PIX_H;y++) for(let x=0;x<PIX_W;x++){
+    dots+=`<rect class="off" x="${x+0.12}" y="${y+0.12}" `+
+          `width="0.76" height="0.76" rx="0.16"/>`;
+  }
+  return `<svg class="pix" viewBox="0 0 ${PIX_W} ${PIX_H}" aria-hidden="true">${dots}</svg>`;
+}
+
+/** 켜야 할 점의 자리(판 전체를 훑은 일련번호) */
+function pixOnMap(label){
   const txt=pixText(label);
   // 글자 수가 아니라 '점 칸' 으로 가운데를 잡는다. 칸 단위로 맞추면
   // D-43 처럼 네 글자일 때 한쪽으로 한 칸 치우친다.
   const cols=txt.length*4-1;                          // 글자 3칸 + 사이 1칸
   const x0=PIX_PAD_X+Math.round((PIX_CELLS*4-1-cols)/2);
-
-  // 먼저 판 전체를 꺼진 점으로 채우고, 글자에 해당하는 칸만 켠다.
-  // 여백 줄까지 점을 깔아야 테두리 없이도 네모난 '판' 으로 보인다.
-  const on=[];
-  for(let y=0;y<PIX_H;y++) on.push(new Array(PIX_W).fill(false));
+  const on=new Set();
   for(let c=0;c<txt.length;c++){
     const g=PIX_FONT[txt[c]]||PIX_FONT[" "];
     for(let i=0;i<15;i++){
       if(g[i]!=="1") continue;
       const x=i%3, y=(i-x)/3;
-      on[y+PIX_PAD_Y][x0+c*4+x]=true;
+      on.add((y+PIX_PAD_Y)*PIX_W + x0+c*4+x);
     }
   }
-  let dots="";
-  for(let y=0;y<PIX_H;y++) for(let x=0;x<PIX_W;x++){
-    dots+=`<rect class="${on[y][x]?"on":"off"}" `+
-          `x="${x+0.12}" y="${y+0.12}" width="0.76" height="0.76" rx="0.16"/>`;
+  return on;
+}
+
+/** 지금 보고 있는 일정에 맞춰 판을 다시 칠한다. */
+let evRows=[];
+function paintPix(i){
+  const e=evRows[i], box=document.getElementById("ev-pix");
+  if(!e || !box) return;
+  box.className="ev-pix k-"+e.kind.key+(e.heat==="today" ? " today" : "");
+  box.setAttribute("aria-label", e.dday_label);
+  const on=pixOnMap(e.dday_label);
+  const rects=box.querySelectorAll("rect");
+  for(let k=0;k<rects.length;k++){
+    rects[k].setAttribute("class", on.has(k) ? "on" : "off");
   }
-  return `<svg class="pix" viewBox="0 0 ${PIX_W} ${PIX_H}" aria-hidden="true">${dots}</svg>`;
 }
 
 function renderBoardEvents(rows){
@@ -952,15 +973,19 @@ function renderBoardEvents(rows){
     eventSlider.stop();
     return;
   }
-  box.innerHTML=`<div class="slide-win" id="board-events-list"><div class="slide-track">`+
-    rows.map(e=>`
-      <div class="ev-item k-${e.kind.key} ${e.heat}">
-        <span class="cal" role="img" aria-label="${esc(e.dday_label)}">${ddayPix(e.dday_label)}</span>
-        <span class="tt">
-          <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
-          <div class="sub">${esc(fmtWhen(e))}${e.place?` <em>|</em> `+esc(e.place):""}</div>
-        </span>
-      </div>`).join("")+`</div></div>`;
+  // 점판은 칸 바깥에 고정해 두고 글자만 창 안에서 넘어간다.
+  evRows=rows;
+  box.innerHTML=
+    `<div class="ev-wrap">`+
+      `<div class="ev-pix" id="ev-pix" role="img">${pixSkeleton()}</div>`+
+      `<div class="slide-win" id="board-events-list"><div class="slide-track">`+
+        rows.map(e=>`
+          <div class="ev-text">
+            <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
+            <div class="sub">${esc(fmtWhen(e))}${e.place?` <em>|</em> `+esc(e.place):""}</div>
+          </div>`).join("")+
+      `</div></div>`+
+    `</div>`;
   eventSlider.reset();
 }
 
