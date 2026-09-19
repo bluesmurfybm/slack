@@ -724,7 +724,7 @@ function clipTag(n){
 function noticeRow(n){
   return `<button class="nt-row${n.is_important?" imp":""}" onclick="openNotice(${n.id})">
       ${n.is_important?IMP_ICON:""}
-      <span class="tt">${esc(n.title)}</span>
+      <span class="tt" title="${esc(n.title)}">${esc(n.title)}</span>
       ${clipTag(n.file_count)}
       ${n.is_new?`<span class="nt-new">NEW</span>`:""}
       <span class="dt">${fmtDateDot(n.created_at)}</span>
@@ -983,8 +983,8 @@ function renderBoardEvents(rows){
       `<div class="slide-win" id="board-events-list"><div class="slide-track">`+
         rows.map(e=>`
           <div class="ev-text">
-            <div class="nm"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
-            <div class="sub">${esc(fmtWhen(e))}${e.place?` <em>|</em> `+esc(e.place):""}</div>
+            <div class="nm" title="${esc(e.title)}"><i class="ki" title="${esc(e.kind.label)}">${e.kind.icon}</i>${esc(e.title)}</div>
+            <div class="sub" title="${esc(fmtWhen(e))}${e.place?" | "+esc(e.place):""}">${esc(fmtWhen(e))}${e.place?` <em>|</em> `+esc(e.place):""}</div>
           </div>`).join("")+
       `</div></div>`+
     `</div>`;

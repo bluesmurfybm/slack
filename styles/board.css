@@ -18,11 +18,15 @@
      일정 위젯과 날씨 칸이 이 값을 그대로 쓰므로 세 칸 높이가 저절로 맞는다.
      --win-h 만 바꾸면 셋 다 따라온다. */
   --panel-h:calc(var(--win-h) + 65px);
+  /* 일정 칸은 붙박이 너비다. 안에 든 것이 점판(130px)과 두 줄 글자뿐이라
+     비율로 늘리면 오른쪽이 텅 빈다. 440px 면 점판과 여백을 빼고 글자에
+     276px 이 남는다 — 열대여섯 자쯤 들어가고 넘치면 … 으로 줄인다.
+     남는 너비는 공지가 다 가져간다. 줄 수가 많은 쪽이 넓어야 한다. */
   display:grid;
-  grid-template-columns:minmax(0,1.45fr) minmax(0,1fr) var(--panel-h);
+  grid-template-columns:minmax(0,1fr) 440px var(--panel-h);
   gap:16px;margin-bottom:26px;align-items:stretch}
 @media (max-width:1180px){
-  .board{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+  .board{grid-template-columns:minmax(0,1fr) 400px}
   .board .wx{display:none}          /* 좁아지면 날씨부터 접는다 */
 }
 @media (prefers-reduced-motion:reduce){ body.bg-on{transition:none} }
