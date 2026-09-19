@@ -56,8 +56,23 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <link rel="stylesheet" href="styles/default.css">
 <link rel="stylesheet" href="styles/chatbot.css">
 <link rel="stylesheet" href="styles/board.css">
+<link rel="stylesheet" href="styles/wxfx.css">
 </head>
 <body data-bg="<?= htmlspecialchars($__bgPref, ENT_QUOTES, 'UTF-8') ?>">
+
+<!-- 날씨에 따라 움직이는 배경. body 뒤(z-index:-1)라 글자 위로는 아무것도
+     지나가지 않는다. 어느 층을 켤지는 body[data-wx] 가 정하고(styles/wxfx.css),
+     껍데기는 늘 여기 있다 — 날씨가 바뀔 때 DOM 을 다시 만들지 않는다. -->
+<div class="wx-fx" aria-hidden="true">
+  <i class="s1"></i><i class="s2"></i><i class="s3"></i>
+  <i class="r1"></i><i class="r2"></i><i class="d1"></i><i class="d2"></i>
+  <i class="p1 band"></i><i class="p2 band"></i>
+  <i class="c1 band"></i><i class="c2 band"></i><i class="c3 band"></i>
+  <i class="f1 band"></i><i class="f2 band"></i>
+  <i class="m1"></i><i class="st"></i><i class="st2"></i>
+  <u class="sun"></u><u class="rays"></u><u class="moon"></u>
+  <u class="fl"></u><u class="b1"></u><u class="b2"></u>
+</div>
 
 <!-- ================= LOGIN ================= -->
 <section id="login" class="<?= $__current ? 'hidden' : '' ?>">
@@ -989,6 +1004,146 @@ function renderBoardEvents(rows){
       `</div></div>`+
     `</div>`;
   eventSlider.reset();
+  maybeCelebrate(rows);
+}
+
+/* =====================================================================
+   오늘 경사 일정이 있으면 들어올 때 한 번 폭죽을 터뜨린다.
+
+   한 번 터지고 끝나므로 canvas 를 써도 화면에 부담이 남지 않는다 —
+   마지막 알갱이가 사라지면 canvas 를 지우고 리스너까지 뗀다.
+   날씨 배경(.wx-fx)과 달리 계속 도는 것이 아니라서 canvas 를 골랐다.
+   CSS 로는 알갱이 200개를 각각 다른 포물선으로 던질 수 없다.
+   ===================================================================== */
+const BOOM_COLORS = ["#FF5E8A", "#FFC24B", "#5FD8A2", "#79B0FF", "#C98FE8", "#FF9457"];
+
+/* 무엇을 축하하는지 함께 띄운다. 폭죽만 터지면 왜 터지는지 모른다.
+   여러 건이면 두 줄까지 보여 주고 나머지는 '외 N건' 으로 줄인다. */
+function hailCard(titles){
+  if(!titles.length) return null;
+  const box = document.createElement("div");
+  box.className = "fx-hail";
+  const rest = titles.length - 2;
+  box.innerHTML =
+    `<div class="fx-card" role="status">` +
+      `<span class="fx-cap">🎉 축하합니다</span>` +
+      titles.slice(0, 2).map(t => `<strong>${esc(t)}</strong>`).join("") +
+      (rest > 0 ? `<span class="fx-more">외 ${rest}건</span>` : "") +
+    `</div>`;
+  document.body.appendChild(box);
+  setTimeout(() => box.remove(), 3600);
+  return box;
+}
+
+function celebrate(titles){
+  hailCard(titles || []);
+  // 움직임을 줄여 달라고 한 사람에게는 알림 카드만 띄우고 폭죽은 건너뛴다.
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const cv = document.createElement("canvas");
+  cv.className = "fx-boom";
+  cv.setAttribute("aria-hidden", "true");
+  document.body.appendChild(cv);
+
+  const ctx = cv.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  function size(){
+    cv.width  = innerWidth  * dpr;
+    cv.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  size();
+  addEventListener("resize", size);
+
+  const P = [];            // 불꽃 알갱이
+  const C = [];            // 색종이
+  const G = 0.00042;       // 중력 (px/ms²)
+  const pick = () => BOOM_COLORS[(Math.random() * BOOM_COLORS.length) | 0];
+
+  function burst(x, y, n, spd){
+    for(let i = 0; i < n; i++){
+      const a = Math.random() * Math.PI * 2;
+      const v = spd * (0.35 + Math.random() * 0.65);
+      P.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, c: pick(),
+              r: 1.2 + Math.random() * 2.0, life: 950 + Math.random() * 750, age: 0});
+    }
+  }
+  function confetti(n){
+    for(let i = 0; i < n; i++){
+      C.push({x: Math.random() * innerWidth, y: -20 - Math.random() * 240,
+              vx: (Math.random() - .5) * 0.05, vy: 0.07 + Math.random() * 0.09,
+              w: 4 + Math.random() * 5, h: 7 + Math.random() * 7, c: pick(),
+              rot: Math.random() * Math.PI, vr: (Math.random() - .5) * 0.006,
+              life: 3400, age: 0});
+    }
+  }
+
+  // 세 번에 나눠 터뜨린다. 한꺼번에 터뜨리면 '펑' 한 번으로 끝나 심심하다.
+  const H = Math.min(innerHeight * 0.42, 300);
+  burst(innerWidth * 0.26, H,        74, 0.42);
+  setTimeout(() => burst(innerWidth * 0.72, H * 0.82, 66, 0.38), 360);
+  setTimeout(() => burst(innerWidth * 0.49, H * 1.10, 80, 0.45), 760);
+  confetti(90);
+
+  let prev = performance.now();
+  (function tick(now){
+    const dt = Math.min(now - prev, 48);      // 탭을 다녀오면 dt 가 튄다
+    prev = now;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+
+    for(let i = P.length - 1; i >= 0; i--){
+      const p = P[i];
+      p.age += dt;
+      if(p.age > p.life){ P.splice(i, 1); continue; }
+      p.vy += G * dt;  p.vx *= 0.995;  p.vy *= 0.995;
+      p.x  += p.vx * dt;  p.y += p.vy * dt;
+      // 알갱이 하나를 점이 아니라 짧은 꼬리로 긋는다. 점만 찍으면 흩뿌린
+      // 색종이처럼 보이고, 꼬리가 있어야 터져 나가는 불꽃으로 읽힌다.
+      ctx.globalAlpha = Math.max(0, 1 - p.age / p.life);
+      ctx.strokeStyle = p.c;
+      ctx.lineWidth = p.r * 1.7;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(p.x - p.vx * 26, p.y - p.vy * 26);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+    for(let i = C.length - 1; i >= 0; i--){
+      const c = C[i];
+      c.age += dt;
+      if(c.age > c.life || c.y > innerHeight + 40){ C.splice(i, 1); continue; }
+      c.vy += G * dt * 0.25;
+      c.x  += c.vx * dt + Math.sin((c.age + i * 90) / 420) * 0.35;   // 좌우로 나풀
+      c.y  += c.vy * dt;
+      c.rot += c.vr * dt;
+      ctx.globalAlpha = Math.min(1, Math.max(0, (c.life - c.age) / 700));
+      ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+      ctx.fillStyle = c.c; ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h); ctx.restore();
+    }
+
+    if(P.length || C.length) requestAnimationFrame(tick);
+    else { removeEventListener("resize", size); cv.remove(); }
+  })(prev);
+}
+
+/* 들어올 때 한 번만. 화면 안을 돌아다니다 대시보드로 돌아와도, 새로고침을
+   해도 다시 터지지 않게 이 창(sessionStorage)에 오늘 날짜로 표를 남긴다.
+   창을 새로 열거나 다시 로그인하면 그날 처음으로 치고 한 번 더 보여 준다. */
+function maybeCelebrate(rows){
+  const hits = rows.filter(e => e.kind.key === "congrats" && e.heat === "today");
+  if(!hits.length) return;
+
+  const d = new Date();                       // 현지 날짜로 잡는다.
+  const key = "iw-boom-" + d.getFullYear() + "-" +
+              String(d.getMonth() + 1).padStart(2, "0") + "-" +
+              String(d.getDate()).padStart(2, "0");
+  try{
+    if(sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+  }catch(_){ /* 저장을 못 하는 창이어도 한 번은 보여 준다 */ }
+
+  // 화면이 자리 잡은 뒤에
+  setTimeout(() => celebrate(hits.map(e => e.title)), 450);
 }
 
 /* ---- 공지 목록 ---- */

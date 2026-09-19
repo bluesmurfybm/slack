@@ -371,20 +371,10 @@
    포털 기본 배경(#EEF3FB) 위에 아주 옅은 물을 들이는 정도로만 둔다.
    업무 화면이라 읽는 데 방해가 되면 안 된다.
    ===================================================================== */
-/* 위쪽만 물들이고 아래로 가면서 본래 색으로 돌아온다. 화면을 통째로 칠하면
-   글 읽기가 나빠지고, 위만 물들이면 '오늘 날씨' 라는 느낌만 남는다. */
+/* 하늘 색과 움직임은 styles/wxfx.css 가 맡는다. 여기에는 두 파일이 함께
+   쓰는 바탕 규칙만 남긴다 — 날씨가 바뀔 때 색이 부드럽게 넘어가도록. */
 body.bg-on{transition:background-color .6s ease, background-image .6s ease;
   background-repeat:no-repeat;background-attachment:fixed}
-body.bg-on[data-wx]{background-image:linear-gradient(180deg,var(--sky,transparent) 0,transparent 520px)}
-body.bg-on[data-wx="clear"]  {--sky:#FCE9C4}
-body.bg-on[data-wx="partly"] {--sky:#DCE9FC}
-body.bg-on[data-wx="cloud"]  {--sky:#E0E5EE}
-body.bg-on[data-wx="fog"]    {--sky:#E3E6EA}
-body.bg-on[data-wx="drizzle"]{--sky:#D6E7F1}
-body.bg-on[data-wx="rain"]   {--sky:#CEE1EE}
-body.bg-on[data-wx="snow"]   {--sky:#E4EFF8}
-body.bg-on[data-wx="storm"]  {--sky:#DFDAF1}
-body.bg-on[data-wx="night"]  {--sky:#CFD6E8}
 /* ---------- 상단바: 배경 설정 단추 ---------- */
 .bg-btn{display:inline-flex;align-items:center;justify-content:center;
   width:32px;height:32px;padding:0;border-radius:999px;
