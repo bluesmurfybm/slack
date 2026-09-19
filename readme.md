@@ -20,7 +20,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── api/                         login.php, logout.php, me.php
 │                                notices.php, notice_file.php, events.php, admins.php
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
-├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php(미리 축하 날짜 셈 시험)
+├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
 ├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
 │
 ├── book/                        BlueBooks(도서구매신청) — Python/FastAPI, 별도 프로세스(포트 8000)
@@ -655,6 +655,7 @@ chown -R www-data:www-data <포털루트>/var
 | 작업 | `#4A6B8A` | `#93B9DB` | 6.4 |
 | 행사 | `#E2622A` | `#FF9457` | 6.0 |
 | 회의 | `#1C5DE5` | `#79B0FF` | 5.9 |
+| 회식 | — | `#8FDD72` | 7.6 |
 | 그 밖 | `#5A73A8` | `#ABBFE6` | 7.1 |
 
 아홉 종류 모두 **5.7 이상** — WCAG AA(4.5) 를 넉넉히 넘는다. 본래 색은 관리
@@ -686,18 +687,24 @@ chown -R www-data:www-data <포털루트>/var
 
 | key | 낱말 예 | 그림 | 색 |
 |---|---|---|---|
-| `condolence` | 장례, 부고, 발인, 빈소 | 🕯 | 회색 |
+| `condolence` | 장례, 부고, 발인, 빈소, **부친상·모친상·조부상·장인상…** | 🕯 | 회색 |
 | `congrats` | 결혼, 청첩, 출산, 승진 | 🎉 | 자홍 |
 | `holiday` | 휴무, 연휴, 휴가, 창립 | 🌴 | 청록 |
 | `deadline` | 마감, 제출, 만료, 기한 | ⏳ | 주황 |
 | `edu` | 교육, 세미나, 특강, 연수 | 🎓 | 보라 |
 | `ops` | 점검, 배포, 릴리스, 이전 | 🛠 | 남회색 |
-| `event` | 워크숍, MT, 회식, 송년 | 🎈 | 주홍 |
+| `meal` | 먹자, 회식, 만찬, 오찬, 다과 | 🍽 | 연두 |
+| `event` | 워크숍, MT, 송년, 축제 | 🎈 | 주홍 |
 | `meeting` | 회의, 미팅, 보고, 킥오프 | 📋 | 파랑 |
 | `etc` | (아무것도 안 걸림) | 📅 | 청회색 |
 
 **목록의 순서가 곧 우선순위다.** `condolence` 가 맨 위에 있어야 '부친상' 같은 제목에
-축하 색이 붙지 않는다. 낱말을 늘리려면 해당 줄에 덧붙이기만 하면 되고, 종류를
+축하 색이 붙지 않고, `meal` 이 `event`·`meeting` 보다 위에 있어야 '먹자클럽 정기 회의'
+가 회의가 아니라 회식으로 걸린다.
+
+한동안 **'부친상' 이 아무 낱말에도 안 걸려 달력 아이콘이 붙었다**('장례'·'부고'·'조문'
+만 보고 있었다). 상을 당한 일정에 그러면 안 되므로 '…상' 형태를 전부 넣었다.
+낱말을 늘릴 때는 `dev/kind_test.php` 에 한 줄 같이 넣어 두면 다음 사람이 안 깬다. 낱말을 늘리려면 해당 줄에 덧붙이기만 하면 되고, 종류를
 새로 만들 때만 `styles/board.css` 에 `.ev-pix.k-<key>{--k-lit:…}` 한 줄을 더한다.
 
 ### 화면
