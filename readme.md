@@ -20,7 +20,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── api/                         login.php, logout.php, me.php
 │                                notices.php, notice_file.php, events.php, admins.php
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
-├── dev/                         gen_tiles.py — 날씨 배경 타일 생성기(빌드용, 운영과 무관)
+├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php(미리 축하 날짜 셈 시험)
 ├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
 │
 ├── book/                        BlueBooks(도서구매신청) — Python/FastAPI, 별도 프로세스(포트 8000)
@@ -355,12 +355,55 @@ python dev/gen_tiles.py      # tiles.css 를 만든 뒤 wxfx.css 꼬리에 붙�
 
 ### 축하 폭죽
 
-**오늘 날짜의 경사 일정**이 있으면 들어올 때 한 번 폭죽이 터지고 무엇을 축하하는지
-제목이 함께 뜬다. 조건은 `kind.key === "congrats" && heat === "today"` 뿐이라
-`board_event_kind()` 가 경사로 분류한 일정이면 저절로 걸린다.
+**경사 일정**이 있으면 들어올 때 한 번 폭죽이 터지고 무엇을 축하하는지 제목이
+함께 뜬다. `board_event_kind()` 가 경사로 분류한 일정이면 저절로 걸린다.
 
-`renderBoardEvents(rows)` 끝의 `maybeCelebrate(rows)` 한 줄이 전부다 — 그 함수가
-받는 `rows` 에 필요한 것이 다 들어 있어 따로 물어보지 않는다.
+**터뜨릴 날은 서버가 정해서 `cheer` 로 실어 준다**(`board_decorate_event`).
+화면은 그 값만 보고 판단한다 — 주말·공휴일 셈을 브라우저로 내리지 않는다.
+
+| `cheer` | 언제 | 문구 |
+|---|---|---|
+| `today` | 일정 당일 | 🎉 **축하합니다** |
+| `early` | 일정이 주말·공휴일이라 그 앞 마지막 평일 | 🎉 **미리 축하합니다** |
+| `null`  | 그 밖 | 안 터진다 |
+
+`renderBoardEvents(rows)` 끝의 `maybeCelebrate(rows)` 한 줄이 전부다.
+
+#### 미리 축하 — 쉬는 날이면 앞당긴다
+
+토요일 결혼식을 월요일에 축하해 봐야 늦다. **일정 당일이 쉬는 날이면 그 앞의
+마지막 평일**에 터뜨린다. 규칙이 하나라 토·일, 공휴일, 연휴 한가운데가 모두
+같은 길로 풀린다.
+
+```
+토요일 경사   → 금요일
+일요일 경사   → 금요일
+월요일이 공휴일 → 그 전 금요일
+연휴 한가운데  → 연휴 앞 마지막 평일
+평일 경사     → 미리 없음(당일에 터진다)
+```
+
+**쉬는 날은 어디서 아나** — 세 곳을 겹쳐 본다.
+
+1. `FIXED_HOLIDAYS` — 날짜가 고정된 국경일 (1/1, 3/1, 5/5, 6/6, 8/15, 10/3, 10/9, 12/25)
+2. `config.php` 의 `'holidays' => ['2027-02-06', …]`
+3. **달력에 등록된 휴무 일정** — `board_event_kind()` 가 `holiday` 로 고른 일정.
+   연휴는 시작일부터 종료일까지 하루씩 전부 쉬는 날로 친다
+
+**설날·추석·부처님오신날은 음력이라 코드로 셈할 수 없다.** 2번이나 3번으로
+알려 줘야 한다. 안 알려 줘도 탈은 안 난다 — 그날을 평일로 보고 당일에 축하할
+뿐이다. 음력 표를 코드에 박아 두고 해마다 고치는 것보다 이쪽이 낫다고 봤다.
+
+```php
+// config.php
+'holidays' => ['2027-02-06', '2027-02-07', '2027-02-08'],   // 설날 연휴
+```
+
+날짜 셈은 `dev/cheer_test.php` 가 지킨다(DB 없이 도는 14건).
+
+```
+php dev/cheer_test.php
+```
 
 **한 번만** — `sessionStorage` 에 **현지 날짜**로 표를 남긴다. `toISOString` 으로
 뽑으면 자정부터 아홉 시간 동안 어제 키가 나온다.

@@ -1019,14 +1019,14 @@ const BOOM_COLORS = ["#FF5E8A", "#FFC24B", "#5FD8A2", "#79B0FF", "#C98FE8", "#FF
 
 /* 무엇을 축하하는지 함께 띄운다. 폭죽만 터지면 왜 터지는지 모른다.
    여러 건이면 두 줄까지 보여 주고 나머지는 '외 N건' 으로 줄인다. */
-function hailCard(titles){
+function hailCard(titles, early){
   if(!titles.length) return null;
   const box = document.createElement("div");
   box.className = "fx-hail";
   const rest = titles.length - 2;
   box.innerHTML =
     `<div class="fx-card" role="status">` +
-      `<span class="fx-cap">🎉 축하합니다</span>` +
+      `<span class="fx-cap">🎉 ${early ? "미리 축하합니다" : "축하합니다"}</span>` +
       titles.slice(0, 2).map(t => `<strong>${esc(t)}</strong>`).join("") +
       (rest > 0 ? `<span class="fx-more">외 ${rest}건</span>` : "") +
     `</div>`;
@@ -1035,8 +1035,8 @@ function hailCard(titles){
   return box;
 }
 
-function celebrate(titles){
-  hailCard(titles || []);
+function celebrate(titles, early){
+  hailCard(titles || [], !!early);
   // 움직임을 줄여 달라고 한 사람에게는 알림 카드만 띄우고 폭죽은 건너뛴다.
   if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
@@ -1130,8 +1130,11 @@ function celebrate(titles){
    해도 다시 터지지 않게 이 창(sessionStorage)에 오늘 날짜로 표를 남긴다.
    창을 새로 열거나 다시 로그인하면 그날 처음으로 치고 한 번 더 보여 준다. */
 function maybeCelebrate(rows){
-  const hits = rows.filter(e => e.kind.key === "congrats" && e.heat === "today");
+  // 터뜨릴 날인지는 서버가 정해서 cheer 로 실어 준다(board_decorate_event).
+  //   today = 바로 오늘 / early = 그날이 주말·공휴일이라 오늘 미리
+  const hits = rows.filter(e => e.cheer === "today" || e.cheer === "early");
   if(!hits.length) return;
+  const early = !hits.some(e => e.cheer === "today");
 
   const d = new Date();                       // 현지 날짜로 잡는다.
   const key = "iw-boom-" + d.getFullYear() + "-" +
@@ -1143,7 +1146,7 @@ function maybeCelebrate(rows){
   }catch(_){ /* 저장을 못 하는 창이어도 한 번은 보여 준다 */ }
 
   // 화면이 자리 잡은 뒤에
-  setTimeout(() => celebrate(hits.map(e => e.title)), 450);
+  setTimeout(() => celebrate(hits.map(e => e.title), early), 450);
 }
 
 /* ---- 공지 목록 ---- */

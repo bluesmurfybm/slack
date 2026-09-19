@@ -597,6 +597,89 @@ function board_all_events()
         portal_db()->query("SELECT * FROM portal_event ORDER BY starts_on DESC, id DESC")->fetchAll());
 }
 
+/* ─────────────────────────────────────────────────────────────
+   미리 축하 — 경사가 주말·공휴일이면 그 앞 마지막 평일에 터뜨린다.
+
+   토·일이면 금요일, 월요일이 공휴일이면 그 전 금요일. "쉬는 날이면 그 앞의
+   마지막 평일" 이라는 한 규칙으로 둘 다 걸린다. 연휴 한가운데도 마찬가지다.
+   ───────────────────────────────────────────────────────────── */
+
+/**
+ * 날짜가 고정된 국경일.
+ *
+ * 설날·추석·부처님오신날은 음력이라 여기서 셈할 수 없다. 그런 날은
+ *   1) config.php 의 'holidays' 목록, 또는
+ *   2) 달력에 등록된 휴무 일정(board_event_kind 가 holiday 로 고른 것)
+ * 으로 알아낸다. 둘 다 없으면 그날을 평일로 보고 당일에 축하한다 —
+ * 놓쳐도 축하가 하루 늦을 뿐이라 굳이 음력 표를 들고 있지 않는다.
+ */
+const FIXED_HOLIDAYS = ['01-01', '03-01', '05-05', '06-06', '08-15', '10-03', '10-09', '12-25'];
+
+/** 쉬는 날 모음. ['2026-10-03' => true, …] 한 번 만들고 재사용한다. */
+function board_holiday_set()
+{
+    static $set = null;
+    if ($set !== null) { return $set; }
+    $set = [];
+
+    // 1) 날짜가 고정된 국경일 — 올해와 내년치면 넉넉하다
+    $y = (int)date('Y');
+    foreach ([$y, $y + 1] as $year) {
+        foreach (FIXED_HOLIDAYS as $md) { $set[$year . '-' . $md] = true; }
+    }
+
+    // 2) config.php 에 적어 둔 날 (음력 명절 등)
+    $cfg = require dirname(__DIR__) . '/config.php';
+    if (isset($cfg['holidays']) && is_array($cfg['holidays'])) {
+        foreach ($cfg['holidays'] as $d) {
+            if (board_is_date((string)$d)) { $set[(string)$d] = true; }
+        }
+    }
+
+    // 3) 달력에 등록된 휴무 일정 — 연휴는 시작일부터 종료일까지 하루씩 전부
+    $rows = portal_db()->query(
+        "SELECT title, memo, starts_on, ends_on FROM portal_event
+          WHERE COALESCE(ends_on, starts_on) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+    )->fetchAll();
+    foreach ($rows as $r) {
+        if (board_event_kind($r['title'] . ' ' . (string)$r['memo'])['key'] !== 'holiday') {
+            continue;
+        }
+        $d   = new DateTimeImmutable($r['starts_on']);
+        $end = new DateTimeImmutable($r['ends_on'] ?: $r['starts_on']);
+        for ($i = 0; $i < 60 && $d <= $end; $i++) {
+            $set[$d->format('Y-m-d')] = true;
+            $d = $d->modify('+1 day');
+        }
+    }
+    return $set;
+}
+
+/** 토·일과 쉬는 날을 뺀 나머지가 평일이다. */
+function board_is_workday($ymd, array $holidays)
+{
+    $w = (int)(new DateTimeImmutable($ymd))->format('N');   // 1=월 … 7=일
+    return $w <= 5 && !isset($holidays[$ymd]);
+}
+
+/**
+ * 미리 축하할 날.
+ *
+ * 일정 당일이 평일이면 null 이다 — 그날 축하하면 되므로 미리 할 일이 없다.
+ * 주말이나 쉬는 날이면 그 앞의 마지막 평일을 돌려준다.
+ */
+function board_cheer_early_on($ymd, array $holidays)
+{
+    if (board_is_workday($ymd, $holidays)) { return null; }
+    $d = new DateTimeImmutable($ymd);
+    for ($i = 0; $i < 14; $i++) {          // 연휴가 아무리 길어도 두 주면 닿는다
+        $d = $d->modify('-1 day');
+        $back = $d->format('Y-m-d');
+        if (board_is_workday($back, $holidays)) { return $back; }
+    }
+    return null;                            // 못 찾으면 미리 축하는 건너뛴다
+}
+
 /**
  * D-day 를 붙인다. 날짜만 다루므로 시각은 자정으로 맞춰 계산한다 —
  * 그러지 않으면 오후에 본 '내일' 이 D-0 으로 나온다.
@@ -621,6 +704,18 @@ function board_decorate_event(array $e)
     $e['heat'] = $days < 0 ? 'past' : ($days === 0 ? 'today' : ($days <= 7 ? 'soon' : 'later'));
     if ($e['ongoing']) {
         $e['heat'] = 'today';
+    }
+
+    // 오늘 폭죽을 터뜨릴 일정인지. 경사만 따진다.
+    //   today = 바로 오늘이 그날 / early = 그날이 쉬는 날이라 오늘 미리
+    $e['cheer'] = null;
+    if ($e['kind']['key'] === 'congrats') {
+        $ymd = $today->format('Y-m-d');
+        if ($e['starts_on'] === $ymd) {
+            $e['cheer'] = 'today';
+        } elseif (board_cheer_early_on($e['starts_on'], board_holiday_set()) === $ymd) {
+            $e['cheer'] = 'early';
+        }
     }
     return $e;
 }
