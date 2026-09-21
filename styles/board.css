@@ -218,7 +218,9 @@
   padding-bottom:18px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
 .detail-body{padding:22px 0 4px;font-size:14.5px;line-height:1.8;white-space:pre-wrap;word-break:break-word}
 .detail-body a{color:var(--blue)}
-.files{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+/* 본문 위에 이미 선이 하나 있어(.detail-meta) 여기까지 그으면 선이 둘이라
+   어수선하다. 선 대신 간격으로만 떼어 놓는다. */
+.files{margin-top:24px;display:flex;flex-direction:column;gap:6px}
 .files h3{font-size:12px;font-weight:600;color:var(--muted);margin:0 0 4px}
 .file{display:flex;align-items:center;gap:9px;padding:8px 11px;border:1px solid var(--line);
   border-radius:10px;font-size:13px;color:var(--ink);text-decoration:none;background:#FBFCFF}
@@ -285,7 +287,8 @@
 
 .modal-box{background:var(--card);display:flex;flex-direction:column;
   box-shadow:0 24px 64px -20px rgba(16,35,90,.5)}
-.modal--center .modal-box{border-radius:16px;width:100%;max-width:720px;max-height:86vh;
+/* 머리말·바닥에 색을 깔았으므로 둥근 모서리 밖으로 새지 않게 잘라 낸다. */
+.modal--center .modal-box{border-radius:16px;overflow:hidden;width:100%;max-width:720px;max-height:86vh;
   animation:mdPop .2s cubic-bezier(.22,1,.36,1) both}
 .modal--right .modal-box{width:100%;max-width:560px;height:100%;border-left:1px solid var(--line);
   animation:mdSlide .24s cubic-bezier(.22,1,.36,1) both}
@@ -296,16 +299,19 @@
   .modal,.modal-box{animation:none !important}
 }
 
+/* 머리말과 바닥에 아주 옅은 색을 깐다. 선 하나만으로는 본문과의 경계가
+   잘 안 읽혔다. 알림판 머리말(.panel-head)과 같은 색이라 포털 안에서 결이 맞는다. */
 .modal-head{display:flex;align-items:center;gap:10px;padding:18px 22px 14px;
-  border-bottom:1px solid var(--line);flex-shrink:0}
+  background:#F4F7FD;border-bottom:1px solid var(--line);flex-shrink:0}
 .modal-head h3{font-family:var(--disp);font-size:16px;font-weight:600;margin:0;color:var(--navy);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .modal-x{margin-left:auto;background:none;border:0;font-size:22px;line-height:1;color:var(--muted);
   cursor:pointer;padding:0 2px;flex-shrink:0}
 .modal-x:hover{color:var(--ink)}
-.modal-body{padding:18px 22px 4px;overflow-y:auto;flex:1;min-height:0}
-.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:14px 22px 18px;
-  border-top:1px solid var(--line);flex-shrink:0}
+/* 아래를 4px 만 두었더니 글이 단추에 붙어 답답했다. */
+.modal-body{padding:18px 22px 22px;overflow-y:auto;flex:1;min-height:0}
+.modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:11px 20px 13px;
+  background:#F4F7FD;border-top:1px solid var(--line);flex-shrink:0}
 .modal-foot .left{margin-right:auto}
 
 /* ---------- 중요 일정 설정 (관리 화면 드로어) ---------- */
