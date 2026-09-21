@@ -542,46 +542,175 @@ function board_disposition($name)
  * 아무것도 안 걸리면 'etc' 로 떨어진다. 낱말은 그냥 덧붙이면 된다.
  */
 const BOARD_EVENT_KINDS = [
+    // 'cheer' 는 폭죽이 터질 때 큰 글자 위에 뜨는 문구다. [당일, 미리] 한 쌍.
+    // 조사에는 없다 — 폭죽 자체를 막는다(board_decorate_event).
+    //
     // '부친상' 처럼 '…상' 으로만 적는 경우가 가장 흔한데 그동안 아무 낱말에도
     // 안 걸려 달력 아이콘이 붙었다. 상을 당한 일정에는 그러면 안 된다.
-    'condolence' => ['label' => '조사',   'icon' => '🕯',
+    'condolence' => ['label' => '조사',   'icon' => '🕯', 'cheer' => null,
                      'words' => ['장례', '부고', '발인', '빈소', '조문', '별세', '상중',
                                  '부친상', '모친상', '조부상', '조모상', '빙부상', '빙모상',
                                  '시부상', '시모상', '장인상', '장모상']],
     // '축 ' 과 '축!' 은 빈칸·느낌표가 뒤따라야 걸린다 — '축구', '축사' 까지
     // 끌려오지 않게 하려는 것이다. '추카' 와 '경축' 은 그럴 걱정이 없어 그냥 넣는다.
     'congrats'   => ['label' => '경사',   'icon' => '🎉',
+                     'cheer' => ['축하합니다', '미리 축하합니다'],
                      'words' => ['결혼', '청첩', '혼례', '돌잔치', '출산', '승진', '개업', '생일',
                                  '추카', '경축', '축 ', '축!']],
     'holiday'    => ['label' => '휴무',   'icon' => '🌴',
+                     'cheer' => ['오늘은 쉬는 날!', '곧 쉬는 날!'],
                      'words' => ['휴무', '연휴', '휴가', '창립', '공휴일', '대체휴일', '워라밸']],
     'deadline'   => ['label' => '마감',   'icon' => '⏳',
+                     'cheer' => ['오늘까지입니다', '곧 마감입니다'],
                      'words' => ['마감', '제출', '만료', '접수', '신청 기한', '기한', '까지']],
     'edu'        => ['label' => '교육',   'icon' => '🎓',
+                     'cheer' => ['오늘입니다', '곧 있습니다'],
                      'words' => ['교육', '세미나', '특강', '연수', '강의', '수료', '자격']],
     'ops'        => ['label' => '작업',   'icon' => '🛠',
+                     'cheer' => ['오늘입니다', '곧 있습니다'],
                      'words' => ['점검', '배포', '릴리스', '오픈', '이전', '이사', '서버', '작업']],
     // 아이콘은 '색이 기본' 인 글자를 고른다. 처음 쓴 U+1F37D(🍽)는
     // Emoji_Presentation 이 아니라 윈도에서 검은 글자꼴로 그려져 안 읽혔다.
     'meal'       => ['label' => '회식',   'icon' => '🍜',
+                     'cheer' => ['오늘은 먹는 날!', '곧 먹는 날!'],
                      'words' => ['먹자', '회식', '만찬', '오찬', '다과', '뒤풀이', '맛집', '시식']],
     'event'      => ['label' => '행사',   'icon' => '🎈',
+                     'cheer' => ['오늘입니다!', '곧 있습니다!'],
                      'words' => ['워크숍', '워크샵', 'MT', '행사', '체육대회', '송년', '신년', '축제', '간담회']],
     'meeting'    => ['label' => '회의',   'icon' => '📋',
+                     'cheer' => ['오늘입니다', '곧 있습니다'],
                      'words' => ['회의', '미팅', '보고', '리뷰', '킥오프', '발표', '면담', '평가']],
 ];
 
-function board_event_kind($text)
+/* 낱말은 관리 화면에서 고칠 수 있다(portal_event_word). 줄이 없는 종류는
+   위 코드 기본값을 그대로 쓴다 — 표를 비우면 언제든 처음 상태로 돌아온다.
+   순서(우선순위)는 코드가 쥐고 있다. 화면에서 바꿀 수 있는 것은 낱말뿐이다. */
+const KIND_WORD_MAX     = 60;   // 한 종류에 넣을 수 있는 낱말 수
+const KIND_WORD_LEN_MAX = 40;   // 낱말 하나의 길이
+
+/**
+ * 쉼표로 이어 붙인 글을 낱말 목록으로 가른다.
+ *
+ * 낱말 앞뒤의 빈칸은 떼어 낸다 — '결혼, 청첩' 처럼 쉼표 뒤에 한 칸 띄우는 게
+ * 자연스럽기 때문이다. 다만 '축 ' 처럼 **빈칸이 뜻을 갖는 낱말**이 있어서,
+ * 따옴표로 감싸면 그 안은 손대지 않는다. 이걸 안 하면 '축 ' 이 '축' 이 되어
+ * '축구 대회', '개회 축사' 까지 경사로 걸린다.
+ */
+function board_text_to_words($text)
 {
-    $text = (string)$text;
+    $out = [];
+    foreach (explode(',', (string)$text) as $raw) {
+        $w = trim($raw);
+        if (mb_strlen($w) >= 2 && mb_substr($w, 0, 1) === '"' && mb_substr($w, -1) === '"') {
+            $w = mb_substr($w, 1, mb_strlen($w) - 2);        // 따옴표 안은 그대로
+        }
+        if ($w === '') { continue; }
+        if (mb_strlen($w) > KIND_WORD_LEN_MAX) {
+            throw new BoardError('낱말은 ' . KIND_WORD_LEN_MAX . '자 이내로 입력하세요: ' . $w, 422);
+        }
+        if (!in_array($w, $out, true)) { $out[] = $w; }
+    }
+    if (count($out) > KIND_WORD_MAX) {
+        throw new BoardError('낱말은 종류마다 ' . KIND_WORD_MAX . '개까지 넣을 수 있습니다', 422);
+    }
+    return $out;
+}
+
+/** 화면에 되돌려 줄 글. 빈칸이 붙은 낱말은 따옴표로 감싸 눈에 보이게 한다. */
+function board_words_to_text(array $words)
+{
+    return implode(', ', array_map(function ($w) {
+        return $w !== trim($w) ? '"' . $w . '"' : $w;
+    }, $words));
+}
+
+/** 실제로 쓰이는 낱말. ['congrats' => ['결혼', …], …] */
+function board_kind_words()
+{
+    static $words = null;
+    if ($words !== null) { return $words; }
+
+    $words = [];
+    foreach (BOARD_EVENT_KINDS as $key => $def) { $words[$key] = $def['words']; }
+
+    $rows = portal_db()->query("SELECT kind, words FROM portal_event_word")->fetchAll();
+    foreach ($rows as $r) {
+        if (!isset($words[$r['kind']])) { continue; }      // 코드에서 없어진 종류는 무시
+        try {
+            $w = board_text_to_words($r['words']);
+        } catch (BoardError $e) {
+            continue;                                      // 표가 망가져도 화면은 살린다
+        }
+        if ($w) { $words[$r['kind']] = $w; }               // 통째로 비우면 기본값으로
+    }
+    return $words;
+}
+
+/** 설정 화면용 — 종류마다 지금 낱말과 코드 기본값을 함께 준다. */
+function board_kind_word_rows()
+{
+    $now  = board_kind_words();
+    $rows = [];
     foreach (BOARD_EVENT_KINDS as $key => $def) {
-        foreach ($def['words'] as $w) {
-            if (mb_stripos($text, $w) !== false) {
-                return ['key' => $key, 'label' => $def['label'], 'icon' => $def['icon']];
+        $rows[] = [
+            'kind'      => $key,
+            'label'     => $def['label'],
+            'icon'      => $def['icon'],
+            'words'     => board_words_to_text($now[$key]),
+            'default'   => board_words_to_text($def['words']),
+            'overriden' => $now[$key] !== $def['words'],
+        ];
+    }
+    return $rows;
+}
+
+/** 저장. 코드 기본값과 같아지면 줄을 지워 둔다 — 표에 군더더기를 안 남긴다. */
+function board_save_kind_words(array $in, $email)
+{
+    $pdo = portal_db();
+    foreach (BOARD_EVENT_KINDS as $key => $def) {
+        if (!array_key_exists($key, $in)) { continue; }
+        $words = board_text_to_words($in[$key]);
+        if (!$words || $words === $def['words']) {
+            $pdo->prepare("DELETE FROM portal_event_word WHERE kind = ?")->execute([$key]);
+            continue;
+        }
+        $pdo->prepare(
+            "INSERT INTO portal_event_word (kind, words, updated_at, updated_by)
+                  VALUES (?, ?, NOW(), ?)
+             ON DUPLICATE KEY UPDATE words = VALUES(words),
+                                     updated_at = VALUES(updated_at),
+                                     updated_by = VALUES(updated_by)"
+        )->execute([$key, board_words_to_text($words), (string)$email]);
+    }
+}
+
+/** 한 종류를 코드 기본값으로 되돌린다. */
+function board_reset_kind_words($kind)
+{
+    if (!isset(BOARD_EVENT_KINDS[$kind])) { throw new BoardError('없는 종류입니다', 404); }
+    portal_db()->prepare("DELETE FROM portal_event_word WHERE kind = ?")->execute([$kind]);
+}
+
+/**
+ * 제목에서 일정 종류를 고른다. 목록의 순서가 곧 우선순위다.
+ * $words 를 넘기면 그것으로 가른다 — 시험이 DB 없이 돌 수 있게 열어 둔 문이다.
+ */
+function board_event_kind($text, array $words = null)
+{
+    $text  = (string)$text;
+    $words = $words === null ? board_kind_words() : $words;
+    foreach (BOARD_EVENT_KINDS as $key => $def) {
+        foreach ((isset($words[$key]) ? $words[$key] : $def['words']) as $w) {
+            if ($w !== '' && mb_stripos($text, $w) !== false) {
+                return ['key'   => $key,   'label' => $def['label'],
+                        'icon'  => $def['icon'],
+                        'cheer' => isset($def['cheer']) ? $def['cheer'] : null];
             }
         }
     }
-    return ['key' => 'etc', 'label' => '일정', 'icon' => '📅'];
+    return ['key' => 'etc', 'label' => '일정', 'icon' => '📅',
+            'cheer' => ['오늘입니다', '곧 있습니다']];
 }
 
 /**
@@ -609,7 +738,7 @@ function board_all_events()
 }
 
 /* ─────────────────────────────────────────────────────────────
-   미리 축하 — 경사가 주말·공휴일이면 그 앞 마지막 평일에 터뜨린다.
+   미리 축하 — 주말·공휴일이면 그 앞 마지막 평일에 터뜨린다.
 
    토·일이면 금요일, 월요일이 공휴일이면 그 전 금요일. "쉬는 날이면 그 앞의
    마지막 평일" 이라는 한 규칙으로 둘 다 걸린다. 연휴 한가운데도 마찬가지다.
@@ -717,15 +846,27 @@ function board_decorate_event(array $e)
         $e['heat'] = 'today';
     }
 
-    // 오늘 폭죽을 터뜨릴 일정인지. 경사만 따진다.
+    // 폭죽은 일정마다 켠다. 종류는 안 따진다 — 공휴일이나 회식도
+    // 재미있게 알리자는 뜻이라, 등록하는 사람이 고르게 두었다.
     //   today = 바로 오늘이 그날 / early = 그날이 쉬는 날이라 오늘 미리
-    $e['cheer'] = null;
-    if ($e['kind']['key'] === 'congrats') {
+    $e['cheer_on']    = (int)(isset($e['cheer_on'])    ? $e['cheer_on']    : 0);
+    $e['cheer_early'] = (int)(isset($e['cheer_early']) ? $e['cheer_early'] : 1);
+    // 조사에는 문구가 없다(cheer => null). 폭죽을 켜 두었더라도 안 터뜨린다 —
+    // 부고 위로 색종이가 날리는 것은 실수라도 일어나면 안 되는 일이다.
+    $e['cheer']     = null;
+    $e['cheer_cap'] = null;
+    $cap = $e['kind']['cheer'];
+    if ($e['cheer_on'] && $cap) {
         $ymd = $today->format('Y-m-d');
         if ($e['starts_on'] === $ymd) {
             $e['cheer'] = 'today';
-        } elseif (board_cheer_early_on($e['starts_on'], board_holiday_set()) === $ymd) {
+        } elseif ($e['cheer_early']
+                  && board_cheer_early_on($e['starts_on'], board_holiday_set()) === $ymd) {
             $e['cheer'] = 'early';
+        }
+        if ($e['cheer'] !== null) {
+            $e['cheer_cap'] = $e['kind']['icon'] . ' '
+                            . ($e['cheer'] === 'early' ? $cap[1] : $cap[0]);
         }
     }
     return $e;
@@ -747,21 +888,27 @@ function board_save_event($id, array $in, array $u)
     if (mb_strlen($place) > 120) { throw new BoardError('장소는 120자 이내로 입력하세요', 422); }
     if (mb_strlen($memo) > 500)  { throw new BoardError('메모는 500자 이내로 입력하세요', 422); }
 
-    $args = [$title, $start, $end ?: null, $place ?: null, $memo ?: null];
+    // 폭죽 — 켤 때만 1. 안 보내면 끔으로 본다.
+    $cheerOn    = (isset($in['cheer_on'])    && (string)$in['cheer_on']    === '1') ? 1 : 0;
+    // '미리 축하' 는 켜 두는 쪽이 자연스러워서 안 보내면 1 이다.
+    $cheerEarly = (isset($in['cheer_early']) && (string)$in['cheer_early'] === '0') ? 0 : 1;
+
+    $args = [$title, $start, $end ?: null, $place ?: null, $memo ?: null, $cheerOn, $cheerEarly];
 
     if ($id) {
         $args[] = (int)$id;
         portal_db()->prepare(
             "UPDATE portal_event SET title = ?, starts_on = ?, ends_on = ?, place = ?, memo = ?,
-                    updated_at = NOW() WHERE id = ?"
+                    cheer_on = ?, cheer_early = ?, updated_at = NOW() WHERE id = ?"
         )->execute($args);
         return (int)$id;
     }
 
     $args[] = $u['email'];
     portal_db()->prepare(
-        "INSERT INTO portal_event (title, starts_on, ends_on, place, memo, author_email, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, NOW())"
+        "INSERT INTO portal_event (title, starts_on, ends_on, place, memo,
+                                   cheer_on, cheer_early, author_email, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())"
     )->execute($args);
     return (int)portal_db()->lastInsertId();
 }

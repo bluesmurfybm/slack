@@ -287,6 +287,32 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     </div>
   </div>
 
+  <!-- 일정 분류 낱말 설정 — 오른쪽 드로어 -->
+  <div class="modal modal--right hidden" id="kw-modal">
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="kw-title">
+      <div class="modal-head">
+        <h3 id="kw-title">일정 분류 설정</h3>
+        <button class="modal-x" onclick="closeKwModal()" aria-label="닫기">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="err hidden" id="kw-err"></div>
+
+        <p class="kw-help">
+          일정 이름에 아래 낱말이 있으면 그 종류로 분류되어 아이콘과 색이 붙습니다.
+          <b>쉼표로 나눠</b> 적으세요. 위에 있는 종류가 먼저 걸립니다 —
+          조사가 맨 위라야 ‘부친상’ 에 축하 색이 붙지 않습니다.<br>
+          낱말 뒤 빈칸이 뜻을 가질 때는 <code>"축 "</code> 처럼 따옴표로 감싸세요.
+          그래야 ‘축구 대회’ 가 경사로 걸리지 않습니다.
+        </p>
+        <div id="kw-list"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-ghost" onclick="closeKwModal()">취소</button>
+        <button class="btn-primary" id="kw-save" style="width:auto;padding:10px 20px;margin:0" onclick="saveKwWords()">저장</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 일정 등록 / 수정 — 오른쪽 드로어 -->
   <div class="modal modal--right hidden" id="ev-modal">
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="ev-title">
@@ -318,6 +344,28 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           <div class="fld">
             <label>메모</label>
             <input type="text" id="ev-memo" maxlength="500" placeholder="한 줄 설명 (선택)">
+          </div>
+
+          <h4 class="kw-sec" style="margin-top:20px">축하 폭죽</h4>
+          <div class="fld kw-opt">
+            <label for="ev-cheer">그날 들어오면 폭죽 쏘기</label>
+            <select id="ev-cheer" onchange="syncEvCheer()">
+              <option value="0">아니오</option>
+              <option value="1">예</option>
+            </select>
+            <span class="kw-note">
+              일정 이름이 함께 뜹니다. 경사뿐 아니라 공휴일·회식에도 쓸 수 있고,
+              문구는 종류에 따라 달라집니다. 조사에는 켜도 터지지 않습니다.
+            </span>
+          </div>
+          <div class="fld kw-opt" id="ev-early-row">
+            <label for="ev-cheer-early">주말·공휴일이면 미리 축하</label>
+            <select id="ev-cheer-early">
+              <option value="1">예</option>
+              <option value="0">아니오</option>
+            </select>
+            <span class="kw-note">
+              토요일 일정은 금요일에 터집니다. ‘아니오’ 면 당일에만 터집니다.
           </div>
         </div>
       </div>
@@ -1019,14 +1067,14 @@ const BOOM_COLORS = ["#FF5E8A", "#FFC24B", "#5FD8A2", "#79B0FF", "#C98FE8", "#FF
 
 /* 무엇을 축하하는지 함께 띄운다. 폭죽만 터지면 왜 터지는지 모른다.
    여러 건이면 두 줄까지 보여 주고 나머지는 '외 N건' 으로 줄인다. */
-function hailCard(titles, early){
+function hailCard(titles, cap){
   if(!titles.length) return null;
   const box = document.createElement("div");
   box.className = "fx-hail";
   const rest = titles.length - 2;
   box.innerHTML =
     `<div class="fx-card" role="status">` +
-      `<span class="fx-cap">🎉 ${early ? "미리 축하합니다" : "축하합니다"}</span>` +
+      `<span class="fx-cap">${esc(cap || "🎉 축하합니다")}</span>` +
       titles.slice(0, 2).map(t => `<strong>${esc(t)}</strong>`).join("") +
       (rest > 0 ? `<span class="fx-more">외 ${rest}건</span>` : "") +
     `</div>`;
@@ -1035,8 +1083,8 @@ function hailCard(titles, early){
   return box;
 }
 
-function celebrate(titles, early){
-  hailCard(titles || [], !!early);
+function celebrate(titles, cap){
+  hailCard(titles || [], cap);
   // 움직임을 줄여 달라고 한 사람에게는 알림 카드만 띄우고 폭죽은 건너뛴다.
   if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
@@ -1134,7 +1182,9 @@ function maybeCelebrate(rows){
   //   today = 바로 오늘 / early = 그날이 주말·공휴일이라 오늘 미리
   const hits = rows.filter(e => e.cheer === "today" || e.cheer === "early");
   if(!hits.length) return;
-  const early = !hits.some(e => e.cheer === "today");
+  // 여러 건이면 첫 건의 문구를 쓴다. 종류가 섞이는 날은 드물고,
+  // 문구를 여러 줄 쌓으면 정작 일정 이름이 눈에 안 들어온다.
+  const cap = hits[0].cheer_cap;
 
   const d = new Date();                       // 현지 날짜로 잡는다.
   const key = "iw-boom-" + d.getFullYear() + "-" +
@@ -1146,7 +1196,7 @@ function maybeCelebrate(rows){
   }catch(_){ /* 저장을 못 하는 창이어도 한 번은 보여 준다 */ }
 
   // 화면이 자리 잡은 뒤에
-  setTimeout(() => celebrate(hits.map(e => e.title), early), 450);
+  setTimeout(() => celebrate(hits.map(e => e.title), cap), 450);
 }
 
 /* ---- 공지 목록 ---- */
@@ -1400,6 +1450,7 @@ async function renderManageEvents(box){
       `<div class="page-head" style="padding:0 0 14px">
          <span style="flex:1"></span>
          <button class="btn-sm" onclick="openEventModal(0)">+ 일정 등록</button>
+         <button class="btn-sm" onclick="openKwModal()">설정</button>
        </div>`+
       (d.rows.length?`<div class="list-card">`+d.rows.map(e=>`
         <div class="mrow">
@@ -1488,6 +1539,64 @@ async function removeAdmin(email){
   }catch(e){ toast(e.message); }
 }
 
+/* ---- 일정 분류 낱말 설정 ----
+   소스를 고치지 않고 낱말만 늘리고 줄일 수 있게 한 화면이다.
+   종류의 순서(우선순위)와 아이콘은 코드가 쥐고 있고, 여기서는 낱말만 만진다.
+   폭죽을 쏠지는 일정마다 고른다 — 여기가 아니라 일정 등록 창에 있다. */
+async function openKwModal(){
+  const err=document.getElementById("kw-err");
+  const list=document.getElementById("kw-list");
+  err.classList.add("hidden");
+  list.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
+  document.getElementById("kw-modal").classList.remove("hidden");
+  try{
+    const d=await bapi("api/event_words.php");
+    list.innerHTML=d.rows.map(r=>`
+      <div class="fld kw-row">
+        <label>
+          <i class="ki">${r.icon}</i>${esc(r.label)}
+          ${r.overriden?`<em class="kw-tag">고침</em>`:""}
+          <button type="button" class="kw-reset" onclick="resetKwWords('${r.kind}')"
+            title="코드 기본값으로 되돌립니다">기본값</button>
+        </label>
+        <textarea id="kw-${r.kind}" rows="2"
+          data-default="${esc(r.default)}">${esc(r.words)}</textarea>
+      </div>`).join("");
+  }catch(e){ list.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
+}
+
+function closeKwModal(){
+  document.getElementById("kw-modal").classList.add("hidden");
+}
+
+/* 되돌리기는 저장까지 하지 않고 칸만 기본값으로 채운다 —
+   저장을 눌러야 바뀌는 편이 취소할 여지가 있어 안전하다. */
+function resetKwWords(kind){
+  const ta=document.getElementById("kw-"+kind);
+  if(ta) ta.value=ta.dataset.default;
+}
+
+async function saveKwWords(){
+  const err=document.getElementById("kw-err");
+  const btn=document.getElementById("kw-save");
+  err.classList.add("hidden");
+  btn.disabled=true;
+  try{
+    const body={};
+    document.querySelectorAll("#kw-list textarea").forEach(ta=>{
+      body[ta.id.replace(/^kw-/,"")]=ta.value;
+    });
+    await bapi("api/event_words.php",{method:"PUT",body:JSON.stringify(body)});
+    closeKwModal();
+    toast("일정 분류 낱말을 저장했습니다");
+    // 이미 등록된 일정의 아이콘·색이 그 자리에서 바뀌어야 납득이 된다
+    showManage("events");
+    loadBoard();
+  }catch(e){
+    err.textContent=e.message; err.classList.remove("hidden");
+  }finally{ btn.disabled=false; }
+}
+
 /* ---- 일정 등록 / 수정 ---- */
 let evId=0;
 function openEventModal(id){
@@ -1500,6 +1609,7 @@ function openEventModal(id){
   const set=(k,v)=>{document.getElementById(k).value=v||"";};
   if(!evId){
     set("ev-name",""); set("ev-start",""); set("ev-end",""); set("ev-place",""); set("ev-memo","");
+    set("ev-cheer","0"); set("ev-cheer-early","1"); syncEvCheer();
     document.getElementById("ev-name").focus();
     return;
   }
@@ -1509,7 +1619,17 @@ function openEventModal(id){
     if(!e){ toast("일정을 찾을 수 없습니다"); closeEventModal(); return; }
     set("ev-name",e.title); set("ev-start",e.starts_on); set("ev-end",e.ends_on);
     set("ev-place",e.place); set("ev-memo",e.memo);
+    set("ev-cheer",String(e.cheer_on||0)); set("ev-cheer-early",String(e.cheer_early ?? 1));
+    syncEvCheer();
   }).catch(e=>toast(e.message));
+}
+
+/* 폭죽을 끄면 '미리 축하' 는 물어볼 것이 없다. 감추지 않고 잠그기만 한다 —
+   사라지면 그런 설정이 있었다는 것도 모른다. */
+function syncEvCheer(){
+  const on=document.getElementById("ev-cheer").value==="1";
+  document.getElementById("ev-early-row").classList.toggle("off", !on);
+  document.getElementById("ev-cheer-early").disabled=!on;
 }
 
 function closeEventModal(){
@@ -1527,7 +1647,9 @@ async function saveEvent(){
       starts_on:document.getElementById("ev-start").value,
       ends_on:document.getElementById("ev-end").value,
       place:document.getElementById("ev-place").value.trim(),
-      memo:document.getElementById("ev-memo").value.trim()
+      memo:document.getElementById("ev-memo").value.trim(),
+      cheer_on:document.getElementById("ev-cheer").value,
+      cheer_early:document.getElementById("ev-cheer-early").value
     });
     if(evId) await bapi(`api/events.php?id=${evId}`,{method:"PUT",body});
     else     await bapi("api/events.php",{method:"POST",body});

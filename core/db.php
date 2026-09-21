@@ -99,6 +99,16 @@ function portal_db() {
     add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `starts_on` DATE NULL COMMENT '노출 시작일. NULL 이면 등록 즉시' AFTER `is_important`");
     add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `ends_on` DATE NULL COMMENT '노출 종료일. NULL 이면 내릴 때까지' AFTER `starts_on`");
 
+    /* 일정마다 폭죽을 쏠지 고른다. 예전에는 '경사 종류면 무조건' 이었는데,
+       공휴일이나 회식도 재미있게 알리고 싶다는 쪽으로 바뀌었다.
+       기본은 끔 — 등록하는 사람이 뜻을 갖고 켜야 터진다. */
+    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
+        ADD COLUMN `cheer_on` TINYINT(1) NOT NULL DEFAULT 0
+        COMMENT '그날 들어오면 축하 폭죽을 쏠지' AFTER `memo`");
+    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
+        ADD COLUMN `cheer_early` TINYINT(1) NOT NULL DEFAULT 1
+        COMMENT '주말·공휴일이면 그 앞 평일에 미리 쏠지' AFTER `cheer_on`");
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `portal_notice_file` (
             `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -113,6 +123,17 @@ function portal_db() {
                 REFERENCES `portal_notice` (`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='공지 첨부파일'
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_event_word` (
+            `kind`       VARCHAR(20)  NOT NULL COMMENT 'BOARD_EVENT_KINDS 의 열쇠',
+            `words`      TEXT         NOT NULL COMMENT '쉼표로 이어 붙인 낱말 목록',
+            `updated_at` DATETIME     NOT NULL,
+            `updated_by` VARCHAR(190) NOT NULL,
+            PRIMARY KEY (`kind`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='일정 제목을 종류로 가르는 낱말. 줄이 없는 종류는 코드 기본값을 쓴다'
     ");
 
     $pdo->exec("
