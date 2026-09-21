@@ -156,8 +156,8 @@
              '<span class="bc-pipe__l">' + p.label + '</span></button>';
     }).join('');
 
-    // 네 단계를 합친 요약. 앞 칸들과 같은 얼개(큰 숫자 + 라벨)로 두되
-    // 누르는 칸이 아니라는 게 드러나게 배경과 테두리를 달리한다.
+    // 네 단계를 합친 요약. 앞 칸들과 같은 얼개(라벨 + 큰 숫자)로 두되
+    // 누르는 칸이 아니라는 게 드러나게 레일 끝에서 세로줄로 잘라 낸다.
     html += '<div class="bc-pipe__aside">' +
             '<span class="bc-sum__k">올해 전체</span>' +
             '<span class="bc-sum__n">' + num(counts.TOTAL || 0) +
