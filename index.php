@@ -781,6 +781,12 @@ function enableTileReorder(box){
 async function saveTileOrder(){
   const keys = [...document.querySelectorAll("#tiles .tile:not(.soon)")]
                  .map(t => t.dataset.key);
+  // 바꾼 순서를 SYSTEMS 에도 반영한다. 끌어 놓기는 DOM 만 바꾸는데, 이 화면은
+  // 로그인·대시보드·마이페이지가 한 페이지라 renderTiles() 가 다시 불릴 일이
+  // 많다(로그아웃 후 재로그인, 마이페이지 갔다 오기). SYSTEMS 를 그대로 두면
+  // 그때 서버가 처음 준 순서로 되돌아가, DB 는 맞는데 화면만 되돌아간다.
+  const at = k => keys.indexOf(k);
+  SYSTEMS.sort((a, b) => at(a.key) - at(b.key));
   try{
     await bapi("api/me.php", {method:"PUT", body:JSON.stringify({tile_order:keys})});
     TILE_ORDERED = keys.length > 0;
