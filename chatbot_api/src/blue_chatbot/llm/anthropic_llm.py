@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from blue_chatbot.configs.core import config
 from blue_chatbot.messages import Message
 from blue_chatbot.services.llm import (
+    LLMClient,
     LLMClientRateLimitError,
     LLMClientRequestError,
     LLMClientUnreachableError,
@@ -55,7 +56,7 @@ def _to_sdk_tool(tool: Tool[Any], evidences: list[Evidence]) -> BetaFunctionTool
     )
 
 
-class AnthropicLLMClient:
+class AnthropicLLMClient(LLMClient):
     def __init__(self, client: anthropic.Anthropic):
         self._client = client
 
@@ -79,8 +80,17 @@ class AnthropicLLMClient:
                     model=config.claude_model,
                     max_tokens=config.max_tokens,
                     output_config=beta_config,
-                    system=system,
-                    messages=[BetaMessageParam(role=m.role, content=m.content) for m in messages],
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                    messages=[
+                        BetaMessageParam(role=m.role, content=m.content)
+                        for m in messages
+                    ],
                     output_format=output_format,
                     tools=build_sdk_tools(tools, evidences),
                 ).until_done()
@@ -91,7 +101,13 @@ class AnthropicLLMClient:
                     model=config.claude_model,
                     max_tokens=config.max_tokens,
                     output_config=_output_config(),
-                    system=system,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
                     messages=sent,
                     output_format=output_format,
                 )
