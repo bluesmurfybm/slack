@@ -19,6 +19,7 @@ $label = $argv[1] ?? date('Y-m-d');
 // 사람마다 다른 파일은 대조 대상이 아니다.
 $skipExact = [
     'config/config.php',
+    'config/secret.local.php',
     'dev/php-path.txt',
     'dev/mysql-path.txt',
     'MANIFEST.sha256',

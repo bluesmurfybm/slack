@@ -82,6 +82,10 @@ return [
         ],
 
         'slack' => [
+            // 아래 두 값은 **관리자 탭 > 알림 설정** 화면에서 넣어도 됩니다.
+            // 화면에서 넣은 값이 우선이고, 암호화돼 bc_setting 에 저장됩니다.
+            // 여기(또는 환경변수)에 적어 두면 화면에서 비워 둬도 그 값을 씁니다.
+            //
             // Bot User OAuth Token (xoxb-...). DM 발송에 필요합니다.
             // 필요 스코프: chat:write, users:read, users:read.email
             'bot_token'       => getenv('BLUECART_SLACK_BOT_TOKEN') ?: '',
@@ -107,6 +111,11 @@ return [
         // 새 형식을 추가하면 MIME_BY_EXT 에도 대응표를 넣어야 합니다.
         'upload_ext'  => ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'xlsx', 'xls', 'hwp', 'docx'],
         'timezone'    => 'Asia/Seoul',
+        // 관리자 화면에서 넣은 비밀값(슬랙 봇 토큰 등)을 암호화하는 키.
+        // base64 로 적은 32바이트. 비워 두면 포털 config.php 의 key 를 쓰고,
+        // 그것도 없으면 config/secret.local.php 를 최초 1회 자동 생성합니다.
+        // 'secret_key' => base64_encode(random_bytes(32)) 결과를 붙여 넣으세요.
+        'secret_key'  => getenv('BLUECART_SECRET_KEY') ?: '',
         'debug'       => false,
     ],
 ];

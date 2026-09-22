@@ -905,6 +905,9 @@
           clearTimeout(rt); rt = setTimeout(function () { self.loadRoles(); }, 350);
         });
         $('#bc-nt-save').addEventListener('click', function () { self.saveNotify(); });
+        $$('[data-clear-secret]').forEach(function (b) {
+          b.addEventListener('click', function () { self.clearSecret(b.dataset.clearSecret); });
+        });
       }
 
       // 통계 탭은 검토승인자·구매담당자에게도 보이므로 관리자 전용 블록 밖에 둔다.
@@ -1135,6 +1138,7 @@
       api('api/notify_settings.php').then(function (res) {
         self.notifyMeta = res;
         $('#bc-nt-channel').value = res.slack_channel || '';
+        self.renderSecrets(res.slack_secrets || {});
 
         var chKeys = Object.keys(res.channels);
         var html = '<thead><tr><th style="min-width:180px">처리 단계</th><th style="min-width:110px">알림 대상</th>' +
@@ -1163,6 +1167,44 @@
       }).catch(function (e) { toast(e.message, true); });
     },
 
+    // 비밀값은 되받아 오지 않는다. 지금 설정돼 있는지와 어디서 온 값인지만 적는다.
+    secretFields: {
+      slack_bot_token:   { input: '#bc-nt-token', state: '#bc-nt-token-state' },
+      slack_webhook_url: { input: '#bc-nt-hook',  state: '#bc-nt-hook-state' }
+    },
+
+    renderSecrets: function (secrets) {
+      var map = { slack_bot_token: secrets.bot_token, slack_webhook_url: secrets.webhook_url };
+      Object.keys(this.secretFields).forEach(function (key) {
+        var f = admin.secretFields[key], st = map[key] || {};
+        var el = $(f.state), clear = $('[data-clear-secret="' + key + '"]');
+        $(f.input).value = '';
+        if (!st.set) {
+          el.textContent = '— 미설정';
+          el.className = 'bc-conn__state';
+        } else if (st.source === 'config') {
+          el.textContent = '— 설정 파일에 있음 (' + st.masked + ')';
+          el.className = 'bc-conn__state bc-conn__state--on';
+        } else {
+          el.textContent = '— 저장됨 (' + st.masked + ')';
+          el.className = 'bc-conn__state bc-conn__state--on';
+        }
+        // 설정 파일에서 온 값은 화면에서 지울 수 없다.
+        clear.hidden = !(st.set && st.source === 'db');
+      });
+    },
+
+    clearSecret: function (key) {
+      var label = key === 'slack_bot_token' ? '슬랙 봇 토큰' : '슬랙 Webhook URL';
+      if (!confirm(label + ' 을(를) 지웁니다.\n계속할까요?')) return;
+      var body = { matrix: {} };
+      body[key + '_clear'] = 1;
+      var self = this;
+      api('api/notify_settings.php', { method: 'POST', body: body })
+        .then(function () { toast(label + ' 을(를) 지웠습니다.'); self.loadNotify(); })
+        .catch(function (e) { toast(e.message, true); });
+    },
+
     saveNotify: function () {
       var matrix = {};
       $$('#bc-nt-matrix input[type="checkbox"]').forEach(function (cb) {
@@ -1171,10 +1213,16 @@
         matrix[ev][role] = matrix[ev][role] || {};
         matrix[ev][role][ch] = cb.checked ? 1 : 0;
       });
-      api('api/notify_settings.php', {
-        method: 'POST',
-        body: { matrix: matrix, slack_channel: $('#bc-nt-channel').value.trim() }
-      }).then(function (res) { toast(res.message); })
+      var body = { matrix: matrix, slack_channel: $('#bc-nt-channel').value.trim() };
+      // 빈 칸은 보내지 않는다. 서버에서 "그대로 두기" 로 읽힌다.
+      Object.keys(this.secretFields).forEach(function (key) {
+        var v = $(admin.secretFields[key].input).value.trim();
+        if (v) body[key] = v;
+      });
+
+      var self = this;
+      api('api/notify_settings.php', { method: 'POST', body: body })
+        .then(function (res) { toast(res.message); self.loadNotify(); })
         .catch(function (e) { toast(e.message, true); });
     }
   };

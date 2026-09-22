@@ -192,10 +192,10 @@ body { margin: 0; background: #EEF3FB; }
 .bc-filters + .bc-listbar { margin-top: 26px; }
 
 .bc-field { display: inline-flex; flex-direction: column; gap: 3px; }
-.bc-field > span { font-size: 12px; color: var(--ink-soft); }
+.bc-field > span, .bc-field > label { font-size: 12px; color: var(--ink-soft); }
 
 .bc input[type="text"], .bc input[type="number"], .bc input[type="date"],
-.bc input[type="search"], .bc select, .bc textarea {
+.bc input[type="search"], .bc input[type="password"], .bc select, .bc textarea {
   font: inherit; color: var(--ink);
   background: #FBFCFF;
   border: 1px solid var(--line); border-radius: 8px;
@@ -203,7 +203,7 @@ body { margin: 0; background: #EEF3FB; }
 }
 /* 한 줄에 서는 것들만 공용 높이로 묶는다. textarea 는 여러 줄이라 제외. */
 .bc input[type="text"], .bc input[type="number"], .bc input[type="date"],
-.bc input[type="search"], .bc select {
+.bc input[type="search"], .bc input[type="password"], .bc select {
   height: var(--ctl-h); padding-block: 0;
 }
 .bc input:focus, .bc select:focus, .bc textarea:focus {
@@ -490,6 +490,15 @@ body { margin: 0; background: #EEF3FB; }
 .bc-picker .bc-picker__id { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
 
 /* ---- 알림 매트릭스 -------------------------------------------------- */
+/* ---- 알림 - 슬랙 연결 정보 ------------------------------------------
+   채널 이름과 비밀값(봇 토큰·Webhook)을 한 줄에 늘어놓는다. 좁은 화면에서는
+   접혀 내려간다. 비밀값은 저장하면 다시 못 보므로, 지금 설정돼 있는지와
+   어디서 온 값인지를 라벨 옆에 적어 준다. */
+.bc-conn { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-bottom: 12px; }
+.bc-conn__row { display: inline-flex; align-items: center; gap: 6px; }
+.bc-conn__state { font-style: normal; color: var(--ink-soft); }
+.bc-conn__state--on { color: var(--done); }
+
 .bc-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
 .bc-matrix th, .bc-matrix td { border: 1px solid var(--line); padding: 8px 10px; text-align: center; }
 .bc-matrix th { background: var(--surface); font-weight: 600; }
