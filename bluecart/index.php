@@ -55,9 +55,9 @@ $roleLabels = array_map(
 <?php if ($inPortal): ?>
 <link rel="stylesheet" href="../styles/topbar.css">
 <?php else: ?>
-<link rel="stylesheet" href="assets/topbar-fallback.css">
+<link rel="stylesheet" href="assets/topbar-fallback.css?v=<?= bc_asset_v('assets/topbar-fallback.css') ?>">
 <?php endif; ?>
-<link rel="stylesheet" href="assets/app.css?v=4">
+<link rel="stylesheet" href="assets/app.css?v=<?= bc_asset_v('assets/app.css') ?>">
 </head>
 <body>
 
@@ -149,6 +149,6 @@ document.addEventListener('click', function (e) {
   if (um && !um.contains(e.target)) um.classList.remove('open');
 });
 </script>
-<script src="assets/app.js?v=4"></script>
+<script src="assets/app.js?v=<?= bc_asset_v('assets/app.js') ?>"></script>
 </body>
 </html>
