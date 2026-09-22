@@ -1,8 +1,37 @@
+import struct
+from collections.abc import Callable
 from datetime import datetime
-from typing import Generic, TypeVar
+from typing import Any
 
 from sqlalchemy import Engine
+from sqlalchemy.dialects.mysql.base import MySQLDialect
+from sqlalchemy.engine.interfaces import Dialect
+from sqlalchemy.types import UserDefinedType
 from sqlmodel import Field, Session, SQLModel
+
+
+class Vector(UserDefinedType[list[float]]):
+    """MariaDB VECTOR(n) -> list[float] 매퍼"""
+
+    cache_ok = True
+
+    def __init__(self, dimension: int) -> None:
+        self.dimension = dimension
+
+    def get_col_spec(self, **kw: Any) -> str:
+        return f"VECTOR({self.dimension})"
+
+    def bind_processor(self, dialect: Dialect) -> Callable[[Any], Any]:
+        return lambda value: None if value is None else struct.pack(f"<{len(value)}f", *value)
+
+    def result_processor(self, dialect: Dialect, coltype: Any) -> Callable[[Any], Any]:
+        return lambda value: (
+            None if value is None else list(struct.unpack(f"<{self.dimension}f", value))
+        )
+
+
+# SQLAlchemy 2.0에는 MariaDB/MySQL 전용 Vector schema
+MySQLDialect.ischema_names["vector"] = Vector
 
 
 class BaseSQLModel(SQLModel):
@@ -16,10 +45,7 @@ class BaseSQLModel(SQLModel):
         return self.id
 
 
-T = TypeVar("T", bound=BaseSQLModel)
-
-
-class BaseRepository(Generic[T]):
+class BaseRepository[T: BaseSQLModel]:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 

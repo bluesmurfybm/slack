@@ -35,7 +35,6 @@ def get_conversation(
     return ConversationResponse(
         key=conversation.key,
         messages=[
-            MessageResponse(role=m.role, content=m.content, created_at=m.created_at)
-            for m in stored
+            MessageResponse(role=m.role, content=m.content, created_at=m.created_at) for m in stored
         ],
     )
