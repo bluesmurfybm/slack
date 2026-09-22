@@ -15,8 +15,7 @@ $isAdmin = in_array('ADMIN', $roles, true);
 
 <!-- ============ 신청 물품 관리 ============ -->
 <div id="bc-adm-queue">
-  <div class="bc-pipe" id="bc-adm-pipe" aria-label="처리 단계별 건수"></div>
-
+  <!-- 범위 축과 사람 축. 상태 축은 목록 위 탭이 전담한다. 구성원 화면과 같은 짜임. -->
   <div class="bc-filters">
     <label class="bc-field">
       <span>연도</span>
@@ -39,18 +38,36 @@ $isAdmin = in_array('ADMIN', $roles, true);
       <span>검색</span>
       <input type="search" id="bc-af-keyword" placeholder="물품명, 요청번호, 요청자">
     </label>
+    <label class="bc-field">
+      <span>정렬</span>
+      <select id="bc-af-sort">
+        <option value="status" selected>처리 단계 순</option>
+        <option value="recent">최신 요청 순</option>
+        <option value="oldest">오래된 요청 순</option>
+        <option value="item">물품명 순</option>
+      </select>
+    </label>
+
+    <!-- 사람 축. 모집단을 좁히므로 조회 항목 쪽에 둔다. '내가 처리할 건' 은
+         역할에 맞는 단계까지 함께 정하는데, 그러면 해당 없는 상태 탭이
+         저절로 0건이 되어 흐려진다. 탭을 여럿 켜지 않아도 된다. -->
+    <label class="bc-field">
+      <span>담당</span>
+      <select id="bc-af-assign">
+        <option value="todo" selected>내가 처리할 건</option>
+        <option value="assigned">내가 맡은 건</option>
+        <option value="all">전체</option>
+      </select>
+    </label>
+
     <span class="bc-spacer"></span>
     <button type="button" class="bc-btn" id="bc-af-export">엑셀 받기</button>
     <button type="button" class="bc-btn" id="bc-af-reset">필터 초기화</button>
   </div>
 
-  <div class="bc-subtabs" role="tablist" aria-label="처리 구분">
-    <button type="button" role="tab" data-atab="todo"     aria-selected="true">내가 처리할 건</button>
-    <button type="button" role="tab" data-atab="assigned" aria-selected="false">내가 맡은 건</button>
-    <button type="button" role="tab" data-atab="progress" aria-selected="false">진행중 전체</button>
-    <button type="button" role="tab" data-atab="stocked"  aria-selected="false">구비완료</button>
-    <button type="button" role="tab" data-atab="rejected" aria-selected="false">반려·철회</button>
-    <button type="button" role="tab" data-atab="all"      aria-selected="false">전체</button>
+  <div class="bc-listbar">
+    <!-- 상태 축. 고르는 자리가 여기 하나뿐이다. 건수는 app.js 가 채운다. -->
+    <div class="bc-statabs" id="bc-adm-tabs" role="tablist" aria-label="처리 상태"></div>
   </div>
 
   <div class="bc-table-wrap">

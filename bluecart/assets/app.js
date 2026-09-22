@@ -141,36 +141,39 @@
   // =====================================================================
   // 파이프라인 집계
   // =====================================================================
-  var PIPE = [
+  // 상태 축은 이 탭 줄이 전담한다. 고르는 자리가 하나뿐이라야 선택 표시가
+  // 서로 어긋나지 않는다. 건수는 라벨 옆에 달아 숫자와 그 숫자를 쓰는
+  // 컨트롤이 떨어지지 않게 한다.
+  // 서버의 BC_STATUS_TABS 와 짝이다 — 한쪽만 고치면 안 된다.
+  var STATUS_TABS = [
+    { key: 'all',        label: '전체',      tone: 'all' },
     { key: 'REQUESTED',  label: '검토 대기', tone: 'wait' },
     { key: 'APPROVED',   label: '구매 대기', tone: 'ready' },
     { key: 'PURCHASING', label: '구매 진행', tone: 'work' },
-    { key: 'STOCKED',    label: '구비 완료', tone: 'done' }
+    { key: 'STOCKED',    label: '구비 완료', tone: 'done' },
+    { key: 'OUT',        label: '반려·철회', tone: 'stop' }
   ];
 
-  function renderPipe(el, counts, active, onPick) {
-    var html = PIPE.map(function (p) {
-      return '<button type="button" class="bc-pipe__cell bc-tone-' + p.tone + '"' +
-             ' data-status="' + p.key + '" aria-pressed="' + (active === p.key) + '">' +
-             '<span class="bc-pipe__n">' + num(counts[p.key] || 0) + '</span>' +
-             '<span class="bc-pipe__l">' + p.label + '</span></button>';
+  /** 탭 하나가 걸러 낼 건수. 전체는 여섯 상태의 합(반려·철회 포함)이다. */
+  function tabCount(counts, key) {
+    if (key === 'all') { return counts.TOTAL || 0; }
+    if (key === 'OUT') { return (counts.REJECTED || 0) + (counts.CANCELED || 0); }
+    return counts[key] || 0;
+  }
+
+  function renderStatusTabs(el, counts, active, onPick) {
+    el.innerHTML = STATUS_TABS.map(function (t) {
+      var n = tabCount(counts, t.key);
+      // 0건은 흐려지되 누르는 것은 막지 않는다. 막아 두면 왜 안 눌리는지
+      // 설명할 자리가 없다. 눌리면 '조건에 맞는 요청이 없습니다' 가 뜬다.
+      return '<button type="button" role="tab" class="bc-tone-' + t.tone +
+             (n ? '' : ' is-zero') + '" data-tab="' + t.key + '"' +
+             ' aria-selected="' + (active === t.key) + '">' +
+             esc(t.label) + '<i>' + num(n) + '</i></button>';
     }).join('');
 
-    // 네 단계를 합친 요약. 앞 칸들과 같은 얼개(라벨 + 큰 숫자)로 두되
-    // 누르는 칸이 아니라는 게 드러나게 레일 끝에서 세로줄로 잘라 낸다.
-    html += '<div class="bc-pipe__aside">' +
-            '<span class="bc-sum__k">올해 전체</span>' +
-            '<span class="bc-sum__n">' + num(counts.TOTAL || 0) +
-              '<em>건</em></span>' +
-            '<span class="bc-sum__x">' +
-              '<i class="bc-tone-stop">반려 <b>' + num(counts.REJECTED || 0) + '</b></i>' +
-              '<i class="bc-tone-off">철회 <b>' + num(counts.CANCELED || 0) + '</b></i>' +
-            '</span>' +
-            '</div>';
-    el.innerHTML = html;
-
-    $$('.bc-pipe__cell', el).forEach(function (btn) {
-      btn.addEventListener('click', function () { onPick(btn.dataset.status); });
+    $$('button', el).forEach(function (btn) {
+      btn.addEventListener('click', function () { onPick(btn.dataset.tab); });
     });
   }
 
@@ -316,22 +319,13 @@
   // 구성원 화면
   // =====================================================================
   var member = {
-    state: { tab: 'progress', page: 1, status: null, view: 'list' },
+    // 상태 축은 tab 하나뿐이다. 예전의 status 는 탭으로 흡수됐다.
+    state: { tab: 'all', page: 1, view: 'list' },
 
     init: function () {
       var self = this;
 
       $('#bc-new').addEventListener('click', function () { form.open(null); });
-
-      $$('.bc-subtabs [data-tab]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          $$('.bc-subtabs [data-tab]').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
-          self.state.tab = b.dataset.tab;
-          self.state.status = null;
-          self.state.page = 1;
-          self.load();
-        });
-      });
 
       ['bc-f-year', 'bc-f-category', 'bc-f-sort', 'bc-f-mine', 'bc-f-from', 'bc-f-to'].forEach(function (id) {
         $('#' + id).addEventListener('change', function () { self.state.page = 1; self.load(); });
@@ -382,12 +376,11 @@
         from: $('#bc-f-from').value,
         to: $('#bc-f-to').value,
         sort: $('#bc-f-sort').value,
+        tab: this.state.tab,
         page: this.state.page,
         size: 30
       };
       if ($('#bc-f-mine').checked) p.mine = '1';
-      if (this.state.status) p.status = [this.state.status];
-      else if (this.state.tab !== 'all') p.tab = this.state.tab;
       return p;
     },
 
@@ -409,8 +402,8 @@
       }
 
       api('api/requests.php?' + qs(this.params())).then(function (res) {
-        renderPipe($('#bc-pipe'), res.counts, self.state.status, function (status) {
-          self.state.status = (self.state.status === status) ? null : status;
+        renderStatusTabs($('#bc-tabs'), res.counts, self.state.tab, function (tab) {
+          self.state.tab = tab;
           self.state.page = 1;
           self.load();
         });
@@ -853,7 +846,9 @@
   // =====================================================================
   var admin = {
     ready: false,
-    state: { tab: 'todo', page: 1, status: null },
+    // tab = 상태 축, assign = 사람 축. 담당 기본값은 '내가 처리할 건' 이라
+    // 화면을 열면 바로 작업 큐가 보인다.
+    state: { tab: 'all', page: 1 },
 
     init: function () {
       if (this.ready || !CAN_ADMIN) return;
@@ -874,17 +869,7 @@
         });
       });
 
-      $$('.bc-subtabs [data-atab]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          $$('.bc-subtabs [data-atab]').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
-          self.state.tab = b.dataset.atab;
-          self.state.status = null;
-          self.state.page = 1;
-          self.loadQueue();
-        });
-      });
-
-      ['bc-af-year', 'bc-af-category'].forEach(function (id) {
+      ['bc-af-year', 'bc-af-category', 'bc-af-sort', 'bc-af-assign'].forEach(function (id) {
         $('#' + id).addEventListener('change', function () { self.state.page = 1; self.loadQueue(); });
       });
       var t;
@@ -902,7 +887,9 @@
         $('#bc-af-year').value = THIS_YEAR;
         $('#bc-af-category').value = '';
         $('#bc-af-keyword').value = '';
-        self.state.status = null; self.state.page = 1; self.loadQueue();
+        $('#bc-af-sort').value = 'status';
+        $('#bc-af-assign').value = 'todo';
+        self.state.tab = 'all'; self.state.page = 1; self.loadQueue();
       });
 
       $('#bc-adm-list').addEventListener('click', onRowClick(function () { self.loadQueue(); }));
@@ -934,11 +921,12 @@
         year: $('#bc-af-year').value,
         category_id: $('#bc-af-category').value,
         keyword: $('#bc-af-keyword').value.trim(),
+        sort: $('#bc-af-sort').value,
+        assign: $('#bc-af-assign').value,
+        tab: this.state.tab,
         page: this.state.page,
         size: 30
       };
-      if (this.state.status) p.status = [this.state.status];
-      else if (this.state.tab !== 'all') p.tab = this.state.tab;
       return p;
     },
 
@@ -946,7 +934,7 @@
     exportParams: function () {
       var p = this.queueParams();
       delete p.page; delete p.size; delete p.scope;
-      // 'todo'/'assigned' 는 서버에서 로그인 사용자 기준으로 걸러진다
+      // assign 의 'todo'/'assigned' 는 서버가 로그인 사용자 기준으로 푼다
       return p;
     },
 
@@ -959,8 +947,8 @@
       var p = this.queueParams();
 
       api('api/requests.php?' + qs(p)).then(function (res) {
-        renderPipe($('#bc-adm-pipe'), res.counts, self.state.status, function (status) {
-          self.state.status = (self.state.status === status) ? null : status;
+        renderStatusTabs($('#bc-adm-tabs'), res.counts, self.state.tab, function (tab) {
+          self.state.tab = tab;
           self.state.page = 1;
           self.loadQueue();
         });

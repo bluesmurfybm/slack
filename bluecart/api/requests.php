@@ -22,74 +22,46 @@ if ($scope === 'admin' && !bc_can_see_admin()) {
 
 $year = bc_param_int('year', (int)date('Y'));
 
-$status = bc_param('status', []);
-$status = is_array($status) ? $status : array_filter(explode(',', (string)$status));
+// 상태 축 — 목록 위 탭이 전담한다.
+$tab = bc_param_str('tab', 'all');
+if (!in_array($tab, BC_STATUS_TABS, true)) {
+    $tab = 'all';
+}
 
-// 탭 프리셋. 명시적 status 필터가 있으면 그쪽이 우선.
-$tab  = bc_param_str('tab', '');
-$mine          = false;
-$assigneeScope = false;
-$assigneeOnly  = false;
-if (!$status) {
-    switch ($tab) {
-        case 'progress':                                    // 구매 진행중 물품
-            $status = ['REQUESTED', 'APPROVED', 'PURCHASING'];
-            break;
-        case 'stocked':                                     // 구비완료 물품
-            $status = ['STOCKED'];
-            break;
-        case 'rejected':
-            $status = ['REJECTED', 'CANCELED'];
-            break;
-        case 'mine':
-            $mine = true;
-            break;
-        case 'todo':                                        // 관리자: 내가 처리할 건
-            $roles = bc_my_roles();
-            $status = [];
-            if (array_intersect($roles, ['REVIEWER', 'ADMIN'])) {
-                $status[] = 'REQUESTED';
-            }
-            if (array_intersect($roles, ['BUYER', 'ADMIN'])) {
-                $status[] = 'APPROVED';
-                $status[] = 'PURCHASING';
-                // 구매담당자에게는 내가 맡은 건과 아직 아무도 안 맡은 건만 보여준다.
-                // 관리자는 전부 본다.
-                if (!in_array('ADMIN', $roles, true)) {
-                    $assigneeScope = true;
-                }
-            }
-            if (!$status) {
-                $status = ['__NONE__'];
-            }
-            break;
-        case 'assigned':                                    // 내가 맡은 건만
-            $assigneeOnly = true;
-            break;
+// 사람 축 — 상태 축과 겹치지 않게 따로 받는다.
+//   구성원: mine=1 / 관리자: assign = all | todo | assigned
+$assign = $scope === 'admin' ? bc_param_str('assign', 'all') : 'all';
+$scopeOf = bc_assign_scope($assign, (string)$user['id'], bc_my_roles());
+
+// 목록에 실제로 걸리는 상태 = 고른 탭 ∩ 담당이 정한 범위.
+$listStatus = bc_tab_status($tab);
+if ($scopeOf['status_in'] !== null) {
+    $listStatus = $listStatus
+        ? array_values(array_intersect($listStatus, $scopeOf['status_in']))
+        : $scopeOf['status_in'];
+    if (!$listStatus) {
+        $listStatus = ['__NONE__'];     // 겹치는 단계가 없다 = 0건
     }
 }
 
 $filter = [
     'year'        => $year,
-    'status'      => $status,
+    'status'      => $listStatus,
     'category_id' => bc_param_int('category_id'),
     'keyword'     => bc_param_str('keyword'),
     'from'        => bc_param_str('from') ?: null,
     'to'          => bc_param_str('to') ?: null,
-    'sort'        => bc_param_str('sort', 'recent'),
+    'sort'        => bc_param_str('sort', 'status'),
     'page'        => bc_param_int('page', 1),
     'size'        => bc_param_int('size', 30),
 ];
 
-if ($mine || bc_param_str('mine') === '1') {
+if (bc_param_str('mine') === '1') {
     $filter['requester_id'] = $user['id'];
 }
-
-if ($assigneeOnly) {
-    $filter['assignee_id'] = $user['id'];
-} elseif ($assigneeScope) {
-    $filter['assignee_id']        = $user['id'];
-    $filter['include_unassigned'] = true;
+if ($scopeOf['assignee_id'] !== null) {
+    $filter['assignee_id']        = $scopeOf['assignee_id'];
+    $filter['include_unassigned'] = $scopeOf['include_unassigned'];
 }
 
 $result = PurchaseRequest::search($filter);
@@ -105,10 +77,19 @@ bc_json_ok([
     'total'  => $result['total'],
     'page'   => $result['page'],
     'size'   => $result['size'],
+    // 집계는 목록과 같은 모집단을 본다 — 범위 축과 사람 축을 그대로 태운다.
+    // 상태 축(고른 탭)만 뺀다. 집계가 나눠 보여 주는 축이라 여기서 걸면
+    // 자기 자신을 지우고, 탭마다 제 건수를 못 달게 된다.
     'counts' => PurchaseRequest::statusCounts([
-        'year'         => $year,
-        'category_id'  => $filter['category_id'],
-        'requester_id' => $filter['requester_id'] ?? null,
+        'year'               => $year,
+        'category_id'        => $filter['category_id'],
+        'requester_id'       => $filter['requester_id'] ?? null,
+        'keyword'            => $filter['keyword'],
+        'from'               => $filter['from'],
+        'to'                 => $filter['to'],
+        'assignee_id'        => $scopeOf['assignee_id'],
+        'include_unassigned' => $scopeOf['include_unassigned'],
+        'status_in'          => $scopeOf['status_in'],
     ]),
     'years'  => PurchaseRequest::years(),
 ]);

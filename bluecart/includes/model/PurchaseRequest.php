@@ -35,10 +35,15 @@ final class PurchaseRequest
             $args[]  = $year;
         }
 
-        $status = array_values(array_filter((array)($f['status'] ?? []), fn($s) => isset(BC_STATUS[$s])));
+        $rawStatus = (array)($f['status'] ?? []);
+        $status    = array_values(array_filter($rawStatus, fn($s) => isset(BC_STATUS[$s])));
         if ($status) {
             $where[] = 'r.status IN (' . implode(',', array_fill(0, count($status), '?')) . ')';
             array_push($args, ...$status);
+        } elseif ($rawStatus) {
+            // 넘어온 값이 있는데 하나도 안 남았다 = 어떤 상태와도 맞지 않는다.
+            // 빈 배열('조건 없음')과 달리 전체가 아니라 0건이어야 한다.
+            $where[] = '1 = 0';
         }
 
         if (!empty($f['category_id'])) {
@@ -125,6 +130,44 @@ final class PurchaseRequest
         if (!empty($f['requester_id'])) {
             $where[] = 'requester_id = ?';
             $args[]  = (string)$f['requester_id'];
+        }
+        // 조회 조건 중 목록에만 걸리고 집계에는 안 걸리는 것이 있으면, 같은 상자
+        // 안에서 어떤 것은 위 숫자를 바꾸고 어떤 것은 안 바꾸게 된다.
+        // search() 와 같은 조건을 그대로 태워 둘이 항상 같은 모집단을 본다.
+        $kw = trim((string)($f['keyword'] ?? ''));
+        if ($kw !== '') {
+            $where[] = '(item_name LIKE ? OR note LIKE ? OR requester_name LIKE ? OR req_no LIKE ?)';
+            $like = '%' . $kw . '%';
+            array_push($args, $like, $like, $like, $like);
+        }
+        if (!empty($f['from'])) {
+            $where[] = 'requested_at >= ?';
+            $args[]  = $f['from'] . ' 00:00:00';
+        }
+        if (!empty($f['to'])) {
+            $where[] = 'requested_at <= ?';
+            $args[]  = $f['to'] . ' 23:59:59';
+        }
+        // 사람 축(담당)도 모집단이므로 집계에 건다. 상태 축은 집계가 나눠
+        // 보여 주는 것이라 걸지 않는다 — 걸면 자기 자신을 지운다.
+        if (!empty($f['assignee_id'])) {
+            if (!empty($f['include_unassigned'])) {
+                $where[] = '(assignee_id = ? OR assignee_id IS NULL)';
+            } else {
+                $where[] = 'assignee_id = ?';
+            }
+            $args[] = (string)$f['assignee_id'];
+        }
+        // '내가 처리할 건' 처럼 사람 축이 단계까지 정하는 경우의 모집단 제한.
+        $rawIn = $f['status_in'] ?? null;
+        if (is_array($rawIn)) {
+            $in = array_values(array_filter($rawIn, fn($s) => isset(BC_STATUS[$s])));
+            if ($in) {
+                $where[] = 'status IN (' . implode(',', array_fill(0, count($in), '?')) . ')';
+                array_push($args, ...$in);
+            } elseif ($rawIn) {
+                $where[] = '1 = 0';
+            }
         }
         $whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
