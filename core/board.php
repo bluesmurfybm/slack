@@ -49,6 +49,65 @@ function board_bg_pref($u)
     return in_array($v, BG_PREFS, true) ? $v : 'weather';
 }
 
+/**
+ * 업무 시스템 카드 순서.
+ *
+ * 사람마다 중요한 시스템이 달라 카드를 끌어 놓은 순서를 계정에 남긴다.
+ * 아직 정한 적이 없으면 제목순으로 그린다 — 일곱 개가 넘어가면 json 에 적힌
+ * 순서보다 이름으로 찾는 편이 빠르다.
+ *
+ * 저장된 순서와 실제 목록은 언제든 어긋날 수 있다(시스템이 늘거나 빠진다).
+ *   - 저장된 key 중 지금 없는 것은 버린다
+ *   - 저장에 없는 새 시스템은 뒤에 제목순으로 붙인다. 없어지는 것보다 낫다
+ *
+ * @param array $systems work_systems() 결과
+ * @param string|null $saved portal_users.tile_order (key 를 콤마로 이은 값)
+ */
+function board_sort_tiles(array $systems, $saved = null)
+{
+    // strcoll 은 서버 로케일을 타서 브라우저가 매기는 순서와 어긋날 수 있다.
+    // 코드포인트 순(strcmp)이면 어디서 돌려도 같고, JS 의 문자열 비교와도
+    // 결과가 같다 — 영문이 앞, 한글이 뒤로 가는데 지금 목록에선 그편이 읽기 낫다.
+    $byLabel = $systems;
+    usort($byLabel, function ($a, $b) {
+        return strcmp($a['label'], $b['label']);
+    });
+
+    $order = array_values(array_filter(
+        array_map('trim', explode(',', (string)$saved)),
+        function ($k) { return $k !== ''; }
+    ));
+    if (!$order) {
+        return $byLabel;                       // 정한 적 없음 → 제목순
+    }
+
+    $pos  = array_flip($order);
+    $kept = $rest = [];
+    foreach ($byLabel as $sys) {               // 제목순을 밑바탕에 깔고
+        if (isset($pos[$sys['key']])) {
+            $kept[$pos[$sys['key']]] = $sys;   // 정한 것은 정한 자리에
+        } else {
+            $rest[] = $sys;                    // 그 뒤는 제목순 그대로
+        }
+    }
+    ksort($kept);
+    return array_merge(array_values($kept), $rest);
+}
+
+/** 저장 전 검증. 실제로 있는 key 만, 중복 없이 남긴다. */
+function board_clean_tile_order(array $keys, array $systems)
+{
+    $valid = array_column($systems, 'key');
+    $out   = [];
+    foreach ($keys as $k) {
+        $k = trim((string)$k);
+        if (in_array($k, $valid, true) && !in_array($k, $out, true)) {
+            $out[] = $k;
+        }
+    }
+    return $out;
+}
+
 // 최초 기동 때 portal_admin 에 심을 초기 명단. 그 뒤로는 DB 가 원본이다.
 const SEED_ADMINS = ['kimhy@bluesoft.co.kr'];
 

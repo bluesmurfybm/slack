@@ -72,6 +72,15 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15p
 .tile .go{position:absolute;top:22px;right:22px;color:var(--blue-soft);opacity:0;transition:opacity .15s ease}
 .tile:hover .go{opacity:1}
 .tile .go svg{width:20px;height:20px}
+/* ---- 카드 끌어 옮기기 ----
+   끌고 있는 카드는 반투명으로 뜨고, 자리는 그 자리에 미리 만들어 보여 준다.
+   터치에서도 되도록 포인터 이벤트를 쓰므로 touch-action 으로 스크롤을 막는다. */
+.tile.dragging{opacity:.45;cursor:grabbing;transform:none;box-shadow:none}
+.tile.dragging:hover{transform:none}
+.grid.reordering .tile{transition:transform .12s ease}
+.grid.reordering .tile:hover{transform:none;box-shadow:none;border-color:var(--line)}
+.grid.reordering{touch-action:none}
+
 .tile.soon{cursor:default;border-style:dashed;background:transparent;box-shadow:none}
 .tile.soon:hover{transform:none;border-color:var(--line)}
 .tile.soon .ic{background:#E7EDF9}

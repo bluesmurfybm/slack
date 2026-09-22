@@ -37,7 +37,8 @@ $__bgPref  = board_bg_pref($__u);
 // 예전에는 url 만 뽑아 넘겼는데, 정작 타일 일곱 개가 손으로 적혀 있어서 json 에
 // 시스템을 더해도 드롭다운에만 생기고 타일은 안 생겼다. 목록을 통째로 넘겨
 // 타일도 이 목록에서 그린다 — 이제 json 만 고치면 양쪽이 같이 늘어난다.
-$__systems = work_systems();
+// 카드 순서는 사람마다 다르다. 끌어 놓은 순서가 있으면 그대로, 없으면 제목순.
+$__systems = board_sort_tiles(work_systems(), $__u['tile_order'] ?? null);
 // 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
 $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
@@ -188,7 +189,10 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
          가는 선 하나로 경계를 준다 — 색을 더 쓰면 화면이 시끄러워진다. -->
     <div class="sec">
       <h2>업무 시스템</h2>
-      <span class="sec-hint">사용할 시스템을 선택하세요</span>
+      <span class="sec-hint">카드를 끌어 순서를 바꿀 수 있습니다</span>
+      <!-- ::after 가 가는 선이라 그 뒤로 못 넣는다. order 로 맨 오른쪽에 세운다. -->
+      <button type="button" class="sec-reset" id="tileResetBtn" onclick="resetTileOrder()"
+              title="카드 순서를 제목순으로 되돌립니다" hidden>기본 순서로</button>
     </div>
     <div class="grid" id="tiles"></div>
   </div>
@@ -453,6 +457,8 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 /* ===== 타일 링크 ===== */
 /* config.php 의 links 설정을 그대로 씀(서버가 단일 소스) */
 const SYSTEMS = <?= json_encode($__systems, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+// 카드 순서를 직접 정해 둔 사람인지. '기본 순서로' 단추를 그 사람에게만 보인다.
+let TILE_ORDERED = <?= json_encode(!empty($__u['tile_order'])) ?>;
 
 /* 모듈에서 미로그인으로 튕겨 온 경우에만 채워진다(?need_login=<key>) */
 const NOTICE = <?= json_encode($__notice, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
@@ -646,9 +652,11 @@ function renderTiles(){
 
   // 타일은 SYSTEMS(=worksystems.json) 를 그대로 따라간다. 시스템을 더하려면
   // json 에 한 줄 적고 여기 ICONS 에 아이콘만 얹으면 된다.
-  document.getElementById("tiles").innerHTML =
+  // 순서는 서버가 이미 정해서 준다(끌어 놓은 순서, 없으면 제목순).
+  const box = document.getElementById("tiles");
+  box.innerHTML =
     SYSTEMS.map(s => `
-    <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener">
+    <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener" data-key="${esc(s.key)}">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}</span>
       <div><h3>${esc(s.label)}</h3><p>${esc(s.desc || "")}</p></div>
@@ -658,6 +666,90 @@ function renderTiles(){
       <span class="ic">${plusIcon}</span>
       <div><h3>추가 예정</h3><p>새로운 사내 시스템이 이 자리에 추가됩니다.</p></div>
     </div>`;
+  enableTileReorder(box);
+  document.getElementById("tileResetBtn").hidden = !TILE_ORDERED;
+}
+
+// ---- 카드 순서 바꾸기 --------------------------------------------------
+// HTML5 드래그는 링크를 끌면 주소가 끌려 나오고 터치에서 아예 안 된다.
+// 포인터 이벤트로 직접 다루면 마우스와 터치가 같은 길을 탄다.
+function enableTileReorder(box){
+  // renderTiles() 는 여러 번 불린다(대시보드로 돌아올 때마다). 상자는 그대로라
+  // 그때마다 붙이면 리스너가 쌓인다 — 한 번만 붙인다.
+  if(box.dataset.reorderOn) return;
+  box.dataset.reorderOn = "1";
+
+  let drag=null, moved=false, startX=0, startY=0;
+
+  box.addEventListener("pointerdown", e => {
+    const tile = e.target.closest(".tile:not(.soon)");
+    if(!tile || e.button !== 0) return;
+    drag = tile; moved = false; startX = e.clientX; startY = e.clientY;
+  });
+
+  box.addEventListener("pointermove", e => {
+    if(!drag) return;
+    // 살짝 흔들린 것과 끄는 것을 가른다. 6px 넘어야 끌기로 본다.
+    if(!moved){
+      if(Math.abs(e.clientX-startX) < 6 && Math.abs(e.clientY-startY) < 6) return;
+      moved = true;
+      drag.setPointerCapture(e.pointerId);
+      drag.classList.add("dragging");
+      box.classList.add("reordering");
+    }
+    // 포인터가 놓인 카드를 찾아 그 앞뒤로 옮긴다. 옮기는 즉시 눈에 보인다.
+    const over = [...box.querySelectorAll(".tile:not(.soon)")].find(t => {
+      if(t === drag) return false;
+      const r = t.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right
+          && e.clientY >= r.top  && e.clientY <= r.bottom;
+    });
+    if(!over) return;
+    const r = over.getBoundingClientRect();
+    const after = (e.clientX - r.left) > r.width/2;
+    box.insertBefore(drag, after ? over.nextSibling : over);
+  });
+
+  const finish = e => {
+    if(!drag) return;
+    const wasMoved = moved;
+    drag.classList.remove("dragging");
+    box.classList.remove("reordering");
+    drag = null; moved = false;
+    if(!wasMoved) return;              // 그냥 눌렀다 뗀 것 — 링크가 열리게 둔다
+    // 끌고 나서 올라오는 click 한 번은 막는다. 안 막으면 새 탭이 열린다.
+    box.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); },
+                         {capture:true, once:true});
+    saveTileOrder();
+  };
+  box.addEventListener("pointerup", finish);
+  box.addEventListener("pointercancel", finish);
+}
+
+async function saveTileOrder(){
+  const keys = [...document.querySelectorAll("#tiles .tile:not(.soon)")]
+                 .map(t => t.dataset.key);
+  try{
+    await bapi("api/me.php", {method:"PUT", body:JSON.stringify({tile_order:keys})});
+    TILE_ORDERED = keys.length > 0;
+    document.getElementById("tileResetBtn").hidden = !TILE_ORDERED;
+  }catch(e){
+    toast("카드 순서를 저장하지 못했습니다");
+  }
+}
+
+async function resetTileOrder(){
+  try{
+    await bapi("api/me.php", {method:"PUT", body:JSON.stringify({tile_order:[]})});
+  }catch(e){
+    toast("되돌리지 못했습니다"); return;
+  }
+  // 제목순은 서버(board_sort_tiles)가 정하는 규칙이라 같은 기준으로 맞춘다.
+  // 거기서 strcmp 를 쓰므로 여기서도 코드포인트 순으로 비교한다 — localeCompare 를
+  // 쓰면 브라우저마다 달라져 새로고침했을 때 순서가 바뀌어 보인다.
+  SYSTEMS.sort((a,b) => a.label < b.label ? -1 : a.label > b.label ? 1 : 0);
+  TILE_ORDERED = false;
+  renderTiles();
 }
 
 /* ---- profile save ---- */
