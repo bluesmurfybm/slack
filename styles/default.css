@@ -75,6 +75,9 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15p
 /* ---- 카드 끌어 옮기기 ----
    끌고 있는 카드는 반투명으로 뜨고, 자리는 그 자리에 미리 만들어 보여 준다.
    터치에서도 되도록 포인터 이벤트를 쓰므로 touch-action 으로 스크롤을 막는다. */
+/* 카드는 <a> 라 기본이 '링크 끌기'다. 그게 먼저 잡으면 순서 바꾸기가 안 되고,
+   글자가 선택된 채 끌려 지저분해진다. 둘 다 막는다. */
+.tile{-webkit-user-drag:none;user-select:none;-webkit-user-select:none}
 .tile.dragging{opacity:.45;cursor:grabbing;transform:none;box-shadow:none}
 .tile.dragging:hover{transform:none}
 .grid.reordering .tile{transition:transform .12s ease}

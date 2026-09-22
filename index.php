@@ -656,7 +656,8 @@ function renderTiles(){
   const box = document.getElementById("tiles");
   box.innerHTML =
     SYSTEMS.map(s => `
-    <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener" data-key="${esc(s.key)}">
+    <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener"
+       draggable="false" data-key="${esc(s.key)}">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}</span>
       <div><h3>${esc(s.label)}</h3><p>${esc(s.desc || "")}</p></div>
@@ -679,7 +680,20 @@ function enableTileReorder(box){
   if(box.dataset.reorderOn) return;
   box.dataset.reorderOn = "1";
 
-  let drag=null, moved=false, startX=0, startY=0;
+  // 카드가 <a> 라 누르고 움직이면 브라우저가 먼저 '링크 끌기'를 시작한다.
+  // 그러면 포인터 이벤트가 pointercancel 로 끊겨 아래 코드가 돌지 못한다.
+  // 마크업의 draggable="false" 와 함께 여기서도 막아 둔다.
+  box.addEventListener("dragstart", e => e.preventDefault());
+
+  let drag=null, moved=false, startX=0, startY=0, justDragged=false;
+
+  // 끌고 난 직후 올라오는 click 한 번은 막는다. 안 막으면 새 탭이 열린다.
+  // 끌기 뒤에 click 이 아예 안 오는 경우도 있어서, 한 번만 듣는 리스너 대신
+  // 깃발을 세웠다 내린다 — 안 그러면 그 리스너가 남아 다음 클릭을 먹는다.
+  box.addEventListener("click", ev => {
+    if(!justDragged) return;
+    ev.preventDefault(); ev.stopPropagation();
+  }, true);
 
   box.addEventListener("pointerdown", e => {
     const tile = e.target.closest(".tile:not(.soon)");
@@ -693,7 +707,9 @@ function enableTileReorder(box){
     if(!moved){
       if(Math.abs(e.clientX-startX) < 6 && Math.abs(e.clientY-startY) < 6) return;
       moved = true;
-      drag.setPointerCapture(e.pointerId);
+      // 캡처는 카드가 아니라 상자에 건다. 카드는 순서를 바꾸며 DOM 에서
+      // 뽑았다 꽂히는데, 그때 캡처가 풀려 끌기가 중간에 끊긴다.
+      box.setPointerCapture(e.pointerId);
       drag.classList.add("dragging");
       box.classList.add("reordering");
     }
@@ -710,20 +726,20 @@ function enableTileReorder(box){
     box.insertBefore(drag, after ? over.nextSibling : over);
   });
 
-  const finish = e => {
+  const finish = save => {
     if(!drag) return;
     const wasMoved = moved;
     drag.classList.remove("dragging");
     box.classList.remove("reordering");
     drag = null; moved = false;
     if(!wasMoved) return;              // 그냥 눌렀다 뗀 것 — 링크가 열리게 둔다
-    // 끌고 나서 올라오는 click 한 번은 막는다. 안 막으면 새 탭이 열린다.
-    box.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); },
-                         {capture:true, once:true});
-    saveTileOrder();
+    justDragged = true;
+    setTimeout(() => { justDragged = false; }, 100);
+    if(save) saveTileOrder();
   };
-  box.addEventListener("pointerup", finish);
-  box.addEventListener("pointercancel", finish);
+  box.addEventListener("pointerup", () => finish(true));
+  // 끌기가 중간에 끊긴 것(창 밖으로 나감 등)은 저장하지 않는다.
+  box.addEventListener("pointercancel", () => finish(false));
 }
 
 async function saveTileOrder(){
