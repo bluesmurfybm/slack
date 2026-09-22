@@ -686,6 +686,7 @@ function enableTileReorder(box){
   box.addEventListener("dragstart", e => e.preventDefault());
 
   let drag=null, moved=false, startX=0, startY=0, justDragged=false;
+  let ph=null, grabX=0, grabY=0;     // 놓일 자리 · 카드 안에서 쥔 지점
 
   // 끌고 난 직후 올라오는 click 한 번은 막는다. 안 막으면 새 탭이 열린다.
   // 끌기 뒤에 click 이 아예 안 오는 경우도 있어서, 한 번만 듣는 리스너 대신
@@ -710,12 +711,36 @@ function enableTileReorder(box){
       // 캡처는 카드가 아니라 상자에 건다. 카드는 순서를 바꾸며 DOM 에서
       // 뽑았다 꽂히는데, 그때 캡처가 풀려 끌기가 중간에 끊긴다.
       box.setPointerCapture(e.pointerId);
-      drag.classList.add("dragging");
       box.classList.add("reordering");
       // 커서는 body 에 걸어야 카드 바깥으로 나가도 '옮기는 중' 이 유지된다.
       document.body.classList.add("tile-dragging");
+
+      // 들기 직전 크기와 자리를 재 둔다. 자리표시를 꽂으면 배치가 바뀌므로
+      // 반드시 꽂기 전에 재야 한다.
+      const r0 = drag.getBoundingClientRect();
+      grabX = e.clientX - r0.left;
+      grabY = e.clientY - r0.top;
+
+      ph = document.createElement("div");
+      ph.className = "tile-ph";
+      ph.style.height = r0.height + "px";
+      box.insertBefore(ph, drag);
+
+      // 카드를 흐름에서 빼 손에 들린 상태로 만든다. 폭·높이를 고정해 두지
+      // 않으면 흐름에서 빠지는 순간 제 크기를 잃는다.
+      drag.style.width  = r0.width + "px";
+      drag.style.height = r0.height + "px";
+      drag.style.left   = r0.left + "px";
+      drag.style.top    = r0.top + "px";
+      drag.classList.add("dragging");
     }
-    // 포인터가 놓인 카드를 찾아 그 앞뒤로 옮긴다. 옮기는 즉시 눈에 보인다.
+
+    // 카드는 포인터를 따라오고, 자리표시만 카드들 사이를 오간다.
+    drag.style.left = (e.clientX - grabX) + "px";
+    drag.style.top  = (e.clientY - grabY) + "px";
+
+    // 포인터가 놓인 카드를 찾아 그 앞뒤로 자리표시를 옮긴다.
+    // 들린 카드는 pointer-events 가 꺼져 있고 자리도 떠 있어 후보에서 뺀다.
     const over = [...box.querySelectorAll(".tile:not(.soon)")].find(t => {
       if(t === drag) return false;
       const r = t.getBoundingClientRect();
@@ -724,14 +749,22 @@ function enableTileReorder(box){
     });
     if(!over) return;
     const r = over.getBoundingClientRect();
-    const after = (e.clientX - r.left) > r.width/2;
-    box.insertBefore(drag, after ? over.nextSibling : over);
+    const ref = (e.clientX - r.left) > r.width/2 ? over.nextSibling : over;
+    if(ref !== ph) box.insertBefore(ph, ref);
   });
 
   const finish = save => {
     if(!drag) return;
     const wasMoved = moved;
+    // 들고 있던 카드를 자리표시가 있던 칸에 내려놓는다. 여기서 정해지는
+    // DOM 순서가 곧 저장될 순서다.
+    if(ph){
+      box.insertBefore(drag, ph);
+      ph.remove();
+      ph = null;
+    }
     drag.classList.remove("dragging");
+    drag.removeAttribute("style");     // 들면서 준 width/height/left/top 을 걷는다
     box.classList.remove("reordering");
     document.body.classList.remove("tile-dragging");
     drag = null; moved = false;
