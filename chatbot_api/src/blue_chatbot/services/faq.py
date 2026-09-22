@@ -20,6 +20,7 @@ class FaqEntry:
 
 REQUIRED_FIELDS = ("id", "question", "answer")
 
+
 def load(path: Path, domain: str = "") -> list[FaqEntry]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
 

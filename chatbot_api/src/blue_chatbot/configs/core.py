@@ -17,19 +17,24 @@ class CoreConfig(BaseSettings):
     # 그런 모델로 바꿀 때는 비워 두면 파라미터를 보내지 않는다.
     effort: Literal["low", "medium", "high", "xhigh", "max"] | None = "low"
 
+    # 임베딩
+    openai_api_key: SecretStr | None = None
+    embedding_model: str = "openai-3-small"
+
     # FAQ
     faq_dir: Path = Path("data/faq")
 
-    # 저장소
-    database_url: SecretStr
+    # DB
+    database_url: SecretStr  # chatbot 전용 DB
+    iwork_db_url: SecretStr | None = None  # iworks 통합 DB
 
     # 대화
     conversation_expires_after: timedelta = timedelta(minutes=30)
 
-    @field_validator("effort", mode="before")
+    @field_validator("effort", "iwork_db_url", "openai_api_key", mode="before")
     @classmethod
     def _empty_means_unset(cls, value: object) -> object:
-        """EFFORT= 처럼 빈 값을 주면 파라미터를 보내지 않는다는 뜻으로 읽는다."""
+        """EFFORT= 처럼 빈 값을 주면 설정하지 않은 것으로 읽는다."""
         return None if value == "" else value
 
 

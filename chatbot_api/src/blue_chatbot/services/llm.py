@@ -1,10 +1,11 @@
 """LLM 관련 예외 및 클라이언트 API 인터페이스"""
 
-from typing import Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
 from blue_chatbot.messages import Message
+from blue_chatbot.tools.base import Evidence, Tool
 
 
 class LLMClientError(Exception):
@@ -26,6 +27,7 @@ class LLMClientUnreachableError(LLMClientError):
 class LLMClientVendorError(LLMClientError):
     """LLM api 서버 관련 오류"""
 
+
 class LLMClientRequestError(LLMClientError):
     """LLM 요청 오류"""
 
@@ -37,6 +39,12 @@ class LLMClient(Protocol):
     """LLM 클라이언트"""
 
     def generate(
-        self, *, system: str, messages: list[Message], output_format: type[T]
-    ) -> T | None:
+        self,
+        *,
+        system: str,
+        messages: list[Message],
+        output_format: type[T],
+        tools: list[Tool[Any]],
+    ) -> tuple[T | None, list[Evidence]]:
+        """직렬화된 응답과, 이번 호출에서 도구가 돌려준 근거."""
         ...

@@ -1,12 +1,14 @@
 from logging.config import fileConfig
 
-from alembic import context
-
-from blue_chatbot.configs.core import config as app_config
 from sqlmodel import SQLModel
 
-from blue_chatbot.repositories import conversation as _models  # noqa: F401  모델을 metadata에 등록한다
+from alembic import context
+from blue_chatbot.configs.core import config as app_config
+from blue_chatbot.repositories import (
+    conversation as _models,  # noqa: F401  모델을 metadata에 등록한다
+)
 from blue_chatbot.repositories import db
+from blue_chatbot.repositories import workhub as _workhub_models  # noqa: F401
 
 alembic_config = context.config
 
