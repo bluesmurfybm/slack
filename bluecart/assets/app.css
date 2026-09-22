@@ -493,7 +493,10 @@ body { margin: 0; background: #EEF3FB; }
 .bc-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
 .bc-matrix th, .bc-matrix td { border: 1px solid var(--line); padding: 8px 10px; text-align: center; }
 .bc-matrix th { background: var(--surface); font-weight: 600; }
-.bc-matrix td:first-child, .bc-matrix th:first-child { text-align: left; }
+/* 처리 단계 칸만 왼쪽 정렬이다. 자리(:first-child)로 잡으면 안 된다 — 한 단계에
+   알림 대상이 둘 이상이면 그 단계 칸이 rowspan 으로 묶여 둘째 줄부터는 없고,
+   알림 대상 칸이 첫 칸이 되어 혼자 왼쪽으로 붙는다. 클래스로 잡는다. */
+.bc-matrix th:first-child, .bc-matrix .bc-matrix__ev { text-align: left; }
 .bc-matrix .bc-matrix__ev { font-weight: 600; background: #fbfcfd; }
 
 /* ---- 토스트 --------------------------------------------------------- */
