@@ -80,6 +80,7 @@ class AnthropicLLMClient(LLMClient):
                     model=config.claude_model,
                     max_tokens=config.max_tokens,
                     output_config=beta_config,
+                    cache_control={"type": "ephemeral"},
                     system=[
                         {
                             "type": "text",
