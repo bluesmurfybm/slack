@@ -712,6 +712,8 @@ function enableTileReorder(box){
       box.setPointerCapture(e.pointerId);
       drag.classList.add("dragging");
       box.classList.add("reordering");
+      // 커서는 body 에 걸어야 카드 바깥으로 나가도 '옮기는 중' 이 유지된다.
+      document.body.classList.add("tile-dragging");
     }
     // 포인터가 놓인 카드를 찾아 그 앞뒤로 옮긴다. 옮기는 즉시 눈에 보인다.
     const over = [...box.querySelectorAll(".tile:not(.soon)")].find(t => {
@@ -731,6 +733,7 @@ function enableTileReorder(box){
     const wasMoved = moved;
     drag.classList.remove("dragging");
     box.classList.remove("reordering");
+    document.body.classList.remove("tile-dragging");
     drag = null; moved = false;
     if(!wasMoved) return;              // 그냥 눌렀다 뗀 것 — 링크가 열리게 둔다
     justDragged = true;

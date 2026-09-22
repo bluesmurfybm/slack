@@ -78,8 +78,12 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15p
 /* 카드는 <a> 라 기본이 '링크 끌기'다. 그게 먼저 잡으면 순서 바꾸기가 안 되고,
    글자가 선택된 채 끌려 지저분해진다. 둘 다 막는다. */
 .tile{-webkit-user-drag:none;user-select:none;-webkit-user-select:none}
-.tile.dragging{opacity:.45;cursor:grabbing;transform:none;box-shadow:none}
+.tile.dragging{opacity:.45;transform:none;box-shadow:none}
 .tile.dragging:hover{transform:none}
+/* 끄는 동안에는 포인터가 어디에 있든 '옮기는 중'(십자 화살표)을 보여 준다.
+   평소 hover 는 손 모양 그대로 둔다 — 카드는 눌러서 여는 링크이기도 하다. */
+body.tile-dragging, body.tile-dragging *{cursor:move}
+body.tile-dragging .tile.soon{cursor:move}
 .grid.reordering .tile{transition:transform .12s ease}
 .grid.reordering .tile:hover{transform:none;box-shadow:none;border-color:var(--line)}
 .grid.reordering{touch-action:none}
