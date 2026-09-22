@@ -34,10 +34,10 @@ $__weather = board_office_weather();
 // 배경 설정은 서버가 먼저 내려 줘야 화면이 한 번 번쩍이지 않는다.
 $__bgPref  = board_bg_pref($__u);
 // 대시보드 타일도 상단바 드롭다운과 같은 목록(worksystems.php)을 쓴다 — 한쪽만 늘어나는 일이 없게.
-$__links = [];
-foreach (work_systems() as $__sys) {
-    $__links[$__sys['key']] = $__sys['url'];
-}
+// 예전에는 url 만 뽑아 넘겼는데, 정작 타일 일곱 개가 손으로 적혀 있어서 json 에
+// 시스템을 더해도 드롭다운에만 생기고 타일은 안 생겼다. 목록을 통째로 넘겨
+// 타일도 이 목록에서 그린다 — 이제 json 만 고치면 양쪽이 같이 늘어난다.
+$__systems = work_systems();
 // 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
 $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
@@ -452,7 +452,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <script>
 /* ===== 타일 링크 ===== */
 /* config.php 의 links 설정을 그대로 씀(서버가 단일 소스) */
-const LINKS = <?= json_encode($__links, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+const SYSTEMS = <?= json_encode($__systems, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 /* 모듈에서 미로그인으로 튕겨 온 경우에만 채워진다(?need_login=<key>) */
 const NOTICE = <?= json_encode($__notice, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
@@ -637,37 +637,22 @@ function renderTiles(){
   const accessIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.1-8.1M17 6l2.5 2.5M14.5 8.5 17 11"/></svg>`;
   const moodleIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.3 6.1-6.1 2.3 2.3-6.1z"/></svg>`;
   const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
-  document.getElementById("tiles").innerHTML=`
-    <a class="tile" href="${LINKS.book}" target="_blank" rel="noopener">
+  const cartIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.2l2.3 12.2a1.6 1.6 0 0 0 1.6 1.3h9.1a1.6 1.6 0 0 0 1.6-1.3L21 7H5.3"/></svg>`;
+
+  // key → 아이콘. 그림은 코드에 두고 이름·설명·색은 worksystems.json 에 둔다.
+  // 모르는 key 가 오면 plusIcon 으로 그려 타일이 통째로 사라지지는 않게 한다.
+  const ICONS = { book:bookIcon, slack:slackIcon, dti:dtiIcon, learn:learnIcon,
+                  access:accessIcon, moodle:moodleIcon, bluecart:cartIcon };
+
+  // 타일은 SYSTEMS(=worksystems.json) 를 그대로 따라간다. 시스템을 더하려면
+  // json 에 한 줄 적고 여기 ICONS 에 아이콘만 얹으면 된다.
+  document.getElementById("tiles").innerHTML =
+    SYSTEMS.map(s => `
+    <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:#2E6BF0">${bookIcon}</span>
-      <div><h3>BlueBooks</h3><p>읽고 싶은 책을 신청하고 처리 현황을 확인합니다.</p></div>
-    </a>
-    <a class="tile" href="${LINKS.slack}" target="_blank" rel="noopener">
-      <span class="go">${arrow}</span>
-      <span class="ic" style="background:#1F9D76">${slackIcon}</span>
-      <div><h3>Coursemos WorkHub</h3><p>유지보수 요청 현황을 확인하고 관리합니다.</p></div>
-    </a>
-    <a class="tile" href="${LINKS.dti}" target="_blank" rel="noopener">
-      <span class="go">${arrow}</span>
-      <span class="ic" style="background:#7B5CF0">${dtiIcon}</span>
-      <div><h3>DTI 발표</h3><p>매거진을 읽고 지식을 공유합니다.</p></div>
-    </a>
-    <a class="tile" href="${LINKS.learn}" target="_blank" rel="noopener">
-      <span class="go">${arrow}</span>
-      <span class="ic" style="background:#F2711C">${learnIcon}</span>
-      <div><h3>BlueLearn</h3><p>역량 강화를 위한 강의를 신청하고 수강료를 지원받습니다.</p></div>
-    </a>
-    <a class="tile" href="${LINKS.access}" target="_blank" rel="noopener">
-      <span class="go">${arrow}</span>
-      <span class="ic" style="background:#0F7B8A">${accessIcon}</span>
-      <div><h3>Coursemos EnvHub</h3><p>대학별 svn·git, 계정, DB, plink 정보를 찾아 복사합니다.</p></div>
-    </a>
-    <a class="tile" href="${LINKS.moodle}" target="_blank" rel="noopener">
-      <span class="go">${arrow}</span>
-      <span class="ic" style="background:#D6336C">${moodleIcon}</span>
-      <div><h3>MoodleUp?</h3><p>무들 PAG·트래커·릴리스 변화를 매주 모아 코스모스 관점으로 요약합니다.</p></div>
-    </a>
+      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}</span>
+      <div><h3>${esc(s.label)}</h3><p>${esc(s.desc || "")}</p></div>
+    </a>`).join("") + `
     <div class="tile soon">
       <span class="badge-soon">준비중</span>
       <span class="ic">${plusIcon}</span>
