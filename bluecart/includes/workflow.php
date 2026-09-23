@@ -114,6 +114,25 @@ const BC_EVENT = [
 ];
 
 /**
+ * 슬랙 메시지 제목 앞에 붙는 이모지.
+ *
+ * 같은 채널(#blue_inbox)에 DTI·도서 신청 알림도 함께 들어온다. 그쪽이
+ * ':books: *새 도서 신청*' 꼴이라 모양을 맞췄다. 한 줄만 보고도 어느
+ * 시스템의 어떤 단계인지 가려내려는 것이다.
+ */
+const BC_EVENT_EMOJI = [
+    'REQUEST_CREATED'     => ':shopping_trolley:',
+    'REQUEST_UPDATED'     => ':pencil2:',
+    'REQUEST_RESUBMITTED' => ':arrows_counterclockwise:',
+    'REQUEST_CANCELED'    => ':wastebasket:',
+    'REVIEW_APPROVED'     => ':white_check_mark:',
+    'REVIEW_REJECTED'     => ':no_entry_sign:',
+    'PURCHASE_ASSIGNED'   => ':bust_in_silhouette:',
+    'PURCHASE_STARTED'    => ':truck:',
+    'PURCHASE_DONE'       => ':package:',
+];
+
+/**
  * 배송/수령 희망 장소 선택지.
  *
  * 자유 입력이던 칸을 목록에서 고르게 바꿨다. 사람마다 '사무실', '회사', '본사'

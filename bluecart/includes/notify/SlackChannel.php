@@ -30,7 +30,7 @@ final class SlackChannel
         return $v !== '' ? $v : trim((string)bc_config('notify.slack.webhook_url', ''));
     }
 
-    public static function postMessage(string $channel, string $text): void
+    public static function postMessage(string $channel, string $text, string $emoji = ''): void
     {
         if (!bc_config('notify.enabled', true)) {
             return;
@@ -40,7 +40,7 @@ final class SlackChannel
             self::api('chat.postMessage', [
                 'channel' => $channel,
                 'text'    => $text,
-                'blocks'  => json_encode(self::blocks($text), JSON_UNESCAPED_UNICODE),
+                'blocks'  => json_encode(self::blocks($text, $emoji), JSON_UNESCAPED_UNICODE),
             ]);
             return;
         }
@@ -52,7 +52,7 @@ final class SlackChannel
         if (str_starts_with($channel, 'U')) {
             throw new RuntimeException('개인 DM 은 봇 토큰이 필요합니다. Webhook 으로는 보낼 수 없습니다.');
         }
-        self::httpPostJson($webhook, ['text' => $text, 'blocks' => self::blocks($text)]);
+        self::httpPostJson($webhook, ['text' => $text, 'blocks' => self::blocks($text, $emoji)]);
     }
 
     /** 이메일로 슬랙 사용자 ID 조회. 실패하면 null. */
@@ -74,24 +74,31 @@ final class SlackChannel
         }
     }
 
-    /** 첫 줄은 제목, 나머지는 본문으로 나눈 단순 블록. */
-    private static function blocks(string $text): array
+    /**
+     * 첫 줄은 제목, 나머지는 본문.
+     *
+     * 같은 채널(#blue_inbox)에 DTI·도서 신청 알림도 함께 들어와서 그쪽 모양에
+     * 맞췄다. 제목은 '이모지 + 굵게' 한 줄, 항목은 가운뎃점 목록이다.
+     *
+     * header 블록은 쓰지 않는다. 글자가 크고 이모지가 제목과 따로 놀아서,
+     * 다른 알림과 나란히 놓으면 혼자 튄다. 한 채널에 여러 시스템이 들어올
+     * 때는 같은 문법(mrkdwn 한 덩어리)으로 맞추는 쪽이 읽기 낫다.
+     */
+    private static function blocks(string $text, string $emoji = ''): array
     {
         $lines = explode("\n", $text);
         $title = array_shift($lines) ?: 'BlueCart';
-        $rest  = trim(implode("\n", $lines));
 
-        $blocks = [[
-            'type' => 'header',
-            'text' => ['type' => 'plain_text', 'text' => mb_substr($title, 0, 150), 'emoji' => true],
-        ]];
-        if ($rest !== '') {
-            $blocks[] = [
-                'type' => 'section',
-                'text' => ['type' => 'mrkdwn', 'text' => mb_substr($rest, 0, 2900)],
-            ];
+        $out = [($emoji !== '' ? $emoji . ' ' : '') . '*' . $title . '*'];
+        foreach ($lines as $line) {
+            // '항목: 값' 꼴만 목록으로 만든다. 안내 문장과 링크는 그대로 둔다.
+            $out[] = preg_match('/^[^:\n]{1,24}: /u', $line) ? '• ' . $line : $line;
         }
-        return $blocks;
+
+        return [[
+            'type' => 'section',
+            'text' => ['type' => 'mrkdwn', 'text' => mb_substr(implode("\n", $out), 0, 2950)],
+        ]];
     }
 
     private static function api(string $method, array $params): array

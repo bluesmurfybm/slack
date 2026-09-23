@@ -160,7 +160,7 @@ final class Notifier
             $logId = self::log($req['id'], $event, $role, 'SLACK_DM', $slackId,
                                $msg['subject'], $msg['text'], 'PENDING', null);
             try {
-                SlackChannel::postMessage($slackId, $msg['text']);
+                SlackChannel::postMessage($slackId, $msg['text'], BC_EVENT_EMOJI[$event] ?? '');
                 self::markSent($logId);
             } catch (Throwable $e) {
                 self::markFailed($logId, $e->getMessage());
@@ -180,7 +180,7 @@ final class Notifier
         $logId = self::log($req['id'], $event, $role, 'SLACK_CHANNEL', $channel,
                            $msg['subject'], $msg['text'], 'PENDING', null);
         try {
-            SlackChannel::postMessage($channel, $msg['text']);
+            SlackChannel::postMessage($channel, $msg['text'], BC_EVENT_EMOJI[$event] ?? '');
             self::markSent($logId);
         } catch (Throwable $e) {
             self::markFailed($logId, $e->getMessage());
