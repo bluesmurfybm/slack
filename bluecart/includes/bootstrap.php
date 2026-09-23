@@ -95,6 +95,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once BC_ROOT . '/includes/helpers.php';
 require_once BC_ROOT . '/includes/db.php';
+require_once BC_ROOT . '/includes/secret.php';
 require_once BC_ROOT . '/includes/auth.php';
 require_once BC_ROOT . '/includes/directory.php';
 require_once BC_ROOT . '/includes/workflow.php';

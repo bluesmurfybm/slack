@@ -89,6 +89,9 @@ return [
         ],
 
         'slack' => [
+            // 아래 두 값은 관리자 탭 > 알림 설정 화면에서 넣는 쪽이 편하다.
+            // 화면에서 넣은 값이 우선이고, 포털 config.php 의 key 로 암호화해
+            // bc_setting 에 들어간다. 여기(또는 환경변수)는 비워 둬도 된다.
             // 필요 스코프: chat:write, users:read, users:read.email
             'bot_token'       => getenv('BLUECART_SLACK_BOT_TOKEN') ?: '',
             'webhook_url'     => getenv('BLUECART_SLACK_WEBHOOK') ?: '',

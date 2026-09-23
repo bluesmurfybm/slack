@@ -183,10 +183,39 @@ $isAdmin = in_array('ADMIN', $roles, true);
     <h2>프로세스별 알림</h2>
     <p class="bc-panel__hint">각 처리 단계에서 누구에게 어떤 방법으로 알릴지 정합니다. 슬랙 개인 DM 은 봇 토큰이 설정되어 있어야 동작합니다.</p>
 
-    <label class="bc-field" style="margin-bottom:14px">
-      <span>기본 슬랙 채널</span>
-      <input type="text" id="bc-nt-channel" placeholder="#general" style="width:220px">
-    </label>
+    <div class="bc-conn">
+      <label class="bc-field">
+        <span>기본 슬랙 채널</span>
+        <input type="text" id="bc-nt-channel" placeholder="#general" style="width:220px">
+      </label>
+
+      <div class="bc-field">
+        <label for="bc-nt-token">슬랙 봇 토큰 <em class="bc-conn__state" id="bc-nt-token-state"></em></label>
+        <div class="bc-conn__row">
+          <input type="password" id="bc-nt-token" autocomplete="new-password"
+                 placeholder="xoxb-..." style="width:320px">
+          <button type="button" class="bc-btn bc-btn--sm bc-btn--danger"
+                  data-clear-secret="slack_bot_token" hidden>지우기</button>
+        </div>
+      </div>
+
+      <div class="bc-field">
+        <label for="bc-nt-hook">슬랙 Webhook URL <em class="bc-conn__state" id="bc-nt-hook-state"></em></label>
+        <div class="bc-conn__row">
+          <input type="password" id="bc-nt-hook" autocomplete="new-password"
+                 placeholder="https://hooks.slack.com/services/..." style="width:320px">
+          <button type="button" class="bc-btn bc-btn--sm bc-btn--danger"
+                  data-clear-secret="slack_webhook_url" hidden>지우기</button>
+        </div>
+      </div>
+    </div>
+
+    <p class="bc-panel__hint">
+      봇 토큰이 있으면 개인 DM 과 채널 발송 모두 봇 토큰으로 나갑니다. 채널만 쓸 때는
+      Webhook URL 만 넣어도 되지만, 그때는 Webhook 을 만들 때 고른 채널로만 갑니다.
+      여기 넣은 값은 암호화해서 저장하고 다시 보여 주지 않습니다. 비워 두고 저장하면
+      기존 값이 그대로 남습니다.
+    </p>
 
     <div style="overflow-x:auto"><table class="bc-matrix" id="bc-nt-matrix"></table></div>
 

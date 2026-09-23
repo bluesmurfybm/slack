@@ -721,11 +721,43 @@ $row = current_portal_user();                // includes/auth.php
 
 1. Slack 앱 생성 → **OAuth & Permissions**
 2. Bot Token Scopes: `chat:write`, `users:read`, `users:read.email`
-3. 워크스페이스에 설치하고 `xoxb-` 토큰을 `BLUECART_SLACK_BOT_TOKEN` 에 설정
-4. 채널 발송을 쓸 채널에 봇을 초대
+3. 워크스페이스에 설치하고 `xoxb-` 토큰을 **관리자 탭 → 알림 설정**에 입력
+   (또는 `config.php` 의 `notify.slack.bot_token` / `BLUECART_SLACK_BOT_TOKEN`)
+4. 채널 발송을 쓸 채널에 봇을 초대 — 초대하지 않으면 `not_in_channel` 로 실패합니다
 
 `col_slack_id` 매핑이 없으면 이메일로 슬랙 사용자를 조회합니다
-(`users.lookupByEmail`). 채널 발송만 필요하면 Incoming Webhook 만으로도 됩니다.
+(`users.lookupByEmail`). 슬랙 계정 이메일이 구성원 명단의 이메일과 같아야 합니다.
+채널 발송만 필요하면 Incoming Webhook 만으로도 됩니다. 다만 Webhook 은 만들 때
+고른 채널로만 가므로 "기본 슬랙 채널" 값이 무시됩니다.
+
+#### 토큰을 어디에 두는가
+
+봇 토큰과 Webhook URL 은 **관리자 화면에서 넣거나 설정 파일에 적거나** 둘 다
+됩니다. 읽는 순서는
+
+```
+bc_setting (관리자 화면에서 넣은 값)  →  config.php 의 notify.slack.*
+```
+
+화면에서 넣은 값은 AES-256-GCM 으로 암호화해서 `bc_setting` 에 넣습니다. 한 번
+저장하면 원문은 어느 응답에도 실어 보내지 않고, 설정 여부와 가린 표기
+(`xoxb-••••1a2b`)만 돌려줍니다. 입력칸을 비워 두고 저장하면 **기존 값이 그대로**
+남고, 지울 때는 옆의 "지우기" 를 누릅니다. 설정 파일에서 온 값은 화면에서 지울 수
+없고 "설정 파일에 있음" 으로만 표시됩니다.
+
+암호화 키는 이 순서로 찾습니다(`includes/secret.php`).
+
+| 순서 | 어디 | 비고 |
+|---|---|---|
+| 1 | `config.php` 의 `app.secret_key` | base64 32바이트. 직접 정하고 싶을 때 |
+| 2 | 포털 `config.php` 의 `key` | 포털 모듈로 동작할 때. 포털 슬랙 토큰과 같은 키 |
+| 3 | `config/secret.local.php` | 없으면 최초 1회 자동 생성(포털과 같은 방식) |
+
+서버를 옮길 때 이 키가 따라가지 않으면 저장해 둔 토큰이 풀리지 않습니다. 그때는
+화면에서 다시 입력하면 됩니다(오류로 죽지 않고 "미설정" 으로 보입니다).
+
+`notify.enabled` 는 설정 파일에만 있습니다. 이 값이 `false` 면 토큰이 있어도
+아무것도 나가지 않습니다.
 
 ### 5.4 실패 처리
 

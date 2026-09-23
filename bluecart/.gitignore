@@ -1,5 +1,7 @@
 # 실제 접속 정보 — 절대 커밋하지 않는다
 config/config.php
+# 비밀값 암호화 키. 최초 실행 때 자동 생성된다.
+config/secret.local.php
 .env
 
 # 런타임
