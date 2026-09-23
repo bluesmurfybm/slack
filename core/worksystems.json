@@ -1,10 +1,18 @@
 [
-  { "key": "book", "emoji": "📚", "label": "BlueBooks", "path": "book" },
-  { "key": "slack", "emoji": "📥", "label": "Coursemos WorkHub", "path": "slack/lists.php" },
-  { "key": "slackai", "emoji": "🤖", "label": "WorkHub AI (test)", "path": "slackai/lists.php" },
-  { "key": "dti", "emoji": "📰", "label": "DTI 발표", "path": "dti/index.php" },
-  { "key": "learn", "emoji": "🎓", "label": "BlueLearn", "path": "learn/index.php" },
-  { "key": "access", "emoji": "🔑", "label": "Coursemos EnvHub", "path": "access/access.php" },
-  { "key": "moodle", "emoji": "🧭", "label": "MoodleUp?", "path": "moodle/" },
-  { "key": "bluecart", "emoji": "🛒", "label": "BlueCart", "path": "bluecart/index.php" }
+  { "key": "book", "emoji": "📚", "label": "BlueBooks", "path": "book",
+    "desc": "읽고 싶은 책을 신청하고 처리 현황을 확인합니다.", "color": "#2E6BF0" },
+  { "key": "slack", "emoji": "📥", "label": "Coursemos WorkHub", "path": "slack/lists.php",
+    "desc": "유지보수 요청 현황을 확인하고 관리합니다.", "color": "#1F9D76" },
+  { "key": "slackai", "emoji": "🤖", "label": "WorkHub AI (test)", "path": "slackai/lists.php",
+    "desc": "WorkHub 에 AI 처리를 얹은 시험판입니다.", "color": "#5A667F" },
+  { "key": "dti", "emoji": "📰", "label": "DTI 발표", "path": "dti/index.php",
+    "desc": "매거진을 읽고 지식을 공유합니다.", "color": "#7B5CF0" },
+  { "key": "learn", "emoji": "🎓", "label": "BlueLearn", "path": "learn/index.php",
+    "desc": "역량 강화를 위한 강의를 신청하고 수강료를 지원받습니다.", "color": "#F2711C" },
+  { "key": "access", "emoji": "🔑", "label": "Coursemos EnvHub", "path": "access/access.php",
+    "desc": "대학별 svn·git, 계정, DB, plink 정보를 찾아 복사합니다.", "color": "#0F7B8A" },
+  { "key": "moodle", "emoji": "🧭", "label": "MoodleUp?", "path": "moodle/",
+    "desc": "무들 PAG·트래커·릴리스 변화를 매주 모아 코스모스 관점으로 요약합니다.", "color": "#D6336C" },
+  { "key": "bluecart", "emoji": "🛒", "label": "BlueCart", "path": "bluecart/index.php",
+    "desc": "필요한 물품을 요청하고 구비까지 진행 상황을 확인합니다.", "color": "#4C57C9" }
 ]
