@@ -120,6 +120,15 @@ const BC_EVENT = [
  * ':books: *새 도서 신청*' 꼴이라 모양을 맞췄다. 한 줄만 보고도 어느
  * 시스템의 어떤 단계인지 가려내려는 것이다.
  */
+/**
+ * 슬랙 메시지 제목 앞에 붙는 꼬리표.
+ *
+ * #blue_inbox 한 채널에 여러 시스템의 알림이 모인다. '검토 승인' 같은 제목은
+ * 그 자체로는 어느 시스템 것인지 알 수 없어, 본문까지 읽어야 가려낼 수 있었다.
+ * 제목 줄에서 끝나게 한다. 비우면 붙지 않는다.
+ */
+const BC_SLACK_LABEL = 'BlueCart';
+
 const BC_EVENT_EMOJI = [
     'REQUEST_CREATED'     => ':shopping_trolley:',
     'REQUEST_UPDATED'     => ':pencil2:',

@@ -36,11 +36,16 @@ final class SlackChannel
             return;
         }
 
+        // 알림 배너와 목록 미리보기는 blocks 가 아니라 text 를 읽는다. 둘을 같게
+        // 맞춰야 배너에도 꼬리표가 붙는다 — 어느 시스템인지는 거기서 먼저 보인다.
+        $blocks   = self::blocks($text, $emoji);
+        $fallback = $blocks[0]['text']['text'];
+
         if (self::botToken() !== '') {
             self::api('chat.postMessage', [
                 'channel' => $channel,
-                'text'    => $text,
-                'blocks'  => json_encode(self::blocks($text, $emoji), JSON_UNESCAPED_UNICODE),
+                'text'    => $fallback,
+                'blocks'  => json_encode($blocks, JSON_UNESCAPED_UNICODE),
             ]);
             return;
         }
@@ -52,7 +57,7 @@ final class SlackChannel
         if (str_starts_with($channel, 'U')) {
             throw new RuntimeException('개인 DM 은 봇 토큰이 필요합니다. Webhook 으로는 보낼 수 없습니다.');
         }
-        self::httpPostJson($webhook, ['text' => $text, 'blocks' => self::blocks($text, $emoji)]);
+        self::httpPostJson($webhook, ['text' => $fallback, 'blocks' => $blocks]);
     }
 
     /** 이메일로 슬랙 사용자 ID 조회. 실패하면 null. */
@@ -89,7 +94,10 @@ final class SlackChannel
         $lines = explode("\n", $text);
         $title = array_shift($lines) ?: 'BlueCart';
 
-        $out = [($emoji !== '' ? $emoji . ' ' : '') . '*' . $title . '*'];
+        // 꼬리표는 제목 안(굵게)에 넣는다. 밖에 두면 굵기가 끊겨 두 줄처럼 읽힌다.
+        $label = defined('BC_SLACK_LABEL') && BC_SLACK_LABEL !== '' ? '[' . BC_SLACK_LABEL . '] ' : '';
+
+        $out = [($emoji !== '' ? $emoji . ' ' : '') . '*' . $label . $title . '*'];
         foreach ($lines as $line) {
             // '항목: 값' 꼴만 목록으로 만든다. 안내 문장과 링크는 그대로 둔다.
             $out[] = preg_match('/^[^:\n]{1,24}: /u', $line) ? '• ' . $line : $line;
