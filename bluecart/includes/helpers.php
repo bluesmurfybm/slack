@@ -5,6 +5,19 @@ declare(strict_types=1);
 // 출력
 // ---------------------------------------------------------------------
 
+/**
+ * 정적 파일 주소에 붙일 판 번호.
+ *
+ * 예전에는 ?v=4 처럼 손으로 적어 뒀는데, 모듈을 처음 넣을 때 박아 둔 뒤로
+ * 한 번도 올리지 않아 CSS·JS 를 고쳐도 브라우저가 옛 파일을 계속 썼다.
+ * 파일 수정시각을 쓰면 고칠 때마다 저절로 바뀌므로 잊을 일이 없다.
+ */
+function bc_asset_v(string $rel): string
+{
+    $t = @filemtime(BC_ROOT . '/' . ltrim($rel, '/'));
+    return (string)($t ?: 0);
+}
+
 function h(?string $s): string
 {
     return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

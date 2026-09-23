@@ -119,110 +119,46 @@ body { margin: 0; background: #EEF3FB; }
   box-shadow: 0 1px 2px rgba(16, 35, 90, .12);
 }
 
-/* ---- 파이프라인 집계 ------------------------------------------------
-   네 단계는 순서가 있는 흐름이므로 상자를 따로 놓지 않고 한 장의 레일로
-   잇는다. 칸 사이에는 꺾쇠를 두어 어느 쪽으로 흘러가는지 형태로 알린다.
+/* ---- 상태 탭 --------------------------------------------------------
+   상태 축은 이 탭 줄이 전담한다. 고르는 자리가 하나뿐이라야 선택 표시가
+   서로 어긋나지 않는다. 건수를 라벨 옆에 달아, 숫자와 그 숫자를 쓰는
+   컨트롤이 떨어져 있지 않게 했다.
+   관리자의 '관리 기능' 탭은 .bc-subtabs 라 여기 영향을 받지 않는다.
    ------------------------------------------------------------------- */
-.bc-pipe {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr) minmax(178px, .82fr);
-  align-items: stretch;
-  gap: 0;
-  margin-bottom: 22px;
-  background: var(--paper);
-  border: 1px solid var(--line); border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
+.bc-statabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.bc-statabs button {
+  appearance: none; font: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 13px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--paper);
+  color: var(--ink-soft); font-size: 13.5px;
+  transition: background .14s ease, color .14s ease, border-color .14s ease;
 }
-/* 네 칸은 누르면 그 단계만 걸러 주는 버튼이다. 레일의 한 구간이므로
-   테두리와 그림자를 걷어내고, 눌린 상태는 색면과 아래쪽 띠로 알린다.
-   칸 안의 차례는 라벨 → 숫자. 오른쪽 요약 칸과 기준선을 맞추기 위함이다. */
-.bc-pipe__cell {
-  position: relative; overflow: visible;
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 14px 18px 15px;
-  border: 0; border-radius: 0;
-  background: none; text-align: left; font: inherit;
-  box-shadow: none;
-  cursor: pointer;
-  transition: background .14s ease;
-}
-.bc-pipe__cell + .bc-pipe__cell { border-left: 1px solid var(--line); }
-.bc-pipe__cell:hover { background: #f7f9fe; }
-/* 레일이 바깥을 잘라내므로 포커스 링을 칸 안쪽으로 들여 그린다. */
-.bc-pipe__cell:focus-visible { outline-offset: -3px; border-radius: 0; }
-
-/* 단계 사이 꺾쇠. 흐름은 구비 완료에서 끝나므로 넷째 칸에는 두지 않는다. */
-.bc-pipe__cell::after {
-  content: ""; position: absolute; right: -6px; top: 50%; z-index: 2;
-  width: 10px; height: 10px; margin-top: -5px;
-  background: var(--paper); transform: rotate(45deg);
-  border-top: 1px solid var(--line); border-right: 1px solid var(--line);
-}
-.bc-pipe__cell:nth-child(4)::after { display: none; }
-.bc-pipe__cell:hover::after { background: #f7f9fe; }
-
-/* 고른 단계 표시용 아래쪽 띠. 평소에는 비워 둔다. */
-.bc-pipe__cell::before {
-  content: ""; position: absolute; inset: auto auto 0 0;
-  width: 100%; height: 3px;
-  background: transparent;
-}
-.bc-pipe__cell[aria-pressed="true"] {
-  background: var(--tone-soft, var(--surface));
-  box-shadow: none;
-}
-.bc-pipe__cell[aria-pressed="true"]::before { background: var(--tone, var(--brand)); }
-
-.bc-pipe__n {
-  order: 2;
-  display: block; font-size: 28px; font-weight: 700; line-height: 1.1;
-  color: var(--tone, var(--ink)); font-variant-numeric: tabular-nums;
-  letter-spacing: -.02em;
-}
-/* 요약 칸에만 있던 단위를 단계 칸에도 붙여 다섯 칸의 어휘를 맞춘다. */
-.bc-pipe__n::after {
-  content: "건"; margin-left: 3px;
-  font-size: 12px; font-weight: 500; color: var(--ink-soft); letter-spacing: 0;
-}
-.bc-pipe__l {
-  order: 1;
-  display: block; margin-top: 0;
-  font-size: 12.5px; font-weight: 600; color: var(--ink-soft);
-}
-.bc-pipe__l::before {
-  content: ""; display: inline-block;
+/* 단계 색은 점이 맡는다. 알약 여섯 개가 다 물들면 시끄럽다. */
+.bc-statabs button::before {
+  content: ""; flex: 0 0 6px;
   width: 6px; height: 6px; border-radius: 50%;
-  margin-right: 6px; vertical-align: 1px;
   background: var(--tone, var(--off));
 }
-/* 네 단계를 합친 요약. 같은 레일 끝에 붙되 세로줄로 잘라 내고 배경을 깔아
-   '누르는 칸이 아니다' 를 드러낸다. 점선은 쓰지 않는다. */
-.bc-pipe__aside {
-  display: flex; flex-direction: column; justify-content: flex-start;
-  gap: 4px; padding: 14px 18px 15px;
-  border: 0; border-left: 1px solid var(--line); border-radius: 0;
-  background: var(--surface);
-  white-space: nowrap;
+.bc-statabs button i {
+  font-style: normal; font-variant-numeric: tabular-nums;
+  font-size: 12px; font-weight: 600;
+  padding: 1px 7px; border-radius: 999px;
+  background: var(--tone-soft, var(--surface)); color: var(--tone, var(--ink-soft));
 }
-.bc-sum__k { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
-.bc-sum__n {
-  font-size: 28px; font-weight: 700; line-height: 1.1; color: var(--ink);
-  font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+.bc-statabs button:hover { border-color: #cdd9f0; color: var(--ink); }
+/* 고른 탭은 그 단계 색으로 채운다. hover 뒤에 둬야 덮이지 않는다. */
+.bc-statabs button[aria-selected="true"] {
+  background: var(--tone, var(--ink)); border-color: var(--tone, var(--ink));
+  color: #fff; font-weight: 600;
 }
-.bc-sum__n em {
-  font-style: normal; font-size: 12.5px; font-weight: 500;
-  color: var(--ink-soft); margin-left: 3px;
-}
-/* 반려·철회는 본 흐름에서 빠진 것들이라 작은 알약으로 따로 묶는다 */
-.bc-sum__x { display: flex; gap: 5px; margin-top: 5px; }
-.bc-sum__x i {
-  font-style: normal; font-size: 11.5px; font-weight: 500;
-  color: var(--tone, var(--ink-soft));
-  background: var(--tone-soft, var(--paper));
-  border-radius: 999px; padding: 2px 8px;
-}
-.bc-sum__x b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.bc-statabs button[aria-selected="true"]::before { background: rgba(255, 255, 255, .85); }
+.bc-statabs button[aria-selected="true"] i { background: rgba(255, 255, 255, .22); color: #fff; }
+/* 0건은 흐려지되 누르는 것은 막지 않는다 — 막아 두면 왜 안 눌리는지
+   설명할 자리가 없다. 누르면 '조건에 맞는 요청이 없습니다' 가 뜬다. */
+.bc-statabs button.is-zero { opacity: .55; }
+.bc-statabs button.is-zero i { background: var(--surface); color: var(--ink-soft); }
+.bc-statabs button.is-zero[aria-selected="true"] { opacity: 1; }
 
 /* --tone 은 글자/테두리용, --tone-soft 는 배경용 */
 .bc-tone-wait  { --tone: var(--wait);  --tone-soft: #fbf4e4; }
@@ -231,6 +167,8 @@ body { margin: 0; background: #EEF3FB; }
 .bc-tone-done  { --tone: var(--done);  --tone-soft: #e6f4ee; }
 .bc-tone-stop  { --tone: var(--stop);  --tone-soft: #faecec; }
 .bc-tone-off   { --tone: var(--off);   --tone-soft: #edf0f6; }
+/* '전체' 는 단계가 아니다. 본문 잉크색을 써 흐름 색과 구분한다. */
+.bc-tone-all   { --tone: var(--ink);   --tone-soft: var(--surface); }
 
 /* ---- 필터 -----------------------------------------------------------
    왼쪽 항목은 라벨 + 입력창 두 층, 오른쪽 도구는 한 층뿐이다. 가운데로
@@ -249,17 +187,15 @@ body { margin: 0; background: #EEF3FB; }
   background: var(--line);
 }
 
-/* 조건을 고르는 층과 결과를 보는 층을 갈라 놓는다. 구성원 화면은 .bc-listbar 가,
-   관리자 화면은 .bc-subtabs 가 뒤에 온다. 상단 '새 구매 요청' 줄과 카테고리
-   입력줄은 뒤에 오는 것이 달라 영향을 받지 않는다. */
-.bc-filters + .bc-listbar,
-.bc-filters + .bc-subtabs { margin-top: 26px; }
+/* 조건을 고르는 층과 결과를 보는 층을 갈라 놓는다. 상단 '새 구매 요청' 줄과
+   관리자 카테고리 입력줄은 뒤에 오는 것이 달라 영향을 받지 않는다. */
+.bc-filters + .bc-listbar { margin-top: 26px; }
 
 .bc-field { display: inline-flex; flex-direction: column; gap: 3px; }
-.bc-field > span { font-size: 12px; color: var(--ink-soft); }
+.bc-field > span, .bc-field > label { font-size: 12px; color: var(--ink-soft); }
 
 .bc input[type="text"], .bc input[type="number"], .bc input[type="date"],
-.bc input[type="search"], .bc select, .bc textarea {
+.bc input[type="search"], .bc input[type="password"], .bc select, .bc textarea {
   font: inherit; color: var(--ink);
   background: #FBFCFF;
   border: 1px solid var(--line); border-radius: 8px;
@@ -267,7 +203,7 @@ body { margin: 0; background: #EEF3FB; }
 }
 /* 한 줄에 서는 것들만 공용 높이로 묶는다. textarea 는 여러 줄이라 제외. */
 .bc input[type="text"], .bc input[type="number"], .bc input[type="date"],
-.bc input[type="search"], .bc select {
+.bc input[type="search"], .bc input[type="password"], .bc select {
   height: var(--ctl-h); padding-block: 0;
 }
 .bc input:focus, .bc select:focus, .bc textarea:focus {
@@ -554,10 +490,22 @@ body { margin: 0; background: #EEF3FB; }
 .bc-picker .bc-picker__id { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
 
 /* ---- 알림 매트릭스 -------------------------------------------------- */
+/* ---- 알림 - 슬랙 연결 정보 ------------------------------------------
+   채널 이름과 비밀값(봇 토큰·Webhook)을 한 줄에 늘어놓는다. 좁은 화면에서는
+   접혀 내려간다. 비밀값은 저장하면 다시 못 보므로, 지금 설정돼 있는지와
+   어디서 온 값인지를 라벨 옆에 적어 준다. */
+.bc-conn { display: flex; flex-wrap: wrap; gap: 12px 18px; margin-bottom: 12px; }
+.bc-conn__row { display: inline-flex; align-items: center; gap: 6px; }
+.bc-conn__state { font-style: normal; color: var(--ink-soft); }
+.bc-conn__state--on { color: var(--done); }
+
 .bc-matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
 .bc-matrix th, .bc-matrix td { border: 1px solid var(--line); padding: 8px 10px; text-align: center; }
 .bc-matrix th { background: var(--surface); font-weight: 600; }
-.bc-matrix td:first-child, .bc-matrix th:first-child { text-align: left; }
+/* 처리 단계 칸만 왼쪽 정렬이다. 자리(:first-child)로 잡으면 안 된다 — 한 단계에
+   알림 대상이 둘 이상이면 그 단계 칸이 rowspan 으로 묶여 둘째 줄부터는 없고,
+   알림 대상 칸이 첫 칸이 되어 혼자 왼쪽으로 붙는다. 클래스로 잡는다. */
+.bc-matrix th:first-child, .bc-matrix .bc-matrix__ev { text-align: left; }
 .bc-matrix .bc-matrix__ev { font-weight: 600; background: #fbfcfd; }
 
 /* ---- 토스트 --------------------------------------------------------- */
@@ -579,12 +527,8 @@ body { margin: 0; background: #EEF3FB; }
 
 @media (max-width: 760px) {
   .bc-modal__box, .bc-modal__box--narrow { width: 100vw; border-left: 0; }
-  /* 레일을 두 칸씩 접는다. 줄이 바뀌면 꺾쇠는 흐름을 잘못 가리키므로 감춘다. */
-  .bc-pipe { grid-template-columns: repeat(2, 1fr); }
-  .bc-pipe__cell::after { display: none; }
-  .bc-pipe__cell:nth-child(odd) { border-left: 0; }
-  .bc-pipe__cell:nth-child(n+3) { border-top: 1px solid var(--line); }
-  .bc-pipe__aside { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+  /* 탭 여섯 개는 좁은 화면에서 두세 줄로 접힌다. 줄바꿈 간격을 조금 준다. */
+  .bc-statabs { row-gap: 8px; }
   .bc-filters .bc-spacer { display: none; }
   .bc-site__in { flex-direction: column; }
   .bc-site__aside { padding-top: 0; }

@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import Any
 from uuid import uuid4
 
 from blue_chatbot.messages import Role
@@ -13,6 +14,7 @@ from blue_chatbot.services import ask
 from blue_chatbot.services.faq import FaqEntry
 from blue_chatbot.services.llm import LLMClient
 from blue_chatbot.support import utc_now
+from blue_chatbot.tools.base import Tool
 
 
 class ConversationNotFoundError(Exception):
@@ -30,6 +32,7 @@ class ConversationService:
         message_repository: ConversationMessageRepository,
         llm_client: LLMClient,
         faqs: list[FaqEntry],
+        tools: list[Tool[Any]],
         expires_after: timedelta,
         now: Callable[[], datetime] = utc_now,
     ) -> None:
@@ -37,6 +40,7 @@ class ConversationService:
         self._messages = message_repository
         self._llm_client = llm_client
         self._faqs = faqs
+        self._tools = tools
         self._expires_after = expires_after
         self._now = now
 
@@ -50,7 +54,7 @@ class ConversationService:
         return loaded
 
     def send_message(self, key: str, content: str) -> ask.LLMAnswer:
-        """메시지를 대화에 추가하고 FAQ를 근거로 답한다. 질문과 답을 모두 저장한다."""
+        """메시지를 대화에 추가하고 답한다. 질문과 답을 모두 저장한다."""
         loaded = self._load(key)
         if loaded is None:
             raise ConversationNotFoundError(key)
@@ -60,7 +64,7 @@ class ConversationService:
 
         question = self._message(conversation, "user", content)
         self._messages.save(question)
-        answer = ask.answer(self._llm_client, self._faqs, [*stored, question])
+        answer = ask.answer(self._llm_client, self._faqs, self._tools, [*stored, question])
         self._messages.save(self._message(conversation, "assistant", answer.content))
         return answer
 
@@ -84,4 +88,3 @@ class ConversationService:
         """대화가 만료되었는지 확인"""
         last_activity = stored[-1].created_at if stored else conversation.created_at
         return last_activity < self._now() - self._expires_after
-

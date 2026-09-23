@@ -10,7 +10,9 @@ class Conversation(BaseSQLModel, table=True):
     key: str = Field(
         max_length=36,
         unique=True,
-        sa_column_kwargs={"comment": "conversation 조회용 유니크 값, id 추론을 방지하기 위해 식별자로 사용"},
+        sa_column_kwargs={
+            "comment": "conversation 조회용 유니크 값, id 추론을 방지하기 위해 식별자로 사용"
+        },
     )
 
 

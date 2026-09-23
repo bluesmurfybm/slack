@@ -18,6 +18,53 @@ final class Setting
         );
     }
 
+    public static function forget(string $key): void
+    {
+        bc_query('DELETE FROM bc_setting WHERE k = ?', [$key]);
+        unset(self::$secretCache[$key]);
+    }
+
+    // -----------------------------------------------------------------
+    // 비밀값 (슬랙 봇 토큰 등)
+    //
+    // 암호화해서 같은 bc_setting 에 넣는다. 읽기는 한 요청 안에서 여러 번
+    // 일어나므로(발송 대상마다 토큰을 본다) 캐시해 둔다.
+    // -----------------------------------------------------------------
+
+    /** @var array<string,string> */
+    private static array $secretCache = [];
+
+    /** 복호화한 원문. 값이 없거나 키가 맞지 않으면 ''. */
+    public static function secret(string $key): string
+    {
+        if (isset(self::$secretCache[$key])) {
+            return self::$secretCache[$key];
+        }
+        $enc = (string)self::get($key, '');
+        if ($enc === '') {
+            return self::$secretCache[$key] = '';
+        }
+        try {
+            return self::$secretCache[$key] = bc_decrypt($enc);
+        } catch (Throwable $e) {
+            // 키를 못 찾는 상황이라도 알림 발송만 조용히 건너뛰게 한다.
+            error_log('[BlueCart] secret decrypt failed (' . $key . '): ' . $e->getMessage());
+            return self::$secretCache[$key] = '';
+        }
+    }
+
+    /** 빈 값이나 null 이면 저장된 값을 지운다. */
+    public static function setSecret(string $key, ?string $value, ?string $actorId = null): void
+    {
+        $value = $value === null ? '' : trim($value);
+        if ($value === '') {
+            self::forget($key);
+            return;
+        }
+        self::set($key, bc_encrypt($value), $actorId);
+        self::$secretCache[$key] = $value;
+    }
+
     /**
      * 알림 설정 매트릭스 전체.
      * @return array<string,array<string,array<string,bool>>> [event][role][channel] = enabled

@@ -7,10 +7,28 @@ declare(strict_types=1);
  * 개인 DM 은 Bot Token 이 있어야 합니다 (chat:write, users:read, users:read.email).
  * 채널 발송만 쓸 경우에는 Incoming Webhook 만으로도 동작합니다.
  * Bot Token 이 있으면 항상 Web API 를 우선 사용합니다.
+ *
+ * 토큰과 Webhook URL 은 관리자 화면(알림 설정)에서 넣은 값을 먼저 보고,
+ * 없으면 config.php 의 notify.slack 값을 씁니다. 화면에서 넣은 값은
+ * 암호화해서 bc_setting 에 들어갑니다.
  */
 final class SlackChannel
 {
     private const API = 'https://slack.com/api/';
+
+    /** 봇 토큰 — 관리자 화면 저장값이 먼저, 없으면 설정 파일. */
+    public static function botToken(): string
+    {
+        $v = Setting::secret('slack_bot_token');
+        return $v !== '' ? $v : trim((string)bc_config('notify.slack.bot_token', ''));
+    }
+
+    /** Incoming Webhook URL — 관리자 화면 저장값이 먼저, 없으면 설정 파일. */
+    public static function webhookUrl(): string
+    {
+        $v = Setting::secret('slack_webhook_url');
+        return $v !== '' ? $v : trim((string)bc_config('notify.slack.webhook_url', ''));
+    }
 
     public static function postMessage(string $channel, string $text): void
     {
@@ -18,8 +36,7 @@ final class SlackChannel
             return;
         }
 
-        $token = (string)bc_config('notify.slack.bot_token', '');
-        if ($token !== '') {
+        if (self::botToken() !== '') {
             self::api('chat.postMessage', [
                 'channel' => $channel,
                 'text'    => $text,
@@ -28,7 +45,7 @@ final class SlackChannel
             return;
         }
 
-        $webhook = (string)bc_config('notify.slack.webhook_url', '');
+        $webhook = self::webhookUrl();
         if ($webhook === '') {
             throw new RuntimeException('슬랙 봇 토큰 또는 Webhook URL 이 설정되어 있지 않습니다.');
         }
@@ -45,7 +62,7 @@ final class SlackChannel
         if (array_key_exists($email, $cache)) {
             return $cache[$email];
         }
-        if ((string)bc_config('notify.slack.bot_token', '') === '') {
+        if (self::botToken() === '') {
             return $cache[$email] = null;
         }
         try {
@@ -79,7 +96,7 @@ final class SlackChannel
 
     private static function api(string $method, array $params): array
     {
-        $token = (string)bc_config('notify.slack.bot_token', '');
+        $token = self::botToken();
         $ch = curl_init(self::API . $method);
         curl_setopt_array($ch, [
             CURLOPT_POST           => true,

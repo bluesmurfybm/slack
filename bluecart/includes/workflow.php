@@ -39,6 +39,68 @@ const BC_STATUS = [
     'CANCELED'   => ['label' => '철회',      'tone' => 'off'],
 ];
 
+/**
+ * 목록 위 상태 탭. 상태 축은 이 탭이 전담한다 — 고르는 자리가 하나뿐이라야
+ * 선택 표시가 서로 어긋나지 않는다.
+ *
+ *   all  조건 없음(그 모집단 전체)   OUT  반려 + 철회
+ */
+const BC_STATUS_TABS = ['all', 'REQUESTED', 'APPROVED', 'PURCHASING', 'STOCKED', 'OUT'];
+
+/** 상태 탭 → 상태 코드. 화면·엑셀·집계가 이 한 곳을 본다. */
+function bc_tab_status(string $tab): array
+{
+    if ($tab === 'OUT') {
+        return ['REJECTED', 'CANCELED'];
+    }
+    if (in_array($tab, ['REQUESTED', 'APPROVED', 'PURCHASING', 'STOCKED'], true)) {
+        return [$tab];
+    }
+    return [];      // all — 조건 없음
+}
+
+/**
+ * 관리자 화면의 사람 축(담당) → 조회 범위.
+ *
+ * 상태 축과 겹치지 않게 따로 받는다. 다만 '내가 처리할 건' 은 정의상
+ * 역할별 단계를 함께 정하므로 그 제한을 status_in 으로 돌려준다.
+ * 이 제한은 목록뿐 아니라 집계에도 걸어서, 해당 없는 단계가 탭에서
+ * 저절로 0건이 되게 한다 — 탭을 여러 개 동시에 켜지 않아도 된다.
+ *
+ * @return array{assignee_id:?string, include_unassigned:bool, status_in:?array}
+ */
+function bc_assign_scope(string $assign, string $userId, array $roles): array
+{
+    $out = ['assignee_id' => null, 'include_unassigned' => false, 'status_in' => null];
+
+    if ($assign === 'assigned') {          // 내가 맡은 건
+        $out['assignee_id'] = $userId;
+        return $out;
+    }
+    if ($assign !== 'todo') {              // 전체
+        return $out;
+    }
+
+    $stages = [];
+    if (array_intersect($roles, ['REVIEWER', 'ADMIN'])) {
+        $stages[] = 'REQUESTED';
+    }
+    if (array_intersect($roles, ['BUYER', 'ADMIN'])) {
+        $stages[] = 'APPROVED';
+        $stages[] = 'PURCHASING';
+        // 구매담당자에게는 내가 맡은 건과 아직 아무도 안 맡은 건만 보여준다.
+        // 관리자는 전부 본다.
+        if (!in_array('ADMIN', $roles, true)) {
+            $out['assignee_id']        = $userId;
+            $out['include_unassigned'] = true;
+        }
+    }
+    // 역할이 없으면 처리할 것도 없다. 빈 배열은 '조건 없음' 이라 전체가 나오므로
+    // 어떤 상태와도 맞지 않는 값을 넣어 0건이 되게 한다.
+    $out['status_in'] = $stages ?: ['__NONE__'];
+    return $out;
+}
+
 const BC_EVENT = [
     'REQUEST_CREATED'     => '구매 요청 등록',
     'REQUEST_UPDATED'     => '요청 내용 수정',

@@ -44,6 +44,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         $fields[] = 'bg_pref=?';
         $vals[]   = $pref;
     }
+    // 업무 시스템 카드 순서. 카드를 끌어 놓을 때마다 key 배열만 따로 보낸다.
+    // 빈 배열이면 '기본 순서로' 를 누른 것 — 비워서 제목순으로 되돌린다.
+    if (isset($body['tile_order']) && is_array($body['tile_order'])) {
+        require_once __DIR__ . '/../core/board.php';
+        require_once __DIR__ . '/../core/worksystems.php';
+        $order = board_clean_tile_order($body['tile_order'], work_systems());
+        $fields[] = 'tile_order=?';
+        $vals[]   = $order ? implode(',', $order) : null;
+    }
     if (!empty($body['color'])) {
         $color = trim((string)$body['color']);
         if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {

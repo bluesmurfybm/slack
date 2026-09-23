@@ -90,17 +90,22 @@ if ($type === 'stats') {
 // ---------------------------------------------------------------------
 // 목록
 // ---------------------------------------------------------------------
-$status = bc_param('status', []);
-$status = is_array($status) ? $status : array_filter(explode(',', (string)$status));
+// 화면과 같은 표를 본다 — 상태 탭과 담당은 workflow.php 한 곳에서 푼다.
+$tab = bc_param_str('tab', 'all');
+if (!in_array($tab, BC_STATUS_TABS, true)) {
+    $tab = 'all';
+}
+$assign  = bc_param_str('assign', 'all');
+$scopeOf = bc_assign_scope($assign, (string)$user['id'], bc_my_roles());
 
-$tab = bc_param_str('tab', '');
-if (!$status) {
-    $status = match ($tab) {
-        'progress' => ['REQUESTED', 'APPROVED', 'PURCHASING'],
-        'stocked'  => ['STOCKED'],
-        'rejected' => ['REJECTED', 'CANCELED'],
-        default    => [],
-    };
+$status = bc_tab_status($tab);
+if ($scopeOf['status_in'] !== null) {
+    $status = $status
+        ? array_values(array_intersect($status, $scopeOf['status_in']))
+        : $scopeOf['status_in'];
+    if (!$status) {
+        $status = ['__NONE__'];
+    }
 }
 
 $filter = [
@@ -110,12 +115,16 @@ $filter = [
     'keyword'     => bc_param_str('keyword'),
     'from'        => bc_param_str('from') ?: null,
     'to'          => bc_param_str('to') ?: null,
-    'sort'        => bc_param_str('sort', 'recent'),
+    'sort'        => bc_param_str('sort', 'status'),
     'page'        => 1,
     'size'        => 200,
 ];
 if (bc_param_str('mine') === '1') {
     $filter['requester_id'] = $user['id'];
+}
+if ($scopeOf['assignee_id'] !== null) {
+    $filter['assignee_id']        = $scopeOf['assignee_id'];
+    $filter['include_unassigned'] = $scopeOf['include_unassigned'];
 }
 
 // 엑셀은 화면 페이지와 달리 조건에 맞는 전체를 담는다.

@@ -364,6 +364,13 @@
   white-space:nowrap}
 .sec-hint{font-size:12.5px;color:var(--muted);white-space:nowrap}
 .sec::after{content:"";flex:1;height:1px;background:var(--line);margin-left:2px}
+/* 가는 선(::after)이 마지막 자식이라 그 뒤로 요소를 못 넣는다. order 로 넘긴다.
+   순서를 직접 정한 사람에게만 보이므로 평소에는 이 줄이 지금과 똑같다. */
+.sec-reset{order:1;flex:0 0 auto;appearance:none;cursor:pointer;
+  font:inherit;font-size:12px;color:var(--muted);
+  background:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+.sec-reset:hover{color:#1C5DE5;border-color:#CFE0FA;background:#EEF3FB}
+.sec-reset[hidden]{display:none}
 @media (max-width:560px){.sec-hint{display:none}}
 
 /* =====================================================================

@@ -43,6 +43,9 @@ function portal_db() {
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `color` VARCHAR(7) NULL COMMENT '고유색상(#rrggbb) — 아바타/뱃지 표시용' AFTER `slack_token_enc`");
     // 대시보드 배경을 날씨에 따라 바꿀지 말지. 사람마다 다르게 두고 계정에 남긴다.
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `bg_pref` VARCHAR(20) NULL COMMENT '대시보드 배경: weather|plain' AFTER `color`");
+    // 업무 시스템 카드 순서. 사람마다 중요한 시스템이 달라 직접 끌어 정한 순서를
+    // 계정에 남긴다. key 를 콤마로 이은 값이고, 비어 있으면 제목순으로 그린다.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `tile_order` VARCHAR(255) NULL COMMENT '업무 시스템 카드 순서(key 를 콤마로 이음). 비면 제목순' AFTER `bg_pref`");
 
     // -----------------------------------------------------------------
     // 알림판 — 공지 / 중요 일정 / 포털 관리자

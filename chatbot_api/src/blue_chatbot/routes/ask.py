@@ -28,6 +28,7 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     content: str
+    matched_source: str | None
     matched_id: str | None
 
 
@@ -35,7 +36,7 @@ class AskResponse(BaseModel):
 def post_ask(
     ask_request: AskRequest,
     response: Response,
-    conversation_key: Annotated[str | None, Cookie()] = None, # 쿠키에서 대화 키 가져옴
+    conversation_key: Annotated[str | None, Cookie()] = None,  # 쿠키에서 대화 키 가져옴
     service: ConversationService = Depends(get_conversation_service),
 ) -> AskResponse:
     if conversation_key is None:
@@ -76,4 +77,8 @@ def post_ask(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR) from exc
 
     set_conversation_cookie(response, conversation_key)
-    return AskResponse(content=answer.content, matched_id=answer.matched_id)
+    return AskResponse(
+        content=answer.content,
+        matched_source=answer.matched_source,
+        matched_id=answer.matched_id,
+    )
