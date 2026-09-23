@@ -1,0 +1,28 @@
+line-length = 120
+target-version = "py312"
+exclude = ["var", ".venv", "knowledge"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "PL", "RUF", "T20", "S", "N", "ARG"]
+ignore = [
+  "E261", # 인라인 주석은 한 칸 띄워 붙여 쓴다(저장소 규칙)
+  "S101", # pytest 는 assert 로 검증한다
+  "S603", "S607", # subprocess 인자는 우리가 정한 상수·설정값이다(shell=False)
+  "S608", # SQL 문자열 조립은 화이트리스트 컬럼/상수만 쓴다
+  "PLR0913", "PLR0917", "PLR0912", "PLR0915", "PLR0911", "PLR0914", # 잡 핸들러는 절차형이라 길다
+  "PLR2004", # 매직 넘버(rc 2, 캡 크기 등)
+  "PLW0603", # 모듈 전역 캐시
+  "RUF001", "RUF002", "RUF003", # 한국어 문장 부호(·, ～)
+  "RUF012", # 클래스 상수 리스트
+  "B008", "B904", "SIM108", "SIM102", "SIM105", "C901",
+  "RUF005", "PLC0415", # 지연 import 는 의도적(선택 의존성)
+  "S105", "S106",
+  "S310", # 웹훅 URL 은 설정값(https 만 허용)
+  "S110", # 종료·정리 경로의 try/except pass 는 의도적
+  "E501", # 줄 길이는 120 을 기준으로 보되 한국어 독스트링은 예외 # 토큰 접두어 문자열('xoxp-')은 마스킹 패턴이다
+]
+
+[lint.per-file-ignores]
+"run_worker.py" = ["T201"]
+"tests/*.py" = ["ARG", "PLR", "E501", "S", "N", "SIM", "RUF", "B"]
+"llm/prompts.py" = ["E501"]

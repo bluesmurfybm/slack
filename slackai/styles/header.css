@@ -1,0 +1,3 @@
+/* 전 모듈 공통 상단바 — 원본은 styles/topbar.css(포털 루트) 하나뿐.
+   slack/는 포털과 같은 서버 트리이므로 그 파일을 그대로 가져다 쓴다. */
+@import url('../../styles/topbar.css');

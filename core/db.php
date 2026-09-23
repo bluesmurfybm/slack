@@ -99,16 +99,6 @@ function portal_db() {
     add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `starts_on` DATE NULL COMMENT '노출 시작일. NULL 이면 등록 즉시' AFTER `is_important`");
     add_column_if_missing($pdo, "ALTER TABLE `portal_notice` ADD COLUMN `ends_on` DATE NULL COMMENT '노출 종료일. NULL 이면 내릴 때까지' AFTER `starts_on`");
 
-    /* 일정마다 폭죽을 쏠지 고른다. 예전에는 '경사 종류면 무조건' 이었는데,
-       공휴일이나 회식도 재미있게 알리고 싶다는 쪽으로 바뀌었다.
-       기본은 끔 — 등록하는 사람이 뜻을 갖고 켜야 터진다. */
-    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
-        ADD COLUMN `cheer_on` TINYINT(1) NOT NULL DEFAULT 0
-        COMMENT '그날 들어오면 축하 폭죽을 쏠지' AFTER `memo`");
-    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
-        ADD COLUMN `cheer_early` TINYINT(1) NOT NULL DEFAULT 1
-        COMMENT '주말·공휴일이면 그 앞 평일에 미리 쏠지' AFTER `cheer_on`");
-
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `portal_notice_file` (
             `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -152,6 +142,18 @@ function portal_db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='포털 첫 화면에 D-day 로 뜨는 중요 일정'
     ");
+
+    /* 일정마다 폭죽을 쏠지 고른다. 예전에는 '경사 종류면 무조건' 이었는데,
+       공휴일이나 회식도 재미있게 알리고 싶다는 쪽으로 바뀌었다.
+       기본은 끔 — 등록하는 사람이 뜻을 갖고 켜야 터진다.
+       (이 ALTER 는 위 CREATE TABLE portal_event 뒤에 있어야 한다. 앞에 있으면 테이블이 아직 없는
+        새 DB 에서 42S02 로 포털 전체가 죽는다 — 운영 DB 에는 테이블이 이미 있어 드러나지 않았던 버그.) */
+    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
+        ADD COLUMN `cheer_on` TINYINT(1) NOT NULL DEFAULT 0
+        COMMENT '그날 들어오면 축하 폭죽을 쏠지' AFTER `memo`");
+    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
+        ADD COLUMN `cheer_early` TINYINT(1) NOT NULL DEFAULT 1
+        COMMENT '주말·공휴일이면 그 앞 평일에 미리 쏠지' AFTER `cheer_on`");
 
     // 사내 인원 13명 + book 모듈에서 쓰던 개인별 고유색을 이어받되, 아바타처럼 큰 면적을 단색으로
     // 채우면 book의 원래 뱃지(연한 배경 위 작은 글자)보다 훨씬 쨍하게 보여서 채도를 낮추고

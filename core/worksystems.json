@@ -1,6 +1,7 @@
 [
   { "key": "book", "emoji": "📚", "label": "BlueBooks", "path": "book" },
   { "key": "slack", "emoji": "📥", "label": "Coursemos WorkHub", "path": "slack/lists.php" },
+  { "key": "slackai", "emoji": "🤖", "label": "WorkHub AI (test)", "path": "slackai/lists.php" },
   { "key": "dti", "emoji": "📰", "label": "DTI 발표", "path": "dti/index.php" },
   { "key": "learn", "emoji": "🎓", "label": "BlueLearn", "path": "learn/index.php" },
   { "key": "access", "emoji": "🔑", "label": "Coursemos EnvHub", "path": "access/access.php" },

@@ -1,0 +1,9 @@
+pymysql>=1.1
+pydantic>=2.7
+pydantic-settings>=2.3
+anthropic>=0.50
+slack_bolt>=1.21
+slack_sdk>=3.33
+openai>=1.50
+pytest>=8
+ruff>=0.6

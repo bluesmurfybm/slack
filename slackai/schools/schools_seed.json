@@ -1,0 +1,1773 @@
+[
+    {
+        "name": "IHO 해양조사원",
+        "ver": "2.9",
+        "dev": "http:\/\/iholms.moodler.kr\/",
+        "ops": "https:\/\/elearning.iho.int\/",
+        "active": 1
+    },
+    {
+        "name": "KETI 한국전자기술",
+        "ver": "2.9",
+        "dev": "http:\/\/smic.moodler.kr",
+        "ops": "https:\/\/lms.smic-academy.com",
+        "active": 1
+    },
+    {
+        "name": "가천대",
+        "ver": "2.9",
+        "dev": "http:\/\/gcucybercm3.moodler.kr\/",
+        "ops": "https:\/\/cyber.gachon.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "건국대",
+        "ver": "2.9",
+        "dev": "http:\/\/kkulmscm3.moodler.kr",
+        "ops": "https:\/\/tls.kku.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "경찰대",
+        "ver": "2.9",
+        "dev": "http:\/\/knpu.moodler.kr",
+        "ops": "https:\/\/lms.police.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "경찰대 치안대학원",
+        "ver": "2.9",
+        "dev": "http:\/\/172.20.10.206",
+        "ops": "https:\/\/glms.police.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "공주대 특수교육종합연수원\n(3.9 saas로 변경)",
+        "ver": "2.9",
+        "dev": "http:\/\/kjuseti.moodler.kr",
+        "ops": "https:\/\/lms.kongju.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "국제뇌교육종합대학원대",
+        "ver": "2.9",
+        "dev": "http:\/\/ubelms.moodler.kr",
+        "ops": "https:\/\/lms.ube.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "글로벌사이버대",
+        "ver": "2.9",
+        "dev": "http:\/\/gcyulms.moodler.kr",
+        "ops": "https:\/\/www.gcu.kr\/",
+        "active": 1
+    },
+    {
+        "name": "대림대 원격평생교육원",
+        "ver": "2.9",
+        "dev": "http:\/\/dledulms.moodler.kr\/",
+        "ops": "https:\/\/dlclms.daelim.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "명원문화재단",
+        "ver": "2.9",
+        "dev": "http:\/\/koreatea.moodler.kr\/login.php",
+        "ops": "http:\/\/www.koreateaacademy.com\/",
+        "active": 1
+    },
+    {
+        "name": "상명대",
+        "ver": "2.9",
+        "dev": "http:\/\/smulmscm3.moodler.kr",
+        "ops": "https:\/\/ecampus.smu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "서울대",
+        "ver": "2.9",
+        "dev": "http:\/\/snulmscm3.moodler.kr:8081\/",
+        "ops": "https:\/\/etl.snu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "서울대의대 교육연수원\n(의학교육연수원)",
+        "ver": "2.9",
+        "dev": "http:\/\/snunttc.moodler.kr",
+        "ops": "http:\/\/enttc.snu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "순천향대",
+        "ver": "2.9",
+        "dev": "http:\/\/schcyber.moodler.kr\/login.php",
+        "ops": "https:\/\/lms.sch.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "숭실대",
+        "ver": "2.9",
+        "dev": "https:\/\/lmstest.ssu.ac.kr\/login.php",
+        "ops": "https:\/\/myclass.ssu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "신한대",
+        "ver": "2.9",
+        "dev": "http:\/\/shulmscm3.moodler.kr\/login.php",
+        "ops": "https:\/\/cyber.shinhan.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "연세대 미래캠퍼스\n(원주)",
+        "ver": "2.9",
+        "dev": "http:\/\/yswlms.moodler.kr",
+        "ops": "http:\/\/ymooc.yonsei.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "우송정보대",
+        "ver": "2.9",
+        "dev": "http:\/\/wsilms.moodler.kr",
+        "ops": "https:\/\/lms.wsi.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "유네스코 GCED",
+        "ver": "2.9",
+        "dev": "http:\/\/unesco.moodler.kr\/",
+        "ops": "http:\/\/www.gcedonlinecampus.org\/",
+        "active": 1
+    },
+    {
+        "name": "이랜서 AI DATA\n(서비스 중지)",
+        "ver": "2.9",
+        "dev": "http:\/\/aidatalms.moodler.kr\/",
+        "ops": "http:\/\/lms.elancer.co.kr",
+        "active": 1
+    },
+    {
+        "name": "인덕대",
+        "ver": "2.9",
+        "dev": "http:\/\/idlmscm3.moodler.kr",
+        "ops": "https:\/\/lms.induk.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "인천대",
+        "ver": "2.9",
+        "dev": "http:\/\/inulmscm3.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "인천대 산학협력단\n트라이버시티\n\n(서비스 중지)",
+        "ver": "2.9",
+        "dev": "http:\/\/itilms.moodler.kr",
+        "ops": "https:\/\/itilms.inu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "인하대 산학협력단\n(스마트제조 에듀링크)",
+        "ver": "2.9",
+        "dev": "http:\/\/ihusanhak.moodler.kr",
+        "ops": "https:\/\/edu.techlink.or.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국관광대\n(학교에서 유지 보수 계약 안함)",
+        "ver": "2.9",
+        "dev": "http:\/\/ktclms.moodler.kr",
+        "ops": "https:\/\/stl.ktc.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "한국문화예술교육진흥원",
+        "ver": "2.9",
+        "dev": "http:\/\/artelms.moodler.kr\/",
+        "ops": "https:\/\/arte.coursemos.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국외대 다문화교육원\n(LG다문화학교)",
+        "ver": "2.9",
+        "dev": "http:\/\/hufslms.moodler.kr\/",
+        "ops": "https:\/\/lms.lgglobalschool.co.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국평생교육평가원",
+        "ver": "2.9",
+        "dev": "http:\/\/ikpelms.moodler.kr\/",
+        "ops": "https:\/\/lms.ikpe.or.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국학대학원",
+        "ver": "2.9",
+        "dev": "http:\/\/akslms.moodler.kr",
+        "ops": "https:\/\/aks.coursemos.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한복마름방\n(한국공예디자인문화진흥원)",
+        "ver": "2.9",
+        "dev": "http:\/\/hbclife.moodler.kr",
+        "ops": "http:\/\/lms.hanbokcenter.kr",
+        "active": 1
+    },
+    {
+        "name": "혜전대",
+        "ver": "2.9",
+        "dev": "http:\/\/hjlms.moodler.kr\/login.php",
+        "ops": "https:\/\/lms.hj.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "(강원대) 데이터보안활용 혁신융합대학",
+        "ver": "3.2",
+        "dev": "http:\/\/sduclms.moodler.kr",
+        "ops": "https:\/\/lms.sducoss.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "DSC 공유대학",
+        "ver": "3.2",
+        "dev": "http:\/\/dsculms.moodler.kr\/",
+        "ops": "https:\/\/ecampus.dscu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "KERIS 케리스 ( KNU9 )",
+        "ver": "3.2",
+        "dev": "http:\/\/keris.moodler.kr\/login.php",
+        "ops": "https:\/\/lms.knu9.or.kr",
+        "active": 1
+    },
+    {
+        "name": "KMOOC 참여기관연수",
+        "ver": "3.2",
+        "dev": "http:\/\/kmooctrain.moodler.kr",
+        "ops": "http:\/\/training.kmooc.kr",
+        "active": 1
+    },
+    {
+        "name": "가톨릭관동대",
+        "ver": "3.2",
+        "dev": "http:\/\/ckulms.moodler.kr\/login.php",
+        "ops": "https:\/\/tlms.cku.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "강남대",
+        "ver": "3.2",
+        "dev": "http:\/\/knamlms.moodler.kr",
+        "ops": "http:\/\/ecampus.kangnam.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "강릉영동대",
+        "ver": "3.2",
+        "dev": "http:\/\/gyulms.moodler.kr",
+        "ops": "https:\/\/lms.gyu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "강릉원주대",
+        "ver": "3.2",
+        "dev": "http:\/\/gwnulms.moodler.kr",
+        "ops": "https:\/\/nlms.gwnu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "강서대 ( 구 KC대 )",
+        "ver": "3.2",
+        "dev": "http:\/\/kculms.moodler.kr",
+        "ops": "https:\/\/eclass.kcu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "강원LRS 공유혁신",
+        "ver": "3.2",
+        "dev": "http:\/\/gwlrslms.moodler.kr",
+        "ops": "https:\/\/lms.gwlrs.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "강원네트워크캠퍼스",
+        "ver": "3.2",
+        "dev": "http:\/\/gwknclms.moodler.kr\/",
+        "ops": "https:\/\/lms.gwknc.kr\/",
+        "active": 1
+    },
+    {
+        "name": "강원대",
+        "ver": "3.2",
+        "dev": "http:\/\/knulms.moodler.kr",
+        "ops": "https:\/\/pasteruri.kangwon.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "강원도립대",
+        "ver": "3.2",
+        "dev": "http:\/\/gwreg.moodler.kr",
+        "ops": "http:\/\/gsulms.gw.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "건강보험심사평가원",
+        "ver": "3.2",
+        "dev": "http:\/\/hiralms.moodler.kr\/",
+        "ops": "http:\/\/edu.hira.or.kr",
+        "active": 1
+    },
+    {
+        "name": "건국대 실감미디어\n(혁신공유대학 협의체(건국대 외))",
+        "ver": "3.2",
+        "dev": "http:\/\/xrlms.moodler.kr\/",
+        "ops": "https:\/\/lms.xr.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "경기대",
+        "ver": "3.2",
+        "dev": "http:\/\/kgulms.moodler.kr",
+        "ops": "http:\/\/lms.kyonggi.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "경기대 법정의무교육",
+        "ver": "3.2",
+        "dev": "http:\/\/kgulawlms.moodler.kr",
+        "ops": "http:\/\/kgedu.kyonggi.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "경남도립남해대",
+        "ver": "3.2",
+        "dev": "http:\/\/gnhulms.moodler.kr",
+        "ops": "http:\/\/lms.namhae.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "고려사이버대",
+        "ver": "3.2",
+        "dev": "http:\/\/devlms.cuk.edu\/local\/ubion\/login.php",
+        "ops": "https:\/\/lms.cuk.edu\/login.php?superadmin=1",
+        "active": 1
+    },
+    {
+        "name": "과학기술연합대학원대학교\n(UST)",
+        "ver": "3.2",
+        "dev": "http:\/\/ustlms.moodler.kr",
+        "ops": "https:\/\/class.ust.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "광주 \/ 전남권역\n(빛나래 G-RISE 공유대학)",
+        "ver": "3.2",
+        "dev": "https:\/\/iugj.moodler.kr",
+        "ops": "https:\/\/lms.g-riseon.or.kr\/",
+        "active": 1
+    },
+    {
+        "name": "광주과학기술원",
+        "ver": "3.2",
+        "dev": "http:\/\/gistlms.moodler.kr\/",
+        "ops": "https:\/\/lms.gist.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "광주보건대",
+        "ver": "3.2",
+        "dev": "http:\/\/ghulms.moodler.kr",
+        "ops": "https:\/\/lms.ghu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "군산간호대",
+        "ver": "3.2",
+        "dev": "http:\/\/kcnlms.moodler.kr",
+        "ops": "https:\/\/lms.kcn.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "김천대",
+        "ver": "3.2",
+        "dev": "http:\/\/gimculms.moodler.kr",
+        "ops": "https:\/\/cyber.gimcheon.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "남부대",
+        "ver": "3.2",
+        "dev": "http:\/\/nbulms.moodler.kr",
+        "ops": "http:\/\/nblms.nambu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "대구대",
+        "ver": "3.2",
+        "dev": "https:\/\/heartlms.daegu.ac.kr\/login.php",
+        "ops": "https:\/\/heartlms.daegu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "대구보건대",
+        "ver": "3.2",
+        "dev": "http:\/\/dhclms.moodler.kr",
+        "ops": "https:\/\/nlms.dhc.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "대림대 마이스터",
+        "ver": "3.2",
+        "dev": "http:\/\/dlulms.moodler.kr",
+        "ops": "https:\/\/mstlms.daelim.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "대림대 빅포레스트 \n(교수학습지원센터)",
+        "ver": "3.2",
+        "dev": "http:\/\/dlctlms.moodler.kr\/",
+        "ops": "https:\/\/dllms.daelim.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "대림대 혁신공유대학",
+        "ver": "3.2",
+        "dev": "http:\/\/dlcosslms.moodler.kr",
+        "ops": "https:\/\/cosslms.daelim.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "대진대",
+        "ver": "3.2",
+        "dev": "http:\/\/djulms.moodler.kr",
+        "ops": "https:\/\/eclass.daejin.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "덕성여대",
+        "ver": "3.2",
+        "dev": "http:\/\/dswulms.moodler.kr",
+        "ops": "http:\/\/lms.duksung.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "동남보건대",
+        "ver": "3.2",
+        "dev": "http:\/\/dnhulms.moodler.kr:8080\/login.php",
+        "ops": "https:\/\/lms.dongnam.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "동서울대",
+        "ver": "3.2",
+        "dev": "http:\/\/dulms.moodler.kr\/",
+        "ops": "https:\/\/lms.du.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "동신대",
+        "ver": "3.2",
+        "dev": "http:\/\/lmsdev.dsu.ac.kr",
+        "ops": "http:\/\/lms.dsu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "동양미래대학교",
+        "ver": "3.2",
+        "dev": "http:\/\/dymulms.moodler.kr",
+        "ops": "https:\/\/eclass.dongyang.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "동원대학교",
+        "ver": "3.2",
+        "dev": "http:\/\/twulms.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "딥코",
+        "ver": "3.2",
+        "dev": "",
+        "ops": "https:\/\/deepco.coursemos.io\/",
+        "active": 1
+    },
+    {
+        "name": "레고랜드",
+        "ver": "3.2",
+        "dev": "",
+        "ops": "https:\/\/legolandjob.kangwon.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "루터대",
+        "ver": "3.2",
+        "dev": "http:\/\/ltulms.moodler.kr",
+        "ops": "https:\/\/lms.ltu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "목포대",
+        "ver": "3.2",
+        "dev": "http:\/\/mpulms.moodler.kr\/login.php",
+        "ops": "http:\/\/lms.mokpo.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "배재대",
+        "ver": "3.2",
+        "dev": "http:\/\/pculmscm32.moodler.kr",
+        "ops": "https:\/\/course.pcu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "부산 RIS\n(BITS 부산공유대학)",
+        "ver": "3.2",
+        "dev": "http:\/\/psrislms.moodler.kr",
+        "ops": "http:\/\/lms.bbits.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "부산가톨릭대",
+        "ver": "3.2",
+        "dev": "http:\/\/psculms.moodler.kr",
+        "ops": "https:\/\/lms.cup.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "부산권역",
+        "ver": "3.2",
+        "dev": "http:\/\/pusanreg.moodler.kr",
+        "ops": "https:\/\/busan.udec.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "상지대",
+        "ver": "3.2",
+        "dev": "http:\/\/sjiulms.moodler.kr",
+        "ops": "http:\/\/cyber.sangji.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "서울시립대",
+        "ver": "3.2",
+        "dev": "http:\/\/uoslms.moodler.kr",
+        "ops": "https:\/\/olduclass.uos.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "서울신학대",
+        "ver": "3.2",
+        "dev": "http:\/\/stulms.moodler.kr",
+        "ops": "http:\/\/ecampus.stu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "서울여자간호대학교",
+        "ver": "3.2",
+        "dev": "http:\/\/swcnlms.moodler.kr",
+        "ops": "https:\/\/lms.snjc.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "성결대",
+        "ver": "3.2",
+        "dev": "http:\/\/skulms.moodler.kr",
+        "ops": "https:\/\/cc.sungkyul.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "성공회대",
+        "ver": "3.2",
+        "dev": "http:\/\/skhulms.moodler.kr\/",
+        "ops": "https:\/\/lmsedu.skhu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "세경대학교",
+        "ver": "3.2",
+        "dev": "http:\/\/sekulms.moodler.kr\/",
+        "ops": "https:\/\/klms.saekyung.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "세종대",
+        "ver": "3.2",
+        "dev": "http:\/\/sjudev.moodler.kr",
+        "ops": "http:\/\/sjulms.moodler.kr",
+        "active": 1
+    },
+    {
+        "name": "송곡대",
+        "ver": "3.2",
+        "dev": "http:\/\/sgulms.moodler.kr",
+        "ops": "http:\/\/sglms.songgok.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "송호대",
+        "ver": "3.2",
+        "dev": "http:\/\/shoulms.moodler.kr",
+        "ops": "http:\/\/lms.songho.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "순천대",
+        "ver": "3.2",
+        "dev": "http:\/\/scnulms.moodler.kr",
+        "ops": "https:\/\/lms.scnu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "숭의여자대학교",
+        "ver": "3.2",
+        "dev": "http:\/\/sewclms.moodler.kr",
+        "ops": "https:\/\/lms.sewc.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "신구대",
+        "ver": "3.2",
+        "dev": "http:\/\/sgclms.moodler.kr",
+        "ops": "https:\/\/lms.shingu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "여주대학교",
+        "ver": "3.2",
+        "dev": "http:\/\/yjitlms.moodler.kr",
+        "ops": "https:\/\/eclass.yit.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "연세대 원주(미래)캠퍼스 의과대학",
+        "ver": "3.2",
+        "dev": "http:\/\/ysmirae.moodler.kr\/",
+        "ops": "https:\/\/medilms.yonsei.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "연암공대",
+        "ver": "3.2",
+        "dev": "http:\/\/yitlms.moodler.kr",
+        "ops": "http:\/\/lms.yc.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "연암대",
+        "ver": "3.2",
+        "dev": "http:\/\/yaulms.moodler.kr\/login.php",
+        "ops": "https:\/\/lms.yonam.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "영남대-비교과",
+        "ver": "3.2",
+        "dev": "http:\/\/ynulms.moodler.kr",
+        "ops": "http:\/\/yutopialms.yu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "예수대",
+        "ver": "3.2",
+        "dev": "http:\/\/jsulms.moodler.kr",
+        "ops": "https:\/\/ecampus.jesus.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "오산대",
+        "ver": "3.2",
+        "dev": "http:\/\/osulms.moodler.kr",
+        "ops": "http:\/\/lms.osan.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "용인예술과학대 - 비교과",
+        "ver": "3.2",
+        "dev": "http:\/\/yiasulms.moodler.kr",
+        "ops": "https:\/\/damoalms.ysc.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "우석대",
+        "ver": "3.2",
+        "dev": "http:\/\/wsulms.moodler.kr",
+        "ops": "http:\/\/smart.woosuk.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "울산대",
+        "ver": "3.2",
+        "dev": "http:\/\/usulms.moodler.kr",
+        "ops": "http:\/\/ulms.ulsan.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "울산대 MOOC",
+        "ver": "3.2",
+        "dev": "http:\/\/usumooc.moodler.kr",
+        "ops": "https:\/\/mooc.ulsan.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "울산대 의과대학",
+        "ver": "3.2",
+        "dev": "http:\/\/usumedlms.moodler.kr\/",
+        "ops": "https:\/\/lcme.ulsan.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "유한대",
+        "ver": "3.2",
+        "dev": "http:\/\/yhulms.moodler.kr",
+        "ops": "https:\/\/eclass.yuhan.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "인제대",
+        "ver": "3.2",
+        "dev": "http:\/\/ijulms.moodler.kr",
+        "ops": "http:\/\/injelms.inje.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "인천재능대",
+        "ver": "3.2",
+        "dev": "https:\/\/jeiulms.moodler.kr",
+        "ops": "https:\/\/lms.jeiu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "인하대",
+        "ver": "3.2",
+        "dev": "https:\/\/ihulms.moodler.kr",
+        "ops": "http:\/\/learn.inha.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "인하대 해외 - 우즈벡",
+        "ver": "3.2",
+        "dev": "http:\/\/iutlms.moodler.kr\/",
+        "ops": "https:\/\/eclass.inha.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "전남대",
+        "ver": "3.2",
+        "dev": "http:\/\/jnulms.moodler.kr",
+        "ops": "https:\/\/sel.jnu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "전북 RIS\nJST 공유대학",
+        "ver": "3.2",
+        "dev": "http:\/\/jbrislms.moodler.kr",
+        "ops": "http:\/\/lms.jst.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "전북대",
+        "ver": "3.2",
+        "dev": "http:\/\/jbnulms.moodler.kr",
+        "ops": "https:\/\/ieilmsold.jbnu.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "전주교대",
+        "ver": "3.2",
+        "dev": "http:\/\/jnuelms.moodler.kr",
+        "ops": "https:\/\/lms.jnue.kr",
+        "active": 1
+    },
+    {
+        "name": "제주관광대",
+        "ver": "3.2",
+        "dev": "http:\/\/jtulms.moodler.kr",
+        "ops": "https:\/\/lms.jtu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "중원대",
+        "ver": "3.2",
+        "dev": "http:\/\/jwulms.moodler.kr",
+        "ops": "http:\/\/jimslms.jwu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "진주교대",
+        "ver": "3.2",
+        "dev": "http:\/\/cuelms.moodler.kr",
+        "ops": "https:\/\/lms.cue.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "차의과대",
+        "ver": "3.2",
+        "dev": "http:\/\/chaulms.moodler.kr",
+        "ops": "https:\/\/lms.cha.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "창원대",
+        "ver": "3.2",
+        "dev": "https:\/\/cwulms.moodler.kr",
+        "ops": "https:\/\/ecampus.changwon.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "청강문화산업대",
+        "ver": "3.2",
+        "dev": "http:\/\/d-lms.ck.ac.kr",
+        "ops": "https:\/\/lms.ck.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "추계예술대",
+        "ver": "3.2",
+        "dev": "http:\/\/cgulms.moodler.kr",
+        "ops": "https:\/\/lms.chugye.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "춘천교대",
+        "ver": "3.2",
+        "dev": "http:\/\/cnuelms.moodler.kr",
+        "ops": "http:\/\/lms.cnue.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "충북대 의과대학",
+        "ver": "3.2",
+        "dev": "http:\/\/cbnumedi.moodler.kr",
+        "ops": "https:\/\/medlms.chungbuk.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국개발연구원국제정책대학원대학교 ekdis",
+        "ver": "3.2",
+        "dev": "http:\/\/ekdiscm.moodler.kr",
+        "ops": "https:\/\/www.ekdis.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국성서대",
+        "ver": "3.2",
+        "dev": "http:\/\/kbulms.moodler.kr",
+        "ops": "https:\/\/lms.bible.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국영상대학교",
+        "ver": "3.2",
+        "dev": "http:\/\/kumalms.moodler.kr",
+        "ops": "https:\/\/ecampus.pro.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "한국폴리텍대",
+        "ver": "3.2",
+        "dev": "http:\/\/kopolms.moodler.kr",
+        "ops": "http:\/\/e-poly.kopo.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "한국항공대",
+        "ver": "3.2",
+        "dev": "http:\/\/kaulms.moodler.kr",
+        "ops": "http:\/\/lms.kau.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "한국해양대",
+        "ver": "3.2",
+        "dev": "http:\/\/kmoulms.moodler.kr\/",
+        "ops": "https:\/\/ctslms.kmou.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한라대",
+        "ver": "3.2",
+        "dev": "http:\/\/halulms.moodler.kr",
+        "ops": "https:\/\/lms.halla.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "한림대",
+        "ver": "3.2",
+        "dev": "http:\/\/hlulms.moodler.kr",
+        "ops": "https:\/\/smartlead.hallym.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "한림성심대",
+        "ver": "3.2",
+        "dev": "http:\/\/hsclms.moodler.kr",
+        "ops": "http:\/\/lms.hsc.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "한성대",
+        "ver": "3.2",
+        "dev": "http:\/\/hsulms.moodler.kr",
+        "ops": "http:\/\/learn.hansung.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "한양대학교",
+        "ver": "3.2",
+        "dev": "",
+        "ops": "https:\/\/lmsface.hanyang.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한양여대 비교과용",
+        "ver": "3.2",
+        "dev": "http:\/\/hywulms.moodler.kr\/",
+        "ops": "https:\/\/ceslms.hywoman.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한일장신대학교",
+        "ver": "3.2",
+        "dev": "http:\/\/haiulms.moodler.kr",
+        "ops": "https:\/\/lms.hanil.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "해군사관학교",
+        "ver": "3.2",
+        "dev": "http:\/\/navylms.moodler.kr\/",
+        "ops": "http:\/\/owl.navy.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "협성대",
+        "ver": "3.2",
+        "dev": "http:\/\/hpsulms.moodler.kr\/",
+        "ops": "https:\/\/uwlms.uhs.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "홍익대",
+        "ver": "3.2",
+        "dev": "http:\/\/hiulms.moodler.kr\/login.php",
+        "ops": "https:\/\/cn2.hongik.ac.kr\/login.php",
+        "active": 1
+    },
+    {
+        "name": "DSC 공유대학 평생교육",
+        "ver": "3.5",
+        "dev": "http:\/\/dscuedu.moodler.kr",
+        "ops": "https:\/\/longrun.dscu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "KIPA 발명진흥회",
+        "ver": "3.5",
+        "dev": "http:\/\/ipdiscovery.moodler.kr",
+        "ops": "http:\/\/www.ipdiscovery.net",
+        "active": 1
+    },
+    {
+        "name": "KMOOC",
+        "ver": "3.5",
+        "dev": "http:\/\/kmooclms.moodler.kr",
+        "ops": "https:\/\/lms.kmooc.kr\/",
+        "active": 1
+    },
+    {
+        "name": "거제대",
+        "ver": "3.5",
+        "dev": "http:\/\/gwlrslms.moodler.kr",
+        "ops": "http:\/\/lms.koje.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "거제대(오픈형)",
+        "ver": "3.5",
+        "dev": "http:\/\/kojelmscm3.moodler.kr\/",
+        "ops": "http:\/\/lms.koje.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "건국대 실감미디어\n학사연동 통합본",
+        "ver": "3.5",
+        "dev": "",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "경민대",
+        "ver": "3.5",
+        "dev": "http:\/\/kminulms.moodler.kr\/",
+        "ops": "https:\/\/klass545.kyungmin.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "경민대오픈형",
+        "ver": "3.5",
+        "dev": "http:\/\/kminuopen.moodler.kr\/",
+        "ops": "https:\/\/open545.kyungmin.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "경복대",
+        "ver": "3.5",
+        "dev": "http:\/\/kboklms.moodler.kr",
+        "ops": "https:\/\/eclass.kbu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "경복대(오픈형)",
+        "ver": "3.5",
+        "dev": "http:\/\/kbokopen.moodler.kr",
+        "ops": "https:\/\/online.kbu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "계원예술대",
+        "ver": "3.5",
+        "dev": "http:\/\/kwuadlms.moodler.kr\/",
+        "ops": "https:\/\/lms.kaywon.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "고려대 오픈",
+        "ver": "3.5",
+        "dev": "https:\/\/krulms.moodler.kr\/",
+        "ops": "http:\/\/k-class.korea.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "광주과학기술원KDT",
+        "ver": "3.5",
+        "dev": "http:\/\/gistkdt.moodler.kr",
+        "ops": "https:\/\/lms.dreamai.kr",
+        "active": 1
+    },
+    {
+        "name": "굿네이버스",
+        "ver": "3.5",
+        "dev": "http:\/\/academy.goodneighbors.org",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대구한의대 원격평생교육원",
+        "ver": "3.5",
+        "dev": "http:\/\/dghuedu.moodler.kr",
+        "ops": "https:\/\/cyber.dhu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "대구한의대 하니아카데미",
+        "ver": "3.5",
+        "dev": "http:\/\/dghuhani.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 GSITM",
+        "ver": "3.5",
+        "dev": "http:\/\/gsitm.korchamhrd.net\/",
+        "ops": "http:\/\/gsitm.korchamhrd.net\/",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 salesforce",
+        "ver": "3.5",
+        "dev": "",
+        "ops": "http:\/\/sflms.korchamhrd.net",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 unity",
+        "ver": "3.5",
+        "dev": "",
+        "ops": "https:\/\/unity.korchamhrd.net\/",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 경기 \n((주) 아토스)",
+        "ver": "3.5",
+        "dev": "http:\/\/korchamlms.moodler.kr\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 광주",
+        "ver": "3.5",
+        "dev": "https:\/\/gjlms.korchamhrd.net\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 부산",
+        "ver": "3.5",
+        "dev": "https:\/\/pslms.korchamhrd.net\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 서울",
+        "ver": "3.5",
+        "dev": "https:\/\/stclms.korchamhrd.net\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 인천",
+        "ver": "3.5",
+        "dev": "https:\/\/iclms.korchamhrd.net\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 전북",
+        "ver": "3.5",
+        "dev": "https:\/\/jblms.korchamhrd.net\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 충남",
+        "ver": "3.5",
+        "dev": "https:\/\/cnlms.korchamhrd.net\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 현대",
+        "ver": "3.5",
+        "dev": "http:\/\/hyundai.korchamhrd.net\/",
+        "ops": "http:\/\/hyundai.korchamhrd.net\/",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소 현대건설",
+        "ver": "3.5",
+        "dev": "",
+        "ops": "https:\/\/hdec.korchamhrd.net\/",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소(KCCI)영문",
+        "ver": "3.5",
+        "dev": "",
+        "ops": "http:\/\/enlms.korchamhrd.net",
+        "active": 1
+    },
+    {
+        "name": "대한상공회의소(KGICT)",
+        "ver": "3.5",
+        "dev": "https:\/\/kgict.korchamhrd.net",
+        "ops": "https:\/\/kgict.korchamhrd.net",
+        "active": 1
+    },
+    {
+        "name": "동국대",
+        "ver": "3.5",
+        "dev": "http:\/\/dogulms.moodler.kr",
+        "ops": "http:\/\/eclass.dongguk.edu",
+        "active": 1
+    },
+    {
+        "name": "동국대 오픈",
+        "ver": "3.5",
+        "dev": "http:\/\/doguopen.moodler.kr",
+        "ops": "https:\/\/mooc.dongguk.edu\/",
+        "active": 1
+    },
+    {
+        "name": "목원대 오픈",
+        "ver": "3.5",
+        "dev": "http:\/\/mwuopen.moodler.kr",
+        "ops": "https:\/\/again.mokwon.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "부산대",
+        "ver": "3.5",
+        "dev": "http:\/\/pnucm35.moodler.kr",
+        "ops": "https:\/\/plato.pusan.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "서울교대",
+        "ver": "3.5",
+        "dev": "http:\/\/snuelms.moodler.kr",
+        "ops": "https:\/\/lms.snue.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "성균관대",
+        "ver": "3.5",
+        "dev": "http:\/\/skkulms.moodler.kr",
+        "ops": "https:\/\/online.skku.edu\/",
+        "active": 1
+    },
+    {
+        "name": "성균관대 별도 개발환경",
+        "ver": "3.5",
+        "dev": "http:\/\/skkulmsup.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "성신여대 ( 비학위 )",
+        "ver": "3.5",
+        "dev": "http:\/\/sswuopen.moodler.kr",
+        "ops": "https:\/\/slearn.sungshin.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "성신여대 ( 학위 )",
+        "ver": "3.5",
+        "dev": "http:\/\/sswulms.moodler.kr",
+        "ops": "https:\/\/slms.sungshin.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "성신여대 (중계서버)",
+        "ver": "3.5",
+        "dev": "",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "세종대 집현캠퍼스(3.5)",
+        "ver": "3.5",
+        "dev": "http:\/\/sejonglms.moodler.kr",
+        "ops": "https:\/\/ecampus.sejong.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "숙명여대\n3.9로 전환됨.",
+        "ver": "3.5",
+        "dev": "http:\/\/smwlmscm3.moodler.kr",
+        "ops": "https:\/\/snowboard.sookmyung.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "숭의여대 늘봄학교",
+        "ver": "3.5",
+        "dev": "http:\/\/sewcnbom.moodler.kr\/",
+        "ops": "https:\/\/afterschool.sewu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "안양대학교",
+        "ver": "3.5",
+        "dev": "http:\/\/ayulms.moodler.kr\/",
+        "ops": "https:\/\/cyber.anyang.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "안양대학교 중계서버",
+        "ver": "3.5",
+        "dev": "",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "연성대학교(오픈형)",
+        "ver": "3.5",
+        "dev": "http:\/\/ysunglms.moodler.kr\/",
+        "ops": "https:\/\/ymooc.yeonsung.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "연성대학교(학위)",
+        "ver": "3.5",
+        "dev": "http:\/\/ysungdegree.moodler.kr\/",
+        "ops": "https:\/\/eclass.yeonsung.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "연세대학교_학위",
+        "ver": "3.5",
+        "dev": "http:\/\/ysulmsdeg.moodler.kr",
+        "ops": "https:\/\/ys.learnus.org",
+        "active": 1
+    },
+    {
+        "name": "연세대학교(런어스)",
+        "ver": "3.5",
+        "dev": "http:\/\/yednet.moodler.kr",
+        "ops": "https:\/\/www.learnus.org",
+        "active": 1
+    },
+    {
+        "name": "우송대 3.9",
+        "ver": "3.5",
+        "dev": "http:\/\/wsulmscm3.moodler.kr",
+        "ops": "https:\/\/smart.wsu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "유학사업",
+        "ver": "3.5",
+        "dev": "http:\/\/uhaklms.moodler.kr",
+        "ops": "https:\/\/topik.coursemos.kr\/",
+        "active": 1
+    },
+    {
+        "name": "이화여대",
+        "ver": "3.5",
+        "dev": "http:\/\/cm35.ewha.ac.kr\/",
+        "ops": "https:\/\/cyber.ewha.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "이화여대 오픈형\n쉐어 캠퍼스",
+        "ver": "3.5",
+        "dev": "https:\/\/ewuopen.moodler.kr\/",
+        "ops": "https:\/\/share.ewha.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "인하대 MOOC",
+        "ver": "3.5",
+        "dev": "http:\/\/ihumooc.moodler.kr\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "인하대 오픈 LMS",
+        "ver": "3.5",
+        "dev": "http:\/\/ihuopen.moodler.kr\/",
+        "ops": "https:\/\/openlearn.inha.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "잡월드",
+        "ver": "3.5",
+        "dev": "http:\/\/jobwlms.moodler.kr\/",
+        "ops": "http:\/\/lms.interninmeta.or.kr",
+        "active": 1
+    },
+    {
+        "name": "전주대",
+        "ver": "3.5",
+        "dev": "http:\/\/jjlmscm35.moodler.kr\/",
+        "ops": "https:\/\/cyber.jj.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "풀무원 바른정책아카데미",
+        "ver": "3.5",
+        "dev": "http:\/\/barunpa.moodler.kr\/",
+        "ops": "https:\/\/www.barunacademy.co.kr",
+        "active": 1
+    },
+    {
+        "name": "한국예술종합대학교\n(한예종)",
+        "ver": "3.5",
+        "dev": "http:\/\/kartslms.moodler.kr\/",
+        "ops": "http:\/\/lms.karts.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "한국의과대학공유대학",
+        "ver": "3.5",
+        "dev": "http:\/\/kamcopen.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "한국제약바이오협회",
+        "ver": "3.5",
+        "dev": "http:\/\/kpbmalms.moodler.kr",
+        "ops": "https:\/\/www.laidd.org\/",
+        "active": 1
+    },
+    {
+        "name": "한동대학교",
+        "ver": "3.5",
+        "dev": "http:\/\/hdulms.moodler.kr\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "한림대 오픈형",
+        "ver": "3.5",
+        "dev": "http:\/\/hluopen.moodler.kr\/",
+        "ops": "https:\/\/smartlead.hallym.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "한양여대 DXAX",
+        "ver": "3.5",
+        "dev": "http:\/\/hywudxax.moodler.kr\/",
+        "ops": "http:\/\/eclass.hywoman.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한예종 (중계서버)",
+        "ver": "3.5",
+        "dev": "",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "호서대학교\n3.9로 전환됨.",
+        "ver": "3.5",
+        "dev": "http:\/\/hosulms.moodler.kr",
+        "ops": "https:\/\/learn.hoseo.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "EBS 위대한수업",
+        "ver": "3.9",
+        "dev": "http:\/\/greatmlms.moodler.kr",
+        "ops": "https:\/\/www.thegreatminds.com",
+        "active": 1
+    },
+    {
+        "name": "LG전자칠판",
+        "ver": "3.9",
+        "dev": "https:\/\/lgebblms.moodler.kr\/",
+        "ops": "https:\/\/lg.thegreatminds.com\/",
+        "active": 1
+    },
+    {
+        "name": "가톨릭성서모임",
+        "ver": "3.9",
+        "dev": "http:\/\/biblegather.moodler.kr",
+        "ops": "http:\/\/lms.biblemove.com",
+        "active": 1
+    },
+    {
+        "name": "광주대",
+        "ver": "3.9",
+        "dev": "http:\/\/gjulms.moodler.kr",
+        "ops": "http:\/\/elearn.gwangju.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "국민대",
+        "ver": "3.9",
+        "dev": "https:\/\/kmulms.moodler.kr\/",
+        "ops": "https:\/\/ecampus.kookmin.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "국민대 기후변화대응사업단",
+        "ver": "3.9",
+        "dev": "http:\/\/kmuclim.moodler.kr",
+        "ops": "https:\/\/ecampus.climate.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "국민대고도화",
+        "ver": "3.9",
+        "dev": "http:\/\/kmulmsup.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "글로벌학점은행",
+        "ver": "3.9",
+        "dev": "http:\/\/gcb.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "김종길어학원",
+        "ver": "3.9",
+        "dev": "http:\/\/kjglms.moodler.kr",
+        "ops": "https:\/\/lms.munhaegil.com\/",
+        "active": 1
+    },
+    {
+        "name": "나사렛대",
+        "ver": "3.9",
+        "dev": "http:\/\/kornucm3.moodler.kr",
+        "ops": "http:\/\/ncyber.kornu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "넥스트 삼성 플러스\n(넥삼플)",
+        "ver": "3.9",
+        "dev": "https:\/\/nsplms.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "삼성DS",
+        "ver": "3.9",
+        "dev": "https:\/\/dev.dscovery.net\/ko\/index\/outer",
+        "ops": "https:\/\/www.dscovery.net\/ko\/index\/outer",
+        "active": 1
+    },
+    {
+        "name": "서강대",
+        "ver": "3.9",
+        "dev": "http:\/\/sogulms.moodler.kr",
+        "ops": "https:\/\/splus-lms.sogang.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "서울 RISE",
+        "ver": "3.9",
+        "dev": "http:\/\/surise.moodler.kr\/",
+        "ops": "https:\/\/learnrise.hansung.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "세종대 사물인터넷",
+        "ver": "3.9",
+        "dev": "http:\/\/sjuiot.moodler.kr\/",
+        "ops": "https:\/\/lms.iotcoss.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "세종대 중계서버",
+        "ver": "3.9",
+        "dev": "",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "소프트랩",
+        "ver": "3.9",
+        "dev": "http:\/\/slablms.moodler.kr\/",
+        "ops": "http:\/\/www.ai-hied.com",
+        "active": 1
+    },
+    {
+        "name": "송곡대",
+        "ver": "3.9",
+        "dev": "http:\/\/sgulms39.moodler.kr\/",
+        "ops": "https:\/\/sgulms.songgok.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "숙명여대",
+        "ver": "3.9",
+        "dev": "http:\/\/smwlms.moodler.kr\/",
+        "ops": "https:\/\/snowboard.sookmyung.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "우송대",
+        "ver": "3.9",
+        "dev": "http:\/\/smart39.wsu.ac.kr\/",
+        "ops": "https:\/\/smart.wsu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "우송정보대",
+        "ver": "3.9",
+        "dev": "http:\/\/wsilms.moodler.kr",
+        "ops": "https:\/\/lms.wsi.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "인천대 HUSS 포용사회",
+        "ver": "3.9",
+        "dev": "http:\/\/inuhuss.moodler.kr",
+        "ops": "https:\/\/lms.hussis.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "중앙대 첨단소재\n나노융합 혁신융합대학",
+        "ver": "3.9",
+        "dev": "http:\/\/caumnm.moodler.kr\/",
+        "ops": "https:\/\/eclass-mnm.cau.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "창원문성대",
+        "ver": "3.9",
+        "dev": "http:\/\/cmulms.moodler.kr\/",
+        "ops": "https:\/\/cmulms.cmu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "초당대",
+        "ver": "3.9",
+        "dev": "http:\/\/cdulms.moodler.kr",
+        "ops": "https:\/\/ecampus.cdu.ac.kr\/login\/index.php",
+        "active": 1
+    },
+    {
+        "name": "충남RISE",
+        "ver": "3.9",
+        "dev": "http:\/\/cnurise.moodler.kr",
+        "ops": "https:\/\/lms.crsu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "충남대 병원",
+        "ver": "3.9",
+        "dev": "http:\/\/cnuhlms.moodler.kr",
+        "ops": "https:\/\/mesclms.cnuh.co.kr\/",
+        "active": 1
+    },
+    {
+        "name": "충북대",
+        "ver": "3.9",
+        "dev": "http:\/\/cbnulms.moodler.kr",
+        "ops": "http:\/\/lms.chungbuk.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "코스모스 3.9",
+        "ver": "3.9",
+        "dev": "http:\/\/csms39.moodler.kr",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "포항공대",
+        "ver": "3.9",
+        "dev": "http:\/\/poslms.moodler.kr\/",
+        "ops": "https:\/\/plms.postech.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국기술교육대",
+        "ver": "3.9",
+        "dev": "http:\/\/ktechprod.moodler.kr\/",
+        "ops": "https:\/\/lms.koreatech.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "한국폴리텍꿈드림",
+        "ver": "3.9",
+        "dev": "",
+        "ops": "https:\/\/hub-dream.kopo.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국플랜트산업협회",
+        "ver": "3.9",
+        "dev": "http:\/\/kopialms.moodler.kr",
+        "ops": "https:\/\/lms.kopia.or.kr\/",
+        "active": 1
+    },
+    {
+        "name": "한국항공드론공유대",
+        "ver": "3.9",
+        "dev": "http:\/\/kaudrone.moodler.kr",
+        "ops": "https:\/\/lms.aerodrone.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "호서대",
+        "ver": "3.9",
+        "dev": "http:\/\/hosucm3.moodler.kr",
+        "ops": "https:\/\/learn.hoseo.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "CSAP 인증용 사이트",
+        "ver": "4.5",
+        "dev": "",
+        "ops": "http:\/\/dev-lxp45.coursemos.work",
+        "active": 1
+    },
+    {
+        "name": "강원대",
+        "ver": "4.5",
+        "dev": "https:\/\/knulxp.moodler.kr\/",
+        "ops": "https:\/\/eruri.kangwon.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "국립보건연구원",
+        "ver": "4.5",
+        "dev": "https:\/\/nihlxp.moodler.kr\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "대구과학대",
+        "ver": "4.5",
+        "dev": "https:\/\/tsulxp.moodler.kr\/",
+        "ops": "https:\/\/lxp.tsu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "대구한의대",
+        "ver": "4.5",
+        "dev": "https:\/\/dghulms.moodler.kr",
+        "ops": "https:\/\/lxp.dhu.ac.kr",
+        "active": 1
+    },
+    {
+        "name": "대전과학기술대",
+        "ver": "4.5",
+        "dev": "http:\/\/dstlxp.moodler.kr",
+        "ops": "https:\/\/lxp.dst.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "목원대",
+        "ver": "4.5",
+        "dev": "https:\/\/mwulxp.moodler.kr",
+        "ops": "https:\/\/lms.mokwon.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "부산대",
+        "ver": "4.5",
+        "dev": "https:\/\/pnulxp.moodler.kr\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "서울시립대",
+        "ver": "4.5",
+        "dev": "https:\/\/uoslxp.moodler.kr\/",
+        "ops": "https:\/\/uclass.uos.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "인천대학교",
+        "ver": "4.5",
+        "dev": "https:\/\/inulxp.moodler.kr\/",
+        "ops": "https:\/\/lms.inu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "전북대학교",
+        "ver": "4.5",
+        "dev": "https:\/\/jbnulxp.moodler.kr\/",
+        "ops": "https:\/\/lms.jbnu.ac.kr\/",
+        "active": 1
+    },
+    {
+        "name": "코스모스4.5",
+        "ver": "4.5",
+        "dev": "https:\/\/csms45.moodler.kr\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "태국데모",
+        "ver": "4.5",
+        "dev": "http:\/\/kmutnb.moodler.kr\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "한림대",
+        "ver": "4.5",
+        "dev": "https:\/\/hallymlxp.moodler.kr\/",
+        "ops": "",
+        "active": 1
+    },
+    {
+        "name": "항공대",
+        "ver": "4.5",
+        "dev": "http:\/\/kaulxp.moodler.kr",
+        "ops": "https:\/\/lxp.kau.ac.kr\/",
+        "active": 1
+    }
+]
