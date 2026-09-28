@@ -38,8 +38,10 @@ def test_digest_lists_only_focus_tracker_items_and_stats():
 def test_digest_update_lists_only_new_items():
     old, new = _item("moodlecom", "old", "u-old"), _item("moodlecom", "new", "u-new")
     results = [Result("moodlecom", [old, new]), Result("tracker", [], {"resolved": 3})]
-    text = digest.build_update(results, [new], "2026-09-01", "2026-09-10", 2)
+    text = digest.build_update(results, [new], "2026-09-01", "2026-09-10", 2,
+                               previous_headline="PAG 수집 실패")
     assert "2회차 갱신" in text
+    assert "이전 헤드라인: PAG 수집 실패" in text
     assert "새로 들어온 항목 1건" in text
     assert "- [NEW] [x] new" in text
     assert "old" not in text
@@ -68,8 +70,10 @@ def test_summary_parse_tolerates_missing_updates():
     assert s.updates_md == ""
 
 
-def test_parse_update_reads_only_the_update_fields():
-    s = summarizer.parse_update('{"updates_md": "### PAG\\n- 새 글", "impacts": [{"url": "u", "impact": "중", "reason": "r"}], "actions": ["a"]}', "cli", "")
+def test_parse_update_reads_the_update_fields_and_a_new_headline():
+    s = summarizer.parse_update('{"headline": "새 제목", "updates_md": "### PAG\\n- 새 글", "impacts": [{"url": "u", "impact": "중", "reason": "r"}], "actions": ["a"]}', "cli", "")
+    assert s.headline == "새 제목"
+    assert summarizer.parse_update('{"updates_md": "- x", "impacts": [], "actions": []}', "cli", "").headline == ""
     assert s.summary_md == ""
     assert s.updates_md.startswith("### PAG")
     assert s.impacts[0]["impact"] == "중"
@@ -431,7 +435,7 @@ def test_run_refresh_summarizes_only_new_items_and_appends(tmp_path, monkeypatch
         seen["system"] = system
         seen["prompt"] = prompt
         seen["schema"] = schema
-        return json.dumps({"updates_md": "- new 가 들어왔다 [x](u-new)",
+        return json.dumps({"headline": "갱신된 헤드라인", "updates_md": "- new 가 들어왔다 [x](u-new)",
                            "impacts": [{"url": "u-new", "impact": "중", "reason": "r"}],
                            "actions": ["새 액션"]}), "claude-opus-5"
 
@@ -451,7 +455,9 @@ def test_run_refresh_summarizes_only_new_items_and_appends(tmp_path, monkeypatch
     assert "updates_md" in seen["schema"]["properties"]
     assert "- [NEW] [x] new" in seen["prompt"]
     assert "old" not in seen["prompt"].split("새로 들어온 항목")[1]
-    assert report["headline"] == "이전 헤드라인" # 헤드라인·기존 요약은 그대로
+    assert "이전 헤드라인: 이전 헤드라인" in seen["prompt"]
+    assert "headline" in seen["schema"]["required"]
+    assert report["headline"] == "갱신된 헤드라인" # 갱신 요약이 다시 쓴 제목. 기존 요약 본문은 그대로
     assert re.match(r"### 갱신 \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 새 항목 1건\n\n", report["summary_md"])
     assert report["summary_md"].endswith("- new 가 들어왔다 [x](u-new)\n\n---\n\n## 한눈에\n- 이전 요약")
     assert report["updates_md"] == "- new 가 들어왔다 [x](u-new)"

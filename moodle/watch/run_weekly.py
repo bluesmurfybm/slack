@@ -180,7 +180,8 @@ def _refresh_report(settings: Settings, results: list[Result], items: list[Item]
         return report, digest, summary, why
     new_items = [it for it in items if it.url not in previous["known"]]
     if new_items:
-        digest = digest_mod.build_update(results, new_items, period[0], period[1], run_no)
+        digest = digest_mod.build_update(results, new_items, period[0], period[1], run_no,
+                                         previous_headline=previous["headline"])
         summary, why = summarizer.summarize_update(settings, digest, week)
         if summary is None:
             logger.warning("갱신 요약 없음: %s", why)
@@ -192,8 +193,11 @@ def _refresh_report(settings: Settings, results: list[Result], items: list[Item]
                               len(new_items)) if summary and summary.updates_md else None)
     report = _base_report(results, period, week, run_no=run_no, generated_at=generated_at,
                           status=status)
+    # 헤드라인은 갱신 요약이 다시 쓴 것을 쓴다. 처음 실행이 "수집 실패" 였다가 갱신에서 수집이
+    # 됐는데도 제목이 계속 실패로 남던 문제. 요약이 없으면(새 항목 없음 등) 이전 것을 둔다.
+    headline = (summary.headline if summary and summary.headline else previous["headline"])
     report.update({
-        "headline": previous["headline"],
+        "headline": headline,
         "summary_md": combined, # None 이면 store 가 기존 요약을 그대로 둔다
         "updates_md": (summary.updates_md or None) if summary else None,
         "actions": previous["actions"] + (summary.actions if summary else []),

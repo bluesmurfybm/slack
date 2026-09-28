@@ -90,17 +90,23 @@ UPDATE_SYSTEM = SYSTEM + """
 `-` 불릿만
 쓰고, 각 불릿에 원문 링크를 붙인다. PAG 코스 항목이 있으면 맨 앞에 둔다. 새 항목이 사소하면 한두
 줄로
-끝낸다. 이미 요약한 내용을 반복하지 않는다."""
+끝낸다. 이미 요약한 내용을 반복하지 않는다.
+headline 은 이번 주 **전체**를 한 줄(60자 이내)로 다시 쓴다 — 입력의 "이전 헤드라인" 을 이번 갱신
+결과에 맞게 고친 것이다. 이전 헤드라인이 수집 실패를 말했는데 이번 실행에서 그 소스가 ok 면 실패
+이야기를 지우고 실제 소식으로 채운다. 새 항목이 없고 소스도 그대로면 이전 헤드라인을 그대로 낸다."""
 
 UPDATE_SCHEMA = {
     "type": "object",
     "properties": {
+        "headline": {"type": "string",
+                     "description": "이번 주 전체의 한 줄 요약(60자 이내). "
+                                    "이전 헤드라인을 이번 갱신에 맞게 고쳐 쓴다"},
         "updates_md": {"type": "string", "description": "[NEW] 항목만의 추가 요약(마크다운)"},
         "impacts": SCHEMA["properties"]["impacts"],
         "actions": {"type": "array", "items": {"type": "string"},
                     "description": "새 항목으로 생긴 후속 액션. 없으면 빈 배열"},
     },
-    "required": ["updates_md", "impacts", "actions"],
+    "required": ["headline", "updates_md", "impacts", "actions"],
     "additionalProperties": False,
 }
 
@@ -134,7 +140,7 @@ def parse(text: str, backend: str, model: str) -> Summary:
 
 def parse_update(text: str, backend: str, model: str) -> Summary:
     d = _json_block(text)
-    return Summary(headline="", summary_md="",
+    return Summary(headline=str(d.get("headline") or "").strip(), summary_md="",
                    updates_md=str(d.get("updates_md") or "").strip(),
                    impacts=_impacts(d),
                    actions=[str(a) for a in d.get("actions") or []],

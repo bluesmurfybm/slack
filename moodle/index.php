@@ -455,6 +455,7 @@ document.querySelectorAll(".src.go").forEach(function(el){
 (function(){
   var REPORT_ID = <?= $report ? (int)$report['id'] : 0 ?>;
   var ME = <?= json_encode($me['email'] ?? '', JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
+  var CAN_DELETE_ALL = <?= $isAdmin ? 'true' : 'false' ?>; // 관리자는 남의 표시도 지운다(일반 화면 보기 중에도)
   var NOTES = <?= json_encode(array_map(function ($n) {
       return ['id' => (int)$n['id'], 'target' => $n['target'], 'kind' => $n['kind'], 'text' => $n['anchor_text'],
               'prefix' => $n['prefix'], 'suffix' => $n['suffix'], 'note' => $n['note'], 'color' => $n['color'],
@@ -515,7 +516,7 @@ document.querySelectorAll(".src.go").forEach(function(el){
     var li = document.createElement("li"); li.dataset.id = n.id;
     li.innerHTML = '<span class="swatch ' + esc(n.color) + '"></span><div class="nb"><span class="q">“' + esc(n.text.length > 120 ? n.text.slice(0, 119) + "…" : n.text) + '”</span>' +
       (n.note ? '<div class="nt">' + esc(n.note) + '</div>' : '') + '<div class="tiny">' + esc((n.user_name || n.user_email) + " · " + n.created_at) + '</div></div>' +
-      (n.user_email === ME ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '');
+      (n.user_email === ME || CAN_DELETE_ALL ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '');
     list.appendChild(li); box.hidden = false;
     document.getElementById("notesCount").textContent = list.children.length;
   }
@@ -553,7 +554,7 @@ document.querySelectorAll(".src.go").forEach(function(el){
     var n = byId[mark.dataset.id]; if(!n) return;
     var rect = mark.getBoundingClientRect();
     npop.innerHTML = '<div class="npop-h"><span class="swatch ' + esc(n.color) + '"></span><b>' + esc(n.user_name || n.user_email) + '</b><span class="tiny">' + esc(n.created_at) + '</span>' +
-      (n.user_email === ME ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '') + '</div>' +
+      (n.user_email === ME || CAN_DELETE_ALL ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '') + '</div>' +
       (n.note ? '<div class="npop-b">' + esc(n.note) + '</div>'
               : n.kind === "bookmark" ? '<div class="npop-b tiny">🔖 북마크 · <a href="bookmarks.php">북마크 페이지</a></div>'
               : '<div class="npop-b tiny">형광펜</div>');

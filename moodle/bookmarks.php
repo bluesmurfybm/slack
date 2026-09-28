@@ -15,6 +15,7 @@ if (!$me) {
     header('Location: ../index.php?need_login=moodle');
     exit;
 }
+$isAdmin = moodle_is_admin($me['email']);   // 관리자는 남의 북마크도 지운다
 if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -105,7 +106,7 @@ foreach ($rows as $r) $byWeek[$r['week']][] = $r;
             <div class="bm" data-id="<?= (int)$n['id'] ?>">
               <span class="ic">🔖</span>
               <a class="q" href="index.php?week=<?= h($week) ?>#note-<?= (int)$n['id'] ?>" title="이 주차 요약의 원래 자리로"><?= hl($n['anchor_text'], $q) ?></a>
-              <?php if ($n['user_email'] === $me['email']): ?><button class="x" type="button" title="북마크 지우기" data-del="<?= (int)$n['id'] ?>">×</button><?php else: ?><span></span><?php endif; ?>
+              <?php if ($n['user_email'] === $me['email'] || $isAdmin): ?><button class="x" type="button" title="북마크 지우기" data-del="<?= (int)$n['id'] ?>">×</button><?php else: ?><span></span><?php endif; ?>
               <div class="m"><span><?= h($n['user_name'] ?: $n['user_email']) ?></span><span><?= h(moodle_kst($n['created_at'])) ?></span><a href="index.php?week=<?= h($week) ?>#note-<?= (int)$n['id'] ?>">요약에서 보기 →</a></div>
             </div>
           <?php endforeach; ?>
