@@ -21,6 +21,11 @@ final class RoundTest extends TestCase
         return $value === null ? null : (int)$value;
     }
 
+    private function issues(array ...$pairs): array
+    {
+        return ['issues' => array_map(static fn ($p) => ['magazine' => $p[0], 'volume' => $p[1]], $pairs)];
+    }
+
     private function flagsOf(int $tid): array
     {
         $stmt = $this->pdo->prepare("SELECT active, archived FROM dti_topics WHERE id = ?");
@@ -66,7 +71,7 @@ final class RoundTest extends TestCase
         $this->assertSame(403, $this->put(['rounds', $rid], $this->user(), ['title' => 'x'])['status']);
         $this->assertSame(403, $this->delete(['rounds', $rid], $this->user())['status']);
         $this->assertSame(403, $this->post(['rounds', $rid, 'issue'], $this->user(),
-            ['magazine' => 'DI', 'volume' => '286'])['status']);
+            $this->issues(['DI', '286']))['status']);
         $this->assertSame(403, $this->post(['rounds', $rid, 'topics'], $this->user(), ['archived' => true])['status']);
     }
 
@@ -110,7 +115,7 @@ final class RoundTest extends TestCase
         $this->assertSame(404, $this->put(['rounds', '999'], $this->admin(), ['title' => 'x'])['status']);
         $this->assertSame(404, $this->delete(['rounds', '999'], $this->admin())['status']);
         $this->assertSame(404, $this->post(['rounds', '999', 'issue'], $this->admin(),
-            ['magazine' => 'DI', 'volume' => '286'])['status']);
+            $this->issues(['DI', '286']))['status']);
         $this->assertSame(404, $this->post(['rounds', '999', 'topics'], $this->admin(), ['active' => false])['status']);
     }
 
@@ -135,7 +140,7 @@ final class RoundTest extends TestCase
         $otherVolume = $this->makeTopic(['magazine' => 'DI', 'volume' => '279']);
         $otherMagazine = $this->makeTopic(['magazine' => 'MIT TR', 'volume' => '286']);
 
-        $res = $this->post(['rounds', (string)$rid, 'issue'], $this->admin(), ['magazine' => 'DI', 'volume' => '286']);
+        $res = $this->post(['rounds', (string)$rid, 'issue'], $this->admin(), $this->issues(['DI', '286']));
         $this->assertSame(200, $res['status']);
         $this->assertSame(['count' => 2, 'moved' => 0], $res['data']);
         $this->assertSame($rid, $this->roundOf($a));
@@ -152,7 +157,7 @@ final class RoundTest extends TestCase
         $already = $this->makeTopic(['magazine' => 'DI', 'volume' => '279', 'round_id' => $rid]);
         $fresh = $this->makeTopic(['magazine' => 'DI', 'volume' => '279']);
 
-        $res = $this->post(['rounds', (string)$rid, 'issue'], $this->admin(), ['magazine' => 'DI', 'volume' => '279']);
+        $res = $this->post(['rounds', (string)$rid, 'issue'], $this->admin(), $this->issues(['DI', '279']));
         $this->assertSame(['count' => 3, 'moved' => 1], $res['data']);
         foreach ([$moved, $already, $fresh] as $tid) {
             $this->assertSame($rid, $this->roundOf($tid));
@@ -165,16 +170,44 @@ final class RoundTest extends TestCase
         $blank = $this->makeTopic(['magazine' => 'Etc', 'volume' => '']);
         $this->makeTopic(['magazine' => 'Etc', 'volume' => '1']);
 
-        $res = $this->post(['rounds', (string)$rid, 'issue'], $this->admin(), ['magazine' => 'Etc', 'volume' => '']);
+        $res = $this->post(['rounds', (string)$rid, 'issue'], $this->admin(), $this->issues(['Etc', '']));
         $this->assertSame(['count' => 1, 'moved' => 0], $res['data']);
         $this->assertSame($rid, $this->roundOf($blank));
     }
 
-    public function test_없는_매거진은_422(): void
+    public function test_여러_호를_한_번에_담는다(): void
+    {
+        $old = $this->makeRound(12);
+        $rid = $this->makeRound(13);
+        $di = $this->makeTopic(['magazine' => 'DI', 'volume' => '286']);
+        $mit = $this->makeTopic(['magazine' => 'MIT TR', 'volume' => '28.2026', 'round_id' => $old]);
+        $left = $this->makeTopic(['magazine' => 'DI', 'volume' => '279']);
+
+        $res = $this->post(['rounds', (string)$rid, 'issue'], $this->admin(),
+            $this->issues(['DI', '286'], ['MIT TR', '28.2026']));
+        $this->assertSame(['count' => 2, 'moved' => 1], $res['data']);
+        $this->assertSame($rid, $this->roundOf($di));
+        $this->assertSame($rid, $this->roundOf($mit));
+        $this->assertNull($this->roundOf($left));
+    }
+
+    public function test_잘못된_호가_섞이면_하나도_담지_않는다(): void
     {
         $rid = (string)$this->makeRound(13);
-        $res = $this->post(['rounds', $rid, 'issue'], $this->admin(), ['magazine' => '없는매거진', 'volume' => '1']);
+        $tid = $this->makeTopic(['magazine' => 'DI', 'volume' => '286']);
+
+        $res = $this->post(['rounds', $rid, 'issue'], $this->admin(), $this->issues(['DI', '286'], ['없는매거진', '1']));
         $this->assertSame(422, $res['status']);
+        $this->assertNull($this->roundOf($tid));
+    }
+
+    public function test_호를_고르지_않으면_422(): void
+    {
+        $rid = (string)$this->makeRound(13);
+        foreach ([[], ['issues' => []], ['issues' => 'DI'], ['issues' => ['DI']]] as $body) {
+            $this->assertSame(422, $this->post(['rounds', $rid, 'issue'], $this->admin(), $body)['status'],
+                json_encode($body));
+        }
     }
 
     /* ---------- 일괄 보관·숨김 ---------- */

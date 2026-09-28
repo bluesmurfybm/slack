@@ -353,7 +353,8 @@ if (!dti_identity()) {
       <p>고른 호의 아티클을 모두 이 회차에 담습니다. 다른 회차에 있던 아티클은 옮겨 옵니다.</p>
       <div class="issue-list" id="issueList"></div>
       <div class="row-btn">
-        <button class="btn-ghost" onclick="closeIssueModal()">닫기</button>
+        <button class="btn-ghost" onclick="closeIssueModal()">취소</button>
+        <button class="btn-submit" id="issueSubmit" onclick="submitIssues()" disabled>담기</button>
       </div>
     </div>
   </div>
