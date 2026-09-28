@@ -1,8 +1,18 @@
 let DRAWER_ID = null;
+// 이 상세가 방문 기록을 하나 쌓았는가. 쌓았으면 닫을 때 그 기록을 되돌려야 뒤로가기가 헛돌지 않는다
+let DRAWER_PUSHED = false;
 
-function openDrawer(id) {
+// record: 주소에 topic 을 남긴다. 새로고침·뒤로가기로 여는 경우엔 이미 주소에 있다.
+// 닫힌 상태에서 열 때만 기록을 쌓고, 열린 상세에서 다른 아티클로 넘어가면 주소만 바꾼다
+function openDrawer(id, record = true) {
   const t = APP.topics.find(x => x.id === id);
   if (!t) return;
+  if (record && DRAWER_ID === null) {
+    writeQuery({ topic: String(id) }, true, { drawer: true });
+    DRAWER_PUSHED = true;
+  } else if (record) {
+    writeQuery({ topic: String(id) }, false);
+  }
   DRAWER_ID = id;
   document.getElementById("drawer").innerHTML = drawerHtml(t);
   document.getElementById("drawer").classList.add("open");
@@ -11,6 +21,17 @@ function openDrawer(id) {
 }
 
 function closeDrawer() {
+  if (DRAWER_ID === null) return;
+  if (DRAWER_PUSHED) {
+    DRAWER_PUSHED = false;
+    history.back(); // popstate 가 openDrawerFromQuery() 로 닫는다
+    return;
+  }
+  writeQuery({ topic: "" }, false);
+  hideDrawer();
+}
+
+function hideDrawer() {
   DRAWER_ID = null;
   document.getElementById("drawer").classList.remove("open");
   document.getElementById("scrim").classList.remove("open");
@@ -18,8 +39,15 @@ function closeDrawer() {
 
 function refreshDrawer() {
   if (DRAWER_ID === null) return;
-  if (APP.topics.some(t => t.id === DRAWER_ID)) openDrawer(DRAWER_ID);
+  if (APP.topics.some(t => t.id === DRAWER_ID)) openDrawer(DRAWER_ID, false);
   else closeDrawer(); // 삭제되거나 숨겨져서 목록에서 빠진 주제
+}
+
+function openDrawerFromQuery() {
+  const id = Number(queryOf("topic"));
+  DRAWER_PUSHED = !!(history.state && history.state.drawer);
+  if (id && APP.topics.some(t => t.id === id)) openDrawer(id, false);
+  else if (DRAWER_ID !== null) hideDrawer();
 }
 
 function drawerHtml(t) {

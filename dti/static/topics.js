@@ -24,6 +24,21 @@ function reqLabel(t) {
   return found ? found.label : "권장";
 }
 
+// Volume 표기가 '279', '275. Oct-Nov', '20.2025' 로 섞여 있어 문자열 비교가 안 된다.
+// 앞머리 숫자만 한 매거진 안에서 호 번호 구실을 한다.
+function volumeHead(t) {
+  const found = /^\s*(\d+(?:\.\d+)?)/.exec(t.volume || "");
+  return found ? Number(found[1]) : -1;
+}
+
+// 최신 호 = Volume 번호 → 년도 → 등록 순.
+// 등록 순(id)을 먼저 보면 안 된다 — xlsx 에서 넘어온 행의 id 는 등록 시점이 아니라
+// 시트 행 순서라서, DI 가 279 가 아니라 2024년 275 호로 잡힌다.
+// 년도를 먼저 보면 안 된다 — 년도는 비워 둘 수 있는 값이라, 년도 없이 등록한
+// 새 호(280)가 년도 있는 옛 호(2025년 279)보다 뒤로 밀린다.
+const byNewestIssue = (a, b) =>
+  volumeHead(b) - volumeHead(a) || (b.year || 0) - (a.year || 0) || b.id - a.id;
+
 function pool() {
   const v = APP.view;
   if (v.mode === "admin") {
@@ -105,7 +120,7 @@ function renderStats() {
 }
 
 const LEDGER_TITLE = {
-  user: "아티클 목록",
+  list: "아티클 목록",
   articles: "등록된 아티클",
   archive: "보관된 아티클",
 };
@@ -119,45 +134,16 @@ function render() {
   const admin = v.mode === "admin";
   const isCards = cardsMode();
 
-  document.body.classList.toggle("admin-view", admin);
-  document.getElementById("mystrip").style.display = admin ? "none" : "";
-  document.getElementById("adminTabs").style.display = admin ? "" : "none";
-  document.querySelector(".viewtoggle").style.display = admin ? "none" : "";
-  document.getElementById("pageTitle").textContent = admin ? "DTI 운영 관리" : "DTI 발표";
-  document.getElementById("pageLede").textContent = admin
-    ? "아티클 등록 · 노출 관리 · 발표자 지정 · 보관"
-    : "";
-  document.getElementById("tabArticles").classList.toggle("on", v.tab === "articles");
-  document.getElementById("tabArchive").classList.toggle("on", v.tab === "archive");
-  document.getElementById("tabRounds").classList.toggle("on", v.tab === "rounds");
-  document.getElementById("tabFields").classList.toggle("on", v.tab === "fields");
-  document.getElementById("tabStats").classList.toggle("on", v.tab === "stats");
-  document.getElementById("tabScore").classList.toggle("on", v.tab === "score");
-  document.getElementById("vList").classList.toggle("on", v.layout === "list");
-  document.getElementById("vCard").classList.toggle("on", v.layout === "card");
-
-  const isStats = admin && v.tab === "stats";
-  const isFields = admin && v.tab === "fields";
-  const isScore = admin && v.tab === "score";
-  const isRounds = admin && v.tab === "rounds";
-  const isPanel = isStats || isFields || isScore || isRounds;
-  document.getElementById("statsPage").style.display = isStats ? "" : "none";
-  document.getElementById("fieldsPage").style.display = isFields ? "" : "none";
-  document.getElementById("scorePage").style.display = isScore ? "" : "none";
-  document.getElementById("roundsPage").style.display = isRounds ? "" : "none";
-  document.getElementById("toolbar").style.display = isPanel ? "none" : "";
-  document.querySelector(".ledger-head").style.display = isPanel ? "none" : "";
-  document.getElementById("list").style.display = isPanel ? "none" : "";
-  if (isStats) { renderStatsPage(); return; }
-  if (isFields) { renderFieldsPage(); return; }
-  if (isScore) { renderScorePage(); return; }
-  if (isRounds) { renderRoundsPage(); return; }
+  if (!admin) {
+    document.getElementById("vList").classList.toggle("on", v.layout === "list");
+    document.getElementById("vCard").classList.toggle("on", v.layout === "card");
+  }
 
   buildRoundFilter();
   const rows = visible();
   const hidden = pool().filter(t => !t.active).length;
   document.getElementById("ledgerTitle").textContent =
-    LEDGER_TITLE[admin ? v.tab : "user"];
+    LEDGER_TITLE[v.tab];
   document.getElementById("ledgerCount").textContent =
     `${rows.length}건 / 전체 ${pool().length}건` + (admin && hidden ? ` · 비활성 ${hidden}건` : "");
 
@@ -275,9 +261,5 @@ function actionsHtml(t) {
 async function reload() {
   [APP.topics, APP.fields, APP.rounds] = await Promise.all([
     api("/magazineapi/topics"), api("/magazineapi/fields"), api("/magazineapi/rounds")]);
-  buildFilters();
-  buildFormOptions();
-  renderStats();
-  render();
-  refreshDrawer();
+  renderPage();
 }

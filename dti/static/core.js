@@ -4,7 +4,8 @@ const APP = {
   topics: [],
   fields: [],
   rounds: [],
-  view: { mode: "user", tab: "articles", layout: "list" },
+  // 페이지는 서버가 정한다 — tab 은 lib/pages.php 의 DTI_PAGES 키다
+  view: { mode: document.body.dataset.mode, tab: document.body.dataset.page, layout: "list" },
 };
 
 const LAYOUT_KEY = "dti-list-layout";
@@ -36,13 +37,13 @@ function colorFor(name) {
 // 이 함수만 있으면 나머지 도메인 스크립트는 손대지 않아도 된다.
 function dtiApiURL(path) {
   const [p, qs] = String(path).replace(/^\/magazineapi/, "").split("?");
-  return "api.php?p=" + encodeURIComponent(p || "/") + (qs ? "&" + qs : "");
+  return DTI_BASE + "api.php?p=" + encodeURIComponent(p || "/") + (qs ? "&" + qs : "");
 }
 
 async function api(path, opts) {
   const r = await fetch(dtiApiURL(path), Object.assign({ credentials: "same-origin" }, opts || {}));
   if (r.status === 401) {
-    location.href = "../index.php";
+    location.href = DTI_BASE + "../index.php?need_login=dti";
     throw new Error("unauthenticated");
   }
   if (!r.ok) {

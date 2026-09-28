@@ -41,21 +41,6 @@ function openEdit(id) {
   openSheet();
 }
 
-// Volume 표기가 '279', '275. Oct-Nov', '20.2025' 로 섞여 있어 문자열 비교가 안 된다.
-// 앞머리 숫자만 한 매거진 안에서 호 번호 구실을 한다.
-function volumeHead(t) {
-  const found = /^\s*(\d+(?:\.\d+)?)/.exec(t.volume || "");
-  return found ? Number(found[1]) : -1;
-}
-
-// 최신 호 = Volume 번호 → 년도 → 등록 순.
-// 등록 순(id)을 먼저 보면 안 된다 — xlsx 에서 넘어온 행의 id 는 등록 시점이 아니라
-// 시트 행 순서라서, DI 가 279 가 아니라 2024년 275 호로 잡힌다.
-// 년도를 먼저 보면 안 된다 — 년도는 비워 둘 수 있는 값이라, 년도 없이 등록한
-// 새 호(280)가 년도 있는 옛 호(2025년 279)보다 뒤로 밀린다.
-const byNewestIssue = (a, b) =>
-  volumeHead(b) - volumeHead(a) || (b.year || 0) - (a.year || 0) || b.id - a.id;
-
 function latestIssueOf(magazine) {
   const rows = APP.topics.filter(t => t.magazine === magazine);
   const numbered = rows.filter(t => t.volume);

@@ -3,7 +3,8 @@ const SCORE_KINDS = [
   { kind: "material", label: "자료" }, { kind: "reaction", label: "반응" },
 ];
 const SCORE_RULE = "발표 완료 10 · 필수 주제 +5 · 자료 등록 +3 · 반응 1 (하루 최대 3)";
-let SCORE_YEAR = String(new Date().getFullYear());
+// 주소에 없으면 올해, year=all 이면 전체
+let SCORE_YEAR = queryOf("year") === "all" ? "" : (queryOf("year") || String(new Date().getFullYear()));
 
 function scoreYears() {
   const years = new Set([String(new Date().getFullYear())]);
@@ -13,6 +14,7 @@ function scoreYears() {
 
 function setScoreYear(y) {
   SCORE_YEAR = y;
+  writeQuery({ year: y || "all" }, false);
   renderScorePage();
 }
 

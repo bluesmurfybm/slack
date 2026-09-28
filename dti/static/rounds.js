@@ -16,7 +16,7 @@ function roundMatches(t, picked) {
 
 // 선택지는 지금 목록에 있는 회차만 — 구성원에게 숨긴 회차 이름이 드러나지 않는다
 function buildRoundFilter() {
-  const el = document.getElementById("f-round"), keep = el.value;
+  const el = document.getElementById("f-round"), keep = queryOf("round");
   const rows = pool();
   const ids = new Set(rows.map(t => t.round_id).filter(id => id != null));
   const rounds = APP.rounds.filter(r => ids.has(r.id)).sort(byRoundNoDesc);
@@ -127,10 +127,8 @@ function renderRoundsPage() {
 
 function showRoundTopics(key) {
   const rows = key === "none" ? APP.topics.filter(t => t.round_id == null) : topicsOfRound(key);
-  APP.view.tab = rows.length && rows.every(t => t.archived) ? "archive" : "articles";
-  buildRoundFilter();
-  document.getElementById("f-round").value = String(key);
-  render();
+  const target = rows.length && rows.every(t => t.archived) ? "archive" : "articles";
+  location.href = `${DTI_BASE}${target === "archive" ? "admin/archive.php" : "admin/index.php"}?round=${key}`;
 }
 
 /* ---------- 일괄 보관·숨김 ---------- */

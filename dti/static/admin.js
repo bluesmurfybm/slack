@@ -64,8 +64,7 @@ function closeFieldModal() {
 
 async function refreshFields() {
   APP.fields = await api("/magazineapi/fields");
-  buildFormOptions();
-  render();
+  renderPage();
 }
 
 async function addField() {
