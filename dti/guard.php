@@ -23,3 +23,21 @@ function dti_require_admin(array $ctx): void {
         throw new DtiError('관리자만 할 수 있습니다', 403);
     }
 }
+
+/** 화면 페이지의 입구. 들어오면 안 되는 사람은 여기서 돌려보내고 끝낸다. */
+function dti_page_begin(string $key): array {
+    $page = dti_page($key);
+    $identity = dti_identity();
+    $config = dti_config_from_portal();
+
+    $to = dti_page_redirect($config, $identity, $page);
+    if ($to !== null) {
+        header("Location: {$to}");
+        exit;
+    }
+    return $page + [
+        'identity' => $identity,
+        'is_admin' => dti_is_admin($config, $identity['email']),
+        'portal' => $page['base'] . rtrim($config['portal_url'], '/'),
+    ];
+}

@@ -54,17 +54,32 @@ function dti_round_delete(PDO $pdo, int $id): void {
     }
 }
 
-/** 매거진·Volume 이 글자 그대로 같은 아티클을 모두 담는다. [담은 수, 다른 회차에서 옮겨 온 수] */
-function dti_round_add_issue(PDO $pdo, int $id, string $magazine, string $volume): array {
-    $stmt = $pdo->prepare("SELECT round_id FROM dti_topics WHERE magazine = ? AND volume = ?");
-    $stmt->execute([$magazine, $volume]);
-    $rounds = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    $moved = count(array_filter($rounds, static fn ($rid) => $rid !== null && (int)$rid !== $id));
+/**
+ * 호마다 매거진·Volume 이 글자 그대로 같은 아티클을 모두 담는다. $issues 는 [매거진, Volume] 쌍 목록.
+ * [담은 수, 다른 회차에서 옮겨 온 수]
+ */
+function dti_round_add_issues(PDO $pdo, int $id, array $issues): array {
+    $select = $pdo->prepare("SELECT round_id FROM dti_topics WHERE magazine = ? AND volume = ?");
+    $update = $pdo->prepare("UPDATE dti_topics SET round_id = ? WHERE magazine = ? AND volume = ?");
+    $count = 0;
+    $moved = 0;
 
-    $pdo->prepare("UPDATE dti_topics SET round_id = ? WHERE magazine = ? AND volume = ?")
-        ->execute([$id, $magazine, $volume]);
+    $pdo->beginTransaction();
+    try {
+        foreach ($issues as [$magazine, $volume]) {
+            $select->execute([$magazine, $volume]);
+            $rounds = $select->fetchAll(PDO::FETCH_COLUMN);
+            $count += count($rounds);
+            $moved += count(array_filter($rounds, static fn ($rid) => $rid !== null && (int)$rid !== $id));
+            $update->execute([$id, $magazine, $volume]);
+        }
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
 
-    return [count($rounds), $moved];
+    return [$count, $moved];
 }
 
 /**

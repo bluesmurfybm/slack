@@ -16,7 +16,7 @@ function roundMatches(t, picked) {
 
 // 선택지는 지금 목록에 있는 회차만 — 구성원에게 숨긴 회차 이름이 드러나지 않는다
 function buildRoundFilter() {
-  const el = document.getElementById("f-round"), keep = el.value;
+  const el = document.getElementById("f-round"), keep = queryOf("round");
   const rows = pool();
   const ids = new Set(rows.map(t => t.round_id).filter(id => id != null));
   const rounds = APP.rounds.filter(r => ids.has(r.id)).sort(byRoundNoDesc);
@@ -127,10 +127,8 @@ function renderRoundsPage() {
 
 function showRoundTopics(key) {
   const rows = key === "none" ? APP.topics.filter(t => t.round_id == null) : topicsOfRound(key);
-  APP.view.tab = rows.length && rows.every(t => t.archived) ? "archive" : "articles";
-  buildRoundFilter();
-  document.getElementById("f-round").value = String(key);
-  render();
+  const target = rows.length && rows.every(t => t.archived) ? "archive" : "articles";
+  location.href = `${DTI_BASE}${target === "archive" ? "admin/archive.php" : "admin/index.php"}?round=${key}`;
 }
 
 /* ---------- 일괄 보관·숨김 ---------- */
@@ -212,11 +210,15 @@ function openIssueModal(id) {
   ISSUE_LIST = issuesOf(APP.topics);
   document.getElementById("issueTitle").textContent = `${roundName(roundById(id))}에 호 담기`;
   document.getElementById("issueList").innerHTML = ISSUE_LIST.length
-    ? ISSUE_LIST.map((i, n) => `<button type="button" class="issue-pick" onclick="pickIssue(${n})">
-        <span class="nm">${esc(issueName(i.magazine, i.volume))}</span>
-        <span class="muted">${i.rows.length}건 · ${esc(whereIssueIs(i.rows))}</span>
-      </button>`).join("")
+    ? ISSUE_LIST.map((i, n) => `<label class="issue-pick">
+        <input type="checkbox" value="${n}" onchange="updateIssuePick()">
+        <span class="issue-txt">
+          <span class="nm">${esc(issueName(i.magazine, i.volume))}</span>
+          <span class="muted">${i.rows.length}건 · ${esc(whereIssueIs(i.rows))}</span>
+        </span>
+      </label>`).join("")
     : '<p class="muted">등록된 아티클이 없습니다.</p>';
+  updateIssuePick();
   document.getElementById("issueOverlay").classList.add("open");
 }
 
@@ -224,12 +226,25 @@ function closeIssueModal() {
   document.getElementById("issueOverlay").classList.remove("open");
 }
 
-async function pickIssue(n) {
-  const i = ISSUE_LIST[n];
+function pickedIssues() {
+  return [...document.querySelectorAll("#issueList input:checked")].map(el => ISSUE_LIST[Number(el.value)]);
+}
+
+function updateIssuePick() {
+  const picked = pickedIssues();
+  const rows = picked.reduce((sum, i) => sum + i.rows.length, 0);
+  const btn = document.getElementById("issueSubmit");
+  btn.disabled = !picked.length;
+  btn.textContent = picked.length ? `호 ${picked.length}개 · 아티클 ${rows}건 담기` : "담기";
+}
+
+async function submitIssues() {
+  const picked = pickedIssues();
+  if (!picked.length) return;
   try {
     const res = await postJSON(`/magazineapi/rounds/${ISSUE_ROUND_ID}/issue`,
-      { magazine: i.magazine, volume: i.volume });
-    showToast(`${issueName(i.magazine, i.volume)} ${res.count}건을 담았습니다`
+      { issues: picked.map(i => ({ magazine: i.magazine, volume: i.volume })) });
+    showToast(`호 ${picked.length}개 · 아티클 ${res.count}건을 담았습니다`
       + (res.moved ? ` (다른 회차에서 ${res.moved}건 옮김)` : ""));
     closeIssueModal();
     await reload();

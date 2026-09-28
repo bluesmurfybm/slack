@@ -1,9 +1,10 @@
 const STATS_MONTHS = 6;
 const STATS_ROUNDS = 6;
-let STATS_ROUND = "";
+let STATS_ROUND = queryOf("round");
 
 function setStatsRound(v) {
   STATS_ROUND = v;
+  writeQuery({ round: v }, false);
   renderStatsPage();
 }
 

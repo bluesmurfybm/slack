@@ -66,7 +66,9 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   └── worker/                  Python 워커: ai_jobs 폴링, Slack Socket Mode 수신, claude/codex/svn/git 실행. .env 는 gitignore
 │
 ├── dti/                         DTI 발표 — PHP, 포털 세션·DB 공유
-│   ├── index.php                화면 한 장(SPA). magazine/web/index.html 이식
+│   ├── index.php                구성원 화면(아티클 목록)
+│   ├── admin/                   관리자 탭마다 한 장 — index(아티클 관리)·archive·rounds·fields·stats·score
+│   ├── views/                   레이아웃 조각 — head·tabs·foot, 목록 3장이 쓰는 list·topic_modals
 │   ├── api.php                  프런트 컨트롤러 — 출력하는 유일한 자리
 │   ├── bootstrap.php            require 목록 + 시간대
 │   ├── db.php                   설정 · 연결 · 스키마 · 시드
@@ -76,13 +78,14 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   │   ├── topics.php           아티클 읽기/쓰기 · 상태 판정 · 화면용 배열
 │   │   ├── presentations.php    발표 행 생성 · 삭제 · 배정 해제
 │   │   ├── rounds.php           회차 · 호 담기 · 일괄 보관/숨김
+│   │   ├── pages.php            페이지 표(DTI_PAGES) · 스크립트 목록 · 접근 판정
 │   │   ├── emotions.php, fields.php, members.php
 │   │   ├── related.php, score.php     연관 점수 · 멤버 점수
 │   │   ├── slots.php, storage.php, notify.php
 │   ├── routes/                  topics · materials · fields · rounds · scores · identity
 │   ├── static/, styles/         magazine/web/ 이식 (core.js 에 경로 변환만 추가)
 │   ├── tools/                   rebuild_related.php · backfill_materials.php(일회성)
-│   ├── tests/                   PHPUnit 205건
+│   ├── tests/                   PHPUnit 214건
 │   └── var/uploads/             발표자료 원본 (gitignore, .htaccess 로 직접 접근 차단)
 │
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
@@ -868,9 +871,13 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
 - **인증은 포털 세션**(`guard.php` 의 `dti_identity()`). 구성원 명단은 `portal_users` 에서
   오고, 팀 매핑과 관리자 명단만 `db.php` 의 `DTI_` 상수다. 개발 로그인(`DEV_LOGIN`)은 화면·API 에서 **없앴다** —
   포털 세션을 쓰는 이상 로그인 없이 화면을 보는 경로가 없다.
-- **화면은 거의 그대로다** — `core.js` 의 `dtiApiURL()` 이 `/magazineapi/topics/3` 을
-  `api.php?p=/topics/3` 으로 바꾼다. 나머지 도메인 스크립트는 손대지 않았다(`material.js` 의
-  다운로드 URL 한 줄만 같은 함수를 쓴다).
+- **화면은 탭마다 페이지다** — 구성원은 `dti/index.php`, 관리자 탭은 `dti/admin/*.php` 한 장씩이고,
+  페이지 목록은 `lib/pages.php` 의 `DTI_PAGES` 하나다(탭 링크·스크립트 목록·접근 판정이 여기서 나온다).
+  관리자가 아닌 사람이 `admin/` 을 열면 `dti_page_begin()` 이 목록으로 돌려보낸다. 페이지 안은 여전히
+  JS 가 API 로 그리며, `<body data-page>` 로 진입 함수를 고른다. **필터·열린 상세·통계 회차·점수 연도는
+  주소 쿼리에 있다**(`static/url.js`) — 필터는 `replaceState`, 상세 열기만 `pushState` 라 뒤로가기가
+  상세를 닫는다. `core.js` 의 `dtiApiURL()` 은 `/magazineapi/topics/3` 을 `DTI_BASE + api.php?p=/topics/3`
+  으로 바꾼다(`DTI_BASE` 는 `admin/` 에서 `../`). `views/*.php` 는 `$page` 없이 직접 열리면 404 다.
 - **연관 점수**는 `dti_related` 에 저장하고 등록·수정·삭제 때 다시 계산한다. 파이썬은 기동할
   때도 계산했지만 PHP 에는 기동 훅이 없으므로, 배점 상수를 바꾸면
   `php dti/tools/rebuild_related.php` 를 한 번 돌린다.
@@ -878,7 +885,7 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
   로딩은 `dti/bootstrap.php` 의 `require_once` 목록이 한다. **composer 는 테스트에만 쓴다.**
   서버에 composer 가 없어도, `vendor/` 를 올리지 않아도 파일만 복사하면 돌아간다
   (access·moodle·learn 과 같은 배포).
-- **테스트**: `vendor/bin/phpunit` (205건). 테스트를 돌릴 때만 `composer install` 이 필요하다. 테스트 DB 는 `slackapi_test` 를 쓴다
+- **테스트**: `vendor/bin/phpunit` (214건). 테스트를 돌릴 때만 `composer install` 이 필요하다. 테스트 DB 는 `slackapi_test` 를 쓴다
   (`dti/tests/bootstrap.php`, 환경변수 `DTI_TEST_DB` 로 바꿀 수 있다).
   **이 환경은 커밋마다 fsync 가 돌아 쓰기 한 건이 0.2초다** — 픽스처는 트랜잭션으로 묶고
   테이블은 TRUNCATE 가 아니라 DELETE 로 비운다(TRUNCATE 는 InnoDB 에서 DDL 이라 3초 가까이

@@ -68,9 +68,18 @@ function dti_round_issue(array $ctx, int $rid, array $body): array {
     $pdo = $ctx['pdo'];
 
     dti_round_find_or_fail($pdo, $rid);
-    $magazine = dti_want_one_of($body['magazine'] ?? '', DTI_MAGAZINES, '매거진');
-    $volume = dti_want_str($body, 'volume', 'Volume');
-    [$count, $moved] = dti_round_add_issue($pdo, $rid, $magazine, $volume);
+    $picked = $body['issues'] ?? null;
+    if (!is_array($picked) || !$picked) throw new DtiError('담을 호를 골라 주세요', 422);
+
+    // 하나라도 틀리면 아무것도 담지 않도록 검증을 먼저 끝낸다
+    $issues = [];
+    foreach ($picked as $issue) {
+        if (!is_array($issue)) throw new DtiError('호는 매거진과 Volume 으로 보내 주세요', 422);
+        $magazine = dti_want_one_of($issue['magazine'] ?? '', DTI_MAGAZINES, '매거진');
+        $volume = dti_want_str($issue, 'volume', 'Volume');
+        $issues["{$magazine}\0{$volume}"] = [$magazine, $volume];
+    }
+    [$count, $moved] = dti_round_add_issues($pdo, $rid, array_values($issues));
 
     return dti_json(['count' => $count, 'moved' => $moved]);
 }
