@@ -56,6 +56,7 @@ function dti_topic_create(array $ctx, array $body): array {
 
     $topic = dti_topic_new();
     dti_topic_fill($topic, $body, true);
+    $topic['round_id'] = dti_want_round_id($pdo, $body['round_id'] ?? null);
     $topic['created_by'] = $ctx['identity']['email'];
     $topic['created_at'] = date('Y-m-d H:i:s');
     $tid = dti_topic_insert($pdo, $topic);
@@ -75,6 +76,7 @@ function dti_topic_edit(array $ctx, int $tid, array $body): array {
 
     $topic = dti_topic_find_or_fail($pdo, $tid);
     dti_topic_fill($topic, $body, false);
+    if (array_key_exists('round_id', $body)) $topic['round_id'] = dti_want_round_id($pdo, $body['round_id']);
     dti_topic_update($pdo, $topic);
 
     // 예정일은 아티클이 아니라 발표 행에 있다. 값이 왔을 때만 손댄다

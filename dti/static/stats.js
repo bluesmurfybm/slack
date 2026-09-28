@@ -1,4 +1,11 @@
 const STATS_MONTHS = 6;
+const STATS_ROUNDS = 6;
+let STATS_ROUND = "";
+
+function setStatsRound(v) {
+  STATS_ROUND = v;
+  renderStatsPage();
+}
 
 function monthKey(d) { return String(d || "").slice(0, 7); }
 
@@ -14,15 +21,27 @@ function recentMonths(n) {
   return out;
 }
 
-function statsData() {
-  const all = APP.topics;
-  const done = all.filter(t => t.done_date);
+const doneOf = rows => rows.filter(t => t.done_date);
 
-  const months = recentMonths(STATS_MONTHS).map(m => ({
+// 고른 회차에서 끝나는 최근 회차들. 회차 하나 안에서는 월별 막대가 의미가 없다
+function recentRoundBars(round) {
+  const asc = [...APP.rounds].sort((a, b) => a.no - b.no);
+  const end = asc.findIndex(r => r.id === round.id);
+  return asc.slice(Math.max(0, end - STATS_ROUNDS + 1), end + 1).map(r => ({
+    key: r.id, label: `${r.no}회`, v: doneOf(topicsOfRound(r.id)).length,
+  }));
+}
+
+function statsData() {
+  const round = STATS_ROUND ? roundById(Number(STATS_ROUND)) : null;
+  const all = round ? topicsOfRound(round.id) : APP.topics;
+  const done = doneOf(all);
+
+  const bars = round ? recentRoundBars(round) : recentMonths(STATS_MONTHS).map(m => ({
     ...m, v: done.filter(t => monthKey(t.done_date) === m.key).length,
   }));
-  const cur = months[months.length - 1].v;
-  const prev = months.length > 1 ? months[months.length - 2].v : 0;
+  const cur = bars[bars.length - 1].v;
+  const prev = bars.length > 1 ? bars[bars.length - 2].v : 0;
 
   const waiting = all.filter(t => t.status === "미지정" && t.active && !t.archived).length;
 
@@ -55,19 +74,19 @@ function statsData() {
     .map(e => ({ ...e, v: all.reduce((s, t) => s + emotionCount(t, e.kind), 0) }))
     .sort((a, b) => b.v - a.v);
 
-  return { all, done, months, cur, prev, waiting, spoke: spoke.size, headcount,
+  return { round, all, done, bars, cur, prev, waiting, spoke: spoke.size, headcount,
            rate, likes, teams, rank, fields, reactions };
 }
 
-function deltaHtml(cur, prev) {
+function deltaHtml(cur, prev, before, same) {
   const d = cur - prev;
-  if (!d) return '<i class="flat">전월과 같음</i>';
-  return `<i class="${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} 전월 대비 ${d > 0 ? "+" : ""}${d}</i>`;
+  if (!d) return `<i class="flat">${same}</i>`;
+  return `<i class="${d > 0 ? "up" : "down"}">${d > 0 ? "▲" : "▼"} ${before} 대비 ${d > 0 ? "+" : ""}${d}</i>`;
 }
 
-function barsHtml(months) {
-  const max = Math.max(1, ...months.map(m => m.v));
-  return `<div class="bars">${months.map(m => `
+function barsHtml(bars) {
+  const max = Math.max(1, ...bars.map(m => m.v));
+  return `<div class="bars">${bars.map(m => `
     <div class="b"><em>${m.v}</em>
       <i style="height:${Math.round(m.v / max * 100)}%"></i>
       <span>${m.label}</span></div>`).join("")}</div>`;
@@ -78,12 +97,44 @@ const hbar = (name, pct, value) => `<div class="hbar">
   <span class="tr"><i style="width:${pct}%"></i></span>
   <span class="vl">${esc(value)}</span></div>`;
 
+function roundCompareRow(name, rows) {
+  const done = doneOf(rows);
+  const spoke = new Set(done.map(t => t.presenter_email).filter(Boolean)).size;
+  const likes = rows.reduce((s, t) => s + emotionCount(t, "like"), 0);
+  return `<tr><th>${esc(name)}</th><td>${rows.length}</td><td>${done.length}</td>
+    <td>${spoke}</td><td>${likes}</td></tr>`;
+}
+
+function roundCompareHtml() {
+  const rounds = [...APP.rounds].sort(byRoundNoDesc);
+  if (!rounds.length) return "";
+  const loose = APP.topics.filter(t => t.round_id == null);
+  return `<div class="box2" style="margin-top:14px">
+    <h3>회차 비교</h3>
+    <table class="rtable">
+      <thead><tr><th>회차</th><th>아티클</th><th>발표 완료</th><th>발표한 사람</th><th>좋아요</th></tr></thead>
+      <tbody>${rounds.map(r => roundCompareRow(roundLabel(r), topicsOfRound(r.id))).join("")}
+        ${loose.length ? roundCompareRow("회차 없음", loose) : ""}</tbody>
+    </table>
+  </div>`;
+}
+
+function statsRoundPicker(round) {
+  if (!APP.rounds.length) return "";
+  const picked = round ? String(round.id) : "";
+  const options = [["", "전체"], ...[...APP.rounds].sort(byRoundNoDesc).map(r => [String(r.id), roundLabel(r)])]
+    .map(([v, l]) => `<option value="${v}"${v === picked ? " selected" : ""}>${esc(l)}</option>`).join("");
+  return `<div class="stats-head"><select onchange="setStatsRound(this.value)">${options}</select></div>`;
+}
+
 function statsHtml() {
   const d = statsData();
   const perTalk = d.done.length ? (d.likes / d.done.length).toFixed(1) : "0.0";
-  return `
+  return `${statsRoundPicker(d.round)}
   <div class="stats">
-    <div class="stat"><span>이번 달 발표</span><b>${d.cur}건</b>${deltaHtml(d.cur, d.prev)}</div>
+    ${d.round
+      ? `<div class="stat"><span>이 회차 발표</span><b>${d.cur}건</b>${deltaHtml(d.cur, d.prev, "이전 회차", "이전 회차와 같음")}</div>`
+      : `<div class="stat"><span>이번 달 발표</span><b>${d.cur}건</b>${deltaHtml(d.cur, d.prev, "전월", "전월과 같음")}</div>`}
     <div class="stat"><span>예약 대기</span><b>${d.waiting}건</b><i class="flat">노출 중인 미지정 아티클</i></div>
     <div class="stat"><span>구성원 참여율</span><b>${d.rate}%</b><i class="flat">${d.spoke}/${d.headcount}명 발표 경험</i></div>
     <div class="stat"><span>누적 좋아요</span><b>${d.likes}</b><i class="flat">발표당 평균 ${perTalk}</i></div>
@@ -91,8 +142,8 @@ function statsHtml() {
 
   <div class="statgrid">
     <div class="box2">
-      <h3>월별 발표 건수</h3>
-      ${barsHtml(d.months)}
+      <h3>${d.round ? "회차별 발표 건수" : "월별 발표 건수"}</h3>
+      ${barsHtml(d.bars)}
     </div>
     <div class="box2">
       <h3>팀별 예약률</h3>
@@ -121,7 +172,8 @@ function statsHtml() {
         `<div class="rank"><span class="nm">${r.icon} ${esc(r.label)}</span>
          <span class="v">${r.v}</span></div>`).join("")}
     </div>
-  </div>`;
+  </div>
+  ${roundCompareHtml()}`;
 }
 
 function renderStatsPage() {

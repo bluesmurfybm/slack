@@ -113,7 +113,7 @@ abstract class TestCase extends BaseTestCase
     protected function truncate(): void
     {
         $pdo = $this->pdo;
-        foreach (['dti_related', 'dti_emotions', 'dti_presentations', 'dti_topics', 'dti_fields'] as $table) {
+        foreach (['dti_related', 'dti_emotions', 'dti_presentations', 'dti_topics', 'dti_fields', 'dti_rounds'] as $table) {
             $pdo->exec("DELETE FROM `{$table}`");
         }
         dti_seed_fields($this->pdo);

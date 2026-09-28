@@ -5,10 +5,10 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/guard.php';
 
 foreach (['http', 'members', 'emotions', 'topics', 'presentations', 'materials', 'related', 'score',
-          'fields', 'storage', 'slots', 'notify'] as $__lib) {
+          'fields', 'rounds', 'storage', 'slots', 'notify'] as $__lib) {
     require_once __DIR__ . '/lib/' . $__lib . '.php';
 }
-foreach (['identity', 'topics', 'materials', 'fields', 'scores'] as $__route) {
+foreach (['identity', 'topics', 'materials', 'fields', 'rounds', 'scores'] as $__route) {
     require_once __DIR__ . '/routes/' . $__route . '.php';
 }
 

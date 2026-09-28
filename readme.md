@@ -75,13 +75,14 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   │   ├── http.php             DtiError · 요청 파싱 · 응답 · 입력 검증 · 라우팅
 │   │   ├── topics.php           아티클 읽기/쓰기 · 상태 판정 · 화면용 배열
 │   │   ├── presentations.php    발표 행 생성 · 삭제 · 배정 해제
+│   │   ├── rounds.php           회차 · 호 담기 · 일괄 보관/숨김
 │   │   ├── emotions.php, fields.php, members.php
 │   │   ├── related.php, score.php     연관 점수 · 멤버 점수
 │   │   ├── slots.php, storage.php, notify.php
-│   ├── routes/                  topics · materials · fields · scores · identity
+│   ├── routes/                  topics · materials · fields · rounds · scores · identity
 │   ├── static/, styles/         magazine/web/ 이식 (core.js 에 경로 변환만 추가)
 │   ├── tools/                   rebuild_related.php · backfill_materials.php(일회성)
-│   ├── tests/                   PHPUnit 169건
+│   ├── tests/                   PHPUnit 205건
 │   └── var/uploads/             발표자료 원본 (gitignore, .htaccess 로 직접 접근 차단)
 │
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
@@ -848,8 +849,14 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
   없어 제외한다. **설치·PHP 설정·증상별 확인은 `dti/README.md`** 에 있다(LibreOffice 패키지,
   `max_execution_time` 과 `soffice_timeout` 관계 등).
 - **테이블은 `dti_*`** — `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`,
-  `dti_related`. slackapi DB 를 포털·slack·learn 과 공유하므로 맨이름을 쓸 수 없다.
+  `dti_related`, `dti_materials`, `dti_rounds`. slackapi DB 를 포털·slack·learn 과 공유하므로 맨이름을 쓸 수 없다.
   컬럼 추가는 `add_column_if_missing()` 을 거친다.
+- **회차는 아티클이 가리킨다** — `dti_topics.round_id` 가 `dti_rounds` 를 가리키고 `NULL` 이
+  회차 없음이다. 회차는 여러 매거진 호를 묶은 발표 단위이고, "호 담기"(`POST /rounds/{id}/issue`)는
+  매거진·Volume 이 글자 그대로 같은 아티클을 한 번에 넣는 편의 기능일 뿐이다. **보관·숨김은 회차에
+  두지 않는다** — 일괄 보관·숨김(`POST /rounds/{id}/topics`)은 아티클의 `archived`·`active` 를
+  한꺼번에 바꾸므로, 목록·예약 차단·통계는 아티클 값만 보면 된다. 대신 일괄 해제는 따로 보관·숨김해
+  둔 아티클까지 푼다. 회차별 통계는 화면이 `APP.topics` 로 계산한다.
 - **자료는 칸(slot)당 여러 건이다** — `dti_materials` 가 원본이고 `topic_id + slot` 으로 건다
   (발표는 아티클과 1:1 이라 발표자료도 topic_id 로 잡는다). 응답의 `material_kind`·`material_name`
   ·`material_url`·`material_path` 는 **첫 자료에서 파생한 값**이고, 목록은 `materials`·`scans`
@@ -871,7 +878,7 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
   로딩은 `dti/bootstrap.php` 의 `require_once` 목록이 한다. **composer 는 테스트에만 쓴다.**
   서버에 composer 가 없어도, `vendor/` 를 올리지 않아도 파일만 복사하면 돌아간다
   (access·moodle·learn 과 같은 배포).
-- **테스트**: `vendor/bin/phpunit` (169건). 테스트를 돌릴 때만 `composer install` 이 필요하다. 테스트 DB 는 `slackapi_test` 를 쓴다
+- **테스트**: `vendor/bin/phpunit` (205건). 테스트를 돌릴 때만 `composer install` 이 필요하다. 테스트 DB 는 `slackapi_test` 를 쓴다
   (`dti/tests/bootstrap.php`, 환경변수 `DTI_TEST_DB` 로 바꿀 수 있다).
   **이 환경은 커밋마다 fsync 가 돌아 쓰기 한 건이 0.2초다** — 픽스처는 트랜잭션으로 묶고
   테이블은 TRUNCATE 가 아니라 DELETE 로 비운다(TRUNCATE 는 InnoDB 에서 DDL 이라 3초 가까이
@@ -1331,7 +1338,7 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 - `schools`, `user_reads`, `user_pins`, `user_hides`, `local_assignments`, `sync_meta` — slack 부가기능
 - `gmail_mails` — Gmail 캐시(계정별 구분, `account` 컬럼)
 - `dti_topics`, `dti_presentations`, `dti_emotions`, `dti_fields`, `dti_related`,
-  `dti_materials` — dti 모듈
+  `dti_materials`, `dti_rounds` — dti 모듈
 - `school_access` — 대학별 접속·배포 정보(access 모듈). `schools` 가 마스터이고 여기는 상세라
   `school_id` 로 붙는다. 한 대학이 버전군별로 여러 행을 가질 수 있어(강원대 3.5 + 4.5)
   키는 `(school_id, grp)` 다.

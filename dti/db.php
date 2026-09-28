@@ -146,6 +146,7 @@ function dti_schema_tables(): array {
                 `note` VARCHAR(2000) NOT NULL DEFAULT '',
                 `active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '구성원 화면 노출',
                 `archived` TINYINT(1) NOT NULL DEFAULT 0,
+                `round_id` INT UNSIGNED NULL COMMENT 'NULL 이 회차 없음이다',
                 `material_kind` VARCHAR(10) NULL COMMENT 'link|file. NULL 이 없음이다',
                 `material_name` VARCHAR(500) NULL,
                 `material_url` VARCHAR(1000) NULL,
@@ -156,7 +157,8 @@ function dti_schema_tables(): array {
                 `scan_path` VARCHAR(255) NULL,
                 `created_by` VARCHAR(190) NOT NULL DEFAULT '',
                 `created_at` VARCHAR(19) NOT NULL DEFAULT '',
-                PRIMARY KEY (`id`)
+                PRIMARY KEY (`id`),
+                KEY `idx_round` (`round_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 
         'dti_presentations' => "
@@ -208,6 +210,16 @@ function dti_schema_tables(): array {
                 UNIQUE KEY `uq_name` (`name`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
 
+        'dti_rounds' => "
+            CREATE TABLE IF NOT EXISTS `dti_rounds` (
+                `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `no` INT UNSIGNED NOT NULL,
+                `title` VARCHAR(150) NOT NULL DEFAULT '',
+                `created_at` VARCHAR(19) NOT NULL DEFAULT '',
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uq_no` (`no`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
         'dti_related' => "
             CREATE TABLE IF NOT EXISTS `dti_related` (
                 `topic_id` INT UNSIGNED NOT NULL,
@@ -224,5 +236,6 @@ function dti_schema_alters(): array {
         "ALTER TABLE `dti_topics` ADD COLUMN `note` VARCHAR(2000) NOT NULL DEFAULT '' AFTER `done_date`",
         "ALTER TABLE `dti_topics` ADD COLUMN `active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `note`",
         "ALTER TABLE `dti_topics` ADD COLUMN `archived` TINYINT(1) NOT NULL DEFAULT 0 AFTER `active`",
+        "ALTER TABLE `dti_topics` ADD COLUMN `round_id` INT UNSIGNED NULL AFTER `archived`, ADD KEY `idx_round` (`round_id`)",
     ];
 }

@@ -70,6 +70,9 @@ document.addEventListener("keydown", e => {
   closeDate(null);
   closeDrawer();
   closeFieldModal();
+  closeRoundModal();
+  closeIssueModal();
+  closeAsk(false);
 });
 
 loadAll();

@@ -3,6 +3,7 @@ const APP = {
   me: {},
   topics: [],
   fields: [],
+  rounds: [],
   view: { mode: "user", tab: "articles", layout: "list" },
 };
 
@@ -83,5 +84,17 @@ function askDate(title, hint, initial) {
 function closeDate(v) {
   document.getElementById("dateOverlay").classList.remove("open");
   if (dateResolver) { const r = dateResolver; dateResolver = null; r(v); }
+}
+let askResolver = null;
+function askConfirm(title, text, okLabel) {
+  document.getElementById("askTitle").textContent = title;
+  document.getElementById("askText").textContent = text;
+  document.getElementById("askOk").textContent = okLabel;
+  document.getElementById("askOverlay").classList.add("open");
+  return new Promise(r => { askResolver = r; });
+}
+function closeAsk(ok) {
+  document.getElementById("askOverlay").classList.remove("open");
+  if (askResolver) { const r = askResolver; askResolver = null; r(ok); }
 }
 const today = () => new Date().toISOString().slice(0, 10);

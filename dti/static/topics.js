@@ -41,6 +41,7 @@ function visible() {
   return pool().filter(t =>
     (!v("f-field") || t.field === v("f-field")) &&
     (!v("f-magazine") || t.magazine === v("f-magazine")) &&
+    roundMatches(t, v("f-round")) &&
     (!v("f-team") || t.team === v("f-team")) &&
     (!myteam || teams.includes(t.team)) &&
     (!v("f-status") || STAGES[stageOf(t)].key === v("f-status")) &&
@@ -80,6 +81,7 @@ function buildFormOptions() {
   fill("f-team-in", APP.me.all_teams || [], "없음");
   fill("f-field-in", union(APP.fields.map(f => f.name), "field"), null);
   fill("f-magazine-in", APP.me.all_magazines || [], "매거진 선택");
+  buildRoundFormOptions();
 }
 
 function myStats() {
@@ -127,6 +129,7 @@ function render() {
     : "";
   document.getElementById("tabArticles").classList.toggle("on", v.tab === "articles");
   document.getElementById("tabArchive").classList.toggle("on", v.tab === "archive");
+  document.getElementById("tabRounds").classList.toggle("on", v.tab === "rounds");
   document.getElementById("tabFields").classList.toggle("on", v.tab === "fields");
   document.getElementById("tabStats").classList.toggle("on", v.tab === "stats");
   document.getElementById("tabScore").classList.toggle("on", v.tab === "score");
@@ -136,17 +139,21 @@ function render() {
   const isStats = admin && v.tab === "stats";
   const isFields = admin && v.tab === "fields";
   const isScore = admin && v.tab === "score";
-  const isPanel = isStats || isFields || isScore;
+  const isRounds = admin && v.tab === "rounds";
+  const isPanel = isStats || isFields || isScore || isRounds;
   document.getElementById("statsPage").style.display = isStats ? "" : "none";
   document.getElementById("fieldsPage").style.display = isFields ? "" : "none";
   document.getElementById("scorePage").style.display = isScore ? "" : "none";
+  document.getElementById("roundsPage").style.display = isRounds ? "" : "none";
   document.getElementById("toolbar").style.display = isPanel ? "none" : "";
   document.querySelector(".ledger-head").style.display = isPanel ? "none" : "";
   document.getElementById("list").style.display = isPanel ? "none" : "";
   if (isStats) { renderStatsPage(); return; }
   if (isFields) { renderFieldsPage(); return; }
   if (isScore) { renderScorePage(); return; }
+  if (isRounds) { renderRoundsPage(); return; }
 
+  buildRoundFilter();
   const rows = visible();
   const hidden = pool().filter(t => !t.active).length;
   document.getElementById("ledgerTitle").textContent =
@@ -216,7 +223,7 @@ function tagsHtml(t) {
 }
 
 function sourceHtml(t) {
-  return `<span class="muted">${esc(sourceOf(t) || "—")}</span>${materialChips(t)}`;
+  return `<span class="muted">${esc(sourceOf(t) || "—")}</span>${roundSourceHtml(t)}${materialChips(t)}`;
 }
 
 function metaHtml(t) {
@@ -266,8 +273,8 @@ function actionsHtml(t) {
 }
 
 async function reload() {
-  [APP.topics, APP.fields] = await Promise.all([
-    api("/magazineapi/topics"), api("/magazineapi/fields")]);
+  [APP.topics, APP.fields, APP.rounds] = await Promise.all([
+    api("/magazineapi/topics"), api("/magazineapi/fields"), api("/magazineapi/rounds")]);
   buildFilters();
   buildFormOptions();
   renderStats();

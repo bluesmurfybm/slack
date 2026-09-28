@@ -89,6 +89,7 @@ function dti_route(array $ctx, array $req): array {
         'members' => dti_route_identity($ctx, $req),
         'topics' => dti_route_topics($ctx, $req),
         'fields' => dti_route_fields($ctx, $req),
+        'rounds' => dti_route_rounds($ctx, $req),
         'score' => dti_route_scores($ctx, $req),
         default => throw new DtiError('없는 API 입니다', 404),
     };

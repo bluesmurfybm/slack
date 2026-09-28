@@ -14,9 +14,9 @@ final class SchemaTest extends TestCase
         return $out;
     }
 
-    public function test_다섯_테이블이_만들어진다(): void
+    public function test_테이블이_모두_만들어진다(): void
     {
-        foreach (['dti_topics', 'dti_presentations', 'dti_emotions', 'dti_fields', 'dti_related'] as $table) {
+        foreach (['dti_topics', 'dti_presentations', 'dti_emotions', 'dti_fields', 'dti_related', 'dti_rounds'] as $table) {
             $this->assertNotEmpty($this->columns($table), "{$table} 이 없다");
         }
     }
@@ -47,6 +47,22 @@ final class SchemaTest extends TestCase
         $pdo->exec("INSERT INTO dti_presentations (topic_id) VALUES (1)");
     }
 
+    public function test_회차_번호는_하나뿐이다(): void
+    {
+        $pdo = $this->pdo;
+        $pdo->exec("INSERT INTO dti_rounds (`no`) VALUES (12)");
+
+        $this->expectException(\PDOException::class);
+        $pdo->exec("INSERT INTO dti_rounds (`no`) VALUES (12)");
+    }
+
+    public function test_회차_없는_아티클은_round_id_가_NULL_이다(): void
+    {
+        $topics = $this->columns('dti_topics');
+        $this->assertSame('YES', $topics['round_id']['Null']);
+        $this->assertNull($topics['round_id']['Default']);
+    }
+
     public function test_migrate_는_여러_번_불러도_안전하다(): void
     {
         dti_migrate($this->pdo);
@@ -62,6 +78,18 @@ final class SchemaTest extends TestCase
 
         dti_migrate($this->pdo);
         $this->assertArrayHasKey('note', $this->columns('dti_topics'));
+    }
+
+    public function test_기존_설치본에는_round_id_가_인덱스와_함께_붙는다(): void
+    {
+        $pdo = $this->pdo;
+        $pdo->exec("ALTER TABLE dti_topics DROP COLUMN round_id");
+        $this->assertArrayNotHasKey('round_id', $this->columns('dti_topics'));
+
+        dti_migrate($this->pdo);
+        $this->assertArrayHasKey('round_id', $this->columns('dti_topics'));
+        $keys = $pdo->query("SHOW INDEX FROM dti_topics WHERE Key_name = 'idx_round'")->fetchAll();
+        $this->assertSame('round_id', $keys[0]['Column_name']);
     }
 
     public function test_분야는_기본값으로_시드된다(): void

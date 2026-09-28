@@ -33,6 +33,7 @@ function drawerHtml(t) {
     <div class="d-body">
       <dl class="kv">
         <dt>매거진</dt><dd>${esc(sourceOf(t) || "—")}</dd>
+        <dt>회차</dt><dd>${esc(roundLabel(t.round_id == null ? null : roundById(t.round_id)))}</dd>
         <dt>분야 / 키워드</dt><dd>${esc(t.field || "—")} · ${esc(t.keywords || "—")}</dd>
         <dt>발표자</dt><dd>${t.presenter ? esc(t.presenter)
       : (t.team ? `${esc(t.team)} 팀 배정` : '<span class="muted">아직 없음</span>')}</dd>

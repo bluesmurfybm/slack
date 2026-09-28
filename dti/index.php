@@ -88,6 +88,7 @@ if (!dti_identity()) {
     <nav class="tabs" id="adminTabs">
       <button type="button" id="tabArticles" class="on" onclick="setTab('articles')">아티클 관리</button>
       <button type="button" id="tabArchive" onclick="setTab('archive')">보관함</button>
+      <button type="button" id="tabRounds" onclick="setTab('rounds')">회차</button>
       <button type="button" id="tabFields" onclick="setTab('fields')">기타 관리</button>
       <button type="button" id="tabStats" onclick="setTab('stats')">통계</button>
       <button type="button" id="tabScore" onclick="setTab('score')">점수</button>
@@ -104,6 +105,7 @@ if (!dti_identity()) {
       <div class="filters">
         <select id="f-field" onchange="render()"></select>
         <select id="f-magazine" onchange="render()"></select>
+        <select id="f-round" onchange="render()" style="display:none"></select>
         <select id="f-team" onchange="render()"></select>
         <select id="f-status" onchange="render()"></select>
         <select id="f-req" onchange="render()">
@@ -142,6 +144,7 @@ if (!dti_identity()) {
     <section class="statspage" id="statsPage" style="display:none"></section>
     <section class="fieldspage" id="fieldsPage" style="display:none"></section>
     <section class="statspage" id="scorePage" style="display:none"></section>
+    <section class="roundspage" id="roundsPage" style="display:none"></section>
   </div>
 
   <div class="scrim" id="scrim" onclick="closeDrawer()"></div>
@@ -183,6 +186,10 @@ if (!dti_identity()) {
             <input id="f-page" type="text" placeholder="Page">
           </div>
           <p class="hint" id="issueHint" style="display:none"></p>
+        </div>
+        <div class="field">
+          <label>회차</label>
+          <select id="f-round-in"></select>
         </div>
         <div class="two">
           <div class="field">
@@ -310,10 +317,51 @@ if (!dti_identity()) {
     </div>
   </div>
 
+  <div class="overlay" id="askOverlay" onclick="if(event.target===this)closeAsk(false)">
+    <div class="cdialog">
+      <h3 id="askTitle"></h3>
+      <p id="askText"></p>
+      <div class="row-btn">
+        <button class="btn-ghost" onclick="closeAsk(false)">취소</button>
+        <button class="btn-submit" id="askOk" onclick="closeAsk(true)">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="roundOverlay" onclick="if(event.target===this)closeRoundModal()">
+    <div class="cdialog">
+      <h3 id="roundTitle">회차 추가</h3>
+      <p>여러 매거진 호를 한 회차로 묶습니다.</p>
+      <div class="field">
+        <label>회차 번호</label>
+        <input id="roundNo" type="number" min="1" step="1" onkeydown="if(event.key==='Enter')submitRound()">
+      </div>
+      <div class="field">
+        <label>이름 (선택)</label>
+        <input id="roundName" type="text" placeholder="예: 10월 정기" onkeydown="if(event.key==='Enter')submitRound()">
+      </div>
+      <div class="row-btn">
+        <button class="btn-ghost" onclick="closeRoundModal()">취소</button>
+        <button class="btn-submit" onclick="submitRound()">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="issueOverlay" onclick="if(event.target===this)closeIssueModal()">
+    <div class="cdialog">
+      <h3 id="issueTitle">호 담기</h3>
+      <p>고른 호의 아티클을 모두 이 회차에 담습니다. 다른 회차에 있던 아티클은 옮겨 옵니다.</p>
+      <div class="issue-list" id="issueList"></div>
+      <div class="row-btn">
+        <button class="btn-ghost" onclick="closeIssueModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <!-- 도메인별로 나뉜 스크립트. 로드 순서가 의존 순서다.
-     core -> topics -> related/drawer -> claim/form/material/assign/admin -> main.
+     core -> topics -> related/drawer -> claim/form/material/assign/rounds/stats/admin -> main.
      인라인 onclick 이 함수를 전역에서 찾으므로 ES 모듈이 아닌 클래식 스크립트로 둔다. -->
   <script src="static/core.js"></script>
   <script src="static/topics.js"></script>
@@ -324,6 +372,7 @@ if (!dti_identity()) {
   <script src="static/form.js"></script>
   <script src="static/material.js"></script>
   <script src="static/assign.js"></script>
+  <script src="static/rounds.js"></script>
   <script src="static/stats.js"></script>
   <script src="static/score.js"></script>
   <script src="static/admin.js"></script>

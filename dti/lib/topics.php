@@ -25,6 +25,7 @@ const DTI_TOPIC_DEFAULTS = [
     'note' => '',
     'active' => 1,
     'archived' => 0,
+    'round_id' => null,
     'material_kind' => null,
     'material_name' => null,
     'material_url' => null,
@@ -63,7 +64,7 @@ function dti_topic_from_row(array $row): array {
 
         $topic[$column] = match (true) {
             in_array($column, ['id', 'active', 'archived'], true) => (int)$value,
-            $column === 'year' => $value === null ? null : (int)$value,
+            in_array($column, ['year', 'round_id'], true) => $value === null ? null : (int)$value,
             in_array($column, DTI_TOPIC_NULLABLE, true) => $value === null ? null : (string)$value,
             default => (string)$value,
         };

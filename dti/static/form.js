@@ -1,5 +1,5 @@
 const FORM_IDS = ["f-title", "f-field-in", "f-keywords", "f-magazine-in",
-  "f-volume", "f-page", "f-team-in", "f-planned", "f-note"];
+  "f-volume", "f-page", "f-round-in", "f-team-in", "f-planned", "f-note"];
 
 let REQ = "recommended"; // 폼의 발표 구분 선택
 let EDIT_ID = null;
@@ -31,6 +31,7 @@ function openEdit(id) {
   const s = (el, v) => document.getElementById(el).value = (v == null ? "" : v);
   s("f-title", t.title); s("f-field-in", t.field); s("f-keywords", t.keywords);
   s("f-magazine-in", t.magazine); s("f-volume", t.volume); s("f-page", t.page);
+  s("f-round-in", t.round_id);
   s("f-team-in", t.team); s("f-planned", t.planned_date);
   s("f-note", t.note); s("f-active", t.active ? "1" : "0");
   document.getElementById("issueHint").style.display = "none";
@@ -82,6 +83,7 @@ function formValues() {
   return {
     title: g("f-title"), field: g("f-field-in"), keywords: g("f-keywords"),
     magazine: g("f-magazine-in"), volume: g("f-volume"), page: g("f-page"),
+    round_id: g("f-round-in"),
     requirement: REQ, team: g("f-team-in"), planned_date: g("f-planned"),
     note: g("f-note"), active: Number(g("f-active")),
   };
