@@ -126,6 +126,28 @@ def ensure_schema(conn) -> None:
     conn.commit()
 
 
+def rewrite_summaries(conn, fn, *, dry_run: bool = False) -> list[str]:
+    """모든 주차의 summary_md 에 fn 을 적용해 달라진 것만 UPDATE 한다. 바뀐 주차 목록을 돌려준다.
+    (갱신분 순서 바로잡기처럼 저장 형식이 바뀌었을 때 한 번 돌리는 용도)"""
+    changed = []
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, week, summary_md FROM moodle_weekly_report"
+                    " WHERE summary_md IS NOT NULL ORDER BY week")
+        rows = cur.fetchall()
+        for rid, week, md in rows:
+            new = fn(md)
+            if new == md:
+                continue
+            changed.append(week)
+            if not dry_run:
+                cur.execute("UPDATE moodle_weekly_report SET summary_md=%s WHERE id=%s", (new, rid))
+    if dry_run:
+        conn.rollback()
+    else:
+        conn.commit()
+    return changed
+
+
 def load_week(conn, week: str) -> dict | None:
     """갱신 대상 주차. 없으면 None. known 은 url → 처음 들어온 실행 번호와 이전 영향도."""
     with conn.cursor() as cur:

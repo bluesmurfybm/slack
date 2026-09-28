@@ -87,6 +87,47 @@ def test_append_update_puts_the_newest_block_on_top_and_keeps_previous_text():
     assert run_weekly.append_update(None, "- x", at, 1) == "### 갱신 2026-09-10 12:00 · 새 항목 1건\n\n- x"
 
 
+LEGACY = ("## 한눈에\n- 처음\n\n---\n\n### 갱신 2026-09-11 10:00 · 새 항목 1건\n\n- 첫 갱신"
+          "\n\n---\n\n### 갱신 2026-09-12 09:30 · 새 항목 2건\n\n- 둘째 갱신")
+FIXED = ("### 갱신 2026-09-12 09:30 · 새 항목 2건\n\n- 둘째 갱신"
+         "\n\n---\n\n### 갱신 2026-09-11 10:00 · 새 항목 1건\n\n- 첫 갱신"
+         "\n\n---\n\n## 한눈에\n- 처음")
+
+
+def test_reorder_updates_moves_legacy_blocks_on_top_newest_first():
+    assert run_weekly.reorder_updates(LEGACY) == FIXED
+    assert run_weekly.reorder_updates(FIXED) is FIXED # 이미 맞는 순서면 원문 그대로
+    assert run_weekly.reorder_updates("## 한눈에\n- 갱신 없음") == "## 한눈에\n- 갱신 없음"
+    assert run_weekly.reorder_updates(None) is None
+    # 새 방식 갱신이 위에 하나 얹힌 뒤에도 아래 남은 옛 블록을 끌어올린다
+    mixed = "### 갱신 2026-09-13 08:00 · 새 항목 1건\n\n- 셋째" + run_weekly.SEP + LEGACY
+    out = run_weekly.reorder_updates(mixed)
+    assert out.startswith("### 갱신 2026-09-13 08:00")
+    assert out.endswith("## 한눈에\n- 처음")
+    assert out.index("2026-09-12") < out.index("2026-09-11")
+
+
+def test_append_update_also_lifts_legacy_blocks():
+    at = datetime(2026, 9, 13, 0, 0, tzinfo=UTC) # KST 09:00
+    out = run_weekly.append_update(LEGACY, "- 셋째", at, 1)
+    assert out == "### 갱신 2026-09-13 09:00 · 새 항목 1건\n\n- 셋째" + run_weekly.SEP + FIXED
+
+
+def test_store_rewrite_summaries_updates_only_changed_rows_and_respects_dry_run():
+    rows = [(1, "2026-W37", LEGACY), (2, "2026-W38", FIXED), (3, "2026-W39", "## 그냥")]
+    conn = FakeConn(summary_rows=rows)
+    assert store.rewrite_summaries(conn, run_weekly.reorder_updates, dry_run=True) == ["2026-W37"]
+    assert not [s for s, _ in conn.log if s.startswith("UPDATE")]
+    assert conn.rollbacks == 1
+    assert conn.commits == 0
+
+    conn = FakeConn(summary_rows=rows)
+    assert store.rewrite_summaries(conn, run_weekly.reorder_updates) == ["2026-W37"]
+    ups = [(s, p) for s, p in conn.log if s.startswith("UPDATE")]
+    assert ups == [("UPDATE moodle_weekly_report SET summary_md=%s WHERE id=%s", (FIXED, 1))]
+    assert conn.commits == 1
+
+
 def test_summarize_none_mode_returns_reason(settings):
     s, why = summarizer.summarize(settings, "digest", "2026-W37")
     assert s is None
@@ -165,6 +206,8 @@ class FakeCursor:
             self._rows = [(self.conn.latest_week,)] if self.conn.latest_week else []
         elif flat.startswith("SELECT id FROM moodle_weekly_report WHERE week"):
             self._rows = [(self.conn.report_row[0],)] if self.conn.report_row else []
+        elif flat.startswith("SELECT id, week, summary_md"):
+            self._rows = list(self.conn.summary_rows)
 
     def executemany(self, sql, rows):
         self.conn.log.append((" ".join(sql.split()), list(rows)))
@@ -183,13 +226,18 @@ class FakeCursor:
 
 
 class FakeConn:
-    def __init__(self, report_row=None, item_rows=(), latest_week=None):
+    def __init__(self, report_row=None, item_rows=(), latest_week=None, summary_rows=()):
         self.log = []
         self.commits = 0
+        self.rollbacks = 0
         self.closed = False
         self.report_row = report_row
         self.item_rows = list(item_rows)
         self.latest_week = latest_week
+        self.summary_rows = list(summary_rows)
+
+    def rollback(self):
+        self.rollbacks += 1
 
     def cursor(self):
         return FakeCursor(self)
