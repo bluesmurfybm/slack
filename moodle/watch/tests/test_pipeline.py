@@ -76,11 +76,15 @@ def test_parse_update_reads_only_the_update_fields():
     assert s.actions == ["a"]
 
 
-def test_append_update_keeps_previous_text_and_adds_a_divider():
+def test_append_update_puts_the_newest_block_on_top_and_keeps_previous_text():
     at = datetime(2026, 9, 10, 3, 0, tzinfo=UTC) # KST 12:00
     out = run_weekly.append_update("## 한눈에\n- a\n", "- 새 글 [x](u)", at, 2)
-    assert out.startswith("## 한눈에\n- a\n\n---\n\n### 갱신 2026-09-10 12:00 · 새 항목 2건\n\n- 새 글")
-    assert run_weekly.append_update(None, "- x", at, 1).startswith("---")
+    assert out == "### 갱신 2026-09-10 12:00 · 새 항목 2건\n\n- 새 글 [x](u)\n\n---\n\n## 한눈에\n- a"
+    # 두 번째 갱신은 첫 갱신보다 위에 온다 — 처음 요약은 늘 맨 밑
+    again = run_weekly.append_update(out, "- 더 새 글", at, 1)
+    assert again.startswith("### 갱신 2026-09-10 12:00 · 새 항목 1건\n\n- 더 새 글\n\n---\n\n### 갱신")
+    assert again.endswith("## 한눈에\n- a")
+    assert run_weekly.append_update(None, "- x", at, 1) == "### 갱신 2026-09-10 12:00 · 새 항목 1건\n\n- x"
 
 
 def test_summarize_none_mode_returns_reason(settings):
@@ -400,9 +404,8 @@ def test_run_refresh_summarizes_only_new_items_and_appends(tmp_path, monkeypatch
     assert "- [NEW] [x] new" in seen["prompt"]
     assert "old" not in seen["prompt"].split("새로 들어온 항목")[1]
     assert report["headline"] == "이전 헤드라인" # 헤드라인·기존 요약은 그대로
-    assert report["summary_md"].startswith("## 한눈에\n- 이전 요약\n\n---\n\n### 갱신 20")
-    assert re.search(r"### 갱신 \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 새 항목 1건\n\n", report["summary_md"])
-    assert report["summary_md"].endswith("- new 가 들어왔다 [x](u-new)")
+    assert re.match(r"### 갱신 \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 새 항목 1건\n\n", report["summary_md"])
+    assert report["summary_md"].endswith("- new 가 들어왔다 [x](u-new)\n\n---\n\n## 한눈에\n- 이전 요약")
     assert report["updates_md"] == "- new 가 들어왔다 [x](u-new)"
     assert report["actions"] == ["이전 액션", "새 액션"]
     assert report["status"] == "ok"

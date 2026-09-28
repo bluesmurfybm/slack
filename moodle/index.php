@@ -249,7 +249,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
 
 
         <?php if ($report['summary_md']): ?>
-          <div class="hint-annot tiny">요약 글을 드래그하면 <b>형광펜</b>·<b>메모</b>·<b>북마크</b>를 남길 수 있습니다. 표시는 팀이 함께 보고, 북마크는 <a href="bookmarks.php">북마크 페이지</a>에 모입니다. 갱신된 내용은 구분선 아래에 날짜와 함께 덧붙습니다.</div>
+          <div class="hint-annot tiny">요약 글을 드래그하면 <b>형광펜</b>·<b>메모</b>·<b>북마크</b>를 남길 수 있습니다. 표시는 팀이 함께 보고, 북마크는 <a href="bookmarks.php">북마크 페이지</a>에 모입니다. 갱신된 내용은 날짜와 함께 맨 위에 오고, 구분선 아래가 그 이전 요약입니다.</div>
           <div class="summary annot" data-target="summary"><?= moodle_md_emphasize_pag(moodle_md($report['summary_md'])) ?></div>
         <?php else: ?>
           <p class="tiny" style="margin-top:14px">이 주차는 요약 없이 원문 항목만 수집되었습니다.</p>

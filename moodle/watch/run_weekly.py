@@ -82,13 +82,15 @@ def decide_status(results: list[Result], summary: summarizer.Summary | None,
 
 
 def append_update(previous_md: str | None, updates_md: str, at: datetime, new_count: int) -> str:
-    """기존 요약 본문은 그대로 두고 구분선 아래에 갱신분을 덧붙인다.
+    """갱신분을 맨 위에 얹고 구분선 아래에 기존 요약 본문을 그대로 둔다.
 
+    아래에 덧붙이면 화면을 열었을 때 늘 같은 첫 화면이라 바뀐 게 없어 보인다. 최신 갱신이
+    위에 오고 그 아래로 이전 갱신, 맨 밑이 처음 요약이다.
     본문을 다시 쓰지 않아야 형광펜·메모(텍스트 앵커)가 자리를 잃지 않는다.
     """
     stamp = at.astimezone(KST).strftime("%Y-%m-%d %H:%M")
-    block = f"---\n\n### 갱신 {stamp} · 새 항목 {new_count}건\n\n{updates_md.strip()}"
-    return (previous_md.rstrip() + "\n\n" + block) if previous_md else block
+    block = f"### 갱신 {stamp} · 새 항목 {new_count}건\n\n{updates_md.strip()}"
+    return (block + "\n\n---\n\n" + previous_md.strip()) if previous_md else block
 
 
 def _resolve_period(state: State, opts: RunOptions, conn) -> tuple:
@@ -140,7 +142,7 @@ def _full_report(settings: Settings, results: list[Result], items: list[Item], *
 def _refresh_report(settings: Settings, results: list[Result], items: list[Item], *, # noqa: PLR0913
                     previous: dict, period: tuple[str, str], week: str, run_no: int,
                     generated_at: datetime):
-    """갱신: 기존 요약은 그대로 두고, 이전 실행 이후 새로 들어온 항목만 요약해 아래에 덧붙인다.
+    """갱신: 기존 요약은 그대로 두고, 이전 실행 이후 새로 들어온 항목만 요약해 맨 위에 얹는다.
 
     이전 실행이 요약 없이 끝났으면(요약기 실패 등) 덧붙일 본문이 없으니 전체 요약을 다시 만든다.
     """
