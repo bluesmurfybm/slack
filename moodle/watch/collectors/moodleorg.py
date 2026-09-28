@@ -2,6 +2,7 @@ import difflib
 import hashlib
 
 from collectors.base import Context, Result
+from core import tokencheck
 from core.config import PAG_BOOKS, PAG_COURSE_ID, PAG_FORUMS, PAG_PAGES
 from core.items import Item, clip, html_to_text, is_focus, iso
 
@@ -13,7 +14,15 @@ DIFF_CLIP = 3000
 
 
 class WsError(RuntimeError):
-    pass
+    """moodle.org 가 JSON 으로 돌려준 예외. errorcode 로 토큰 문제와 코스 접근 문제를 가른다.
+    debuginfo 에 진짜 사유(만료·IP 제한·함수 미허용 등)가 오므로 버리지 않는다."""
+
+    def __init__(self, function: str, errorcode: str | None, message: str | None,
+                 debuginfo: str | None = None):
+        self.function, self.errorcode = function, errorcode or ""
+        self.message, self.debuginfo = message or "", debuginfo or ""
+        detail = f" ({self.debuginfo})" if self.debuginfo else ""
+        super().__init__(f"{function}: {self.errorcode} {self.message}{detail}")
 
 
 def call(ctx: Context, function: str, **params):
@@ -21,7 +30,7 @@ def call(ctx: Context, function: str, **params):
          "moodlewsrestformat": "json", **params}
     data = ctx.http.get_json(WS, params=q)
     if isinstance(data, dict) and data.get("exception"):
-        raise WsError(f"{function}: {data.get('errorcode')} {data.get('message')}")
+        raise WsError(function, data.get("errorcode"), data.get("message"), data.get("debuginfo"))
     return data
 
 
@@ -122,12 +131,24 @@ def _page_changes(ctx: Context, modules: dict, stats: dict) -> list[Item]:
 
 
 def collect(ctx: Context) -> Result:
-    if not ctx.settings.moodle_org_token:
-        return Result("moodleorg", status="skipped",
-                      note="MOODLE_ORG_TOKEN 이 없어 moodle.org PAG 코스는 건너뛰었다")
+    # 코스를 부르기 전에 토큰부터 본다. 코스 호출이 accessexception 으로 죽으면 토큰이 죽은 건지
+    # 수강 등록이 풀린 건지 리포트만 봐서는 알 수 없었다. 결과는 var/token_status.json 에도
+    # 남겨 뷰어가 관리자에게 알린다.
+    token = tokencheck.probe_and_record(ctx.settings, ctx.http)
+    if token["kind"] == "missing":
+        return Result("moodleorg", status="skipped", note=token["note"])
+    if not token["ok"]:
+        return Result("moodleorg", status="failed", note=token["note"])
 
     since_ts, until_ts = int(ctx.since.timestamp()), int(ctx.until.timestamp())
-    sections = call(ctx, "core_course_get_contents", courseid=PAG_COURSE_ID)
+    try:
+        sections = call(ctx, "core_course_get_contents", courseid=PAG_COURSE_ID)
+    except WsError as e:
+        if e.errorcode in tokencheck.COURSE_ACCESS_ERRORS:
+            return Result("moodleorg", status="failed",
+                          note=tokencheck.course_access_note(
+                              token, e.errorcode, f"{e.message} {e.debuginfo}".strip()))
+        raise
     modules = {m["id"]: m for s in sections for m in s.get("modules", [])}
 
     items: list[Item] = []

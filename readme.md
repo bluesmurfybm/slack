@@ -1454,6 +1454,49 @@ journalctl -u moodle-watch -n 50 --no-pager
   `Environment=CLAUDE_CLI=/home/blueapp_core/.local/bin/claude` 를 service 에 넣는다. systemd 는
   `.bashrc` 의 PATH 를 모른다.
 
+### moodle.org 토큰 점검 (systemd timer, 금요일 오후)
+
+moodle.org 모바일 WS 토큰은 만료돼도 알려 주는 곳이 없다 — 보안 키 페이지에 유효기간이 안 보이고,
+만료·삭제되면 그냥 사라져 월요일 수집이 통째로 실패한다. 그래서 금요일 14:00 KST 에 `--check-token`
+으로 살아 있는지만 보고 `var/token_status.json` 에 남긴다. 주간 수집도 코스를 부르기 전에 같은 점검을
+해 이 파일을 갱신한다. 뷰어(`moodle/index.php`)는 이 파일의 `ok` 가 false 면 **관리자(`MOODLE_ADMINS`)에게만**
+토스트를 띄운다. 새 토큰을 넣고 요약하기를 한 번 누르면(또는 다음 점검이 돌면) 파일이 바뀌어 토스트가 사라진다.
+
+`/etc/systemd/system/moodle-token-check.service` 는 moodle-watch.service 를 복사해 ExecStart 만 바꾼다
+(Environment/EnvironmentFile 줄은 그대로):
+
+```ini
+ExecStart=/home/blueapp_core/moodle/watch/venv/bin/python run_weekly.py --check-token
+```
+
+`/etc/systemd/system/moodle-token-check.timer`:
+
+```ini
+[Unit]
+Description=moodle.org 토큰 점검 (금요일 오후)
+
+[Timer]
+OnCalendar=Fri *-*-* 14:00:00 Asia/Seoul
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```sh
+sudo systemctl daemon-reload && sudo systemctl enable --now moodle-token-check.timer
+sudo systemctl start moodle-token-check.service && cat /home/blueapp_core/moodle/watch/var/token_status.json
+```
+
+무효면 서비스가 종료 코드 1 로 끝나 `systemctl status` 에도 failed 로 남는다. 토큰 재발급은
+`login/token.php` 를 다시 부르면 된다(응답 JSON 의 `token` 값, 32자 16진수. 살아 있는 토큰이 있으면
+같은 값을, 없으면 새 값을 준다):
+
+```sh
+curl -s -A "BluesoftMoodleWatch/1.0" https://moodle.org/login/token.php \
+  --data-urlencode "username=amitoa" --data-urlencode "password=..." --data-urlencode "service=moodle_mobile_app"
+```
+
 ### 화면 '지금 다시 가져오기' (systemd path)
 
 버튼이 남기는 요청 파일을 감시하는 유닛 두 개. `/etc/systemd/system/moodle-watch-refresh.path`:
@@ -1494,6 +1537,7 @@ sudo systemctl enable --now moodle-watch-refresh.path
 | `start-limit-hit` 로 refresh 서비스 반복 실패 | 요청 폴더에 처리 못 한 파일이 남아 glob 에 계속 걸림 | `sudo rm -f var/requests/*` → `systemctl reset-failed moodle-watch-refresh.service` → `systemctl restart moodle-watch-refresh.path` |
 | 리포트가 `partial` 이고 노트에 `요약 없음` | claude 로그인 만료 또는 CLI 경로 | blueapp_core 로 `claude auth login`, `/etc/moodle-watch.env` 의 CLAUDE_CLI 확인. 다음 요약하기가 전체 요약을 다시 만든다 |
 | moodle.org 책(book) 두 권 `HTTPError` | Cloudflare 가 pluginfile 차단 | 구조적 제약. 재시도 무의미, 코스에서 직접 읽는다 |
+| moodleorg 소스 노트가 `토큰이 무효(invalidtoken …)` / 관리자 화면에 토큰 토스트 | 모바일 WS 토큰이 만료·삭제됨(moodle.org 는 알려 주지 않는다) | `login/token.php` 로 재발급 → `/etc/moodle-watch.env` 의 `MOODLE_ORG_TOKEN` 교체 → 요약하기. 노트가 `토큰은 유효하지만 PAG 코스에 접근할 수 없음` 이면 코스 17257 수강 등록을 확인 |
 
 `PathExistsGlob` 은 파일이 남아 있는 동안 계속 service 를 부르므로, 처리 후 파일을 지우는 배치
 쪽 동작이 곧 종료 조건이다. 처리중·실패 파일(`*.running`, `*.failed`)은 `.json` 으로 끝나지 않아 glob 에 걸리지 않는다.

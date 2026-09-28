@@ -139,6 +139,13 @@ a{color:var(--blue)}
 .btn.ghost{background:#fff;color:var(--muted);border:1px solid var(--line)}
 .btn.ghost:hover{color:var(--ink);border-color:var(--muted);background:#fff}
 .pending.stale{background:var(--mid-bg);border-color:#F1E2A8;color:#7A5A00}
+/* 토큰 점검 토스트(관리자만). 오른쪽 아래에 떠 있고 닫기 전까지 남는다 — 몇 초 뒤 사라지면 놓친다. */
+.toast{position:fixed;right:18px;bottom:18px;z-index:60;width:min(440px,calc(100vw - 32px));background:var(--mid-bg);border:1px solid #F1E2A8;color:#5C4400;border-radius:12px;box-shadow:var(--shadow);padding:12px 14px;font-size:13px;line-height:1.5}
+.toast .t-h{display:flex;align-items:center;justify-content:space-between;font-weight:700;margin-bottom:4px}
+.toast .t-x{border:0;background:none;font-size:20px;line-height:1;cursor:pointer;color:inherit;padding:0 2px}
+.toast .t-b{word-break:break-word}
+.toast .t-f{margin-top:6px;font-size:12px;color:#7A5A00}
+.toast .t-f a{color:inherit}
 form.inline{display:inline}
 
 /* 형광펜·메모 */

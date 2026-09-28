@@ -21,7 +21,7 @@ import refresh_queue
 import summarizer
 from collectors import devdocs, github, moodlecom, moodleorg, tracker
 from collectors.base import Context, Result, run_safely
-from core import store
+from core import store, tokencheck
 from core.config import Settings
 from core.http import Http
 from core.items import Item
@@ -242,6 +242,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--refresh", metavar="WEEK", help="이 주차를 다시 수집·요약해 갱신한다")
     ap.add_argument("--requests", action="store_true", help="화면에서 남긴 갱신 요청을 처리한다")
     ap.add_argument("--serve", action="store_true", help="갱신 요청을 기다리며 계속 처리한다(로컬)")
+    ap.add_argument("--check-token", action="store_true",
+                    help="moodle.org 토큰이 살아 있는지만 확인해 var/token_status.json 에 남긴다"
+                         "(금요일 오후 timer 용). 무효면 종료 코드 1")
     ap.add_argument("--trigger", default="cli", choices=["cli", "timer", "manual"],
                     help="실행 이력에 남길 실행 주체")
     ap.add_argument("--dry-run", action="store_true", help="DB 에 저장하지 않는다")
@@ -258,6 +261,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.serve or a.requests:
         refresh_queue.serve(settings, _refresh_runner(settings), once=a.requests)
         return 0
+    if a.check_token:
+        st = tokencheck.probe_and_record(settings, Http(settings))
+        logger.info("[token] %s", st["note"])
+        print(json.dumps(st, ensure_ascii=False))
+        return 0 if st["ok"] else 1
 
     opts = RunOptions(since=_parse_dt(a.since), until=_parse_dt(a.until),
                       week=a.refresh or a.week, dry_run=a.dry_run, trigger=a.trigger,

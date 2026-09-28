@@ -219,11 +219,28 @@ function moodle_runs($reportId) {
  * 기본은 watch/var/requests. 서버에서 DATA_DIR 을 바꿨으면 moodle/config.local.php 에
  * return ['data_dir' => '/경로'] 로 알려준다.
  */
-function moodle_requests_dir() {
+/** 배치의 var/ (state.json·요청 폴더·토큰 상태). config.local.php 의 data_dir 로 옮길 수 있다. */
+function moodle_data_dir() {
     $local = __DIR__ . '/config.local.php';
     $cfg = is_file($local) ? (require $local) : [];
     $dataDir = $cfg['data_dir'] ?? (__DIR__ . '/watch/var');
-    return rtrim($dataDir, "/\\") . '/requests';
+    return rtrim($dataDir, "/\\");
+}
+
+function moodle_requests_dir() {
+    return moodle_data_dir() . '/requests';
+}
+
+/**
+ * 배치가 남긴 moodle.org 토큰 점검 결과(var/token_status.json). 없으면 null.
+ * 주간 수집과 금요일 오후 `run_weekly.py --check-token` 이 갱신한다. ok 가 false 면 화면이
+ * 관리자에게 토스트로 알린다 — 토큰은 만료돼도 moodle.org 가 알려 주지 않기 때문이다.
+ */
+function moodle_token_status() {
+    $path = moodle_data_dir() . '/token_status.json';
+    if (!is_file($path)) return null;
+    $st = json_decode((string)@file_get_contents($path), true);
+    return is_array($st) ? $st : null;
 }
 
 /**

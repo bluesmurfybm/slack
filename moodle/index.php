@@ -36,6 +36,9 @@ $isAdmin    = moodle_is_admin($me['email']);
 $viewAsUser = $isAdmin && (($_GET['as'] ?? '') === 'user');
 $showAdmin  = $isAdmin && !$viewAsUser;
 $asParam    = $viewAsUser ? '&as=user' : '';
+// moodle.org 토큰 점검 결과. 무효·연결 실패면 관리자에게만 토스트로 띄운다(일반 계정 화면 보기 중에도).
+$tokenStatus = $isAdmin ? moodle_token_status() : null;
+$tokenAlert  = $tokenStatus && empty($tokenStatus['ok']) ? $tokenStatus : null;
 
 $SOURCE_LABEL = [
     'moodleorg' => 'moodle.org PAG',
@@ -638,5 +641,13 @@ document.querySelectorAll(".src.go").forEach(function(el){
   });
 })();
 </script>
+<?php if ($tokenAlert): ?>
+<!-- 토큰 점검 토스트: 닫기 전까지 남는다. 새 토큰으로 요약하기를 돌리면 상태 파일이 바뀌어 사라진다. -->
+<div class="toast" id="tokenToast" role="alert">
+  <div class="t-h"><span>🔑 moodle.org 토큰 점검</span><button type="button" class="t-x" onclick="document.getElementById('tokenToast').remove()" aria-label="닫기">&times;</button></div>
+  <div class="t-b"><?= h($tokenAlert['note'] ?? '토큰 상태를 확인할 수 없습니다') ?></div>
+  <div class="t-f">확인 <?= h(moodle_kst(substr((string)($tokenAlert['checked_at'] ?? ''), 0, 19))) ?> KST · <a href="https://moodle.org/user/managetoken.php" target="_blank" rel="noopener">보안 키 페이지</a> · 새 토큰을 넣고 요약하기를 누르면 이 알림이 사라집니다</div>
+</div>
+<?php endif; ?>
 </body>
 </html>

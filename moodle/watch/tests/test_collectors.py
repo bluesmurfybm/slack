@@ -2,9 +2,11 @@ import json
 
 import requests
 
+import run_weekly
 from collectors import devdocs, github, moodlecom, moodleorg, tracker
 from collectors.base import run_safely
-from conftest import SINCE, make_ctx
+from conftest import SINCE, FakeHttp, make_ctx
+from core import tokencheck
 
 JIRA = "https://moodle.atlassian.net/rest/api/3/search/jql"
 GH = "https://api.github.com/repos/moodle/moodle"
@@ -171,6 +173,8 @@ def test_moodleorg_collects_new_posts_and_page_changes(settings):
 
     def ws(p):
         fn = p["wsfunction"]
+        if fn == "core_webservice_get_site_info":
+            return {"username": "amitoa", "userid": 1}
         if fn == "core_course_get_contents":
             return contents
         if fn == "mod_forum_get_forum_discussions":
@@ -222,13 +226,69 @@ def test_moodleorg_collects_new_posts_and_page_changes(settings):
     assert r2.stats["pages_changed"] == 1
 
 
-def test_moodleorg_surfaces_ws_errors(settings):
+WS = "https://moodle.org/webservice/rest/server.php"
+
+
+def test_moodleorg_reports_a_dead_token_without_calling_the_course(settings):
     settings = settings.model_copy(update={"moodle_org_token": "bad"})
-    routes = {"https://moodle.org/webservice/rest/server.php":
-              {"exception": "moodle_exception", "errorcode": "invalidtoken", "message": "Invalid token"}}
-    r = run_safely("moodleorg", moodleorg.collect, make_ctx(settings, routes))
+    routes = {WS: {"exception": "moodle_exception", "errorcode": "invalidtoken",
+                   "message": "Invalid token - token not found"}}
+    ctx = make_ctx(settings, routes)
+    r = run_safely("moodleorg", moodleorg.collect, ctx)
     assert r.status == "failed"
     assert "invalidtoken" in r.note
+    assert "재발급" in r.note
+    assert "Traceback" not in r.note
+    assert [c[1]["wsfunction"] for c in ctx.http.calls] == ["core_webservice_get_site_info"]
+    st = json.loads((settings.data_path / "token_status.json").read_text(encoding="utf-8"))
+    assert st["ok"] is False
+    assert st["kind"] == "token"
+    assert st["errorcode"] == "invalidtoken"
+
+
+def test_moodleorg_tells_course_access_apart_from_a_dead_token(settings):
+    settings = settings.model_copy(update={"moodle_org_token": "tok"})
+
+    def ws(p):
+        if p["wsfunction"] == "core_webservice_get_site_info":
+            return {"username": "amitoa", "userid": 1}
+        return {"exception": "webservice_access_exception", "errorcode": "accessexception",
+                "message": "Access control exception", "debuginfo": "not enrolled"}
+
+    ctx = make_ctx(settings, {WS: ws})
+    r = run_safely("moodleorg", moodleorg.collect, ctx)
+    assert r.status == "failed"
+    assert "토큰은 유효(amitoa)" in r.note
+    assert "17257" in r.note
+    assert "not enrolled" in r.note
+    st = json.loads((settings.data_path / "token_status.json").read_text(encoding="utf-8"))
+    assert st["ok"] is True
+
+
+def test_moodleorg_network_failure_is_not_blamed_on_the_token(settings):
+    settings = settings.model_copy(update={"moodle_org_token": "tok"})
+
+    def blocked(p):
+        raise requests.HTTPError("403 Client Error: Forbidden") # Cloudflare 가 REST 를 막는 경우
+
+    r = run_safely("moodleorg", moodleorg.collect, make_ctx(settings, {WS: blocked}))
+    assert r.status == "failed"
+    assert "연결하지 못함" in r.note
+    assert "토큰 문제가 아닐 수 있다" in r.note
+
+
+def test_check_token_cli_writes_status_and_exit_code(settings, monkeypatch, capsys):
+    settings = settings.model_copy(update={"moodle_org_token": "tok"})
+    monkeypatch.setattr(run_weekly, "Settings", lambda: settings)
+    monkeypatch.setattr(run_weekly, "Http", lambda s: FakeHttp({WS: {"username": "amitoa", "userid": 1}}))
+    assert run_weekly.main(["--check-token"]) == 0
+    assert json.loads(capsys.readouterr().out)["ok"] is True
+    assert tokencheck.status_path(settings).is_file()
+
+    monkeypatch.setattr(run_weekly, "Http", lambda s: FakeHttp(
+        {WS: {"exception": "x", "errorcode": "invalidtoken", "message": "Invalid token"}}))
+    assert run_weekly.main(["--check-token"]) == 1
+    assert json.loads(tokencheck.status_path(settings).read_text(encoding="utf-8"))["kind"] == "token"
 
 
 def test_run_safely_turns_exceptions_into_failed_results(settings):
