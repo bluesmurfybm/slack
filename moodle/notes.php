@@ -2,7 +2,7 @@
 /**
  * 요약본 형광펜·메모 API. 화면에서 드래그해 남긴 표시를 저장하고 지운다.
  *  - POST JSON {action:"add", report_id, target, kind, text, prefix, suffix, note, color}
- *  - POST JSON {action:"delete", id}  — 본인 것만
+ *  - POST JSON {action:"delete", id}  — 본인 것만. 관리자(MOODLE_ADMINS)는 누구 것이든
  *  표시는 팀이 함께 본다(작성자 이름이 붙는다). 위치는 텍스트 앵커(선택한 글 + 앞뒤 문맥)로 저장하고
  *  화면(JS)이 다시 찍는다. 요약이 갱신되어 문장이 바뀌면 앵커를 못 찾은 표시는 목록에만 남는다.
  *  사용자가 누를 때만 INSERT/DELETE 한 번씩 — 폴링은 없다.
@@ -45,7 +45,7 @@ $action = $in['action'] ?? '';
 if ($action === 'delete') {
     $id = (int)($in['id'] ?? 0);
     if ($id <= 0) $fail('id');
-    $ok = moodle_note_delete($id, $me['email']);
+    $ok = moodle_note_delete($id, $me['email'], moodle_is_admin($me['email']));
     echo json_encode(['ok' => $ok, 'id' => $id]);
     exit;
 }

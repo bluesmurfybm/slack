@@ -149,10 +149,15 @@ function moodle_bookmark_count() {
     return (int)moodle_db()->query("SELECT COUNT(*) FROM moodle_note WHERE kind = 'bookmark'")->fetchColumn();
 }
 
-/** 본인 메모만 지운다. 지웠으면 true. */
-function moodle_note_delete($id, $email) {
-    $stmt = moodle_db()->prepare("DELETE FROM moodle_note WHERE id = ? AND user_email = ?");
-    $stmt->execute([(int)$id, $email]);
+/** 본인 표시만 지운다. 관리자(MOODLE_ADMINS)는 누구 것이든 지운다. 지웠으면 true. */
+function moodle_note_delete($id, $email, $isAdmin = false) {
+    if ($isAdmin) {
+        $stmt = moodle_db()->prepare("DELETE FROM moodle_note WHERE id = ?");
+        $stmt->execute([(int)$id]);
+    } else {
+        $stmt = moodle_db()->prepare("DELETE FROM moodle_note WHERE id = ? AND user_email = ?");
+        $stmt->execute([(int)$id, $email]);
+    }
     return $stmt->rowCount() > 0;
 }
 

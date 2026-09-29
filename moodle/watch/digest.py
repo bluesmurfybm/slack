@@ -23,11 +23,16 @@ def _line(it: Item, excerpt_chars: int, *, new: bool) -> str:
     return head + (f"\n    {body}" if body else "")
 
 
-def build_update(results: list[Result], new_items: list[Item], since: str, until: str,
-                 run_no: int) -> str:
-    """갱신 실행용. 이전 실행 이후 새로 들어온 항목만 [NEW] 로 나열하고 통계는 참고로 붙인다."""
+def build_update(results: list[Result], new_items: list[Item], since: str, until: str, # noqa: PLR0913
+                 run_no: int, *, previous_headline: str = "") -> str:
+    """갱신 실행용. 이전 실행 이후 새로 들어온 항목만 [NEW] 로 나열하고 통계는 참고로 붙인다.
+    이전 헤드라인도 준다 — 갱신이 헤드라인을 다시 쓰려면 지금 것이 무엇인지 알아야 한다."""
     out = [f"수집 구간: {since[:10]} ~ {until[:10]} (UTC) — {run_no}회차 갱신",
-           f"이전 실행 이후 새로 들어온 항목 {len(new_items)}건. 아래 [NEW] 항목만 요약한다.", ""]
+           f"이전 실행 이후 새로 들어온 항목 {len(new_items)}건. 아래 [NEW] 항목만 요약한다."]
+    if previous_headline:
+        out.append(f"이전 헤드라인: {previous_headline} "
+                   "— 이번 갱신을 반영해 headline 을 다시 쓴다.")
+    out.append("")
     by_src: dict[str, list[Item]] = {}
     for it in new_items:
         by_src.setdefault(it.source, []).append(it)

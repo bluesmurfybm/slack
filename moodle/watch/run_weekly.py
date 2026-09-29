@@ -11,6 +11,7 @@
 import argparse
 import json
 import logging
+import re
 import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -81,14 +82,42 @@ def decide_status(results: list[Result], summary: summarizer.Summary | None,
     return "ok"
 
 
-def append_update(previous_md: str | None, updates_md: str, at: datetime, new_count: int) -> str:
-    """기존 요약 본문은 그대로 두고 구분선 아래에 갱신분을 덧붙인다.
+UPDATE_HEAD = re.compile(r"^### 갱신 (\d{4}-\d{2}-\d{2} \d{2}:\d{2})")
+HR = re.compile(r"(?m)^[ \t]*(?:-{3,}|\*{3,})[ \t]*$") # db.php::moodle_md 가 <hr> 로 그리는 줄
+SEP = "\n\n---\n\n"
 
+
+def reorder_updates(md: str | None) -> str | None:
+    """예전 방식(아래에 덧붙임)으로 저장된 요약을 최신 갱신이 위로 오게 다시 세운다.
+
+    구분선으로 나눈 블록 가운데 `### 갱신 …` 으로 시작하는 것이 갱신분이다. 갱신분을 시각
+    내림차순으로 앞에 두고, 나머지(처음 요약)는 순서 그대로 맨 밑에 둔다. 블록 안 글은 손대지
+    않으니 형광펜·메모 앵커는 그대로다. 이미 그 순서면 원문을 그대로 돌려준다.
+    """
+    if not md or not md.strip():
+        return md
+    blocks = [b.strip() for b in HR.split(md) if b.strip()]
+    updates = [b for b in blocks if UPDATE_HEAD.match(b)]
+    if not updates:
+        return md
+    body = [b for b in blocks if not UPDATE_HEAD.match(b)]
+    updates.sort(key=lambda b: UPDATE_HEAD.match(b).group(1), reverse=True)
+    wanted = updates + body
+    return md if wanted == blocks else SEP.join(wanted)
+
+
+def append_update(previous_md: str | None, updates_md: str, at: datetime, new_count: int) -> str:
+    """갱신분을 맨 위에 얹고 구분선 아래에 기존 요약 본문을 그대로 둔다.
+
+    아래에 덧붙이면 화면을 열었을 때 늘 같은 첫 화면이라 바뀐 게 없어 보인다. 최신 갱신이
+    위에 오고 그 아래로 이전 갱신, 맨 밑이 처음 요약이다. 예전 방식으로 아래에 붙어 있던
+    갱신분도 이때 같이 위로 올린다.
     본문을 다시 쓰지 않아야 형광펜·메모(텍스트 앵커)가 자리를 잃지 않는다.
     """
     stamp = at.astimezone(KST).strftime("%Y-%m-%d %H:%M")
-    block = f"---\n\n### 갱신 {stamp} · 새 항목 {new_count}건\n\n{updates_md.strip()}"
-    return (previous_md.rstrip() + "\n\n" + block) if previous_md else block
+    block = f"### 갱신 {stamp} · 새 항목 {new_count}건\n\n{updates_md.strip()}"
+    previous_md = reorder_updates(previous_md)
+    return (block + SEP + previous_md.strip()) if previous_md else block
 
 
 def _resolve_period(state: State, opts: RunOptions, conn) -> tuple:
@@ -140,7 +169,7 @@ def _full_report(settings: Settings, results: list[Result], items: list[Item], *
 def _refresh_report(settings: Settings, results: list[Result], items: list[Item], *, # noqa: PLR0913
                     previous: dict, period: tuple[str, str], week: str, run_no: int,
                     generated_at: datetime):
-    """갱신: 기존 요약은 그대로 두고, 이전 실행 이후 새로 들어온 항목만 요약해 아래에 덧붙인다.
+    """갱신: 기존 요약은 그대로 두고, 이전 실행 이후 새로 들어온 항목만 요약해 맨 위에 얹는다.
 
     이전 실행이 요약 없이 끝났으면(요약기 실패 등) 덧붙일 본문이 없으니 전체 요약을 다시 만든다.
     """
@@ -151,7 +180,8 @@ def _refresh_report(settings: Settings, results: list[Result], items: list[Item]
         return report, digest, summary, why
     new_items = [it for it in items if it.url not in previous["known"]]
     if new_items:
-        digest = digest_mod.build_update(results, new_items, period[0], period[1], run_no)
+        digest = digest_mod.build_update(results, new_items, period[0], period[1], run_no,
+                                         previous_headline=previous["headline"])
         summary, why = summarizer.summarize_update(settings, digest, week)
         if summary is None:
             logger.warning("갱신 요약 없음: %s", why)
@@ -163,8 +193,11 @@ def _refresh_report(settings: Settings, results: list[Result], items: list[Item]
                               len(new_items)) if summary and summary.updates_md else None)
     report = _base_report(results, period, week, run_no=run_no, generated_at=generated_at,
                           status=status)
+    # 헤드라인은 갱신 요약이 다시 쓴 것을 쓴다. 처음 실행이 "수집 실패" 였다가 갱신에서 수집이
+    # 됐는데도 제목이 계속 실패로 남던 문제. 요약이 없으면(새 항목 없음 등) 이전 것을 둔다.
+    headline = (summary.headline if summary and summary.headline else previous["headline"])
     report.update({
-        "headline": previous["headline"],
+        "headline": headline,
         "summary_md": combined, # None 이면 store 가 기존 요약을 그대로 둔다
         "updates_md": (summary.updates_md or None) if summary else None,
         "actions": previous["actions"] + (summary.actions if summary else []),
@@ -181,6 +214,11 @@ def run(settings: Settings, opts: RunOptions, conn_factory=None) -> dict:
     if opts.refresh or not opts.dry_run:
         conn = conn_factory(settings.db_params())
         store.ensure_schema(conn)
+        # 예전 방식으로 아래에 붙어 저장된 갱신분을 위로 올린다. 몇 줄 안 되고 이미 맞으면
+        # UPDATE 가 없어서 매번 해도 부담이 없다 — 손으로 명령을 돌릴 필요가 없게.
+        fixed = store.rewrite_summaries(conn, reorder_updates)
+        if fixed:
+            logger.info("옛 갱신분 순서를 바로잡음: %s", ", ".join(fixed))
     try:
         since_dt, until_dt, week, previous = _resolve_period(state, opts, conn)
         run_no = previous["run_count"] + 1 if previous else 1
@@ -242,6 +280,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--refresh", metavar="WEEK", help="이 주차를 다시 수집·요약해 갱신한다")
     ap.add_argument("--requests", action="store_true", help="화면에서 남긴 갱신 요청을 처리한다")
     ap.add_argument("--serve", action="store_true", help="갱신 요청을 기다리며 계속 처리한다(로컬)")
+    ap.add_argument("--reorder-updates", action="store_true",
+                    help="저장된 모든 주차의 요약에서 예전 방식으로 아래에 붙은 갱신분을 위로 "
+                         "올린다(배치가 시작할 때마다 알아서 하므로 보통은 필요 없다. "
+                         "--dry-run 이면 대상 주차만 보여 준다)")
     ap.add_argument("--check-token", action="store_true",
                     help="moodle.org 토큰이 살아 있는지만 확인해 var/token_status.json 에 남긴다"
                          "(금요일 오후 timer 용). 무효면 종료 코드 1")
@@ -260,6 +302,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if a.serve or a.requests:
         refresh_queue.serve(settings, _refresh_runner(settings), once=a.requests)
+        return 0
+    if a.reorder_updates:
+        conn = store.connect(settings.db_params())
+        try:
+            weeks = store.rewrite_summaries(conn, reorder_updates, dry_run=a.dry_run)
+        finally:
+            conn.close()
+        print(json.dumps({"dry_run": a.dry_run, "reordered": weeks}, ensure_ascii=False))
         return 0
     if a.check_token:
         st = tokencheck.probe_and_record(settings, Http(settings))

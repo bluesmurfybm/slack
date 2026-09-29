@@ -249,7 +249,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
 
 
         <?php if ($report['summary_md']): ?>
-          <div class="hint-annot tiny">요약 글을 드래그하면 <b>형광펜</b>·<b>메모</b>·<b>북마크</b>를 남길 수 있습니다. 표시는 팀이 함께 보고, 북마크는 <a href="bookmarks.php">북마크 페이지</a>에 모입니다. 갱신된 내용은 구분선 아래에 날짜와 함께 덧붙습니다.</div>
+          <div class="hint-annot tiny">요약 글을 드래그하면 <b>형광펜</b>·<b>메모</b>·<b>북마크</b>를 남길 수 있습니다. 표시는 팀이 함께 보고, 북마크는 <a href="bookmarks.php">북마크 페이지</a>에 모입니다. 갱신된 내용은 날짜와 함께 맨 위에 오고, 구분선 아래가 그 이전 요약입니다.</div>
           <div class="summary annot" data-target="summary"><?= moodle_md_emphasize_pag(moodle_md($report['summary_md'])) ?></div>
         <?php else: ?>
           <p class="tiny" style="margin-top:14px">이 주차는 요약 없이 원문 항목만 수집되었습니다.</p>
@@ -455,6 +455,7 @@ document.querySelectorAll(".src.go").forEach(function(el){
 (function(){
   var REPORT_ID = <?= $report ? (int)$report['id'] : 0 ?>;
   var ME = <?= json_encode($me['email'] ?? '', JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
+  var CAN_DELETE_ALL = <?= $isAdmin ? 'true' : 'false' ?>; // 관리자는 남의 표시도 지운다(일반 화면 보기 중에도)
   var NOTES = <?= json_encode(array_map(function ($n) {
       return ['id' => (int)$n['id'], 'target' => $n['target'], 'kind' => $n['kind'], 'text' => $n['anchor_text'],
               'prefix' => $n['prefix'], 'suffix' => $n['suffix'], 'note' => $n['note'], 'color' => $n['color'],
@@ -515,7 +516,7 @@ document.querySelectorAll(".src.go").forEach(function(el){
     var li = document.createElement("li"); li.dataset.id = n.id;
     li.innerHTML = '<span class="swatch ' + esc(n.color) + '"></span><div class="nb"><span class="q">“' + esc(n.text.length > 120 ? n.text.slice(0, 119) + "…" : n.text) + '”</span>' +
       (n.note ? '<div class="nt">' + esc(n.note) + '</div>' : '') + '<div class="tiny">' + esc((n.user_name || n.user_email) + " · " + n.created_at) + '</div></div>' +
-      (n.user_email === ME ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '');
+      (n.user_email === ME || CAN_DELETE_ALL ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '');
     list.appendChild(li); box.hidden = false;
     document.getElementById("notesCount").textContent = list.children.length;
   }
@@ -553,7 +554,7 @@ document.querySelectorAll(".src.go").forEach(function(el){
     var n = byId[mark.dataset.id]; if(!n) return;
     var rect = mark.getBoundingClientRect();
     npop.innerHTML = '<div class="npop-h"><span class="swatch ' + esc(n.color) + '"></span><b>' + esc(n.user_name || n.user_email) + '</b><span class="tiny">' + esc(n.created_at) + '</span>' +
-      (n.user_email === ME ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '') + '</div>' +
+      (n.user_email === ME || CAN_DELETE_ALL ? '<button class="x" type="button" title="지우기" data-del="' + n.id + '">×</button>' : '') + '</div>' +
       (n.note ? '<div class="npop-b">' + esc(n.note) + '</div>'
               : n.kind === "bookmark" ? '<div class="npop-b tiny">🔖 북마크 · <a href="bookmarks.php">북마크 페이지</a></div>'
               : '<div class="npop-b tiny">형광펜</div>');

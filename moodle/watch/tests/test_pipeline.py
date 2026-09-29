@@ -38,8 +38,10 @@ def test_digest_lists_only_focus_tracker_items_and_stats():
 def test_digest_update_lists_only_new_items():
     old, new = _item("moodlecom", "old", "u-old"), _item("moodlecom", "new", "u-new")
     results = [Result("moodlecom", [old, new]), Result("tracker", [], {"resolved": 3})]
-    text = digest.build_update(results, [new], "2026-09-01", "2026-09-10", 2)
+    text = digest.build_update(results, [new], "2026-09-01", "2026-09-10", 2,
+                               previous_headline="PAG 수집 실패")
     assert "2회차 갱신" in text
+    assert "이전 헤드라인: PAG 수집 실패" in text
     assert "새로 들어온 항목 1건" in text
     assert "- [NEW] [x] new" in text
     assert "old" not in text
@@ -68,19 +70,66 @@ def test_summary_parse_tolerates_missing_updates():
     assert s.updates_md == ""
 
 
-def test_parse_update_reads_only_the_update_fields():
-    s = summarizer.parse_update('{"updates_md": "### PAG\\n- 새 글", "impacts": [{"url": "u", "impact": "중", "reason": "r"}], "actions": ["a"]}', "cli", "")
+def test_parse_update_reads_the_update_fields_and_a_new_headline():
+    s = summarizer.parse_update('{"headline": "새 제목", "updates_md": "### PAG\\n- 새 글", "impacts": [{"url": "u", "impact": "중", "reason": "r"}], "actions": ["a"]}', "cli", "")
+    assert s.headline == "새 제목"
+    assert summarizer.parse_update('{"updates_md": "- x", "impacts": [], "actions": []}', "cli", "").headline == ""
     assert s.summary_md == ""
     assert s.updates_md.startswith("### PAG")
     assert s.impacts[0]["impact"] == "중"
     assert s.actions == ["a"]
 
 
-def test_append_update_keeps_previous_text_and_adds_a_divider():
+def test_append_update_puts_the_newest_block_on_top_and_keeps_previous_text():
     at = datetime(2026, 9, 10, 3, 0, tzinfo=UTC) # KST 12:00
     out = run_weekly.append_update("## 한눈에\n- a\n", "- 새 글 [x](u)", at, 2)
-    assert out.startswith("## 한눈에\n- a\n\n---\n\n### 갱신 2026-09-10 12:00 · 새 항목 2건\n\n- 새 글")
-    assert run_weekly.append_update(None, "- x", at, 1).startswith("---")
+    assert out == "### 갱신 2026-09-10 12:00 · 새 항목 2건\n\n- 새 글 [x](u)\n\n---\n\n## 한눈에\n- a"
+    # 두 번째 갱신은 첫 갱신보다 위에 온다 — 처음 요약은 늘 맨 밑
+    again = run_weekly.append_update(out, "- 더 새 글", at, 1)
+    assert again.startswith("### 갱신 2026-09-10 12:00 · 새 항목 1건\n\n- 더 새 글\n\n---\n\n### 갱신")
+    assert again.endswith("## 한눈에\n- a")
+    assert run_weekly.append_update(None, "- x", at, 1) == "### 갱신 2026-09-10 12:00 · 새 항목 1건\n\n- x"
+
+
+LEGACY = ("## 한눈에\n- 처음\n\n---\n\n### 갱신 2026-09-11 10:00 · 새 항목 1건\n\n- 첫 갱신"
+          "\n\n---\n\n### 갱신 2026-09-12 09:30 · 새 항목 2건\n\n- 둘째 갱신")
+FIXED = ("### 갱신 2026-09-12 09:30 · 새 항목 2건\n\n- 둘째 갱신"
+         "\n\n---\n\n### 갱신 2026-09-11 10:00 · 새 항목 1건\n\n- 첫 갱신"
+         "\n\n---\n\n## 한눈에\n- 처음")
+
+
+def test_reorder_updates_moves_legacy_blocks_on_top_newest_first():
+    assert run_weekly.reorder_updates(LEGACY) == FIXED
+    assert run_weekly.reorder_updates(FIXED) is FIXED # 이미 맞는 순서면 원문 그대로
+    assert run_weekly.reorder_updates("## 한눈에\n- 갱신 없음") == "## 한눈에\n- 갱신 없음"
+    assert run_weekly.reorder_updates(None) is None
+    # 새 방식 갱신이 위에 하나 얹힌 뒤에도 아래 남은 옛 블록을 끌어올린다
+    mixed = "### 갱신 2026-09-13 08:00 · 새 항목 1건\n\n- 셋째" + run_weekly.SEP + LEGACY
+    out = run_weekly.reorder_updates(mixed)
+    assert out.startswith("### 갱신 2026-09-13 08:00")
+    assert out.endswith("## 한눈에\n- 처음")
+    assert out.index("2026-09-12") < out.index("2026-09-11")
+
+
+def test_append_update_also_lifts_legacy_blocks():
+    at = datetime(2026, 9, 13, 0, 0, tzinfo=UTC) # KST 09:00
+    out = run_weekly.append_update(LEGACY, "- 셋째", at, 1)
+    assert out == "### 갱신 2026-09-13 09:00 · 새 항목 1건\n\n- 셋째" + run_weekly.SEP + FIXED
+
+
+def test_store_rewrite_summaries_updates_only_changed_rows_and_respects_dry_run():
+    rows = [(1, "2026-W37", LEGACY), (2, "2026-W38", FIXED), (3, "2026-W39", "## 그냥")]
+    conn = FakeConn(summary_rows=rows)
+    assert store.rewrite_summaries(conn, run_weekly.reorder_updates, dry_run=True) == ["2026-W37"]
+    assert not [s for s, _ in conn.log if s.startswith("UPDATE")]
+    assert conn.rollbacks == 1
+    assert conn.commits == 0
+
+    conn = FakeConn(summary_rows=rows)
+    assert store.rewrite_summaries(conn, run_weekly.reorder_updates) == ["2026-W37"]
+    ups = [(s, p) for s, p in conn.log if s.startswith("UPDATE")]
+    assert ups == [("UPDATE moodle_weekly_report SET summary_md=%s WHERE id=%s", (FIXED, 1))]
+    assert conn.commits == 1
 
 
 def test_summarize_none_mode_returns_reason(settings):
@@ -161,6 +210,8 @@ class FakeCursor:
             self._rows = [(self.conn.latest_week,)] if self.conn.latest_week else []
         elif flat.startswith("SELECT id FROM moodle_weekly_report WHERE week"):
             self._rows = [(self.conn.report_row[0],)] if self.conn.report_row else []
+        elif flat.startswith("SELECT id, week, summary_md"):
+            self._rows = list(self.conn.summary_rows)
 
     def executemany(self, sql, rows):
         self.conn.log.append((" ".join(sql.split()), list(rows)))
@@ -179,13 +230,18 @@ class FakeCursor:
 
 
 class FakeConn:
-    def __init__(self, report_row=None, item_rows=(), latest_week=None):
+    def __init__(self, report_row=None, item_rows=(), latest_week=None, summary_rows=()):
         self.log = []
         self.commits = 0
+        self.rollbacks = 0
         self.closed = False
         self.report_row = report_row
         self.item_rows = list(item_rows)
         self.latest_week = latest_week
+        self.summary_rows = list(summary_rows)
+
+    def rollback(self):
+        self.rollbacks += 1
 
     def cursor(self):
         return FakeCursor(self)
@@ -379,7 +435,7 @@ def test_run_refresh_summarizes_only_new_items_and_appends(tmp_path, monkeypatch
         seen["system"] = system
         seen["prompt"] = prompt
         seen["schema"] = schema
-        return json.dumps({"updates_md": "- new 가 들어왔다 [x](u-new)",
+        return json.dumps({"headline": "갱신된 헤드라인", "updates_md": "- new 가 들어왔다 [x](u-new)",
                            "impacts": [{"url": "u-new", "impact": "중", "reason": "r"}],
                            "actions": ["새 액션"]}), "claude-opus-5"
 
@@ -399,14 +455,17 @@ def test_run_refresh_summarizes_only_new_items_and_appends(tmp_path, monkeypatch
     assert "updates_md" in seen["schema"]["properties"]
     assert "- [NEW] [x] new" in seen["prompt"]
     assert "old" not in seen["prompt"].split("새로 들어온 항목")[1]
-    assert report["headline"] == "이전 헤드라인" # 헤드라인·기존 요약은 그대로
-    assert report["summary_md"].startswith("## 한눈에\n- 이전 요약\n\n---\n\n### 갱신 20")
-    assert re.search(r"### 갱신 \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 새 항목 1건\n\n", report["summary_md"])
-    assert report["summary_md"].endswith("- new 가 들어왔다 [x](u-new)")
+    assert "이전 헤드라인: 이전 헤드라인" in seen["prompt"]
+    assert "headline" in seen["schema"]["required"]
+    assert report["headline"] == "갱신된 헤드라인" # 갱신 요약이 다시 쓴 제목. 기존 요약 본문은 그대로
+    assert re.match(r"### 갱신 \d{4}-\d{2}-\d{2} \d{2}:\d{2} · 새 항목 1건\n\n", report["summary_md"])
+    assert report["summary_md"].endswith("- new 가 들어왔다 [x](u-new)\n\n---\n\n## 한눈에\n- 이전 요약")
     assert report["updates_md"] == "- new 가 들어왔다 [x](u-new)"
     assert report["actions"] == ["이전 액션", "새 액션"]
     assert report["status"] == "ok"
     assert conn.params_of("UPDATE moodle_weekly_report")[-2:] == (2, 7)
+    # 시작할 때 옛 갱신분 순서 정리를 한 번 거친다(대상이 없으면 UPDATE 없음)
+    assert any(s.startswith("SELECT id, week, summary_md") for s, _ in conn.log)
     assert (tmp_path / "var" / "snapshots" / "2026-W37-r2.json").is_file()
 
 

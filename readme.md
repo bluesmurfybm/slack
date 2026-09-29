@@ -988,8 +988,11 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
   시각까지 늘려 이번 주에 새로 생긴 것까지 잡고, 지난 주차는 같은 구간을 다시 본다.
 - **갱신은 기존 요약을 다시 쓰지 않는다.** 형광펜·메모가 텍스트 앵커라 본문이 바뀌면 자리를 잃기
   때문이다. 갱신 실행은 이전 실행 이후 새로 들어온 항목만 골라(`digest.build_update`) 추가분 요약을
-  받고(`summarizer.summarize_update`, `UPDATE_SCHEMA`), 기존 본문 아래에 `---` 구분선과
-  `### 갱신 YYYY-MM-DD HH:MM · 새 항목 N건` 제목으로 덧붙인다(`run_weekly.append_update`). 헤드라인·
+  받고(`summarizer.summarize_update`, `UPDATE_SCHEMA`), `### 갱신 YYYY-MM-DD HH:MM · 새 항목 N건`
+  제목으로 **맨 위에** 얹고 `---` 구분선 아래에 기존 본문을 그대로 둔다(`run_weekly.append_update`).
+  최신 갱신이 위, 처음 요약이 맨 밑이다 — 아래에 덧붙이면 열 때마다 첫 화면이 같아 바뀐 게 없어 보였다.
+  예전 방식으로 아래에 붙어 저장된 주차는 배치가 시작할 때(`run()`, `ensure_schema` 직후) 알아서 위로
+  올린다. 손으로 확인하려면 `run_weekly.py --reorder-updates --dry-run` 이 대상 주차를 보여 준다. 헤드라인·
   모델은 1회차 것을 유지하고 액션은 뒤에 이어 붙인다. 새 항목이 없으면 모델을 부르지 않고 항목·이력만
   갱신한다(상태 ok). 화면은 NEW 배지·필터로 새 항목을 표시한다.
 - **버튼은 PHP 가 Python 을 띄우는 게 아니다.** `moodle/refresh.php` 가 `watch/var/requests/<week>.json`
