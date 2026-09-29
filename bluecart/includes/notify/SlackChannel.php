@@ -16,6 +16,25 @@ final class SlackChannel
 {
     private const API = 'https://slack.com/api/';
 
+    /** 보낸 사람 이름을 실을 수 있는가. 슬랙이 한 번 거절하면 내린다. */
+    private static bool $customizable = true;
+
+    /**
+     * 메시지에 실을 보낸 사람 이름·아이콘. 쓰지 않으면 빈 배열.
+     * 왜 필요한지는 includes/workflow.php 의 BC_SLACK_SENDER 에 적어 두었다.
+     */
+    private static function sender(): array
+    {
+        if (!self::$customizable || BC_SLACK_SENDER === '') {
+            return [];
+        }
+        $out = ['username' => BC_SLACK_SENDER];
+        if (BC_SLACK_ICON !== '') {
+            $out['icon_emoji'] = BC_SLACK_ICON;
+        }
+        return $out;
+    }
+
     /** 봇 토큰 — 관리자 화면 저장값이 먼저, 없으면 설정 파일. */
     public static function botToken(): string
     {
@@ -42,11 +61,25 @@ final class SlackChannel
         $fallback = $blocks[0]['text']['text'];
 
         if (self::botToken() !== '') {
-            self::api('chat.postMessage', [
+            $params = [
                 'channel' => $channel,
                 'text'    => $fallback,
                 'blocks'  => json_encode($blocks, JSON_UNESCAPED_UNICODE),
-            ]);
+            ];
+            $extra = self::sender();
+            try {
+                self::api('chat.postMessage', $params + $extra);
+            } catch (RuntimeException $e) {
+                // 보낸 사람 이름은 chat:write.customize 가 있어야 먹는다. 없으면
+                // 슬랙이 통째로 거절하는데, 이름 하나 때문에 알림이 막히면 안 된다.
+                // 한 번 걸리면 이 요청에서는 다시 시도하지 않는다.
+                if (!$extra || !str_contains($e->getMessage(), 'missing_scope')) {
+                    throw $e;
+                }
+                self::$customizable = false;
+                error_log('[BlueCart] slack chat:write.customize 없음 — 보낸 사람 이름 없이 보냅니다.');
+                self::api('chat.postMessage', $params);
+            }
             return;
         }
 

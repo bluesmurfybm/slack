@@ -732,13 +732,34 @@ $row = current_portal_user();                // includes/auth.php
 개인 DM 을 쓰려면 봇 토큰이 필요합니다.
 
 1. Slack 앱 생성 → **OAuth & Permissions**
-2. Bot Token Scopes: `chat:write`, `users:read`, `users:read.email`
+2. Bot Token Scopes
+   - `chat:write`, `users:read`, `users:read.email` — 필수
+   - `chat:write.customize` — 선택. 보낸 사람 이름을 정할 수 있습니다(아래)
 3. 워크스페이스에 설치하고 `xoxb-` 토큰을 **관리자 탭 → 알림 설정**에 입력
    (또는 `config.php` 의 `notify.slack.bot_token` / `BLUECART_SLACK_BOT_TOKEN`)
 4. 채널 발송을 쓸 채널에 봇을 초대 — 초대하지 않으면 `not_in_channel` 로 실패합니다
 
 채널 발송만 필요하면 Incoming Webhook 만으로도 됩니다. 다만 Webhook 은 만들 때
 고른 채널로만 가므로 "기본 슬랙 채널" 값이 무시됩니다.
+
+#### 보낸 사람 이름
+
+봇 앱 하나가 여러 시스템의 알림을 대신 쏘는 경우가 있습니다. 그대로 두면
+개인 DM 도 **앱 이름**(예: `blue_inbox`)이 보낸 것으로 보이고, 사이드바에
+같은 이름의 채널이 나란히 있으면 둘이 헷갈립니다.
+
+`chat:write.customize` 스코프가 있으면 메시지마다 보낸 사람 이름과 아이콘을
+실어 `BlueCart` 로 찍습니다. 문구는 `includes/workflow.php` 의
+`BC_SLACK_SENDER` · `BC_SLACK_ICON` 한 곳에 있고, 비우면 쓰지 않습니다.
+
+- 스코프를 추가하면 **Reinstall to Workspace** 를 해야 토큰에 붙습니다
+- 스코프가 없으면 슬랙이 그 호출을 거절합니다. 그때는 **이름 없이 한 번 더
+  보냅니다** — 이름 하나 때문에 알림이 통째로 막히면 안 되기 때문입니다.
+  한 번 걸리면 그 요청에서는 다시 시도하지 않습니다
+- **대화방 이름(사이드바)까지 바꾸지는 못합니다.** 대화 상대가 앱 자체라
+  그건 앱 이름을 따릅니다. 거기까지 바꾸려면 전용 슬랙 앱을 따로 만들어야
+  합니다
+- `cron/slack_check.php` 가 이 스코프의 유무를 함께 알려 줍니다
 
 #### 받는 사람을 어떻게 찾는가
 

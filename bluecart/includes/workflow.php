@@ -129,6 +129,24 @@ const BC_EVENT = [
  */
 const BC_SLACK_LABEL = 'BlueCart';
 
+/**
+ * 슬랙에 찍히는 보낸 사람 이름과 아이콘.
+ *
+ * 봇 앱 하나(blue_inbox)가 여러 시스템의 알림을 대신 쏜다. 그대로 두면
+ * 개인 DM 도 'blue_inbox 앱' 이 보낸 것으로 보이고, 사이드바에는 같은 이름의
+ * 채널 #blue_inbox 가 나란히 있어 둘이 헷갈린다. 메시지마다 보낸 사람 이름을
+ * 실어 이 줄에서 가려내게 한다.
+ *
+ * 슬랙 봇 토큰에 chat:write.customize 스코프가 있어야 먹는다. 없으면 슬랙이
+ * 거절하는데, 그때는 이름 없이 한 번 더 보낸다(SlackChannel::postMessage).
+ * 알림이 이름 하나 때문에 통째로 막히면 안 되기 때문. 비우면 쓰지 않는다.
+ *
+ * 대화방 이름(사이드바)까지 바꾸려면 전용 슬랙 앱을 따로 만들어야 한다.
+ * 여기서 바꾸는 것은 메시지에 찍히는 보낸 사람 이름이다.
+ */
+const BC_SLACK_SENDER = 'BlueCart';
+const BC_SLACK_ICON   = ':shopping_trolley:';
+
 const BC_EVENT_EMOJI = [
     'REQUEST_CREATED'     => ':shopping_trolley:',
     'REQUEST_UPDATED'     => ':pencil2:',

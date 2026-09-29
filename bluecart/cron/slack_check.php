@@ -28,6 +28,9 @@ require_once BC_ROOT . '/includes/notify/SlackChannel.php';
 /** DM 을 만들려면 토큰에 이 스코프들이 붙어 있어야 한다. */
 const NEED_SCOPES = ['chat:write', 'users:read.email'];
 
+/** 없어도 알림은 나가지만 있으면 좋은 스코프. 보낸 사람 이름을 실을 수 있다. */
+const WANT_SCOPES = ['chat:write.customize'];
+
 $PASS = 0;
 $WARN = 0;
 $FAIL = 0;
@@ -160,6 +163,17 @@ if ($scopes) {
             fail_($need . ' 없음');
             line('         앱 설정에 추가만 하고 Reinstall to Workspace 를 안 하면 이렇게 됩니다.');
             line('         재설치한 뒤 새 봇 토큰을 알림 설정에 다시 넣으세요.');
+        }
+    }
+
+    foreach (WANT_SCOPES as $want) {
+        if (in_array($want, $scopes, true)) {
+            ok_($want, '보낸 사람을 ' . BC_SLACK_SENDER . ' 으로 찍습니다');
+        } else {
+            warn_($want . ' 없음', '없어도 알림은 나갑니다');
+            line('         봇 앱 하나가 여러 시스템의 알림을 대신 쏘기 때문에, 이 스코프가');
+            line('         없으면 개인 DM 도 앱 이름(예: blue_inbox)으로 보입니다. 같은 이름의');
+            line('         채널이 사이드바에 나란히 있으면 둘이 헷갈립니다.');
         }
     }
 }
