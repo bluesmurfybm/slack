@@ -183,6 +183,68 @@ final class PurchaseRequest
         return $out;
     }
 
+    /**
+     * 지난 요청에서 물품 후보를 뽑는다 — 작성 폼의 '필요 물품' 칸에서 쓴다.
+     *
+     * 같은 물품을 여러 번 요청했으면 **가장 최근 한 건**만 올린다. 화면은 그
+     * 건의 갯수·사용처·금액을 그대로 폼에 채우므로, 마지막으로 어떻게 적어
+     * 올렸는지가 가장 쓸모 있는 값이다.
+     *
+     * 철회(CANCELED)한 건은 뺀다 — 없던 일이 된 요청을 다시 권할 이유가 없다.
+     * 반려 건은 남긴다. 무엇을 어떻게 올렸었는지가 오히려 참고가 되고, 화면에
+     * 처리 단계를 함께 찍어 준다.
+     *
+     * MySQL 5.7 에서도 돌아야 하므로 윈도우 함수를 쓰지 않는다. 물품명으로
+     * 묶어 마지막 id 만 고른 뒤(파생 테이블) 그 행을 다시 읽는다.
+     *
+     * @param array $f keyword, requester_id(이 사람 것을 위로), limit
+     */
+    public static function suggestItems(array $f): array
+    {
+        $where = ["status <> 'CANCELED'"];
+        $args  = [];
+
+        $kw = trim((string)($f['keyword'] ?? ''));
+        if ($kw !== '') {
+            // 물품명만 본다. 비고까지 걸면 이름과 상관없는 후보가 섞여 나오는데,
+            // 고른 값이 그대로 칸에 들어가는 자리에서는 그게 더 헷갈린다.
+            $where[] = "item_name LIKE ? ESCAPE '!'";
+            $args[]  = '%' . self::likeEscape($kw) . '%';
+        }
+
+        // 내가 올렸던 물품을 위로 올린다. 한 물품에 여러 건이 묶이므로,
+        // 그중 하나라도 내 요청이면 내 것으로 친다.
+        $me        = (string)($f['requester_id'] ?? '');
+        $mineExpr  = $me !== '' ? 'MAX(CASE WHEN requester_id = ? THEN 1 ELSE 0 END)' : '0';
+        $groupArgs = $me !== '' ? [$me] : [];
+
+        $limit    = min(20, max(1, (int)($f['limit'] ?? 8)));
+        $whereSql = 'WHERE ' . implode(' AND ', $where);
+
+        return bc_fetch_all(
+            "SELECT r.*, c.name AS category_name, c.is_active AS category_active,
+                    g.uses, g.mine
+               FROM (
+                    SELECT MAX(id) AS last_id, COUNT(*) AS uses, $mineExpr AS mine
+                      FROM bc_request
+                      $whereSql
+                     GROUP BY item_name
+                     ORDER BY mine DESC, last_id DESC
+                     LIMIT $limit
+                    ) g
+               JOIN bc_request  r ON r.id = g.last_id
+               JOIN bc_category c ON c.id = r.category_id
+              ORDER BY g.mine DESC, r.id DESC",
+            array_merge($groupArgs, $args)
+        );
+    }
+
+    /** LIKE 특수문자를 글자 그대로 찾게 만든다. 질의의 ESCAPE '!' 와 짝이다. */
+    private static function likeEscape(string $s): string
+    {
+        return str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $s);
+    }
+
     /** 요청 가능한 연도 목록 (필터용) */
     public static function years(): array
     {

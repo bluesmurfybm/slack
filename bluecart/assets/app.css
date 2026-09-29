@@ -455,6 +455,40 @@ body { margin: 0; background: #EEF3FB; }
 .bc-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .bc-form__help { font-size: 12px; color: var(--ink-soft); font-weight: 400; }
 
+/* ---- 필요 물품 — 지난 요청에서 고르기 -------------------------------
+   입력 칸 바로 아래에 붙는 목록. 드로어 본문이 스크롤되므로 칸을 기준으로
+   따라다니게 절대 배치한다. */
+.bc-combo { position: relative; display: grid; gap: 4px; }
+.bc-combo__hint { margin: 0; font-size: 12px; color: var(--ink-soft); }
+.bc-combo__pop {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+  margin-top: 4px; max-height: 290px; overflow-y: auto;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(16, 35, 90, .16);
+}
+.bc-combo__pop[hidden] { display: none; }
+
+.bc-sugg {
+  appearance: none; display: grid; gap: 3px; width: 100%; text-align: left;
+  padding: 9px 12px; border: 0; border-bottom: 1px solid var(--line);
+  background: none; cursor: pointer; font: inherit; color: var(--ink);
+}
+.bc-sugg:last-child { border-bottom: 0; }
+.bc-sugg:hover, .bc-sugg--on { background: var(--surface); }
+.bc-sugg__head { display: flex; align-items: center; gap: 8px; }
+.bc-sugg__name { font-size: 13.5px; font-weight: 600; word-break: break-all; }
+.bc-sugg__head .bc-chip { margin-left: auto; flex: 0 0 auto; }
+.bc-sugg__meta { font-size: 12px; color: var(--ink-soft); }
+.bc-sugg mark { background: #fbf4e4; color: inherit; border-radius: 2px; }
+
+/* 고른 값이 어느 칸에 들어갔는지 잠깐 물들여 보여 준다. 값이 여러 칸에
+   한꺼번에 바뀌므로, 표시가 없으면 무엇이 달라졌는지 못 보고 지나친다. */
+.bc-filled { animation: bc-fill 1.1s ease-out; }
+@keyframes bc-fill {
+  from { background: #e9f0fe; }
+  to   { background: transparent; }
+}
+
 /* ---- 상세 ----------------------------------------------------------- */
 .bc-dl { display: grid; grid-template-columns: 96px 1fr; gap: 7px 14px; font-size: 13px; }
 .bc-dl dt { color: var(--ink-soft); }

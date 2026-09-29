@@ -796,6 +796,78 @@ ok('이메일이 하나도 없어도 죽지 않는다',
 bc_query("UPDATE member SET mb_slack_email = NULL WHERE mb_id = 'hoyoung'");
 
 // ---------------------------------------------------------------------
+echo "\n[23] 지난 요청에서 물품 고르기\n";
+
+$jian2 = login('jian');
+$sugCat = (int)Category::all()[0]['id'];
+
+// 같은 물품을 두 번 올린다. 후보에는 마지막 한 건만 올라와야 한다.
+PurchaseRequest::create([
+    'category_id' => $sugCat, 'item_name' => '냅킨 대용량', 'quantity' => 1, 'unit' => '박스',
+    'est_amount' => 9000, 'ref_url' => '', 'deliver_to' => '', 'need_by' => '', 'note' => '',
+], $hoyoung);
+$napkinLast = PurchaseRequest::create([
+    'category_id' => $sugCat, 'item_name' => '냅킨 대용량', 'quantity' => 4, 'unit' => '박스',
+    'est_amount' => 36000, 'ref_url' => 'https://example.com/napkin', 'deliver_to' => '사무실',
+    'need_by' => '', 'note' => '지난번과 같은 것',
+], $hoyoung);
+
+$sug = PurchaseRequest::suggestItems(['keyword' => '냅킨']);
+ok('물품명으로 후보를 찾는다', count($sug) === 1, '건수: ' . count($sug));
+ok('같은 물품은 한 줄로 묶인다', (int)$sug[0]['uses'] === 2, '횟수: ' . ($sug[0]['uses'] ?? '-'));
+ok('마지막으로 올린 값을 싣는다',
+   (int)$sug[0]['quantity'] === 4 && (int)$sug[0]['est_amount'] === 36000 && $sug[0]['id'] == $napkinLast,
+   json_encode([$sug[0]['quantity'], $sug[0]['est_amount']]));
+ok('폼을 채울 값이 함께 온다',
+   $sug[0]['unit'] === '박스' && $sug[0]['deliver_to'] === '사무실'
+   && $sug[0]['ref_url'] === 'https://example.com/napkin' && $sug[0]['category_name'] !== '',
+   json_encode($sug[0]['unit']));
+
+// 철회한 건은 다시 권하지 않는다.
+$dropped = PurchaseRequest::create([
+    'category_id' => $sugCat, 'item_name' => '철회한 물품', 'quantity' => 1, 'unit' => '개',
+    'est_amount' => null, 'ref_url' => '', 'deliver_to' => '', 'need_by' => '', 'note' => '',
+], $jian2);
+ok('철회 전에는 후보에 있다', count(PurchaseRequest::suggestItems(['keyword' => '철회한'])) === 1);
+PurchaseRequest::transition($dropped, 'cancel', $jian2);
+ok('철회한 건은 후보에서 빠진다', PurchaseRequest::suggestItems(['keyword' => '철회한']) === []);
+
+// 내가 올렸던 물품이 먼저 보여야 한다.
+PurchaseRequest::create([
+    'category_id' => $sugCat, 'item_name' => '정렬시험 남의 물품', 'quantity' => 1, 'unit' => '개',
+    'est_amount' => null, 'ref_url' => '', 'deliver_to' => '', 'need_by' => '', 'note' => '',
+], $jian2);
+PurchaseRequest::create([
+    'category_id' => $sugCat, 'item_name' => '정렬시험 내 물품', 'quantity' => 1, 'unit' => '개',
+    'est_amount' => null, 'ref_url' => '', 'deliver_to' => '', 'need_by' => '', 'note' => '',
+], $hoyoung);
+PurchaseRequest::create([
+    'category_id' => $sugCat, 'item_name' => '정렬시험 나중에 올라온 남의 물품', 'quantity' => 1, 'unit' => '개',
+    'est_amount' => null, 'ref_url' => '', 'deliver_to' => '', 'need_by' => '', 'note' => '',
+], $jian2);
+
+$ordered = PurchaseRequest::suggestItems(['keyword' => '정렬시험', 'requester_id' => 'hoyoung']);
+ok('내가 올렸던 물품이 맨 위', $ordered[0]['item_name'] === '정렬시험 내 물품',
+   $ordered[0]['item_name'] ?? '-');
+ok('내 것 표시가 실린다', (int)$ordered[0]['mine'] === 1 && (int)$ordered[1]['mine'] === 0);
+ok('남의 것은 최근 순', $ordered[1]['item_name'] === '정렬시험 나중에 올라온 남의 물품',
+   $ordered[1]['item_name'] ?? '-');
+
+// 건수 제한
+ok('기본은 8건까지', count(PurchaseRequest::suggestItems([])) <= 8);
+ok('건수 제한을 넘겨 요청해도 20건까지',
+   count(PurchaseRequest::suggestItems(['limit' => 500])) <= 20);
+ok('0건을 요청해도 최소 1건', count(PurchaseRequest::suggestItems(['limit' => 0])) === 1);
+
+// LIKE 특수문자는 글자 그대로 찾는다. 안 그러면 _ 하나가 전체 목록을 부른다.
+ok('밑줄은 아무 글자가 아니라 밑줄로 찾는다',
+   PurchaseRequest::suggestItems(['keyword' => '냅_ 대용량']) === []);
+ok('퍼센트도 글자로 취급', PurchaseRequest::suggestItems(['keyword' => '%']) === []);
+ok('따옴표는 검색어로만 취급', PurchaseRequest::suggestItems(['keyword' => "' OR 1=1 --"]) === []);
+ok('주입 시도 후에도 테이블이 그대로 있음',
+   count(bc_fetch_all('SHOW TABLES LIKE "bc_request"')) === 1);
+
+// ---------------------------------------------------------------------
 echo "\n";
 echo str_repeat('─', 50) . "\n";
 printf("결과: %d건 통과, %d건 실패\n", $pass, $fail);

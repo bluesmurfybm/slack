@@ -501,6 +501,230 @@
     }
   }
 
+  // =====================================================================
+  // 필요 물품 — 지난 요청에서 고르기
+  // =====================================================================
+  /**
+   * 같은 물품을 몇 달 간격으로 다시 올리는 일이 잦다. 그때마다 갯수·사용처·
+   * 금액을 기억해 내 다시 적는 대신, 지난 요청을 칸 아래에 띄워 고르게 한다.
+   *
+   * 고르면 '다시 써도 되는 값'만 옮긴다. 희망 수령일과 첨부파일은 건마다
+   * 달라지는 값이라 건드리지 않고, 참고 링크와 비고는 비어 있을 때만 채운다 —
+   * 이미 적어 둔 문장을 말없이 갈아 끼우면 그대로 올라가 버린다.
+   */
+  var itemSuggest = {
+    rows:  [],
+    at:    -1,     // 키보드로 짚고 있는 줄
+    query: '',     // 지금 목록을 만든 검색어
+    seq:   0,      // 늦게 도착한 응답이 새 목록을 덮지 않게 하는 번호
+    busy:  false,  // 부르는 중 — 같은 조회를 두 번 내보내지 않게 한다
+    timer: null,
+    input: null,
+    pop:   null,
+
+    init: function () {
+      var self = this;
+      this.input = $('#bc-in-item');
+      this.pop   = $('#bc-item-suggest');
+
+      // 칸을 누르면 최근 요청부터 보여 준다. 무엇을 고를 수 있는지 먼저
+      // 보이지 않으면 이런 기능이 있다는 것도 모른다.
+      this.input.addEventListener('focus', function () { self.ask(this.value, 0); });
+      this.input.addEventListener('input', function () { self.ask(this.value, 180); });
+      // 고르고 나면 칸에 포커스가 그대로 남아 focus 가 다시 오지 않는다.
+      // 같은 칸을 한 번 더 눌렀을 때도 목록이 떠야 하므로 누름 자체로도 연다.
+      this.input.addEventListener('click', function () {
+        if (self.pop.hidden && !self.busy) self.ask(this.value, 0);
+      });
+      this.input.addEventListener('keydown', function (e) { self.key(e); });
+      this.input.addEventListener('blur', function () {
+        // 목록을 마우스로 누르는 동안에는 mousedown 이 포커스를 지켜 준다.
+        // 키보드로 빠져나간 경우까지 열어 두면 화면에 그대로 남는다.
+        setTimeout(function () {
+          if (document.activeElement !== self.input) self.close();
+        }, 120);
+      });
+
+      // 누르는 순간 칸이 포커스를 잃으면 blur 가 먼저 닫아 버린다.
+      this.pop.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      this.pop.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('[data-pick]') : null;
+        if (b) self.pick(parseInt(b.dataset.pick, 10));
+      });
+    },
+
+    /** 후보 조회. 타자 중에는 잠깐 모았다가 한 번만 부른다. */
+    ask: function (keyword, wait) {
+      var self = this, kw = (keyword || '').trim();
+      clearTimeout(this.timer);
+      this.busy  = true;
+      this.timer = setTimeout(function () {
+        var mine = ++self.seq;
+        api('api/item_suggest.php?' + qs({ keyword: kw, limit: 8 })).then(function (res) {
+          if (mine !== self.seq) return;          // 더 최근 요청이 이미 나갔다
+          self.rows  = res.rows;
+          self.query = kw;
+          self.at    = -1;
+          if (!self.rows.length) { self.close(); return; }
+          self.render();
+        }).catch(function () {
+          // 후보를 못 불러온 것뿐이다. 직접 적는 길은 그대로 열려 있으므로
+          // 오류 띠로 막지 않고 조용히 닫는다.
+          self.close();
+        }).finally(function () {
+          if (mine === self.seq) self.busy = false;
+        });
+      }, wait);
+    },
+
+    render: function () {
+      var q = this.query;
+      this.pop.innerHTML = this.rows.map(function (r, i) {
+        var meta = [esc(r.category_name), num(r.quantity) + esc(r.unit)];
+        if (r.est_amount !== null) meta.push(num(r.est_amount) + '원');
+        meta.push(esc(r.is_mine ? '내 요청' : r.requester_name));
+        meta.push(esc(r.requested_at));
+        if (r.uses > 1) meta.push(r.uses + '번 요청');
+
+        return '<button type="button" class="bc-sugg" role="option" aria-selected="false"' +
+               ' id="bc-sugg-' + i + '" data-pick="' + i + '">' +
+                 '<span class="bc-sugg__head">' +
+                   '<span class="bc-sugg__name">' + hit(r.item_name, q) + '</span>' +
+                   '<span class="bc-chip bc-tone-' + esc(r.status_tone) + '">' + esc(r.status_label) + '</span>' +
+                 '</span>' +
+                 '<span class="bc-sugg__meta">' + meta.join(' · ') + '</span>' +
+               '</button>';
+      }).join('');
+      this.pop.hidden = false;
+      this.input.setAttribute('aria-expanded', 'true');
+      this.mark();
+    },
+
+    /** 키보드로 짚은 줄을 표시하고, 화면 밖이면 끌어온다. */
+    mark: function () {
+      var self = this;
+      $$('.bc-sugg', this.pop).forEach(function (b, i) {
+        var on = i === self.at;
+        b.classList.toggle('bc-sugg--on', on);
+        b.setAttribute('aria-selected', String(on));
+        if (on) b.scrollIntoView({ block: 'nearest' });
+      });
+      if (this.at < 0) this.input.removeAttribute('aria-activedescendant');
+      else this.input.setAttribute('aria-activedescendant', 'bc-sugg-' + this.at);
+    },
+
+    /**
+     * 위아래 이동. 끝을 지나면 '아무것도 안 고름'(-1) 을 한 번 거친다.
+     * 목록을 훑다가 자기가 적던 글자로 되돌아올 길이 있어야 한다.
+     */
+    move: function (step) {
+      var n = this.rows.length;
+      if (!n) return;
+      // 0 = 아무것도 안 고름, 1..n = 각 줄. 한 바퀴 돌아 0 으로 돌아온다.
+      var slot = (this.at + 1 + step + n + 1) % (n + 1);
+      this.at = slot - 1;
+      this.mark();
+    },
+
+    key: function (e) {
+      var open = !this.pop.hidden;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (open) this.move(1); else this.ask(this.input.value, 0);
+      } else if (e.key === 'ArrowUp') {
+        if (!open) return;
+        e.preventDefault();
+        this.move(-1);
+      } else if (e.key === 'Enter') {
+        if (!open || this.at < 0) return;
+        e.preventDefault();
+        this.pick(this.at);
+      } else if (e.key === 'Escape') {
+        if (!open) return;
+        // 목록만 접는다. 여기서 막지 않으면 드로어까지 닫혀 적던 내용이 사라진다.
+        e.preventDefault();
+        e.stopPropagation();
+        this.close();
+      } else if (e.key === 'Tab') {
+        this.close();
+      }
+    },
+
+    close: function () {
+      clearTimeout(this.timer);
+      this.seq++;        // 날아오는 중인 응답이 닫은 목록을 되살리지 않게
+      this.busy = false;
+      this.pop.hidden = true;
+      this.pop.innerHTML = '';
+      this.rows = [];
+      this.at = -1;
+      this.input.setAttribute('aria-expanded', 'false');
+      this.input.removeAttribute('aria-activedescendant');
+    },
+
+    /** 폼을 새로 열 때. 지난 목록과 채움 표시를 지운다. */
+    reset: function () {
+      this.close();
+      $$('.bc-filled', $('#bc-m-form')).forEach(function (el) { el.classList.remove('bc-filled'); });
+    },
+
+    pick: function (i) {
+      var r = this.rows[i];
+      if (!r) return;
+
+      this.input.value = r.item_name;
+
+      // 다시 쓰려고 고른 값들이다. 그대로 덮어쓴다.
+      this.put('#bc-in-qty', r.quantity);
+      this.put('#bc-in-unit', r.unit);
+      this.put('#bc-in-amount', r.est_amount === null ? '' : r.est_amount);
+
+      // 사용처가 그 뒤 '사용 안 함' 으로 바뀌었으면 고를 수 없는 값이다.
+      // 없는 값을 밀어 넣으면 select 가 첫 항목으로 튀므로 손대지 않는다.
+      var cat = $('#bc-in-category');
+      if (r.category_active && cat.querySelector('option[value="' + r.category_id + '"]')) {
+        this.put('#bc-in-category', r.category_id);
+      }
+
+      if (r.deliver_to) {
+        setDeliver(r.deliver_to);
+        this.flash($('#bc-in-deliver'));
+      }
+
+      // 글로 적는 칸은 비어 있을 때만 채운다.
+      if (r.ref_url && !$('#bc-in-url').value.trim()) this.put('#bc-in-url', r.ref_url);
+      if (r.note && !$('#bc-in-note').value.trim()) this.put('#bc-in-note', r.note);
+
+      this.close();
+      this.input.focus();
+      toast(r.req_no + ' 요청의 내용을 채웠습니다. 달라진 부분만 고치세요.');
+    },
+
+    put: function (sel, value) {
+      var el = $(sel);
+      el.value = value;
+      this.flash(el);
+    },
+
+    /** 방금 채운 칸을 잠깐 물들인다. 무엇이 바뀌었는지 눈으로 좇을 수 있게. */
+    flash: function (el) {
+      el.classList.remove('bc-filled');
+      void el.offsetWidth;          // 같은 칸을 다시 채워도 한 번 더 돌게 한다
+      el.classList.add('bc-filled');
+    }
+  };
+
+  /** 검색어와 겹친 부분을 굵게. 어디가 걸려 나온 후보인지 보이게 한다. */
+  function hit(text, q) {
+    text = String(text == null ? '' : text);
+    if (!q) return esc(text);
+    var at = text.toLowerCase().indexOf(q.toLowerCase());
+    if (at < 0) return esc(text);
+    return esc(text.slice(0, at)) +
+           '<mark>' + esc(text.slice(at, at + q.length)) + '</mark>' +
+           esc(text.slice(at + q.length));
+  }
+
   var form = {
     pending: [],   // 아직 서버에 올리지 않은 파일
 
@@ -523,6 +747,7 @@
     open: function (id) {
       $('#bc-form-error').hidden = true;
       $('#bc-in-id').value = id || '';
+      itemSuggest.reset();
       $('#bc-m-form-title').textContent = id ? '구매 요청 수정' : '새 구매 요청';
       $('#bc-form-submit').textContent = id ? '수정 저장' : '요청 올리기';
 
@@ -1369,6 +1594,7 @@
     if (e.key === 'Enter') { e.preventDefault(); remove.submit(); }
   });
 
+  itemSuggest.init();
   member.init();
 
   // 링크로 특정 요청을 열고 들어온 경우 (?id=123)

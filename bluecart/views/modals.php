@@ -30,10 +30,19 @@ declare(strict_types=1);
           </label>
         </div>
 
-        <label>
-          <span class="bc-form__req">필요 물품</span>
-          <input type="text" id="bc-in-item" maxlength="200" placeholder="예) 16OZ 아이스 컵">
-        </label>
+        <!-- 필요 물품 — 지난 요청에서 골라 채울 수 있다.
+             칸을 누르면 최근 요청이 뜨고, 적어 나가면 그 이름으로 좁혀진다.
+             고르면 갯수·사용처·금액까지 그때 올린 값으로 채운다(app.js). -->
+        <div class="bc-combo" id="bc-item-combo">
+          <label>
+            <span class="bc-form__req">필요 물품</span>
+            <input type="text" id="bc-in-item" maxlength="200" placeholder="예) 16OZ 아이스 컵"
+                   autocomplete="off" role="combobox" aria-expanded="false"
+                   aria-controls="bc-item-suggest" aria-autocomplete="list">
+          </label>
+          <p class="bc-combo__hint">지난 요청에서 고르면 갯수·사용처·예상 금액까지 함께 채워집니다.</p>
+          <div class="bc-combo__pop" id="bc-item-suggest" role="listbox" aria-label="지난 요청 물품" hidden></div>
+        </div>
 
         <div class="bc-form__row">
           <label>
