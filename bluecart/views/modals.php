@@ -1,5 +1,5 @@
 <?php
-/** 모달 3종: 요청 작성/수정, 상세, 처리 확인. */
+/** 모달 4종: 요청 작성/수정, 상세, 처리 확인, 삭제 확인. */
 declare(strict_types=1);
 ?>
 
@@ -138,6 +138,40 @@ declare(strict_types=1);
     <div class="bc-modal__foot">
       <button type="button" class="bc-btn" data-close>취소</button>
       <button type="button" class="bc-btn bc-btn--primary" id="bc-action-submit">처리</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 삭제 확인 (관리자) =====
+     되돌릴 수 없는 처리다. 무엇이 함께 사라지는지 먼저 보여 주고,
+     요청번호를 직접 적게 해서 잘못 누른 손을 한 번 더 세운다. -->
+<div class="bc-modal" id="bc-m-delete" hidden>
+  <div class="bc-modal__box bc-modal__box--narrow" role="dialog" aria-modal="true" aria-labelledby="bc-m-delete-title">
+    <div class="bc-modal__head">
+      <h2 id="bc-m-delete-title">요청 삭제</h2>
+      <button type="button" class="bc-close" data-close aria-label="닫기">&times;</button>
+    </div>
+    <div class="bc-modal__body">
+      <div class="bc-alert" id="bc-delete-error" hidden></div>
+      <p style="margin:8px 0 14px">
+        되돌릴 수 없습니다. 처리 이력과 첨부파일까지 함께 사라지고, 요청자에게는 알림이 가지 않습니다.
+        진행 중인 건을 정리하려는 것이라면 <b>반려</b>나 <b>철회</b>를 쓰세요 — 그쪽은 기록이 남습니다.
+      </p>
+      <dl class="bc-dl" id="bc-delete-what"></dl>
+      <div class="bc-form" style="margin-top:14px">
+        <label>
+          <span class="bc-form__req">확인 — 요청번호 <b id="bc-delete-no"></b> 를 그대로 입력</span>
+          <input type="text" id="bc-delete-confirm" autocomplete="off" inputmode="numeric" placeholder="0000-0000">
+        </label>
+        <label>
+          <span>삭제 사유 <em class="bc-form__help">삭제 기록에 함께 남습니다</em></span>
+          <input type="text" id="bc-delete-reason" maxlength="500" placeholder="예) 기능 시험용으로 올린 건">
+        </label>
+      </div>
+    </div>
+    <div class="bc-modal__foot">
+      <button type="button" class="bc-btn" data-close>취소</button>
+      <button type="button" class="bc-btn bc-btn--danger" id="bc-delete-submit">영구 삭제</button>
     </div>
   </div>
 </div>

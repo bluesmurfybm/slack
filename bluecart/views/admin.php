@@ -83,7 +83,7 @@ $isAdmin = in_array('ADMIN', $roles, true);
           <th style="width:104px">처리상태</th>
           <th style="width:96px">구매담당</th>
           <th style="width:124px">처리일 / 처리자</th>
-          <th style="width:210px">처리</th>
+          <th style="width:244px">처리</th>
         </tr>
       </thead>
       <tbody><tr><td colspan="10" class="bc-loading">불러오는 중…</td></tr></tbody>

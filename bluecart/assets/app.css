@@ -224,6 +224,10 @@ body { margin: 0; background: #EEF3FB; }
 .bc-btn--danger { color: var(--stop); border-color: #e7c6c6; }
 .bc-btn--danger:hover { background: #fbf2f2; }
 .bc-btn--sm { padding: 4px 10px; font-size: 12.5px; }
+/* 삭제처럼 처리 흐름에 속하지 않는 정리용 버튼. 승인·반려 옆에서 먼저
+   눈에 띄면 잘못 눌리므로 평소에는 흐리게 두고, 손이 닿을 때만 색이 선다. */
+.bc-btn--quiet { color: var(--ink-soft); border-color: transparent; background: none; }
+.bc-btn--quiet:hover { color: var(--stop); border-color: #e7c6c6; background: #fbf2f2; }
 .bc-btn[disabled] { opacity: .5; cursor: not-allowed; }
 
 /* 필터 줄에 선 버튼은 옆 입력창과 높이·모서리를 맞춘다. */

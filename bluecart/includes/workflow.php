@@ -280,6 +280,19 @@ function bc_available_actions(array $request, ?array $user = null): array
 }
 
 /**
+ * 요청을 영구 삭제할 수 있는가. 상태와 관계없이 관리자만.
+ *
+ * BC_ACTIONS 에 넣지 않은 이유는 삭제가 프로세스의 한 단계가 아니기 때문이다.
+ * 전이표에 끼우면 transition() 이 받아 주게 되고, 목록에서도 승인·반려와
+ * 같은 줄에 섞여 잘못 눌리기 좋은 자리에 놓인다.
+ */
+function bc_can_delete(?array $user = null): bool
+{
+    $user ??= bc_current_user();
+    return $user !== null && in_array('ADMIN', bc_roles_of($user['id']), true);
+}
+
+/**
  * 이 건을 처리할 사람을 한 줄로 설명한다. 목록에 그대로 쓴다.
  */
 function bc_assignee_label(array $request): string

@@ -38,6 +38,8 @@ function bc_present_request(array $r, array $user): array
         'resubmit_count' => (int)$r['resubmit_count'],
         'attach_count'   => Attachment::countFor((int)$r['id']),
         'actions'        => bc_available_actions($r, $user),
+        // 삭제는 상태 전이가 아니라서 actions 와 따로 싣는다.
+        'can_delete'     => bc_can_delete($user),
     ];
 }
 

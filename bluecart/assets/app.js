@@ -206,7 +206,11 @@
   };
   ACTION_META.approve.assignee = true;   // 승인하면서 담당까지 지정할 수 있다
 
-  function rowHtml(r, withAssignee) {
+  /**
+   * 표의 한 줄. isAdminView 는 관리자 화면인지 — 담당 칸과 삭제 버튼처럼
+   * 관리자 화면에만 있는 것을 이 하나로 가른다.
+   */
+  function rowHtml(r, isAdminView) {
     var actions = (r.actions || []).map(function (a) {
       var m = ACTION_META[a];
       if (!m) return '';
@@ -219,6 +223,13 @@
       actions = '<button type="button" class="bc-btn bc-btn--sm" data-edit="' + r.id + '">수정</button>' + actions;
     }
 
+    // 삭제는 처리 단계가 아니라 잘못 올라온 건을 치우는 도구다. 처리 버튼
+    // 뒤에 흐리게 붙여 둔다.
+    if (isAdminView && r.can_delete) {
+      actions += '<button type="button" class="bc-btn bc-btn--sm bc-btn--quiet" data-del="' + r.id +
+                 '" title="요청을 영구 삭제합니다">삭제</button>';
+    }
+
     var handled = r.stocked_at || r.purchasing_at || r.reviewed_at || '';
     var handler = r.buyer_name || r.reviewer_name || '';
 
@@ -226,7 +237,7 @@
       ? '<span class="bc-clip" title="첨부 ' + r.attach_count + '개">📎 ' + r.attach_count + '</span>' : '';
 
     var assigneeCell = '';
-    if (withAssignee) {
+    if (isAdminView) {
       var cls = r.assignee_name ? (r.is_my_job ? 'bc-assignee--me' : '') : 'bc-assignee--none';
       assigneeCell = '<td><span class="bc-assignee ' + cls + '">' +
                      esc(r.assignee_label || '') + '</span></td>';
@@ -253,7 +264,7 @@
    * 카드 한 장. 표의 rowHtml 과 같은 데이터·같은 data-* 훅을 쓴다.
    * onRowClick 이 data-detail / data-edit / data-act 만 보므로 그대로 공용이다.
    */
-  function cardHtml(r, withAssignee) {
+  function cardHtml(r, isAdminView) {
     var actions = (r.actions || []).map(function (a) {
       var m = ACTION_META[a];
       if (!m) return '';
@@ -267,7 +278,7 @@
     }
 
     var meta = [esc(r.category_name), num(r.quantity) + esc(r.unit)];
-    if (withAssignee && r.assignee_label) meta.push('담당 ' + esc(r.assignee_label));
+    if (isAdminView && r.assignee_label) meta.push('담당 ' + esc(r.assignee_label));
 
     var clip = r.attach_count
       ? ' <span class="bc-clip" title="첨부 ' + r.attach_count + '개">📎 ' + r.attach_count + '</span>' : '';
@@ -285,22 +296,22 @@
       '</article>';
   }
 
-  function renderCards(el, rows, emptyMsg, withAssignee) {
+  function renderCards(el, rows, emptyMsg, isAdminView) {
     if (!rows.length) {
       el.innerHTML = '<div class="bc-empty"><b>' + esc(emptyMsg.title) + '</b>' + esc(emptyMsg.body) + '</div>';
       return;
     }
-    el.innerHTML = rows.map(function (r) { return cardHtml(r, withAssignee); }).join('');
+    el.innerHTML = rows.map(function (r) { return cardHtml(r, isAdminView); }).join('');
   }
 
-  function renderList(tbody, rows, emptyMsg, withAssignee) {
-    var cols = withAssignee ? 10 : 9;
+  function renderList(tbody, rows, emptyMsg, isAdminView) {
+    var cols = isAdminView ? 10 : 9;
     if (!rows.length) {
       tbody.innerHTML = '<tr><td colspan="' + cols + '"><div class="bc-empty"><b>' + esc(emptyMsg.title) +
                         '</b>' + esc(emptyMsg.body) + '</div></td></tr>';
       return;
     }
-    tbody.innerHTML = rows.map(function (r) { return rowHtml(r, withAssignee); }).join('');
+    tbody.innerHTML = rows.map(function (r) { return rowHtml(r, isAdminView); }).join('');
   }
 
   function renderPager(el, total, page, size, onGo) {
@@ -437,6 +448,7 @@
       var t = e.target;
       if (t.dataset.detail) { e.preventDefault(); detail.open(parseInt(t.dataset.detail, 10), reload); }
       else if (t.dataset.edit) { form.open(parseInt(t.dataset.edit, 10)); }
+      else if (t.dataset.del) { remove.open(parseInt(t.dataset.del, 10)); }
       else if (t.dataset.act) {
         action.open(parseInt(t.dataset.id, 10), t.dataset.act, reload, t.dataset.assignee || '');
       }
@@ -644,6 +656,9 @@
 
         $('#bc-detail-actions').innerHTML =
           '<button type="button" class="bc-btn" data-close>닫기</button>' +
+          (r.can_delete
+            ? '<button type="button" class="bc-btn bc-btn--quiet" data-del="' + r.id + '">삭제</button>'
+            : '') +
           (r.actions || []).map(function (a) {
             var m = ACTION_META[a];
             return m ? '<button type="button" class="bc-btn ' + (m.cls || '') + '" data-act="' + a +
@@ -654,6 +669,13 @@
           b.addEventListener('click', function () {
             closeModal('bc-m-detail');
             action.open(parseInt(b.dataset.id, 10), b.dataset.act, reload, r.assignee_id || '');
+          });
+        });
+
+        $$('#bc-detail-actions [data-del]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            closeModal('bc-m-detail');
+            remove.open(parseInt(b.dataset.del, 10));
           });
         });
       }).catch(function (e) {
@@ -834,6 +856,77 @@
         member.load();
         if (CAN_ADMIN) admin.reloadQueue();
         if (ctx.reload) ctx.reload();
+      }).catch(function (e) {
+        err.textContent = e.message;
+        err.hidden = false;
+      }).finally(function () { btn.disabled = false; });
+    }
+  };
+
+  // =====================================================================
+  // 삭제 (관리자)
+  //
+  // 처리(action)와 따로 둔다. 상태를 옮기는 일이 아니라 건을 통째로 없애는
+  // 일이고, 확인 절차도 다르다 — 무엇이 함께 사라지는지 보여 준 뒤
+  // 요청번호를 그대로 적게 한다.
+  // =====================================================================
+  var remove = {
+    ctx: null,
+
+    open: function (id) {
+      var self = this;
+      // 목록에 들고 있는 값 대신 다시 물어 온다. 지우기 직전의 상태와
+      // 이력·첨부 개수를 정확히 보여 주려는 것.
+      api('api/request_detail.php?id=' + id).then(function (res) {
+        var r = res.request;
+        if (!r.can_delete) { toast('요청 삭제는 관리자만 할 수 있습니다.', true); return; }
+
+        self.ctx = { id: r.id, no: r.req_no };
+
+        $('#bc-delete-error').hidden = true;
+        $('#bc-delete-no').textContent = r.req_no;
+        $('#bc-delete-confirm').value = '';
+        $('#bc-delete-confirm').placeholder = r.req_no;
+        $('#bc-delete-reason').value = '';
+        $('#bc-delete-what').innerHTML = [
+          ['요청번호', esc(r.req_no)],
+          ['필요 물품', esc(r.item_name) + ' · ' + num(r.quantity) + esc(r.unit)],
+          ['요청자', esc(r.requester_name) + ' · ' + esc(r.requested_at)],
+          ['처리상태', '<span class="bc-chip bc-tone-' + r.status_tone + '">' + esc(r.status_label) + '</span>'],
+          ['함께 지워짐', '처리 이력 ' + res.history.length + '건, 첨부파일 ' + (r.attach_count || 0) + '개']
+        ].map(function (kv) { return '<dt>' + kv[0] + '</dt><dd>' + kv[1] + '</dd>'; }).join('');
+
+        openModal('bc-m-delete');
+        $('#bc-delete-confirm').focus();
+      }).catch(function (e) { toast(e.message, true); });
+    },
+
+    submit: function () {
+      var ctx = this.ctx;
+      if (!ctx) return;
+
+      var err = $('#bc-delete-error');
+      var typed = $('#bc-delete-confirm').value.trim();
+      if (typed !== ctx.no) {
+        err.textContent = '요청번호 ' + ctx.no + ' 을(를) 그대로 입력해야 삭제됩니다.';
+        err.hidden = false;
+        $('#bc-delete-confirm').focus();
+        return;
+      }
+
+      var btn = $('#bc-delete-submit');
+      btn.disabled = true;
+      err.hidden = true;
+
+      api('api/request_delete.php', {
+        method: 'POST',
+        body: { id: ctx.id, confirm: typed, reason: $('#bc-delete-reason').value.trim() }
+      }).then(function (res) {
+        closeModal('bc-m-delete');
+        toast(res.message);
+        // 지운 건은 어느 목록에도 남으면 안 된다. 둘 다 다시 읽는다.
+        member.load();
+        if (CAN_ADMIN) admin.reloadQueue();
       }).catch(function (e) {
         err.textContent = e.message;
         err.hidden = false;
@@ -1240,6 +1333,12 @@
     form.submit(true);
   });
   $('#bc-action-submit').addEventListener('click', function () { action.submit(); });
+  $('#bc-delete-submit').addEventListener('click', function () { remove.submit(); });
+  // 확인 칸에서 Enter 로도 넘어가게 한다. 사유 칸은 여러 줄이 아니지만
+  // 여기서까지 Enter 로 지워지면 곤란해 확인 칸에만 건다.
+  $('#bc-delete-confirm').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); remove.submit(); }
+  });
 
   member.init();
 

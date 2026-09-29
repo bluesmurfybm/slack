@@ -591,6 +591,18 @@ mysql -u <user> -p --default-character-set=utf8mb4 slackapi < sql/01_schema.sql
 mysql -u <user> -p --default-character-set=utf8mb4 slackapi < sql/02_seed.sql
 ```
 
+**이미 설치해 두고 소스만 올리는 경우**에는 마이그레이션도 함께 돌립니다.
+새로 설치하는 경우에는 `01_schema.sql` 에 이미 들어 있어 실행할 필요가 없습니다.
+
+```bash
+php dev/apply_sql.php sql/03_migration_v2.sql   # 건별 구매담당자 (v1 → v2)
+php dev/apply_sql.php sql/04_migration_v3.sql   # 요청 삭제 기록 (v2 → v3)
+```
+
+`04_migration_v3.sql` 은 `CREATE TABLE IF NOT EXISTS` 뿐이라 두 번 실행해도
+안전합니다. `03_migration_v2.sql` 은 `ALTER TABLE` 이 들어 있어 한 번만
+실행해야 합니다.
+
 ### 3.4 첨부 저장소
 
 ```bash
@@ -810,6 +822,70 @@ SELECT * FROM bc_notify_log WHERE status='FAILED' ORDER BY id DESC LIMIT 20;
   자주 구비한 물품, 평균 검토 소요 시간, 요청→구비 평균 소요 시간.
   엑셀로 내보낼 수 있습니다
 - **처리 역할 배정** — 구성원 목록에서 다중 선택. 배정된 전원에게 알림이 갑니다
+- **삭제** — 관리자에게만 보입니다 (6.3)
+
+### 6.3 요청 삭제 (관리자 전용)
+
+시험용으로 올린 건이나 잘못 올라온 건을 치우는 도구입니다. **관리자만**
+쓸 수 있고, 요청자 본인이나 검토승인자·구매담당자에게는 버튼이 보이지도,
+API 가 받아 주지도 않습니다.
+
+**철회와 무엇이 다른가**
+
+| | 철회 | 삭제 |
+|---|---|---|
+| 쓰는 사람 | 요청자 본인, 관리자 | 관리자만 |
+| 쓰는 상황 | 하기로 했다가 그만둠 | 애초에 없었어야 할 건 |
+| 결과 | `CANCELED` 상태로 목록에 남음 | 행이 사라짐 |
+| 이력·첨부 | 그대로 남음 | 함께 사라짐 |
+| 요청자 알림 | 감 | **가지 않음** |
+
+진행 중인 건을 정리하려는 것이라면 **반려**나 **철회**를 쓰세요. 그쪽은
+기록이 남고 요청자도 무슨 일이 있었는지 알 수 있습니다.
+
+**어디에 있나**
+
+관리자 탭 → 신청 물품 관리 목록의 **처리** 칸 맨 뒤, 그리고 요청 상세
+화면 아래쪽입니다. 승인·반려와 잘못 섞이지 않게 평소에는 흐리게 두고,
+마우스를 올릴 때만 색이 섭니다.
+
+**확인 절차**
+
+지우기 전에 무엇이 함께 사라지는지(처리 이력 N건, 첨부파일 N개) 보여 주고,
+**요청번호를 그대로 입력**해야 버튼이 동작합니다. 화면뿐 아니라 서버
+(`api/request_delete.php`)에서도 같은 값을 확인합니다. 삭제 사유는 선택이며
+적으면 삭제 기록에 함께 남습니다.
+
+**무엇이 지워지고 무엇이 남는가**
+
+지워지는 것 — `bc_request` 행, 처리 이력(`bc_request_history`),
+첨부 메타데이터(`bc_attachment`)와 **실제 파일**.
+
+남는 것 — `bc_request_deleted` 의 삭제 기록. 요청번호·물품명·요청자·
+삭제한 사람·시각·사유와 함께, 지운 시점의 요청 본문·처리 이력·첨부 목록이
+`snapshot` 에 JSON 으로 통째로 들어갑니다. 화면에서 지울 수 있는 경로는
+없습니다. 무엇이 지워졌는지 확인할 때는 DB 를 직접 봅니다.
+
+```sql
+SELECT req_no, item_name, requester_name, status,
+       deleted_by_name, deleted_at, reason
+  FROM bc_request_deleted
+ ORDER BY deleted_at DESC;
+
+-- 한 건의 전체 내용
+SELECT snapshot FROM bc_request_deleted WHERE req_no = '2026-0007';
+```
+
+아직 나가지 않은 알림(`bc_notify_log` 의 `PENDING`/`FAILED`)은 `SKIPPED` 로
+바꿔 둡니다. 재발송 배치는 저장해 둔 본문만 보고 보내므로, 그냥 두면 이미
+없는 건의 알림이 뒤늦게 나갑니다.
+
+**요청번호는 다시 쓰지 않습니다**
+
+채번은 `MAX(req_seq) + 1` 인데, 마지막 건을 지우면 다음 요청이 같은 번호를
+다시 받게 됩니다. 이미 메일·슬랙으로 나간 번호가 엉뚱한 건을 가리키면
+안 되므로, 채번은 `bc_request_deleted` 의 번호까지 함께 보고 건너뜁니다.
+`2026-0009` 를 지우면 다음 요청은 `2026-0010` 입니다.
 
 ---
 
@@ -966,9 +1042,12 @@ UPDATE bc_setting SET v='30' WHERE k='reject_auto_close_days';
 | `bc_notify_setting` | 이벤트 × 역할 × 채널 알림 매트릭스 |
 | `bc_notify_log` | 발송 로그 겸 재시도 큐 |
 | `bc_setting` | 키-값 운영 설정 |
+| `bc_request_deleted` | 관리자가 지운 요청의 기록 + 지운 시점 스냅샷 (6.3) |
 
 요청번호는 `2026-0001` 형식으로 연도별 채번합니다.
 동시 등록 시 번호가 겹치지 않게 트랜잭션 안에서 `FOR UPDATE` 로 잠급니다.
+지워진 번호(`bc_request_deleted`)도 함께 보고 건너뛰므로, 한 번 나간 번호는
+다른 건에 다시 붙지 않습니다.
 
 기존 엑셀 양식과의 대응:
 
@@ -1057,7 +1136,7 @@ mysql -u root -p --default-character-set=utf8mb4 iworks_test < tests/fixture.sql
 php tests/workflow_test.php
 ```
 
-123건을 확인합니다.
+163건을 확인합니다.
 
 - 요청 등록과 연도별 번호 채번, 입력 검증
 - 역할별 권한 차단, 승인/반려/재요청/철회 전 경로, 처리 이력
@@ -1067,10 +1146,13 @@ php tests/workflow_test.php
 - 건별 담당 지정, 담당자 외 처리 차단, 담당 기준 알림 분기
 - 첨부 저장·삭제, 확장자/내용 불일치 차단, 시점별 첨부 권한
 - 엑셀 생성(ZIP 구조, 특수문자 이스케이프)
+- 관리자 삭제 — 권한 차단, 이력·첨부·파일 동반 삭제, 삭제 기록과 스냅샷,
+  미발송 알림 중단, 지워진 요청번호 재사용 방지
 
 마이그레이션을 검증하려면 이전 스키마로 만든 DB 에 `sql/03_migration_v2.sql`
 을 적용한 뒤, 과거 건의 `assignee_name` 이 `buyer_name` 으로 채워졌는지
-확인하세요.
+확인하세요. `sql/04_migration_v3.sql` 은 `bc_request_deleted` 가 생겼는지만
+보면 됩니다.
 
 ### 13.1 운영 DB(MySQL 8)에서도 확인
 

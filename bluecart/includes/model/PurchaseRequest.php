@@ -221,9 +221,17 @@ final class PurchaseRequest
             $year = (int)date('Y');
 
             // 동시 요청 시 번호가 겹치지 않도록 같은 해 행을 잠근다.
-            $maxSeq = (int)bc_fetch_value(
-                'SELECT COALESCE(MAX(req_seq), 0) FROM bc_request WHERE req_year = ? FOR UPDATE',
-                [$year], 0
+            // 지워진 번호도 함께 본다 — 마지막 건을 지웠다고 그 번호를 다시
+            // 내주면, 이미 메일·슬랙으로 나간 번호가 다른 건을 가리키게 된다.
+            $maxSeq = max(
+                (int)bc_fetch_value(
+                    'SELECT COALESCE(MAX(req_seq), 0) FROM bc_request WHERE req_year = ? FOR UPDATE',
+                    [$year], 0
+                ),
+                (int)bc_fetch_value(
+                    'SELECT COALESCE(MAX(req_seq), 0) FROM bc_request_deleted WHERE req_year = ? FOR UPDATE',
+                    [$year], 0
+                )
             );
             $seq   = $maxSeq + 1;
             $reqNo = sprintf('%d-%04d', $year, $seq);
@@ -485,6 +493,96 @@ final class PurchaseRequest
              VALUES (?,?,?,?,?,?,?)',
             [$requestId, $event, $from, $to, $actor['id'], $actor['name'], $comment]
         );
+    }
+
+    // -----------------------------------------------------------------
+    // 삭제 (관리자)
+    // -----------------------------------------------------------------
+
+    /**
+     * 요청을 영구 삭제한다.
+     *
+     * 철회(cancel)와 쓰임이 다르다. 철회는 "하기로 했다가 그만둔 일"이라 목록에
+     * 남아야 하는 기록이고, 삭제는 시험용으로 올렸거나 잘못 올려서 애초에
+     * 없었어야 할 건을 치우는 일이다. 그래서 BC_ACTIONS 에 넣지 않았다 —
+     * 삭제는 프로세스의 한 단계가 아니고, 전이표에 끼워 넣으면 transition()
+     * 이 받아 주게 되어 상태 기계가 흐려진다.
+     *
+     * 지우면 처리 이력과 첨부도 함께 사라진다(FK 의 ON DELETE CASCADE).
+     * 대신 지운 시점의 모습을 bc_request_deleted 에 통째로 남긴다 — 무엇을
+     * 누가 언제 지웠는지는 화면에서 지울 수 없어야 한다.
+     *
+     * @param  string $reason 삭제 사유(선택). 삭제 기록에 함께 남는다.
+     * @return array  지워진 요청 행
+     */
+    public static function delete(int $id, array $user, string $reason = ''): array
+    {
+        if (!in_array('ADMIN', bc_roles_of($user['id']), true)) {
+            throw new DomainException('요청 삭제는 관리자만 할 수 있습니다.');
+        }
+
+        $req = self::find($id);
+        if (!$req) {
+            throw new DomainException('요청을 찾을 수 없습니다.');
+        }
+
+        $history = self::history($id);
+        $files   = bc_fetch_all(
+            'SELECT id, orig_name, stored_path, file_size FROM bc_attachment WHERE request_id = ?',
+            [$id]
+        );
+
+        bc_transaction(function () use ($id, $req, $history, $files, $user, $reason) {
+            bc_query(
+                'INSERT INTO bc_request_deleted
+                   (request_id, req_year, req_seq, req_no, item_name, status,
+                    requester_id, requester_name, snapshot, reason,
+                    deleted_by, deleted_by_name)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                [
+                    $id,
+                    (int)$req['req_year'], (int)$req['req_seq'], $req['req_no'],
+                    $req['item_name'], $req['status'],
+                    $req['requester_id'], $req['requester_name'],
+                    json_encode(
+                        ['request' => $req, 'history' => $history, 'attachments' => $files],
+                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                    ),
+                    $reason !== '' ? mb_substr($reason, 0, 500) : null,
+                    $user['id'], $user['name'],
+                ]
+            );
+
+            // 아직 못 보낸 알림은 여기서 끊는다. 재발송 배치(cron/notify_retry.php)는
+            // 저장해 둔 본문만 보고 보내므로, 그냥 두면 없는 건의 알림이 뒤늦게 나간다.
+            bc_query(
+                'UPDATE bc_notify_log
+                    SET status = "SKIPPED", error_msg = "요청이 삭제되어 발송을 중단했습니다."
+                  WHERE request_id = ? AND status IN ("PENDING", "FAILED")',
+                [$id]
+            );
+
+            // 처리 이력(bc_request_history)과 첨부 행(bc_attachment)은
+            // FK 의 ON DELETE CASCADE 로 함께 지워진다.
+            bc_query('DELETE FROM bc_request WHERE id = ?', [$id]);
+        });
+
+        // 파일은 커밋이 끝난 뒤에 지운다. 트랜잭션이 되돌아가면 DB 행은
+        // 살아나지만 이미 지운 파일은 돌아오지 않기 때문.
+        $dirs = [];
+        foreach ($files as $f) {
+            if (is_file($f['stored_path'])) {
+                @unlink($f['stored_path']);
+            }
+            $dirs[dirname($f['stored_path'])] = true;
+        }
+        // 요청별 폴더가 빈 채로 남지 않게 한다. 비어 있지 않으면 rmdir 이
+        // 실패하고 폴더는 그대로 남는다 — 남의 파일을 건드리지 않는다.
+        foreach (array_keys($dirs) as $dir) {
+            @rmdir($dir);
+        }
+
+        return $req;
     }
 
     // -----------------------------------------------------------------

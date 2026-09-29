@@ -11,6 +11,77 @@ php dev\verify.php
 
 ---
 
+## 2026-09-28 · 관리자 요청 삭제
+
+시험용으로 올린 건이나 잘못 올라온 건을 치울 방법이 없었습니다. 철회는
+`CANCELED` 상태로 목록에 남는 기록이라, 애초에 없었어야 할 건에는 맞지
+않았습니다. **관리자만** 쓸 수 있는 삭제를 넣었습니다.
+
+**어디에 있나**
+
+관리자 탭 → 신청 물품 관리 목록의 **처리** 칸 맨 뒤, 그리고 요청 상세
+화면 아래쪽입니다. 승인·반려와 섞여 잘못 눌리지 않게 평소에는 흐리게
+두고, 마우스를 올릴 때만 색이 섭니다.
+
+**확인 절차**
+
+- 무엇이 함께 사라지는지(처리 이력 N건, 첨부파일 N개) 먼저 보여 줍니다
+- **요청번호를 그대로 입력**해야 동작합니다. 화면뿐 아니라 서버
+  (`api/request_delete.php`)에서도 같은 값을 확인합니다
+- 삭제 사유는 선택입니다. 적으면 삭제 기록에 함께 남습니다
+
+**지워지는 것 / 남는 것**
+
+`bc_request` 행과 처리 이력·첨부 메타데이터·실제 파일이 사라집니다.
+대신 `bc_request_deleted` 에 삭제 기록이 남습니다 — 누가 언제 왜 지웠는지와
+함께, 지운 시점의 요청 본문·처리 이력·첨부 목록이 `snapshot` 에 JSON 으로
+통째로 들어갑니다. 화면에서 이 기록을 지울 수 있는 경로는 없습니다.
+
+```sql
+SELECT req_no, item_name, requester_name, deleted_by_name, deleted_at, reason
+  FROM bc_request_deleted ORDER BY deleted_at DESC;
+```
+
+- 요청자에게 **알림은 가지 않습니다**. 진행 중인 건을 정리하려는 것이라면
+  반려나 철회를 쓰세요 — 그쪽은 기록이 남고 요청자도 알 수 있습니다
+- 아직 못 보낸 알림(`PENDING`/`FAILED`)은 `SKIPPED` 로 바꿉니다. 재발송
+  배치는 저장해 둔 본문만 보고 보내므로, 그냥 두면 없는 건의 알림이 뒤늦게
+  나갑니다
+
+**요청번호는 다시 쓰지 않습니다**
+
+채번이 `MAX(req_seq) + 1` 이라, 마지막 건을 지우면 다음 요청이 같은 번호를
+다시 받았습니다. 이미 메일·슬랙으로 나간 번호가 엉뚱한 건을 가리키면 안
+되므로 채번이 `bc_request_deleted` 의 번호까지 함께 봅니다. `2026-0009` 를
+지우면 다음 요청은 `2026-0010` 입니다.
+
+**DB 작업**
+
+```bash
+php dev/apply_sql.php sql/04_migration_v3.sql
+```
+
+`CREATE TABLE IF NOT EXISTS` 뿐이라 두 번 실행해도 안전합니다.
+새로 설치하는 경우에는 `01_schema.sql` 에 이미 들어 있습니다.
+
+**덮어쓸 파일**
+
+```
+api/request_delete.php        (새 파일)
+sql/01_schema.sql
+sql/04_migration_v3.sql       (새 파일)
+includes/workflow.php
+includes/presenter.php
+includes/model/PurchaseRequest.php
+views/admin.php
+views/modals.php
+assets/app.js
+assets/app.css
+tests/workflow_test.php
+```
+
+---
+
 ## 2026-09-23 · 슬랙 제목에 `[BlueCart]` 꼬리표
 
 `#blue_inbox` 에는 여러 시스템의 알림이 모입니다. '검토 승인' 같은 제목은 그

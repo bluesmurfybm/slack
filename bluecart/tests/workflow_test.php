@@ -687,6 +687,77 @@ ok('담당 지정 버튼이 다시 보임',
 ok('미지정으로 표시', bc_assignee_label($r2b) === '미지정', bc_assignee_label($r2b));
 
 // ---------------------------------------------------------------------
+echo "\n[21] 관리자 영구 삭제\n";
+
+$idDel = PurchaseRequest::create(['category_id' => $catId, 'item_name' => '삭제 시험',
+    'quantity' => 1, 'unit' => '개', 'est_amount' => null, 'ref_url' => '',
+    'deliver_to' => '', 'need_by' => '', 'note' => ''], $hoyoung);
+PurchaseRequest::transition($idDel, 'approve', $jian);
+
+$rDel     = PurchaseRequest::find($idDel);
+$attDelId = Attachment::store($idDel, fake_upload('영수증.png', $pngBytes), $hoyoung);
+$attDel   = Attachment::find($attDelId);
+
+$admin = login('admin');   // config.test.php 의 superadmins
+ok('관리자 판정', in_array('ADMIN', bc_roles_of('admin'), true));
+ok('삭제 권한은 관리자만', bc_can_delete($admin) && !bc_can_delete($hoyoung) && !bc_can_delete($jian));
+
+throws('요청자 본인도 삭제 불가', function () use ($idDel, $hoyoung) {
+    PurchaseRequest::delete($idDel, $hoyoung);
+}, '관리자만');
+throws('검토승인자도 삭제 불가', function () use ($idDel, $jian) {
+    PurchaseRequest::delete($idDel, $jian);
+}, '관리자만');
+ok('막힌 뒤에도 요청은 그대로', PurchaseRequest::find($idDel) !== null);
+
+// 아직 못 보낸 알림이 남아 있으면 지운 뒤에 뒤늦게 나가면 안 된다.
+bc_query(
+    'INSERT INTO bc_notify_log (request_id, event_code, target_role, channel, recipient, subject, body, status)
+     VALUES (?, "REVIEW_APPROVED", "REQUESTER", "EMAIL", "hoyoung@example.com", "제목", "본문", "FAILED")',
+    [$idDel]
+);
+
+PurchaseRequest::delete($idDel, $admin, '시험용으로 올린 건');
+
+ok('요청이 사라짐', PurchaseRequest::find($idDel) === null);
+ok('처리 이력도 함께 사라짐', count(PurchaseRequest::history($idDel)) === 0);
+ok('첨부 행도 함께 사라짐', Attachment::find($attDelId) === null);
+ok('첨부 파일도 지워짐', !is_file($attDel['stored_path']), $attDel['stored_path']);
+
+$delLog = bc_fetch_one('SELECT * FROM bc_request_deleted WHERE request_id = ?', [$idDel]);
+ok('삭제 기록이 남음', $delLog !== null);
+ok('지운 사람이 기록됨', ($delLog['deleted_by'] ?? '') === 'admin');
+ok('삭제 사유가 기록됨', ($delLog['reason'] ?? '') === '시험용으로 올린 건');
+ok('요청번호가 기록됨', ($delLog['req_no'] ?? '') === $rDel['req_no']);
+
+$snap = json_decode((string)($delLog['snapshot'] ?? ''), true);
+ok('요청 본문이 통째로 보존됨', ($snap['request']['item_name'] ?? '') === '삭제 시험');
+ok('처리 이력도 보존됨', count($snap['history'] ?? []) >= 2,
+   json_encode(array_column($snap['history'] ?? [], 'event_code')));
+ok('첨부 목록도 보존됨', ($snap['attachments'][0]['orig_name'] ?? '') === '영수증.png');
+
+ok('못 보낸 알림이 남지 않음', (int)bc_fetch_value(
+   'SELECT COUNT(*) FROM bc_notify_log WHERE request_id = ? AND status IN ("PENDING","FAILED")',
+   [$idDel], 0) === 0);
+ok('발송 중단 사유가 기록됨', (int)bc_fetch_value(
+   'SELECT COUNT(*) FROM bc_notify_log WHERE request_id = ? AND status = "SKIPPED" AND error_msg LIKE "%삭제%"',
+   [$idDel], 0) === 1);
+
+// 마지막 번호를 지웠다고 그 번호를 다시 내주면, 이미 메일·슬랙으로 나간
+// 번호가 다른 건을 가리키게 된다.
+$idAfter = PurchaseRequest::create(['category_id' => $catId, 'item_name' => '삭제 후 요청',
+    'quantity' => 1, 'unit' => '개', 'est_amount' => null, 'ref_url' => '',
+    'deliver_to' => '', 'need_by' => '', 'note' => ''], $hoyoung);
+$rAfter = PurchaseRequest::find($idAfter);
+ok('지워진 번호를 다시 쓰지 않음',
+   (int)$rAfter['req_seq'] > (int)$rDel['req_seq'],
+   $rDel['req_no'] . ' 삭제 → ' . $rAfter['req_no']);
+
+throws('없는 요청은 삭제할 수 없음', function () use ($idDel, $admin) {
+    PurchaseRequest::delete($idDel, $admin);
+}, '찾을 수 없');
+
+// ---------------------------------------------------------------------
 echo "\n";
 echo str_repeat('─', 50) . "\n";
 printf("결과: %d건 통과, %d건 실패\n", $pass, $fail);
