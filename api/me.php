@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'name'        => $u['name'],
         'email'       => $u['email'],
         'has_token'   => !empty($u['slack_token_enc']),
+        'slack_email' => $u['slack_email'] ?? null,
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
         'bg_pref'     => board_bg_pref($u),
@@ -31,6 +32,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if (isset($body['slack_token']) && trim((string)$body['slack_token']) !== '') {
         $fields[] = 'slack_token_enc=?';
         $vals[]   = enc_token(trim($body['slack_token']));
+    }
+    // 슬랙 계정 이메일. 포털 로그인 이메일과 다른 사람만 적는다.
+    //
+    // 바로 위 슬랙 토큰과 규칙이 반대다. 토큰은 민감정보라 저장 후 다시 보여
+    // 주지 않으므로 빈칸을 '그대로 두기' 로 읽지만, 이 칸은 화면에 원문이 그대로
+    // 보이므로 빈칸은 '지우기' 로 읽는다.
+    if (isset($body['slack_email'])) {
+        $se = trim((string)$body['slack_email']);
+        if ($se !== '' && !filter_var($se, FILTER_VALIDATE_EMAIL)) {
+            http_response_code(400);
+            echo json_encode(['error' => '슬랙 계정 이메일 형식이 올바르지 않습니다'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        // 같은 요청에서 로그인 이메일을 함께 바꿀 수 있으니 새 값과 견준다.
+        $base = !empty($body['email']) ? trim((string)$body['email']) : (string)$u['email'];
+        // 회사 메일과 같으면 적어 둘 이유가 없다. 같은 사실이 두 군데 있으면
+        // 한쪽만 바뀌었을 때 어느 쪽이 맞는지 알 수 없다.
+        $fields[] = 'slack_email=?';
+        $vals[]   = ($se === '' || strcasecmp($se, $base) === 0) ? null : $se;
     }
     // 대시보드 배경 설정. 화면 우상단 아이콘이 이것만 따로 보낸다.
     if (isset($body['bg_pref'])) {
@@ -84,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         'name'        => $u['name'],
         'email'       => $u['email'],
         'has_token'   => !empty($u['slack_token_enc']),
+        'slack_email' => $u['slack_email'] ?? null,
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
         'bg_pref'     => board_bg_pref($u),

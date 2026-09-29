@@ -28,19 +28,21 @@ CREATE TABLE `bc_dev_member` (
   `mb_name`       VARCHAR(80)  NOT NULL,
   `mb_email`      VARCHAR(255) NULL,
   `mb_slack_id`   VARCHAR(40)  NULL,
+  -- 슬랙 계정이 회사 메일과 다른 사람만 채운다
+  `mb_slack_email` VARCHAR(255) NULL,
   `mb_leave_date` VARCHAR(10)  NULL,
   PRIMARY KEY (`mb_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='로컬 개발용 가짜 회원 테이블';
 
-INSERT INTO `bc_dev_member` (`mb_id`, `mb_name`, `mb_email`, `mb_slack_id`, `mb_leave_date`) VALUES
-  ('hoyoung',    '김호영', 'hoyoung@example.com',    'U001', NULL),
-  ('jian',       '김지안', 'jian@example.com',       'U002', NULL),
-  ('seongcheol', '박성철', 'seongcheol@example.com', 'U003', NULL),
-  ('jeongmin',   '안정민', 'jeongmin@example.com',   'U004', NULL),
-  ('byeongmun',  '유병문', 'byeongmun@example.com',  'U005', NULL),
-  ('sohyeon',    '진소현', 'sohyeon@example.com',    'U006', NULL),
-  ('retired',    '퇴사자', 'retired@example.com',    NULL,   '2025-12-31');
+INSERT INTO `bc_dev_member` (`mb_id`, `mb_name`, `mb_email`, `mb_slack_id`, `mb_slack_email`, `mb_leave_date`) VALUES
+  ('hoyoung',    '김호영', 'hoyoung@example.com',    'U001', NULL, NULL),
+  ('jian',       '김지안', 'jian@example.com',       'U002', NULL, NULL),
+  ('seongcheol', '박성철', 'seongcheol@example.com', 'U003', NULL, NULL),
+  ('jeongmin',   '안정민', 'jeongmin@example.com',   'U004', NULL, NULL),
+  ('byeongmun',  '유병문', 'byeongmun@example.com',  'U005', NULL, NULL),
+  ('sohyeon',    '진소현', 'sohyeon@example.com',    'U006', NULL, NULL),
+  ('retired',    '퇴사자', 'retired@example.com',    NULL,   NULL, '2025-12-31');
 
 -- ---------------------------------------------------------------------
 -- 2. 역할 배정

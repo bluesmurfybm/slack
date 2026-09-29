@@ -26,6 +26,9 @@ function bc_directory_select(): string
         bc_ident($m['col_name'])  . ' AS name',
         ($m['col_email'] ? bc_ident($m['col_email']) : 'NULL') . ' AS email',
         ($m['col_slack_id'] ? bc_ident($m['col_slack_id']) : 'NULL') . ' AS slack_id',
+        // 슬랙 계정이 회사 메일과 다른 사람만 값이 있다. 없으면 email 을 쓴다.
+        // 설정에 이 키가 없는 예전 config.php 도 그대로 돌아야 하므로 ?? 로 받는다.
+        (($m['col_slack_email'] ?? null) ? bc_ident($m['col_slack_email']) : 'NULL') . ' AS slack_email',
     ];
     return 'SELECT ' . implode(', ', $cols) . ' FROM ' . bc_ident($m['table']);
 }
@@ -33,7 +36,7 @@ function bc_directory_select(): string
 /**
  * 재직 중인 구성원 전체 목록.
  *
- * @return array<int,array{id:string,name:string,email:?string,slack_id:?string}>
+ * @return array<int,array{id:string,name:string,email:?string,slack_id:?string,slack_email:?string}>
  */
 function bc_directory_all(string $keyword = ''): array
 {

@@ -11,6 +11,127 @@ php dev\verify.php
 
 ---
 
+## 2026-09-29 · 슬랙 계정 이메일을 본인이 등록
+
+슬랙 개인 DM 이 일부 인원에게 가지 않았습니다. iworks 계정은 전원 회사
+메일(`@bluesoft.co.kr`)인데 **슬랙은 협업사 도메인 계정을 쓰는 사람이 있어**,
+회사 메일로 `users.lookupByEmail` 을 불러도 찾지 못했습니다. 찾지 못하면
+`SKIPPED` 로만 남고 화면에는 아무 표시가 없어, 그 사람만 조용히 빠졌습니다.
+
+**포털 마이페이지에 칸 하나**
+
+슬랙 계정 이메일이 회사 메일과 **다른 사람만** 본인이 적습니다. 같은 사람은
+비워 둡니다 — 같은 값을 보내면 서버가 비워서 저장합니다(대소문자 무시).
+관리자가 사람마다 슬랙 프로필을 뒤지는 대신 본인이 아는 것을 본인이 적는
+쪽을 골랐습니다.
+
+- 저장 위치는 `portal_users.slack_email`. `NULL` 이면 로그인 이메일과 같다는 뜻
+- 바로 위 **슬랙 연동 토큰과 규칙이 반대**입니다. 토큰은 빈칸이 '그대로 두기'
+  지만(민감정보라 다시 보여 주지 않으므로), 이 칸은 원문이 화면에 보이므로
+  빈칸은 '지우기' 입니다. 안내 문구도 그렇게 갈라 놓았습니다
+
+**DM 대상을 찾는 순서**
+
+```
+회원 테이블의 슬랙 ID  →  본인이 등록한 슬랙 이메일  →  회사 이메일
+```
+
+2번이 있는데 안 잡히면 3번도 해 봅니다 — 적어 둔 주소에 오타가 있거나, 그
+사이 슬랙 계정을 회사 메일로 옮겼을 수 있습니다.
+
+**점검 스크립트가 사람별로 어느 주소로 찾았는지 알려 줍니다**
+
+```
+[정상] 김호영 (검토승인자/관리자)  kimhy@naddle.net (등록값) → U03XXXX
+[오류] 유병문 (요청자)            byeongmun@bluesoft.co.kr (회사 메일) → 못 찾음
+       → 슬랙을 회사 메일이 아닌 계정으로 쓰는 분입니다.
+          본인이 포털 마이페이지 > 슬랙 계정 이메일에 등록해야 합니다.
+```
+
+공지 후 며칠 뒤 `php cron/slack_check.php` 를 한 번 돌려, 오류로 남은 분에게만
+개별 연락하시면 됩니다.
+
+**배포 순서 — 포털 먼저, BlueCart 나중**
+
+BlueCart 가 `portal_users.slack_email` 을 읽으므로 컬럼이 먼저 있어야 합니다.
+컬럼은 포털이 뜰 때 `core/db.php` 가 자동으로 만듭니다(`add_column_if_missing`).
+따로 실행할 SQL 은 없습니다.
+
+```
+1. 포털(iWorks) 배포 → 아무 화면이나 한 번 열어 컬럼 생성 확인
+     SHOW COLUMNS FROM portal_users LIKE 'slack_email';
+2. BlueCart 배포
+```
+
+반대로 올리면 BlueCart 가 없는 컬럼을 읽어 구성원 조회가 빈 목록이 됩니다
+(`bc_directory_*` 가 예외를 삼키고 빈 배열을 돌려주므로 화면이 죽지는 않지만,
+역할 배정 목록이 비어 보입니다).
+
+**덮어쓸 파일**
+
+포털(iWorks)
+
+```
+core/db.php
+api/me.php
+api/login.php
+index.php
+readme.md
+```
+
+BlueCart
+
+```
+config/config.iworks.sample.php
+config/config.sample.php
+config/config.test.php
+includes/directory.php
+includes/model/RoleAssign.php
+includes/notify/Notifier.php
+cron/slack_check.php
+dev/seed_dev.sql
+tests/fixture.sql
+tests/workflow_test.php
+README.md
+```
+
+---
+
+## 2026-09-28 · 슬랙 알림 점검 스크립트
+
+개인 DM 이 안 될 때 원인이 화면 어디에도 드러나지 않았습니다. 세 가지가
+말없이 막는데 셋 다 눈에 보이지 않습니다.
+
+1. `notify.enabled` 가 `false` — 보내지 않고 **로그에는 `SENT` 로** 남습니다
+2. 슬랙 앱에 스코프를 추가하고 **재설치를 안 함** — 앱 설정 화면에는 보이지만
+   토큰에는 안 붙어 있습니다
+3. 포털 계정 이메일과 슬랙 프로필 이메일이 다름 — 그 사람만 조용히 빠집니다
+
+```bash
+php cron/slack_check.php                      # 점검만
+php cron/slack_check.php --dm=<본인 이메일>    # 실제로 한 통 보내 본다
+```
+
+- 토큰에 **실제로** 붙어 있는 스코프를 응답 헤더 `x-oauth-scopes` 에서 읽어
+  `chat:write` · `users:read.email` 과 대조합니다. 재설치를 빠뜨렸는지 여기서
+  드러납니다
+- 역할 배정자와 최근 요청자의 이메일을 한 명씩 슬랙에서 조회해 보여 줍니다
+- 어느 채널도 켜지지 않아 **알림이 통째로 안 나가는 단계**를 따로 짚어 줍니다
+- 슬랙에 닿지 못했을 때는 사람별 조회를 '못 찾음' 이 아니라 '확인 못 함' 으로
+  적습니다. 연결 문제를 이메일 문제로 읽고 엉뚱한 곳을 고치지 않게 하려는 것
+
+`cron/` 에 두었지만 cron 에 등록하는 파일은 아닙니다. 배포할 때 `dev/` 는
+지우는데 슬랙이 말썽인 순간은 대개 배포 뒤에 오기 때문입니다.
+
+**덮어쓸 파일**
+
+```
+cron/slack_check.php          (새 파일)
+README.md
+```
+
+---
+
 ## 2026-09-28 · 관리자 요청 삭제
 
 시험용으로 올린 건이나 잘못 올라온 건을 치울 방법이 없었습니다. 철회는

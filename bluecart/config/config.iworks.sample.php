@@ -62,6 +62,10 @@ return [
             // slack_token_enc 는 개인 토큰이라 사용자 ID 가 아니다.
             // 슬랙 DM 은 이메일로 users.lookupByEmail 조회해서 찾는다.
             'col_slack_id' => null,
+            // 슬랙 계정이 회사 메일이 아닌 사람이 있다(협업사 도메인 등).
+            // 포털 마이페이지에서 본인이 적어 둔 값이고, 회사 메일과 같은
+            // 사람은 비어 있다. 비어 있으면 col_email 로 찾는다.
+            'col_slack_email' => 'slack_email',
         ],
 
         // 최초 관리자. 역할 배정 화면에 들어갈 사람을 이메일로 적는다.

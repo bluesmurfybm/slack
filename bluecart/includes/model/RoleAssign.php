@@ -86,7 +86,7 @@ final class RoleAssign
      * 알림 수신자 해석.
      * REQUESTER 는 요청 건에 종속이므로 $request 를 함께 받는다.
      *
-     * @return array<int,array{id:string,name:string,email:?string,slack_id:?string}>
+     * @return array<int,array{id:string,name:string,email:?string,slack_id:?string,slack_email:?string}>
      */
     public static function resolveRecipients(string $targetRole, array $request): array
     {
@@ -106,10 +106,11 @@ final class RoleAssign
         $out = [];
         foreach ($ids as $id) {
             $out[] = [
-                'id'       => $id,
-                'name'     => $map[$id]['name']     ?? $id,
-                'email'    => $map[$id]['email']    ?? null,
-                'slack_id' => $map[$id]['slack_id'] ?? null,
+                'id'          => $id,
+                'name'        => $map[$id]['name']        ?? $id,
+                'email'       => $map[$id]['email']       ?? null,
+                'slack_id'    => $map[$id]['slack_id']    ?? null,
+                'slack_email' => $map[$id]['slack_email'] ?? null,
             ];
         }
         return $out;

@@ -758,6 +758,44 @@ throws('없는 요청은 삭제할 수 없음', function () use ($idDel, $admin)
 }, '찾을 수 없');
 
 // ---------------------------------------------------------------------
+echo "\n[22] 슬랙 계정 이메일 (회사 메일과 다른 사람)\n";
+
+// 슬랙을 회사 메일이 아닌 계정으로 쓰는 사람이 있다. 본인이 포털 마이페이지에서
+// 적어 둔 값을 회원 조회가 함께 실어 와야 알림이 그 사람에게 닿는다.
+bc_query("UPDATE member SET mb_slack_email = 'hoyoung@partner.example' WHERE mb_id = 'hoyoung'");
+
+$row = bc_directory_find('hoyoung');
+ok('구성원 조회가 슬랙 이메일을 함께 싣는다',
+   ($row['slack_email'] ?? null) === 'hoyoung@partner.example', json_encode($row));
+
+$plain = bc_directory_find('jian');
+ok('등록하지 않은 사람은 비어 있다', ($plain['slack_email'] ?? null) === null);
+
+$recips = RoleAssign::resolveRecipients('REQUESTER', ['requester_id' => 'hoyoung']);
+ok('수신자 해석에도 실린다',
+   ($recips[0]['slack_email'] ?? null) === 'hoyoung@partner.example', json_encode($recips));
+ok('회사 이메일은 그대로 남는다',
+   ($recips[0]['email'] ?? null) === 'hoyoung@example.com');
+
+// 찾는 순서: 회원 테이블의 슬랙 ID → 등록한 슬랙 이메일 → 회사 이메일.
+// private 이라 리플렉션으로 직접 부른다. 발송 경로 전체를 태우면 슬랙 API 를
+// 실제로 불러야 해서, 순서를 결정하는 이 한 곳만 본다.
+$slackIdOf = new ReflectionMethod(Notifier::class, 'slackIdOf');
+$slackIdOf->setAccessible(true);
+$pick = fn(array $r) => $slackIdOf->invoke(null, $r);
+
+ok('회원 테이블의 슬랙 ID 가 가장 먼저',
+   $pick(['slack_id' => 'U999', 'slack_email' => 'a@b.c', 'email' => 'd@e.f']) === 'U999');
+
+// 슬랙 API 는 부르지 않는다(토큰이 없으면 lookup 이 곧바로 null).
+ok('슬랙 ID 도 토큰도 없으면 찾지 못한다',
+   $pick(['slack_id' => null, 'slack_email' => 'a@b.c', 'email' => 'd@e.f']) === null);
+ok('이메일이 하나도 없어도 죽지 않는다',
+   $pick(['slack_id' => null, 'slack_email' => null, 'email' => null]) === null);
+
+bc_query("UPDATE member SET mb_slack_email = NULL WHERE mb_id = 'hoyoung'");
+
+// ---------------------------------------------------------------------
 echo "\n";
 echo str_repeat('─', 50) . "\n";
 printf("결과: %d건 통과, %d건 실패\n", $pass, $fail);

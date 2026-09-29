@@ -18,6 +18,7 @@ $__current = $__u ? [
     'name'        => $__u['name'],
     'email'       => $__u['email'],
     'has_token'   => !empty($__u['slack_token_enc']),
+    'slack_email' => $__u['slack_email'] ?? null,
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
 ] : null;
@@ -411,6 +412,18 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         <div class="hintline">초기 비밀번호는 blue$123 입니다.</div>
       </div>
 
+      <!-- 슬랙 알림을 받을 계정. 슬랙 연동 토큰과는 쓰임이 다르다 —
+           토큰은 slack 모듈을 쓰는 사람만 필요하지만 이 칸은 전원 대상이라
+           토큰 안내(민감정보 경고) 위에 따로 둔다. -->
+      <div class="fld">
+        <label>슬랙 계정 이메일</label>
+        <input id="pf-slackmail" type="email" placeholder="회사 메일과 같으면 비워 두세요" disabled>
+        <div class="hintline">
+          슬랙 알림(개인 DM)을 보낼 때 씁니다. <b>슬랙 계정 이메일이 위 이메일과 다른 분만</b> 적어 주세요.
+          슬랙 → 본인 프로필에서 확인할 수 있습니다. 비우고 저장하면 등록이 지워집니다.
+        </div>
+      </div>
+
       <div class="token-note">
         🔒 <b>슬랙 연동 토큰</b>은 민감정보입니다. 본인만 입력·수정하며, 저장 후에는 화면에 원문이 다시 표시되지 않습니다.
         토큰이 유출되면 즉시 재발급하세요.
@@ -602,7 +615,7 @@ function pickSwatch(c){
    단, 초기 비번 미변경/토큰 요구 상황이면 볼 것도 없이 바로 수정 모드로 연다. */
 function setProfileMode(editing){
   profileEditing=editing;
-  ["pf-name","pf-email","pf-color","pf-pw","pf-token"].forEach(id=>{
+  ["pf-name","pf-email","pf-color","pf-pw","pf-slackmail","pf-token"].forEach(id=>{
     document.getElementById(id).disabled=!editing;
   });
   buildSwatches(document.getElementById("pf-color").value);
@@ -617,6 +630,7 @@ function cancelEditProfile(){
   document.getElementById("pf-email").value=current.email;
   document.getElementById("pf-pw").value="";
   document.getElementById("pf-color").value=hexOrDefault(current.color);
+  document.getElementById("pf-slackmail").value=current.slack_email||"";
   document.getElementById("pf-token").value="";
   setProfileMode(false);
 }
@@ -627,6 +641,7 @@ function showProfile(alertMsg, forceEdit){
   document.getElementById("pf-email").value=current.email;
   document.getElementById("pf-pw").value="";
   document.getElementById("pf-color").value=hexOrDefault(current.color);
+  document.getElementById("pf-slackmail").value=current.slack_email||"";
   const tokenEl=document.getElementById("pf-token");
   tokenEl.value="";
   tokenEl.placeholder = current.has_token ? "저장됨 · 변경하려면 새 토큰 입력" : "xoxp-... (본인 토큰 붙여넣기)";
@@ -826,6 +841,9 @@ async function saveProfile(){
   const body={ name, email, color:document.getElementById("pf-color").value };
   const pw=v("pf-pw"); if(pw) body.password=pw;
   const tk=v("pf-token"); if(tk) body.slack_token=tk; // 빈칸이면 미전송=기존 토큰 유지
+  // 슬랙 계정 이메일은 빈칸도 보낸다. 토큰과 달리 화면에 원문이 보이므로
+  // 비운 것은 '지우기' 라는 뜻이다. 회사 메일과 같으면 서버가 비워서 저장한다.
+  body.slack_email=v("pf-slackmail");
 
   const r=await fetch("api/me.php",{method:"PUT",headers:{"Content-Type":"application/json"},
     body:JSON.stringify(body)});

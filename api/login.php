@@ -29,6 +29,7 @@ echo json_encode([
     'name'        => $row['name'],
     'email'       => $row['email'],
     'has_token'   => !empty($row['slack_token_enc']),
+    'slack_email' => $row['slack_email'] ?? null,
     'needs_setup' => needs_setup($row),
     'color'       => user_color($row),
 ], JSON_UNESCAPED_UNICODE);

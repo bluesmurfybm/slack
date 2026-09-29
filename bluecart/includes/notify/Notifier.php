@@ -145,13 +145,40 @@ final class Notifier
         }
     }
 
+    /**
+     * 이 사람의 슬랙 사용자 ID. 찾지 못하면 null.
+     *
+     * 찾는 순서
+     *   1. 회원 테이블의 슬랙 ID 컬럼 — 있으면 조회할 것도 없다
+     *   2. 본인이 등록한 슬랙 계정 이메일 — 슬랙을 회사 메일이 아닌 계정으로
+     *      쓰는 사람이 있다. 포털 마이페이지에서 본인이 적어 둔 값
+     *   3. 회사 이메일 — 대부분은 여기서 잡힌다
+     *
+     * 2번이 있는데 안 잡히면 3번도 해 본다. 적어 둔 주소에 오타가 있거나,
+     * 그 사이 슬랙 계정을 회사 메일로 옮겼을 수 있다.
+     */
+    private static function slackIdOf(array $r): ?string
+    {
+        if (!empty($r['slack_id'])) {
+            return (string)$r['slack_id'];
+        }
+        foreach ([$r['slack_email'] ?? null, $r['email'] ?? null] as $email) {
+            $email = trim((string)$email);
+            if ($email === '') {
+                continue;
+            }
+            $id = SlackChannel::lookupUserByEmail($email);
+            if ($id) {
+                return $id;
+            }
+        }
+        return null;
+    }
+
     private static function sendSlackDm(array $recipients, array $msg, array $req, string $event, string $role): void
     {
         foreach ($recipients as $r) {
-            $slackId = $r['slack_id'] ?: null;
-            if (!$slackId && !empty($r['email'])) {
-                $slackId = SlackChannel::lookupUserByEmail($r['email']);
-            }
+            $slackId = self::slackIdOf($r);
             if (!$slackId) {
                 self::log($req['id'], $event, $role, 'SLACK_DM', $r['id'], $msg['subject'], $msg['text'],
                           'SKIPPED', '슬랙 사용자를 찾지 못했습니다.');

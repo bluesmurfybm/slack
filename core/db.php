@@ -46,6 +46,10 @@ function portal_db() {
     // 업무 시스템 카드 순서. 사람마다 중요한 시스템이 달라 직접 끌어 정한 순서를
     // 계정에 남긴다. key 를 콤마로 이은 값이고, 비어 있으면 제목순으로 그린다.
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `tile_order` VARCHAR(255) NULL COMMENT '업무 시스템 카드 순서(key 를 콤마로 이음). 비면 제목순' AFTER `bg_pref`");
+    // 슬랙 개인 DM 을 받을 계정. 포털 로그인 이메일은 회사 메일(@bluesoft.co.kr)인데
+    // 슬랙은 협업사 도메인 계정을 쓰는 사람이 있어, 이메일로 슬랙 사용자를 찾지
+    // 못하고 알림이 조용히 빠졌다. 다른 사람만 적는다 — NULL 이면 email 과 같다는 뜻.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `slack_email` VARCHAR(190) NULL COMMENT '슬랙 계정 이메일. 로그인 이메일과 다를 때만 채운다' AFTER `slack_token_enc`");
 
     // -----------------------------------------------------------------
     // 알림판 — 공지 / 중요 일정 / 포털 관리자

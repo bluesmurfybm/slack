@@ -203,6 +203,9 @@ $hasSlackCol = (string)bc_config('iworks.member.col_slack_id', '') !== '';
 line('  슬랙 ID 컬럼: ' . ($hasSlackCol
     ? bc_config('iworks.member.col_slack_id') . ' (있으면 이메일 조회를 건너뜁니다)'
     : '없음 — 이메일로만 찾습니다'));
+line('  슬랙 이메일 컬럼: ' . ((string)bc_config('iworks.member.col_slack_email', '') !== ''
+    ? bc_config('iworks.member.col_slack_email') . ' (본인이 마이페이지에서 등록)'
+    : '없음 — 회사 이메일로만 찾습니다'));
 
 $targets = [];
 foreach (RoleAssign::TYPES as $type) {
@@ -227,14 +230,25 @@ $miss = 0;
 foreach ($targets as $uid => $roles) {
     $row   = $dir[$uid] ?? null;
     $name  = $row['name'] ?? $uid;
-    $email = $row['email'] ?? null;
+    $email = trim((string)($row['email'] ?? ''));
+    $mine  = trim((string)($row['slack_email'] ?? ''));   // 본인이 등록한 슬랙 계정
     $tag   = $name . ' (' . implode('/', array_unique($roles)) . ')';
 
     if ($hasSlackCol && !empty($row['slack_id'])) {
         ok_($tag, '슬랙 ID ' . $row['slack_id'] . ' 가 회원 정보에 있음');
         continue;
     }
-    if (!$email) {
+
+    // Notifier::slackIdOf 와 같은 순서로 찾는다. 여기서 되는 것이 거기서도 된다.
+    $tries = [];
+    if ($mine !== '') {
+        $tries[$mine] = '등록값';
+    }
+    if ($email !== '' && !isset($tries[$email])) {
+        $tries[$email] = '회사 메일';
+    }
+
+    if (!$tries) {
         fail_($tag, '이메일이 없어 슬랙에서 찾을 수 없습니다');
         $miss++;
         continue;
@@ -242,24 +256,43 @@ foreach ($targets as $uid => $roles) {
     // API 자체가 막혀 있으면 전원이 '못 찾음' 으로 나온다. 이메일이 틀린 것처럼
     // 읽히면 엉뚱한 곳을 고치게 되므로, 확인 못 했다고만 말한다.
     if (!$apiOk) {
-        warn_($tag, $email . ' → 확인 못 함 (3번을 먼저 해결하세요)');
+        warn_($tag, array_key_first($tries) . ' → 확인 못 함 (3번을 먼저 해결하세요)');
         continue;
     }
 
-    $slackId = SlackChannel::lookupUserByEmail($email);
-    if ($slackId) {
-        ok_($tag, $email . ' → ' . $slackId);
-    } else {
-        fail_($tag, $email . ' → 못 찾음');
-        $miss++;
+    $found = null;
+    foreach ($tries as $try => $label) {
+        $slackId = SlackChannel::lookupUserByEmail($try);
+        if ($slackId) {
+            $found = $try . ' (' . $label . ') → ' . $slackId;
+            break;
+        }
     }
+
+    if ($found !== null) {
+        ok_($tag, $found);
+        continue;
+    }
+
+    $tried = [];
+    foreach ($tries as $try => $label) {
+        $tried[] = $try . ' (' . $label . ')';
+    }
+    fail_($tag, implode(', ', $tried) . ' → 못 찾음');
+    if ($mine === '') {
+        line('         → 슬랙을 회사 메일이 아닌 계정으로 쓰는 분입니다.');
+        line('            본인이 포털 마이페이지 > 슬랙 계정 이메일에 등록해야 합니다.');
+    } else {
+        line('         → 등록한 주소로도 못 찾았습니다. 오타이거나 슬랙 계정이 비활성입니다.');
+    }
+    $miss++;
 }
 
 if ($miss) {
     line('');
     line('         못 찾은 사람은 DM 이 조용히 빠집니다(SKIPPED).');
-    line('         포털 계정 이메일과 슬랙 프로필 이메일이 글자까지 같아야 합니다.');
-    line('         비활성화된 슬랙 계정도 찾지 못합니다.');
+    line('         슬랙 계정 이메일이 회사 메일과 다르면, 본인이 포털 마이페이지에서');
+    line('         직접 등록해야 합니다. 비활성화된 슬랙 계정은 어느 쪽으로도 찾지 못합니다.');
 }
 
 // ---------------------------------------------------------------------

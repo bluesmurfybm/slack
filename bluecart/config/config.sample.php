@@ -53,6 +53,10 @@ return [
             'active_where' => "(mb_leave_date IS NULL OR mb_leave_date = '')",
             // 슬랙 사용자 ID 컬럼이 회원 테이블에 있으면 지정 (없으면 null)
             'col_slack_id' => null,
+            // 슬랙 계정 이메일 컬럼. 회사 메일과 슬랙 계정 메일이 다른 사람이
+            // 있을 때 쓴다. 이 값이 있으면 이 주소로 먼저 슬랙 사용자를 찾고,
+            // 없으면 col_email 로 찾는다. (없으면 null)
+            'col_slack_email' => null,
         ],
 
         // 시스템 관리자로 간주할 사용자 ID 목록 (부트스트랩용)
