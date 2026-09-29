@@ -92,4 +92,8 @@ bc_json_ok([
         'status_in'          => $scopeOf['status_in'],
     ]),
     'years'  => PurchaseRequest::years(),
+    // 사람 축(담당)이 단계까지 제한하고 있으면 그 목록. null 이면 제한 없음.
+    // 화면이 이걸 알아야 "고른 탭이 지금 담당 범위 밖" 인지 판단할 수 있다.
+    // 모르면 구비 완료 탭이 늘 0건으로 보이는데 왜 그런지 설명할 길이 없다.
+    'scope_status' => $scopeOf['status_in'],
 ]);

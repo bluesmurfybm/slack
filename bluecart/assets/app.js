@@ -161,6 +161,28 @@
     return counts[key] || 0;
   }
 
+  /** 탭 하나가 보는 상태 코드. 서버 bc_tab_status() 와 짝이다. */
+  function tabStatus(key) {
+    if (key === 'OUT') { return ['REJECTED', 'CANCELED']; }
+    if (key === 'all') { return []; }          // 조건 없음
+    return [key];
+  }
+
+  /**
+   * 고른 탭이 지금 담당 범위 밖인가.
+   *
+   * '내가 처리할 건' 은 역할에 맞는 단계까지 함께 정한다. 관리자면
+   * 검토 대기·구매 대기·구매 진행 셋이라, 구비 완료와 반려·철회는 아무리
+   * 눌러도 0건이다. 화면에는 그 이유가 적힐 자리가 없어 "관리자인데 구비
+   * 완료가 안 보인다" 로 읽힌다. 여기서 가려내 담당을 넓혀 준다.
+   */
+  function outOfScope(tab, scopeStatus) {
+    if (!scopeStatus || !scopeStatus.length) { return false; }   // 제한 없음
+    var want = tabStatus(tab);
+    if (!want.length) { return false; }                          // '전체' 탭은 늘 유효
+    return want.every(function (s) { return scopeStatus.indexOf(s) < 0; });
+  }
+
   function renderStatusTabs(el, counts, active, onPick) {
     el.innerHTML = STATUS_TABS.map(function (t) {
       var n = tabCount(counts, t.key);
@@ -1046,6 +1068,13 @@
         renderStatusTabs($('#bc-adm-tabs'), res.counts, self.state.tab, function (tab) {
           self.state.tab = tab;
           self.state.page = 1;
+          // 담당이 정한 단계 밖의 탭을 골랐다면 담당을 넓혀 준다. 안 그러면
+          // 눌러도 늘 0건이고, 화면에는 그 이유가 적힐 자리가 없다.
+          // 담당 선택칸이 눈에 보이게 함께 바뀌므로 숨은 상태가 생기지는 않는다.
+          if (outOfScope(tab, res.scope_status)) {
+            $('#bc-af-assign').value = 'all';
+            toast('담당을 ‘전체’ 로 바꿔 보여 드립니다. ‘내가 처리할 건’ 에는 이 단계가 들어가지 않습니다.');
+          }
           self.loadQueue();
         });
         renderList(tbody, res.rows, {
