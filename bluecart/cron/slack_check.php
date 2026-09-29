@@ -203,9 +203,32 @@ $hasSlackCol = (string)bc_config('iworks.member.col_slack_id', '') !== '';
 line('  슬랙 ID 컬럼: ' . ($hasSlackCol
     ? bc_config('iworks.member.col_slack_id') . ' (있으면 이메일 조회를 건너뜁니다)'
     : '없음 — 이메일로만 찾습니다'));
-line('  슬랙 이메일 컬럼: ' . ((string)bc_config('iworks.member.col_slack_email', '') !== ''
+$hasMailCol = (string)bc_config('iworks.member.col_slack_email', '') !== '';
+line('  슬랙 이메일 컬럼: ' . ($hasMailCol
     ? bc_config('iworks.member.col_slack_email') . ' (본인이 마이페이지에서 등록)'
     : '없음 — 회사 이메일로만 찾습니다'));
+
+// config.php 는 서버마다 사람이 만드는 파일이라 배포로 덮이지 않는다. 포털에
+// 컬럼이 생기고 본인이 등록까지 마쳐도, 여기 한 줄이 없으면 BlueCart 는 그
+// 값을 읽지 않는다. 증상이 '등록 전' 과 똑같아 원인을 짚기 어려우므로 짚어 준다.
+if (!$hasMailCol) {
+    try {
+        // 회원 테이블에 slack_email 이 이미 있고 누가 적어 뒀는지 본다.
+        // 컬럼이 없으면 질의가 실패하고, 그때는 알릴 것도 없다.
+        $registered = (int)bc_fetch_value(
+            'SELECT COUNT(*) FROM ' . bc_ident((string)bc_config('iworks.member.table'))
+            . ' WHERE `slack_email` IS NOT NULL', [], 0
+        );
+    } catch (Throwable $e) {
+        $registered = 0;
+    }
+    if ($registered > 0) {
+        fail_('등록된 슬랙 이메일을 읽지 않고 있습니다', $registered . '명이 이미 적어 두었습니다');
+        line('         config/config.php 의 iworks.member 에 한 줄을 더하세요.');
+        line("             'col_slack_email' => 'slack_email',");
+        line('         config.php 는 서버마다 사람이 만드는 파일이라 배포로 덮이지 않습니다.');
+    }
+}
 
 $targets = [];
 foreach (RoleAssign::TYPES as $type) {

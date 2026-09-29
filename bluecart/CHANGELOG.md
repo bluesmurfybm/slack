@@ -51,6 +51,20 @@ php dev\verify.php
 공지 후 며칠 뒤 `php cron/slack_check.php` 를 한 번 돌려, 오류로 남은 분에게만
 개별 연락하시면 됩니다.
 
+**이미 쓰고 있는 설치본은 `config/config.php` 에 한 줄 추가**
+
+```php
+'member' => [
+    ...
+    'col_slack_email' => 'slack_email',
+],
+```
+
+`config/config.php` 는 서버마다 사람이 만드는 파일이라 배포로 덮이지
+않습니다. 샘플(`config.iworks.sample.php`)만 고쳐서는 적용되지 않고,
+증상은 **등록 전과 똑같습니다**(그 사람만 DM 이 안 감).
+`cron/slack_check.php` 가 이 경우를 따로 짚어 줍니다.
+
 **배포 순서 — 포털 먼저, BlueCart 나중**
 
 BlueCart 가 `portal_users.slack_email` 을 읽으므로 컬럼이 먼저 있어야 합니다.

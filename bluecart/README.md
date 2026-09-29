@@ -765,6 +765,21 @@ $row = current_portal_user();                // includes/auth.php
 - 누가 안 적었는지, 적은 주소가 실제로 잡히는지는 `cron/slack_check.php` 가
   사람별로 찍어 줍니다
 
+> **이미 쓰고 있는 설치본은 `config/config.php` 에 한 줄을 직접 더해야 합니다.**
+>
+> ```php
+> 'member' => [
+>     ...
+>     'col_slack_email' => 'slack_email',
+> ],
+> ```
+>
+> `config/config.php` 는 서버마다 사람이 만드는 파일이라 배포로 덮이지
+> 않습니다. 샘플(`config.iworks.sample.php`)만 고쳐서는 적용되지 않습니다.
+> 이 줄이 없으면 포털에 컬럼이 생기고 본인이 등록까지 마쳐도 BlueCart 가
+> 그 값을 읽지 않고, 증상은 **등록 전과 똑같습니다**(그 사람만 DM 이 안 감).
+> `cron/slack_check.php` 가 이 경우를 따로 짚어 줍니다.
+
 포털 밖(단독 실행)에서는 회원 테이블에 같은 뜻의 컬럼을 만들어
 `col_slack_email` 에 지정하면 됩니다. 지정하지 않으면(`null`) 예전처럼
 회사 이메일로만 찾습니다.
