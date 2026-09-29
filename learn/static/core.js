@@ -217,9 +217,11 @@ function certChip(r) {
     <em class="multi">${names}</em></span>`;
 }
 
+// 목록의 플랫폼 배지는 회색 한 가지다. 플랫폼마다 색을 입히면 필수·승인 같은
+// 상태 색과 뒤섞여 화면이 어수선해진다. 플랫폼 색(SITE_THEMES)은 통계 막대와
+// 분류 관리 카드처럼 플랫폼끼리 견주는 자리에만 쓴다.
 function siteBadge(name) {
-  const t = siteTheme(name);
-  return `<span class="badge site" style="background:${t.bg};color:${t.fg}">${esc(name)}</span>`;
+  return `<span class="badge site">${esc(name)}</span>`;
 }
 
 function tip(html, when) {
