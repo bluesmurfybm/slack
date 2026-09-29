@@ -214,6 +214,11 @@ def run(settings: Settings, opts: RunOptions, conn_factory=None) -> dict:
     if opts.refresh or not opts.dry_run:
         conn = conn_factory(settings.db_params())
         store.ensure_schema(conn)
+        # 예전 방식으로 아래에 붙어 저장된 갱신분을 위로 올린다. 몇 줄 안 되고 이미 맞으면
+        # UPDATE 가 없어서 매번 해도 부담이 없다 — 손으로 명령을 돌릴 필요가 없게.
+        fixed = store.rewrite_summaries(conn, reorder_updates)
+        if fixed:
+            logger.info("옛 갱신분 순서를 바로잡음: %s", ", ".join(fixed))
     try:
         since_dt, until_dt, week, previous = _resolve_period(state, opts, conn)
         run_no = previous["run_count"] + 1 if previous else 1
@@ -277,7 +282,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--serve", action="store_true", help="갱신 요청을 기다리며 계속 처리한다(로컬)")
     ap.add_argument("--reorder-updates", action="store_true",
                     help="저장된 모든 주차의 요약에서 예전 방식으로 아래에 붙은 갱신분을 위로 "
-                         "올린다(한 번만 돌리면 된다. --dry-run 이면 대상 주차만 보여 준다)")
+                         "올린다(배치가 시작할 때마다 알아서 하므로 보통은 필요 없다. "
+                         "--dry-run 이면 대상 주차만 보여 준다)")
     ap.add_argument("--check-token", action="store_true",
                     help="moodle.org 토큰이 살아 있는지만 확인해 var/token_status.json 에 남긴다"
                          "(금요일 오후 timer 용). 무효면 종료 코드 1")

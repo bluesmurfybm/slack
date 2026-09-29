@@ -464,6 +464,8 @@ def test_run_refresh_summarizes_only_new_items_and_appends(tmp_path, monkeypatch
     assert report["actions"] == ["이전 액션", "새 액션"]
     assert report["status"] == "ok"
     assert conn.params_of("UPDATE moodle_weekly_report")[-2:] == (2, 7)
+    # 시작할 때 옛 갱신분 순서 정리를 한 번 거친다(대상이 없으면 UPDATE 없음)
+    assert any(s.startswith("SELECT id, week, summary_md") for s, _ in conn.log)
     assert (tmp_path / "var" / "snapshots" / "2026-W37-r2.json").is_file()
 
 
