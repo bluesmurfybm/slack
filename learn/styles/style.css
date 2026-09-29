@@ -1955,39 +1955,38 @@ li.row.dim,li.card.dim{opacity:.62}
 .ab-chip:focus-visible,.ab-go:focus-visible{outline:2px solid #fff;outline-offset:2px}
 
 /* ---------- 내 처리 현황 줄 (관리자 줄이 없을 때) ---------- */
-/* 관리자 줄과 같은 자리·같은 높이. 내 일이라 남색 띠 대신 흰 카드에 파랑을 액센트로만 쓴다.
-   단계 색은 점이 맡는다 — 칩 바탕까지 물들이면 여섯 색이 한 줄에 선다. */
+/* 관리자 줄과 같은 파란 배경과 높이를 쓴다. 단계 색은 점이 맡는다. */
 .mybar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   margin:14px 0 0;padding:9px 14px;min-height:46px;
-  background:var(--bg-card);border:1px solid var(--bo-primary);border-left:3px solid var(--cos50);
-  border-radius:var(--r10);box-shadow:var(--shadow-sm);
+  background:var(--cos35);border-radius:var(--r10);color:#fff;
+  box-shadow:var(--shadow-sm);
 }
 .mb-tag{
   flex:none;font-size:11px;font-weight:700;padding:3px 8px;border-radius:var(--r6);
-  background:var(--cos95);color:var(--cos40);
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.26);color:#fff;
 }
-.mb-sum{font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;color:var(--tx-primary)}
+.mb-sum{font-size:12.5px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;color:#fff}
 .mb-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1}
 .mb-chip{
   font-family:var(--sans);font-size:11.5px;font-weight:600;line-height:1.5;
   display:inline-flex;align-items:center;gap:5px;padding:3px 9px;
-  background:var(--bg-card);border:1px solid var(--bo-tertiary);border-radius:999px;
-  color:var(--tx-secondary);cursor:pointer;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.3);border-radius:999px;
+  color:#fff;cursor:pointer;
   transition:background .12s ease,border-color .12s ease;
 }
-.mb-chip:hover{background:var(--bg-subtle);border-color:var(--gray80)}
+.mb-chip:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5)}
 .mb-chip .dot{width:6px;height:6px;border-radius:50%;flex:none}
 .mb-chip b{font-weight:800;font-variant-numeric:tabular-nums}
 /* 지금 목록에 걸린 칩 */
-.mb-chip.on{background:var(--cos95);border-color:var(--cos50);color:var(--cos40)}
-.mb-empty{flex:1;font-size:12.5px;font-weight:600;color:var(--tx-quaternary)}
+.mb-chip.on{background:#fff;border-color:#fff;color:var(--cos40)}
+.mb-empty{flex:1;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.78)}
 .mb-go{
   flex:none;margin-left:auto;background:none;border:none;cursor:pointer;padding:0;
-  font-family:var(--sans);font-size:12.5px;font-weight:700;color:var(--cos50);
+  font-family:var(--sans);font-size:12.5px;font-weight:700;color:#fff;
 }
 .mb-go:hover{text-decoration:underline;text-underline-offset:3px}
-.mb-chip:focus-visible,.mb-go:focus-visible{outline:2px solid var(--cos50);outline-offset:2px}
+.mb-chip:focus-visible,.mb-go:focus-visible{outline:2px solid #fff;outline-offset:2px}
 
 /* 관리자 패널 머리줄 — 등록 버튼을 float 로 띄우면 아래 타일과 겹칠 여지가 있다 */
 .adm-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
