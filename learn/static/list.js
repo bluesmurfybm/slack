@@ -235,16 +235,54 @@ const ADMIN_TODO = [
   ["수강 승인", S.REQUESTED], ["청구 승인", S.CLAIMED], ["환급", S.CLAIM_APPROVED],
 ];
 
-/* ---------- 관리자 처리 대기 줄 ---------- */
+// 내 처리 현황 칸 — 끝나지 않은 내 신청이 지금 어느 단계에 있는지.
+// tone 은 상태 색 체계를 따른다: 대기 앰버, 진행 파랑, 곧 끝남 초록, 반려 코랄.
+const MY_TODO = [
+  ["승인 대기", S.REQUESTED, "amber"], ["수강 중", S.APPROVED, "blue"],
+  ["청구 심사", S.CLAIMED, "amber"], ["환급 예정", S.CLAIM_APPROVED, "green"],
+  ["수강 반려", S.REJECTED, "red"], ["청구 반려", S.CLAIM_REJECTED, "red"],
+];
 
-// 학습 현황 줄 아래에 한 줄. 관리자가 아니거나 처리할 게 없으면 줄 자체를 내지 않는다.
-// 내 할 일은 따로 두지 않는다 — 신청 목록이 바로 아래에 있고, 급한 건은 목록의
-// 상태 배지가 이미 말한다. 첫 화면 위쪽을 알림으로 채우면 정작 목록이 밀린다.
+/* ---------- 처리 현황 줄 ---------- */
+
+// 학습 현황 줄 아래에 한 줄. 관리자에게 처리할 건이 있으면 관리자 줄을,
+// 아니면 내 신청이 어디쯤 있는지를 보여 준다. 줄이 통째로 비면 위아래 카드 사이가
+// 허전해 보여서, 진행 중인 신청이 없을 때도 신청을 권하는 한 줄은 남긴다.
 const STALE_DAYS = 3;
 
 function renderTodoRow() {
   const box = document.getElementById("todoRow");
-  box.innerHTML = adminBarHTML();
+  box.innerHTML = adminBarHTML() || myBarHTML();
+}
+
+function myBarHTML() {
+  // 무료 건은 요청상태가 없고, 이수증을 올린 반려 건은 이미 끝난 건이다(stageOf 와 같은 셈)
+  const mine = APP.requests.filter(r => isMine(r) && !r.archived && !r.is_free
+    && !(r.cert_count && r.status === S.REJECTED));
+  const todo = MY_TODO.map(([label, st, tone]) =>
+    [label, st, tone, mine.filter(r => r.status === st).length]).filter(([, , , c]) => c);
+  const total = todo.reduce((sum, [, , , c]) => sum + c, 0);
+
+  const body = total
+    ? `<b class="mb-sum">진행 중 ${total}건</b>
+       <span class="mb-chips">${todo.map(([label, st, tone, c]) =>
+        `<button type="button" class="mb-chip t-${tone}${APP.filter.mine && APP.filter.status === st
+          ? " on" : ""}" onclick="filterMine('${esc(st)}')"
+          title="내 신청 중 ${esc(st)} 상태만 보기"><i class="dot"></i>${esc(label)}<b>${c}</b></button>`)
+        .join("")}</span>
+       <button type="button" class="mb-go" onclick="showMineAll()">내 신청 내역 →</button>`
+    : `<span class="mb-empty">진행 중인 신청이 없습니다. 듣고 싶은 강의가 있으면 신청해 보세요.</span>
+       <button type="button" class="mb-go" onclick="openForm()">강의 신청 →</button>`;
+
+  return `<div class="mybar"><span class="mb-tag">내 처리 현황</span>${body}</div>`;
+}
+
+// 처리 현황 줄의 "내 신청 내역" — 되누르면 풀리는 toggleMineOnly 와 달리 늘 켜기만 한다
+function showMineAll() {
+  toListPane();
+  document.getElementById("f-status").value = "";
+  document.getElementById("f-mine").checked = true;
+  applyFilters();
 }
 
 function adminBarHTML() {
@@ -290,8 +328,16 @@ function toggleMineOnly() {
   applyFilters();
 }
 
-// 알림 줄의 "확인" 은 언제나 "내 신청" 안에서 그 상태만 남긴다
+// 신청 목록 탭으로 옮기고 상태 칸을 요청상태로 다시 채운다 — 카탈로그 탭에서는 같은 칸이 등급이다
+function toListPane() {
+  if (APP.view.pane === "list") return;
+  APP.view.pane = "list";
+  buildFilters();
+}
+
+// 처리 현황 줄의 칩은 언제나 "내 신청" 안에서 그 상태만 남긴다. 같은 칩을 다시 누르면 풀린다
 function filterMine(st) {
+  toListPane();
   const same = APP.filter.status === st && APP.filter.mine;
   document.getElementById("f-status").value = same ? "" : st;
   document.getElementById("f-mine").checked = !same;

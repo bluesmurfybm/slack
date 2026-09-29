@@ -17,6 +17,8 @@ learn_require_page_login();
   <link rel="icon" href="styles/favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Nunito:wght@800&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet"
     href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
   <link rel="stylesheet" href="../styles/topbar.css">
@@ -28,10 +30,6 @@ learn_require_page_login();
     <div class="topbar-in">
       <a class="logo" id="hdrBrand" href="#" style="text-decoration:none"><b>blue</b><span
           class="dash">-</span>iWorks</a>
-      <div class="seg-mode admin-only" role="group" aria-label="화면 전환">
-        <button type="button" id="modeUser" class="on" onclick="setMode('user')">구성원 화면</button>
-        <button type="button" id="modeAdmin" onclick="setMode('admin')">관리자 화면</button>
-      </div>
       <div class="top-right">
         <div class="user-menu" id="hdrUserMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
@@ -56,6 +54,11 @@ learn_require_page_login();
       <div class="brand">
         <span class="eyebrow">BlueUP-Learning</span>
         <h1 id="pageTitle">BlueLearn</h1>
+      </div>
+      <!-- 화면 전환은 BlueCart 처럼 머리말 오른쪽에 둔다. 상단바에 있으면 포털 메뉴와 섞여 보인다 -->
+      <div class="seg-mode admin-only" role="group" aria-label="화면 전환">
+        <button type="button" id="modeUser" class="on" onclick="setMode('user')">구성원</button>
+        <button type="button" id="modeAdmin" onclick="setMode('admin')">관리자</button>
       </div>
     </div>
   </header>
