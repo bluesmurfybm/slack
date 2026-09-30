@@ -1989,7 +1989,13 @@ const CHAT_BOTS={
   iworks:{api:"/chatapi", start:"GET", title:"blue chatbot", st:"데모 챗봇입니다. 무엇이든 물어보세요",
     greet:()=>`${current?current.name+"님, ":""}무엇을 도와드릴까요?`, renew:"대화가 만료되어 새로 시작했습니다."},
   blui:{api:"/bluiapi", start:"POST", title:"블리", st:"홈페이지 상담 챗봇입니다. 블루소프트 서비스에 관해 물어보세요",
-    greet:()=>"안녕하세요, 블루소프트 상담 에이전트 블리입니다. 무엇을 도와드릴까요?", renew:"대화가 길어져 새로 시작했습니다."},
+    greet:()=>"안녕하세요, 블루소프트 상담 에이전트 블리입니다. 무엇을 도와드릴까요?", renew:"대화가 길어져 새로 시작했습니다.",
+    starters:[
+      ["블루소프트 소개", "블루소프트에 대해 설명해 주세요."],
+      ["홈페이지·쇼핑몰 제작", "홈페이지, 쇼핑몰 제작을 문의하고 싶어요."],
+      ["Coursemos", "Coursemos에 대해 설명해 주세요."],
+      ["디지털 마케팅", "디지털 마케팅 서비스에 대해 설명해 주세요."],
+    ]},
 };
 let chatBot="iworks";
 let chatBusy=false;
@@ -2013,7 +2019,31 @@ async function chatLoadConversation(){
 function chatRestore(messages){
   document.getElementById("chat-log").innerHTML="";
   for(const m of messages) chatAppend(m.role==="user" ? "me" : "bot", m.content);
-  if(!messages.length) chatAppend("bot", CHAT_BOTS[chatBot].greet());
+  if(!messages.length){ chatAppend("bot", CHAT_BOTS[chatBot].greet()); chatStartersOn(); }
+}
+/* 온보딩 카드. 이력이 없는 새 대화에서만 인사말 아래에 깔리고, 누르면 그 문장을 그대로 질문으로 보낸다.
+   사용자 메시지가 하나라도 붙으면(chatAppend "me") 걷어낸다 — 카드로 보냈든 직접 쳤든 온보딩은 끝난 것이다. */
+function chatStartersOn(){
+  const starters=CHAT_BOTS[chatBot].starters;
+  if(!starters || !starters.length) return;
+  const log=document.getElementById("chat-log");
+  const box=document.createElement("div");
+  box.className="chat-starters"; box.id="chat-starters";
+  for(const [label, question] of starters){
+    const b=document.createElement("button");
+    b.type="button"; b.className="chat-starter";
+    const t=document.createElement("b"); t.textContent=label;
+    const q=document.createElement("span"); q.textContent=question;
+    b.append(t, q);
+    b.onclick=()=>sendChat(question);
+    box.appendChild(b);
+  }
+  log.appendChild(box);
+  log.scrollTop=log.scrollHeight;
+}
+function chatStartersOff(){
+  const el=document.getElementById("chat-starters");
+  if(el) el.remove();
 }
 
 function setChatVisible(on){
@@ -2047,6 +2077,7 @@ function selectBot(name){
 }
 
 function chatAppend(cls, text){
+  if(cls==="me") chatStartersOff();
   const log=document.getElementById("chat-log");
   const el=document.createElement("div");
   el.className="chat-msg "+cls;
@@ -2087,16 +2118,17 @@ function chatKeydown(e){
   if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendChat(); }
 }
 
-async function sendChat(){
+async function sendChat(preset){ // preset 은 온보딩 카드가 넘기는 문장. 없으면 입력창 내용을 보낸다
   if(chatBusy) return;
   const box=document.getElementById("chat-input");
-  const text=box.value.trim();
+  const fromCard=typeof preset==="string";
+  const text=(fromCard ? preset : box.value).trim();
   if(!text) return;
   chatBusy=true;
   document.getElementById("chat-send").disabled=true;
   try{
     await chatBootstrap(); // 쿠키가 있어야 /ask 가 받는다. 실패하면 입력은 남겨 둔다
-    box.value=""; chatGrow(box);
+    if(!fromCard){ box.value=""; chatGrow(box); }
     chatAppend("me", text);
     chatTypingOn();
     chatAppend("bot", await askBot(text));
