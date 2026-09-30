@@ -54,13 +54,14 @@ try {
                     echo json_encode(['ok' => false, 'conflict' => true, 'field' => 'status', 'current' => $curLabel, 'current_id' => $curId], JSON_UNESCAPED_UNICODE);
                     exit;
                 }
-            } else { // asg
-                $curAsg = isset($mm[$col['asg']]) ? slackFieldUser($mm[$col['asg']]) : null;
-                if ((string)($curAsg ?? '') !== $expect) {
+            } else { // asg (여러 명)
+                $curAsgIds = isset($mm[$col['asg']]) ? slackFieldUsers($mm[$col['asg']]) : [];
+                $curAsgStr = implode(',', $curAsgIds);
+                if ($curAsgStr !== $expect) {
                     $nm = '—';
-                    if ($curAsg) { $names = slackResolveUsers($tok, [$curAsg]); $nm = $names[$curAsg] ?? $curAsg; }
-                    $pdo->prepare("UPDATE requests SET asg_id=?, asg=? WHERE id=?")->execute([$curAsg, $nm, $rid]);
-                    echo json_encode(['ok' => false, 'conflict' => true, 'field' => 'asg', 'current' => $nm, 'current_id' => $curAsg], JSON_UNESCAPED_UNICODE);
+                    if ($curAsgIds) { $names = slackResolveUsers($tok, $curAsgIds); $nm = implode(', ', array_map(function ($id) use ($names) { return $names[$id] ?? $id; }, $curAsgIds)); }
+                    $pdo->prepare("UPDATE requests SET asg_id=?, asg=? WHERE id=?")->execute([$curAsgStr !== '' ? $curAsgStr : null, $nm, $rid]);
+                    echo json_encode(['ok' => false, 'conflict' => true, 'field' => 'asg', 'current' => $nm, 'current_id' => $curAsgStr], JSON_UNESCAPED_UNICODE);
                     exit;
                 }
             }
@@ -87,13 +88,15 @@ try {
         exit;
     }
 
-    // asg (담당자)
-    $r = slackUpdateCell($tok, $list, $rid, $col['asg'], 'user', $value !== '' ? [$value] : []);
+    // asg (담당자 · 여러 명 콤마구분)
+    $ids = $value !== '' ? array_values(array_unique(array_filter(array_map('trim', explode(',', $value))))) : [];
+    $r = slackUpdateCell($tok, $list, $rid, $col['asg'], 'user', $ids);
     if (empty($r['ok'])) { echo json_encode(['ok' => false, 'error' => 'Slack: ' . ($r['error'] ?? 'fail')]); exit; }
     $name = '—';
-    if ($value !== '') { $names = slackResolveUsers($tok, [$value]); $name = $names[$value] ?? $value; }
-    $pdo->prepare("UPDATE requests SET asg_id=?, asg=? WHERE id=?")->execute([$value !== '' ? $value : null, $name, $rid]);
-    echo json_encode(['ok' => true, 'field' => 'asg', 'asg_id' => $value, 'asg' => $name], JSON_UNESCAPED_UNICODE);
+    if ($ids) { $names = slackResolveUsers($tok, $ids); $name = implode(', ', array_map(function ($id) use ($names) { return $names[$id] ?? $id; }, $ids)); }
+    $asgIdStr = implode(',', $ids);
+    $pdo->prepare("UPDATE requests SET asg_id=?, asg=? WHERE id=?")->execute([$asgIdStr !== '' ? $asgIdStr : null, $name, $rid]);
+    echo json_encode(['ok' => true, 'field' => 'asg', 'asg_id' => $asgIdStr, 'asg' => $name], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
