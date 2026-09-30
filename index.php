@@ -54,6 +54,8 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <link rel="stylesheet" href="styles/topbar.css">
 <link rel="stylesheet" href="styles/default.css">
 <link rel="stylesheet" href="styles/chatbot.css">
@@ -449,8 +451,12 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     <div class="chat-head">
       <span class="bot-av" id="chat-botav"></span>
       <div class="tt">
-        <h3>blue chatbot</h3>
-        <div class="st">데모 챗봇입니다. 무엇이든 물어보세요</div>
+        <h3 id="chat-title">blue chatbot</h3>
+        <div class="st" id="chat-st">데모 챗봇입니다. 무엇이든 물어보세요</div>
+      </div>
+      <div class="chat-bots">
+        <button type="button" class="chat-bot on" data-bot="iworks" onclick="selectBot('iworks')">iworks</button>
+        <button type="button" class="chat-bot" data-bot="blui" onclick="selectBot('blui')">블리</button>
       </div>
       <button class="chat-x" onclick="closeChat()" title="닫기">&times;</button>
     </div>
@@ -1970,7 +1976,22 @@ document.querySelectorAll('.eye').forEach(b=>{
 });
 
 /* ---- 챗봇 ---- */
-const CHAT_API="/chatapi"; // nginx 가 chatbot 서버(8003)로 넘긴다
+// 맨 URL 은 URL 문자(ASCII)까지만 링크로 잡는다. 기본은 공백 전까지라 "…request.php에서" 의 조사까지 딸려 간다
+if(window.marked) marked.use({tokenizer:{url(src){
+  const m=/^https?:\/\/[A-Za-z0-9\-._~:\/?#\[\]@!$&'()*+,;=%]+/.exec(src);
+  if(!m) return false;
+  let href=m[0].replace(/[.,;:!?]+$/, "");
+  if(href.endsWith(")") && !href.includes("(")) href=href.slice(0, -1);
+  return {type:"link", raw:href, text:href, href, tokens:[{type:"text", raw:href, text:href}]};
+}}});
+// nginx 가 접두사별로 넘긴다. /chatapi 는 chatbot 서버(8003), /bluiapi 는 blui 서버(8004)
+const CHAT_BOTS={
+  iworks:{api:"/chatapi", start:"GET", title:"blue chatbot", st:"데모 챗봇입니다. 무엇이든 물어보세요",
+    greet:()=>`${current?current.name+"님, ":""}무엇을 도와드릴까요?`, renew:"대화가 만료되어 새로 시작했습니다."},
+  blui:{api:"/bluiapi", start:"POST", title:"블리", st:"홈페이지 상담 챗봇입니다. 블루소프트 서비스에 관해 물어보세요",
+    greet:()=>"안녕하세요, 블루소프트 상담 에이전트 블리입니다. 무엇을 도와드릴까요?", renew:"대화가 길어져 새로 시작했습니다."},
+};
+let chatBot="iworks";
 let chatBusy=false;
 
 /* POST /ask 는 GET /conversations 가 발급한 쿠키를 요구한다. 부트스트랩 약속을
@@ -1983,7 +2004,8 @@ function chatBootstrap(){
   return chatReady;
 }
 async function chatLoadConversation(){
-  const r=await fetch(`${CHAT_API}/conversations`,{credentials:"same-origin"});
+  const bot=CHAT_BOTS[chatBot];
+  const r=await fetch(`${bot.api}/conversations`,{method:bot.start,credentials:"same-origin"});
   if(!r.ok) throw new Error(`대화를 시작하지 못했습니다. (HTTP ${r.status})`);
   const d=await r.json().catch(()=>({}));
   chatRestore(d.messages || []);
@@ -1991,7 +2013,7 @@ async function chatLoadConversation(){
 function chatRestore(messages){
   document.getElementById("chat-log").innerHTML="";
   for(const m of messages) chatAppend(m.role==="user" ? "me" : "bot", m.content);
-  if(!messages.length) chatAppend("bot", `${current?current.name+"님, ":""}무엇을 도와드릴까요?`);
+  if(!messages.length) chatAppend("bot", CHAT_BOTS[chatBot].greet());
 }
 
 function setChatVisible(on){
@@ -2012,14 +2034,37 @@ function toggleChat(){
   if(document.getElementById("chat-panel").classList.contains("hidden")) openChat();
   else closeChat();
 }
+function selectBot(name){
+  if(name===chatBot || chatBusy) return;
+  chatBot=name;
+  const bot=CHAT_BOTS[name];
+  document.getElementById("chat-title").textContent=bot.title;
+  document.getElementById("chat-st").textContent=bot.st;
+  document.querySelectorAll(".chat-bot").forEach(b=>b.classList.toggle("on", b.dataset.bot===name));
+  document.getElementById("chat-log").innerHTML="";
+  chatReady=null;
+  chatBootstrap().catch(e=>chatAppend("err", e.message));
+}
 
 function chatAppend(cls, text){
   const log=document.getElementById("chat-log");
   const el=document.createElement("div");
   el.className="chat-msg "+cls;
-  el.textContent=text; // 서버가 준 문자열이라 HTML 로 해석시키지 않는다
+  if(cls==="bot" && window.marked && window.DOMPurify){
+    el.classList.add("md");
+    el.innerHTML=chatMarkdown(text);
+  }else{
+    el.textContent=text; // 서버가 준 문자열이라 HTML 로 해석시키지 않는다
+  }
   log.appendChild(el);
   log.scrollTop=log.scrollHeight;
+}
+function chatMarkdown(text){
+  const box=document.createElement("div");
+  box.innerHTML=DOMPurify.sanitize(marked.parse(text, {gfm:true, breaks:true}),
+    {ALLOWED_TAGS:["p","br","strong","em","del","a","ul","ol","li","code","pre","blockquote","h1","h2","h3","h4","hr"], ALLOWED_ATTR:["href"]});
+  box.querySelectorAll("a").forEach(a=>{ a.target="_blank"; a.rel="noopener"; });
+  return box.innerHTML;
 }
 function chatTypingOn(){
   const log=document.getElementById("chat-log");
@@ -2066,7 +2111,7 @@ async function sendChat(){
 }
 
 async function askBot(text, retried){
-  const r=await fetch(`${CHAT_API}/ask`,{method:"POST",credentials:"same-origin",
+  const r=await fetch(`${CHAT_BOTS[chatBot].api}/ask`,{method:"POST",credentials:"same-origin",
     headers:{"Content-Type":"application/json"},body:JSON.stringify({question:text})});
   const d=await r.json().catch(()=>({}));
   if(r.ok){
@@ -2079,7 +2124,7 @@ async function askBot(text, retried){
     chatTypingOff();
     chatReady=null;
     await chatBootstrap();
-    if(r.status===409) chatAppend("err", "대화가 만료되어 새로 시작했습니다.");
+    if(r.status===409) chatAppend("err", CHAT_BOTS[chatBot].renew);
     chatAppend("me", text);
     chatTypingOn();
     return askBot(text, true);

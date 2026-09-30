@@ -1,0 +1,103 @@
+- id: PRO-001
+  question: 진행 절차가 어떻게 되나요?
+  aliases:
+    - 어떻게 진행되나요
+    - 절차
+    - 순서
+  answer: 문의, 상담, 견적, 계약, 기획·디자인, 개발, 검수, 오픈 순서로 진행됩니다. 전체 기간은 홈페이지나 작업 규모에 따라 최소 1주에서 3개월까지 달라지므로, 정확한 일정은 요구사항 확인 후 안내드립니다.
+
+- id: PRO-002
+  question: 계약과 결제 조건은 어떻게 되나요?
+  aliases:
+    - 계약금
+    - 결제
+    - 세금계산서
+  handoff: true
+
+- id: PRO-003
+  question: 문의하면 언제 연락을 받을 수 있나요?
+  aliases:
+    - 언제 연락 오나요
+    - 답변 시간
+  handoff: true
+
+- id: PRO-004
+  question: 지방이나 해외에서도 의뢰할 수 있나요?
+  aliases:
+    - 서울인데 가능한가요
+    - 원격
+    - 방문
+  handoff: true
+
+- id: PRO-005
+  question: 1년이 지나면 유지보수는 어떻게 되나요?
+  aliases:
+    - 2년차
+    - 연장 비용
+    - 호스팅 갱신
+  handoff: true
+
+- id: PRO-006
+  question: 로고나 원고 같은 자료는 누가 준비하나요?
+  aliases:
+    - 원고
+    - 사진
+    - 로고 없어요
+  handoff: true
+
+- id: PRO-007
+  question: 기존에 만든 사이트 수정도 맡길 수 있나요?
+  aliases:
+    - 타사 제작
+    - 이어받기
+    - 리뉴얼
+  handoff: true
+
+- id: PRO-008
+  question: 할인이 되나요?
+  aliases:
+    - 가격 조정
+    - 네고
+    - 깎아 주세요
+  handoff: true
+
+- id: PRO-009
+  question: 다른 업체보다 비싼 이유가 뭔가요?
+  aliases:
+    - 타사 비교
+    - 가격 비교
+    - 경쟁사
+  handoff: true
+
+- id: PRO-010
+  question: 운영 중인 사이트에 장애나 오류가 났어요
+  aliases:
+    - 사이트 에러
+    - 접속 안 됨
+    - 장애 접수
+  handoff: true
+
+- id: PRO-011
+  question: 우리 규모나 조건에 맞춘 개별 견적을 받을 수 있나요?
+  aliases:
+    - 견적 뽑아주세요
+    - 우리 규모면 얼마
+    - 사업장 수
+    - 인원 수
+  handoff: true
+
+- id: PRO-012
+  question: 우리 기관에서 쓰는 시스템과 연동되나요? 우리 이용 인원 규모로 가능한가요?
+  aliases:
+    - 우리 학사시스템
+    - 우리 서버
+    - 동시접속 인원
+  handoff: true
+
+- id: PRO-013
+  question: 하자 보수와 법적 책임 범위는 어떻게 되나요?
+  aliases:
+    - 하자
+    - 보증
+    - 책임
+  handoff: true
