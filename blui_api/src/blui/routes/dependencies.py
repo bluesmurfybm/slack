@@ -8,7 +8,7 @@ from blui.tools.handoff import HandoffTool
 from common import guard as common_guard
 from common.guard import Guard
 from common.knowledge import KnowledgeEntry
-from common.llm import anthropic
+from common.llm import openai
 from common.llm.client import LLMClient
 from common.repositories.conversation import (
     ConversationMessageRepository,
@@ -30,15 +30,18 @@ def get_knowledge(request: Request) -> list[KnowledgeEntry]:
 def get_llm_client() -> LLMClient:
     global _llm_client
     if _llm_client is None:
-        _llm_client = anthropic.build_from_config(config)
+        _llm_client = openai.build_from_config(config)
     return _llm_client
 
 
 def get_light_llm_client() -> LLMClient:
     global _light_llm_client
     if _light_llm_client is None:
-        _light_llm_client = anthropic.build(
-            config, model=config.claude_light_model, max_tokens=common_guard.MAX_TOKENS, effort=None
+        _light_llm_client = openai.build(
+            config,
+            model=config.openai_light_model,
+            max_tokens=common_guard.MAX_TOKENS,
+            effort=None,
         )
     return _light_llm_client
 

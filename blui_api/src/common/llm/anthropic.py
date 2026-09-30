@@ -54,7 +54,9 @@ class AnthropicLLMClient(LLMClient):
         messages: list[Message],
         output_format: type[T],
         tools: list[Tool[Any]],
+        temperature: float | None = None,
     ) -> GenerationResponse[T]:
+        """temperature는 Claude API에서 사용되지 않습니다."""
         evidences: list[Evidence] = []
         replies: list[str] = []
         sent = [MessageParam(role=m.role, content=m.content) for m in messages]

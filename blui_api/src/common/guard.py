@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from common.llm.client import LLMClient
 from common.messages import Message
@@ -7,7 +7,7 @@ MAX_TOKENS = 256
 
 
 class GuardOutput(BaseModel):
-    forbidden: bool
+    forbidden: bool = Field(description="블루소프트와 관련되지 않은 요청이면 true")
 
 
 class Guard:
@@ -17,10 +17,14 @@ class Guard:
         self._llm_client = llm_client
         self._instructions = instructions
 
-    def is_forbidden_message(self, message: Message) -> bool:
-        """대화의 마지막 유저 메시지가 금지된 메시지이면 True, 판정을 받지 못하면 False"""
+    def is_forbidden_message(self, messages: list[Message]) -> bool:
+        """대화 전체를 보고 마지막 유저 메시지가 금지된 메시지이면 True, 판정을 받지 못하면 False"""
         generated = self._llm_client.generate(
-            system=self._instructions, messages=[message], output_format=GuardOutput, tools=[]
+            system=self._instructions,
+            messages=messages,
+            output_format=GuardOutput,
+            tools=[],
+            temperature=0,
         )
         if generated.output is None:
             return False

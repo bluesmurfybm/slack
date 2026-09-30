@@ -20,8 +20,11 @@ class CommonConfig(BaseSettings):
     # 그런 모델로 바꿀 때는 비워 두면 파라미터를 보내지 않습니다.
     effort: Effort | None = "low"
 
-    # 임베딩
+    # OpenAI
     openai_api_key: SecretStr | None = None
+    openai_base_url: str = "https://llm-router.cafe24.com/api/v1"
+    openai_model: str = "upstage/solar-pro4"
+    openai_light_model: str = "upstage/solar-mini4"
     embedding_model: str = "openai-3-small"
 
     # DB

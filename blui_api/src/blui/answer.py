@@ -50,7 +50,7 @@ def answer(
 ) -> Answer:
     """상담 범위 안의 질문에 지식을 근거로 답하고, 담당자에게 이관하거나 근거가 잘못되면 정해진 문구를 반환합니다."""
     llm_messages = _to_llm_messages(messages)
-    if guard.is_forbidden_message(llm_messages[-1]):
+    if guard.is_forbidden_message(llm_messages):
         return Answer(content=OUT_OF_SCOPE, matched_ids=[])
     generated = llm_client.generate(
         system=build_system(entries),

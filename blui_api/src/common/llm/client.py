@@ -30,6 +30,7 @@ class LLMClient(Protocol):
         messages: list[Message],
         output_format: type[T],
         tools: list[Tool[Any]],
+        temperature: float | None = None,
     ) -> GenerationResponse[T]: ...
 
 
