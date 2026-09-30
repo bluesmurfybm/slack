@@ -34,10 +34,11 @@ try {
     $sel      = slackSelectMaps($tok, $list, $rid);
     $statusId = isset($m[$col['status']]) ? slackFieldSelect($m[$col['status']]) : null;
     $status   = $statusId !== null ? (($sel[$col['status']] ?? [])[$statusId] ?? '') : '';
-    // 담당자
-    $asgId    = isset($m[$col['asg']]) ? slackFieldUser($m[$col['asg']]) : null;
+    // 담당자 (여러 명)
+    $asgIds   = isset($m[$col['asg']]) ? slackFieldUsers($m[$col['asg']]) : [];
+    $asgId    = implode(',', $asgIds);
     $asg      = '—';
-    if ($asgId) { $names = slackResolveUsers($tok, [$asgId]); $asg = $names[$asgId] ?? $asgId; }
+    if ($asgIds) { $names = slackResolveUsers($tok, $asgIds); $asg = implode(', ', array_map(function ($id) use ($names) { return $names[$id] ?? $id; }, $asgIds)); }
     // 예상완료일
     $eta      = isset($m[$col['eta']]) ? slackFieldDate($m[$col['eta']]) : null;
 

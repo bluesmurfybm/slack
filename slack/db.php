@@ -79,6 +79,13 @@ function db() {
     add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `cmt_count` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `team`");
     add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `eta` DATE NULL AFTER `cmt_count`");
 
+    // 담당자 다중(콤마구분) 저장 위해 컬럼 폭 확대: asg_id VARCHAR(32)→255 (1회만)
+    $asgLen = $pdo->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='requests' AND COLUMN_NAME='asg_id'")->fetchColumn();
+    if ($asgLen !== false && (int)$asgLen < 255) {
+        $pdo->exec("ALTER TABLE `requests` MODIFY `asg_id` VARCHAR(255) NULL COMMENT '담당자 Slack ID(콤마구분 다중)'");
+        $pdo->exec("ALTER TABLE `requests` MODIFY `asg` VARCHAR(255) NOT NULL DEFAULT '—' COMMENT '담당자 이름(콤마구분 다중)'");
+    }
+
     // 난이도 채점 캐시 컬럼 (채점 결과 저장 · 있으면 difficulty.php 에서 규칙기반보다 우선 표시)
     $aiCols = [
         'ai_stars'     => "TINYINT UNSIGNED NULL COMMENT '난이도 별 1~5'",

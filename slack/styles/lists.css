@@ -434,3 +434,21 @@
   .sm-link.dev:hover, .sm-link.ops:hover { filter:brightness(.96); }
   .sm-link.off { color:var(--hint); background:var(--bg2); cursor:not-allowed; opacity:.45; }
   .sm-empty { padding:28px; text-align:center; color:var(--muted); font-size:13px; }
+
+  /* ===== 다중 담당자 에디터(슬랙식 칩 + 드롭다운) ===== */
+  .mi.asg-mi { align-items:center; }
+  .mi.asg-mi .ml { align-self:center; }
+  .asg-box { position:relative; flex:1; min-width:0; }
+  .asg-chips { display:flex; flex-wrap:wrap; gap:5px; align-items:center; min-height:26px; }
+  .asg-chip { display:inline-flex; align-items:center; gap:5px; background:var(--info-bg); color:var(--info); border-radius:12px; padding:2px 7px 2px 9px; font-size:12px; font-weight:600; }
+  .asg-x { border:none; background:transparent; cursor:pointer; color:var(--muted); font-size:11px; line-height:1; padding:0; }
+  .asg-x:hover { color:#e01e5a; }
+  .asg-empty { color:var(--hint); font-size:12px; }
+  .asg-add { border:1px dashed var(--line); background:transparent; color:var(--muted); border-radius:11px; cursor:pointer; font-size:13px; line-height:1; padding:2px 8px; }
+  .asg-add:hover { border-color:var(--info); color:var(--info); }
+  .asg-menu { position:absolute; z-index:60; top:100%; left:0; margin-top:5px; width:230px; max-height:350px; overflow:auto; background:var(--bg); border:1px solid var(--line); border-radius:9px; box-shadow:0 10px 30px rgba(0,0,0,.22); padding:7px; }
+  .asg-search { width:100%; box-sizing:border-box; height:28px; border:1px solid var(--line); border-radius:6px; padding:0 8px; font:inherit; margin-bottom:6px; background:var(--bg2); color:var(--txt); }
+  .asg-opt { display:flex; align-items:center; gap:7px; padding:0px 6px; border-radius:6px; cursor:pointer; font-size:13px; line-height:1.25; color:var(--txt); }
+  .asg-opt input { margin:0; flex:none; }
+  .asg-opt span { line-height:1.25; }
+  .asg-opt:hover { background:var(--bg2); }
