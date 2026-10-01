@@ -156,6 +156,27 @@ function ensure_test_accounts(string $adminEmail, string $userEmail, string $pas
 
     // 일반 사용자 쪽이 관리자 명단에 남아 있으면 권한 시험이 무의미해진다.
     $pdo->prepare('DELETE FROM portal_admin WHERE email = ?')->execute([$userEmail]);
+
+    // ── 시험용 구성원 ────────────────────────────────────────────────
+    //
+    // **여기서 만든다. [R] 에서 만들지 않는다.**
+    //
+    // 전에는 [R] 이 자기가 쓰기 직전에 만들었다. 그런데 그보다 앞선 [Q] 가
+    // 시험관리자를 담당자로 세워야 해서, 앞 회차의 뒷정리가 배정 가능을
+    // 꺼 두면 [Q] 가 "본인이 배정받은 태스크만" 403 으로 깨졌다. 준비는
+    // 앞에서 한 번에 하고, 배정 가능 여부도 매 회차 확실히 되돌린다.
+    //
+    //   시험관리자 — 배정 가능. [Q] 가 담당자로 세우고 [R] 이 후보 표에서 찾는다
+    //   시험사용자 — 배정 **불가**. '본인' 경로만 쓴다. 배정 가능으로 두면
+    //                시험이 끝난 뒤에도 남아, 누가 배정을 돌릴 때 엔진이
+    //                이 유령에게 일을 맡긴다
+    $member = $pdo->prepare(
+        'INSERT INTO ba_member (user_id, emp_name, is_assignable) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name),
+                                 is_assignable = VALUES(is_assignable)'
+    );
+    $member->execute([$adminEmail, '시험관리자', 1]);
+    $member->execute([$userEmail,  '시험사용자', 0]);
 }
 
 ensure_test_accounts($ADMIN['email'], $USER['email'], TEST_PASSWORD);
@@ -1296,6 +1317,10 @@ foreach ($admin->req('/assign/api/allocate.php?act=members&project_id=' . $pid)
                 ['json']['data']['rows'] as $m) {
     if ($m['emp_name'] === '시험관리자') { $myMid = $m['id']; }
 }
+// 못 찾으면 여기서 말한다. 전에는 그냥 넘어가 60줄 뒤에 엉뚱한 403 과
+// 치명적 오류로 터졌고, 원인을 찾는 데 한참 걸렸다.
+ok('배정 가능한 시험관리자가 있다', $myMid !== null,
+   'ba_member 에 없거나 is_assignable=0 이다');
 $itemsQ = $admin->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aidQ)
                 ['json']['data']['items'];
 if ($myMid) {
@@ -1455,22 +1480,7 @@ $pdoR = (function () {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 })();
 $pdoR->exec("DELETE FROM ba_workload WHERE kind = 'manual'");
-// 시험사용자는 **배정 대상이 아니다**(is_assignable=0).
-//
-// 처음에는 1 로 넣었는데, 이 줄이 시험이 끝난 뒤에도 DB 에 남는다.
-// 그러면 그 다음에 누가 프로젝트 1 에 배정을 한 번 돌리는 순간 엔진이
-// 이 유령을 후보로 집어 배정해 버리고, 다음 회차의
-// '구성원이 아니면 빈 목록' 단언이 까닭 없이 깨진다. 실제로 깨졌다.
-// 여기서 시험사용자에게 필요한 것은 '본인' 경로뿐이라 0 이면 충분하다.
-$pdoR->prepare('INSERT INTO ba_member (user_id, emp_name, is_assignable) VALUES (?,?,0)
-                ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name),
-                                        is_assignable = VALUES(is_assignable)')
-     ->execute(['batest-user@bluesoft.co.kr', '시험사용자']);
-// 시험관리자는 후보 표에 나와야 한다 — 가용도가 깎이는 것을 거기서 확인한다.
-$pdoR->prepare('INSERT INTO ba_member (user_id, emp_name, is_assignable) VALUES (?,?,1)
-                ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name),
-                                        is_assignable = VALUES(is_assignable)')
-     ->execute(['batest-admin@bluesoft.co.kr', '시험관리자']);
+// 구성원은 ensure_test_accounts() 가 시작할 때 이미 만들어 두었다.
 $selfMid  = (int)$pdoR->query("SELECT id FROM ba_member WHERE user_id='batest-user@bluesoft.co.kr'")
                       ->fetchColumn();
 $otherMid = (int)$pdoR->query("SELECT id FROM ba_member WHERE user_id='batest-admin@bluesoft.co.kr'")
