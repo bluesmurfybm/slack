@@ -1,0 +1,1175 @@
+/* =====================================================================
+   BlueAssign 화면 스타일
+
+   포털 styles/topbar.css 위에 얹힌다. 상단바는 그쪽이 그리므로 여기서
+   .topbar 계열을 다시 정의하지 않는다.
+
+   접두사는 .ba- 로 통일한다. 토큰·컴포넌트 구성은 BlueCart
+   (bluecart/assets/app.css)와 같은 얼개를 따랐다 — 두 모듈이 나란히 있을 때
+   생김새가 따로 놀지 않게.
+
+   드로어(우측에서 밀려 나오는 상세 패널)는 파일 끝에 있다(.ba-drawer).
+   docs/conventions.md §5.1 의 BlueCart .bc-modal 계약을 옮긴 것이다.
+   ===================================================================== */
+
+:root {
+  --ba-ink:       #16243a;
+  --ba-ink-soft:  #5b6b85;
+  --ba-line:      #e3e8f0;
+  --ba-paper:     #ffffff;
+  --ba-surface:   #f7f9fc;
+  --ba-brand:     #2B7A4B;   /* worksystems.json 의 assign 색과 같다 */
+  --ba-brand-dk:  #23653e;
+  --ba-danger:    #c0392b;
+  --ba-warn:      #b9770e;
+  --ba-r:         10px;
+}
+
+body {
+  margin: 0;
+  background: var(--ba-surface);
+  color: var(--ba-ink);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ---- 모듈 머리말 ---------------------------------------------------- */
+.ba-site { background: var(--ba-paper); border-bottom: 1px solid var(--ba-line); }
+.ba-site__in {
+  max-width: 1280px; margin: 0 auto; padding: 22px 20px 18px;
+  display: flex; align-items: flex-end; gap: 20px;
+}
+.ba-site__lead { flex: 1; min-width: 0; }
+.ba-site__eyebrow {
+  display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ba-brand);
+}
+.ba-site__title {
+  margin: 2px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -.02em;
+  font-family: 'Space Grotesk', Pretendard, sans-serif;
+}
+.ba-site__desc { margin: 4px 0 0; color: var(--ba-ink-soft); font-size: 13.5px; }
+.ba-site__aside { flex: 0 0 auto; }
+
+/* ---- 화면 이동 탭 --------------------------------------------------- */
+.ba-nav { display: flex; gap: 4px; }
+.ba-nav a {
+  display: block; padding: 7px 14px; border-radius: 8px;
+  color: var(--ba-ink-soft); text-decoration: none; font-size: 13.5px; font-weight: 600;
+}
+.ba-nav a:hover { background: var(--ba-surface); color: var(--ba-ink); }
+.ba-nav a.on { background: var(--ba-brand); color: #fff; }
+
+/* ---- 본문 컨테이너 -------------------------------------------------- */
+.ba { max-width: 1280px; margin: 0 auto; padding: 22px 20px 60px; }
+
+/* ---- 공통 요소 ------------------------------------------------------ */
+.ba-panel {
+  border: 1px solid var(--ba-line); border-radius: 12px; background: var(--ba-paper);
+  padding: 18px 20px; margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .05);
+}
+.ba-panel > h2 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
+.ba-panel__hint { margin: 0 0 14px; color: var(--ba-ink-soft); font-size: 12.5px; }
+
+.ba-alert {
+  border: 1px solid #f0c8c2; background: #fdf3f2; color: #8c2f22;
+  border-radius: 6px; padding: 10px 13px; font-size: 13px;
+  margin-bottom: 14px; white-space: pre-line;
+}
+.ba-alert[hidden] { display: none; }
+
+.ba-note {
+  border: 1px dashed var(--ba-line); background: var(--ba-surface);
+  border-radius: 8px; padding: 14px 16px; color: var(--ba-ink-soft); font-size: 13px;
+}
+
+.ba-loading, .ba-empty { padding: 40px 20px; text-align: center; color: var(--ba-ink-soft); }
+.ba-empty-inline { color: var(--ba-ink-soft); font-size: 13px; margin: 8px 0 0; }
+.ba-spacer { flex: 1; }
+
+/* ---- 버튼 ----------------------------------------------------------- */
+.ba-btn {
+  appearance: none; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--ba-line); background: var(--ba-paper); color: var(--ba-ink);
+  border-radius: 8px; padding: 8px 14px; font-size: 13.5px; font-weight: 600;
+  cursor: pointer; text-decoration: none; font-family: inherit; line-height: 1.4;
+}
+.ba-btn:hover { background: var(--ba-surface); }
+.ba-btn--primary { background: var(--ba-brand); border-color: var(--ba-brand); color: #fff; }
+.ba-btn--primary:hover { background: var(--ba-brand-dk); border-color: var(--ba-brand-dk); }
+.ba-btn--danger { color: var(--ba-danger); border-color: #e8c4be; }
+.ba-btn--danger:hover { background: #fdf3f2; }
+.ba-btn--sm { padding: 4px 9px; font-size: 12px; border-radius: 6px; }
+.ba-btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* ---- 폼 ------------------------------------------------------------- */
+.ba-form { display: grid; gap: 14px; }
+.ba-form__row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ba-form label, .ba-source-pane label { display: block; }
+.ba-form label > span,
+.ba-source-pane label > span {
+  display: block; font-size: 12.5px; font-weight: 600; color: var(--ba-ink-soft);
+  margin-bottom: 5px;
+}
+.ba-req::after { content: ' *'; color: var(--ba-danger); }
+.ba-help { display: block; margin-top: 5px; font-size: 12px; color: var(--ba-ink-soft); font-style: normal; }
+
+.ba-form input[type="text"], .ba-form input[type="url"], .ba-form input[type="date"],
+.ba-form select, .ba-form textarea,
+.ba-source-pane input[type="text"], .ba-source-pane input[type="url"],
+.ba-source-pane textarea {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 8px 11px;
+  font-size: 13.5px; font-family: inherit; color: var(--ba-ink); background: var(--ba-paper);
+}
+.ba-form textarea, .ba-source-pane textarea { resize: vertical; line-height: 1.6; }
+.ba-form input:focus, .ba-form select:focus, .ba-form textarea:focus,
+.ba-source-pane input:focus, .ba-source-pane textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--ba-brand) 35%, transparent);
+  outline-offset: 1px; border-color: var(--ba-brand);
+}
+
+.ba-formbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 0 0; border-top: 1px solid var(--ba-line); margin-top: 4px;
+}
+
+/* ---- 위저드 단계 ---------------------------------------------------- */
+.ba-steps {
+  display: flex; gap: 8px; list-style: none; margin: 0 0 18px; padding: 0; flex-wrap: wrap;
+}
+.ba-steps li {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 14px 7px 8px; border-radius: 999px;
+  border: 1px solid var(--ba-line); background: var(--ba-paper);
+  font-size: 13px; font-weight: 600; color: var(--ba-ink-soft);
+}
+.ba-steps li span {
+  display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%;
+  background: var(--ba-line); color: var(--ba-ink-soft); font-size: 11.5px;
+}
+.ba-steps li.on { border-color: var(--ba-brand); color: var(--ba-brand); }
+.ba-steps li.on span { background: var(--ba-brand); color: #fff; }
+.ba-steps li.off { opacity: .55; }
+
+/* ---- 기간 ----------------------------------------------------------- */
+.ba-periods { display: grid; gap: 10px; }
+.ba-period { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ba-period__label {
+  flex: 0 0 78px; font-size: 12.5px; font-weight: 700; color: var(--ba-ink-soft);
+}
+.ba-period input[type="date"] {
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 7px 10px;
+  font-size: 13.5px; font-family: inherit; color: var(--ba-ink); background: var(--ba-paper);
+}
+.ba-period__tilde { color: var(--ba-ink-soft); }
+/* 기간이 역전되면 해당 칸을 표시한다. 서버도 같은 규칙으로 다시 막는다. */
+.ba-period input.is-bad { border-color: var(--ba-danger); background: #fdf3f2; }
+.ba-period__warn {
+  margin: 10px 0 0; color: var(--ba-danger); font-size: 12.5px; font-weight: 600;
+}
+.ba-period__warn[hidden] { display: none; }
+
+/* ---- 출처 등록 ------------------------------------------------------ */
+.ba-source-tabs { display: flex; gap: 4px; margin-bottom: 14px; flex-wrap: wrap; }
+.ba-source-tabs button {
+  appearance: none; border: 1px solid var(--ba-line); background: var(--ba-paper);
+  color: var(--ba-ink-soft); border-radius: 8px; padding: 7px 13px;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.ba-source-tabs button[aria-selected="true"] {
+  background: var(--ba-brand); border-color: var(--ba-brand); color: #fff;
+}
+.ba-source-pane { display: grid; gap: 12px; justify-items: start; }
+.ba-source-pane[hidden] { display: none; }
+.ba-source-pane > label { width: 100%; }
+.ba-source-pane input[type="file"] { font-size: 13px; }
+
+.ba-srclist { display: grid; gap: 6px; margin-top: 18px; }
+.ba-src {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--ba-line); border-radius: 8px;
+  padding: 8px 12px; background: var(--ba-surface); font-size: 13px;
+}
+.ba-src__kind {
+  flex: 0 0 auto; font-size: 11.5px; font-weight: 700; color: var(--ba-ink-soft);
+  background: var(--ba-paper); border: 1px solid var(--ba-line);
+  border-radius: 5px; padding: 2px 7px;
+}
+.ba-src__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-src__title a { color: var(--ba-brand); }
+.ba-src__meta { flex: 0 0 auto; color: var(--ba-ink-soft); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ba-src__parse { flex: 0 0 auto; font-size: 11.5px; font-weight: 600; }
+.ba-src__parse--pending { color: var(--ba-warn); }
+.ba-src__parse--ok      { color: var(--ba-brand); }
+.ba-src__parse--fail    { color: var(--ba-danger); }
+.ba-src__parse--skip    { color: var(--ba-ink-soft); }
+
+/* ---- 조회 조건 줄 --------------------------------------------------- */
+.ba-filters {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ba-field { display: flex; flex-direction: column; gap: 4px; }
+.ba-field > span {
+  font-size: 12px; font-weight: 600; color: var(--ba-ink-soft);
+}
+.ba-field input, .ba-field select {
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 7px 10px;
+  font-size: 13.5px; font-family: inherit; color: var(--ba-ink); background: var(--ba-paper);
+}
+.ba-check {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 8px 12px;
+  background: var(--ba-paper); font-size: 13px; font-weight: 600; color: var(--ba-ink-soft);
+}
+.ba-check:hover { background: var(--ba-surface); }
+.ba-check:has(input:checked) {
+  border-color: var(--ba-brand); color: var(--ba-brand);
+  background: color-mix(in srgb, var(--ba-brand) 7%, var(--ba-paper));
+}
+.ba-head__sub { color: var(--ba-ink-soft); font-size: 13px; }
+
+/* ---- 상태 탭 -------------------------------------------------------- */
+.ba-listbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.ba-statabs { display: flex; gap: 4px; flex-wrap: wrap; row-gap: 8px; }
+.ba-statabs button {
+  appearance: none; border: 1px solid var(--ba-line); background: var(--ba-paper);
+  color: var(--ba-ink-soft); border-radius: 999px; padding: 6px 13px;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.ba-statabs button i {
+  font-style: normal; font-size: 11.5px; font-variant-numeric: tabular-nums;
+  background: var(--ba-surface); border-radius: 999px; padding: 1px 6px;
+}
+.ba-statabs button:hover { background: var(--ba-surface); }
+.ba-statabs button[aria-selected="true"] {
+  background: var(--ba-brand); border-color: var(--ba-brand); color: #fff;
+}
+.ba-statabs button[aria-selected="true"] i { background: rgba(255,255,255,.22); color: #fff; }
+.ba-statabs button.is-zero { opacity: .5; }
+
+/* ---- 표 ------------------------------------------------------------- */
+.ba-table-wrap {
+  border: 1px solid var(--ba-line); border-radius: 12px; background: var(--ba-paper);
+  overflow-x: auto;
+}
+.ba-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ba-table th, .ba-table td {
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--ba-line);
+  vertical-align: middle;
+}
+.ba-table th {
+  font-size: 12px; font-weight: 700; color: var(--ba-ink-soft);
+  background: var(--ba-surface); white-space: nowrap;
+}
+.ba-table tbody tr:last-child td { border-bottom: 0; }
+.ba-table tbody tr:hover { background: var(--ba-surface); }
+.ba-table .ba-code { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ba-table .ba-name a { color: var(--ba-ink); text-decoration: none; font-weight: 600; }
+.ba-table .ba-name a:hover { color: var(--ba-brand); text-decoration: underline; }
+.ba-table .ba-period-cell { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 12.5px; }
+.ba-table .ba-num { text-align: right; font-variant-numeric: tabular-nums; }
+.ba-table tr.is-deleted { opacity: .55; }
+.ba-table tr.is-deleted .ba-name a { text-decoration: line-through; }
+
+/* 상태 배지 */
+.ba-badge {
+  display: inline-block; font-size: 11.5px; font-weight: 700;
+  border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  background: var(--ba-surface); color: var(--ba-ink-soft); border: 1px solid var(--ba-line);
+}
+.ba-badge--draft      { }
+.ba-badge--scoping    { background:#eef4ff; color:#2b5bbd; border-color:#d3e0fb; }
+.ba-badge--allocating { background:#fff4e5; color:#a5641a; border-color:#f6ddbc; }
+.ba-badge--confirmed  { background:#e9f6ee; color:#23653e; border-color:#c6e6d3; }
+.ba-badge--running    { background:#e6f4f6; color:#0f6b7b; border-color:#c3e3e8; }
+.ba-badge--done       { background:#eef0f4; color:#5b6b85; border-color:#dde1e9; }
+.ba-badge--hold       { background:#fdf0ee; color:#a3402f; border-color:#f3d2cb; }
+.ba-badge--deleted    { background:#fdf0ee; color:#a3402f; border-color:#f3d2cb; }
+
+/* ---- 페이지 이동 ---------------------------------------------------- */
+.ba-pager {
+  display: flex; gap: 8px; align-items: center; justify-content: center;
+  padding: 16px 0;
+}
+.ba-pager span { color: var(--ba-ink-soft); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+/* ---- 토스트 --------------------------------------------------------- */
+.ba-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  background: #1f2937; color: #fff; border-radius: 8px;
+  padding: 11px 18px; font-size: 13.5px; z-index: 9500;
+  box-shadow: 0 8px 26px rgba(16,26,38,.22); max-width: 90vw;
+}
+.ba-toast--bad { background: var(--ba-danger); }
+.ba-toast[hidden] { display: none; }
+
+/* ---- 스캐폴딩 자리 표시(화면이 채워지면 지운다) --------------------- */
+.ba-placeholder {
+  border: 1px dashed var(--ba-line); border-radius: 12px; background: var(--ba-paper);
+  padding: 28px 24px; color: var(--ba-ink-soft);
+}
+.ba-placeholder__phase {
+  margin: 0 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ba-brand);
+}
+.ba-placeholder h2 { margin: 0 0 12px; color: var(--ba-ink); font-size: 17px; }
+.ba-placeholder__todo { margin: 0; padding-left: 18px; display: grid; gap: 5px; font-size: 13px; }
+
+/* ---- 좁은 화면 (BlueCart 와 같은 분기점) ---------------------------- */
+@media (max-width: 760px) {
+  .ba-site__in { flex-direction: column; align-items: flex-start; }
+  .ba-form__row { grid-template-columns: 1fr; }
+  .ba-period__label { flex-basis: 100%; }
+  .ba-filters .ba-spacer { display: none; }
+  .ba-field, .ba-field input, .ba-field select { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ba * { transition: none !important; animation: none !important; }
+}
+
+/* =====================================================================
+   프로파일 (P3)
+   ===================================================================== */
+
+.ba-prof__head { display: flex; align-items: flex-start; gap: 16px; }
+.ba-prof__head h2 { display: flex; align-items: center; gap: 8px; }
+.ba-prof__run { margin-left: auto; text-align: right; font-size: 12px; }
+.ba-dim { color: var(--ba-ink-soft); }
+.ba-hr { border: 0; border-top: 1px solid var(--ba-line); margin: 20px 0 16px; }
+.ba-panel--admin { border-color: #e7d6bd; background: #fffdf8; }
+.ba-note--excluded { border-color: #e7c6c6; background: #fdf5f5; color: #8c3a3a; }
+
+/* ---- 레이더 (인라인 SVG. 차트 라이브러리 없음) ---------------------- */
+.ba-radar-wrap {
+  display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: start;
+}
+.ba-radar { display: grid; place-items: center; }
+.ba-radar__svg { width: 100%; max-width: 300px; height: auto; overflow: visible; }
+.ba-radar__ring { fill: none; stroke: var(--ba-line); stroke-width: 1; }
+.ba-radar__axis { stroke: var(--ba-line); stroke-width: 1; }
+.ba-radar__area {
+  fill: color-mix(in srgb, var(--ba-brand) 22%, transparent);
+  stroke: var(--ba-brand); stroke-width: 2; stroke-linejoin: round;
+}
+.ba-radar__dot { fill: var(--ba-brand); cursor: pointer; }
+.ba-radar__dot:hover { r: 6; }
+.ba-radar__label {
+  font-size: 11px; fill: var(--ba-ink); cursor: pointer;
+  dominant-baseline: middle; font-family: inherit;
+}
+.ba-radar__label:hover { fill: var(--ba-brand); text-decoration: underline; }
+/* 표본이 모자란 축 — 흐리게. 0점처럼 보이면 안 된다 */
+.ba-radar__label.is-dim { fill: var(--ba-ink-soft); opacity: .6; }
+
+/* ---- 계열 목록 ------------------------------------------------------ */
+.ba-catlist { display: grid; gap: 4px; }
+.ba-cat {
+  display: grid; grid-template-columns: 1fr 42px 90px 76px;
+  align-items: center; gap: 10px; width: 100%; text-align: left;
+  border: 1px solid transparent; border-radius: 8px; padding: 8px 10px;
+  background: none; cursor: pointer; font: inherit; color: var(--ba-ink);
+}
+.ba-cat:hover { background: var(--ba-surface); border-color: var(--ba-line); }
+.ba-cat__name { font-weight: 600; font-size: 13.5px; }
+.ba-cat__name em {
+  display: block; font-style: normal; font-size: 11px;
+  color: var(--ba-ink-soft); font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.ba-cat__score {
+  font-size: 17px; font-weight: 700; text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--ba-brand);
+}
+.ba-cat__score.is-partial { color: var(--ba-warn); }
+.ba-cat__bar { display: block; height: 7px; border-radius: 4px; background: var(--ba-line); }
+.ba-cat__bar i { display: block; height: 100%; border-radius: 4px; background: var(--ba-brand); }
+.ba-cat__n { font-size: 11.5px; color: var(--ba-ink-soft); text-align: right; }
+.ba-cat__none {
+  grid-column: 2 / 4; font-size: 12px; color: var(--ba-ink-soft);
+  background: var(--ba-surface); border-radius: 5px; padding: 3px 8px; text-align: center;
+}
+
+/* ---- 종합 지표 ------------------------------------------------------ */
+.ba-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.ba-metric {
+  border: 1px solid var(--ba-line); border-radius: 10px; padding: 12px 14px;
+  background: var(--ba-surface);
+}
+.ba-metric__k { display: block; font-size: 12px; color: var(--ba-ink-soft); }
+.ba-metric__v {
+  display: block; font-size: 24px; font-weight: 700; line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.ba-metric__s { display: block; font-size: 11.5px; color: var(--ba-ink-soft); }
+.ba-metric--adj { border-color: #e7d6bd; background: #fffdf8; }
+
+/* ---- 분야별 실적 ---------------------------------------------------- */
+.ba-domainlist { display: grid; gap: 3px; }
+.ba-dom {
+  display: grid; grid-template-columns: 96px 1fr 120px 54px;
+  align-items: center; gap: 10px; width: 100%; text-align: left;
+  border: 1px solid transparent; border-radius: 7px; padding: 6px 10px;
+  background: none; cursor: pointer; font: inherit; font-size: 13px; color: var(--ba-ink);
+}
+.ba-dom:hover { background: var(--ba-surface); border-color: var(--ba-line); }
+.ba-dom__cat { font-size: 11px; color: var(--ba-ink-soft); }
+.ba-dom__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-dom__bar { display: block; height: 6px; border-radius: 3px; background: var(--ba-line); }
+.ba-dom__bar i { display: block; height: 100%; border-radius: 3px; background: var(--ba-brand); opacity: .55; }
+.ba-dom__n { text-align: right; font-size: 12px; color: var(--ba-ink-soft); font-variant-numeric: tabular-nums; }
+
+/* =====================================================================
+   우측 드로어 — conventions.md §5.1 의 BlueCart .bc-modal 계약을 옮긴 것.
+   가운데 팝업이 아니라 우측에서 밀려 나온다.
+   ===================================================================== */
+.ba-drawer[hidden] { display: none; }
+.ba-drawer {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(16, 26, 38, .38);
+  display: flex; align-items: stretch; justify-content: flex-end;
+  animation: ba-fade .16s ease-out;
+}
+.ba-drawer__box {
+  background: var(--ba-paper); width: 620px; max-width: 100vw; height: 100%;
+  border-left: 1px solid var(--ba-line);
+  box-shadow: -16px 0 44px rgba(16, 26, 38, .18);
+  display: flex; flex-direction: column;
+  animation: ba-slide-in .2s cubic-bezier(.22, .68, .35, 1);
+}
+.ba-drawer__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 20px; border-bottom: 1px solid var(--ba-line); flex: 0 0 auto;
+}
+.ba-drawer__head h2 { flex: 1; margin: 0; font-size: 16px; }
+.ba-drawer__body { padding: 16px 20px; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
+.ba-drawer__foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 20px; border-top: 1px solid var(--ba-line);
+  background: var(--ba-surface); flex: 0 0 auto;
+}
+.ba-close {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  font-size: 20px; line-height: 1; color: var(--ba-ink-soft); padding: 4px 6px;
+}
+.ba-close:hover { color: var(--ba-ink); }
+
+@keyframes ba-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ba-slide-in {
+  from { transform: translateX(24px); opacity: .6; }
+  to   { transform: none; opacity: 1; }
+}
+
+/* ---- 근거 항목 ------------------------------------------------------ */
+.ba-ev { border-bottom: 1px solid var(--ba-line); padding: 11px 0; }
+.ba-ev:last-child { border-bottom: 0; }
+.ba-ev__top { display: flex; align-items: center; gap: 10px; font-size: 11.5px; }
+.ba-ev__diff { color: #d4a017; letter-spacing: -1px; }
+.ba-ev__diff em {
+  font-style: normal; color: var(--ba-ink-soft); font-size: 10.5px;
+  margin-left: 5px; letter-spacing: 0;
+}
+.ba-ev__org { font-weight: 600; color: var(--ba-ink-soft); }
+.ba-ev__status { margin-left: auto; color: var(--ba-ink-soft); }
+.ba-ev__title { font-size: 13.5px; margin: 3px 0; line-height: 1.5; }
+.ba-ev__meta { font-size: 11.5px; color: var(--ba-ink-soft); }
+.ba-ev__meta a { color: var(--ba-brand); }
+
+@media (max-width: 860px) {
+  .ba-radar-wrap { grid-template-columns: 1fr; }
+  .ba-drawer__box { width: 100vw; border-left: 0; }
+  .ba-cat { grid-template-columns: 1fr 42px 70px; }
+  .ba-cat__n { display: none; }
+  .ba-dom { grid-template-columns: 1fr 60px; }
+  .ba-dom__cat, .ba-dom__bar { display: none; }
+}
+
+/* =====================================================================
+   프로젝트 상세 / Step2 후보 리스트 (P4)
+   ===================================================================== */
+
+.ba-pv__head { display: flex; align-items: flex-start; gap: 16px; }
+.ba-pv__head h2 { display: flex; align-items: center; gap: 10px; }
+.ba-pre { white-space: pre-line; margin: 0; font-size: 13.5px; line-height: 1.7; }
+.ba-periods--ro .ba-period b { font-variant-numeric: tabular-nums; }
+
+/* 단계 탭 */
+.ba-steps--tabs { margin-bottom: 16px; }
+.ba-steps--tabs button {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 14px 7px 8px; border-radius: 999px;
+  border: 1px solid var(--ba-line); background: var(--ba-paper);
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--ba-ink-soft);
+  cursor: pointer;
+}
+.ba-steps--tabs button span {
+  display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%;
+  background: var(--ba-line); color: var(--ba-ink-soft); font-size: 11.5px;
+}
+.ba-steps--tabs button[aria-selected="true"] { border-color: var(--ba-brand); color: var(--ba-brand); }
+.ba-steps--tabs button[aria-selected="true"] span { background: var(--ba-brand); color: #fff; }
+.ba-steps--tabs button[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* ---- 조건 슬라이더 -------------------------------------------------- */
+.ba-sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+.ba-slider { display: block; }
+.ba-slider > span {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12.5px; font-weight: 600; color: var(--ba-ink-soft); margin-bottom: 6px;
+}
+.ba-slider > span b { font-size: 14px; color: var(--ba-brand); font-variant-numeric: tabular-nums; }
+.ba-slider input[type="range"] { width: 100%; accent-color: var(--ba-brand); }
+
+/* ---- 분야 칩 -------------------------------------------------------- */
+.ba-domainpick { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--ba-line); }
+.ba-domainpick__label {
+  display: block; font-size: 12.5px; font-weight: 600;
+  color: var(--ba-ink-soft); margin-bottom: 8px;
+}
+.ba-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ba-chip { cursor: pointer; }
+.ba-chip input { position: absolute; opacity: 0; width: 0; height: 0; }
+.ba-chip span {
+  display: inline-block; border: 1px solid var(--ba-line); border-radius: 999px;
+  padding: 5px 12px; font-size: 12.5px; background: var(--ba-paper); color: var(--ba-ink-soft);
+}
+.ba-chip:hover span { background: var(--ba-surface); }
+.ba-chip input:checked + span {
+  background: var(--ba-brand); border-color: var(--ba-brand); color: #fff; font-weight: 600;
+}
+.ba-chip input:focus-visible + span { outline: 2px solid var(--ba-brand); outline-offset: 2px; }
+
+/* ---- 가용도 막대 ----------------------------------------------------
+   확정과 추정을 **눈으로 구분되게** 그린다. 추정은 빗금이다.
+   같은 색으로 이어 그리면 합친 하나의 숫자처럼 읽힌다.
+   -------------------------------------------------------------------- */
+.ba-av { display: grid; gap: 3px; }
+.ba-av__bar {
+  display: flex; height: 8px; border-radius: 4px;
+  background: color-mix(in srgb, var(--ba-brand) 16%, var(--ba-surface)); overflow: hidden;
+}
+.ba-av__c { display: block; height: 100%; background: var(--ba-ink-soft); }
+.ba-av__i {
+  display: block; height: 100%;
+  background: repeating-linear-gradient(
+    45deg, var(--ba-warn), var(--ba-warn) 3px, transparent 3px, transparent 6px);
+  opacity: .75;
+}
+.ba-av__txt { font-size: 11.5px; line-height: 1.4; }
+.ba-av__txt b { font-variant-numeric: tabular-nums; }
+
+/* ---- 후보 표 -------------------------------------------------------- */
+.ba-ctable td { vertical-align: middle; }
+.ba-ctable tr.is-out { opacity: .5; }
+.ba-ct__name { font-weight: 600; }
+.ba-linkish {
+  border: 0; background: none; padding: 0; font: inherit; font-weight: 600;
+  color: var(--ba-ink); cursor: pointer; text-align: left;
+}
+.ba-linkish:hover { color: var(--ba-brand); text-decoration: underline; }
+.ba-cell-none { font-size: 11.5px; color: var(--ba-ink-soft); }
+.ba-ct__break td {
+  background: var(--ba-surface); font-size: 12px; color: var(--ba-ink-soft);
+  padding: 7px 12px; border-top: 2px solid var(--ba-line);
+}
+.ba-ct__pick { accent-color: var(--ba-brand); width: 16px; height: 16px; }
+
+/* ---- 후보 근거 드로어 ------------------------------------------------ */
+.ba-cd__sec { margin-bottom: 22px; }
+.ba-cd__sec h3 {
+  margin: 0 0 8px; font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; gap: 8px;
+}
+.ba-cd__note { margin: 6px 0 0; font-size: 11.5px; color: var(--ba-ink-soft); }
+.ba-tag-est {
+  font-size: 10.5px; font-weight: 700; color: var(--ba-warn);
+  border: 1px solid #f0dcb8; background: #fffaf0; border-radius: 4px; padding: 1px 6px;
+}
+.ba-wl {
+  display: grid; grid-template-columns: 44px 1fr 54px;
+  grid-template-areas: "k t r" "k d r";
+  gap: 1px 10px; align-items: center;
+  border: 1px solid var(--ba-line); border-radius: 8px;
+  padding: 8px 11px; margin-bottom: 5px; font-size: 12.5px;
+}
+.ba-wl__k {
+  grid-area: k; font-size: 10.5px; font-weight: 700; text-align: center;
+  border-radius: 4px; padding: 2px 0;
+}
+.ba-wl--c .ba-wl__k { background: var(--ba-ink-soft); color: #fff; }
+.ba-wl--i .ba-wl__k { background: #fffaf0; color: var(--ba-warn); border: 1px solid #f0dcb8; }
+.ba-wl--i { background: #fffdf8; border-color: #f0e4cd; }
+.ba-wl__t { grid-area: t; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-wl__d { grid-area: d; font-size: 11px; color: var(--ba-ink-soft); }
+.ba-wl__r {
+  grid-area: r; text-align: right; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ba-cat--ro { cursor: default; }
+.ba-cat--ro:hover { background: none; border-color: transparent; }
+
+@media (max-width: 860px) {
+  .ba-pv__head { flex-direction: column; }
+  .ba-ctable th:nth-child(3), .ba-ctable td:nth-child(3),
+  .ba-ctable th:nth-child(7), .ba-ctable td:nth-child(7) { display: none; }
+}
+
+/* =====================================================================
+   WBS 편집기 (명세서 §7.1 Step3)
+   ===================================================================== */
+
+/* 폼 바깥(표 안, 드로어 안)에서도 쓰는 입력칸. 위쪽 .ba-form 규칙과 같은 모양. */
+.ba-input {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--ba-line); border-radius: 7px; padding: 6px 9px;
+  font-size: 13px; font-family: inherit; color: var(--ba-ink); background: var(--ba-paper);
+}
+.ba-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--ba-brand) 35%, transparent);
+  outline-offset: 1px; border-color: var(--ba-brand);
+}
+.ba-input[disabled] { background: var(--ba-surface); color: var(--ba-ink-soft); }
+textarea.ba-input { resize: vertical; line-height: 1.6; }
+
+.ba-note--warn { border-color: #e6d3ae; background: #fffaf0; color: #7a5a1e; }
+.ba-note--warn ul { margin: 6px 0 0; padding-left: 18px; }
+.ba-note--warn li { margin: 2px 0; }
+
+.ba-wbsbar {
+  display: flex; align-items: center; gap: 8px;
+  margin: 14px 0 12px; flex-wrap: wrap;
+}
+.ba-dirty { color: var(--ba-warn); font-size: 12.5px; font-weight: 600; }
+
+.ba-th-unit { display: block; font-size: 10px; font-weight: 400; color: var(--ba-ink-soft); }
+
+/* ---- 행 --------------------------------------------------------------
+   depth 는 제목 칸의 들여쓰기로만 드러낸다. 행 전체를 밀면 다른 칸까지
+   어긋나서 공수·난이도를 세로로 훑어볼 수 없게 된다.
+   ---------------------------------------------------------------------- */
+.ba-wbs td { padding: 5px 8px; vertical-align: middle; }
+.ba-wbs th { white-space: nowrap; }
+.ba-wbs tbody tr:hover { background: transparent; }   /* 편집 중이라 행 강조는 방해된다 */
+
+.ba-wr--d1 > td { border-top: 1px solid var(--ba-line); }
+.ba-wr--d1 .ba-wr__t { font-weight: 700; }
+.ba-wr--d2 .ba-wr__t { font-weight: 600; }
+.ba-wr.is-confirmed .ba-wr__no span { color: var(--ba-brand); font-weight: 700; }
+
+.ba-wr__cb { text-align: center; }
+.ba-wr__confirm { width: 16px; height: 16px; accent-color: var(--ba-brand); }
+.ba-wr__confirm[disabled] { opacity: .35; }
+
+.ba-wr__no { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+.ba-wr__no span { color: var(--ba-ink-soft); }
+.ba-wr__dl { display: block; font-style: normal; font-size: 10px; color: var(--ba-ink-soft); opacity: .7; }
+
+/* .ba-wbs td 의 padding 을 이겨야 해서 선택자를 한 단계 더 붙였다. */
+.ba-wbs td.ba-wr__title {
+  display: flex; align-items: center; gap: 6px;
+  padding-left: calc(8px + var(--ind, 0) * 22px);
+}
+.ba-wr__t { min-width: 120px; }
+.ba-wr__memo, .ba-tag-auto {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 600; border-radius: 4px;
+  padding: 1px 5px; border: 1px solid var(--ba-line); color: var(--ba-ink-soft);
+}
+.ba-tag-auto { color: var(--ba-warn); border-color: #f0dcb8; background: #fffaf0; }
+
+.ba-wr__md { text-align: right; }
+.ba-wr__n { text-align: right; font-variant-numeric: tabular-nums; }
+.ba-wr__roll { font-variant-numeric: tabular-nums; color: var(--ba-ink-soft); font-weight: 600; }
+.ba-wr__warn { display: block; font-style: normal; font-size: 10px; color: var(--ba-warn); }
+
+.ba-wr__pd { display: flex; align-items: center; gap: 4px; }
+.ba-wr__d { padding: 5px 6px; font-size: 12px; }
+.ba-wr__pd > span { color: var(--ba-ink-soft); font-size: 11px; }
+
+.ba-wr__dmtag {
+  display: inline-block; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; vertical-align: bottom;
+  font-size: 11.5px; border: 1px solid var(--ba-line); border-radius: 999px; padding: 2px 8px;
+}
+
+.ba-wr__act { text-align: right; white-space: nowrap; }
+.ba-mini {
+  border: 1px solid var(--ba-line); background: var(--ba-paper); border-radius: 6px;
+  padding: 3px 7px; font: inherit; font-size: 11.5px; color: var(--ba-ink-soft);
+  cursor: pointer; margin-left: 3px;
+}
+.ba-mini:hover { background: var(--ba-surface); color: var(--ba-ink); }
+.ba-mini--x { color: var(--ba-danger); }
+.ba-mini--x:hover { background: #fdf3f2; }
+
+/* ---- 붙여넣기 드로어 -------------------------------------------------- */
+.ba-ps__ta { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; tab-size: 4; }
+.ba-ps__mode { display: flex; flex-direction: column; gap: 5px; margin: 10px 0; font-size: 12.5px; }
+.ba-ps__mode label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.ba-ps__h { margin: 16px 0 6px; font-size: 13px; font-weight: 700; }
+.ba-ps__pv {
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 8px;
+  max-height: 320px; overflow: auto;
+}
+.ba-ps__row {
+  display: flex; align-items: baseline; gap: 8px; font-size: 12.5px;
+  padding: 3px 4px 3px calc(4px + var(--ind, 0) * 18px);
+}
+.ba-ps__row span { color: var(--ba-ink-soft); font-size: 11.5px; }
+
+@media (max-width: 1100px) {
+  .ba-wbs th:nth-child(6), .ba-wbs td:nth-child(6) { display: none; }   /* 계획 기간 */
+}
+@media (max-width: 860px) {
+  .ba-wbs th:nth-child(7), .ba-wbs td:nth-child(7) { display: none; }   /* 분야 */
+  .ba-wr__dl { display: none; }
+}
+
+/* 역량 점수를 내지 않는 계열의 분야. 고를 수는 있되 같은 것으로 보이면 안 된다. */
+.ba-chip--noscore span { border-style: dashed; color: var(--ba-ink-soft); }
+.ba-chip--noscore input:checked + span {
+  background: var(--ba-ink-soft); border-color: var(--ba-ink-soft); border-style: dashed;
+}
+
+/* ---- 문서 분석 / WBS 도출 ---------------------------------------------- */
+.ba-wbsbar__sep {
+  width: 1px; height: 20px; background: var(--ba-line); margin: 0 4px;
+}
+
+.ba-docs { display: grid; gap: 5px; margin: 12px 0; }
+.ba-doc {
+  display: grid; grid-template-columns: 56px 1fr 68px 96px;
+  align-items: center; gap: 10px;
+  border: 1px solid var(--ba-line); border-left-width: 3px; border-radius: 8px;
+  padding: 8px 11px; font-size: 12.5px;
+}
+.ba-doc__k {
+  font-size: 10.5px; font-weight: 700; text-align: center; text-transform: uppercase;
+  background: var(--ba-surface); border-radius: 4px; padding: 2px 0; color: var(--ba-ink-soft);
+}
+.ba-doc__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ba-doc__s { font-size: 11.5px; font-weight: 600; }
+.ba-doc__n {
+  text-align: right; font-size: 11px; color: var(--ba-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.ba-doc__e {
+  grid-column: 1 / -1; margin: 4px 0 0; font-size: 11.5px; color: var(--ba-danger);
+}
+.ba-doc__e--warn { color: var(--ba-warn); }
+
+.ba-doc--ok      { border-left-color: var(--ba-brand); }
+.ba-doc--ok      .ba-doc__s { color: var(--ba-brand); }
+.ba-doc--fail    { border-left-color: var(--ba-danger); background: #fdf5f5; }
+.ba-doc--fail    .ba-doc__s { color: var(--ba-danger); }
+/* '해당 없음'은 실패가 아니다. 빨갛게 하지 않는다. */
+.ba-doc--skip    { border-left-color: var(--ba-line); opacity: .7; }
+.ba-doc--pending { border-left-color: var(--ba-warn); }
+.ba-doc--pending .ba-doc__s { color: var(--ba-warn); }
+
+/* ---- 초안 줄 -----------------------------------------------------------
+   사람이 쓴 줄과 모델이 뽑은 줄이 같아 보이면 검토가 형식만 남는다.
+   ------------------------------------------------------------------------ */
+.ba-wr.is-draft > td { background: #fffdf6; }
+.ba-wr.is-draft .ba-wr__t { border-color: #ecdcb8; }
+.ba-wr__src {
+  flex: 0 0 auto; font-size: 10.5px; color: var(--ba-ink-soft);
+  border: 1px dashed var(--ba-line); border-radius: 4px; padding: 1px 5px;
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ba-wr__srcfull {
+  margin: 0; font-size: 12.5px; word-break: break-all;
+  background: var(--ba-surface); border-radius: 6px; padding: 8px 10px;
+}
+
+@media (max-width: 1100px) {
+  .ba-doc { grid-template-columns: 48px 1fr 64px; }
+  .ba-doc__n { display: none; }
+  .ba-wr__src { display: none; }
+}
+
+/* =====================================================================
+   배정안 (명세서 §6 · §7.1 Step3)
+   ===================================================================== */
+
+.ba-al__ver { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.ba-al__ver select { width: auto; min-width: 150px; }
+.ba-al__badge { font-size: 12px; font-weight: 600; }
+.ba-al__badge--confirmed { color: var(--ba-brand); }
+.ba-al__badge--archived  { color: var(--ba-ink-soft); }
+.ba-al__badge--adjusted  { color: var(--ba-warn); }
+
+/* ---- 가중치 패널 ------------------------------------------------------ */
+.ba-wpanel {
+  border: 1px solid var(--ba-line); border-radius: 10px;
+  padding: 16px; margin-bottom: 14px; background: var(--ba-surface);
+}
+.ba-slider__hint {
+  display: block; font-style: normal; font-size: 11px;
+  color: var(--ba-ink-soft); margin-top: 3px;
+}
+
+/* ---- 인원별 부하 막대 --------------------------------------------------
+   가용 공수 위치를 세로선으로 찍는다. 막대 길이만 보면 "많이 맡았다" 는
+   알아도 "넘쳤다" 는 모른다.
+   ---------------------------------------------------------------------- */
+.ba-loads { display: grid; gap: 4px; margin: 14px 0 18px; }
+.ba-loadrow {
+  display: grid; grid-template-columns: 76px 1fr 120px 72px 48px;
+  align-items: center; gap: 10px; font-size: 12.5px;
+}
+.ba-loadrow__n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-loadrow__bar {
+  position: relative; display: block; height: 12px; border-radius: 6px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); overflow: hidden;
+}
+.ba-loadrow__bar i {
+  display: block; height: 100%; background: var(--ba-brand); opacity: .7;
+}
+/* 가용 공수 눈금 */
+.ba-loadrow__bar u {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: var(--ba-ink-soft); opacity: .8; overflow: visible;
+}
+.ba-loadrow__v, .ba-loadrow__p, .ba-loadrow__c {
+  font-variant-numeric: tabular-nums; color: var(--ba-ink-soft); font-size: 11.5px;
+}
+.ba-loadrow__v { text-align: right; }
+.ba-loadrow__p { text-align: right; }
+.ba-loadrow__c { text-align: right; }
+.ba-loadrow.is-over .ba-loadrow__bar i { background: var(--ba-danger); opacity: .75; }
+.ba-loadrow.is-over .ba-loadrow__p b { color: var(--ba-danger); }
+
+/* ---- 배정 표 ---------------------------------------------------------- */
+.ba-altable td { vertical-align: middle; padding: 6px 8px; }
+.ba-al__no { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ba-ink-soft); }
+.ba-al__t  { font-weight: 600; }
+.ba-al__md, .ba-al__df { text-align: right; font-variant-numeric: tabular-nums; }
+.ba-al__sel { padding: 5px 7px; font-size: 12.5px; }
+.ba-al__who { font-weight: 600; }
+.ba-al__role { font-size: 12px; color: var(--ba-ink-soft); white-space: nowrap; }
+.ba-al__manual {
+  display: inline-block; margin-left: 5px; font-style: normal; font-size: 10.5px;
+  font-weight: 700; color: var(--ba-warn);
+  border: 1px solid #f0dcb8; background: #fffaf0; border-radius: 4px; padding: 1px 5px;
+}
+.ba-al__fit { text-align: right; }
+.ba-al__fitb { font-variant-numeric: tabular-nums; font-size: 14px; }
+.ba-al__act { text-align: right; }
+.ba-altable tr.is-manual > td { background: #fffdf6; }
+.ba-altable tr.is-orphan > td { background: #fdf5f5; }
+.ba-al__break td {
+  background: var(--ba-surface); font-size: 12px; color: var(--ba-danger);
+  font-weight: 600; padding: 7px 10px; border-top: 2px solid var(--ba-line);
+}
+
+/* ---- 근거 드로어 ------------------------------------------------------- */
+.ba-why { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.75; }
+.ba-why li { margin: 3px 0; }
+.ba-why__notes { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--ba-warn); }
+.ba-why__notes li { margin: 3px 0; }
+
+.ba-parts { display: grid; gap: 5px; }
+.ba-part {
+  display: grid; grid-template-columns: 68px 1fr 44px; align-items: center; gap: 8px;
+  font-size: 12.5px;
+}
+.ba-part i {
+  display: block; height: 7px; border-radius: 4px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); overflow: hidden;
+}
+.ba-part i b { display: block; height: 100%; background: var(--ba-brand); opacity: .6; }
+.ba-part em {
+  font-style: normal; text-align: right; font-variant-numeric: tabular-nums;
+  color: var(--ba-ink-soft);
+}
+
+.ba-evlist { display: grid; gap: 4px; }
+.ba-ev {
+  border: 1px solid var(--ba-line); border-radius: 7px; padding: 7px 10px; font-size: 12.5px;
+}
+.ba-ev a { color: var(--ba-ink); font-weight: 600; }
+.ba-ev a:hover { color: var(--ba-brand); }
+.ba-ev__m { display: block; font-size: 11px; color: var(--ba-ink-soft); margin-top: 2px; }
+
+@media (max-width: 1100px) {
+  .ba-loadrow { grid-template-columns: 64px 1fr 100px 56px; }
+  .ba-loadrow__c { display: none; }
+  .ba-altable th:nth-child(4), .ba-altable td:nth-child(4) { display: none; }
+}
+
+/* =====================================================================
+   대시보드 (명세서 §7.1 Step4 · §7.2)
+   ===================================================================== */
+
+/* ---- 상태 색 — 칸반·배지 어디서나 같은 뜻으로 쓴다 --------------------- */
+.ba-st--todo, .ba-st--doing, .ba-st--review,
+.ba-st--devdep, .ba-st--proddep, .ba-st--done, .ba-st--hold {
+  display: inline-block; font-size: 10.5px; font-weight: 700;
+  border-radius: 4px; padding: 1px 6px; white-space: nowrap;
+}
+.ba-st--todo    { background: var(--ba-surface); color: var(--ba-ink-soft); }
+.ba-st--doing   { background: #eef4fb; color: #2e5c8a; }
+.ba-st--review  { background: #f5eefb; color: #6b3d8a; }
+.ba-st--devdep  { background: #fff7e8; color: #8a6b2e; }
+.ba-st--proddep { background: #eafaf0; color: #2e7d52; }
+.ba-st--done    { background: #e9f0e9; color: #4a6b4a; }
+.ba-st--hold    { background: #f2f2f2; color: #888; }
+
+/* ---- 내가 맡은 일 ------------------------------------------------------ */
+.ba-mylist { display: grid; gap: 4px; }
+.ba-my {
+  display: grid; grid-template-columns: 120px 1fr 78px 90px 44px 110px;
+  align-items: center; gap: 10px; width: 100%; text-align: left;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 8px 11px;
+  background: var(--ba-paper); font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.ba-my:hover { background: var(--ba-surface); }
+.ba-my.is-late { border-color: #e8c4be; background: #fdf7f6; }
+.ba-my__p { color: var(--ba-ink-soft); font-size: 11.5px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-my__t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-my__b { display: block; height: 6px; border-radius: 3px; background: var(--ba-surface);
+            border: 1px solid var(--ba-line); overflow: hidden; }
+.ba-my__b i { display: block; height: 100%; background: var(--ba-brand); opacity: .65; }
+.ba-my__n { text-align: right; font-variant-numeric: tabular-nums; color: var(--ba-ink-soft); }
+.ba-my__d { text-align: right; font-size: 11.5px; color: var(--ba-ink-soft); white-space: nowrap; }
+.ba-my__d b { color: var(--ba-danger); }
+
+/* ---- 프로젝트 카드 ------------------------------------------------------ */
+.ba-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.ba-card {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  border: 1px solid var(--ba-line); border-radius: 10px; padding: 13px 15px;
+  background: var(--ba-paper); font: inherit;
+}
+.ba-card:hover { border-color: var(--ba-brand); }
+.ba-card__top { display: flex; align-items: baseline; gap: 8px; }
+.ba-card__name { font-weight: 700; font-size: 14px; flex: 1;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-card__dd { font-size: 12px; font-weight: 700; color: var(--ba-brand);
+               font-variant-numeric: tabular-nums; }
+.ba-card.is-past .ba-card__dd { color: var(--ba-danger); }
+.ba-card__meta { font-size: 11.5px; color: var(--ba-ink-soft); margin: 3px 0 9px; }
+.ba-card__bar { display: block; height: 8px; border-radius: 4px;
+                background: var(--ba-surface); border: 1px solid var(--ba-line); overflow: hidden; }
+.ba-card__bar i { display: block; height: 100%; background: var(--ba-brand); opacity: .7; }
+.ba-card__nums { display: flex; gap: 12px; margin-top: 6px; font-size: 11.5px;
+                 color: var(--ba-ink-soft); }
+.ba-card__nums .is-late b { color: var(--ba-danger); }
+.ba-card__note { margin-top: 8px; font-size: 11px; color: var(--ba-ink-soft); }
+.ba-card__note--warn { color: var(--ba-warn); }
+
+.ba-stages { display: flex; gap: 4px; margin-top: 8px; }
+.ba-stage { flex: 1; text-align: center; font-size: 10.5px; border-radius: 4px; padding: 2px 0;
+            background: var(--ba-surface); color: var(--ba-ink-soft); }
+.ba-stage--now  { background: var(--ba-brand); color: #fff; font-weight: 700; }
+.ba-stage--past { background: #e9f0e9; color: #4a6b4a; }
+.ba-stage--none { opacity: .4; }
+
+/* ---- 보드 머리 --------------------------------------------------------- */
+.ba-bd__head { display: flex; align-items: flex-start; gap: 12px; }
+.ba-bd__toggle { display: flex; gap: 4px; }
+.ba-bd__toggle .is-on { background: var(--ba-brand); border-color: var(--ba-brand); color: #fff; }
+
+/* ---- 담당자별 카드 ------------------------------------------------------ */
+.ba-pcards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.ba-pcard { border: 1px solid var(--ba-line); border-radius: 9px; padding: 10px 12px; }
+.ba-pcard.is-late { border-color: #e8c4be; background: #fdf7f6; }
+.ba-pcard__n { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.ba-pcard__bar { display: block; height: 7px; border-radius: 4px; background: var(--ba-surface);
+                 border: 1px solid var(--ba-line); overflow: hidden; }
+.ba-pcard__bar i { display: block; height: 100%; background: var(--ba-brand); opacity: .65; }
+.ba-pcard__m { display: flex; gap: 10px; margin-top: 5px; font-size: 11.5px;
+               color: var(--ba-ink-soft); flex-wrap: wrap; }
+.ba-pcard__m .is-late b { color: var(--ba-danger); }
+
+/* ---- 지연 -------------------------------------------------------------- */
+.ba-lates { display: grid; gap: 4px; }
+.ba-late {
+  display: grid; grid-template-columns: 64px 1fr 130px 150px; align-items: center; gap: 10px;
+  width: 100%; text-align: left; cursor: pointer; font: inherit; font-size: 12.5px;
+  border: 1px solid #e8c4be; background: #fdf7f6; border-radius: 8px; padding: 8px 11px;
+}
+.ba-late:hover { background: #fbeeec; }
+.ba-late__w { font-variant-numeric: tabular-nums; color: var(--ba-ink-soft); font-size: 12px; }
+.ba-late__t { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-late__s, .ba-late__d { font-size: 11.5px; color: var(--ba-ink-soft); text-align: right; }
+.ba-late__d b { color: var(--ba-danger); }
+
+/* ---- 칸반 -------------------------------------------------------------- */
+.ba-kanban {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr);
+  gap: 8px; overflow-x: auto; padding-bottom: 6px;
+}
+.ba-kcol { border: 1px solid var(--ba-line); border-radius: 9px; background: var(--ba-surface); }
+.ba-kcol__h {
+  font-size: 12px; font-weight: 700; padding: 8px 11px;
+  border-bottom: 1px solid var(--ba-line);
+}
+.ba-kcol__b { padding: 7px; display: grid; gap: 5px; max-height: 520px; overflow-y: auto; }
+.ba-kcol__e { margin: 10px 0; text-align: center; font-size: 11.5px; color: var(--ba-ink-soft); }
+.ba-kcol--done .ba-kcol__h, .ba-kcol--proddep .ba-kcol__h { color: #2e7d52; }
+.ba-kcol--hold  { opacity: .75; }
+
+.ba-kcard {
+  display: block; width: 100%; text-align: left; cursor: pointer; font: inherit;
+  background: var(--ba-paper); border: 1px solid var(--ba-line);
+  border-radius: 7px; padding: 8px 10px;
+}
+.ba-kcard:hover { border-color: var(--ba-brand); }
+.ba-kcard.is-late { border-color: #e0a9a1; background: #fdf7f6; }
+.ba-kcard__w { display: block; font-size: 10.5px; color: var(--ba-ink-soft);
+               font-variant-numeric: tabular-nums; }
+.ba-kcard__t { display: block; font-size: 12.5px; font-weight: 600; margin: 1px 0 4px; }
+.ba-kcard__m { display: block; font-size: 11px; color: var(--ba-ink-soft); }
+.ba-kcard__m i { font-style: normal; color: var(--ba-warn); }
+.ba-kcard__b { display: block; height: 5px; border-radius: 3px; margin-top: 5px;
+               background: var(--ba-surface); overflow: hidden; }
+.ba-kcard__b i { display: block; height: 100%; background: var(--ba-brand); opacity: .6; }
+.ba-kcard__d { display: block; font-size: 10.5px; color: var(--ba-ink-soft); margin-top: 4px; }
+.ba-kcard__d b { color: var(--ba-danger); }
+
+/* ---- 간트 -------------------------------------------------------------
+   차트 라이브러리가 없는 저장소라 CSS 로 그린다.
+   ------------------------------------------------------------------------ */
+.ba-gantt__head { display: flex; font-size: 11px; color: var(--ba-ink-soft); margin-bottom: 6px; }
+.ba-gantt__rows { display: grid; gap: 3px; }
+.ba-grow { display: grid; grid-template-columns: 236px 1fr; align-items: center; gap: 6px; }
+.ba-grow__t { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-grow__track {
+  position: relative; display: block; height: 15px; border-radius: 4px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line);
+}
+/* 오늘 위치. 줄마다 그어야 왼쪽 이름 칸과 어긋나지 않는다. */
+.ba-grow__track::before {
+  content: ""; position: absolute; top: -2px; bottom: -2px;
+  left: var(--today, 0%); border-left: 1px dashed var(--ba-danger); opacity: .55;
+}
+.ba-gbar {
+  position: absolute; top: 1px; bottom: 1px; border-radius: 3px; cursor: pointer;
+  background: color-mix(in srgb, var(--ba-brand) 30%, var(--ba-paper));
+  border: 1px solid var(--ba-brand); overflow: hidden; min-width: 4px;
+}
+.ba-gbar u { display: block; height: 100%; background: var(--ba-brand); opacity: .6; }
+.ba-gbar.is-late { border-color: var(--ba-danger);
+                   background: color-mix(in srgb, var(--ba-danger) 22%, var(--ba-paper)); }
+.ba-gbar.is-late u { background: var(--ba-danger); opacity: .5; }
+
+/* ---- 진행 피드 ---------------------------------------------------------- */
+.ba-feed { display: grid; gap: 4px; }
+.ba-fitem {
+  display: grid; grid-template-columns: 80px 1fr 110px; gap: 10px;
+  width: 100%; text-align: left; cursor: pointer; font: inherit; font-size: 12.5px;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 8px 11px;
+  background: var(--ba-paper);
+}
+.ba-fitem:hover { background: var(--ba-surface); }
+.ba-fitem__w { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-fitem__t em { font-style: normal; font-size: 10.5px; color: var(--ba-ink-soft);
+                  border: 1px solid var(--ba-line); border-radius: 4px; padding: 0 4px; }
+.ba-fitem__c { grid-column: 2; font-size: 11.5px; color: var(--ba-ink-soft);
+               overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-fitem__x { grid-column: 2; font-size: 11.5px; color: var(--ba-danger); }
+.ba-fitem__d { text-align: right; font-size: 11px; color: var(--ba-ink-soft); }
+
+/* ---- 진행상황 드로어 ----------------------------------------------------- */
+.ba-pgnow { display: grid; grid-template-columns: auto 1fr 44px; align-items: center; gap: 10px; }
+.ba-pgnow__b { display: block; height: 8px; border-radius: 4px; background: var(--ba-surface);
+               border: 1px solid var(--ba-line); overflow: hidden; }
+.ba-pgnow__b i { display: block; height: 100%; background: var(--ba-brand); opacity: .65; }
+.ba-pgform { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+.ba-pgform input[type="range"] { width: 100%; accent-color: var(--ba-brand); }
+
+.ba-pglist { display: grid; gap: 7px; }
+.ba-pg { border: 1px solid var(--ba-line); border-radius: 9px; padding: 9px 11px; }
+.ba-pg__h { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.ba-pg__c { margin: 6px 0 0; font-size: 12.5px; white-space: pre-line; }
+.ba-pg__x { margin: 5px 0 0; font-size: 12.5px; color: var(--ba-danger); white-space: pre-line; }
+.ba-pg__cm { margin-top: 8px; border-top: 1px dashed var(--ba-line); padding-top: 7px; }
+.ba-cm { font-size: 12px; margin: 3px 0; }
+.ba-cmadd { display: flex; gap: 5px; margin-top: 6px; }
+.ba-cmadd input { flex: 1; }
+
+@media (max-width: 1100px) {
+  .ba-my { grid-template-columns: 1fr 78px 44px; }
+  .ba-my__p, .ba-my__b, .ba-my__d { display: none; }
+  .ba-late { grid-template-columns: 1fr 140px; }
+  .ba-late__w, .ba-late__s { display: none; }
+  .ba-grow { grid-template-columns: 130px 1fr; }
+  .ba-pgform { grid-template-columns: 1fr; }
+}
+
+/* ---- "이 숫자는 무엇인가" — 산식과 한계를 같이 적는다 -------------------
+   점수를 보여 주면서 무엇을 재는지 안 적으면, 보는 사람이 이름에서
+   짐작한다. '처리량' 이라고 이름을 고쳐도 그것만으로는 모자라다.
+   ------------------------------------------------------------------------ */
+.ba-whatis__row {
+  display: grid; grid-template-columns: 116px 1fr; gap: 16px;
+  padding: 14px 0; border-top: 1px solid var(--ba-line);
+}
+.ba-whatis__row:first-of-type { border-top: 0; padding-top: 4px; }
+.ba-whatis__row h3 { margin: 0; font-size: 13px; font-weight: 700; }
+.ba-whatis__row ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.8; }
+.ba-whatis__row li { margin: 1px 0; }
+.ba-whatis__f { margin: 0 0 8px; }
+.ba-whatis__f code {
+  display: inline-block; font-size: 12px; background: var(--ba-surface);
+  border: 1px solid var(--ba-line); border-radius: 6px; padding: 6px 10px;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.ba-whatis__not {
+  margin: 9px 0 0; font-size: 12.5px; line-height: 1.75;
+  border-left: 3px solid var(--ba-warn); background: #fffdf8;
+  border-radius: 0 6px 6px 0; padding: 8px 12px;
+}
+
+@media (max-width: 860px) {
+  .ba-whatis__row { grid-template-columns: 1fr; gap: 6px; }
+}
+
+/* ---- 직접 등록한 점유 --------------------------------------------------
+   배정에서 나온 것과 눈으로 갈라 보이게 한다. 둘 다 '확정' 이지만
+   앞엣것은 배정안이 만든 파생 데이터고 뒤엣것은 사람의 진술이다.
+   ------------------------------------------------------------------------ */
+.ba-wl--m { background: #f7fbff; border-color: #cfe0f0; }
+.ba-wl--m .ba-wl__k { background: #4a6f96; color: #fff; }
+.ba-wl__note {
+  display: block; font-style: normal; font-size: 11px; color: var(--ba-ink-soft);
+  margin-top: 2px; white-space: normal;
+}
+.ba-wl__r .ba-mini { margin-left: 4px; padding: 1px 5px; }
+
+.ba-wladd { margin-top: 10px; }
+.ba-wladd > summary {
+  cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--ba-brand);
+  padding: 7px 10px; border: 1px dashed var(--ba-line); border-radius: 8px;
+  list-style: none;
+}
+.ba-wladd > summary::-webkit-details-marker { display: none; }
+.ba-wladd > summary::before { content: '+ '; }
+.ba-wladd[open] > summary { border-style: solid; margin-bottom: 10px; }
+.ba-wladd > summary:hover { background: var(--ba-surface); }
+
+/* 1fr 이 아니라 minmax(0, 1fr) 이다. 1fr 은 '내용 최소폭 밑으로는 못 줄어드는'
+   칸이라, 날짜 입력처럼 고유 최소폭이 큰 요소가 들어오면 칸이 폼 밖으로 삐져
+   나가고 드로어에 가로 스크롤이 생긴다. */
+.ba-wlform { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ba-wlform > .ba-field { min-width: 0; }
+.ba-wlform__wide { grid-column: 1 / -1; }
+.ba-wlform .ba-input { max-width: 100%; }
+
+/* 슬라이더는 글상자가 아니다.
+   .ba-field input 규칙이 테두리 1px + 안쪽여백 10px 을 얹는데 box-sizing 이
+   content-box 라, width:100% 가 칸보다 22px 넓어졌다 — 285px 칸에 307px.
+   그 22px 이 옆 칸으로 넘어가 '어디서 알게 됐나' 선택란을 덮고 있었다. */
+.ba-wlform input[type="range"] {
+  width: 100%; box-sizing: border-box;
+  border: 0; padding: 0; background: none;
+  height: 24px; margin: 4px 0 0;
+  accent-color: var(--ba-brand);
+}
+.ba-wlform .ba-field > span { font-size: 12px; font-weight: 600; color: var(--ba-ink-soft); }
