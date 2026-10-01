@@ -9,7 +9,7 @@
 
   "_적용순서": [
     "1. core/worksystems.json 배열 끝에 worksystems_json_항목 을 추가한다",
-    "2. 루트 index.php 의 ICONS 맵에 root_index_php_ICONS 의 키를 더한다",
+    "2. (끝남) 루트 index.php 의 ICONS 맵 — studio: studioIcon 이 이미 들어가 있다",
     "3. studio/inc/bootstrap.php 의 BS_MODULE_KEY 를 'studio' 로 바꾼다",
     "4. 812건 시험을 다시 돌린다"
   ],
@@ -31,15 +31,14 @@
   ],
 
   "root_index_php_ICONS": {
-    "_위치": "index.php 672행 ICONS 맵",
-    "_현재": "book slack slackai dti learn access moodle bluecart — studio 키가 없다",
-    "_증상": "키가 없으면 타일이 plusIcon(＋)으로 그려진다. 지금도 그 상태다",
-    "_넣을것": "studio: studioIcon",
-    "_아이콘필요": "studioIcon 상수를 새로 만들어야 한다. 기존 8개와 같은 형식의 24x24 stroke SVG"
+    "_상태": "끝났다. studioIcon 상수와 ICONS 맵 항목이 이미 들어가 있다",
+    "_위치": "index.php 의 studioIcon 상수 + ICONS 맵",
+    "_모양": "보드 — 둥근 사각형에 머리줄 하나와 세로 칸막이 둘. 24x24 stroke SVG",
+    "_왜먼저넣었나": "쓰이지 않는 키라 json 이 studio 를 등록하기 전에는 아무 일도 하지 않는다. 등록 때 SVG 를 새로 그리느라 막히지 않도록 미리 넣어 두었다"
   },
 
   "bootstrap_module_key": {
-    "_위치": "studio/inc/bootstrap.php 45행",
+    "_위치": "studio/inc/bootstrap.php 의 BS_MODULE_KEY 상수",
     "_현재": "const BS_MODULE_KEY = 'assign';",
     "_바꿀값": "const BS_MODULE_KEY = 'studio';",
     "_이유": "worksystems.json 의 key 와 같아야 상단바 메뉴에서 현재 위치가 표시되고, 미로그인 안내(?need_login=)가 맞는 모듈명을 집는다"
