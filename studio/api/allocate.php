@@ -530,7 +530,7 @@ function ba_alloc_notices(ProjectRepo $projects, MemberRepo $members, Allocation
             );
         }
         $lines[] = '';
-        $lines[] = '자세한 내용은 업무 배정 화면에서 확인하세요.';
+        $lines[] = '자세한 내용은 BlueStudio 에서 확인하세요.';
         $body = implode("\n", $lines);
 
         $subject = '[' . $p['name'] . '] 배정 확정 (' . count($items) . '건)';

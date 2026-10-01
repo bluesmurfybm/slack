@@ -264,7 +264,7 @@ const BA_KANBAN_COLUMNS = ['todo', 'doing', 'review', 'dev_deployed', 'prod_depl
 const BA_DASH_PROJECT_STATUS = ['scoping', 'allocating', 'confirmed', 'running', 'hold'];
 
 /** 진행상황 알림을 보낼 슬랙 채널 (명세서 §7.2). */
-const BA_PROGRESS_CHANNEL = '#blueassign-알림';
+const BA_PROGRESS_CHANNEL = '#bluestudio-알림';
 
 /** 대/중/소 3계층. 스키마의 depth TINYINT 과 짝이다. */
 const BA_TASK_MAX_DEPTH = 3;

@@ -292,7 +292,7 @@ function ba_progress_allowed(MemberRepo $members, AllocationRepo $allocs,
 /**
  * 진행상황 알림 (명세서 §7.2).
  *
- *   · 채널 `#blueassign-알림` 에 한 건
+ *   · 채널 `#bluestudio-알림` 에 한 건
  *   · 블로커가 있으면 담당 PM 에게 DM 한 건 더
  *
  * 보내지 않고 적재한다 — 내보내는 경로가 아직 없다
