@@ -107,7 +107,7 @@ final class Client
         if ($r['status'] !== 200) {
             return false;
         }
-        $page = $this->req('/assign/project_list.php');
+        $page = $this->req('/studio/project_list.php');
         if (preg_match('/data-csrf="([a-f0-9]{64})"/', $page['body'], $m)) {
             $this->csrf = $m[1];
         }
@@ -189,25 +189,25 @@ $anon  = new Client($BASE, 'anon');
 
 // =====================================================================
 section('[A] 인증 — 로그인 없이');
-$r = $anon->req('/assign/api/project.php?act=list');
+$r = $anon->req('/studio/api/project.php?act=list');
 ok('API 는 401', $r['status'] === 401, 'status=' . $r['status']);
 ok('오류 형식 {ok:false,error:{code,message}}',
    ($r['json']['ok'] ?? null) === false && isset($r['json']['error']['code']),
    substr($r['body'], 0, 90));
 ok('code=LOGIN_REQUIRED', ($r['json']['error']['code'] ?? '') === 'LOGIN_REQUIRED');
 
-$r = $anon->req('/assign/project_list.php');
+$r = $anon->req('/studio/project_list.php');
 ok('화면은 포털로 리다이렉트', $r['status'] === 302, 'status=' . $r['status']);
 
 // =====================================================================
 section('[B] .htaccess 가 막아야 할 경로 (라우터가 같은 규칙으로 대신)');
 foreach ([
-    '/assign/inc/bootstrap.php'            => '부트스트랩',
-    '/assign/inc/repo/ProjectRepo.php'     => '리포지토리',
-    '/assign/sql/001_schema.sql'           => '스키마',
-    '/assign/dev/setup_local.php'          => '개발 스크립트',
-    '/assign/var/source/'                  => '업로드 폴더',
-    '/assign/docs/conventions.md'          => '문서',
+    '/studio/inc/bootstrap.php'            => '부트스트랩',
+    '/studio/inc/repo/ProjectRepo.php'     => '리포지토리',
+    '/studio/sql/001_schema.sql'           => '스키마',
+    '/studio/dev/setup_local.php'          => '개발 스크립트',
+    '/studio/var/source/'                  => '업로드 폴더',
+    '/studio/docs/conventions.md'          => '문서',
     '/config.php'                          => '포털 설정',
 ] as $p => $label) {
     $r = $anon->req($p);
@@ -219,42 +219,42 @@ section('[C] 로그인');
 ok('관리자 로그인 + CSRF 토큰 확보', $admin->login($ADMIN));
 ok('일반 사용자 로그인', $guest->login($USER));
 
-$r = $admin->req('/assign/api/project.php?act=list');
+$r = $admin->req('/studio/api/project.php?act=list');
 ok('로그인 후 목록 200', $r['status'] === 200, 'status=' . $r['status']);
 ok('응답이 {ok:true,data:{...}}', ($r['json']['ok'] ?? null) === true && isset($r['json']['data']));
 ok('counts 포함', isset($r['json']['data']['counts']));
 
 // =====================================================================
 section('[D] CSRF');
-$r = $admin->req('/assign/api/project.php?act=create', ['json' => ['name' => 'CSRF 없이']]);
+$r = $admin->req('/studio/api/project.php?act=create', ['json' => ['name' => 'CSRF 없이']]);
 ok('토큰 없으면 419', $r['status'] === 419, 'status=' . $r['status']);
 ok('code=CSRF_EXPIRED', ($r['json']['error']['code'] ?? '') === 'CSRF_EXPIRED');
 
-$r = $admin->req('/assign/api/project.php?act=list', ['json' => ['x' => 1], 'csrf' => true]);
+$r = $admin->req('/studio/api/project.php?act=list', ['json' => ['x' => 1], 'csrf' => true]);
 ok('GET 전용 act 는 POST 여도 동작', $r['status'] === 200);
 
 // =====================================================================
 section('[E] 권한');
-$r = $guest->req('/assign/api/project.php?act=create',
+$r = $guest->req('/studio/api/project.php?act=create',
                  ['json' => ['name' => '권한 없는 등록'], 'csrf' => true]);
 ok('일반 사용자 등록은 403', $r['status'] === 403, 'status=' . $r['status']);
 ok('code=FORBIDDEN', ($r['json']['error']['code'] ?? '') === 'FORBIDDEN');
 
-$r = $guest->req('/assign/api/project.php?act=list');
+$r = $guest->req('/studio/api/project.php?act=list');
 ok('일반 사용자도 조회는 200', $r['status'] === 200);
 
 // =====================================================================
 section('[F] 등록 / 기간 검증');
-$r = $admin->req('/assign/api/project.php?act=create', ['json' => ['name' => ''], 'csrf' => true]);
+$r = $admin->req('/studio/api/project.php?act=create', ['json' => ['name' => ''], 'csrf' => true]);
 ok('이름 없으면 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'MISSING_PARAM');
 
-$r = $admin->req('/assign/api/project.php?act=create', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/project.php?act=create', ['csrf' => true, 'json' => [
     'name' => '기간 역전', 'dev_start' => '2026-05-01', 'dev_end' => '2026-04-01']]);
 ok('기간 역전 400', $r['status'] === 400, 'status=' . $r['status']);
 ok('사람이 읽을 메시지', str_contains($r['json']['error']['message'] ?? '', '뒤집'),
    $r['json']['error']['message'] ?? '');
 
-$r = $admin->req('/assign/api/project.php?act=create', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/project.php?act=create', ['csrf' => true, 'json' => [
     'name' => 'API 시험 프로젝트', 'client' => 'Z대학교', 'track' => 'lxp',
     'summary' => 'HTTP 레벨 시험용',
     'dev_start' => '2026-03-01', 'dev_end' => '2026-05-31',
@@ -269,16 +269,16 @@ ok('개발·테스트 겹침 허용', ($r['json']['data']['project']['test_start
 
 // =====================================================================
 section('[G] 조회 / 수정');
-$r = $admin->req('/assign/api/project.php?act=get&id=' . $pid);
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
 ok('상세 200', $r['status'] === 200);
 ok('sources 배열 포함', isset($r['json']['data']['sources']));
 ok('can.manage true (등록자=관리자)', ($r['json']['data']['can']['manage'] ?? null) === true);
 ok('file_path 는 노출 안 됨', !str_contains($r['body'], 'file_path'));
 
-$r = $admin->req('/assign/api/project.php?act=get&id=99999');
+$r = $admin->req('/studio/api/project.php?act=get&id=99999');
 ok('없는 id 404', $r['status'] === 404 && ($r['json']['error']['code'] ?? '') === 'NOT_FOUND');
 
-$r = $admin->req('/assign/api/project.php?act=update',
+$r = $admin->req('/studio/api/project.php?act=update',
     ['csrf' => true, 'json' => ['id' => $pid, 'name' => 'API 시험 프로젝트 (수정)', 'status' => 'scoping']]);
 ok('수정 200', $r['status'] === 200);
 ok('이름 반영', ($r['json']['data']['project']['name'] ?? '') === 'API 시험 프로젝트 (수정)');
@@ -287,15 +287,15 @@ ok('상태 반영', ($r['json']['data']['project']['status'] ?? '') === 'scoping
 // 회귀 — 안 보낸 칸이 지워지면 안 된다.
 // 예전에 ba_read_project_input() 이 늘 열한 칸을 돌려줘서, 이름만 고쳐도
 // 고객·트랙·기간이 전부 NULL 이 됐다. 화면은 전 칸을 보내 눈에 안 띄었다.
-$r = $admin->req('/assign/api/project.php?act=get&id=' . $pid);
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
 $before = $r['json']['data']['project'];
 ok('수정 전 — 고객/기간이 살아 있다',
    $before['client'] === 'Z대학교' && $before['dev_start'] === '2026-03-01',
    json_encode([$before['client'], $before['dev_start']], JSON_UNESCAPED_UNICODE));
 
-$admin->req('/assign/api/project.php?act=update',
+$admin->req('/studio/api/project.php?act=update',
     ['csrf' => true, 'json' => ['id' => $pid, 'name' => '이름만 바꾼다']]);
-$after = $admin->req('/assign/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
+$after = $admin->req('/studio/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
 ok('이름만 보내도 고객이 안 지워진다', $after['client'] === 'Z대학교', var_export($after['client'], true));
 ok('이름만 보내도 트랙이 안 지워진다', $after['track'] === 'lxp', var_export($after['track'], true));
 ok('이름만 보내도 개발기간이 안 지워진다',
@@ -306,23 +306,23 @@ ok('이름만 보내도 배포일이 안 지워진다', $after['deploy_date'] ==
 ok('보낸 칸은 바뀐다', $after['name'] === '이름만 바꾼다');
 
 // 빈 문자열을 **명시적으로** 보내면 지워지는 게 맞다(안 보낸 것과 다르다).
-$admin->req('/assign/api/project.php?act=update',
+$admin->req('/studio/api/project.php?act=update',
     ['csrf' => true, 'json' => ['id' => $pid, 'client' => '']]);
-$after2 = $admin->req('/assign/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
+$after2 = $admin->req('/studio/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
 ok('빈 값을 보내면 지워진다', $after2['client'] === null, var_export($after2['client'], true));
 ok('그래도 다른 칸은 그대로', $after2['track'] === 'lxp');
 
 // 뒤 절(J)이 이 프로젝트의 이름·고객으로 검색한다. 바꿔 놓은 값을 되돌린다.
 // 시험끼리 상태를 물려주면 엉뚱한 곳이 빨개진다 — 실제로 한 번 그랬다.
-$admin->req('/assign/api/project.php?act=update', ['csrf' => true, 'json' => [
+$admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
     'id' => $pid, 'name' => 'API 시험 프로젝트 (수정)', 'client' => 'Z대학교']]);
-$restored = $admin->req('/assign/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
+$restored = $admin->req('/studio/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
 ok('상태 되돌리기', $restored['client'] === 'Z대학교'
    && $restored['name'] === 'API 시험 프로젝트 (수정)'
    && $restored['dev_start'] === '2026-03-01');
 
 // PM 권한: 이 프로젝트의 owner 는 관리자다. 일반 사용자는 PM 이 아니다.
-$r = $guest->req('/assign/api/project.php?act=update',
+$r = $guest->req('/studio/api/project.php?act=update',
     ['csrf' => true, 'json' => ['id' => $pid, 'name' => '남의 프로젝트 수정']]);
 ok('PM 아닌 사람의 수정은 403', $r['status'] === 403, 'status=' . $r['status']);
 
@@ -366,7 +366,7 @@ function fixture(string $path): CURLFile
     return new CURLFile($path, 'image/png', basename($path));
 }
 
-$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
     'project_id' => $pid, 'source_type' => 'file',
     'files[]' => fixture($png),
 ]]);
@@ -376,13 +376,13 @@ ok('parse_status=pending', ($r['json']['data']['saved'][0]['parse_status'] ?? ''
 ok('원본 파일명 보존', ($r['json']['data']['saved'][0]['title'] ?? '') === '시안.png');
 $srcId = (int)($r['json']['data']['sources'][0]['id'] ?? 0);
 
-$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
     'project_id' => $pid, 'source_type' => 'file',
     'files[]' => fixture($evil),
 ]]);
 ok('php 업로드 거부', count($r['json']['data']['failed'] ?? []) === 1, substr($r['body'], 0, 140));
 
-$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
     'project_id' => $pid, 'source_type' => 'file',
     'files[]' => fixture($fakePng),
 ]]);
@@ -393,7 +393,7 @@ ok('거부 사유가 내용 불일치',
 
 // 부분 성공
 $png2 = "$tmp/b.png"; copy($png, $png2);
-$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
     'project_id' => $pid, 'source_type' => 'file',
     'files[0]' => fixture($png2),
     'files[1]' => fixture($evil),
@@ -403,96 +403,96 @@ ok('부분 성공 — 1건 저장 / 1건 실패',
    substr($r['body'], 0, 160));
 
 // 업로드된 파일에 웹으로 직접 접근 불가
-$r = $anon->req('/assign/var/source/' . date('Y') . '/' . $pid . '/');
+$r = $anon->req('/studio/var/source/' . date('Y') . '/' . $pid . '/');
 ok('업로드 경로 직접 접근 404', $r['status'] === 404);
 
 // =====================================================================
 section('[I] 출처 — 링크 / 직접 입력');
-$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'source_type' => 'link',
     'url' => 'https://www.figma.com/file/abc/Design']]);
 ok('피그마 링크 200', $r['status'] === 200);
 ok('kind=figma', ($r['json']['data']['saved'][0]['kind'] ?? '') === 'figma');
 
-$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'source_type' => 'link', 'url' => 'javascript:alert(1)']]);
 ok('javascript: 거부 400', $r['status'] === 400, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'source_type' => 'text',
     'text' => "첫 줄이 제목\n본문 내용입니다"]]);
 ok('직접 입력 200', $r['status'] === 200);
 ok('첫 줄을 제목으로', ($r['json']['data']['saved'][0]['title'] ?? '') === '첫 줄이 제목');
 ok('parse_status=ok', ($r['json']['data']['saved'][0]['parse_status'] ?? '') === 'ok');
 
-$r = $guest->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+$r = $guest->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'source_type' => 'text', 'text' => '권한 없음']]);
 ok('PM 아닌 사람의 출처 등록 403', $r['status'] === 403);
 
 // =====================================================================
 section('[J] 목록 필터');
-$r = $admin->req('/assign/api/project.php?act=list&keyword=' . rawurlencode('Z대학교'));
+$r = $admin->req('/studio/api/project.php?act=list&keyword=' . rawurlencode('Z대학교'));
 ok('키워드 검색', ($r['json']['data']['total'] ?? 0) >= 1);
 
-$r = $admin->req('/assign/api/project.php?act=list&keyword=' . rawurlencode('%'));
+$r = $admin->req('/studio/api/project.php?act=list&keyword=' . rawurlencode('%'));
 ok('% 가 전건 조회를 만들지 않음', ($r['json']['data']['total'] ?? -1) === 0,
    '총 ' . ($r['json']['data']['total'] ?? '?'));
 
-$r = $admin->req('/assign/api/project.php?act=list&sort=' . rawurlencode('x; DROP TABLE ba_project'));
+$r = $admin->req('/studio/api/project.php?act=list&sort=' . rawurlencode('x; DROP TABLE ba_project'));
 ok('정렬 주입 무시', $r['status'] === 200 && ($r['json']['data']['total'] ?? 0) > 0);
 
-$r = $admin->req('/assign/api/project.php?act=list&from=2026-04-01&to=2026-04-30');
+$r = $admin->req('/studio/api/project.php?act=list&from=2026-04-01&to=2026-04-30');
 $names = array_column($r['json']['data']['rows'] ?? [], 'name');
 ok('기간 겹침 — 3~5월 건이 4월 조회에 잡힘',
    in_array('API 시험 프로젝트 (수정)', $names, true), implode(' / ', $names));
 
-$r = $admin->req('/assign/api/project.php?act=list&size=2&page=1');
+$r = $admin->req('/studio/api/project.php?act=list&size=2&page=1');
 ok('페이징 size=2', count($r['json']['data']['rows'] ?? []) <= 2);
 
-$r = $admin->req('/assign/api/project.php?act=list&mine=1');
+$r = $admin->req('/studio/api/project.php?act=list&mine=1');
 ok('내 프로젝트만', ($r['json']['data']['total'] ?? 0) >= 1);
 
 // =====================================================================
 section('[K] 삭제');
-$r = $admin->req('/assign/api/project.php?act=delete_source',
+$r = $admin->req('/studio/api/project.php?act=delete_source',
                  ['csrf' => true, 'json' => ['source_id' => $srcId]]);
 ok('출처 삭제 200', $r['status'] === 200);
 
-$r = $admin->req('/assign/api/project.php?act=delete',
+$r = $admin->req('/studio/api/project.php?act=delete',
                  ['csrf' => true, 'json' => ['id' => $pid, 'confirm' => '엉뚱한값']]);
 ok('코드 확인 틀리면 400', $r['status'] === 400 &&
    ($r['json']['error']['code'] ?? '') === 'CONFIRM_REQUIRED', 'status=' . $r['status']);
 
-$code = $admin->req('/assign/api/project.php?act=get&id=' . $pid)['json']['data']['project']['code'];
-$r = $admin->req('/assign/api/project.php?act=delete',
+$code = $admin->req('/studio/api/project.php?act=get&id=' . $pid)['json']['data']['project']['code'];
+$r = $admin->req('/studio/api/project.php?act=delete',
                  ['csrf' => true, 'json' => ['id' => $pid, 'confirm' => $code, 'reason' => 'API 시험']]);
 ok('코드 맞으면 삭제', $r['status'] === 200, substr($r['body'], 0, 120));
 
-$r = $admin->req('/assign/api/project.php?act=get&id=' . $pid);
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
 ok('삭제 후 조회 — 관리자는 보임', $r['status'] === 200);
 ok('is_deleted=true', ($r['json']['data']['project']['is_deleted'] ?? null) === true);
 
-$r = $guest->req('/assign/api/project.php?act=get&id=' . $pid);
+$r = $guest->req('/studio/api/project.php?act=get&id=' . $pid);
 ok('삭제 후 일반 사용자는 404', $r['status'] === 404);
 
-$r = $admin->req('/assign/api/project.php?act=list&with_deleted=1');
+$r = $admin->req('/studio/api/project.php?act=list&with_deleted=1');
 $del = array_filter($r['json']['data']['rows'] ?? [], fn($x) => !empty($x['is_deleted']));
 ok('with_deleted 로 보임 (관리자)', count($del) >= 1);
 
-$r = $guest->req('/assign/api/project.php?act=list&with_deleted=1');
+$r = $guest->req('/studio/api/project.php?act=list&with_deleted=1');
 $del = array_filter($r['json']['data']['rows'] ?? [], fn($x) => !empty($x['is_deleted']));
 ok('일반 사용자는 with_deleted 무시', count($del) === 0);
 
-$r = $admin->req('/assign/api/project.php?act=restore', ['csrf' => true, 'json' => ['id' => $pid]]);
+$r = $admin->req('/studio/api/project.php?act=restore', ['csrf' => true, 'json' => ['id' => $pid]]);
 ok('복구 200', $r['status'] === 200);
 
 // =====================================================================
 section('[L] 잘못된 요청');
-$r = $admin->req('/assign/api/project.php?act=nonsense');
+$r = $admin->req('/studio/api/project.php?act=nonsense');
 ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
 ok('가능한 act 를 알려 줌', str_contains($r['json']['error']['message'] ?? '', 'create'));
 
-$r = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid);
+$r = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid);
 ok('아직 안 만든 기능도 형식은 지킴(200 + data)',
    $r['status'] === 200 && isset($r['json']['data']));
 
@@ -507,19 +507,19 @@ section('[M] 후보 리스트 (명세서 §5 · §7.1 Step2)');
 // │ 같은 점수를 이쪽이 12명분 한 번에 내주게 되고, 정렬 한 번이면   │
 // │ CLAUDE.md 가 금지한 전사 랭킹이 된다. 아래 단언이 그 문을 잠근다.│
 // └────────────────────────────────────────────────────────────────┘
-$r = $guest->req('/assign/api/candidate.php?act=list&project_id=' . $pid);
+$r = $guest->req('/studio/api/candidate.php?act=list&project_id=' . $pid);
 ok('배정 권한이 없으면 후보 목록 403', $r['status'] === 403, 'status=' . $r['status']);
 ok('code=FORBIDDEN', ($r['json']['error']['code'] ?? '') === 'FORBIDDEN');
 ok('점수가 한 건도 새지 않는다', empty($r['json']['data']['rows']),
    substr($r['body'], 0, 120));
 
-$r = $guest->req('/assign/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=1');
+$r = $guest->req('/studio/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=1');
 ok('후보 상세도 403 (계열별 점수가 여기로 샜었다)', $r['status'] === 403,
    'status=' . $r['status']);
 
 // 화면도 같은 선을 쓴다. API 만 막고 화면을 열어 두면 빈 표가 뜨고,
 // 화면만 막으면 API 를 직접 불러 뚫린다.
-$r = $guest->req('/assign/project_view.php?id=' . $pid);
+$r = $guest->req('/studio/project_view.php?id=' . $pid);
 ok('화면의 2단계 탭이 잠긴다',
    str_contains($r['body'], 'data-pv-tab="candidate"')
    && str_contains($r['body'], 'disabled title="배정을 맡은'),
@@ -530,29 +530,29 @@ ok('본인 프로파일로 가는 길을 함께 준다',
    str_contains($r['body'], 'member_profile.php'));
 
 // 프로젝트 번호 없이는 후보를 낼 수 없다 — 전역 순위를 만들지 않기 위한 방어다.
-$r = $admin->req('/assign/api/candidate.php?act=list');
+$r = $admin->req('/studio/api/candidate.php?act=list');
 ok('project_id 없으면 400', $r['status'] === 400, 'status=' . $r['status']);
 ok('code=MISSING_PARAM', ($r['json']['error']['code'] ?? '') === 'MISSING_PARAM');
 
-$r = $admin->req('/assign/api/candidate.php?act=list&project_id=99999999');
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=99999999');
 ok('없는 프로젝트 404', $r['status'] === 404);
 
-$r = $anon->req('/assign/api/candidate.php?act=list&project_id=' . $pid);
+$r = $anon->req('/studio/api/candidate.php?act=list&project_id=' . $pid);
 ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
 
 // 기간이 비면 가용도를 낼 수 없다. 0% 로 때우지 않고 거절해야 한다.
-$admin->req('/assign/api/project.php?act=update', ['csrf' => true, 'json' => [
+$admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
     'id' => $pid, 'dev_start' => '', 'dev_end' => '',
     'test_start' => '', 'test_end' => '', 'deploy_date' => '']]);
-$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid);
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid);
 ok('기간 없으면 400 NO_PERIOD',
    $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'NO_PERIOD',
    'status=' . $r['status'] . ' ' . ($r['json']['error']['code'] ?? ''));
 
-$admin->req('/assign/api/project.php?act=update', ['csrf' => true, 'json' => [
+$admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
     'id' => $pid, 'dev_start' => '2026-10-01', 'dev_end' => '2026-12-18']]);
 
-$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid);
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid);
 ok('기간 넣으면 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
 $d = $r['json']['data'] ?? [];
 ok('rows 반환', isset($d['rows']) && is_array($d['rows']) && count($d['rows']) > 0,
@@ -612,17 +612,17 @@ ok('걸러진 후보는 뒤로 간다', $orderOk);
 ok('점수 없는 후보는 0 점이 아니라 뒤로 간다', $nullOrderOk);
 
 $total = $d['total'];
-$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid . '&min_availability=100');
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid . '&min_availability=100');
 $d2 = $r['json']['data'];
 ok('조건을 올려도 명단에서 지우지 않는다', $d2['total'] === $total,
    "{$d2['total']} vs $total");
 ok('대신 filtered_out 으로 표시', count(array_filter($d2['rows'], fn($x) => $x['filtered_out'])) > 0);
 
-$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid . '&min_availability=9999');
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid . '&min_availability=9999');
 ok('범위를 벗어난 조건도 안전하게 처리', $r['status'] === 200);
 
 // 분야를 고르면 그 분야가 속한 '계열' 로 본다 (분야 단위는 표본이 안 찬다)
-$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid
                  . '&domains[]=1&domains[]=2');
 $d3 = $r['json']['data'];
 ok('분야 선택 200', $r['status'] === 200);
@@ -635,19 +635,19 @@ $withFit = array_filter($d3['rows'], fn($x) => $x['domain_fit'] !== null);
 ok('분야 매치도가 붙는다', count($withFit) > 0, 'n=' . count($withFit));
 
 // 점수를 내지 않는 계열(기획)은 조건에서 빠진다
-$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid . '&domains[]=21');
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid . '&domains[]=21');
 ok('기획 분야는 계열 조건이 되지 않는다',
    count($r['json']['data']['scope']['categories'] ?? []) === 0);
 
 // --- 근거 드로어 ----------------------------------------------------
 $mid = (int)($d['rows'][0]['member_id'] ?? 0);
-$r = $admin->req('/assign/api/candidate.php?act=detail&project_id=' . $pid);
+$r = $admin->req('/studio/api/candidate.php?act=detail&project_id=' . $pid);
 ok('member_id 없으면 400', $r['status'] === 400);
 
-$r = $admin->req('/assign/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=99999999');
+$r = $admin->req('/studio/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=99999999');
 ok('없는 구성원 404', $r['status'] === 404);
 
-$r = $admin->req('/assign/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=' . $mid);
+$r = $admin->req('/studio/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=' . $mid);
 ok('근거 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
 $dt = $r['json']['data'] ?? [];
 ok('확정 내역과 추정 내역이 따로 담긴다',
@@ -669,25 +669,25 @@ foreach ($dt['confirmed_breakdown'] ?? [] as $it) {
 }
 ok('확정 내역에 추정이 섞이지 않는다', $cfOk);
 
-$r = $anon->req('/assign/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=' . $mid);
+$r = $anon->req('/studio/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=' . $mid);
 ok('근거도 로그인 없이는 401', $r['status'] === 401);
 
-$r = $admin->req('/assign/api/candidate.php?act=nope&project_id=' . $pid);
+$r = $admin->req('/studio/api/candidate.php?act=nope&project_id=' . $pid);
 ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
 
 
 // =====================================================================
 section('[N] WBS (명세서 §7.1 Step3 앞단)');
 
-$r = $anon->req('/assign/api/task.php?act=tree&project_id=' . $pid);
+$r = $anon->req('/studio/api/task.php?act=tree&project_id=' . $pid);
 ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/task.php?act=tree');
+$r = $admin->req('/studio/api/task.php?act=tree');
 ok('project_id 없으면 400', $r['status'] === 400);
-$r = $admin->req('/assign/api/task.php?act=tree&project_id=99999999');
+$r = $admin->req('/studio/api/task.php?act=tree&project_id=99999999');
 ok('없는 프로젝트 404', $r['status'] === 404);
 
-$r = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid);
+$r = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid);
 ok('빈 트리도 200', $r['status'] === 200 && is_array($r['json']['data']['tree'] ?? null));
 $rev = $r['json']['data']['revision'] ?? '';
 ok('revision 을 내려 준다', strlen($rev) === 16, $rev);
@@ -708,15 +708,15 @@ $wbsTree = [
     ]],
 ];
 
-$r = $admin->req('/assign/api/task.php?act=save_tree',
+$r = $admin->req('/studio/api/task.php?act=save_tree',
                  ['json' => ['project_id' => $pid, 'tree' => $wbsTree]]);
 ok('CSRF 없으면 419', $r['status'] === 419, 'status=' . $r['status']);
 
-$r = $guest->req('/assign/api/task.php?act=save_tree',
+$r = $guest->req('/studio/api/task.php?act=save_tree',
                  ['csrf' => true, 'json' => ['project_id' => $pid, 'tree' => $wbsTree]]);
 ok('PM 아닌 사람은 403', $r['status'] === 403, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/task.php?act=save_tree',
+$r = $admin->req('/studio/api/task.php?act=save_tree',
                  ['csrf' => true, 'json' => ['project_id' => $pid, 'tree' => $wbsTree, 'revision' => $rev]]);
 ok('저장 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 140));
 $d = $r['json']['data'];
@@ -744,14 +744,14 @@ $walk = function (array $ns) use (&$walk, &$taskIds): void {
 $walk($d['tree']);
 ok('말단 3건', count($taskIds) === 3, (string)count($taskIds));
 
-$r = $guest->req('/assign/api/task.php?act=confirm',
+$r = $guest->req('/studio/api/task.php?act=confirm',
                  ['csrf' => true, 'json' => ['task_ids' => $taskIds]]);
 ok('확정도 PM 아니면 403', $r['status'] === 403, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/task.php?act=confirm', ['csrf' => true, 'json' => ['task_ids' => []]]);
+$r = $admin->req('/studio/api/task.php?act=confirm', ['csrf' => true, 'json' => ['task_ids' => []]]);
 ok('대상 없으면 400', $r['status'] === 400);
 
-$r = $admin->req('/assign/api/task.php?act=confirm',
+$r = $admin->req('/studio/api/task.php?act=confirm',
                  ['csrf' => true, 'json' => ['task_ids' => $taskIds]]);
 ok('확정 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
 ok('배정 가능 3건이 됨', ($r['json']['data']['counts']['assignable'] ?? 0) === 3,
@@ -766,8 +766,8 @@ $strip = function (array $ns) use (&$strip): array {
         'children' => $strip($n['children']),
     ], $ns);
 };
-$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
-$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+$cur = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'tree' => $strip($cur['tree']), 'revision' => $cur['revision']]]);
 ok('save_tree 에 confirmed 를 끼워 보내도 무시된다',
    ($r['json']['data']['counts']['confirmed'] ?? -1) === 3,
@@ -778,63 +778,63 @@ $rev = $r['json']['data']['revision'];
 
 // --- 낙관적 잠금 -----------------------------------------------------
 $stale = $rev;
-$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$cur = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
 $mod = $cur['tree'];
 $mod[0]['title'] = '분석 (먼저 저장)';
-$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'tree' => $mod, 'revision' => $cur['revision']]]);
 ok('먼저 저장한 쪽은 통과', $r['status'] === 200);
 
-$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'tree' => $mod, 'revision' => $stale]]);
 ok('낡은 revision 은 거절', $r['status'] === 400
    && str_contains($r['json']['error']['message'] ?? '', '먼저 저장'),
    'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
 
-$rev = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data']['revision'];
+$rev = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)['json']['data']['revision'];
 
 // --- 검증 -----------------------------------------------------------
-$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'revision' => $rev,
     'tree' => [['title' => 'A', 'children' => [['title' => 'B', 'children' => [
         ['title' => 'C', 'children' => [['title' => 'D']]]]]]]]]]);
 ok('4단계는 400', $r['status'] === 400 && str_contains($r['json']['error']['message'] ?? '', '3단계'),
    substr($r['body'], 0, 120));
 
-$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'revision' => $rev, 'tree' => [['title' => '   ']]]]);
 ok('빈 제목은 400', $r['status'] === 400);
 
-$after = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$after = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
 ok('거절된 저장이 트리를 건드리지 않았다', ($after['counts']['total'] ?? 0) === 6,
    json_encode($after['counts'] ?? null));
 
 // --- 한 건 수정 ------------------------------------------------------
 $one = $taskIds[0];
-$r = $admin->req('/assign/api/task.php?act=update', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/task.php?act=update', ['csrf' => true, 'json' => [
     'id' => $one, 'est_md' => 5.5, 'difficulty' => 3]]);
 ok('한 건 수정 200', $r['status'] === 200, substr($r['body'], 0, 120));
 ok('값이 바뀜', abs(($r['json']['data']['task']['est_md'] ?? 0) - 5.5) < 0.01);
 ok('확정은 그대로', ($r['json']['data']['task']['confirmed'] ?? null) === true);
 
-$r = $admin->req('/assign/api/task.php?act=update', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/task.php?act=update', ['csrf' => true, 'json' => [
     'id' => $one, 'confirmed' => false]]);
 ok('update 로는 확정을 못 바꾼다 (바꿀 내용 없음)', $r['status'] === 400,
    'status=' . $r['status']);
 
-$r = $guest->req('/assign/api/task.php?act=update', ['csrf' => true, 'json' => [
+$r = $guest->req('/studio/api/task.php?act=update', ['csrf' => true, 'json' => [
     'id' => $one, 'title' => '남의 태스크']]);
 ok('PM 아니면 수정 403', $r['status'] === 403);
 
 // --- 이동 ------------------------------------------------------------
-$r = $admin->req('/assign/api/task.php?act=move', ['csrf' => true, 'json' => ['id' => $one]]);
+$r = $admin->req('/studio/api/task.php?act=move', ['csrf' => true, 'json' => ['id' => $one]]);
 ok('parent_id 를 빼면 400', $r['status'] === 400
    && str_contains($r['json']['error']['message'] ?? '', 'parent_id'),
    substr($r['body'], 0, 120));
 
-$cur  = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$cur  = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
 $last = end($cur['tree'])['id'];
-$r = $admin->req('/assign/api/task.php?act=move',
+$r = $admin->req('/studio/api/task.php?act=move',
                  ['csrf' => true, 'json' => ['id' => $last, 'parent_id' => null, 'seq' => 0]]);
 ok('최상위로 이동 200', $r['status'] === 200, substr($r['body'], 0, 120));
 ok('맨 앞으로 갔고 번호가 다시 매겨짐',
@@ -842,39 +842,39 @@ ok('맨 앞으로 갔고 번호가 다시 매겨짐',
    && ($r['json']['data']['tree'][0]['wbs_no'] ?? '') === '1');
 
 // --- 확정 해제 / 삭제 -------------------------------------------------
-$r = $admin->req('/assign/api/task.php?act=unconfirm',
+$r = $admin->req('/studio/api/task.php?act=unconfirm',
                  ['csrf' => true, 'json' => ['task_ids' => [$one]]]);
 ok('확정 해제 200', $r['status'] === 200);
 ok('배정 가능이 2건으로 줄어듦', ($r['json']['data']['counts']['assignable'] ?? 0) === 2,
    json_encode($r['json']['data']['counts'] ?? null));
 
-$r = $guest->req('/assign/api/task.php?act=delete', ['csrf' => true, 'json' => ['id' => $one]]);
+$r = $guest->req('/studio/api/task.php?act=delete', ['csrf' => true, 'json' => ['id' => $one]]);
 ok('PM 아니면 삭제 403', $r['status'] === 403);
 
-$r = $admin->req('/assign/api/task.php?act=delete', ['csrf' => true, 'json' => ['id' => $one]]);
+$r = $admin->req('/studio/api/task.php?act=delete', ['csrf' => true, 'json' => ['id' => $one]]);
 ok('삭제 200', $r['status'] === 200, substr($r['body'], 0, 120));
 
 // --- 직접 입력한 글도 도출 입력이다 ---------------------------------------
 // 앞 [I] 에서 넣은 text 출처가 parse_status='ok' 로 남아 있다. 파일만
 // 입력인 것이 아니다 — 회의 중에 적어 넣은 글도 그대로 근거가 된다.
-$r = $admin->req('/assign/api/task.php?act=extract',
+$r = $admin->req('/studio/api/task.php?act=extract',
                  ['csrf' => true, 'json' => ['project_id' => $pid]]);
 ok('직접 입력한 글에서도 도출된다', $r['status'] === 200, 'status=' . $r['status']);
 ok('초안이 나온다', !empty($r['json']['data']['tree']));
-$beforeX = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+$beforeX = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)
                  ['json']['data']['counts']['total'];
-$admin->req('/assign/api/task.php?act=extract', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$admin->req('/studio/api/task.php?act=extract', ['csrf' => true, 'json' => ['project_id' => $pid]]);
 ok('도출은 저장하지 않는다',
-   $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+   $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)
          ['json']['data']['counts']['total'] === $beforeX,
    '도출 전 ' . $beforeX . '건');
 
-$r = $admin->req('/assign/api/task.php?act=nope&project_id=' . $pid);
+$r = $admin->req('/studio/api/task.php?act=nope&project_id=' . $pid);
 ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
 
 // 뒷정리 — 이 프로젝트는 뒤에서 삭제 시험에 쓰이므로 태스크를 비워 둔다.
-$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
-$admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+$cur = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'tree' => [], 'revision' => $cur['revision']]]);
 
 
@@ -911,15 +911,15 @@ if (!is_file("$fixDir/sample.xlsx")) {
          ->execute([$pid]);
 
     // --- 권한 ---
-    $r = $guest->req('/assign/api/task.php?act=parse',
+    $r = $guest->req('/studio/api/task.php?act=parse',
                      ['csrf' => true, 'json' => ['project_id' => $pid]]);
     ok('문서 분석은 PM 아니면 403', $r['status'] === 403, 'status=' . $r['status']);
 
-    $r = $admin->req('/assign/api/task.php?act=parse', ['json' => ['project_id' => $pid]]);
+    $r = $admin->req('/studio/api/task.php?act=parse', ['json' => ['project_id' => $pid]]);
     ok('CSRF 없으면 419', $r['status'] === 419);
 
     // --- 분석 ---
-    $r = $admin->req('/assign/api/task.php?act=parse',
+    $r = $admin->req('/studio/api/task.php?act=parse',
                      ['csrf' => true, 'json' => ['project_id' => $pid]]);
     ok('문서 분석 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 140));
     $sum = $r['json']['data']['summary'] ?? [];
@@ -938,28 +938,28 @@ if (!is_file("$fixDir/sample.xlsx")) {
        count(array_filter($r['json']['data']['sources'],
              fn($x) => $x['status'] === 'ok' && $x['chars'] > 0)) === 3);
 
-    $r = $admin->req('/assign/api/task.php?act=parse',
+    $r = $admin->req('/studio/api/task.php?act=parse',
                      ['csrf' => true, 'json' => ['project_id' => $pid]]);
     ok('두 번째는 대기 중인 것만 본다', ($r['json']['data']['summary']['touched'] ?? -1) === 0,
        json_encode($r['json']['data']['summary'] ?? null));
 
-    $r = $admin->req('/assign/api/task.php?act=parse',
+    $r = $admin->req('/studio/api/task.php?act=parse',
                      ['csrf' => true, 'json' => ['project_id' => $pid, 'all' => 1]]);
     ok('all=1 이면 다시 읽는다', ($r['json']['data']['summary']['touched'] ?? 0) === 5,
        json_encode($r['json']['data']['summary'] ?? null));
 
     // --- 도출 ---
-    $r = $guest->req('/assign/api/task.php?act=extract',
+    $r = $guest->req('/studio/api/task.php?act=extract',
                      ['csrf' => true, 'json' => ['project_id' => $pid]]);
     ok('도출도 PM 아니면 403', $r['status'] === 403);
 
-    $r = $admin->req('/assign/api/task.php?act=extract',
+    $r = $admin->req('/studio/api/task.php?act=extract',
                      ['csrf' => true, 'json' => ['project_id' => $pid]]);
     ok('도출 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 160));
     $dx = $r['json']['data'];
     ok('초안 트리가 온다', !empty($dx['tree']));
     ok('저장하지 않는다',
-       $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+       $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)
              ['json']['data']['counts']['total'] === 0,
        '도출만으로 태스크가 생기면 안 된다');
 
@@ -988,9 +988,9 @@ if (!is_file("$fixDir/sample.xlsx")) {
        str_contains($dx['notice'] ?? '', '확정해야 배정 대상'));
 
     // --- 초안을 저장해도 배정 대상이 되지 않는다 ---
-    $revX = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+    $revX = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)
                   ['json']['data']['revision'];
-    $r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    $r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
         'project_id' => $pid, 'tree' => $dx['tree'], 'revision' => $revX]]);
     ok('초안 저장 200', $r['status'] === 200, substr($r['body'], 0, 140));
     ok('저장해도 배정 가능 0건', ($r['json']['data']['counts']['assignable'] ?? -1) === 0,
@@ -1014,9 +1014,9 @@ if (!is_file("$fixDir/sample.xlsx")) {
         'SELECT id FROM ba_project_source WHERE project_id <> ' . (int)$pid . ' LIMIT 1'
     )->fetchColumn();
     if ($otherSrcId) {
-        $revX = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+        $revX = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)
                       ['json']['data']['revision'];
-        $r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+        $r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
             'project_id' => $pid, 'revision' => $revX,
             'tree' => [['title' => '가로채기', 'source_id' => $otherSrcId]]]]);
         ok('남의 프로젝트 문서를 출처로 못 쓴다', $r['status'] === 400
@@ -1025,14 +1025,14 @@ if (!is_file("$fixDir/sample.xlsx")) {
     }
 
     // --- 문서가 없으면 ---
-    $r = $admin->req('/assign/api/task.php?act=extract',
+    $r = $admin->req('/studio/api/task.php?act=extract',
                      ['csrf' => true, 'json' => ['project_id' => 99999999]]);
     ok('없는 프로젝트 404', $r['status'] === 404);
 
     // 뒷정리 — 뒤의 삭제 시험이 쓰도록 비워 둔다
-    $revX = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+    $revX = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)
                   ['json']['data']['revision'];
-    $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
         'project_id' => $pid, 'tree' => [], 'revision' => $revX]]);
     $pdoX->prepare('DELETE FROM ba_project_source WHERE project_id = ?')->execute([$pid]);
 }
@@ -1042,13 +1042,13 @@ if (!is_file("$fixDir/sample.xlsx")) {
 section('[P] 배정안 (명세서 §6)');
 
 // 이 프로젝트에는 확정된 태스크가 없다. 그 상태부터 확인한다.
-$r = $anon->req('/assign/api/allocate.php?act=versions&project_id=' . $pid);
+$r = $anon->req('/studio/api/allocate.php?act=versions&project_id=' . $pid);
 ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/allocate.php?act=versions');
+$r = $admin->req('/studio/api/allocate.php?act=versions');
 ok('project_id 없으면 400', $r['status'] === 400);
 
-$r = $admin->req('/assign/api/allocate.php?act=current&project_id=' . $pid);
+$r = $admin->req('/studio/api/allocate.php?act=current&project_id=' . $pid);
 // 주의: `$a['k'] ?? 'x'` 는 값이 null 이어도 'x' 를 준다. null 인지 보려면
 // 키가 있는지와 값이 null 인지를 따로 봐야 한다.
 $d0 = $r['json']['data'];
@@ -1058,15 +1058,15 @@ ok('확정본이 없으면 null',
 ok('그 사실을 말로 알려 준다',
    str_contains($r['json']['data']['message'] ?? '', '확정'));
 
-$r = $admin->req('/assign/api/allocate.php?act=propose',
+$r = $admin->req('/studio/api/allocate.php?act=propose',
                  ['csrf' => true, 'json' => ['project_id' => $pid]]);
 ok('확정된 태스크가 없으면 400', $r['status'] === 400
    && ($r['json']['error']['code'] ?? '') === 'NO_TASKS',
    'status=' . $r['status'] . ' ' . substr($r['body'], 0, 100));
 
 // --- WBS 를 만들고 확정한다 -------------------------------------------
-$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
-$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+$cur = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'revision' => $cur['revision'],
     'tree' => [
         ['title' => '배정 시험 대분류', 'children' => [
@@ -1085,18 +1085,18 @@ $walkP = function (array $ns) use (&$walkP, &$leafIds): void {
     }
 };
 $walkP($r['json']['data']['tree']);
-$admin->req('/assign/api/task.php?act=confirm', ['csrf' => true, 'json' => ['task_ids' => $leafIds]]);
+$admin->req('/studio/api/task.php?act=confirm', ['csrf' => true, 'json' => ['task_ids' => $leafIds]]);
 
 // --- 권한 -------------------------------------------------------------
-$r = $guest->req('/assign/api/allocate.php?act=propose',
+$r = $guest->req('/studio/api/allocate.php?act=propose',
                  ['csrf' => true, 'json' => ['project_id' => $pid]]);
 ok('PM 아니면 산출 403', $r['status'] === 403, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/allocate.php?act=propose', ['json' => ['project_id' => $pid]]);
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['json' => ['project_id' => $pid]]);
 ok('CSRF 없으면 419', $r['status'] === 419);
 
 // --- 산출 -------------------------------------------------------------
-$r = $admin->req('/assign/api/allocate.php?act=propose',
+$r = $admin->req('/studio/api/allocate.php?act=propose',
                  ['csrf' => true, 'json' => ['project_id' => $pid]]);
 ok('산출 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 160));
 $al   = $r['json']['data'];
@@ -1119,33 +1119,33 @@ $sigP = function (array $items): string {
     sort($a);
     return sha1(implode('|', $a));
 };
-$r2 = $admin->req('/assign/api/allocate.php?act=propose',
+$r2 = $admin->req('/studio/api/allocate.php?act=propose',
                   ['csrf' => true, 'json' => ['project_id' => $pid]]);
 ok('다시 산출해도 같은 결과', $sigP($r2['json']['data']['items']) === $sigP($al['items']));
 ok('버전은 올라간다', $r2['json']['data']['version'] === 2);
 $aid2 = $r2['json']['data']['allocation_id'];
 
 // --- 확정 전 노출 차단 -------------------------------------------------
-$r = $admin->req('/assign/api/allocate.php?act=current&project_id=' . $pid);
+$r = $admin->req('/studio/api/allocate.php?act=current&project_id=' . $pid);
 $d1 = $r['json']['data'];
 ok('산출만으로는 대시보드에 안 나온다',
    array_key_exists('allocation', $d1) && $d1['allocation'] === null,
    substr($r['body'], 0, 120));
 
-$r = $guest->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aid2);
+$r = $guest->req('/studio/api/allocate.php?act=detail&allocation_id=' . $aid2);
 ok('PM 아니면 초안을 못 연다', $r['status'] === 403, 'status=' . $r['status']);
 
-$r = $guest->req('/assign/api/allocate.php?act=versions&project_id=' . $pid);
+$r = $guest->req('/studio/api/allocate.php?act=versions&project_id=' . $pid);
 ok('목록에서도 초안이 빠진다', count($r['json']['data']['rows']) === 0,
    (string)count($r['json']['data']['rows']));
 ok('몇 개가 감춰졌는지는 알려 준다', ($r['json']['data']['hidden_drafts'] ?? 0) === 2,
    (string)($r['json']['data']['hidden_drafts'] ?? -1));
 
-$r = $guest->req('/assign/api/allocate.php?act=members&project_id=' . $pid);
+$r = $guest->req('/studio/api/allocate.php?act=members&project_id=' . $pid);
 ok('구성원 목록도 PM 전용', $r['status'] === 403);
 
 // --- 가중치 ------------------------------------------------------------
-$r = $admin->req('/assign/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
     'project_id' => $pid,
     'weights' => ['domain' => 1.0, 'cap' => 0, 'avail' => 0, 'career' => 0, 'growth' => 0]]]);
 ok('가중치를 바꿔 산출 200', $r['status'] === 200);
@@ -1153,25 +1153,25 @@ ok('바꾼 가중치가 기록된다',
    abs(($r['json']['data']['meta']['weights']['domain'] ?? 0) - 1.0) < 0.001);
 $aid3 = $r['json']['data']['allocation_id'];
 
-$r = $admin->req('/assign/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
     'project_id' => $pid,
     'weights' => ['domain' => 0, 'cap' => 0, 'avail' => 0, 'career' => 0, 'growth' => 0]]]);
 ok('가중치가 전부 0 이면 400', $r['status'] === 400, 'status=' . $r['status']);
 
 // --- 수동 조정 ---------------------------------------------------------
-$det   = $admin->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aid3)['json']['data'];
+$det   = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $aid3)['json']['data'];
 $item  = $det['items'][0];
-$mlist = $admin->req('/assign/api/allocate.php?act=members&project_id=' . $pid)['json']['data']['rows'];
+$mlist = $admin->req('/studio/api/allocate.php?act=members&project_id=' . $pid)['json']['data']['rows'];
 $otherM = null;
 foreach ($mlist as $m) { if ($m['id'] !== $item['member_id']) { $otherM = $m['id']; break; } }
 
-$r = $admin->req('/assign/api/allocate.php?act=update_item',
+$r = $admin->req('/studio/api/allocate.php?act=update_item',
                  ['csrf' => true, 'json' => ['item_id' => $item['id'], 'member_id' => $otherM]]);
 ok('사유 없이 담당자 변경은 400', $r['status'] === 400
    && str_contains($r['json']['error']['message'] ?? '', '사유'),
    substr($r['body'], 0, 120));
 
-$r = $admin->req('/assign/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
     'item_id' => $item['id'], 'member_id' => $otherM, 'manual_note' => '본인 요청']]);
 ok('사유와 함께면 200', $r['status'] === 200, substr($r['body'], 0, 120));
 ok('adjusted 로 바뀐다', ($r['json']['data']['allocation']['status'] ?? '') === 'adjusted');
@@ -1182,20 +1182,20 @@ ok('엔진 점수는 지운다', $changed['fit_score'] === null,
    json_encode($changed['fit_score']));
 ok('부하가 다시 계산돼 온다', count($r['json']['data']['load']) > 0);
 
-$r = $guest->req('/assign/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
+$r = $guest->req('/studio/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
     'item_id' => $item['id'], 'member_id' => $otherM, 'manual_note' => 'x']]);
 ok('PM 아니면 조정 403', $r['status'] === 403);
 
 // --- 확정 --------------------------------------------------------------
-$r = $guest->req('/assign/api/allocate.php?act=confirm',
+$r = $guest->req('/studio/api/allocate.php?act=confirm',
                  ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
 ok('PM 아니면 확정 403', $r['status'] === 403);
 
-$r = $admin->req('/assign/api/allocate.php?act=confirm',
+$r = $admin->req('/studio/api/allocate.php?act=confirm',
                  ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
 if ($r['status'] === 409) {
     ok('과배정이면 한 번 더 묻는다', ($r['json']['error']['code'] ?? '') === 'OVERLOAD');
-    $r = $admin->req('/assign/api/allocate.php?act=confirm', ['csrf' => true, 'json' => [
+    $r = $admin->req('/studio/api/allocate.php?act=confirm', ['csrf' => true, 'json' => [
         'allocation_id' => $aid3, 'accept_overload' => 1]]);
 } else {
     ok('과배정이 없으면 바로 확정', $r['status'] === 200, 'status=' . $r['status']);
@@ -1205,30 +1205,30 @@ ok('보냈다고 말하지 않는다',
    str_contains($r['json']['data']['notify_notice'] ?? '', '적재만'),
    $r['json']['data']['notify_notice'] ?? '(없음)');
 
-$r = $admin->req('/assign/api/allocate.php?act=current&project_id=' . $pid);
+$r = $admin->req('/studio/api/allocate.php?act=current&project_id=' . $pid);
 ok('이제 대시보드에 나온다', ($r['json']['data']['allocation']['id'] ?? 0) === $aid3);
 ok('항목도 함께', count($r['json']['data']['items']) === 2);
 
-$r = $guest->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aid3);
+$r = $guest->req('/studio/api/allocate.php?act=detail&allocation_id=' . $aid3);
 ok('확정본은 일반 사용자도 볼 수 있다', $r['status'] === 200, 'status=' . $r['status']);
 ok('편집 권한은 없다', ($r['json']['data']['can_edit'] ?? true) === false);
 
-$r = $admin->req('/assign/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
     'item_id' => $item['id'], 'member_id' => $item['member_id'], 'manual_note' => '되돌리기']]);
 ok('확정본은 고칠 수 없다', $r['status'] === 400
    && str_contains($r['json']['error']['message'] ?? '', '확정'),
    substr($r['body'], 0, 120));
 
-$r = $admin->req('/assign/api/allocate.php?act=confirm',
+$r = $admin->req('/studio/api/allocate.php?act=confirm',
                  ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
 ok('두 번 확정 불가', $r['status'] === 400);
 
-$r = $admin->req('/assign/api/allocate.php?act=versions&project_id=' . $pid);
+$r = $admin->req('/studio/api/allocate.php?act=versions&project_id=' . $pid);
 $confirmedN = count(array_filter($r['json']['data']['rows'],
                                  fn($x) => $x['status'] === 'confirmed'));
 ok('확정본은 언제나 하나', $confirmedN === 1, (string)$confirmedN);
 
-$r = $admin->req('/assign/api/allocate.php?act=nope&project_id=' . $pid);
+$r = $admin->req('/studio/api/allocate.php?act=nope&project_id=' . $pid);
 ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
 
 // 뒷정리는 따로 하지 않는다. 뒤의 프로젝트 삭제는 소프트 삭제라
@@ -1256,12 +1256,12 @@ section('[Q] 대시보드와 진행상황 (명세서 §7.1 Step4 · §7.2)');
     )->execute([$pid]);
 })();
 
-$r = $anon->req('/assign/api/dashboard.php?act=projects');
+$r = $anon->req('/studio/api/dashboard.php?act=projects');
 ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
-$r = $anon->req('/assign/index.php');
+$r = $anon->req('/studio/index.php');
 ok('대시보드 화면도 로그인 필요', $r['status'] === 302, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/index.php');
+$r = $admin->req('/studio/index.php');
 ok('대시보드 화면 200', $r['status'] === 200);
 ok('플레이스홀더가 남아 있지 않다', !str_contains($r['body'], 'ba-placeholder'));
 foreach (['ba-mine' => '내 일', 'ba-cards' => '프로젝트 카드', 'ba-bd-kanban' => '칸반',
@@ -1271,7 +1271,7 @@ foreach (['ba-mine' => '내 일', 'ba-cards' => '프로젝트 카드', 'ba-bd-ka
 }
 
 // --- 확정 전에는 보드가 비어 있다 -------------------------------------
-$r = $admin->req('/assign/api/dashboard.php?act=board&project_id=' . $pid);
+$r = $admin->req('/studio/api/dashboard.php?act=board&project_id=' . $pid);
 $dq = $r['json']['data'];
 ok('확정 배정안이 없으면 allocation=null',
    array_key_exists('allocation', $dq) && $dq['allocation'] === null,
@@ -1282,14 +1282,14 @@ ok('칸반 뼈대는 그려 준다(열이 사라지지 않게)', count($dq['colu
 $empty = array_sum(array_column($dq['columns'], 'count'));
 ok('다만 카드는 없다', $empty === 0, (string)$empty);
 
-$r = $admin->req('/assign/api/dashboard.php?act=board');
+$r = $admin->req('/studio/api/dashboard.php?act=board');
 ok('project_id 없으면 400', $r['status'] === 400);
-$r = $admin->req('/assign/api/dashboard.php?act=board&project_id=99999999');
+$r = $admin->req('/studio/api/dashboard.php?act=board&project_id=99999999');
 ok('없는 프로젝트 404', $r['status'] === 404);
 
 // --- WBS 확정 → 배정 확정 ---------------------------------------------
-$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
-$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+$cur = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$r = $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'revision' => $cur['revision'],
     'tree' => [['title' => '대시보드 시험', 'children' => [
         ['title' => '지난 태스크', 'est_md' => 5, 'difficulty' => 3,
@@ -1304,16 +1304,16 @@ $wq = function (array $ns) use (&$wq, &$leafQ): void {
     foreach ($ns as $n) { if (!$n['children']) { $leafQ[$n['title']] = $n['id']; } $wq($n['children']); }
 };
 $wq($r['json']['data']['tree']);
-$admin->req('/assign/api/task.php?act=confirm',
+$admin->req('/studio/api/task.php?act=confirm',
             ['csrf' => true, 'json' => ['task_ids' => array_values($leafQ)]]);
 
-$r = $admin->req('/assign/api/allocate.php?act=propose',
+$r = $admin->req('/studio/api/allocate.php?act=propose',
                  ['csrf' => true, 'json' => ['project_id' => $pid]]);
 $aidQ = $r['json']['data']['allocation_id'];
 
 // 시험 계정을 담당자로 바꿔 둔다 — 진행상황은 본인만 올릴 수 있다.
 $myMid = null;
-foreach ($admin->req('/assign/api/allocate.php?act=members&project_id=' . $pid)
+foreach ($admin->req('/studio/api/allocate.php?act=members&project_id=' . $pid)
                 ['json']['data']['rows'] as $m) {
     if ($m['emp_name'] === '시험관리자') { $myMid = $m['id']; }
 }
@@ -1321,22 +1321,22 @@ foreach ($admin->req('/assign/api/allocate.php?act=members&project_id=' . $pid)
 // 치명적 오류로 터졌고, 원인을 찾는 데 한참 걸렸다.
 ok('배정 가능한 시험관리자가 있다', $myMid !== null,
    'ba_member 에 없거나 is_assignable=0 이다');
-$itemsQ = $admin->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aidQ)
+$itemsQ = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $aidQ)
                 ['json']['data']['items'];
 if ($myMid) {
-    $admin->req('/assign/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
+    $admin->req('/studio/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
         'item_id' => $itemsQ[0]['id'], 'member_id' => $myMid, 'manual_note' => '시험용']]);
 }
-$r = $admin->req('/assign/api/allocate.php?act=confirm',
+$r = $admin->req('/studio/api/allocate.php?act=confirm',
                  ['csrf' => true, 'json' => ['allocation_id' => $aidQ]]);
 if ($r['status'] === 409) {
-    $r = $admin->req('/assign/api/allocate.php?act=confirm', ['csrf' => true, 'json' => [
+    $r = $admin->req('/studio/api/allocate.php?act=confirm', ['csrf' => true, 'json' => [
         'allocation_id' => $aidQ, 'accept_overload' => 1]]);
 }
 ok('배정 확정', $r['status'] === 200, substr($r['body'], 0, 120));
 
 // --- 확정 후 보드 -------------------------------------------------------
-$r = $admin->req('/assign/api/dashboard.php?act=board&project_id=' . $pid);
+$r = $admin->req('/studio/api/dashboard.php?act=board&project_id=' . $pid);
 $dq = $r['json']['data'];
 ok('이제 배정안이 보인다', ($dq['allocation']['id'] ?? 0) === $aidQ);
 $cards = array_sum(array_column($dq['columns'], 'count'));
@@ -1357,7 +1357,7 @@ ok('칸반 열이 명세서대로',
 ok('보류는 따로 끝에 둔다(버리지 않는다)', end($keys) === 'hold');
 
 // --- 프로젝트 카드 -------------------------------------------------------
-$r = $admin->req('/assign/api/dashboard.php?act=projects');
+$r = $admin->req('/studio/api/dashboard.php?act=projects');
 ok('카드 200', $r['status'] === 200);
 $mine = null;
 foreach ($r['json']['data']['rows'] as $c) { if ($c['id'] === $pid) { $mine = $c; } }
@@ -1370,16 +1370,16 @@ ok('지연 건수를 표시', ($mine['overdue'] ?? -1) === 1, (string)($mine['ov
 
 // --- 진행상황 (§7.2) -----------------------------------------------------
 $myTask = $itemsQ[0]['task_id'];
-$r = $admin->req('/assign/api/progress.php?act=task&task_id=' . $myTask);
+$r = $admin->req('/studio/api/progress.php?act=task&task_id=' . $myTask);
 ok('드로어 조회 200', $r['status'] === 200);
 ok('본인 태스크면 올릴 수 있다', ($r['json']['data']['can_write'] ?? false) === true,
    $r['json']['data']['why'] ?? '');
 ok('상태 목록을 함께 준다', count($r['json']['data']['statuses'] ?? []) === 7);
 
-$r = $admin->req('/assign/api/progress.php?act=create', ['json' => ['task_id' => $myTask]]);
+$r = $admin->req('/studio/api/progress.php?act=create', ['json' => ['task_id' => $myTask]]);
 ok('CSRF 없으면 419', $r['status'] === 419);
 
-$r = $admin->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/progress.php?act=create', ['csrf' => true, 'json' => [
     'task_id' => $myTask, 'status' => 'doing', 'progress_pct' => 40, 'content' => '절반쯤']]);
 ok('등록 200', $r['status'] === 200, substr($r['body'], 0, 140));
 ok('태스크 상태가 함께 바뀐다', ($r['json']['data']['task']['status'] ?? '') === 'doing');
@@ -1388,59 +1388,59 @@ ok('보냈다고 말하지 않는다', str_contains($r['json']['data']['notify_n
 ok('팀 채널로 한 건 접수', ($r['json']['data']['notify']['queued'] ?? 0) >= 1,
    json_encode($r['json']['data']['notify'] ?? null, JSON_UNESCAPED_UNICODE));
 
-$r = $admin->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/progress.php?act=create', ['csrf' => true, 'json' => [
     'task_id' => $myTask, 'blocker' => 'API 스펙 대기', 'content' => '막힘']]);
 ok('블로커 등록 200', $r['status'] === 200);
 ok('PM 에게 따로 알린다고 말한다', str_contains($r['json']['data']['message'] ?? '', 'PM'));
 $ch = array_column($r['json']['data']['notify']['detail'] ?? [], 'channel');
 ok('알림이 2건(채널 + PM)', count($ch) === 2, json_encode($ch));
 
-$r = $admin->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/progress.php?act=create', ['csrf' => true, 'json' => [
     'task_id' => $myTask]]);
 ok('빈 등록은 400', $r['status'] === 400, substr($r['body'], 0, 100));
-$r = $admin->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+$r = $admin->req('/studio/api/progress.php?act=create', ['csrf' => true, 'json' => [
     'task_id' => $myTask, 'progress_pct' => 999]]);
 ok('진행률 범위 밖 400', $r['status'] === 400);
 
 // 본인 것이 아니면 못 올린다 — 이 화면의 핵심 규칙이다.
-$r = $guest->req('/assign/api/progress.php?act=task&task_id=' . $myTask);
+$r = $guest->req('/studio/api/progress.php?act=task&task_id=' . $myTask);
 ok('남은 can_write=false', ($r['json']['data']['can_write'] ?? true) === false);
 ok('왜 안 되는지 말해 준다', !empty($r['json']['data']['why']));
-$r = $guest->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+$r = $guest->req('/studio/api/progress.php?act=create', ['csrf' => true, 'json' => [
     'task_id' => $myTask, 'progress_pct' => 10]]);
 ok('남의 태스크에 등록하면 403', $r['status'] === 403, 'status=' . $r['status']);
 
 // --- 댓글 ---------------------------------------------------------------
-$rows = $admin->req('/assign/api/progress.php?act=list&task_id=' . $myTask)['json']['data']['rows'];
+$rows = $admin->req('/studio/api/progress.php?act=list&task_id=' . $myTask)['json']['data']['rows'];
 ok('기록 목록에 댓글 칸이 있다', array_key_exists('comments', $rows[0]));
 $pgQ = $rows[0]['id'];
 
-$r = $admin->req('/assign/api/progress.php?act=comment',
+$r = $admin->req('/studio/api/progress.php?act=comment',
                  ['csrf' => true, 'json' => ['progress_id' => $pgQ, 'content' => '확인했습니다']]);
 ok('댓글 200', $r['status'] === 200);
 ok('댓글이 붙는다', count($r['json']['data']['comments']) === 1);
 
 // 댓글은 본인 태스크가 아니어도 단다 — PM 과 동료가 묻고 답하는 자리다.
-$r = $guest->req('/assign/api/progress.php?act=comment',
+$r = $guest->req('/studio/api/progress.php?act=comment',
                  ['csrf' => true, 'json' => ['progress_id' => $pgQ, 'content' => '남이 다는 댓글']]);
 ok('남도 댓글은 달 수 있다', $r['status'] === 200, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/progress.php?act=comment',
+$r = $admin->req('/studio/api/progress.php?act=comment',
                  ['csrf' => true, 'json' => ['progress_id' => $pgQ, 'content' => '   ']]);
 ok('빈 댓글은 400', $r['status'] === 400);
 
-$cmts = $admin->req('/assign/api/progress.php?act=list&task_id=' . $myTask)
+$cmts = $admin->req('/studio/api/progress.php?act=list&task_id=' . $myTask)
               ['json']['data']['rows'][0]['comments'];
 $otherCm = null;
 foreach ($cmts as $c) { if ($c['user_name'] !== '시험관리자') { $otherCm = $c['id']; } }
 if ($otherCm) {
-    $r = $guest->req('/assign/api/progress.php?act=delete_comment',
+    $r = $guest->req('/studio/api/progress.php?act=delete_comment',
                      ['csrf' => true, 'json' => ['id' => $otherCm]]);
     ok('본인 댓글은 지울 수 있다', $r['status'] === 200, 'status=' . $r['status']);
 }
 
 // --- 내가 맡은 일 ---------------------------------------------------------
-$r = $admin->req('/assign/api/dashboard.php?act=mine');
+$r = $admin->req('/studio/api/dashboard.php?act=mine');
 ok('내 일 200', $r['status'] === 200);
 ok('맡은 태스크가 나온다', count($r['json']['data']['rows']) >= 1,
    (string)count($r['json']['data']['rows']));
@@ -1450,20 +1450,20 @@ ok('내 태스크가 들어 있다', $mineRow !== null);
 ok('지연 여부를 표시', array_key_exists('overdue', $mineRow ?? []));
 ok('마지막 진행 기록을 함께', array_key_exists('last', $mineRow ?? []));
 
-$r = $guest->req('/assign/api/dashboard.php?act=mine');
+$r = $guest->req('/studio/api/dashboard.php?act=mine');
 ok('구성원이 아니면 빈 목록 + 설명', $r['status'] === 200
    && count($r['json']['data']['rows']) === 0,
    substr($r['body'], 0, 120));
 
 // --- 피드에 반영 -----------------------------------------------------------
-$r = $admin->req('/assign/api/progress.php?act=feed&project_id=' . $pid);
+$r = $admin->req('/studio/api/progress.php?act=feed&project_id=' . $pid);
 ok('피드 200', $r['status'] === 200);
 ok('올린 것이 피드에 있다', count($r['json']['data']['rows']) >= 2,
    (string)count($r['json']['data']['rows']));
 
-$r = $admin->req('/assign/api/dashboard.php?act=nope');
+$r = $admin->req('/studio/api/dashboard.php?act=nope');
 ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
-$r = $admin->req('/assign/api/progress.php?act=nope');
+$r = $admin->req('/studio/api/progress.php?act=nope');
 ok('진행 API 도 모르는 act 400', $r['status'] === 400);
 
 
@@ -1489,27 +1489,27 @@ $otherMid = (int)$pdoR->query("SELECT id FROM ba_member WHERE user_id='batest-ad
 $wlBase = ['label' => '상주 지원', 'note' => '4월 한 달 상주 확정',
            'start_date' => '2026-04-01', 'end_date' => '2026-04-30'];
 
-$r = $anon->req('/assign/api/workload.php?act=list&member_id=' . $otherMid);
+$r = $anon->req('/studio/api/workload.php?act=list&member_id=' . $otherMid);
 ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/workload.php?act=list');
+$r = $admin->req('/studio/api/workload.php?act=list');
 ok('member_id 없으면 400', $r['status'] === 400);
-$r = $admin->req('/assign/api/workload.php?act=list&member_id=99999999');
+$r = $admin->req('/studio/api/workload.php?act=list&member_id=99999999');
 ok('없는 구성원 404', $r['status'] === 404);
 
 // --- 등록 -------------------------------------------------------------
-$r = $admin->req('/assign/api/workload.php?act=create',
+$r = $admin->req('/studio/api/workload.php?act=create',
                  ['json' => ['member_id' => $otherMid] + $wlBase]);
 ok('CSRF 없으면 419', $r['status'] === 419, 'status=' . $r['status']);
 
-$r = $admin->req('/assign/api/workload.php?act=create', ['csrf' => true, 'json' =>
+$r = $admin->req('/studio/api/workload.php?act=create', ['csrf' => true, 'json' =>
     ['member_id' => $otherMid, 'label' => '상주 지원',
      'start_date' => '2026-04-01', 'end_date' => '2026-04-30']]);
 ok('사유 없이는 못 넣는다', $r['status'] === 400
    && str_contains($r['json']['error']['message'] ?? '', '사유'),
    substr($r['body'], 0, 120));
 
-$r = $admin->req('/assign/api/workload.php?act=create', ['csrf' => true, 'json' =>
+$r = $admin->req('/studio/api/workload.php?act=create', ['csrf' => true, 'json' =>
     ['member_id' => $otherMid, 'note' => '사유만 있음',
      'start_date' => '2026-04-01', 'end_date' => '2026-04-30']]);
 ok('제목 없이도 못 넣는다', $r['status'] === 400);
@@ -1522,12 +1522,12 @@ foreach ([
     ['모르는 출처 거절',      ['source' => 'zzz']],
     ['javascript 링크 거절',  ['source_url' => 'javascript:alert(1)']],
 ] as [$what, $bad]) {
-    $r = $admin->req('/assign/api/workload.php?act=create',
+    $r = $admin->req('/studio/api/workload.php?act=create',
                      ['csrf' => true, 'json' => ['member_id' => $otherMid] + $bad + $wlBase]);
     ok($what, $r['status'] === 400, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 90));
 }
 
-$r = $admin->req('/assign/api/workload.php?act=create', ['csrf' => true, 'json' =>
+$r = $admin->req('/studio/api/workload.php?act=create', ['csrf' => true, 'json' =>
     ['member_id' => $otherMid, 'source' => 'email',
      'source_url' => 'https://mail.example.com/x', 'load_pct' => 80,
      'from' => '2026-03-02', 'to' => '2026-06-22'] + $wlBase]);
@@ -1545,14 +1545,14 @@ ok('가용도를 함께 돌려준다', isset($r['json']['data']['availability'][
 // --- 가용도에 반영되는가 -------------------------------------------------
 $before = null;
 $after  = null;
-foreach ($admin->req('/assign/api/candidate.php?act=list&project_id=1')
+foreach ($admin->req('/studio/api/candidate.php?act=list&project_id=1')
                 ['json']['data']['rows'] as $x) {
     if ($x['member_id'] === $otherMid) { $after = $x['availability']; }
 }
 ok('후보 표의 가용도에 반영된다', $after !== null && $after['confirmed_pct'] > 0,
    json_encode($after));
 
-$r = $admin->req('/assign/api/candidate.php?act=detail&project_id=1&member_id=' . $otherMid);
+$r = $admin->req('/studio/api/candidate.php?act=detail&project_id=1&member_id=' . $otherMid);
 $manual = null;
 foreach ($r['json']['data']['confirmed_breakdown'] as $w) {
     if (($w['kind'] ?? '') === 'manual') { $manual = $w; }
@@ -1570,81 +1570,81 @@ ok('등록 단추를 그릴지 알려 준다',
 $asgnId = (int)$pdoR->query("SELECT id FROM ba_workload WHERE kind='assigned' LIMIT 1")
                     ->fetchColumn();
 if ($asgnId) {
-    $r = $admin->req('/assign/api/workload.php?act=delete',
+    $r = $admin->req('/studio/api/workload.php?act=delete',
                      ['csrf' => true, 'json' => ['id' => $asgnId]]);
     ok('배정이 만든 점유는 못 지운다', $r['status'] === 400
        && str_contains($r['json']['error']['message'] ?? '', '직접 등록'),
        substr($r['body'], 0, 120));
-    $r = $admin->req('/assign/api/workload.php?act=update',
+    $r = $admin->req('/studio/api/workload.php?act=update',
                      ['csrf' => true, 'json' => ['id' => $asgnId, 'label' => '바꿔보기']]);
     ok('배정이 만든 점유는 못 고친다', $r['status'] === 400);
 }
 
 // --- 권한 ---------------------------------------------------------------
-$r = $guest->req('/assign/api/workload.php?act=list&member_id=' . $otherMid);
+$r = $guest->req('/studio/api/workload.php?act=list&member_id=' . $otherMid);
 ok('PM 아닌 사람은 남의 것을 못 본다', $r['status'] === 403, 'status=' . $r['status']);
 
-$r = $guest->req('/assign/api/workload.php?act=create',
+$r = $guest->req('/studio/api/workload.php?act=create',
                  ['csrf' => true, 'json' => ['member_id' => $otherMid] + $wlBase]);
 ok('PM 아닌 사람은 남의 것을 못 넣는다', $r['status'] === 403);
 
-$r = $guest->req('/assign/api/workload.php?act=delete',
+$r = $guest->req('/studio/api/workload.php?act=delete',
                  ['csrf' => true, 'json' => ['id' => $wlId]]);
 ok('PM 아닌 사람은 남의 것을 못 지운다', $r['status'] === 403);
 
 // 등록 단추를 그릴지는 후보 상세가 알려 주는데, 이제 그 화면 자체가
 // 배정 권한을 요구한다. 단추를 그릴 기회조차 없다는 것을 확인한다.
-$r = $guest->req('/assign/api/candidate.php?act=detail&project_id=1&member_id=' . $otherMid);
+$r = $guest->req('/studio/api/candidate.php?act=detail&project_id=1&member_id=' . $otherMid);
 ok('후보 상세를 아예 못 연다', $r['status'] === 403, 'status=' . $r['status']);
 
 // 본인 것은 언제나 — 자기 가용도가 왜 그런지 알 권리가 있다
-$r = $guest->req('/assign/api/workload.php?act=list&member_id=' . $selfMid);
+$r = $guest->req('/studio/api/workload.php?act=list&member_id=' . $selfMid);
 ok('본인은 자기 것을 볼 수 있다', $r['status'] === 200, 'status=' . $r['status']);
 ok('본인은 넣을 수도 있다', ($r['json']['data']['can_write'] ?? false) === true);
 
-$r = $guest->req('/assign/api/workload.php?act=create', ['csrf' => true, 'json' =>
+$r = $guest->req('/studio/api/workload.php?act=create', ['csrf' => true, 'json' =>
     ['member_id' => $selfMid, 'label' => '사내 교육', 'note' => '3일 교육',
      'source' => 'meeting', 'start_date' => '2026-04-01', 'end_date' => '2026-04-03']]);
 ok('본인이 자기 것을 넣는다', $r['status'] === 200, substr($r['body'], 0, 120));
 $selfWl = $r['json']['data']['id'];
 
-$r = $guest->req('/assign/api/workload.php?act=delete',
+$r = $guest->req('/studio/api/workload.php?act=delete',
                  ['csrf' => true, 'json' => ['id' => $selfWl]]);
 ok('본인이 자기 것을 지운다', $r['status'] === 200);
 
 // --- 고치기 -------------------------------------------------------------
-$r = $admin->req('/assign/api/workload.php?act=update', ['csrf' => true, 'json' =>
+$r = $admin->req('/studio/api/workload.php?act=update', ['csrf' => true, 'json' =>
     ['id' => $wlId, 'load_pct' => 40, 'note' => '절반으로 줄어 재조정',
      'from' => '2026-03-02', 'to' => '2026-06-22']]);
 ok('점유율을 고친다', $r['status'] === 200, substr($r['body'], 0, 120));
 ok('고친 값이 반영된다', ($r['json']['data']['rows'][0]['load_pct'] ?? 0) === 40,
    (string)($r['json']['data']['rows'][0]['load_pct'] ?? -1));
 
-$r = $admin->req('/assign/api/workload.php?act=update',
+$r = $admin->req('/studio/api/workload.php?act=update',
                  ['csrf' => true, 'json' => ['id' => $wlId, 'note' => '   ']]);
 ok('사유를 비울 수 없다', $r['status'] === 400,
    'status=' . $r['status'] . ' ' . substr($r['body'], 0, 90));
 
-$r = $admin->req('/assign/api/workload.php?act=update',
+$r = $admin->req('/studio/api/workload.php?act=update',
                  ['csrf' => true, 'json' => ['id' => $wlId]]);
 ok('바꿀 내용이 없으면 400', $r['status'] === 400);
 
-$r = $admin->req('/assign/api/workload.php?act=update',
+$r = $admin->req('/studio/api/workload.php?act=update',
                  ['csrf' => true, 'json' => ['id' => 99999999, 'label' => 'x']]);
 ok('없는 기록 404', $r['status'] === 404);
 
 // --- 지우면 가용도가 돌아온다 ----------------------------------------------
-$avBefore = $admin->req('/assign/api/workload.php?act=list&member_id=' . $otherMid
+$avBefore = $admin->req('/studio/api/workload.php?act=list&member_id=' . $otherMid
                         . '&from=2026-03-02&to=2026-06-22')
                   ['json']['data']['availability']['available_pct'];
-$r = $admin->req('/assign/api/workload.php?act=delete', ['csrf' => true, 'json' =>
+$r = $admin->req('/studio/api/workload.php?act=delete', ['csrf' => true, 'json' =>
     ['id' => $wlId, 'from' => '2026-03-02', 'to' => '2026-06-22']]);
 ok('지우기 200', $r['status'] === 200);
 ok('가용도가 돌아온다', ($r['json']['data']['availability']['available_pct'] ?? 0) > $avBefore,
    $avBefore . ' → ' . ($r['json']['data']['availability']['available_pct'] ?? '?'));
 ok('목록에서도 사라진다', count($r['json']['data']['rows']) === 0);
 
-$r = $admin->req('/assign/api/workload.php?act=nope&member_id=' . $otherMid);
+$r = $admin->req('/studio/api/workload.php?act=nope&member_id=' . $otherMid);
 ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
 
 // 이 시험이 만든 배정안과 점유 기록을 치운다.
@@ -1683,7 +1683,7 @@ ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? 
 
 array_map('unlink', glob("$tmp/*") ?: []);
 @rmdir($tmp);
-$admin->req('/assign/api/project.php?act=delete',
+$admin->req('/studio/api/project.php?act=delete',
     ['csrf' => true, 'json' => ['id' => $pid, 'confirm' => $code, 'reason' => '시험 뒷정리']]);
 
 echo "\n" . str_repeat('=', 62) . "\n";

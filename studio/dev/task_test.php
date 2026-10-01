@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 define('ROOT', dirname(__DIR__, 2));
 $TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
-require ROOT . '/assign/inc/bootstrap.php';
-require ROOT . '/assign/inc/repo/ProjectRepo.php';
-require ROOT . '/assign/inc/repo/TaskRepo.php';
-require ROOT . '/assign/inc/service/WbsExtractor.php';
+require ROOT . '/studio/inc/bootstrap.php';
+require ROOT . '/studio/inc/repo/ProjectRepo.php';
+require ROOT . '/studio/inc/repo/TaskRepo.php';
+require ROOT . '/studio/inc/service/WbsExtractor.php';
 
 try {
     $pdo = new PDO("mysql:host=127.0.0.1;dbname={$TESTDB};charset=utf8mb4", 'root', '', [

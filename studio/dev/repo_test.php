@@ -7,8 +7,8 @@ define('ROOT', dirname(__DIR__, 2));
 // 운영/개발 DB 를 건드리지 않도록 **전용 시험 DB** 를 쓴다.
 // 없으면 아래 안내대로 만들면 된다.
 $TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
-require ROOT . '/assign/inc/bootstrap.php';
-require ROOT . '/assign/inc/repo/ProjectRepo.php';
+require ROOT . '/studio/inc/bootstrap.php';
+require ROOT . '/studio/inc/repo/ProjectRepo.php';
 
 try {
 $pdo = new PDO("mysql:host=127.0.0.1;dbname={$TESTDB};charset=utf8mb4", 'root', '', [

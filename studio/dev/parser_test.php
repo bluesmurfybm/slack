@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 define('ROOT', dirname(__DIR__, 2));
-require ROOT . '/assign/inc/service/DocumentParser.php';
-require ROOT . '/assign/inc/service/OfficeDocumentParser.php';
-require ROOT . '/assign/inc/service/LlmClient.php';
+require ROOT . '/studio/inc/service/DocumentParser.php';
+require ROOT . '/studio/inc/service/OfficeDocumentParser.php';
+require ROOT . '/studio/inc/service/LlmClient.php';
 
 /* ┌──────────────────────────────────────────────────────────────────┐
    │ 이 시험이 DB 를 안 타는 이유                                       │
@@ -135,7 +135,7 @@ ok('available=false', !$null->available());
 ok('name=none', $null->name() === 'none');
 // 빈 결과를 조용히 돌려주면 화면이 "문서가 부실하다" 로 읽는다. 던져야 한다.
 try {
-    define('BA_ROOT', ROOT . '/assign');
+    define('BA_ROOT', ROOT . '/studio');
     $null->generate('a', 'b', []);
     ok('설정 없으면 예외', false, '예외가 안 났다');
 } catch (LlmError $e) {

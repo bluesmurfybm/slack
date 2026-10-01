@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 define('ROOT', dirname(__DIR__, 2));
 $TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
-require ROOT . '/assign/inc/bootstrap.php';
+require ROOT . '/studio/inc/bootstrap.php';
 foreach (['ProjectRepo', 'TaskRepo', 'MemberRepo', 'AllocationRepo', 'ProgressRepo'] as $r) {
-    require ROOT . "/assign/inc/repo/$r.php";
+    require ROOT . "/studio/inc/repo/$r.php";
 }
 
 try {

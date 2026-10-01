@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 define('ROOT', dirname(__DIR__, 2));
 $TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
-require ROOT . '/assign/inc/bootstrap.php';
+require ROOT . '/studio/inc/bootstrap.php';
 foreach (['ProjectRepo', 'TaskRepo', 'MemberRepo', 'AllocationRepo'] as $r) {
-    require ROOT . "/assign/inc/repo/$r.php";
+    require ROOT . "/studio/inc/repo/$r.php";
 }
-require ROOT . '/assign/inc/service/AvailabilityCalculator.php';
-require ROOT . '/assign/inc/service/AllocationEngine.php';
-require ROOT . '/assign/inc/service/Notifier.php';
+require ROOT . '/studio/inc/service/AvailabilityCalculator.php';
+require ROOT . '/studio/inc/service/AllocationEngine.php';
+require ROOT . '/studio/inc/service/Notifier.php';
 
 try {
     $pdo = new PDO("mysql:host=127.0.0.1;dbname={$TESTDB};charset=utf8mb4", 'root', '', [

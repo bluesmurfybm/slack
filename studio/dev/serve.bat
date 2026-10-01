@@ -48,6 +48,6 @@ echo  ----------------------------------------------------------
 echo.
 
 pushd "%PORTAL%"
-"%PHP%" -S 127.0.0.1:%PORT% -t . assign\dev\router.php
+"%PHP%" -S 127.0.0.1:%PORT% -t . studio\dev\router.php
 popd
 endlocal
