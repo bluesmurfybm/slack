@@ -88,6 +88,34 @@ bs_layout_head(
     <strong>공개(열람만)</strong>는 보이지만 신청은 받지 않습니다.
   </p>
 
+  <!-- 분야 태그 -->
+  <?php
+  $picked = [];
+  if (!$isNew) {
+      foreach ($repo->domains((int)$rnd['id']) as $d) { $picked[(int)$d['id']] = true; }
+  }
+  $domains = bs_db()->query(
+      'SELECT id, name, category FROM bs_domain WHERE is_active = 1 ORDER BY sort_no, id'
+  )->fetchAll(PDO::FETCH_ASSOC);
+  ?>
+  <fieldset class="ba-field ba-field--wide ba-domains">
+    <legend>분야 태그</legend>
+    <div class="ba-domains__grid">
+      <?php foreach ($domains as $d): ?>
+        <label class="ba-check">
+          <input type="checkbox" class="ba-r-dom" value="<?= (int)$d['id'] ?>"
+            <?= isset($picked[(int)$d['id']]) ? 'checked' : '' ?>>
+          <span><?= h($d['name']) ?></span>
+        </label>
+      <?php endforeach; ?>
+    </div>
+  </fieldset>
+
+  <p class="ba-head__sub">
+    과제가 다루는 분야를 고릅니다. <strong>종료한 뒤 경험 범위(역량)에 반영될 때
+    계열을 가르는 유일한 근거</strong>입니다 — 비워 두면 반영되지 않습니다.
+  </p>
+
   <!-- 배경·목적 -->
   <label class="ba-field ba-field--wide">
     <span>배경 · 목적</span>

@@ -483,6 +483,7 @@ function bs_rnd_detail(RndRepo $repo, int $pid): array
     // 승인하는 사람이 발의자의 중단 이력을 **함께** 본다 (명세서 §9).
     // 발의 때 경고를 띄우고 끝내면, 정작 판단하는 사람은 모른 채 승인한다.
     $rnd['proposer_warning'] = $svc->proposalWarning((string)($r['proposer_id'] ?? ''), (int)$r['id']);
+    $rnd['domains'] = $repo->domains($pid);
 
     return [
         'rnd'     => $rnd,
@@ -559,6 +560,12 @@ function bs_read_rnd_input(bool $partial = false): array
              'dev_start', 'dev_end', 'load_cap', 'recruiting', 'status'];
 
     $out = [];
+
+    // 분야 태그 — 역량 반영에서 **계열의 유일한 근거**다 (명세서 4.7).
+    // 태그가 없으면 종료돼도 경험 범위에 반영되지 않는다.
+    if (!$partial || bs_has_param('domain_ids')) {
+        $out['domain_ids'] = array_map('intval', (array)bs_param_array('domain_ids'));
+    }
     foreach ($keys as $k) {
         if ($partial && !bs_has_param($k)) {
             continue;

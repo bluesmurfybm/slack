@@ -263,7 +263,10 @@ final class RndRepo
                     $this->nn($data['load_cap'] ?? null),
                     !empty($data['recruiting']) ? 1 : 0,
                 ]);
-                return (int)$this->pdo->lastInsertId();
+                $newId = (int)$this->pdo->lastInsertId();
+                // 분야 태그는 역량 반영의 계열 근거다 (명세서 4.7).
+                $this->saveDomains($newId, (array)($data['domain_ids'] ?? []));
+                return $newId;
             } catch (PDOException $e) {
                 if ($e->getCode() !== '23000') {
                     throw $e;
@@ -314,6 +317,11 @@ final class RndRepo
                 : $this->nn($data[$key]);
         }
         if (!$sets) {
+            // 분야 태그만 바꾸는 경우가 있다. 그때는 본문 UPDATE 가 없다.
+            if (array_key_exists('domain_ids', $data)) {
+                $this->saveDomains($id, (array)$data['domain_ids']);
+                return;
+            }
             throw new InvalidArgumentException('바꿀 내용이 없습니다.');
         }
 
@@ -322,6 +330,10 @@ final class RndRepo
             'UPDATE bs_project SET ' . implode(', ', $sets)
             . " WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NULL"
         )->execute($p);
+
+        if (array_key_exists('domain_ids', $data)) {
+            $this->saveDomains($id, (array)$data['domain_ids']);
+        }
     }
 
     /**
@@ -403,6 +415,58 @@ final class RndRepo
                     approved_by = NULL, approved_by_name = NULL, approved_at = NULL
               WHERE id = ? AND project_type = 'rnd' AND status = 'proposed'"
         )->execute([$note, $id]);
+    }
+
+    // =================================================================
+    // 분야 태그 (명세서 §8.2 · §4.7)
+    // =================================================================
+
+    /**
+     * 이 과제가 다루는 분야.
+     *
+     * 역량 반영(P10-3)에서 **계열의 유일한 근거**다. 태그가 없으면 그 과제는
+     * 종료돼도 경험 범위에 반영되지 않는다 — 어느 계열인지 알 수 없으므로.
+     */
+    public function domains(int $projectId): array
+    {
+        $st = $this->pdo->prepare(
+            'SELECT d.id, d.code, d.name, d.category
+               FROM bs_rnd_domain rd
+               JOIN bs_domain d ON d.id = rd.domain_id
+              WHERE rd.project_id = ?
+              ORDER BY d.sort_no, d.id'
+        );
+        $st->execute([$projectId]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** 분야 태그를 통째로 갈아 끼운다. 빈 배열이면 전부 지운다. */
+    private function saveDomains(int $projectId, array $domainIds): void
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $domainIds))));
+
+        $this->pdo->prepare('DELETE FROM bs_rnd_domain WHERE project_id = ?')
+            ->execute([$projectId]);
+
+        if (!$ids) {
+            return;
+        }
+        // 없는 분야를 걸러낸다. FK 가 막아 주지만, 한 건 때문에 전체가
+        // 실패하는 것보다 조용히 빼고 나머지를 넣는 편이 낫다.
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $st = $this->pdo->prepare("SELECT id FROM bs_domain WHERE id IN ($ph)");
+        $st->execute($ids);
+        $valid = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+
+        if (!$valid) {
+            return;
+        }
+        $ins = $this->pdo->prepare(
+            'INSERT INTO bs_rnd_domain (project_id, domain_id) VALUES (?,?)'
+        );
+        foreach ($valid as $d) {
+            $ins->execute([$projectId, $d]);
+        }
     }
 
     // =================================================================
