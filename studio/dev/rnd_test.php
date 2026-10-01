@@ -338,7 +338,219 @@ $r = $admin->req('/studio/api/rnd.php?act=nonsense');
 ok('모르는 act 는 400', $r['status'] === 400);
 
 // ---------------------------------------------------------------------
+echo "\n[8] 합류 (명세서 §8.4)\n";
+
+// 승인된 open+모집 과제는 $openId. 발의자는 시험사용자, lead 도 시험사용자.
+$r = $admin->req('/studio/api/rnd.php?act=get&id=' . $openId);
+$lead = null;
+foreach ($r['json']['data']['members'] ?? [] as $m) {
+    if ($m['role'] === 'lead') { $lead = $m; }
+}
+ok('과제가 승인되면 발의자가 주도자(lead)로 앉는다', $lead !== null,
+   json_encode($r['json']['data']['members'] ?? [], JSON_UNESCAPED_UNICODE));
+ok('주도자는 승인 상태', ($lead['status'] ?? '') === 'approved');
+
+$r = $admin->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $openId, 'join_reason' => '', 'load_ratio' => '0.1']]);
+ok('사유 없이 합류 신청 불가', $r['status'] === 400, substr($r['body'], 0, 120));
+
+$r = $admin->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $openId, 'join_reason' => '인프라 쪽을 돕고 싶습니다', 'load_ratio' => '1.5']]);
+ok('점유율이 1 을 넘으면 거절', $r['status'] === 400);
+
+$r = $admin->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $openId, 'join_reason' => '인프라 쪽을 돕고 싶습니다', 'load_ratio' => '0.15']]);
+ok('합류 신청 200', $r['status'] === 200, substr($r['body'], 0, 160));
+
+$joinRow = null;
+foreach ($r['json']['data']['members'] ?? [] as $m) {
+    if (($m['status'] ?? '') === 'requested') { $joinRow = $m; }
+}
+ok('신청 상태로 들어간다', $joinRow !== null);
+ok('사유가 남는다', ($joinRow['join_reason'] ?? '') === '인프라 쪽을 돕고 싶습니다');
+
+$r = $admin->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $openId, 'join_reason' => '또', 'load_ratio' => '0.1']]);
+ok('두 번 신청할 수 없다', $r['status'] !== 200, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $privId, 'join_reason' => '비공개인데', 'load_ratio' => '0.1']]);
+ok('받지 않는 과제에는 신청할 수 없다', $r['status'] !== 200);
+
+echo "\n[9] 합류 승인 — lead 또는 관리자\n";
+
+$pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
+
+// 시험사용자가 lead 다. 관리자도 권한이 있다.
+$r = $user->req('/studio/api/rnd.php?act=approve_member', ['csrf' => true,
+    'json' => ['member_row_id' => (int)$joinRow['id']]]);
+ok('주도자는 합류를 승인한다', $r['status'] === 200, substr($r['body'], 0, 180));
+
+$approved = null;
+foreach ($r['json']['data']['members'] ?? [] as $m) {
+    if ((int)$m['id'] === (int)$joinRow['id']) { $approved = $m; }
+}
+ok('상태가 참여 중으로 바뀐다', ($approved['status'] ?? '') === 'approved');
+ok('승인자가 남는다', !empty($approved['approved_at']));
+
+$n = (int)$pdo->query("SELECT COUNT(*) AS n FROM bs_notification
+                        WHERE ref_type = 'rnd_member'")->fetch()['n'];
+ok('승인 알림이 적재된다', $n > 0, "적재 {$n}건");
+ok('보내지는 않는다 (발송 경로 없음)',
+   (int)$pdo->query("SELECT COUNT(*) AS n FROM bs_notification
+                      WHERE ref_type='rnd_member' AND status='sent'")->fetch()['n'] === 0);
+
+$row = $pdo->prepare('SELECT COUNT(*) AS n FROM bs_workload WHERE ref_type = ?');
+$row->execute(['rnd']);
+ok('합류를 승인해도 bs_workload 는 비어 있다 (적재는 P9-4)',
+   (int)$row->fetch()['n'] === 0);
+
+$r = $user->req('/studio/api/rnd.php?act=approve_member', ['csrf' => true,
+    'json' => ['member_row_id' => (int)$joinRow['id']]]);
+ok('이미 승인된 사람을 또 승인할 수 없다', $r['status'] !== 200);
+
+echo "\n[10] 진행 기록 — content 와 finding 을 나눈다 (§8.3)\n";
+
+$r = $admin->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $openId, 'content' => '']]);
+ok('내용이 비면 거절', $r['status'] === 400);
+
+$r = $admin->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $openId, 'content' => '캐시 계층을 붙여 봤다',
+    'finding' => '병목은 캐시가 아니라 인덱스였다', 'worked_on' => '2026-10-01']]);
+ok('승인된 참여자는 기록을 남긴다', $r['status'] === 200, substr($r['body'], 0, 180));
+
+$log = ($r['json']['data']['logs'] ?? [])[0] ?? [];
+ok('content 가 그대로', ($log['content'] ?? '') === '캐시 계층을 붙여 봤다');
+ok('finding 이 따로 남는다', ($log['finding'] ?? '') === '병목은 캐시가 아니라 인덱스였다');
+ok('작업한 날이 남는다', ($log['worked_on'] ?? '') === '2026-10-01');
+
+$r = $admin->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $openId, 'content' => 'x', 'worked_on' => '엉터리']]);
+ok('날짜 형식이 틀리면 거절', $r['status'] === 400);
+
+// 참여하지 않는 사람 — 관리자 비공개 과제에 시험사용자가 기록을 남기려 한다.
+$r = $user->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $admPrivId, 'content' => '남의 과제']]);
+ok('참여하지 않는 과제에는 기록을 못 남긴다', $r['status'] !== 200);
+
+echo "\n[11] 산출물\n";
+
+$r = $admin->req('/studio/api/rnd.php?act=output', ['csrf' => true, 'json' => [
+    'id' => $openId, 'title' => '']]);
+ok('제목이 비면 거절', $r['status'] === 400);
+
+$r = $admin->req('/studio/api/rnd.php?act=output', ['csrf' => true, 'json' => [
+    'id' => $openId, 'title' => '측정 결과', 'kind' => 'nonsense']]);
+ok('모르는 갈래는 거절', $r['status'] === 400);
+
+$r = $admin->req('/studio/api/rnd.php?act=output', ['csrf' => true, 'json' => [
+    'id' => $openId, 'title' => '측정 결과', 'kind' => 'report', 'url' => 'ftp://x']]);
+ok('http(s) 가 아닌 링크는 거절', $r['status'] === 400);
+
+$r = $admin->req('/studio/api/rnd.php?act=output', ['csrf' => true, 'json' => [
+    'id' => $openId, 'title' => '측정 결과', 'kind' => 'report',
+    'url' => 'https://example.com/r', 'summary' => '인덱스 교체 전후 비교']]);
+ok('산출물 등록 200', $r['status'] === 200, substr($r['body'], 0, 180));
+$out = ($r['json']['data']['outputs'] ?? [])[0] ?? [];
+ok('갈래 이름이 함께 온다', ($out['kind_label'] ?? '') === '보고서');
+ok('file_path 는 내보내지 않는다', !array_key_exists('file_path', $out),
+   json_encode(array_keys($out)));
+
+echo "\n[12] 관심 표시 — 점유를 만들지 않는다\n";
+
+$r = $user->req('/studio/api/rnd.php?act=interest', ['csrf' => true, 'json' => ['id' => $openId]]);
+ok('관심 표시 켜기', ($r['json']['data']['interested'] ?? null) === true, substr($r['body'], 0, 140));
+$r = $user->req('/studio/api/rnd.php?act=interest', ['csrf' => true, 'json' => ['id' => $openId]]);
+ok('다시 누르면 꺼진다', ($r['json']['data']['interested'] ?? null) === false);
+
+echo "\n[13] 나가기 — 본인만, 주도자는 못 나간다\n";
+
+$r = $user->req('/studio/api/rnd.php?act=leave', ['csrf' => true, 'json' => ['id' => $openId]]);
+ok('주도자는 혼자 나갈 수 없다', $r['status'] !== 200, substr($r['body'], 0, 140));
+
+// 관리자는 [9] 에서 일반 참여자로 승인됐다. 그 사람은 나갈 수 있다.
+$r = $admin->req('/studio/api/rnd.php?act=leave', ['csrf' => true, 'json' => ['id' => $openId]]);
+ok('참여자는 스스로 나간다', $r['status'] === 200, substr($r['body'], 0, 160));
+$left = null;
+foreach ($r['json']['data']['members'] ?? [] as $m) {
+    if ((int)$m['id'] === (int)$joinRow['id']) { $left = $m; }
+}
+ok('상태가 이탈로 바뀐다', ($left['status'] ?? '') === 'left', (string)($left['status'] ?? ''));
+ok('나간 시각이 남는다', !empty($left['left_at']));
+
+$r = $admin->req('/studio/api/rnd.php?act=leave', ['csrf' => true, 'json' => ['id' => $openId]]);
+ok('두 번 나갈 수 없다', $r['status'] !== 200);
+
+$r = $admin->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $openId, 'content' => '나간 뒤 기록']]);
+ok('나간 뒤에는 기록을 못 남긴다', $r['status'] !== 200, 'status=' . $r['status']);
+
+// 다시 신청하면 받아 준다 — 한 번 나갔다가 돌아오는 경우가 있다.
+$r = $admin->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $openId, 'join_reason' => '다시 돕겠습니다', 'load_ratio' => '0.1']]);
+ok('나간 사람도 다시 신청할 수 있다', $r['status'] === 200, substr($r['body'], 0, 160));
+
+echo "\n[14] 종료 (명세서 §8.5)\n";
+
+// 산출물이 없는 과제를 하나 만들어 승인한다.
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 산출물 없는 과제', 'visibility' => 'open', 'status' => 'proposed']]);
+$emptyId = (int)($r['json']['data']['id'] ?? 0);
+$admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $emptyId]]);
+
+$r = $admin->req('/studio/api/rnd.php?act=finish', ['csrf' => true, 'json' => ['id' => $emptyId]]);
+ok('산출물이 없으면 종료 불가', $r['status'] === 400, 'status=' . $r['status']);
+ok('전용 코드 RND_NO_OUTPUT 로 알려 준다',
+   ($r['json']['error']['code'] ?? '') === 'RND_NO_OUTPUT',
+   (string)($r['json']['error']['code'] ?? ''));
+
+$r = $admin->req('/studio/api/rnd.php?act=finish', ['csrf' => true, 'json' => ['id' => $openId]]);
+ok('산출물이 있으면 종료 200', $r['status'] === 200, substr($r['body'], 0, 180));
+ok('상태가 done', ($r['json']['data']['rnd']['status'] ?? '') === 'done');
+ok('모집이 꺼진다', ($r['json']['data']['rnd']['recruiting'] ?? null) === false);
+ok('점유를 지우지 않는다고 알려 준다',
+   str_contains((string)($r['json']['data']['notice'] ?? ''), '지우지 않습니다'));
+
+$st = $pdo->prepare("SELECT COUNT(*) AS n FROM bs_rnd_member WHERE project_id = ? AND status = 'approved'");
+$st->execute([$openId]);
+ok('참여자도 함께 종료 처리된다', (int)$st->fetch()['n'] === 0);
+
+$r = $admin->req('/studio/api/rnd.php?act=finish', ['csrf' => true, 'json' => ['id' => $openId]]);
+ok('끝난 과제를 또 끝낼 수 없다', $r['status'] !== 200);
+
+$r = $admin->req('/studio/api/rnd.php?act=drop', ['csrf' => true, 'json' => ['id' => $emptyId]]);
+ok('사유 없이 중단 불가', $r['status'] !== 200);
+
+$r = $admin->req('/studio/api/rnd.php?act=drop', ['csrf' => true,
+    'json' => ['id' => $emptyId, 'reason' => '다른 과제로 대체']]);
+ok('사유와 함께면 중단 200', $r['status'] === 200, substr($r['body'], 0, 180));
+ok('상태가 dropped', ($r['json']['data']['rnd']['status'] ?? '') === 'dropped');
+ok('중단 사유가 기록에 남는다',
+   str_contains((string)($r['json']['data']['rnd']['notes'] ?? ''), '다른 과제로 대체'));
+ok('역량에 반영하지 않는다고 알려 준다',
+   str_contains((string)($r['json']['data']['notice'] ?? ''), '반영하지 않습니다'));
+
+echo "\n[15] 끝난 과제에는 더 쓸 수 없다\n";
+
+$r = $admin->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $openId, 'content' => '끝난 뒤 기록']]);
+ok('종료된 과제에는 기록을 못 남긴다', $r['status'] !== 200, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/rnd.php?act=get&id=' . $openId);
+$can = $r['json']['data']['rnd']['can'] ?? [];
+ok('종료 뒤에는 write_log 가 닫힌다', ($can['write_log'] ?? null) === false);
+ok('종료 뒤에는 finish 도 닫힌다', ($can['finish'] ?? null) === false);
+ok('종료 뒤에는 join 이 닫힌다', ($can['join'] ?? null) === false);
+
+echo "\n[16] bs_workload 를 끝까지 건드리지 않았다\n";
+$row = $pdo->prepare('SELECT COUNT(*) AS n FROM bs_workload WHERE ref_type = ?');
+$row->execute(['rnd']);
+ok('이 단계는 점유를 한 줄도 만들지 않는다', (int)$row->fetch()['n'] === 0);
+
+// ---------------------------------------------------------------------
 echo "\n[뒷정리]\n";
+$pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");
 echo "  시험용 과제 {$n}건 삭제\n";
 
