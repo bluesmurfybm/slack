@@ -1991,7 +1991,7 @@ const CHAT_BOTS={
   iworks:{api:"/chatapi", start:"GET", title:"blue chatbot", st:"데모 챗봇입니다. 무엇이든 물어보세요",
     greet:()=>`${current?current.name+"님, ":""}무엇을 도와드릴까요?`, renew:"대화가 만료되어 새로 시작했습니다."},
   blui:{api:"/bluiapi", start:"POST", title:"블리", st:"홈페이지 상담 챗봇입니다. 블루소프트 서비스에 관해 물어보세요",
-    greet:()=>"안녕하세요, 블루소프트 상담 도우미 블리입니다.\n서비스 안내부터 견적 문의 접수까지 도와드려요. 무엇이 궁금하신가요?",
+    greet:()=>"안녕하세요, 상담에이전트 블리예요.\n무엇을 도와드릴까요?",
     renew:"대화가 길어져 새로 시작했습니다.",
     starters:[
       ["제작 비용", "홈페이지 제작 비용이 궁금해요."],
