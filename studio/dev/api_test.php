@@ -1797,6 +1797,46 @@ ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? 
       ->execute();
 })();
 
+// =====================================================================
+section('[S] 대시보드 통합 뷰 (P11)');
+
+$r = $anon->req('/studio/api/dashboard.php?act=overview');
+ok('미로그인은 401', $r['status'] === 401, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/dashboard.php?act=overview');
+ok('통합 뷰 머리 200', $r['status'] === 200, substr($r['body'], 0, 160));
+$d = $r['json']['data'] ?? [];
+
+ok('조직 지표 세 가지가 온다',
+   isset($d['org']['project_running'], $d['org']['rnd_running'], $d['org']['output_quarter']),
+   json_encode($d['org'] ?? null));
+ok('분기 시작일을 함께 준다 — 화면이 기간을 지어내지 않게',
+   !empty($d['org']['quarter_from']));
+
+ok('내 점유 구성이 온다', isset($d['me']['donut']), json_encode(array_keys($d['me'] ?? [])));
+$dn = $d['me']['donut'] ?? [];
+ok('도넛이 네 조각으로 나뉜다 (합산 하나로 주지 않는다)',
+   array_key_exists('project_pct', $dn) && array_key_exists('rnd_pct', $dn)
+   && array_key_exists('inferred_pct', $dn) && array_key_exists('available_pct', $dn),
+   json_encode(array_keys($dn)));
+ok('네 조각의 합이 기준 근무량과 같다',
+   ($dn['project_pct'] + $dn['rnd_pct'] + $dn['inferred_pct'] + $dn['available_pct'])
+   === $dn['capacity_pct'],
+   sprintf('%d+%d+%d+%d vs %d', $dn['project_pct'], $dn['rnd_pct'],
+           $dn['inferred_pct'], $dn['available_pct'], $dn['capacity_pct']));
+ok('정체 과제 경고 자리가 온다', array_key_exists('stale', $d['me'] ?? []));
+ok('기간을 함께 준다', !empty($d['me']['period']['from']) && !empty($d['me']['period']['to']));
+
+// 통합 뷰는 mine 응답에 R&D 를 함께 싣는다.
+$r = $admin->req('/studio/api/dashboard.php?act=mine');
+ok('mine 이 R&D 과제를 함께 돌려준다', array_key_exists('rnd', $r['json']['data'] ?? []),
+   json_encode(array_keys($r['json']['data'] ?? [])));
+
+// 대시보드는 역량 점수를 내보내지 않는다 — 점유와 진행 상황만 본다.
+ok('대시보드 응답에 역량 점수가 없다',
+   !str_contains($r['body'], 'cap_score') && !str_contains($r['body'], 'breadth_score'),
+   '점수 칸이 샜다');
+
 array_map('unlink', glob("$tmp/*") ?: []);
 @rmdir($tmp);
 $admin->req('/studio/api/project.php?act=delete',
