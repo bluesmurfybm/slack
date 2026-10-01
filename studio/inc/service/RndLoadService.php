@@ -57,7 +57,7 @@ final class RndLoadService
      */
     public function currentLoad(int $memberId, ?int $exceptProjectId = null): array
     {
-        $sql = "SELECT rm.project_id, rm.load_ratio, p.name, p.code, p.status
+        $sql = "SELECT rm.project_id, rm.load_ratio, p.name, p.code, p.status, p.visibility
                   FROM bs_rnd_member rm
                   JOIN bs_project p ON p.id = rm.project_id
                  WHERE rm.member_id = ?
@@ -88,8 +88,64 @@ final class RndLoadService
                 'code'       => $r['code'],
                 'name'       => $r['name'],
                 'load_ratio' => (float)$r['load_ratio'],
+                'visibility' => $r['visibility'],
             ], $rows),
         ];
+    }
+
+    /**
+     * 내보내기 전에 **못 볼 과제의 이름을 가린다**.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 상한 계산과 화면 표시는 보는 범위가 다르다                     │
+     * │                                                              │
+     * │ currentLoad() 는 **가시성을 걸지 않는다.** 걸면 안 된다 —      │
+     * │ 안 보이는 과제의 점유도 상한에 들어가야 하기 때문이다. 비공개  │
+     * │ 과제로 0.3 을 채운 사람이 상한에 안 걸리면 통제가 무의미하다.  │
+     * │                                                              │
+     * │ 그래서 숫자는 전부 세되, **내보낼 때 이름만 가린다.** 점유율과 │
+     * │ 건수는 그대로라 합계가 맞고, 비공개 과제가 무엇인지는 모른다.  │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    public function maskInvisible(array $projects): array
+    {
+        $isAdmin = bs_is_admin();
+        $me      = (string)(bs_current_user()['id'] ?? '');
+
+        if ($isAdmin) {
+            return array_map(static function (array $p) {
+                unset($p['visibility']);
+                return $p;
+            }, $projects);
+        }
+
+        // 비공개 과제 중 내가 발의한 것만 이름을 보여 준다.
+        $mineIds = [];
+        $priv = array_values(array_filter($projects,
+            static fn(array $p) => ($p['visibility'] ?? '') === 'private'));
+        if ($priv && $me !== '') {
+            $ph = implode(',', array_fill(0, count($priv), '?'));
+            $st = $this->pdo->prepare(
+                "SELECT id FROM bs_project
+                  WHERE id IN ($ph) AND proposer_id = ?"
+            );
+            $st->execute(array_merge(array_column($priv, 'project_id'), [$me]));
+            $mineIds = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+        }
+
+        return array_map(static function (array $p) use ($mineIds) {
+            $vis = $p['visibility'] ?? '';
+            unset($p['visibility']);
+            if ($vis !== 'private' || in_array($p['project_id'], $mineIds, true)) {
+                return $p;
+            }
+            // 이름도 코드도 주지 않는다. 몇 번에 무엇이 있는지조차 흘리지 않는다.
+            $p['project_id'] = null;
+            $p['code']       = null;
+            $p['name']       = '비공개 과제';
+            $p['masked']     = true;
+            return $p;
+        }, $projects);
     }
 
     /**
@@ -191,7 +247,7 @@ final class RndLoadService
         $weeks = bs_setting_int('rnd_stale_weeks');
 
         $st = $this->pdo->prepare(
-            "SELECT p.id, p.code, p.name, p.approved_at,
+            "SELECT p.id, p.code, p.name, p.visibility, p.approved_at,
                     (SELECT MAX(l.created_at) FROM bs_rnd_log l WHERE l.project_id = p.id) AS last_log_at
                FROM bs_rnd_member rm
                JOIN bs_project p ON p.id = rm.project_id
@@ -204,12 +260,13 @@ final class RndLoadService
         );
         $st->execute([$memberId, $weeks * 7]);
 
-        return array_map(static fn(array $r) => [
+        return $this->maskInvisible(array_map(static fn(array $r) => [
             'project_id'  => (int)$r['id'],
             'code'        => $r['code'],
             'name'        => $r['name'],
+            'visibility'  => $r['visibility'],
             'last_log_at' => bs_date($r['last_log_at'] ?? $r['approved_at']),
-        ], $st->fetchAll(PDO::FETCH_ASSOC));
+        ], $st->fetchAll(PDO::FETCH_ASSOC)));
     }
 
     /**
@@ -355,6 +412,15 @@ final class RndLoadService
             }
             $n++;
         }
+
+        // 정체는 시간이 지나면서 생긴다. 적재 시점에 한 번 정하고 끝내면
+        // 그 뒤 조용해진 과제가 1.0 인 채로 남는다. 쓰는 김에 함께 맞춘다.
+        //
+        // **이것만으로는 모자란다.** 아무도 승인·합류를 하지 않는 동안에는
+        // 돌지 않으므로, 주기적으로 부르는 자리가 따로 있어야 한다.
+        // TODO(P12): 배치에서 하루 한 번 refreshConfidence() 를 돌린다.
+        $this->refreshConfidence();
+
         return $n;
     }
 

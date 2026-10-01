@@ -82,6 +82,18 @@ bs_route(bs_param_str('act', 'view'), [
         $evalVer = $repo->latestEvalVer();
         $rows    = $repo->evidence((int)$target['id'], $category, $domainId, $evalVer);
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ R&D 근거는 **과제 가시성을 한 번 더 본다** (명세서 §8.6)      │
+        // │                                                              │
+        // │ 근거 제목에 과제 이름이 그대로 들어 있어, 프로파일을 볼 수    │
+        // │ 있는 PM 이 남의 **비공개 과제 이름**을 보게 된다. 가시성을    │
+        // │ RndRepo 에서 막아 놓고 이 경로로 샜다.                        │
+        // │                                                              │
+        // │ 줄을 지우지 않고 **제목만 가린다.** 지우면 점수의 근거 건수와 │
+        // │ 보이는 건수가 어긋나 "왜 10건인데 8건만 보이나" 가 된다.      │
+        // └──────────────────────────────────────────────────────────────┘
+        $rows = bs_mask_private_rnd_evidence($rows);
+
         bs_json_ok([
             'member_id' => (int)$target['id'],
             'category'  => $category,
@@ -248,6 +260,56 @@ function bs_present_member(array $m): array
  * 근거 한 건.
  * `source_url` 이 빠지면 근거로 쓸 수 없다 — 반드시 싣는다.
  */
+/**
+ * 못 볼 R&D 과제의 제목을 가린다.
+ *
+ * 질의 **한 번**으로 끝낸다. 건마다 묻지 않는다 — 근거는 최대 300건이다.
+ * 가시성 판정은 inc/presenter.php 의 것을 그대로 쓴다.
+ */
+function bs_mask_private_rnd_evidence(array $rows): array
+{
+    require_once BS_ROOT . '/inc/presenter.php';
+
+    // 'rnd:<과제>:<구성원>' 에서 과제 번호를 모은다.
+    $ids = [];
+    foreach ($rows as $r) {
+        if (($r['source'] ?? '') === 'rnd'
+            && preg_match('/^rnd:(\d+):/', (string)($r['source_key'] ?? ''), $m)) {
+            $ids[(int)$m[1]] = true;
+        }
+    }
+    if (!$ids) {
+        return $rows;
+    }
+
+    [$vis, $visParams] = bs_rnd_visible_sql('p');
+    $ph = implode(',', array_fill(0, count($ids), '?'));
+    $st = bs_db()->prepare(
+        "SELECT p.id FROM bs_project p WHERE p.id IN ($ph) AND p.deleted_at IS NULL AND $vis"
+    );
+    $st->execute(array_merge(array_keys($ids), $visParams));
+    $ok = array_flip(array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)));
+
+    foreach ($rows as &$r) {
+        if (($r['source'] ?? '') !== 'rnd') {
+            continue;
+        }
+        $pid = preg_match('/^rnd:(\d+):/', (string)($r['source_key'] ?? ''), $m)
+             ? (int)$m[1] : 0;
+        if ($pid && isset($ok[$pid])) {
+            continue;
+        }
+        // 이름도 링크도 주지 않는다. 난이도·분야는 점수의 근거라 남긴다.
+        $r['title']      = '[R&D] 비공개 과제';
+        $r['source_url'] = null;
+        $r['source_key'] = null;
+        $r['masked']     = true;
+    }
+    unset($r);
+
+    return $rows;
+}
+
 function bs_present_evidence(array $r): array
 {
     return [
@@ -265,6 +327,8 @@ function bs_present_evidence(array $r): array
         'rnd_project_id' => (($r['source'] ?? '') === 'rnd'
                              && preg_match('/^rnd:(\d+):/', (string)($r['source_key'] ?? ''), $m))
                             ? (int)$m[1] : null,
+        // 가려진 건은 화면이 링크를 걸지 않게 표시한다.
+        'masked'       => !empty($r['masked']),
         'requested_at' => bs_date($r['requested_at']),
         'closed_at'    => bs_date($r['closed_at']),
         'domains'      => $r['domains'] ?? null,
