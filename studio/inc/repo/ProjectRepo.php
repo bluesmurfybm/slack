@@ -530,6 +530,26 @@ final class ProjectRepo
         $w = [];
         $p = [];
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 유형을 안 주면 **지시형 프로젝트만** 본다                     │
+        // │                                                              │
+        // │ P9 에서 bs_project 에 R&D 과제(project_type='rnd')가 함께     │
+        // │ 들어왔다. 필터가 없으면 R&D 과제가 프로젝트 목록과 배정       │
+        // │ 대상에 섞인다.                                               │
+        // │                                                              │
+        // │ 기본을 'project' 로 두는 이유 — 부르는 쪽이 빠뜨렸을 때       │
+        // │ **안 보이는 쪽으로 틀리게** 하기 위해서다. 반대로 두면        │
+        // │ 빠뜨린 화면마다 R&D 가 조용히 섞여 들어오고, 그건 아무도      │
+        // │ 눈치채지 못한다.                                             │
+        // │                                                              │
+        // │ R&D 보드는 'rnd' 를, 둘 다 볼 화면은 'all' 을 명시한다.      │
+        // └──────────────────────────────────────────────────────────────┘
+        $type = (string)($f['project_type'] ?? 'project');
+        if ($type !== 'all') {
+            $w[] = 'project_type = ?';
+            $p[] = $type;
+        }
+
         if (empty($f['with_deleted'])) {
             $w[] = 'deleted_at IS NULL';
         }
@@ -582,7 +602,7 @@ final class ProjectRepo
     private function prefixWhere(string $where): string
     {
         return preg_replace(
-            '/\b(deleted_at|status|track|owner_id|code|name|client|summary|dev_start|dev_end|test_start|test_end|deploy_date)\b/',
+            '/\b(deleted_at|project_type|status|track|owner_id|code|name|client|summary|dev_start|dev_end|test_start|test_end|deploy_date)\b/',
             'p.$1',
             $where
         ) ?? $where;

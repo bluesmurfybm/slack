@@ -639,8 +639,17 @@ function bs_can_edit_workload(string $memberUserId): bool
     // 어느 프로젝트든 담당 PM 이면 된다.
     static $isPm = null;
     if ($isPm === null) {
+        // R&D 과제(project_type='rnd')의 owner 는 여기 들지 않는다.
+        //
+        // 이 판정은 BS_CAP_PROJECT_MANAGE · BS_CAP_ALLOCATION_PROPOSE 를
+        // 열어 준다. 과제를 하나 발의했다는 이유로 **남의 프로젝트 배정안을
+        // 만들 권한**까지 생기면 안 된다. R&D 과제 안에서의 권한은
+        // bs_rnd_member.role='lead' 로 따로 본다 (P9).
         $st = bs_db()->prepare(
-            'SELECT 1 FROM bs_project WHERE owner_id = ? AND deleted_at IS NULL LIMIT 1'
+            "SELECT 1 FROM bs_project
+              WHERE owner_id = ? AND deleted_at IS NULL
+                AND project_type = 'project'
+              LIMIT 1"
         );
         $st->execute([(string)$me['id']]);
         $isPm = (bool)$st->fetchColumn();

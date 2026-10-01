@@ -472,6 +472,8 @@ function bs_dash_me(MemberRepo $members, array $me, array $byMember): array
 /** 내가 맡은 태스크 — 확정된 배정안에서만. */
 function bs_dash_my_tasks(PDO $pdo, int $memberId): array
 {
+    // bs_project 조인에 project_type 을 건다. R&D 과제는 지금 bs_task 를
+    // 쓰지 않지만, bs_task 에 유형 제약이 없어 나중에 달면 조용히 섞인다 (P9).
     $st = $pdo->prepare(
         "SELECT t.id AS task_id, t.wbs_no, t.title, t.status, t.progress_pct,
                 t.plan_start, t.plan_end, t.est_md, t.difficulty,
@@ -481,6 +483,7 @@ function bs_dash_my_tasks(PDO $pdo, int $memberId): array
            JOIN bs_allocation a ON a.id = i.allocation_id AND a.status = 'confirmed'
            JOIN bs_task       t ON t.id = i.task_id
            JOIN bs_project    p ON p.id = t.project_id AND p.deleted_at IS NULL
+                               AND p.project_type = 'project'
           WHERE i.member_id = ?
           ORDER BY (t.plan_end IS NULL), t.plan_end, t.wbs_no"
     );
