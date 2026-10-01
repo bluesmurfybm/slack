@@ -885,6 +885,164 @@ if ($pidP) {
 }
 
 // ---------------------------------------------------------------------
+echo "\n[21] 분야 태그 — 역량 반영의 계열 근거 (명세서 §4.7)\n";
+
+$dGrading = (int)$pdo->query("SELECT id FROM bs_domain WHERE category='grading' ORDER BY id LIMIT 1")
+                     ->fetch()['id'];
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 태그 붙은 과제', 'visibility' => 'open', 'rnd_category' => 'poc',
+    'status' => 'proposed', 'domain_ids' => [$dGrading]]]);
+$tagId = (int)($r['json']['data']['id'] ?? 0);
+ok('발의할 때 분야 태그를 받는다', $r['status'] === 200, substr($r['body'], 0, 160));
+
+$st = $pdo->prepare('SELECT COUNT(*) AS n FROM bs_rnd_domain WHERE project_id = ?');
+$st->execute([$tagId]);
+ok('태그가 저장된다', (int)$st->fetch()['n'] === 1);
+
+$r = $user->req('/studio/api/rnd.php?act=get&id=' . $tagId);
+ok('상세에 분야가 함께 온다',
+   count($r['json']['data']['rnd']['domains'] ?? []) === 1,
+   json_encode($r['json']['data']['rnd']['domains'] ?? [], JSON_UNESCAPED_UNICODE));
+
+$r = $user->req('/studio/api/rnd.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $tagId, 'domain_ids' => []]]);
+ok('태그만 비우는 수정도 된다', $r['status'] === 200, substr($r['body'], 0, 140));
+$st->execute([$tagId]);
+ok('비워진다', (int)$st->fetch()['n'] === 0);
+
+// ---------------------------------------------------------------------
+echo "\n[22] 역량 반영 — R&D 가 들어와도 남의 점수는 흔들리지 않는다 (§4.7)\n";
+
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 절대 기준이라는 말이 사실인지 본다                                │
+   │                                                                  │
+   │ 기준값(자)을 R&D 를 포함해 내면, 한 사람의 과제가 분포를 밀어     │
+   │ **모두의 점수가 바뀐다.** breadth 분모를 데이터에서 유도해도      │
+   │ 마찬가지다 — 새 계열이 하나 생기면 전원의 breadth 가 내려간다.    │
+   │                                                                  │
+   │ 그래서 산출기를 두 번 돌려 맞대어 본다.                           │
+   │   ① R&D 가 하나도 없는 상태                                      │
+   │   ② 한 사람에게만 R&D 를 붙인 상태                                │
+   │ **R&D 가 없는 사람의 수치는 한 자리도 달라지면 안 된다.**         │
+   └──────────────────────────────────────────────────────────────────┘ */
+
+$py = trim((string)@file_get_contents(dirname(__DIR__, 2) . '/studio/dev/php-path.txt'));
+$scoreDir = dirname(__DIR__) . '/collector';
+
+/** score.py 를 돌리고 최신 회차의 지표를 가져온다. */
+$runScore = function () use ($pdo, $scoreDir): array {
+    $cmd = 'cd ' . escapeshellarg($scoreDir) . ' && python score.py --config config.ini 2>&1';
+    exec($cmd, $out, $rc);
+    if ($rc !== 0) {
+        return [];
+    }
+    $st = $pdo->query(
+        'SELECT m.emp_name, t.breadth_score, t.cap_score
+           FROM bs_member_metric t JOIN bs_member m ON m.id = t.member_id
+          WHERE t.eval_ver = (SELECT MAX(id) FROM bs_eval_run)
+          ORDER BY m.id'
+    );
+    $o = [];
+    foreach ($st->fetchAll() as $r2) {
+        $o[$r2['emp_name']] = [$r2['breadth_score'], $r2['cap_score']];
+    }
+    return $o;
+};
+
+// 시험용 R&D 흔적을 먼저 치운다.
+$pdo->exec("DELETE FROM bs_work_item WHERE source = 'rnd'");
+$pdo->exec("DELETE FROM bs_project WHERE project_type='rnd' AND code LIKE 'RNDT-%'");
+
+$before = $runScore();
+if (!$before) {
+    ok('score.py 를 돌릴 수 없어 건너뜀 (python 또는 config 확인)', true);
+} else {
+    ok('① R&D 없이 산출 성공', count($before) > 0, (string)count($before));
+
+    // 한 사람에게만 R&D 를 붙인다. 참여자는 '시험사용자' 로 한정한다.
+    $targetMid = (int)$pdo->query("SELECT id FROM bs_member WHERE user_id='batest-user@bluesoft.co.kr'")
+                          ->fetch()['id'];
+    $pdo->exec("INSERT INTO bs_project (code, project_type, visibility, name, status,
+                    rnd_category, owner_id, owner_name, proposer_id, proposer_name,
+                    approved_at, updated_at)
+                VALUES ('RNDT-0001','rnd','open','[시험] 역량 반영 과제','done','poc',
+                        't@x.kr','시험','t@x.kr','시험',
+                        DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY))");
+    $tp = (int)$pdo->lastInsertId();
+    $pdo->prepare('INSERT INTO bs_rnd_domain (project_id, domain_id) VALUES (?,?)')
+        ->execute([$tp, $dGrading]);
+    $pdo->prepare("INSERT INTO bs_rnd_output (project_id, kind, title) VALUES (?,'report','시험 산출물')")
+        ->execute([$tp]);
+    $pdo->prepare("INSERT INTO bs_rnd_member (project_id, member_id, role, load_ratio, status,
+                       approved_at, joined_at) VALUES (?,?,'member',0.100,'done',NOW(),NOW())")
+        ->execute([$tp, $targetMid]);
+
+    $after = $runScore();
+    ok('② R&D 를 붙이고 산출 성공', count($after) > 0);
+
+    $st = $pdo->prepare("SELECT COUNT(*) AS n FROM bs_work_item WHERE source='rnd' AND member_id = ?");
+    $st->execute([$targetMid]);
+    ok('종료·산출물·태그가 갖춰진 과제는 업무 이력으로 적재된다',
+       (int)$st->fetch()['n'] === 1);
+
+    // **핵심** — R&D 가 없는 사람은 한 자리도 달라지지 않아야 한다.
+    $moved = [];
+    foreach ($before as $name => $v) {
+        if ($name === '시험사용자') { continue; }   // 유일하게 R&D 를 받은 사람
+        $w = $after[$name] ?? null;
+        if ($w === null) { $moved[] = $name . '(사라짐)'; continue; }
+        if ((string)$v[0] !== (string)$w[0] || (string)$v[1] !== (string)$w[1]) {
+            $moved[] = sprintf('%s(%s→%s / %s→%s)', $name, $v[0], $w[0], $v[1], $w[1]);
+        }
+    }
+    ok('R&D 가 없는 사람의 breadth·cap 이 한 자리도 안 바뀐다',
+       $moved === [], implode(' ', $moved));
+
+    // 제외 규칙 — dropped / 산출물 없음 / 태그 없음은 반영되지 않는다.
+    foreach ([['RNDT-0002', 'dropped', 1, true],
+              ['RNDT-0003', 'done', 0, true],
+              ['RNDT-0004', 'done', 1, false]] as [$code, $status, $outs, $withDom]) {
+        $pdo->exec("INSERT INTO bs_project (code, project_type, visibility, name, status,
+                        rnd_category, owner_id, owner_name, proposer_id, proposer_name,
+                        approved_at, updated_at)
+                    VALUES ('$code','rnd','open','[시험] 제외 $code','$status','poc',
+                            't@x.kr','시험','t@x.kr','시험',
+                            DATE_SUB(NOW(), INTERVAL 30 DAY), DATE_SUB(NOW(), INTERVAL 3 DAY))");
+        $xp = (int)$pdo->lastInsertId();
+        if ($withDom) {
+            $pdo->prepare('INSERT INTO bs_rnd_domain (project_id, domain_id) VALUES (?,?)')
+                ->execute([$xp, $dGrading]);
+        }
+        for ($i = 0; $i < $outs; $i++) {
+            $pdo->prepare("INSERT INTO bs_rnd_output (project_id, kind, title) VALUES (?,'report','x')")
+                ->execute([$xp]);
+        }
+        $pdo->prepare("INSERT INTO bs_rnd_member (project_id, member_id, role, load_ratio, status,
+                           approved_at, joined_at) VALUES (?,?,'member',0.100,'done',NOW(),NOW())")
+            ->execute([$xp, $targetMid]);
+    }
+    $runScore();
+    $st = $pdo->prepare("SELECT COUNT(*) AS n FROM bs_work_item WHERE source='rnd' AND member_id = ?");
+    $st->execute([$targetMid]);
+    $nAfterExcl = (int)$st->fetch()['n'];
+    ok('중단·산출물 없음·태그 없음은 반영되지 않는다 (여전히 1건)',
+       $nAfterExcl === 1, '적재 ' . $nAfterExcl . '건');
+
+    // 삭제된 지표를 되살리지 않았는지.
+    $row = $pdo->query('SELECT speed_score, comm_score FROM bs_member_metric
+                         WHERE eval_ver = (SELECT MAX(id) FROM bs_eval_run) LIMIT 1')->fetch();
+    ok('speed_score 는 여전히 NULL (되살리지 않았다)', $row['speed_score'] === null);
+    ok('comm_score 도 NULL', $row['comm_score'] === null);
+
+    // 새 회차로 적재했는지 — 기존 회차를 덮어쓰지 않았다.
+    $n = (int)$pdo->query('SELECT COUNT(*) AS n FROM bs_eval_run')->fetch()['n'];
+    ok('판정 회차가 새로 쌓인다 (기존을 덮어쓰지 않는다)', $n >= 2, (string)$n);
+
+    $pdo->exec("DELETE FROM bs_project WHERE project_type='rnd' AND code LIKE 'RNDT-%'");
+    $pdo->exec("DELETE FROM bs_work_item WHERE source = 'rnd'");
+}
+
+// ---------------------------------------------------------------------
 echo "\n[뒷정리]\n";
 $pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");
