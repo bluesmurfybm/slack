@@ -369,6 +369,10 @@ final class RndRepo
                 ]);
             }
 
+            // 주도자의 점유도 이 자리에서 올린다. 과제가 지금 막 승인됐으므로
+            // §9.1 의 조건이 채워졌다.
+            (new RndLoadService($this->pdo))->syncWorkload($id);
+
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
@@ -495,10 +499,9 @@ final class RndRepo
      * 여기서 막는다 — 신청 단계에서 막으면 왜 안 되는지 말해 줄 자리가 없다.
      * 관리자라도 넘겨 줄 수 없다. 예외를 한 번 열면 그 길로만 다닌다.
      *
-     * TODO(P10-2): 승인된 참여를 bs_workload 에 kind='rnd' 로 적재한다.
-     *              과제가 approved_at 이 찬 상태인지 **반드시 함께 본다** —
-     *              과제 승인 없이 참여만 승인되면 §9.1 이 뚫린다.
-     *              적재는 통제(P10-1)가 자리잡은 뒤에 시작한다(CLAUDE.md).
+     * 승인되면 **그 자리에서 점유를 올린다**(P10-2). 올리는 쪽은
+     * RndLoadService 가 과제의 approved_at 을 다시 보고 판단한다 —
+     * 과제 승인 없이 참여만 승인되면 §9.1 이 뚫리기 때문이다.
      *
      * @throws RndCapExceededException 상한을 넘을 때. 위반 내역을 들고 있다.
      */
@@ -511,19 +514,32 @@ final class RndRepo
             throw new DomainException('신청 상태인 사람만 승인할 수 있습니다.');
         }
 
-        $check = (new RndLoadService($this->pdo))->checkCap(
+        $svc   = new RndLoadService($this->pdo);
+        $check = $svc->checkCap(
             (int)$row['member_id'], (int)$row['project_id'], (float)$row['load_ratio']
         );
         if (!$check['ok']) {
             throw new RndCapExceededException($check, $row['emp_name'] ?? '');
         }
 
-        $this->pdo->prepare(
-            "UPDATE bs_rnd_member
-                SET status = 'approved', approved_by = ?, approved_by_name = ?,
-                    approved_at = NOW(), joined_at = NOW(), reject_reason = NULL
-              WHERE id = ? AND status = 'requested'"
-        )->execute([$actor['id'] ?? null, $actor['name'] ?? null, $rowId]);
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare(
+                "UPDATE bs_rnd_member
+                    SET status = 'approved', approved_by = ?, approved_by_name = ?,
+                        approved_at = NOW(), joined_at = NOW(), reject_reason = NULL
+                  WHERE id = ? AND status = 'requested'"
+            )->execute([$actor['id'] ?? null, $actor['name'] ?? null, $rowId]);
+
+            // 승인과 적재를 한 트랜잭션에 둔다. 승인만 되고 점유가 안 올라가면
+            // 가용도가 조용히 어긋나고, 아무도 그것을 눈치채지 못한다.
+            $svc->syncWorkload((int)$row['project_id'], (int)$row['member_id']);
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
 
         return $this->requireMemberRow($rowId);
     }
@@ -821,16 +837,28 @@ final class RndRepo
      */
     private function closeWorkloadFor(int $projectId, ?int $memberRowId): void
     {
-        $sql = "UPDATE bs_workload w
-                  JOIN bs_rnd_member rm ON rm.id = w.ref_id
-                   SET w.end_date = CURDATE()
-                 WHERE w.ref_type = 'rnd'
-                   AND rm.project_id = ?
-                   AND (w.end_date IS NULL OR w.end_date > CURDATE())";
+        // ref_id 는 **과제 번호**다 (P10-2).
+        //
+        // P9-3 에서는 bs_rnd_member.id 를 넣을 셈으로 조인을 걸어 두었는데,
+        // 적재 규약이 project_id 로 정해졌다. 그때는 한 줄도 적재되지
+        // 않았으므로 옮길 데이터가 없다 — 지금 바로잡는다.
+        $sql = "UPDATE bs_workload
+                   SET end_date = CURDATE()
+                 WHERE ref_type = 'rnd'
+                   AND ref_id = ?
+                   AND end_date > CURDATE()";
         $p = [$projectId];
+
         if ($memberRowId !== null) {
-            $sql .= ' AND rm.id = ?';
-            $p[]  = $memberRowId;
+            // 참여 행 번호로 왔으므로 구성원으로 바꿔 건다.
+            $st = $this->pdo->prepare('SELECT member_id FROM bs_rnd_member WHERE id = ?');
+            $st->execute([$memberRowId]);
+            $mid = $st->fetchColumn();
+            if ($mid === false) {
+                return;
+            }
+            $sql .= ' AND member_id = ?';
+            $p[]  = (int)$mid;
         }
         $this->pdo->prepare($sql)->execute($p);
     }

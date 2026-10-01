@@ -57,6 +57,24 @@ final class AvailabilityCalculator
         return $this->workdays($s, $e);
     }
 
+    /**
+     * 자른 뒤의 몫. $raw 가 $capped 로 잘렸을 때 원래 비율대로 나눈다.
+     *
+     * 자르지 않았으면(대부분의 경우) 그냥 $part 를 돌려준다 — 부동소수점
+     * 연산을 한 번도 더 하지 않는다. **R&D 가 없는 사람에게는 이 함수가
+     * 값을 바꾸지 않는다.**
+     */
+    private function share(float $part, float $raw, float $capped): float
+    {
+        if ($raw <= 0) {
+            return 0.0;
+        }
+        if ($raw <= $capped + 0.0001) {
+            return round($part, 4);
+        }
+        return round($part * ($capped / $raw), 4);
+    }
+
     /** 기간 안의 영업일 수 (양끝 포함). */
     public function workdays(string $from, string $to): int
     {
@@ -151,6 +169,21 @@ final class AvailabilityCalculator
 
         $confirmed = array_fill_keys($memberIds, 0.0);
         $breakdown = array_fill_keys($memberIds, []);
+
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 분해는 **더하기만** 한다 (P10-2)                              │
+        // │                                                              │
+        // │ confirmed_load 와 available 을 내는 식은 한 글자도 바꾸지     │
+        // │ 않았다. 아래 두 칸은 같은 값을 '어디서 왔는지' 로 나눠 담을   │
+        // │ 뿐이다. 합치면 언제나 confirmed 와 같다.                      │
+        // │                                                              │
+        // │ R&D 참여가 없는 사람은 rnd 가 0 이고, project 가 곧           │
+        // │ confirmed 다 — 즉 **이 변경 전과 완전히 같은 수치**가 나온다. │
+        // │ dev/rnd_test.php [18] 이 그것을 지킨다.                       │
+        // └──────────────────────────────────────────────────────────────┘
+        $byProject = array_fill_keys($memberIds, 0.0);
+        $byRnd     = array_fill_keys($memberIds, 0.0);
+
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $w) {
             $mid = (int)$w['member_id'];
             $ov  = $this->overlapWorkdays($from, $to, $w['start_date'], $w['end_date']);
@@ -161,6 +194,12 @@ final class AvailabilityCalculator
             // 2주만 겹치는 100% 점유는 3개월 프로젝트에서 100% 가 아니다.
             $eff = (float)$w['load_ratio'] * ($ov / $totalWorkdays);
             $confirmed[$mid] += $eff;
+
+            if (($w['ref_type'] ?? '') === 'rnd') {
+                $byRnd[$mid] += $eff;
+            } else {
+                $byProject[$mid] += $eff;
+            }
             $breakdown[$mid][] = [
                 'source'        => 'confirmed',
                 'id'            => (int)$w['id'],
@@ -194,6 +233,9 @@ final class AvailabilityCalculator
         foreach ($memberIds as $mid) {
             $base = $cap[$mid] ?? 1.0;
             $c    = round(min($base, $confirmed[$mid]), 4);
+
+            $rawConfirmed = $confirmed[$mid];
+            $projectPct   = (int)round($this->share($byProject[$mid], $rawConfirmed, $c) * 100);
             $i    = round(min(BS_INFERRED_LOAD_MAX, $inf[$mid]['load'] ?? 0.0), 4);
             $avail = max(0.0, $base - $c - $i);
 
@@ -213,6 +255,23 @@ final class AvailabilityCalculator
                 'confirmed_pct'  => (int)round($c * 100),
                 'inferred_pct'   => (int)round($i * 100),
                 'available_pct'  => (int)round($avail * 100),
+
+                // ── 확정 점유의 내역 (P10-2) ──────────────────────────
+                //
+                // project + rnd = confirmed. 언제나 그렇다.
+                //
+                // confirmed 는 base 로 한 번 잘린다(min). 잘렸을 때 원래
+                // 비율대로 나눠 담는다 — 안 그러면 화면에서 "확정 100%
+                // (프로젝트 90% + R&D 50%)" 같은 말이 된다. 자르기 전
+                // 날것은 confirmed_raw 로 함께 준다. 숨기지 않는다.
+                'project_load'   => $this->share($byProject[$mid], $rawConfirmed, $c),
+                'rnd_load'       => $this->share($byRnd[$mid], $rawConfirmed, $c),
+                'confirmed_raw'  => round($rawConfirmed, 4),
+                'capped'         => $rawConfirmed > $base + 0.0001,
+                // %는 정수라 따로 반올림하면 합이 1 어긋난다.
+                // 하나를 반올림하고 나머지는 빼서 **합을 반드시 맞춘다.**
+                'project_pct'    => $projectPct,
+                'rnd_pct'        => (int)round($c * 100) - $projectPct,
                 // 기준 근무량. 반일 근무자는 100 이 아니라 50 이다.
                 // 이것을 안 주면 화면에서 "가용 50% + 확정 0% + 추정 0%" 가
                 // 되어 나머지 50% 가 무엇인지 알 수 없다 — 점유가 아니라
@@ -336,6 +395,10 @@ final class AvailabilityCalculator
             'workdays' => $this->workdays($from, $to),
             'confirmed_load' => 0.0, 'inferred_load' => 0.0, 'available' => 1.0,
             'confirmed_pct' => 0, 'inferred_pct' => 0, 'available_pct' => 100,
+            // P10-2 분해. 점유가 없으니 전부 0 이다.
+            'project_load' => 0.0, 'rnd_load' => 0.0,
+            'confirmed_raw' => 0.0, 'capped' => false,
+            'project_pct' => 0, 'rnd_pct' => 0,
             'active_items' => 0, 'confidence' => 1.0,
             'breakdown' => [], 'inferred_items' => [],
         ];

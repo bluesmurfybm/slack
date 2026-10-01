@@ -267,6 +267,144 @@ final class RndLoadService
         ];
     }
 
+    // =================================================================
+    // 적재 (P10-2)
+    // =================================================================
+
+    /**
+     * 승인된 참여를 bs_workload 에 올린다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 과제가 승인되지 않았으면 **한 줄도 올리지 않는다** (§9.1)     │
+     * │                                                              │
+     * │ 참여만 승인하고 과제는 아직 proposed 인 상태가 있을 수 있다.  │
+     * │ 그때 점유를 올리면 "승인 없이는 반영되지 않는다" 가 뚫린다.   │
+     * │ 그래서 여기서 과제의 approved_at 을 **다시** 본다 — 부르는    │
+     * │ 쪽을 믿지 않는다.                                            │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * 규약 — kind='assigned', ref_type='rnd', ref_id=**과제 번호**.
+     * 한 사람이 한 과제에 갖는 점유 행은 하나다(있으면 갱신).
+     *
+     * @return int 올리거나 고친 행 수
+     */
+    public function syncWorkload(int $projectId, ?int $memberId = null): int
+    {
+        $st = $this->pdo->prepare(
+            "SELECT id, name, code, status, approved_at, dev_start, dev_end
+               FROM bs_project
+              WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NULL"
+        );
+        $st->execute([$projectId]);
+        $p = $st->fetch(PDO::FETCH_ASSOC);
+
+        if (!$p || $p['approved_at'] === null
+            || !in_array((string)$p['status'], ['approved', 'running'], true)) {
+            return 0;   // 승인 전이거나 이미 끝난 과제 — 올리지 않는다
+        }
+
+        [$from, $to] = $this->window($p);
+        $conf = $this->isStale([
+            'status'      => $p['status'],
+            'approved_at' => $p['approved_at'],
+            'last_log_at' => $this->lastLogAt($projectId),
+        ]) ? 0.500 : 1.000;
+
+        $sql = "SELECT rm.member_id, rm.load_ratio
+                  FROM bs_rnd_member rm
+                 WHERE rm.project_id = ? AND rm.status = 'approved'";
+        $args = [$projectId];
+        if ($memberId !== null) {
+            $sql .= ' AND rm.member_id = ?';
+            $args[] = $memberId;
+        }
+        $st = $this->pdo->prepare($sql);
+        $st->execute($args);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+
+        $label = ($p['code'] ? $p['code'] . ' ' : '') . $p['name'];
+        $n = 0;
+
+        foreach ($rows as $r) {
+            // 같은 (구성원, 과제) 점유가 이미 있으면 갈아 끼운다.
+            // 유니크 키가 없는 표라 직접 찾아 고친다.
+            $ex = $this->pdo->prepare(
+                "SELECT id FROM bs_workload
+                  WHERE member_id = ? AND ref_type = 'rnd' AND ref_id = ? AND kind = 'assigned'"
+            );
+            $ex->execute([(int)$r['member_id'], $projectId]);
+            $id = $ex->fetchColumn();
+
+            if ($id !== false) {
+                $this->pdo->prepare(
+                    "UPDATE bs_workload
+                        SET label = ?, start_date = ?, end_date = ?,
+                            load_ratio = ?, confidence = ?
+                      WHERE id = ?"
+                )->execute([$label, $from, $to, (float)$r['load_ratio'], $conf, (int)$id]);
+            } else {
+                $this->pdo->prepare(
+                    "INSERT INTO bs_workload
+                        (member_id, kind, ref_type, ref_id, label,
+                         start_date, end_date, load_ratio, confidence)
+                     VALUES (?, 'assigned', 'rnd', ?, ?, ?, ?, ?, ?)"
+                )->execute([
+                    (int)$r['member_id'], $projectId, $label,
+                    $from, $to, (float)$r['load_ratio'], $conf,
+                ]);
+            }
+            $n++;
+        }
+        return $n;
+    }
+
+    /**
+     * 정체 과제의 점유 신뢰도를 0.5 로 내린다 (CLAUDE.md 2항).
+     *
+     * 적재할 때 한 번 정하고 끝내면, 적재 뒤에 조용해진 과제는 1.0 인 채로
+     * 남는다. 보드를 그릴 때 함께 돌려 맞춘다.
+     *
+     * **점유량(load_ratio)은 건드리지 않는다.** 신고한 양은 그대로이고,
+     * 그 숫자를 얼마나 믿을지만 내린다.
+     */
+    public function refreshConfidence(): int
+    {
+        $weeks = bs_setting_int('rnd_stale_weeks');
+
+        $st = $this->pdo->prepare(
+            "UPDATE bs_workload w
+               JOIN bs_project p ON p.id = w.ref_id AND p.project_type = 'rnd'
+                SET w.confidence = CASE
+                      WHEN COALESCE(
+                             (SELECT MAX(l.created_at) FROM bs_rnd_log l WHERE l.project_id = p.id),
+                             p.approved_at
+                           ) < DATE_SUB(NOW(), INTERVAL ? DAY)
+                      THEN 0.500 ELSE 1.000 END
+              WHERE w.ref_type = 'rnd' AND w.kind = 'assigned'"
+        );
+        $st->execute([$weeks * 7]);
+        return $st->rowCount();
+    }
+
+    /** 이 과제가 점유하는 기간. 프로젝트 기간이 없으면 승인일부터 1년. */
+    private function window(array $p): array
+    {
+        $from = $p['dev_start'] ?: date('Y-m-d', strtotime((string)$p['approved_at']));
+        $to   = $p['dev_end'] ?: date('Y-m-d', strtotime($from . ' +1 year'));
+        if ($from > $to) {
+            $to = $from;
+        }
+        return [$from, $to];
+    }
+
+    private function lastLogAt(int $projectId): ?string
+    {
+        $st = $this->pdo->prepare('SELECT MAX(created_at) FROM bs_rnd_log WHERE project_id = ?');
+        $st->execute([$projectId]);
+        $v = $st->fetchColumn();
+        return $v === false || $v === null ? null : (string)$v;
+    }
+
     /** 0.25 → '25%'. 사람이 읽는 자리에만 쓴다. */
     private function pct(float $v): string
     {
