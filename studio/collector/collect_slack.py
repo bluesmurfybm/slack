@@ -131,7 +131,37 @@ def load_config(path: Path) -> configparser.ConfigParser:
     # 기관명·비밀번호에 한글이나 특수문자가 들어갈 수 있다
     with path.open(encoding="utf-8") as f:
         cp.read_file(f)
+    warn_placeholder_list_url(cp, path)
     return cp
+
+
+# config.sample.ini 가 들고 있는 가짜 팀/리스트 ID. 아무도 안 고치면 그대로
+# 운영까지 따라간다.
+DUMMY_LIST_IDS = ("T0000000", "F0000000")
+
+
+def warn_placeholder_list_url(cp: configparser.ConfigParser, path: Path) -> None:
+    """list_url 이 아직 표본 값이면 크게 알린다.
+
+    source_url 은 `{list_url}?record_id={id}` 로 만들어 bs_work_item 에 그대로
+    저장된다. 표본 값인 채로 수집하면 **열리지 않는 링크가 DB 에 쌓인다.**
+    나중에 고쳐도 이미 적재된 행은 되돌아오지 않는다 — 다시 수집해야 한다.
+
+    그래서 멈추지 않고 경고만 한다. 로컬 개발은 이 값이 가짜인 채로 돌아가야
+    하고(시험이 그 전제로 쓰여 있다), 운영에서는 사람이 봐야 하기 때문이다.
+    진짜 값은 포털 config.php 의 list_url 과 같다.
+    """
+    url = cp["source"].get("list_url", "").strip() if cp.has_section("source") else ""
+    if not url:
+        print(f"[경고] {path.name}: [source] list_url 이 비어 있습니다. "
+              f"source_url 없이 적재합니다.", file=sys.stderr)
+        return
+    if any(d in url for d in DUMMY_LIST_IDS):
+        print(f"[경고] {path.name}: [source] list_url 이 아직 표본 값입니다: {url}",
+              file=sys.stderr)
+        print("        이대로 적재하면 열리지 않는 source_url 이 쌓입니다. "
+              "운영에서는 반드시 실제 값으로 바꾸십시오 "
+              "(포털 config.php 의 list_url 과 같은 값).", file=sys.stderr)
 
 
 def _open(sec) -> "pymysql.connections.Connection":
