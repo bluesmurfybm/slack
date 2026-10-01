@@ -10,7 +10,8 @@
  * POST api/rnd.php?act=reject          과제 반려 (사유 필수)
  *
  * POST api/rnd.php?act=join            합류 신청 (사유 + 신고 점유율)
- * POST api/rnd.php?act=approve_member  합류 승인 — lead 또는 관리자
+ * GET  api/rnd.php?act=load_check      신청 전 점유 상한 사전 확인 (본인 것만)
+ * POST api/rnd.php?act=approve_member  합류 승인 — lead 또는 관리자. 상한을 넘으면 거부
  * POST api/rnd.php?act=reject_member   합류 반려 (사유 필수)
  * POST api/rnd.php?act=leave           스스로 나가기 — 본인만
  * POST api/rnd.php?act=log             진행 기록 (content + finding)
@@ -23,8 +24,10 @@
  * 내보낸다 — 여기서 다시 거르지 않는다. 두 곳에서 거르면 언젠가 어긋난다.
  *
  * **점유(bs_workload) 적재는 아직 없다.** 승인·합류가 가용도를 바꾸지 않는다.
- * 적재는 P9-4 에서 시작한다. 종료·이탈이 end_date 를 당기는 경로는 지금
- * 미리 넣어 두었고(지우지 않는다), 적재가 시작되면 그대로 동작한다.
+ * 적재는 P10-2 다. 통제(P10-1)를 먼저 세우고 그 뒤에 적재를 연다 — CLAUDE.md
+ * 가 그 순서를 못 박는다. 뒤집으면 그 사이에 운영 데이터가 오염된다.
+ * 종료·이탈이 end_date 를 당기는 경로는 지금 미리 넣어 두었고(지우지 않는다),
+ * 적재가 시작되면 그대로 동작한다.
  */
 
 declare(strict_types=1);
@@ -33,6 +36,7 @@ require_once BS_ROOT . '/inc/presenter.php';
 require_once BS_ROOT . '/inc/repo/RndRepo.php';
 require_once BS_ROOT . '/inc/repo/MemberRepo.php';
 require_once BS_ROOT . '/inc/service/Notifier.php';
+require_once BS_ROOT . '/inc/service/RndLoadService.php';
 
 $repo = new RndRepo(bs_db());
 
@@ -95,13 +99,22 @@ bs_route(bs_param_str('act', 'board'), [
     'propose' => function () use ($repo): void {
         $user = bs_begin_write();
 
+        // 발의 **전에** 본다. 올리고 난 뒤에 알려 주면 늦다.
+        //
+        // 막지는 않는다 — 중단 자체가 잘못이 아니다. 해 보고 아니면 접는
+        // 것이 R&D 다. 다만 연속으로 접힌 뒤 또 올리면 승인하는 사람이
+        // 그 사실을 알고 판단해야 한다 (명세서 §9).
+        $warning = (new RndLoadService(bs_db()))->proposalWarning((string)$user['id']);
+
         $id = $repo->propose(bs_read_rnd_input(), $user);
         $r  = $repo->find($id);
 
         bs_json_ok([
             'id'      => $id,
             'rnd'     => $r ? bs_present_rnd($r) : null,
-            'message' => '과제를 발의했습니다. 승인되면 보드에 올라갑니다.',
+            'warning' => $warning,
+            'message' => '과제를 발의했습니다. 승인되면 보드에 올라갑니다.'
+                       . ($warning ? ' ' . $warning['message'] : ''),
         ]);
     },
 
@@ -177,6 +190,30 @@ bs_route(bs_param_str('act', 'board'), [
         ]);
     },
 
+    /**
+     * 신청 전 사전 확인 (명세서 §9.2).
+     *
+     * 신청해 놓고 승인에서 막히는 것보다, 누르기 전에 "지금 0.25 를 쓰고
+     * 있어서 0.1 까지만 됩니다" 를 보는 쪽이 낫다. 승인 때 거는 검사와
+     * **같은 함수**를 쓴다 — 두 벌로 두면 화면은 된다고 하고 서버는
+     * 막는 상태가 된다.
+     */
+    'load_check' => function () use ($repo): void {
+        $user = bs_require_login_api();
+        $pid  = bs_rnd_project_param();
+
+        $svc = new RndLoadService(bs_db());
+        $mid = (new MemberRepo(bs_db()))->findByUserId((string)$user['id'])['id'] ?? null;
+        if ($mid === null) {
+            bs_json_error('NOT_FOUND', '구성원 명단에 없습니다.', 404);
+        }
+
+        // 남의 점유를 들여다보지 못하게 한다. 본인 것만 본다.
+        bs_json_ok($svc->checkCap((int)$mid, $pid, (float)bs_param_str('load_ratio', '0')) + [
+            'stale_projects' => $svc->staleProjectsOf((int)$mid),
+        ]);
+    },
+
     'approve_member' => function () use ($repo): void {
         $user = bs_begin_write();
 
@@ -185,7 +222,13 @@ bs_route(bs_param_str('act', 'board'), [
             bs_json_error('MISSING_PARAM', '참여 기록 번호가 없습니다.', 400);
         }
 
-        $row = $repo->approveMember($rowId, $user);
+        try {
+            $row = $repo->approveMember($rowId, $user);
+        } catch (RndCapExceededException $e) {
+            // 전용 코드로 내보낸다. 화면이 "무엇을 줄여야 하는지" 를
+            // 보여 줘야 하므로 위반 내역과 현재 점유를 함께 싣는다.
+            bs_json_error('RND_CAP_EXCEEDED', $e->getMessage(), 400, $e->check);
+        }
         $pid = (int)$row['project_id'];
 
         $queued = bs_rnd_notify_member($repo, $pid, $row, true, '');
@@ -334,9 +377,15 @@ function bs_rnd_detail(RndRepo $repo, int $pid): array
     }
     $rnd       = bs_present_rnd($r);
     $canManage = $rnd['can']['manage_team'];
+    $svc       = new RndLoadService(bs_db());
+
+    // 승인하는 사람이 발의자의 중단 이력을 **함께** 본다 (명세서 §9).
+    // 발의 때 경고를 띄우고 끝내면, 정작 판단하는 사람은 모른 채 승인한다.
+    $rnd['proposer_warning'] = $svc->proposalWarning((string)($r['proposer_id'] ?? ''), (int)$r['id']);
 
     return [
         'rnd'     => $rnd,
+        'limits'  => $svc->limits(),
         'members' => array_map(
             static fn(array $m) => bs_present_rnd_member($m, $canManage),
             $repo->members($pid)

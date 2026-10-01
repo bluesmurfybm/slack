@@ -20,6 +20,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../presenter.php';
+require_once __DIR__ . '/../service/RndLoadService.php';
 
 /**
  * 산출물 없이 종료하려 할 때 (명세서 §8.5 — `RND_NO_OUTPUT`).
@@ -29,6 +30,25 @@ require_once __DIR__ . '/../presenter.php';
  * 는 다음 행동으로 이어 줘야 한다. api/rnd.php 가 전용 코드로 바꿔 내보낸다.
  */
 final class RndNoOutputException extends DomainException {}
+
+/**
+ * 점유 상한을 넘겨 합류를 승인할 수 없을 때 (명세서 §9.2).
+ *
+ * **위반 내역을 들고 다닌다.** "안 됩니다" 만 돌려주면 승인하는 사람이
+ * 무엇을 어떻게 고쳐야 하는지 모른다. 지금 점유가 얼마이고 상한이
+ * 얼마인지, 어느 과제들이 그 점유를 쓰고 있는지까지 화면으로 넘긴다.
+ */
+final class RndCapExceededException extends DomainException
+{
+    public function __construct(public readonly array $check, string $who = '')
+    {
+        $msgs = array_column($check['violations'] ?? [], 'message');
+        parent::__construct(
+            ($who !== '' ? $who . ' 님의 ' : '')
+            . "점유 상한에 걸려 승인할 수 없습니다.\n · " . implode("\n · ", $msgs)
+        );
+    }
+}
 
 final class RndRepo
 {
@@ -471,13 +491,16 @@ final class RndRepo
     /**
      * 합류 승인. lead 또는 관리자만.
      *
-     * TODO(P9-4): 점유 상한 검증을 여기에 넣는다 — 1인 합계 rnd_total_cap(0.30),
-     *             과제당 rnd_per_project_cap(0.20), 동시 참여 2건. 모두 전역
-     *             설정값이며 하드코딩하지 않는다(명세서 §9.2). 넘으면 승인을
-     *             막고 현재 점유율을 함께 돌려준다.
-     * TODO(P9-4): 승인된 참여를 bs_workload 에 kind='rnd' 로 적재한다.
-     *             과제가 approved_at 이 찬 상태인지 **반드시 함께 본다** —
-     *             과제 승인 없이 참여만 승인되면 §9.1 이 뚫린다.
+     * **상한을 넘으면 승인하지 않는다** (명세서 §9.2). 신청은 이미 받았고
+     * 여기서 막는다 — 신청 단계에서 막으면 왜 안 되는지 말해 줄 자리가 없다.
+     * 관리자라도 넘겨 줄 수 없다. 예외를 한 번 열면 그 길로만 다닌다.
+     *
+     * TODO(P10-2): 승인된 참여를 bs_workload 에 kind='rnd' 로 적재한다.
+     *              과제가 approved_at 이 찬 상태인지 **반드시 함께 본다** —
+     *              과제 승인 없이 참여만 승인되면 §9.1 이 뚫린다.
+     *              적재는 통제(P10-1)가 자리잡은 뒤에 시작한다(CLAUDE.md).
+     *
+     * @throws RndCapExceededException 상한을 넘을 때. 위반 내역을 들고 있다.
      */
     public function approveMember(int $rowId, array $actor): array
     {
@@ -486,6 +509,13 @@ final class RndRepo
 
         if ((string)$row['status'] !== 'requested') {
             throw new DomainException('신청 상태인 사람만 승인할 수 있습니다.');
+        }
+
+        $check = (new RndLoadService($this->pdo))->checkCap(
+            (int)$row['member_id'], (int)$row['project_id'], (float)$row['load_ratio']
+        );
+        if (!$check['ok']) {
+            throw new RndCapExceededException($check, $row['emp_name'] ?? '');
         }
 
         $this->pdo->prepare(

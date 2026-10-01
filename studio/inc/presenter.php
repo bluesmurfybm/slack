@@ -344,22 +344,14 @@ function bs_rnd_join_open(array $rnd): bool
 }
 
 /**
- * 정체 판정 — 진행 기록이 4주 넘게 없는가 (CLAUDE.md 2항).
+ * 정체 판정 — 진행 기록이 설정된 기간 넘게 없는가 (명세서 §9, CLAUDE.md 2항).
  *
- * 아직 안 돌아가는 과제(승인 전)는 정체가 아니다. 종료된 것도 아니다.
+ * 기간은 `rnd_stale_weeks` 설정값이다. **코드에 박지 않는다**(§9.2).
+ * 판정 자체는 RndLoadService 가 들고 있고 여기서는 그것을 부른다 —
+ * 보드와 상세가 서로 다른 기준으로 "조용함" 을 말하면 안 된다.
  */
 function bs_rnd_is_stale(array $rnd): bool
 {
-    if (!in_array((string)($rnd['status'] ?? ''), ['approved', 'running'], true)) {
-        return false;
-    }
-    $last = $rnd['last_log_at'] ?? null;
-    if ($last === null) {
-        // 기록이 하나도 없으면 승인 시점을 기준으로 본다.
-        $last = $rnd['approved_at'] ?? null;
-    }
-    if ($last === null) {
-        return false;
-    }
-    return strtotime((string)$last) < strtotime('-28 day');
+    require_once __DIR__ . '/service/RndLoadService.php';
+    return (new RndLoadService(bs_db()))->isStale($rnd);
 }
