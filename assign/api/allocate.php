@@ -1,0 +1,545 @@
+<?php
+/**
+ * 배정안 API — 산출, 수동 조정, 확정.
+ *
+ * GET  api/allocate.php?act=versions&project_id=1
+ * GET  api/allocate.php?act=detail&allocation_id=1
+ * GET  api/allocate.php?act=current&project_id=1     확정본만 (대시보드용)
+ * POST api/allocate.php?act=propose        배정안 산출 (version + 1)
+ * POST api/allocate.php?act=update_item    담당자 수동 조정
+ * POST api/allocate.php?act=add_item       지원 인원 추가
+ * POST api/allocate.php?act=delete_item
+ * POST api/allocate.php?act=confirm        확정 + 알림 적재
+ *
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ 확정 전 배정안은 PM·관리자만 볼 수 있다.                          │
+ * │ detail 은 확정본이 아니면 BA_CAP_ALLOCATION_PROPOSE 를 요구한다.  │
+ * │ 대시보드가 쓰는 경로는 act=current 하나뿐이고, 그쪽은             │
+ * │ AllocationRepo::confirmed() 만 본다 — 초안이 샐 구멍을 하나로 줄인다.│
+ * └──────────────────────────────────────────────────────────────────┘
+ */
+
+declare(strict_types=1);
+require_once __DIR__ . '/_init.php';
+require_once BA_ROOT . '/inc/repo/ProjectRepo.php';
+require_once BA_ROOT . '/inc/repo/TaskRepo.php';
+require_once BA_ROOT . '/inc/repo/MemberRepo.php';
+require_once BA_ROOT . '/inc/repo/AllocationRepo.php';
+require_once BA_ROOT . '/inc/service/AvailabilityCalculator.php';
+require_once BA_ROOT . '/inc/service/AllocationEngine.php';
+require_once BA_ROOT . '/inc/service/Notifier.php';
+
+$pdo      = ba_db();
+$projects = new ProjectRepo($pdo);
+$tasks    = new TaskRepo($pdo);
+$members  = new MemberRepo($pdo);
+$allocs   = new AllocationRepo($pdo);
+$avail    = new AvailabilityCalculator($pdo);
+$engine   = new AllocationEngine($tasks, $members, $allocs, $avail, $projects);
+
+ba_route(ba_param_str('act', 'versions'), [
+
+    'versions' => function () use ($projects, $allocs): void {
+        ba_require_login_api();
+        $projectId = ba_alloc_project_param($projects);
+
+        $rows = $allocs->versions($projectId);
+        $conf = null;
+        foreach ($rows as $r) {
+            if ($r['status'] === 'confirmed') { $conf = $r['version']; }
+        }
+
+        // 확정 전 배정안의 존재 자체는 알려도 되지만, 안을 열려면 권한이 필요하다.
+        $canSee = ba_can(BA_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        ba_json_ok([
+            'rows'              => $canSee
+                ? $rows
+                : array_values(array_filter($rows, static fn($r) => $r['status'] === 'confirmed')),
+            'confirmed_version' => $conf,
+            'can_propose'       => $canSee,
+            'can_confirm'       => ba_can(BA_CAP_ALLOCATION_CONFIRM, $projectId),
+            'hidden_drafts'     => $canSee ? 0
+                : count(array_filter($rows, static fn($r) => $r['status'] !== 'confirmed')),
+        ]);
+    },
+
+    'detail' => function () use ($allocs, $members, $tasks): void {
+        ba_require_login_api();
+        $a = ba_alloc_param($allocs);
+
+        // 확정 전 배정안은 아무나 볼 수 없다. 초안이 사내에 돌면
+        // 확정되지도 않은 배정을 사실로 받아들이는 사람이 생긴다.
+        if ($a['status'] !== 'confirmed') {
+            ba_require_cap_api(BA_CAP_ALLOCATION_PROPOSE, (int)$a['project_id']);
+        }
+
+        $items = $allocs->items((int)$a['id']);
+
+        ba_json_ok([
+            'allocation'  => $a,
+            'items'       => $items,
+            'load'        => ba_alloc_load($allocs, $members, $tasks, $a, $items),
+            'unassigned'  => $allocs->tasksWithoutOwner((int)$a['id']),
+            'can_edit'    => $a['status'] !== 'confirmed' && $a['status'] !== 'archived'
+                             && ba_can(BA_CAP_ALLOCATION_PROPOSE, (int)$a['project_id']),
+            'can_confirm' => ba_can(BA_CAP_ALLOCATION_CONFIRM, (int)$a['project_id']),
+        ]);
+    },
+
+    /**
+     * 확정본만. 대시보드와 진행상황 화면의 입구다.
+     * 확정 전에는 null 을 돌려준다 — 초안을 대신 보여 주지 않는다.
+     */
+    'current' => function () use ($projects, $allocs, $members, $tasks): void {
+        ba_require_login_api();
+        $projectId = ba_alloc_project_param($projects);
+
+        $r = $allocs->confirmedWithItems($projectId);
+        if ($r === null) {
+            ba_json_ok([
+                'allocation' => null, 'items' => [], 'load' => [],
+                'message' => '확정된 배정안이 없습니다. 확정 전에는 대시보드에 나오지 않습니다.',
+            ]);
+        }
+        ba_json_ok([
+            'allocation' => $r['allocation'],
+            'items'      => $r['items'],
+            'load'       => ba_alloc_load($allocs, $members, $tasks, $r['allocation'], $r['items']),
+        ]);
+    },
+
+    /**
+     * 담당자로 고를 수 있는 사람. 배정 화면의 선택 상자가 쓴다.
+     *
+     * 점수를 함께 내려주지 않는다. 사람 목록에 점수를 붙이면 그 자체가
+     * 전사 비교표가 된다(CLAUDE.md §1.4). 점수는 태스크별 근거에서만 본다.
+     */
+    'members' => function () use ($projects, $members): void {
+        ba_require_login_api();
+        $projectId = ba_alloc_project_param($projects);
+        ba_require_cap_api(BA_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        $rows = array_map(static fn($m) => [
+            'id'         => (int)$m['id'],
+            'emp_name'   => $m['emp_name'],
+            'role_label' => $m['role_label'],
+            'team'       => $m['team'],
+        ], $members->assignable());
+
+        ba_json_ok(['rows' => $rows]);
+    },
+
+    /**
+     * 배정안 산출.
+     * 항상 새 버전(version + 1)을 만들고 status='proposed' 로 시작한다.
+     */
+    'propose' => function () use ($projects, $tasks, $members, $allocs, $engine): void {
+        $user      = ba_begin_write();
+        $projectId = ba_alloc_project_param($projects);
+        ba_require_cap_api(BA_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        // 확정된 태스크가 하나도 없으면 여기서 막는다.
+        // "WBS 를 먼저 확정하세요" 로 돌려보내는 편이 친절하다.
+        if (!$tasks->confirmedForAllocation($projectId)) {
+            ba_json_error('NO_TASKS',
+                '확정된 태스크가 없습니다. 3단계에서 WBS 를 확정해야 배정 대상이 됩니다.', 400);
+        }
+
+        $params = [
+            'weights'     => ba_alloc_assoc('weights'),
+            'constraints' => ba_alloc_assoc('constraints'),
+            'member_ids'  => array_map('intval', ba_param_array('member_ids')),
+        ];
+
+        // 이전 안에서 사람이 손댄 항목을 그대로 가져올지.
+        $keepId = ba_param_int('keep_manual_from', 0);
+        if ($keepId) {
+            $prev = $allocs->find($keepId);
+            if (!$prev || (int)$prev['project_id'] !== $projectId) {
+                ba_json_error('NOT_FOUND', '이어받을 배정안을 찾을 수 없습니다.', 404);
+            }
+            $pinned = [];
+            foreach ($allocs->items($keepId) as $it) {
+                if ($it['is_manual'] && $it['role'] === 'owner') {
+                    $pinned[(int)$it['task_id']] = (int)$it['member_id'];
+                }
+            }
+            $params['pinned'] = $pinned;
+        }
+
+        $r = $engine->propose($projectId, $params);
+
+        // 엔진이 쓴 eval_ver 를 반드시 기록한다. 나중에 "왜 이렇게 배정됐나" 를
+        // 되짚으려면 어느 역량 스냅샷을 봤는지 알아야 한다.
+        $allocationId = $allocs->createVersion($projectId, [
+            'weights'     => $r['meta']['weights'],
+            'constraints' => $r['meta']['constraints'],
+            'member_ids'  => $params['member_ids'],
+            'eval_ver'    => $r['meta']['eval_ver'],
+            'engine_ver'  => $r['meta']['engine_ver'],
+            'pinned_from' => $keepId ?: null,
+        ], $user);
+
+        $allocs->saveItems($allocationId, $r['items']);
+
+        $a     = $allocs->find($allocationId);
+        $items = $allocs->items($allocationId);
+
+        ba_json_ok([
+            'allocation_id' => $allocationId,
+            'version'       => (int)$a['version'],
+            'status'        => $a['status'],
+            'allocation'    => $allocs->versions($projectId)[0] ?? null,
+            'items'         => $items,
+            'load'          => ba_alloc_load($allocs, $members, $tasks, $a, $items),
+            'unassigned'    => $r['unassigned'],
+            'meta'          => $r['meta'],
+            'message'       => '배정안 ' . $a['version'] . '차를 만들었습니다. 검토 후 확정하세요.'
+                . ($r['unassigned']
+                    ? ' 담당자를 못 정한 태스크가 ' . count($r['unassigned']) . '건 있습니다.'
+                    : ''),
+        ]);
+    },
+
+    /**
+     * 담당자 수동 조정.
+     * is_manual=1 과 사유를 반드시 남긴다 — 나중에 왜 바꿨는지 알아야 한다.
+     */
+    'update_item' => function () use ($allocs, $members, $tasks): void {
+        $user = ba_begin_write();
+        $itemId = ba_param_int('item_id', 0);
+        if (!$itemId) {
+            ba_json_error('MISSING_PARAM', '배정 항목 번호가 없습니다.', 400);
+        }
+        $cur = $allocs->findItem($itemId);
+        if (!$cur) {
+            ba_json_error('NOT_FOUND', '배정 항목을 찾을 수 없습니다.', 404);
+        }
+        $projectId = (int)$cur['project_id'];
+        ba_require_cap_api(BA_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        // 사유 없는 변경은 나중에 설명할 수 없다. 담당자를 바꿀 때는 받는다.
+        $note      = ba_param_str('manual_note');
+        $newMember = ba_has_param('member_id') ? ba_param_int('member_id', 0) : null;
+        if ($newMember !== null && $newMember !== (int)$cur['member_id'] && $note === '') {
+            ba_json_error('MISSING_PARAM',
+                '담당자를 바꾸려면 사유를 적어 주세요. 나중에 왜 바꿨는지 알아야 합니다.', 400);
+        }
+
+        $data = ['manual_note' => $note];
+        foreach (['member_id' => 'int', 'role' => 'str', 'alloc_ratio' => 'float'] as $k => $t) {
+            if (!ba_has_param($k)) {
+                continue;
+            }
+            $data[$k] = match ($t) {
+                'int'   => ba_param_int($k, 0),
+                'float' => (float)ba_param_str($k, '1.0'),
+                default => ba_param_str($k),
+            };
+        }
+
+        $allocs->updateItem($itemId, $data, $user);
+
+        $a     = $allocs->find((int)$cur['allocation_id']);
+        $items = $allocs->items((int)$a['id']);
+        ba_json_ok([
+            'item_id'    => $itemId,
+            'allocation' => $a,
+            'items'      => $items,
+            'load'       => ba_alloc_load($allocs, $members, $tasks, $a, $items),
+            'unassigned' => $allocs->tasksWithoutOwner((int)$a['id']),
+            'message'    => '배정을 조정했습니다.',
+        ]);
+    },
+
+    /** 지원 인원 추가(수동). */
+    'add_item' => function () use ($allocs, $members, $tasks): void {
+        $user = ba_begin_write();
+        $allocationId = ba_param_int('allocation_id', 0);
+        $taskId       = ba_param_int('task_id', 0);
+        $memberId     = ba_param_int('member_id', 0);
+        if (!$allocationId || !$taskId || !$memberId) {
+            ba_json_error('MISSING_PARAM', '배정안·태스크·구성원을 모두 지정하세요.', 400);
+        }
+        $a = $allocs->find($allocationId);
+        if (!$a) {
+            ba_json_error('NOT_FOUND', '배정안을 찾을 수 없습니다.', 404);
+        }
+        ba_require_cap_api(BA_CAP_ALLOCATION_PROPOSE, (int)$a['project_id']);
+
+        $role = ba_param_str('role', 'support');
+
+        // 담당(owner)은 태스크당 한 명이다(명세서 §6.2). 이미 있으면 막는다.
+        if ($role === 'owner') {
+            foreach ($allocs->items($allocationId) as $it) {
+                if ((int)$it['task_id'] === $taskId && $it['role'] === 'owner') {
+                    ba_json_error('CONFLICT',
+                        '이 태스크에는 이미 담당자가 있습니다. 바꾸려면 그 항목을 수정하세요.', 409);
+                }
+            }
+        }
+
+        $id = $allocs->addItem($allocationId, [
+            'task_id'     => $taskId,
+            'member_id'   => $memberId,
+            'role'        => $role,
+            'alloc_ratio' => (float)ba_param_str('alloc_ratio', '1.0'),
+            'manual_note' => ba_param_str('manual_note'),
+        ], $user);
+
+        $a     = $allocs->find($allocationId);
+        $items = $allocs->items($allocationId);
+        ba_json_ok([
+            'item_id'    => $id,
+            'allocation' => $a,
+            'items'      => $items,
+            'load'       => ba_alloc_load($allocs, $members, $tasks, $a, $items),
+            'unassigned' => $allocs->tasksWithoutOwner($allocationId),
+            'message'    => '배정 항목을 추가했습니다.',
+        ]);
+    },
+
+    'delete_item' => function () use ($allocs, $members, $tasks): void {
+        ba_begin_write();
+        $itemId = ba_param_int('item_id', 0);
+        if (!$itemId) {
+            ba_json_error('MISSING_PARAM', '배정 항목 번호가 없습니다.', 400);
+        }
+        $cur = $allocs->findItem($itemId);
+        if (!$cur) {
+            ba_json_error('NOT_FOUND', '배정 항목을 찾을 수 없습니다.', 404);
+        }
+        ba_require_cap_api(BA_CAP_ALLOCATION_PROPOSE, (int)$cur['project_id']);
+
+        $allocationId = (int)$cur['allocation_id'];
+        $allocs->deleteItem($itemId);
+
+        $a     = $allocs->find($allocationId);
+        $items = $allocs->items($allocationId);
+        ba_json_ok([
+            'allocation' => $a,
+            'items'      => $items,
+            'load'       => ba_alloc_load($allocs, $members, $tasks, $a, $items),
+            'unassigned' => $allocs->tasksWithoutOwner($allocationId),
+            'message'    => '배정 항목을 삭제했습니다.',
+        ]);
+    },
+
+    /**
+     * 확정.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 여기가 유일한 확정 경로다 (CLAUDE.md).                        │
+     * │ 다른 act 에서 status 를 confirmed 로 바꾸지 말 것.            │
+     * │                                                              │
+     * │ 확정 시 함께 일어나는 일:                                     │
+     * │   1. confirmed_by / confirmed_at 기록                        │
+     * │   2. 같은 프로젝트의 다른 버전을 archived 로                  │
+     * │   3. ba_workload 에 kind='assigned' 점유 생성                │
+     * │   (1~3 은 AllocationRepo::confirm() 이 한 트랜잭션으로)       │
+     * │   4. 알림 적재 — **트랜잭션 바깥**이다. 슬랙이 죽었다고       │
+     * │      확정이 롤백되면 안 된다.                                 │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    'confirm' => function () use ($projects, $allocs, $members, $tasks, $avail, $pdo): void {
+        $user         = ba_begin_write();
+        $allocationId = ba_param_int('allocation_id', 0);
+        if (!$allocationId) {
+            ba_json_error('MISSING_PARAM', '배정안 번호가 없습니다.', 400);
+        }
+        $a = $allocs->find($allocationId);
+        if (!$a) {
+            ba_json_error('NOT_FOUND', '배정안을 찾을 수 없습니다.', 404);
+        }
+        $projectId = (int)$a['project_id'];
+        ba_require_cap_api(BA_CAP_ALLOCATION_CONFIRM, $projectId);
+
+        $items = $allocs->items($allocationId);
+        $load  = ba_alloc_load($allocs, $members, $tasks, $a, $items);
+
+        // 과배정은 **막지 않고 경고한다.** 기간이 짧아 넘치는 것은 흔하고,
+        // 그걸 아는 채로 밀어붙이는 판단은 사람 몫이다. 다만 모르고
+        // 넘어가지는 않게 confirm=1 을 한 번 더 받는다.
+        $over = array_values(array_filter($load, static fn($l) => !empty($l['over'])));
+        if ($over && ba_param_int('accept_overload', 0) !== 1) {
+            ba_json_error('OVERLOAD',
+                '가용 공수를 넘긴 사람이 있습니다:' . "\n · "
+                . implode("\n · ", array_map(
+                    static fn($l) => $l['emp_name'] . ' ' . $l['assigned_md']
+                                   . ' / ' . $l['capacity_md'] . ' M/D', $over))
+                . "\n그래도 확정하려면 다시 눌러 주세요.", 409);
+        }
+
+        // 1~3
+        $allocs->confirm($allocationId, $user);
+
+        // 4 — 여기서 실패해도 확정은 이미 끝났다.
+        $notifier = new OutboxNotifier($pdo);
+        $notice   = ba_alloc_notices($projects, $members, $allocs, $projectId, $allocationId);
+        $sent     = $notifier->send($notice);
+
+        ba_json_ok([
+            'allocation_id' => $allocationId,
+            'status'        => 'confirmed',
+            'allocation'    => $allocs->find($allocationId),
+            'notify'        => $sent + ['notifier' => $notifier->name()],
+            'message'       => '배정안을 확정했습니다.'
+                . ($sent['queued'] ? ' 알림 ' . $sent['queued'] . '건을 보낼 목록에 넣었습니다.' : '')
+                . ($sent['skipped'] ? ' ' . $sent['skipped'] . '건은 받을 주소가 없어 빠졌습니다.' : ''),
+            // 보냈다고 말하지 않는다. 아직 내보내는 경로가 없다.
+            'notify_notice' => '알림은 적재만 된 상태입니다. 실제 발송 경로는 아직 없습니다'
+                             . '(sql/007_migration_notify_outbox.sql 의 설명 참고).',
+        ]);
+    },
+]);
+
+
+// =====================================================================
+// 공통
+// =====================================================================
+
+function ba_alloc_project_param(ProjectRepo $projects): int
+{
+    $projectId = ba_param_int('project_id', 0);
+    if (!$projectId) {
+        ba_json_error('MISSING_PARAM', '프로젝트 번호가 없습니다.', 400);
+    }
+    if (!$projects->find($projectId)) {
+        ba_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+    }
+    return $projectId;
+}
+
+function ba_alloc_param(AllocationRepo $allocs): array
+{
+    $id = ba_param_int('allocation_id', 0);
+    if (!$id) {
+        ba_json_error('MISSING_PARAM', '배정안 번호가 없습니다.', 400);
+    }
+    $a = $allocs->find($id);
+    if (!$a) {
+        ba_json_error('NOT_FOUND', '배정안을 찾을 수 없습니다.', 404);
+    }
+    // find() 는 원본 행이라 화면이 쓰는 모양으로 한 번 더 감싼다.
+    foreach ($allocs->versions((int)$a['project_id']) as $v) {
+        if ((int)$v['id'] === $id) {
+            return $v;
+        }
+    }
+    return $a;
+}
+
+/** JSON 으로 온 연관배열 파라미터. 스칼라가 오면 무시한다. */
+function ba_alloc_assoc(string $key): array
+{
+    $v = ba_param($key, []);
+    return is_array($v) ? $v : [];
+}
+
+/**
+ * 사람별 부하. 화면의 막대가 쓴다.
+ *
+ * 가용 공수는 **배정 당시 기준**이 아니라 지금 다시 계산한다. 그래야
+ * 수동 조정 뒤에도 막대가 맞는다.
+ */
+function ba_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $tasks,
+                       array $allocation, array $items): array
+{
+    $byMember = $allocs->loadByMember((int)$allocation['id']);
+    if (!$byMember) {
+        return [];
+    }
+
+    $ids = array_keys($byMember);
+    $cap = [];
+
+    // 기간은 배정안이 저장해 둔 것을 쓰지 않는다 — 프로젝트 기간이 바뀌면
+    // 막대도 따라 바뀌어야 한다.
+    $pdo = ba_db();
+    $q = $pdo->prepare('SELECT dev_start, dev_end, test_start, test_end, deploy_date
+                          FROM ba_project WHERE id = ?');
+    $q->execute([(int)$allocation['project_id']]);
+    $p = $q->fetch(PDO::FETCH_ASSOC) ?: [];
+    $from = $p['dev_start'] ?: ($p['test_start'] ?: null);
+    $to   = $p['deploy_date'] ?: ($p['test_end'] ?: ($p['dev_end'] ?: null));
+
+    if ($from !== null && $to !== null && $from <= $to) {
+        $calc = new AvailabilityCalculator($pdo);
+        foreach ($calc->forMembers($ids, $from, $to) as $mid => $a) {
+            $cap[$mid] = round((float)$a['available'] * (int)$a['workdays'], 2);
+        }
+    }
+
+    $out = [];
+    foreach ($ids as $mid) {
+        $m  = $members->find($mid);
+        $md = $byMember[$mid]['md'];
+        $c  = $cap[$mid] ?? 0.0;
+        $out[] = [
+            'member_id'   => $mid,
+            'emp_name'    => $m['emp_name'] ?? ('#' . $mid),
+            'role_label'  => $m['role_label'] ?? null,
+            'assigned_md' => $md,
+            'capacity_md' => $c,
+            'load_pct'    => $c > 0 ? (int)round($md / $c * 100) : null,
+            'task_count'  => $byMember[$mid]['items'],
+            'owner_count' => $byMember[$mid]['owner'],
+            'over'        => $c > 0 && $md > $c,
+        ];
+    }
+    usort($out, static fn($a, $b) => ($b['assigned_md'] <=> $a['assigned_md'])
+                                  ?: ($a['member_id'] <=> $b['member_id']));
+    return $out;
+}
+
+/**
+ * 확정 알림 문안.
+ *
+ * 사람마다 자기가 맡은 것만 담는다. 남의 배정까지 보내면 그 자체가
+ * 전사 비교표가 된다(CLAUDE.md 가 막는 것).
+ *
+ * @return Notice[]
+ */
+function ba_alloc_notices(ProjectRepo $projects, MemberRepo $members, AllocationRepo $allocs,
+                          int $projectId, int $allocationId): array
+{
+    $p = $projects->find($projectId);
+    $a = $allocs->find($allocationId);
+
+    $byMember = [];
+    foreach ($allocs->items($allocationId) as $it) {
+        $byMember[(int)$it['member_id']][] = $it;
+    }
+
+    $out = [];
+    foreach ($byMember as $mid => $items) {
+        $m = $members->find($mid);
+        if (!$m) {
+            continue;
+        }
+
+        $lines = [];
+        $lines[] = $p['name'] . ' 배정이 확정됐습니다 (' . $a['version'] . '차).';
+        $lines[] = '';
+        foreach ($items as $it) {
+            $lines[] = sprintf('· %s %s [%s]%s%s',
+                $it['wbs_no'] ?: '-', $it['task_title'], $it['role_name'],
+                $it['est_md'] !== null ? ' ' . $it['est_md'] . ' M/D' : '',
+                $it['plan_start'] ? ' (' . $it['plan_start'] . ' ~ ' . ($it['plan_end'] ?: '') . ')' : ''
+            );
+        }
+        $lines[] = '';
+        $lines[] = '자세한 내용은 업무 배정 화면에서 확인하세요.';
+        $body = implode("\n", $lines);
+
+        $subject = '[' . $p['name'] . '] 배정 확정 (' . count($items) . '건)';
+
+        // 슬랙과 메일 둘 다 접수한다. 어느 쪽이 살아 있을지 모른다.
+        $out[] = new Notice('slack', $mid, (string)($m['slack_handle'] ?? ''),
+                            $body, $subject, 'allocation', $allocationId);
+        $out[] = new Notice('email', $mid, (string)($m['email'] ?? ''),
+                            $body, $subject, 'allocation', $allocationId);
+    }
+    return $out;
+}
