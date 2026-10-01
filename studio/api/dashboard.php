@@ -146,7 +146,13 @@ bs_route(bs_param_str('act', 'projects'), [
             'summary'   => $progress->projectProgress($projectId),   // 1
             'columns'   => bs_dash_columns($cards),
             'gantt'     => bs_dash_gantt($cards, $project),
-            'by_member' => bs_dash_members($byMember, $cards),
+            // 담당자 카드에 가용도를 함께 싣는다 (P10-2).
+            //
+            // 질의가 늘지만 **구성원 수와 무관하게 고정**이다 —
+            // forMembers() 가 한 번에 묶어 묻는다. progress_test [3] 의
+            // "태스크가 늘어도 질의 수는 그대로" 는 그대로 지켜진다.
+            'by_member' => bs_dash_members($byMember, $cards,
+                                           bs_dash_avail($byMember, $project)),
             'overdue'   => $overdue,
             'feed'      => $feed,
             'me'        => bs_dash_me($members, $me, $byMember),     // 1
@@ -421,7 +427,30 @@ function bs_dash_gantt(array $cards, array $project): array
 }
 
 /** 담당자별 카드 — 배정 수, 진행률, 지연 건. */
-function bs_dash_members(array $byMember, array $cards): array
+/**
+ * 담당자들의 가용도를 한 번에 잰다 (P10-2).
+ *
+ * 프로젝트 기간을 창으로 쓴다 — 대시보드는 이 프로젝트를 보는 화면이므로,
+ * "이 기간에 이 사람이 얼마나 비어 있나" 가 맞는 질문이다.
+ * 기간을 모르면 빈 배열을 돌려주고 카드는 가용도 없이 그린다.
+ */
+function bs_dash_avail(array $byMember, array $project): array
+{
+    if (!$byMember) {
+        return [];
+    }
+    $from = $project['dev_start'] ?: ($project['test_start'] ?: null);
+    $to   = $project['deploy_date'] ?: ($project['test_end'] ?: ($project['dev_end'] ?: null));
+    if ($from === null || $to === null || $from > $to) {
+        return [];
+    }
+
+    require_once BS_ROOT . '/inc/service/AvailabilityCalculator.php';
+    return (new AvailabilityCalculator(bs_db()))
+        ->forMembers(array_keys($byMember), $from, $to);
+}
+
+function bs_dash_members(array $byMember, array $cards, array $avail = []): array
 {
     $out = [];
     foreach ($byMember as $mid => $m) {
@@ -446,6 +475,17 @@ function bs_dash_members(array $byMember, array $cards): array
             'overdue'     => $late,
             'assigned_md' => round($md, 2),
             'progress_pct' => $wsum > 0 ? (int)round($psum / $wsum) : 0,
+            // 합산 숫자만 보여 주는 자리를 만들지 않는다 — 프로젝트·R&D·추정을
+            // 나눠 담고 화면이 그대로 그린다 (P10-2).
+            'availability' => isset($avail[$mid]) ? [
+                'available_pct' => $avail[$mid]['available_pct'],
+                'confirmed_pct' => $avail[$mid]['confirmed_pct'],
+                'project_pct'   => $avail[$mid]['project_pct'],
+                'rnd_pct'       => $avail[$mid]['rnd_pct'],
+                'inferred_pct'  => $avail[$mid]['inferred_pct'],
+                'capacity_pct'  => $avail[$mid]['capacity_pct'],
+                'confidence'    => $avail[$mid]['confidence'],
+            ] : null,
         ];
     }
     usort($out, static fn($a, $b) => ($b['overdue'] <=> $a['overdue'])

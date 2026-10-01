@@ -214,6 +214,107 @@ bs_route(bs_param_str('act', 'board'), [
         ]);
     },
 
+    /**
+     * 한 사람의 R&D 점유 내역 (P10-2).
+     *
+     * 가용도 표시에서 "R&D 15%" 를 눌렀을 때 **어떤 과제인지** 보여 주는
+     * 드로어가 쓴다. 합산 숫자만 보여 주고 끝내면 그 15% 가 어디서 왔는지
+     * 아무도 되짚을 수 없다.
+     *
+     * 본인 것은 언제나 본다. 남의 것은 배정을 짜는 사람만 본다 — 후보 표와
+     * 같은 선이다(BS_CAP_ALLOCATION_PROPOSE).
+     *
+     * **역량 점수를 함께 내보내지 않는다.** 이 응답은 점유 감사 전용이다.
+     */
+    'member_load' => function (): void {
+        $user = bs_require_login_api();
+
+        $members = new MemberRepo(bs_db());
+        $meMid   = (int)($members->findByUserId((string)$user['id'])['id'] ?? 0);
+        $mid     = bs_param_int('member_id', 0) ?: $meMid;
+
+        if ($mid !== $meMid && !bs_can(BS_CAP_ALLOCATION_PROPOSE) && !bs_is_admin()) {
+            bs_json_error('FORBIDDEN', '다른 사람의 점유 내역을 볼 권한이 없습니다.', 403);
+        }
+        if (!$mid) {
+            bs_json_error('NOT_FOUND', '구성원 명단에 없습니다.', 404);
+        }
+
+        $svc = new RndLoadService(bs_db());
+        $cur = $svc->currentLoad($mid);
+        $lim = $svc->limits();
+
+        bs_json_ok([
+            'member_id' => $mid,
+            'emp_name'  => $members->find($mid)['emp_name'] ?? null,
+            'total'     => $cur['total'],
+            'count'     => $cur['count'],
+            'projects'  => $cur['projects'],
+            'stale'     => $svc->staleProjectsOf($mid),
+            'limit'     => $lim,
+            // 상한 대비 여유. 음수면 이미 넘은 것이다(설정을 낮춘 경우).
+            'headroom'  => round($lim['total_cap'] - $cur['total'], 3),
+        ]);
+    },
+
+    /**
+     * 관리자용 R&D 점유 현황 (P10-2).
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ **역량 점수를 이 화면에 섞지 않는다.**                        │
+     * │                                                              │
+     * │ 점유율 감사 전용이다. 여기에 역량 점수를 함께 올리면 구성원을 │
+     * │ 한 줄로 세운 표가 되고, 그것은 CLAUDE.md 가 금지한 전사      │
+     * │ 랭킹이다. 정렬 한 번이면 그렇게 된다.                        │
+     * │                                                              │
+     * │ 이 응답에는 cap_score · breadth_score · fit 류가 한 칸도      │
+     * │ 들어 있지 않다. rnd_test 가 그것을 지킨다.                    │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    'admin_load' => function (): void {
+        bs_require_login_api();
+        if (!bs_is_admin()) {
+            bs_json_error('FORBIDDEN', '관리자만 볼 수 있습니다.', 403);
+        }
+
+        $pdo = bs_db();
+        $svc = new RndLoadService($pdo);
+        $lim = $svc->limits();
+
+        // R&D 에 참여 중인 사람만 추린다. 전원을 올리면 "0% 인 사람" 이
+        // 대부분이라 볼 것이 묻힌다.
+        $ids = $pdo->query(
+            "SELECT DISTINCT rm.member_id
+               FROM bs_rnd_member rm
+               JOIN bs_project p ON p.id = rm.project_id
+              WHERE rm.status = 'approved' AND p.project_type = 'rnd'
+                AND p.deleted_at IS NULL AND p.status IN ('approved','running')"
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        $members = new MemberRepo($pdo);
+        $rows = [];
+        foreach ($ids as $mid) {
+            $mid = (int)$mid;
+            $cur = $svc->currentLoad($mid);
+            $m   = $members->find($mid);
+            $rows[] = [
+                'member_id'  => $mid,
+                'emp_name'   => $m['emp_name'] ?? ('#' . $mid),
+                'role_label' => $m['role_label'] ?? null,
+                'total'      => $cur['total'],
+                'count'      => $cur['count'],
+                'projects'   => $cur['projects'],
+                'stale'      => $svc->staleProjectsOf($mid),
+                'headroom'   => round($lim['total_cap'] - $cur['total'], 3),
+                'over'       => $cur['total'] > $lim['total_cap'],
+            ];
+        }
+        usort($rows, static fn($a, $b) => ($b['total'] <=> $a['total'])
+                                       ?: ($a['member_id'] <=> $b['member_id']));
+
+        bs_json_ok(['rows' => $rows, 'limit' => $lim]);
+    },
+
     'approve_member' => function () use ($repo): void {
         $user = bs_begin_write();
 

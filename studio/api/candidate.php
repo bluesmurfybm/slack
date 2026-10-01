@@ -90,9 +90,13 @@ bs_route(bs_param_str('act', 'list'), [
                 'team'        => $r['team'],
 
                 // 가용도 — 확정과 추정을 **분리해서** 담는다. 합치지 않는다.
+                // 확정은 다시 프로젝트와 R&D 로 나눠 담는다(P10-2).
+                // 합산 숫자만 보여 주는 자리를 만들지 않는다.
                 'availability' => $a ? [
                     'available_pct' => $a['available_pct'],
                     'confirmed_pct' => $a['confirmed_pct'],
+                    'project_pct'   => $a['project_pct'],
+                    'rnd_pct'       => $a['rnd_pct'],
                     'inferred_pct'  => $a['inferred_pct'],
                     'confidence'    => $a['confidence'],
                     'workdays'      => $a['workdays'],
@@ -201,9 +205,12 @@ bs_route(bs_param_str('act', 'list'), [
             'availability' => [
                 'available_pct' => $a['available_pct'],
                 'confirmed_pct' => $a['confirmed_pct'],
+                'project_pct'   => $a['project_pct'],
+                'rnd_pct'       => $a['rnd_pct'],
                 'inferred_pct'  => $a['inferred_pct'],
                 'confidence'    => $a['confidence'],
                 'base_capacity' => $a['base_capacity'],
+                'capacity_pct'  => $a['capacity_pct'],
             ],
             // 확정 내역과 추정 내역을 따로 담는다. 화면이 섞지 못하게.
             'confirmed_breakdown' => $a['breakdown'],

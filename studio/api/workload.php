@@ -243,6 +243,9 @@ function bs_wl_avail(array $a): array
     return [
         'available_pct' => $a['available_pct'],
         'confirmed_pct' => $a['confirmed_pct'],
+        // 확정을 프로젝트와 R&D 로 나눠 담는다 (P10-2).
+        'project_pct'   => $a['project_pct'],
+        'rnd_pct'       => $a['rnd_pct'],
         'inferred_pct'  => $a['inferred_pct'],
         'capacity_pct'  => $a['capacity_pct'],
         'confidence'    => $a['confidence'],

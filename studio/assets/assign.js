@@ -1204,17 +1204,34 @@
     //
     // **확정과 추정을 한 숫자로 합치지 않는다.** 막대도 무늬를 달리해
     // 눈으로 구분되게 한다. 추정을 확정처럼 보여 주면 그걸 사실로 읽는다.
-    function availCell(a) {
+    function availCell(a, memberId) {
       if (!a) return '<span class="ba-dim">—</span>';
+
+      // 프로젝트·R&D·추정을 **각각** 적는다. 합산 숫자만 보여 주는 자리를
+      // 만들지 않는다 (P10-2). R&D 가 0이면 그 조각은 아예 쓰지 않는다 —
+      // 참여가 없는 사람 화면에 쓸데없는 0% 가 늘어서는 안 된다.
+      var hasRnd = a.rnd_pct !== undefined && a.rnd_pct > 0;
+      var proj   = a.project_pct !== undefined ? a.project_pct : a.confirmed_pct;
+
+      var parts = [];
+      parts.push('프로젝트 ' + proj + '%');
+      if (hasRnd) {
+        // 눌러서 어떤 과제인지 본다.
+        parts.push('<a href="javascript:void(0)" class="ba-av__rnd"' +
+                   (memberId ? ' data-rndload="' + memberId + '"' : '') +
+                   '>R&amp;D ' + a.rnd_pct + '%</a>');
+      }
+      parts.push('추정 ' + a.inferred_pct + '%');
+
       return '<div class="ba-av">' +
         '<div class="ba-av__bar">' +
-          '<i class="ba-av__c" style="width:' + a.confirmed_pct + '%"></i>' +
+          '<i class="ba-av__c" style="width:' + proj + '%"></i>' +
+          (hasRnd ? '<i class="ba-av__r" style="width:' + a.rnd_pct + '%"></i>' : '') +
           '<i class="ba-av__i" style="width:' + a.inferred_pct + '%"></i>' +
         '</div>' +
         '<div class="ba-av__txt">' +
           '<b>가용 ' + a.available_pct + '%</b> ' +
-          '<span class="ba-dim">(확정 ' + a.confirmed_pct + '% + 추정 ' +
-            a.inferred_pct + '% 점유' +
+          '<span class="ba-dim">(' + parts.join(' + ') + ' 점유' +
             // 반일 근무자는 기준이 100 이 아니다. 안 적으면 남는 칸이
             // 무엇인지 알 수 없다 — 점유가 아니라 애초의 근무량이다.
             (a.capacity_pct !== undefined && a.capacity_pct < 100
@@ -1284,7 +1301,7 @@
           '<td class="ba-ct__name"><button type="button" class="ba-linkish" data-detail="' +
             r.member_id + '">' + esc(r.emp_name) + '</button></td>' +
           '<td>' + esc(r.role_label || '—') + '</td>' +
-          '<td>' + availCell(r.availability) + '</td>' +
+          '<td>' + availCell(r.availability, r.member_id) + '</td>' +
           '<td>' + scoreCell(r.domain_fit, r.insufficient_data) + '</td>' +
           '<td>' + scoreCell(r.capability, r.insufficient_data) + '</td>' +
           '<td>' + scoreCell(r.breadth, r.insufficient_data) + '</td>' +
@@ -1352,7 +1369,7 @@
           var h = '';
 
           h += '<div class="ba-cd__sec"><h3>가용도</h3>' +
-               availCell(a) +
+               availCell(a, mid) +
                '<p class="ba-cd__note">기간 ' + esc(d.period.from) + ' ~ ' + esc(d.period.to) +
                ' · 영업일 ' + d.period.workdays + '일 · 기본 가용 ' +
                (a.base_capacity * 100).toFixed(0) + '%</p></div>';
@@ -3633,8 +3650,141 @@
     });
   }
 
+  // =====================================================================
+  // R&D 점유 드로어 (P10-2)
+  //
+  // 가용도 표시의 "R&D 15%" 를 누르면 **어떤 과제인지** 보여 준다.
+  // 합산 숫자만 보여 주고 끝내면 그 15% 가 어디서 왔는지 되짚을 수 없다.
+  //
+  // 드로어 markup 을 화면마다 넣지 않고 여기서 한 번만 만든다 — 가용도는
+  // 후보 표·프로파일·대시보드 세 곳에 나오고, 앞으로 더 늘 수 있다.
+  // =====================================================================
+  function initRndLoadDrawer() {
+    var EL = null;
+
+    function ensure() {
+      if (EL) return EL;
+      EL = document.createElement('div');
+      EL.className = 'ba-drawer';
+      EL.id = 'ba-rndload-drawer';
+      EL.hidden = true;
+      EL.innerHTML =
+        '<div class="ba-drawer__box" role="dialog" aria-modal="true" aria-labelledby="ba-rl-title">' +
+          '<div class="ba-drawer__head">' +
+            '<h2 id="ba-rl-title">R&amp;D 점유</h2>' +
+            '<button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>' +
+          '</div>' +
+          '<div class="ba-drawer__body" id="ba-rl-body"></div>' +
+          '<div class="ba-drawer__foot"><span class="ba-spacer"></span>' +
+            '<button type="button" class="ba-btn" data-close>닫기</button></div>' +
+        '</div>';
+      document.body.appendChild(EL);
+      EL.addEventListener('click', function (e) {
+        if (e.target.closest('[data-close]') || e.target === EL) closeDrawer('ba-rndload-drawer');
+      });
+      return EL;
+    }
+
+    function render(d) {
+      var h = '';
+      h += '<div class="ba-cd__sec"><h3>' + esc(d.emp_name || '') + '</h3>' +
+           '<p class="ba-cd__note">R&amp;D 점유 합계 <b>' + Math.round(d.total * 100) + '%</b>' +
+           ' · 참여 ' + d.count + '건 · 상한 ' + Math.round(d.limit.total_cap * 100) + '%' +
+           ' · 남은 여유 ' + Math.round(d.headroom * 100) + '%</p></div>';
+
+      h += '<div class="ba-cd__sec"><h3>참여 중인 과제</h3>';
+      if (!d.projects.length) {
+        h += '<p class="ba-empty-inline">참여 중인 R&amp;D 과제가 없습니다.</p>';
+      } else {
+        var staleIds = {};
+        (d.stale || []).forEach(function (s) { staleIds[s.project_id] = s.last_log_at; });
+        h += '<ul class="ba-rl-list">' + d.projects.map(function (p) {
+          var isStale = staleIds[p.project_id] !== undefined;
+          return '<li>' +
+            '<a href="rnd_view.php?id=' + p.project_id + '">' + esc(p.code) + ' ' + esc(p.name) + '</a>' +
+            '<span class="ba-badge">' + Math.round(p.load_ratio * 100) + '%</span>' +
+            (isStale ? '<span class="ba-badge ba-badge--stale" title="진행 기록이 오래 없습니다">조용함</span>' : '') +
+          '</li>';
+        }).join('') + '</ul>';
+      }
+      h += '</div>';
+
+      // 점유 감사용 화면이다. **역량 점수를 여기에 섞지 않는다.**
+      h += '<p class="ba-cd__note">이 내역은 점유 감사용입니다. 역량 점수와 무관합니다.</p>';
+      return h;
+    }
+
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest('[data-rndload]');
+      if (!a) return;
+      e.preventDefault();
+
+      ensure();
+      $('#ba-rl-body').innerHTML = '<div class="ba-loading">불러오는 중…</div>';
+      openDrawer('ba-rndload-drawer');
+
+      api('api/rnd.php?' + qs({ act: 'member_load', member_id: a.dataset.rndload }))
+        .then(function (d) { $('#ba-rl-body').innerHTML = render(d); })
+        .catch(function (err) {
+          $('#ba-rl-body').innerHTML = '<p class="ba-empty-inline">' + esc(err.message) + '</p>';
+        });
+    });
+  }
+
+  // =====================================================================
+  // 관리자용 R&D 점유 현황 (P10-2)
+  //
+  // **역량 점수를 그리지 않는다.** 서버도 안 내려주고 화면도 안 그린다.
+  // =====================================================================
+  function initRndLoadPage() {
+    var root = $('#ba-rnd-load');
+    if (!root) return;
+
+    api('api/rnd.php?act=admin_load').then(function (d) {
+      var lim = d.limit;
+      $$('#ba-rl-limits .n').forEach(function (el) {
+        var k = el.dataset.k;
+        var v = lim[k];
+        el.textContent = (k === 'concurrent_max' || k === 'stale_weeks')
+          ? v : Math.round(v * 100) + '%';
+      });
+
+      var tb = $('#ba-rl-table tbody');
+      if (!d.rows.length) {
+        tb.innerHTML = '<tr><td colspan="6" class="ba-empty">R&amp;D 에 참여 중인 구성원이 없습니다.</td></tr>';
+        return;
+      }
+
+      tb.innerHTML = d.rows.map(function (r) {
+        var staleIds = {};
+        (r.stale || []).forEach(function (s) { staleIds[s.project_id] = 1; });
+
+        var projs = r.projects.map(function (p) {
+          return '<a href="rnd_view.php?id=' + p.project_id + '">' + esc(p.name) + '</a>' +
+                 ' <span class="ba-dim">' + Math.round(p.load_ratio * 100) + '%</span>' +
+                 (staleIds[p.project_id] ? ' <span class="ba-badge ba-badge--stale">조용함</span>' : '');
+        }).join('<br>');
+
+        return '<tr' + (r.over ? ' class="ba-row-over"' : '') + '>' +
+          '<td>' + esc(r.emp_name) + '</td>' +
+          '<td>' + esc(r.role_label || '') + '</td>' +
+          '<td><b>' + Math.round(r.total * 100) + '%</b></td>' +
+          '<td>' + r.count + '</td>' +
+          '<td' + (r.headroom < 0 ? ' class="ba-neg"' : '') + '>' +
+            Math.round(r.headroom * 100) + '%</td>' +
+          '<td>' + projs + '</td>' +
+        '</tr>';
+      }).join('');
+    }).catch(function (e) {
+      $('#ba-rl-table tbody').innerHTML =
+        '<tr><td colspan="6" class="ba-empty">' + esc(e.message) + '</td></tr>';
+    });
+  }
+
   // ---- 진입 ---------------------------------------------------------
   initDrawer();
+  initRndLoadDrawer();
+  initRndLoadPage();
 
   switch (NAV) {
     case 'dashboard': initDashboard(); break;
