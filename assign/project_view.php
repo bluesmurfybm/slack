@@ -234,7 +234,8 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
               <th style="width:74px"
                   title="7개 계열 중 20건 이상 처리한 계열의 비율입니다.&#10;20건이 안 되면 표본이 모자라 점수를 내지 않습니다.">경험 범위</th>
               <th style="width:74px">진행 건</th>
-              <th style="width:80px">적합도</th>
+              <th style="width:80px"
+                  title="이 과업 기준으로 처리량·분야 경험·경험 범위·경력을 합한 값입니다.&#10;가용도는 넣지 않습니다 — 옆 칸에 따로 있습니다.&#10;3단계 배정표의 적합도와는 다른 숫자입니다(그쪽은 가용도를 넣습니다).">적합도</th>
             </tr>
           </thead>
           <tbody><tr><td colspan="9" class="ba-loading">불러오는 중…</td></tr></tbody>
@@ -242,6 +243,11 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
       </div>
 
       <p class="ba-panel__hint" style="margin-top:12px">
+        적합도에는 <b>가용도를 넣지 않습니다.</b> 섞으면 바쁜 전문가가 한가한
+        초보보다 낮게 나옵니다. 두 축을 나란히 두고 고르시라는 뜻입니다 —
+        그래서 3단계 배정표의 적합도와 숫자가 다릅니다(그쪽은 기계가 고르므로
+        가용도를 넣습니다).
+
         가용도는 <b>확정 점유와 추정 점유를 나눠</b> 표시합니다.
         추정은 아직 진행 중인 슬랙 건에서 어림한 값이라 확정과 같은 무게로 보면 안 됩니다.
       </p>
@@ -373,7 +379,8 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
               <th style="width:56px">난이도</th>
               <th style="width:150px">담당자</th>
               <th style="width:86px">역할</th>
-              <th style="width:84px">적합도</th>
+              <th style="width:84px"
+                  title="분야 경험·처리량·가용도·경력을 합한 값입니다.&#10;2단계 후보 표의 적합도와는 다른 숫자입니다 — 그쪽은 가용도를 넣지 않습니다.">적합도</th>
               <th style="width:96px"></th>
             </tr>
           </thead>
@@ -381,6 +388,10 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
         </table>
       </div>
       <p class="ba-panel__hint" style="margin-top:10px">
+        적합도에는 <b>가용도가 들어갑니다.</b> 넣지 않으면 제일 잘하는 한 사람에게
+        전부 몰립니다. 그래서 2단계 후보 표와 숫자가 다릅니다 — 같은 사람이라도
+        보는 자리에 따라 달라지는 것이 맞습니다.
+
         적합도를 누르면 <b>왜 이 사람인지</b> 근거가 열립니다.
         담당자를 바꾸면 <b>수동</b> 으로 표시되고 엔진 점수는 지웁니다 —
         그 점수는 다른 사람 것이기 때문입니다.
