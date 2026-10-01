@@ -41,6 +41,27 @@ sh studio/sql/apply.sh <db> -u <user> -p
 `Permission denied` 가 납니다. `sh` 로 부르면 권한과 무관하게 돌아갑니다.
 직접 실행하고 싶으면 `chmod +x studio/sql/*.sh` 를 한 번 하십시오.
 
+### 운영은 MariaDB 입니다
+
+`mysql` 을 부르면 `Deprecated program name` 경고가 납니다. MariaDB 가
+`mysql` 을 `mariadb` 의 옛 이름으로 보기 때문이며, 동작에는 지장이 없습니다.
+
+스키마는 **MySQL 5.7 호환 범위로만** 썼습니다 — 윈도 함수·CTE·JSON 컬럼·
+함수 인덱스·`utf8mb4_0900` 콜레이션을 쓰지 않았습니다(`001_schema.sql` 머리말).
+그래서 MariaDB 에서도 그대로 돕니다.
+
+`dump.sh` 는 MySQL 전용 옵션(`--set-gtid-purged`)을 `mysqldump --help` 로
+물어본 뒤 있을 때만 붙입니다. MariaDB 에서는 붙이지 않습니다.
+
+### 처음 올리는 DB 라면
+
+`bs_` 로 시작하는 표가 하나도 없다고 나옵니다. **정상입니다.**
+`dump.sh` 는 그때 전체 덤프만 뜨고 `bs_*` 덤프는 건너뜁니다 —
+운영 DB 에는 다른 모듈의 표가 들어 있으므로 전체 덤프는 그래도 떠야 합니다.
+
+DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStudio 는
+포털과 같은 DB 를 씁니다(`bs_db()` → `portal_db()`).
+
 
 ### 왜 스크립트를 쓰는가
 
