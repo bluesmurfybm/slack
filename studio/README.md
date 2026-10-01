@@ -36,6 +36,10 @@ sh studio/sql/dump.sh  <db> -u <user> -p -o ~/backup    # 먼저. 반드시.
 sh studio/sql/apply.sh <db> -u <user> -p
 ```
 
+`-p` 는 **비밀번호를 한 번만 묻습니다.** 받은 값은 600 권한의 임시 설정
+파일에 넣고 `--defaults-extra-file` 로 넘긴 뒤, 끝날 때(중간에 끊겨도) 지웁니다.
+명령줄에 `-p비번` 처럼 적지 마십시오 — `ps` 에 그대로 보입니다.
+
 **`sh` 를 붙여 부르십시오.** 윈도우에서 만든 저장소라 실행 권한이 붙지 않은
 채로 올라갈 수 있습니다(`core.fileMode=false`). 그대로 부르면
 `Permission denied` 가 납니다. `sh` 로 부르면 권한과 무관하게 돌아갑니다.

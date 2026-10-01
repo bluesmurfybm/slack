@@ -30,12 +30,13 @@ DIR=$(dirname "$0")
 DB=""
 YES=0
 MYSQL_ARGS=""
+ASK_PW=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
     -y|--yes)    YES=1 ;;
     -u|--user)   shift; MYSQL_ARGS="$MYSQL_ARGS -u $1" ;;
-    -p|--password) MYSQL_ARGS="$MYSQL_ARGS -p" ;;
+    -p|--password) ASK_PW=1 ;;
     --host)      shift; MYSQL_ARGS="$MYSQL_ARGS --host=$1" ;;
     --port)      shift; MYSQL_ARGS="$MYSQL_ARGS --port=$1" ;;
     -*)          echo "모르는 옵션: $1" >&2; exit 2 ;;
@@ -47,6 +48,38 @@ done
 if [ -z "$DB" ]; then
   echo "사용법: sh sql/apply.sh <db이름> [-y] [-u <user>] [-p] [--host <h>] [--port <n>]" >&2
   exit 2
+fi
+
+# ---------------------------------------------------------------------
+# 비밀번호
+#
+# -p 를 그대로 넘기면 mysql/mysqldump 가 **부를 때마다** 묻는다. apply.sh 는
+# 파일마다 한 번씩 부르므로 열 번 넘게 물어보게 된다.
+#
+# 한 번만 받아서 임시 설정 파일에 넣고 --defaults-extra-file 로 넘긴다.
+# 명령줄에 비밀번호를 적으면(-p비번) ps 에 그대로 보이므로 그 방법은 쓰지 않는다.
+# 파일은 600 으로 만들고 끝날 때 지운다 (중간에 죽어도 trap 이 지운다).
+#
+# --defaults-extra-file 은 **첫 번째 인자**여야 하므로 앞에 붙인다.
+# ---------------------------------------------------------------------
+CNF=""
+cleanup() { [ -n "$CNF" ] && rm -f "$CNF"; }
+trap cleanup EXIT INT TERM HUP
+
+if [ "$ASK_PW" -eq 1 ]; then
+  printf 'Enter password: ' >&2
+  # tty 가 아니면 stty 가 실패하고, read 는 EOF 에서 1 을 돌려준다.
+  # set -e 가 둘 다 잡아 스크립트를 죽이므로 받아 넘긴다
+  # (2>/dev/null 은 메시지만 가릴 뿐 종료코드는 그대로다).
+  stty -echo 2>/dev/null || true
+  read PW || PW=""
+  stty echo 2>/dev/null || true
+  echo >&2
+  CNF=$(mktemp) || { echo "임시 파일을 못 만들었다." >&2; exit 1; }
+  chmod 600 "$CNF"
+  printf '[client]\npassword=%s\n' "$PW" > "$CNF"
+  PW=""
+  MYSQL_ARGS="--defaults-extra-file=$CNF $MYSQL_ARGS"
 fi
 
 # ---------------------------------------------------------------------
