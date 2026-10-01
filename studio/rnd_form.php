@@ -95,25 +95,46 @@ bs_layout_head(
       foreach ($repo->domains((int)$rnd['id']) as $d) { $picked[(int)$d['id']] = true; }
   }
   $domains = bs_db()->query(
-      'SELECT id, name, category FROM bs_domain WHERE is_active = 1 ORDER BY sort_no, id'
+      'SELECT id, name, domain_group, category FROM bs_domain WHERE is_active = 1
+        ORDER BY sort_no, id'
   )->fetchAll(PDO::FETCH_ASSOC);
+
+  // 묶음별로 가른다. 코스모스 기능 목록만 보이면 사내 과제를 발의하는 사람이
+  // 붙일 태그를 못 찾는다 — 묶음을 나눈 이유가 그것이다.
+  $byGroup = [];
+  foreach ($domains as $d) {
+      $byGroup[$d['domain_group'] ?: 'cosmos'][] = $d;
+  }
   ?>
   <fieldset class="ba-field ba-field--wide ba-domains">
     <legend>분야 태그</legend>
-    <div class="ba-domains__grid">
-      <?php foreach ($domains as $d): ?>
-        <label class="ba-check">
-          <input type="checkbox" class="ba-r-dom" value="<?= (int)$d['id'] ?>"
-            <?= isset($picked[(int)$d['id']]) ? 'checked' : '' ?>>
-          <span><?= h($d['name']) ?></span>
-        </label>
-      <?php endforeach; ?>
-    </div>
+    <?php foreach (BS_DOMAIN_GROUP as $gkey => $g): ?>
+      <?php if (empty($byGroup[$gkey])) { continue; } ?>
+      <div class="ba-domains__group">
+        <h4 class="ba-domains__title">
+          <?= h($g['label']) ?>
+          <span class="ba-dim"><?= h($g['hint']) ?></span>
+        </h4>
+        <div class="ba-domains__grid">
+          <?php foreach ($byGroup[$gkey] as $d): ?>
+            <label class="ba-check">
+              <input type="checkbox" class="ba-r-dom" value="<?= (int)$d['id'] ?>"
+                <?= isset($picked[(int)$d['id']]) ? 'checked' : '' ?>>
+              <span><?= h($d['name']) ?></span>
+            </label>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    <?php endforeach; ?>
   </fieldset>
 
   <p class="ba-head__sub">
     과제가 다루는 분야를 고릅니다. <strong>종료한 뒤 경험 범위(역량)에 반영될 때
     계열을 가르는 유일한 근거</strong>입니다 — 비워 두면 반영되지 않습니다.
+    <br>
+    <span class="ba-dim">일반 묶음 중 <b>AI 환경 구축·운영</b>과 <b>AI 연계·응용</b>만
+    역량에 쌓입니다. 나머지는 분류용 태그라 역량으로 잡히지 않습니다 —
+    대신 누가 무엇을 했는지는 프로파일 근거에 남습니다.</span>
   </p>
 
   <!-- 배경·목적 -->

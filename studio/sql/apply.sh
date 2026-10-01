@@ -67,6 +67,7 @@ FILES="
 010_migration_rnd.sql
 011_migration_rnd_cap.sql
 012_migration_rnd_domain.sql
+013_migration_domain_group.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

@@ -2052,18 +2052,35 @@
            '<textarea class="ba-input" id="ba-td-desc" rows="6"' + (CAN_EDIT ? '' : ' disabled') +
            ' placeholder="이 태스크가 무엇인지, 무엇이 되면 끝인지">' + esc(n.description) + '</textarea></div>';
 
+      // 묶음(코스모스 LXP / 일반)별로 갈라 그린다. 한 줄로 늘어놓으면 사내
+      // 제품이나 AI 과제 태그가 코스모스 기능 목록 끝에 묻힌다.
+      // DOMAINS 는 sort_no 순이고 묶음끼리 모여 있으므로 순서대로 끊으면 된다.
+      var domGroups = [];
+      DOMAINS.forEach(function (d) {
+        var g = d.group || 'cosmos';
+        var last = domGroups[domGroups.length - 1];
+        if (!last || last.key !== g) { domGroups.push({ key: g, label: d.group_label || '', items: [] }); last = domGroups[domGroups.length - 1]; }
+        last.items.push(d);
+      });
+
+      function domChip(d) {
+        var on = n.domains.some(function (x) { return x.domain_id === d.id; });
+        // 역량 점수를 내지 않는 분야(기획 계열, 계열이 빈 일반 분야)도 고를 수
+        // 있다. 다만 배정 때 역량으로 맞춰 볼 수 없으므로 그 사실을 칩에 적는다.
+        return '<label class="ba-chip' + (d.scored === false ? ' ba-chip--noscore' : '') +
+               '" title="' + esc(d.cat_label) +
+               (d.scored === false ? ' — 처리량 점수를 내지 않습니다' : '') + '">' +
+               '<input type="checkbox" value="' + d.id + '"' +
+               (on ? ' checked' : '') + (CAN_EDIT ? '' : ' disabled') + '>' +
+               '<span>' + esc(d.name) + '</span></label>';
+      }
+
       h += '<div class="ba-cd__sec"><h3>분야 <span class="ba-dim">최대 5개</span></h3>' +
-           '<div class="ba-chips" id="ba-td-doms">' +
-           DOMAINS.map(function (d) {
-             var on = n.domains.some(function (x) { return x.domain_id === d.id; });
-             // 역량 점수를 내지 않는 계열(기획 등)도 고를 수는 있다. 다만
-             // 배정 때 역량으로 맞춰 볼 수 없으므로 그 사실을 칩에 적는다.
-             return '<label class="ba-chip' + (d.scored === false ? ' ba-chip--noscore' : '') +
-                    '" title="' + esc(d.cat_label) +
-                    (d.scored === false ? ' — 처리량 점수를 내지 않는 계열입니다' : '') + '">' +
-                    '<input type="checkbox" value="' + d.id + '"' +
-                    (on ? ' checked' : '') + (CAN_EDIT ? '' : ' disabled') + '>' +
-                    '<span>' + esc(d.name) + '</span></label>';
+           '<div id="ba-td-doms">' +
+           domGroups.map(function (g) {
+             return (domGroups.length > 1
+                      ? '<div class="ba-chips__title">' + esc(g.label) + '</div>' : '') +
+                    '<div class="ba-chips">' + g.items.map(domChip).join('') + '</div>';
            }).join('') + '</div>' +
            '<p class="ba-cd__note">고른 분야는 배정할 때 <b>계열</b> 단위로 처리량과 맞춰 봅니다. ' +
            '가중치는 고른 개수로 균등하게 나눕니다.' +

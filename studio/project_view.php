@@ -44,12 +44,17 @@ $hasPeriod = $pFrom !== null && $pTo !== null && $pFrom <= $pTo;
 //    없게 막으면 사람이 엉뚱한 분야로 갖다 붙인다. 역량을 못 맞추는 것은
 //    배정 단계에서 드러나면 된다.
 $allDomains = bs_db()->query(
-    'SELECT id, code, name, category FROM bs_domain WHERE is_active = 1 ORDER BY sort_no'
+    'SELECT id, code, name, domain_group, category FROM bs_domain WHERE is_active = 1
+      ORDER BY sort_no'
 )->fetchAll(PDO::FETCH_ASSOC);
 
+// 계열이 비어 있으면 점수가 아예 없다. 일반 묶음의 분야 대부분이 그렇다
+// (013_migration_domain_group.sql). 조건으로 걸어 봐야 맞춰 볼 숫자가 없으므로
+// 점수를 내지 않는 계열과 같이 뺀다.
 $domains = array_values(array_filter(
     $allDomains,
-    static fn($d) => !in_array($d['category'], BS_CATEGORY_NOT_SCORED, true)
+    static fn($d) => ($d['category'] ?? '') !== ''
+                     && !in_array($d['category'], BS_CATEGORY_NOT_SCORED, true)
 ));
 
 bs_layout_head($user, $project['name'], '업무 배정', '', 'project');
@@ -477,10 +482,14 @@ bs_layout_head($user, $project['name'], '업무 배정', '', 'project');
         'id'        => (int)$d['id'],
         'name'      => $d['name'],
         'category'  => $d['category'],
-        'cat_label' => BS_DOMAIN_CATEGORY[$d['category']]['label'] ?? $d['category'],
-        // 이 계열은 역량 점수를 내지 않는다. 골라도 되지만 배정 때
-        // 역량으로 맞춰 볼 수 없다는 것을 화면이 말해 줘야 한다.
-        'scored'    => !in_array($d['category'], BS_CATEGORY_NOT_SCORED, true),
+        'cat_label' => BS_DOMAIN_CATEGORY[$d['category']]['label'] ?? ($d['category'] ?: '계열 없음'),
+        'group'     => $d['domain_group'] ?: 'cosmos',
+        'group_label' => BS_DOMAIN_GROUP[$d['domain_group'] ?? 'cosmos']['label'] ?? '',
+        // 역량 점수를 내지 않는 분야. 골라도 되지만 배정 때 역량으로 맞춰 볼
+        // 수 없다는 것을 화면이 말해 줘야 한다. 두 경우가 있다 —
+        // 계열이 비었거나(일반 묶음), 점수를 내지 않는 계열(기획 등)이거나.
+        'scored'    => ($d['category'] ?? '') !== ''
+                       && !in_array($d['category'], BS_CATEGORY_NOT_SCORED, true),
     ], $allDomains),
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 ) ?></script>

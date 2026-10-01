@@ -1409,6 +1409,18 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-domains__grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 10px;
 }
+/* 묶음(코스모스 LXP / 일반). 코스모스 목록만 보이면 사내 과제를 발의하는
+   사람이 붙일 태그를 못 찾는다 — 묶음 제목을 또렷하게 둔다. */
+.ba-domains__group + .ba-domains__group { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--ba-line); }
+.ba-domains__title {
+  margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--ba-ink);
+  display: flex; align-items: baseline; gap: 8px;
+}
+.ba-domains__title .ba-dim { font-weight: 400; font-size: 11px; }
+
+/* 태스크 상세의 분야 칩도 같은 묶음으로 끊는다 (assign.js) */
+.ba-chips__title { font-size: 11px; font-weight: 700; color: var(--ba-ink-soft); margin: 8px 0 4px; }
+.ba-chips__title:first-child { margin-top: 0; }
 
 /* R&D 에서 온 근거 (P10-3) — 슬랙 업무와 눈으로 가른다 */
 .ba-ev--rnd { border-left: 3px solid #7a5bd6; }
