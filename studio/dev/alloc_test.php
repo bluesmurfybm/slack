@@ -121,16 +121,33 @@ $pid = $projects->create([
     'dev_start' => '2026-03-02', 'dev_end' => '2026-05-29',
 ], $actor);
 
+// 분야는 **code 로 찾는다.** id 를 적어 두면 002 시드와 005 마이그레이션의
+// 적재 순서에 따라 번호가 밀려 조용히 다른 분야를 가리킨다. 실제로 '테마 개편'
+// 에 20 을 적어 두었는데, DB 를 새로 만들면 20 이 '인프라·배포'(platform) 가
+// 되어 화면 과업이 인프라 과업으로 둔갑했다.
+$domId = static function (string $code) use ($pdo): int {
+    $st = $pdo->prepare('SELECT id FROM ba_domain WHERE code = ?');
+    $st->execute([$code]);
+    $id = (int)$st->fetchColumn();
+    if ($id === 0) {
+        fwrite(STDERR, "분야 code '$code' 가 없습니다. 002_seed_domain.sql 을 적재했습니까?\n");
+        exit(1);
+    }
+    return $id;
+};
+$DOM_ACTIVITY     = $domId('attendance');    // 출석부 — activity 계열
+$DOM_PRESENTATION = $domId('frontend_ui');   // UI/UX 퍼블리싱 — presentation 계열
+
 $tasks->saveTree($pid, [
     ['title' => '출석', 'children' => [
-        ['title' => '출석부 화면', 'est_md' => 8, 'difficulty' => 3, 'domain_ids' => [1]],
-        ['title' => '출석 통계',   'est_md' => 5, 'difficulty' => 2, 'domain_ids' => [1]],
+        ['title' => '출석부 화면', 'est_md' => 8, 'difficulty' => 3, 'domain_ids' => [$DOM_ACTIVITY]],
+        ['title' => '출석 통계',   'est_md' => 5, 'difficulty' => 2, 'domain_ids' => [$DOM_ACTIVITY]],
     ]],
     ['title' => '화면', 'children' => [
-        ['title' => '테마 개편',   'est_md' => 6, 'difficulty' => 3, 'domain_ids' => [20]],
+        ['title' => '테마 개편',   'est_md' => 6, 'difficulty' => 3, 'domain_ids' => [$DOM_PRESENTATION]],
     ]],
     ['title' => '난제', 'children' => [
-        ['title' => '성능 개선',   'est_md' => 10, 'difficulty' => 5, 'domain_ids' => [1]],
+        ['title' => '성능 개선',   'est_md' => 10, 'difficulty' => 5, 'domain_ids' => [$DOM_ACTIVITY]],
     ]],
 ], $actor);
 

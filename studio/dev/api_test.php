@@ -179,7 +179,108 @@ function ensure_test_accounts(string $adminEmail, string $userEmail, string $pas
     $member->execute([$userEmail,  '시험사용자', 0]);
 }
 
+/**
+ * 시험용 역량 판정 회차와 점수.
+ *
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ 후보 표 시험은 **점수가 붙은 사람**이 있어야 성립한다.            │
+ * │                                                                  │
+ * │ 전에는 개발 DB 에 쌓여 있던 실수집 데이터에 기대고 있었다.        │
+ * │ DB 를 새로 만들면 그게 없어 `domain_fit` 이 전부 null 이 되고,    │
+ * │ [M] 부터 [P] 까지 줄줄이 깨진다. 시드 업무이력은 12건뿐이라       │
+ * │ 표본 임계선(10건/20건)을 넘지 못해 점수가 나오지 않는다.          │
+ * │                                                                  │
+ * │ 그래서 **시험이 자기가 쓸 점수를 직접 만든다.** alloc_test 와     │
+ * │ 같은 방식이다. 수집기나 score.py 를 돌려 두지 않아도 돌아간다.    │
+ * └──────────────────────────────────────────────────────────────────┘
+ */
+function ensure_test_scores(string $adminEmail): void
+{
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $pdo = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+
+    $mid = $pdo->prepare('SELECT id FROM ba_member WHERE user_id = ?');
+    $mid->execute([$adminEmail]);
+    $memberId = (int)$mid->fetchColumn();
+    if ($memberId === 0) {
+        return;
+    }
+
+    // 회차는 매번 새로 만든다. latestEvalVer() 가 MAX(id) 를 보므로
+    // 이 회차가 곧 최신이 되고, 앞 회차 값에 흔들리지 않는다.
+    $pdo->prepare(
+        'INSERT INTO ba_eval_run (started_at, finished_at, period_from, period_to, status)
+         VALUES (NOW(), NOW(), ?, ?, "ok")'
+    )->execute([date('Y-m-d', strtotime('-180 day')), date('Y-m-d')]);
+    $evalVer = (int)$pdo->lastInsertId();
+
+    $pdo->prepare(
+        'INSERT INTO ba_member_metric (member_id, eval_ver, total_cases, cap_score,
+                                       breadth_score, career_score, insufficient_data)
+         VALUES (?,?,?,?,?,?,0)'
+    )->execute([$memberId, $evalVer, 48, 82.00, 70.00, 60.00]);
+
+    // 표본이 충분한(=confidence full) 계열을 몇 개 둔다. 분야 1·2 가 속한
+    // activity 가 반드시 있어야 [M] 의 '분야 매치도' 가 성립한다.
+    $cat = $pdo->prepare(
+        'INSERT INTO ba_member_category (member_id, category, eval_ver, case_count,
+                                         weighted_qty, baseline, score, confidence,
+                                         insufficient_data)
+         VALUES (?,?,?,?,?,?,?,"full",0)'
+    );
+    foreach ([['activity', 24, 88.00], ['presentation', 21, 74.00], ['platform', 20, 65.00]] as $c) {
+        $cat->execute([$memberId, $c[0], $evalVer, $c[1], (float)$c[1], 24.00, $c[2]]);
+    }
+}
+
+/**
+ * 가용도가 100% 가 아닌 사람 한 명.
+ *
+ * [M] 의 `min_availability=100` 은 **걸러지는 사람이 하나는 있어야** 성립한다.
+ * 백지 DB 에서는 점유가 하나도 없어 전원이 100% 라 아무도 안 걸리고,
+ * 그러면 'filtered_out 으로 표시' 가 깨진다. 전에는 개발 DB 에 쌓여 있던
+ * 점유에 기대고 있었다.
+ *
+ * 시험사용자에게 건다 — is_assignable=0 이라 배정 엔진이 집어가지 않으므로
+ * 뒤의 배정 시험을 흔들지 않는다. kind='manual' 이라 [R] 의 뒷정리가
+ * 지우지만, 다음 회차 시작 때 여기서 다시 만든다.
+ */
+function ensure_busy_member(string $userEmail): void
+{
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $pdo = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+
+    $st = $pdo->prepare('SELECT id FROM ba_member WHERE user_id = ?');
+    $st->execute([$userEmail]);
+    $memberId = (int)$st->fetchColumn();
+    if ($memberId === 0) {
+        return;
+    }
+
+    $pdo->prepare("DELETE FROM ba_workload WHERE member_id = ? AND label = '시험용 선점유'")
+        ->execute([$memberId]);
+
+    // 어떤 프로젝트 기간을 잡든 겹치도록 앞뒤로 넉넉히 둔다.
+    $pdo->prepare(
+        "INSERT INTO ba_workload
+            (member_id, kind, source, label, start_date, end_date, load_ratio, confidence,
+             created_by, created_by_name)
+         VALUES (?, 'manual', 'meeting', '시험용 선점유', ?, ?, 0.600, 1.000,
+                 'apitest@local', '시험 준비')"
+    )->execute([
+        $memberId,
+        date('Y-m-d', strtotime('-1 year')),
+        date('Y-m-d', strtotime('+1 year')),
+    ]);
+}
+
 ensure_test_accounts($ADMIN['email'], $USER['email'], TEST_PASSWORD);
+ensure_test_scores($ADMIN['email']);
+ensure_busy_member($USER['email']);
 
 echo "\nBlueStudio API 시험  ($BASE)\n" . str_repeat('=', 62) . "\n";
 
@@ -634,8 +735,23 @@ ok('계열로 묶인다 (분야 2개 → activity 1계열)',
 $withFit = array_filter($d3['rows'], fn($x) => $x['domain_fit'] !== null);
 ok('분야 매치도가 붙는다', count($withFit) > 0, 'n=' . count($withFit));
 
-// 점수를 내지 않는 계열(기획)은 조건에서 빠진다
-$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid . '&domains[]=21');
+// 점수를 내지 않는 계열(기획)은 조건에서 빠진다.
+//
+// 분야 id 를 적어 두지 않는다 — 002 시드와 005 마이그레이션의 적재 순서에
+// 따라 번호가 밀린다. 실제로 전에는 21 을 기획으로 적어 두었는데, DB 를
+// 새로 만들면 21 이 'UI/UX 퍼블리싱' 이 되어 시험이 깨졌다. code 로 찾는다.
+$planningId = (int)(function () {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    return $p->query("SELECT id FROM ba_domain WHERE category = 'planning' ORDER BY id LIMIT 1")
+             ->fetchColumn();
+})();
+ok('기획 계열 분야가 시드에 있다', $planningId > 0);
+
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid
+                 . '&domains[]=' . $planningId);
 ok('기획 분야는 계열 조건이 되지 않는다',
    count($r['json']['data']['scope']['categories'] ?? []) === 0);
 
