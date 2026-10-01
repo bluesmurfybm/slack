@@ -1,14 +1,18 @@
 # 모듈 내부 디렉터리 직접 접근 차단.
 #
 # RewriteRule 은 .htaccess 가 놓인 디렉터리 기준으로 매칭되므로 폴더 이름이
-# 무엇이든 그대로 동작한다. 각 디렉터리 안에도 `Require all denied` 짜리
-# .htaccess 를 따로 두어 이중으로 막는다 (bluecart 와 같은 방식).
+# 무엇이든 그대로 동작한다. 목록은 dev/router.php 의 $blocked 와 같아야 한다
+# (한쪽만 고치면 로컬에선 막히는데 운영에선 뚫린다).
+#
+# 각 디렉터리 안에도 `Require all denied` 짜리 .htaccess 를 따로 두어 이중으로
+# 막는다 (bluecart 와 같은 방식). 다만 AllowOverride 가 꺼져 있으면 둘 다
+# 읽히지 않는다 — 운영에서는 dev/ 와 collector/ 를 아예 올리지 않는 쪽이 낫다.
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteRule ^(inc|sql|docs|collector|var)(/|$) - [R=404,L]
+  RewriteRule ^(inc|sql|docs|collector|dev|var)(/|$) - [R=404,L]
 </IfModule>
 
 # mod_rewrite 가 없을 때를 위한 대비
 <IfModule !mod_rewrite.c>
-  RedirectMatch 404 /(inc|sql|docs|collector|var)/
+  RedirectMatch 404 /(inc|sql|docs|collector|dev|var)/
 </IfModule>
