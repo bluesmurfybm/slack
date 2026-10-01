@@ -39,6 +39,31 @@ require_once BS_PORTAL_ROOT . '/core/board.php';       // board_is_admin() — �
 require_once BS_ROOT . '/inc/helpers.php';
 
 /**
+ * 환경별 설정값 — 이 컴퓨터/이 서버에만 해당하는 것.
+ *
+ * `inc/env.config.php` 가 있으면 그것이 돌려준 배열에서 꺼내고, 없으면
+ * 아래 각 상수에 적힌 기본값을 쓴다. 그 파일은 .gitignore 로 막혀 있다
+ * (inc/llm.config.php 와 같은 방식). 표본은 inc/env.config.sample.php.
+ *
+ * 로컬에서는 파일을 만들지 않아도 그대로 돌아간다. 기본값이 로컬 값이다.
+ * **운영에서는 반드시 만들어야 한다** — 적어도 upload_dir 은 웹 루트
+ * 바깥을 가리켜야 한다. docs/conventions.md §3.2, README.md '환경별 설정'.
+ */
+function bs_env(string $key, $default = null)
+{
+    static $cfg = null;
+    if ($cfg === null) {
+        $f   = BS_ROOT . '/inc/env.config.php';
+        $cfg = is_file($f) ? require $f : [];
+        if (!is_array($cfg)) {
+            error_log('[BlueStudio] inc/env.config.php 가 배열을 돌려주지 않았습니다. 무시합니다.');
+            $cfg = [];
+        }
+    }
+    return array_key_exists($key, $cfg) && $cfg[$key] !== null ? $cfg[$key] : $default;
+}
+
+/**
  * worksystems.json 에 등록한 이 모듈의 key.
  * 상단바 현재 위치 표시와 미로그인 안내(?need_login=)에 쓰인다.
  */
@@ -328,7 +353,7 @@ const BS_KANBAN_COLUMNS = ['todo', 'doing', 'review', 'dev_deployed', 'prod_depl
 const BS_DASH_PROJECT_STATUS = ['scoping', 'allocating', 'confirmed', 'running', 'hold'];
 
 /** 진행상황 알림을 보낼 슬랙 채널 (명세서 §7.2). */
-const BS_PROGRESS_CHANNEL = '#bluestudio-알림';
+define('BS_PROGRESS_CHANNEL', bs_env('progress_channel', '#bluestudio-알림'));
 
 /** 대/중/소 3계층. 스키마의 depth TINYINT 과 짝이다. */
 const BS_TASK_MAX_DEPTH = 3;
@@ -361,7 +386,7 @@ const BS_TASK_MAX_PER_PROJECT = 1000;
  * 설치 예 (윈도우): poppler 를 받아 풀고 bin/pdftotext.exe 경로를 적습니다.
  *   const BS_PDFTOTEXT = 'C:/tools/poppler/bin/pdftotext.exe';
  */
-const BS_PDFTOTEXT = null;
+define('BS_PDFTOTEXT', bs_env('pdftotext', null));
 
 /** 태스크 하나에 붙일 수 있는 분야 수. 다 고르면 분야 조건이 무의미해진다. */
 const BS_TASK_MAX_DOMAINS = 5;
@@ -477,7 +502,7 @@ const BS_SOURCE_KIND = [
  * docs/conventions.md §9-10 에 "운영 저장 경로 미확인" 으로 남아 있던 항목이며
  * 여기가 그 결정을 내린 곳이다.
  */
-const BS_UPLOAD_DIR = BS_ROOT . '/var/source';
+define('BS_UPLOAD_DIR', rtrim(bs_env('upload_dir', BS_ROOT . '/var/source'), '/\\'));
 
 /** 한 파일 최대 크기. php.ini 의 upload_max_filesize 보다 작아야 의미가 있다. */
 const BS_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;   // 20MB

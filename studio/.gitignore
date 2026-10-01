@@ -15,3 +15,7 @@ collector/config.pull.ini
 # LLM 백엔드 설정. API 키가 들어갈 자리라 올리지 않는다.
 # 표본은 inc/llm.config.sample.php 에 있다.
 inc/llm.config.php
+
+# 환경별 설정(업로드 경로·pdftotext·슬랙 채널). 서버마다 달라 올리지 않는다.
+# 표본은 inc/env.config.sample.php 에 있다.
+inc/env.config.php
