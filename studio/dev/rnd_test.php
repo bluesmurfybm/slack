@@ -549,6 +549,153 @@ $row->execute(['rnd']);
 ok('이 단계는 점유를 한 줄도 만들지 않는다', (int)$row->fetch()['n'] === 0);
 
 // ---------------------------------------------------------------------
+echo "\n[17] 점유 통제 (명세서 §9, P10-1)\n";
+
+// 설정은 **표에서** 읽는다. 값을 바꿔 보고 통제가 따라 움직이는지 본다.
+$setting = $pdo->query("SELECT k, v FROM bs_setting WHERE k LIKE 'rnd\\_%'")->fetchAll();
+$sv = [];
+foreach ($setting as $s) { $sv[$s['k']] = $s['v']; }
+ok('상한값이 bs_setting 에 있다',
+   isset($sv['rnd_total_cap'], $sv['rnd_per_project_cap'],
+         $sv['rnd_concurrent_max'], $sv['rnd_stale_weeks']),
+   json_encode($sv));
+
+/** 데모용 과제 하나를 만들어 승인한다. 관리자가 발의해 lead 가 된다. */
+$mkRnd = function (string $name) use ($admin): int {
+    $r = $admin->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+        'name' => '[시험] ' . $name, 'visibility' => 'open', 'recruiting' => '1',
+        'status' => 'proposed']]);
+    $id = (int)($r['json']['data']['id'] ?? 0);
+    $admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $id]]);
+    return $id;
+};
+$rowIdOf = function (int $pid) use ($pdo, $USER): int {
+    $st = $pdo->prepare('SELECT rm.id FROM bs_rnd_member rm JOIN bs_member m ON m.id = rm.member_id
+                          WHERE rm.project_id = ? AND m.user_id = ?');
+    $st->execute([$pid, $USER]);
+    return (int)($st->fetch()['id'] ?? 0);
+};
+
+// --- ① CAP_PROJECT ---
+$c1 = $mkRnd('과제당 초과');
+$user->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $c1, 'join_reason' => '해보고 싶습니다', 'load_ratio' => '0.25']]);
+$r = $admin->req('/studio/api/rnd.php?act=approve_member', ['csrf' => true,
+    'json' => ['member_row_id' => $rowIdOf($c1)]]);
+ok('과제당 상한을 넘으면 승인이 막힌다', $r['status'] === 400, 'status=' . $r['status']);
+ok('코드는 RND_CAP_EXCEEDED', ($r['json']['error']['code'] ?? '') === 'RND_CAP_EXCEEDED');
+ok('위반 코드 CAP_PROJECT',
+   ($r['json']['error']['detail']['violations'][0]['code'] ?? '') === 'CAP_PROJECT',
+   json_encode($r['json']['error']['detail']['violations'] ?? []));
+ok('현재 점유와 상한을 함께 돌려준다',
+   isset($r['json']['error']['detail']['current'], $r['json']['error']['detail']['limit']));
+
+$st = $pdo->prepare('SELECT status FROM bs_rnd_member WHERE id = ?');
+$st->execute([$rowIdOf($c1)]);
+ok('막혔으면 신청 상태 그대로다 (자동 승인 없음)',
+   ($st->fetch()['status'] ?? '') === 'requested');
+
+// --- ② CAP_TOTAL ---
+$c2 = $mkRnd('합계 1');
+$user->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $c2, 'join_reason' => '첫 과제', 'load_ratio' => '0.2']]);
+$r = $admin->req('/studio/api/rnd.php?act=approve_member', ['csrf' => true,
+    'json' => ['member_row_id' => $rowIdOf($c2)]]);
+ok('상한 안이면 승인된다 (0.2)', $r['status'] === 200, substr($r['body'], 0, 160));
+
+$c3 = $mkRnd('합계 2');
+$user->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $c3, 'join_reason' => '둘째 과제', 'load_ratio' => '0.15']]);
+$r = $admin->req('/studio/api/rnd.php?act=approve_member', ['csrf' => true,
+    'json' => ['member_row_id' => $rowIdOf($c3)]]);
+ok('합계가 상한을 넘으면 막힌다 (0.2 + 0.15)', $r['status'] === 400);
+ok('위반 코드 CAP_TOTAL',
+   ($r['json']['error']['detail']['violations'][0]['code'] ?? '') === 'CAP_TOTAL');
+ok('지금 점유가 얼마인지 알려 준다',
+   abs((float)($r['json']['error']['detail']['current']['total'] ?? 0) - 0.2) < 0.001,
+   (string)($r['json']['error']['detail']['current']['total'] ?? ''));
+
+// --- ③ CAP_CONCURRENT ---
+// 합계가 안 걸리도록 낮춰 두 건을 채운다.
+$pdo->exec("UPDATE bs_rnd_member SET load_ratio = 0.05 WHERE id = " . $rowIdOf($c2));
+$pdo->exec("UPDATE bs_rnd_member SET load_ratio = 0.05 WHERE id = " . $rowIdOf($c3));
+$admin->req('/studio/api/rnd.php?act=approve_member', ['csrf' => true,
+    'json' => ['member_row_id' => $rowIdOf($c3)]]);
+
+$c4 = $mkRnd('동시 3번째');
+$user->req('/studio/api/rnd.php?act=join', ['csrf' => true, 'json' => [
+    'id' => $c4, 'join_reason' => '셋째', 'load_ratio' => '0.05']]);
+$r = $admin->req('/studio/api/rnd.php?act=approve_member', ['csrf' => true,
+    'json' => ['member_row_id' => $rowIdOf($c4)]]);
+ok('동시 참여 건수를 넘으면 막힌다', $r['status'] === 400, substr($r['body'], 0, 200));
+ok('위반 코드 CAP_CONCURRENT',
+   ($r['json']['error']['detail']['violations'][0]['code'] ?? '') === 'CAP_CONCURRENT');
+ok('총량은 여유가 있어도 건수로 막힌다',
+   (float)($r['json']['error']['detail']['current']['total'] ?? 1) < 0.3,
+   (string)($r['json']['error']['detail']['current']['total'] ?? ''));
+
+// --- 사전 확인 ---
+$r = $user->req('/studio/api/rnd.php?act=load_check&id=' . $c4 . '&load_ratio=0.05');
+ok('load_check 는 신청 전에도 부를 수 있다', $r['status'] === 200);
+ok('승인 때와 같은 판정을 돌려준다', ($r['json']['data']['ok'] ?? null) === false);
+ok('같은 위반 코드',
+   ($r['json']['data']['violations'][0]['code'] ?? '') === 'CAP_CONCURRENT');
+ok('상한값도 함께 온다', isset($r['json']['data']['limit']['total_cap']));
+
+// --- ④ 정체 ---
+$pdo->exec("UPDATE bs_project SET approved_at = DATE_SUB(NOW(), INTERVAL 70 DAY) WHERE id = $c2");
+$r = $user->req('/studio/api/rnd.php?act=load_check&id=' . $c4 . '&load_ratio=0.05');
+$stale = $r['json']['data']['stale_projects'] ?? [];
+ok('정체 과제를 함께 알려 준다', count($stale) > 0, json_encode($stale, JSON_UNESCAPED_UNICODE));
+
+$r = $admin->req('/studio/api/rnd.php?act=board&size=100');
+$found = null;
+foreach ($r['json']['data']['rows'] ?? [] as $row2) {
+    if ((int)$row2['id'] === $c2) { $found = $row2; }
+}
+ok('보드 카드에 stale 이 선다', ($found['stale'] ?? null) === true);
+
+// 설정을 바꾸면 판정이 따라 움직인다 — 하드코딩이 아님을 확인한다.
+$pdo->exec("UPDATE bs_setting SET v = '52' WHERE k = 'rnd_stale_weeks'");
+$r = $admin->req('/studio/api/rnd.php?act=board&size=100');
+$found2 = null;
+foreach ($r['json']['data']['rows'] ?? [] as $row2) {
+    if ((int)$row2['id'] === $c2) { $found2 = $row2; }
+}
+ok('rnd_stale_weeks 를 늘리면 정체가 풀린다 (설정값이 실제로 쓰인다)',
+   ($found2['stale'] ?? null) === false);
+$pdo->exec("UPDATE bs_setting SET v = '4' WHERE k = 'rnd_stale_weeks'");
+
+// --- ⑤ 발의 제한 ---
+$pdo->exec("UPDATE bs_project SET status = 'dropped', proposer_id = '$USER'
+             WHERE id IN ($c2, $c3)");
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 세 번째 발의', 'visibility' => 'open', 'status' => 'proposed']]);
+ok('연속 중단이어도 발의를 막지는 않는다', $r['status'] === 200);
+ok('경고를 함께 돌려준다',
+   ($r['json']['data']['warning']['code'] ?? '') === 'RND_RECENT_DROPS',
+   json_encode($r['json']['data']['warning'] ?? null, JSON_UNESCAPED_UNICODE));
+ok('어느 과제가 중단됐는지 적어 준다',
+   count($r['json']['data']['warning']['dropped'] ?? []) === 2);
+
+$newId = (int)($r['json']['data']['id'] ?? 0);
+$g = $admin->req('/studio/api/rnd.php?act=get&id=' . $newId);
+ok('승인하는 사람도 그 이력을 본다',
+   ($g['json']['data']['rnd']['proposer_warning']['code'] ?? '') === 'RND_RECENT_DROPS');
+
+// 한 건만 중단이면 경고하지 않는다.
+$pdo->exec("UPDATE bs_project SET status = 'done' WHERE id = $c3");
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 네 번째 발의', 'visibility' => 'open', 'status' => 'proposed']]);
+ok('연속이 아니면 경고하지 않는다', ($r['json']['data']['warning'] ?? null) === null,
+   json_encode($r['json']['data']['warning'] ?? null, JSON_UNESCAPED_UNICODE));
+
+$row = $pdo->prepare('SELECT COUNT(*) AS n FROM bs_workload WHERE ref_type = ?');
+$row->execute(['rnd']);
+ok('통제 단계는 여전히 점유를 만들지 않는다 (적재는 P10-2)',
+   (int)$row->fetch()['n'] === 0);
+
+// ---------------------------------------------------------------------
 echo "\n[뒷정리]\n";
 $pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");
