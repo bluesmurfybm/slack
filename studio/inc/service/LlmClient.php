@@ -179,7 +179,7 @@ function ba_llm_client(): LlmClient
         if ($c instanceof LlmClient) {
             return $client = $c;
         }
-        error_log('[BlueAssign] inc/llm.config.php 가 LlmClient 를 돌려주지 않았습니다.');
+        error_log('[BlueStudio] inc/llm.config.php 가 LlmClient 를 돌려주지 않았습니다.');
     }
     return $client = new NullLlmClient();
 }

@@ -97,7 +97,7 @@ final class OutboxNotifier implements Notifier
             } catch (Throwable $e) {
                 // 적재조차 실패하면 그 사실만 기록하고 넘어간다.
                 $failed++;
-                error_log('[BlueAssign] 알림 적재 실패: ' . $e->getMessage());
+                error_log('[BlueStudio] 알림 적재 실패: ' . $e->getMessage());
             }
 
             $detail[] = [

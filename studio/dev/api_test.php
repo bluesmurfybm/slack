@@ -92,7 +92,7 @@ final class Client
         // curl_close() 는 PHP 8 에서 deprecated (CurlHandle 객체라 GC 가 정리한다)
 
         if ($err !== '') {
-            fwrite(STDERR, "\n[연결 실패] $err\n서버가 떠 있습니까?  assign\\dev\\serve.bat\n");
+            fwrite(STDERR, "\n[연결 실패] $err\n서버가 떠 있습니까?  studio\\dev\\serve.bat\n");
             exit(1);
         }
         $json = json_decode($body, true);
@@ -181,7 +181,7 @@ function ensure_test_accounts(string $adminEmail, string $userEmail, string $pas
 
 ensure_test_accounts($ADMIN['email'], $USER['email'], TEST_PASSWORD);
 
-echo "\nBlueAssign API 시험  ($BASE)\n" . str_repeat('=', 62) . "\n";
+echo "\nBlueStudio API 시험  ($BASE)\n" . str_repeat('=', 62) . "\n";
 
 $admin = new Client($BASE, 'admin');
 $guest = new Client($BASE, 'guest');

@@ -21,7 +21,7 @@ set_exception_handler(function (Throwable $e) {
     if ($e instanceof DomainException) {
         ba_json_error('DOMAIN_ERROR', $e->getMessage(), 400);
     }
-    error_log('[BlueAssign] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+    error_log('[BlueStudio] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
 
     // TODO(P1): 디버그 여부를 어디서 읽을지 정한다. BlueCart 는 자체 config 의
     //           app.debug 를 보지만 이 모듈은 별도 config 가 없다.

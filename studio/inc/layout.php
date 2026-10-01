@@ -32,7 +32,7 @@ function ba_layout_head(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= h($title) ?> · BlueAssign</title>
+<title><?= h($title) ?> · BlueStudio</title>
 <link rel="icon" href="../styles/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -74,7 +74,7 @@ function ba_layout_head(
   <div class="ba-site__in">
     <div class="ba-site__lead">
       <span class="ba-site__eyebrow"><?= h($eyebrow) ?></span>
-      <h1 class="ba-site__title">BlueAssign</h1>
+      <h1 class="ba-site__title">BlueStudio</h1>
       <?php if ($desc !== ''): ?>
       <p class="ba-site__desc"><?= h($desc) ?></p>
       <?php endif; ?>

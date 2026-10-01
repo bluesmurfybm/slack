@@ -528,7 +528,7 @@ def main() -> int:
 
     mode = "DRY-RUN (적재하지 않음)" if args.dry_run else "적재"
     print()
-    print("BlueAssign 슬랙 수집기")
+    print("BlueStudio 슬랙 수집기")
     print("=" * 62)
     print(f"  모드    {mode}")
     print(f"  기간    {dfrom} ~ {dto}")

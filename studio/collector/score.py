@@ -480,7 +480,7 @@ def main() -> int:
 
     mode = "DRY-RUN (적재하지 않음)" if args.dry_run else "적재"
     print()
-    print("BlueAssign 역량 점수 산출")
+    print("BlueStudio 역량 점수 산출")
     print("=" * 66)
     print(f"  모드      {mode}")
     print(f"  기간      {dfrom} ~ {dto}")

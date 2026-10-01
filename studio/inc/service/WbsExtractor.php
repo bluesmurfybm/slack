@@ -98,7 +98,7 @@ final class WbsExtractor
             return $this->parseResult('fail', 0, 0, $e->getMessage());
         } catch (Throwable $e) {
             // 예상 못 한 오류도 한 파일 안에서 끝낸다. 자세한 내용은 로그로만.
-            error_log('[BlueAssign] parseSource#' . $sourceId . ': ' . $e->getMessage());
+            error_log('[BlueStudio] parseSource#' . $sourceId . ': ' . $e->getMessage());
             $this->projects->updateSourceParse(
                 $sourceId, 'fail', null, '파싱 중 오류가 발생했습니다.');
             return $this->parseResult('fail', 0, 0, '파싱 중 오류가 발생했습니다.');

@@ -31,7 +31,7 @@ function say(string $s): void { echo $s . PHP_EOL; }
 function fail(string $s): never { fwrite(STDERR, "\n[실패] $s\n"); exit(1); }
 
 say('');
-say('BlueAssign 로컬 개발 환경 준비');
+say('BlueStudio 로컬 개발 환경 준비');
 say(str_repeat('=', 60));
 say(sprintf('  DB  %s@%s:%d/%s', $cfg['user'], $cfg['host'], $cfg['port'], $cfg['name']));
 say('');
@@ -117,7 +117,7 @@ PHP;
 // ---------------------------------------------------------------------
 // 3. 스키마
 // ---------------------------------------------------------------------
-say('[3/4] BlueAssign 스키마');
+say('[3/4] BlueStudio 스키마');
 
 /**
  * .sql 파일을 실행한다.
@@ -222,7 +222,7 @@ say('');
 say(str_repeat('=', 60));
 say('준비 끝났습니다.');
 say('');
-say('  서버 띄우기   assign\\dev\\serve.bat');
+say('  서버 띄우기   studio\\dev\\serve.bat');
 say('                또는  php -S 127.0.0.1:8099 -t . studio/dev/router.php');
 say('  접속          http://127.0.0.1:8099/studio/');
 say('  API 시험      php studio/dev/api_test.php');

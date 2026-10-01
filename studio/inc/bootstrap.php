@@ -18,7 +18,7 @@ define('BA_PORTAL_ROOT', dirname(BA_ROOT));
 
 if (!is_file(BA_PORTAL_ROOT . '/core/auth.php')) {
     http_response_code(500);
-    exit('BlueAssign 은 iworks 포털 안(<포털>/assign)에서만 동작합니다.');
+    exit('BlueStudio 는 iworks 포털 안(<포털>/studio)에서만 동작합니다.');
 }
 
 // ---------------------------------------------------------------------
