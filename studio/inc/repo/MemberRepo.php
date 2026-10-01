@@ -420,7 +420,9 @@ final class MemberRepo
     public function evidence(int $memberId, string $category = '', ?int $domainId = null,
                              ?int $evalVer = null): array
     {
-        $where  = ['w.member_id = ?', 'w.source = "slack"'];
+        // R&D 에서 온 건도 함께 보여 준다 (P10-3). 점수에 들어갔으면
+        // 근거에도 보여야 한다 — 되짚을 수 없는 점수를 만들지 않는다(CLAUDE.md).
+        $where  = ['w.member_id = ?', "w.source IN ('slack', 'rnd')"];
         $params = [$memberId];
 
         if ($domainId) {
@@ -442,7 +444,7 @@ final class MemberRepo
         // 한 건이 같은 계열의 분야 둘에 걸리면 행이 둘 나온다. 건 단위로 접는다.
         $st = $this->pdo->prepare(
             'SELECT w.id, w.title, w.source_url, w.org_name, w.status_raw,
-                    w.difficulty, w.difficulty_by, w.msg_count,
+                    w.difficulty, w.difficulty_by, w.msg_count, w.source, w.source_key,
                     w.requested_at, w.closed_at,
                     GROUP_CONCAT(DISTINCT d.name ORDER BY d.sort_no SEPARATOR ", ") AS domains
                FROM bs_work_item w

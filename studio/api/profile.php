@@ -259,6 +259,12 @@ function bs_present_evidence(array $r): array
         'difficulty'   => $r['difficulty'] !== null ? (int)$r['difficulty'] : null,
         'difficulty_by' => $r['difficulty_by'],
         'msg_count'    => (int)($r['msg_count'] ?? 0),
+        // 출처를 숨기지 않는다. R&D 에서 온 건은 화면이 뱃지로 가른다 (P10-3).
+        'source'       => $r['source'] ?? 'slack',
+        // 'rnd:<과제>:<구성원>' 에서 과제 번호만 떼어 낸다. 눌러서 상세로 간다.
+        'rnd_project_id' => (($r['source'] ?? '') === 'rnd'
+                             && preg_match('/^rnd:(\d+):/', (string)($r['source_key'] ?? ''), $m))
+                            ? (int)$m[1] : null,
         'requested_at' => bs_date($r['requested_at']),
         'closed_at'    => bs_date($r['closed_at']),
         'domains'      => $r['domains'] ?? null,

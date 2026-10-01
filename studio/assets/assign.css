@@ -1402,3 +1402,14 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   color: var(--ba-ink-soft);
   border: 1px solid var(--ba-line);
 }
+
+/* 분야 태그 고르기 (P10-3) */
+.ba-domains { border: 1px solid var(--ba-line); border-radius: var(--ba-r); padding: 10px 14px; }
+.ba-domains legend { font-size: 12px; color: var(--ba-ink-soft); padding: 0 4px; }
+.ba-domains__grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 10px;
+}
+
+/* R&D 에서 온 근거 (P10-3) — 슬랙 업무와 눈으로 가른다 */
+.ba-ev--rnd { border-left: 3px solid #7a5bd6; }
+.ba-badge--rndsrc { background: #efeafc; color: #5a3eb0; }

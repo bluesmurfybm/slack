@@ -207,6 +207,7 @@ def fetch_work(conn, dfrom: date, dto: date) -> list[dict]:
         cur.execute(
             """
             SELECT w.id, w.member_id, w.difficulty, w.difficulty_by,
+                   w.source, w.source_key,
                    w.title, w.source_url, w.org_name, w.status_raw,
                    w.requested_at, w.closed_at,
                    d.id AS domain_id, d.code AS domain_code,
@@ -215,13 +216,158 @@ def fetch_work(conn, dfrom: date, dto: date) -> list[dict]:
               JOIN bs_work_item_domain wd ON wd.work_item_id = w.id
               JOIN bs_domain d           ON d.id = wd.domain_id
              WHERE w.member_id IS NOT NULL
-               AND w.source = 'slack'
+               AND w.source IN ('slack', 'rnd')
                AND COALESCE(w.closed_at, w.requested_at) BETWEEN %s AND %s
             """,
             (datetime.combine(dfrom, datetime.min.time()),
              datetime.combine(dto, datetime.max.time())),
         )
         return cur.fetchall()
+
+
+# =====================================================================
+# R&D 과제 적재 (P10-3, 명세서 §4.7)
+# =====================================================================
+
+# rnd_category 별 기본 난이도. 명세서 §4.7 의 표 그대로다.
+RND_DIFFICULTY = {"poc": 3, "enhance": 3, "new_module": 4, "research": 3}
+
+# 산출물 수 보정 — 많이 남긴 과제를 한 칸 올려 준다. 상한은 5 다.
+RND_OUTPUT_BONUS_AT = 3
+
+
+def rnd_difficulty(category: str | None, output_count: int) -> int:
+    """
+    R&D 과제의 난이도.
+
+    기본값은 갈래로 정하고, 산출물이 많으면 한 칸 올린다. 내려가지는 않는다 —
+    산출물이 적다고 어려운 일이 쉬워지지는 않는다. 1~5 를 벗어나지 않는다.
+    """
+    base = RND_DIFFICULTY.get((category or "").strip(), 3)
+    if output_count >= RND_OUTPUT_BONUS_AT:
+        base += 1
+    return max(1, min(5, base))
+
+
+def materialize_rnd(conn, dfrom: date, dto: date) -> dict:
+    """
+    **종료된** R&D 과제를 bs_work_item 에 source='rnd' 로 적재한다.
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │ 무엇을 넣지 않는가 (명세서 §4.7)                                  │
+    │                                                                  │
+    │   · status='dropped' — 중단한 과제                                │
+    │   · 산출물이 한 건도 없는 과제                                     │
+    │   · 분야 태그가 없는 과제 — 계열을 알 수 없다                      │
+    │                                                                  │
+    │ 중단한 과제까지 세면 "발의만 하고 접기" 가 이득이 된다. 산출물     │
+    │ 없이 끝낸 과제도 마찬가지다. 그 길을 열어 두면 반드시 그쪽으로     │
+    │ 간다(CLAUDE.md 2항).                                              │
+    └──────────────────────────────────────────────────────────────────┘
+
+    한 과제에 참여한 **사람마다 한 건**을 넣는다. 역량은 사람 단위이므로.
+    source_key 는 'rnd:<과제>:<구성원>' 이라 여러 번 돌려도 늘지 않는다.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT p.id, p.code, p.name, p.rnd_category, p.approved_at, p.updated_at,
+                   (SELECT COUNT(*) FROM bs_rnd_output o WHERE o.project_id = p.id) AS outputs
+              FROM bs_project p
+             WHERE p.project_type = 'rnd'
+               AND p.status = 'done'
+               AND p.deleted_at IS NULL
+            """
+        )
+        projects = cur.fetchall()
+
+    stat = {"projects": 0, "items": 0, "skipped_no_output": 0,
+            "skipped_no_domain": 0, "skipped_no_member": 0}
+
+    for p in projects:
+        if int(p["outputs"] or 0) == 0:
+            stat["skipped_no_output"] += 1
+            continue
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT domain_id FROM bs_rnd_domain WHERE project_id = %s", (p["id"],))
+            domain_ids = [r["domain_id"] for r in cur.fetchall()]
+        if not domain_ids:
+            stat["skipped_no_domain"] += 1
+            continue
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT member_id FROM bs_rnd_member
+                 WHERE project_id = %s AND status IN ('approved', 'done')
+                """,
+                (p["id"],),
+            )
+            member_ids = [r["member_id"] for r in cur.fetchall()]
+        if not member_ids:
+            stat["skipped_no_member"] += 1
+            continue
+
+        diff = rnd_difficulty(p["rnd_category"], int(p["outputs"] or 0))
+        # 종료 시각을 모르면 승인 시각으로 둔다. 기간 필터가 이 값을 본다.
+        closed = p["updated_at"] or p["approved_at"]
+
+        stat["projects"] += 1
+        for mid in member_ids:
+            key = f"rnd:{p['id']}:{mid}"
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO bs_work_item
+                        (source, source_key, source_url, title, member_id,
+                         requested_at, closed_at, status_raw,
+                         difficulty, difficulty_by, collected_at)
+                    VALUES ('rnd', %s, %s, %s, %s, %s, %s, 'done', %s, 'rule', NOW())
+                    ON DUPLICATE KEY UPDATE
+                        title = VALUES(title), closed_at = VALUES(closed_at),
+                        difficulty = VALUES(difficulty), collected_at = NOW()
+                    """,
+                    (key, f"rnd_view.php?id={p['id']}",
+                     f"[R&D] {p['code']} {p['name']}", mid,
+                     p["approved_at"], closed, diff),
+                )
+                cur.execute(
+                    "SELECT id FROM bs_work_item WHERE source = 'rnd' AND source_key = %s",
+                    (key,),
+                )
+                wid = cur.fetchone()["id"]
+
+                # 분야 태그를 그대로 옮긴다. 계열은 bs_domain 이 들고 있다.
+                cur.execute("DELETE FROM bs_work_item_domain WHERE work_item_id = %s", (wid,))
+                for d in domain_ids:
+                    cur.execute(
+                        "INSERT INTO bs_work_item_domain (work_item_id, domain_id) VALUES (%s, %s)",
+                        (wid, d),
+                    )
+            stat["items"] += 1
+
+    conn.commit()
+    return stat
+
+
+def scoreable_categories(conn) -> list[str]:
+    """
+    점수 대상 계열 — **데이터가 아니라 분야 마스터에서** 뽑는다.
+
+    전에는 집계에 등장한 계열만 셌다. 그러면 R&D 가 새 계열을 하나 건드리는
+    순간 **모든 사람의 breadth 분모가 늘어** 점수가 함께 내려간다.
+    "절대 기준이라 남의 점수는 흔들리지 않는다"(명세서 §4.7)가 깨진다.
+
+    scoring-design.md §2 도 분모를 '점수 대상 계열 수' 로 적고 있다 —
+    고정된 수다. 그쪽이 맞다.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT category FROM bs_domain "
+            " WHERE category IS NOT NULL AND category <> '' ORDER BY category"
+        )
+        return [r["category"] for r in cur.fetchall() if r["category"] not in NOT_SCORED]
 
 
 # =====================================================================
@@ -273,14 +419,37 @@ def aggregate(work: list[dict], members: list[dict]) -> dict:
     }
 
 
-def compute(agg: dict, members: list[dict], base_p: float = DEFAULT_BASELINE_P) -> dict:
-    """계열 점수 + 종합 지표. 사람끼리 비교하지 않는다."""
-    cats = sorted({c for (_m, c) in agg["cat"] if c not in NOT_SCORED and c != "?"})
+def compute(agg: dict, members: list[dict], base_p: float = DEFAULT_BASELINE_P,
+            all_cats: list[str] | None = None, agg_base: dict | None = None) -> dict:
+    """
+    계열 점수 + 종합 지표. 사람끼리 비교하지 않는다.
 
-    # 계열별 기준값 — 그 계열을 다룬 사람들의 75 분위
+    ┌──────────────────────────────────────────────────────────────────┐
+    │ R&D 가 들어와도 **남의 점수가 흔들리지 않게** 하는 두 가지        │
+    │ (명세서 §4.7, P10-3)                                             │
+    │                                                                  │
+    │ ① 분모를 고정한다 — all_cats                                     │
+    │    전에는 집계에 등장한 계열만 셌다. R&D 가 새 계열을 하나        │
+    │    건드리면 모든 사람의 breadth 분모가 늘어 점수가 함께 내려갔다. │
+    │                                                                  │
+    │ ② 기준값은 R&D 를 빼고 낸다 — agg_base                           │
+    │    기준값은 '그 계열을 다룬 사람들의 분위' 라 한 사람의 R&D 가    │
+    │    분포를 밀면 **모두의 점수가 바뀐다.** 자[尺]는 평소 업무로만   │
+    │    만들고, R&D 는 그 자로 잰다.                                   │
+    │                                                                  │
+    │ 둘을 안 하면 "절대 기준" 이라는 말이 사실이 아니게 된다.          │
+    └──────────────────────────────────────────────────────────────────┘
+    """
+    cats = list(all_cats) if all_cats else sorted(
+        {c for (_m, c) in agg["cat"] if c not in NOT_SCORED and c != "?"}
+    )
+
+    # 계열별 기준값 — 그 계열을 다룬 사람들의 분위.
+    # **R&D 를 뺀 집계**로 낸다(agg_base). 주지 않으면 종전대로 전체로 낸다.
+    src = agg_base if agg_base is not None else agg
     baselines = {}
     for c in cats:
-        ws = [v["w"] for (m, cc), v in agg["cat"].items() if cc == c and v["cases"] > 0]
+        ws = [v["w"] for (m, cc), v in src["cat"].items() if cc == c and v["cases"] > 0]
         baselines[c] = baseline_for(ws, base_p)
 
     cat_scores: dict = {}
@@ -304,7 +473,10 @@ def compute(agg: dict, members: list[dict], base_p: float = DEFAULT_BASELINE_P) 
     metrics = {}
     all_total_w = {m["id"]: sum(agg["cat"].get((m["id"], c), {"w": 0.0})["w"] for c in cats)
                    for m in members}
-    cap_base = baseline_for([v for v in all_total_w.values() if v > 0], base_p)
+    # cap_score 의 기준값도 같은 이유로 R&D 를 뺀 쪽에서 낸다.
+    base_total_w = {m["id"]: sum(src["cat"].get((m["id"], c), {"w": 0.0})["w"] for c in cats)
+                    for m in members}
+    cap_base = baseline_for([v for v in base_total_w.values() if v > 0], base_p)
 
     for m in members:
         mid = m["id"]
@@ -495,14 +667,34 @@ def main() -> int:
         members = fetch_members(conn)
         if not members:
             sys.exit("평가 대상 구성원이 없습니다. bs_member 를 확인하세요.")
+        # 종료된 R&D 과제를 먼저 bs_work_item 으로 옮긴다 (P10-3, 명세서 §4.7).
+        # dry-run 에서도 옮긴다 — 적재한 뒤의 점수를 미리 보기 위해서다.
+        rnd_stat = materialize_rnd(conn, dfrom, dto)
+        if rnd_stat["items"]:
+            print(f"  R&D      과제 {rnd_stat['projects']}건 → 업무 이력 {rnd_stat['items']}건")
+        skipped = (rnd_stat["skipped_no_output"] + rnd_stat["skipped_no_domain"]
+                   + rnd_stat["skipped_no_member"])
+        if skipped:
+            print(f"           제외 {skipped}건 "
+                  f"(산출물 없음 {rnd_stat['skipped_no_output']} · "
+                  f"분야 태그 없음 {rnd_stat['skipped_no_domain']} · "
+                  f"참여자 없음 {rnd_stat['skipped_no_member']})")
+
         work = fetch_work(conn, dfrom, dto)
-        print(f"  대상      구성원 {len(members)}명 / 업무-분야 행 {len(work)}건")
+        n_rnd = sum(1 for w in work if w.get("source") == "rnd")
+        print(f"  대상      구성원 {len(members)}명 / 업무-분야 행 {len(work)}건"
+              + (f" (R&D {n_rnd}건 포함)" if n_rnd else ""))
 
         base_p = DEFAULT_BASELINE_P
         if "score" in cfg:
             base_p = cfg["score"].getfloat("baseline_percentile", DEFAULT_BASELINE_P)
+
         agg = aggregate(work, members)
-        res = compute(agg, members, base_p)
+        # 기준값(자)은 **R&D 를 뺀 평소 업무로만** 만든다. 한 사람의 R&D 가
+        # 분포를 밀어 모두의 점수를 바꾸면 '절대 기준' 이 아니다 (명세서 §4.7).
+        agg_base = aggregate([w for w in work if w.get("source") != "rnd"], members)
+        res = compute(agg, members, base_p,
+                      all_cats=scoreable_categories(conn), agg_base=agg_base)
 
         if not res["cats"]:
             sys.exit("점수를 낼 계열이 없습니다. 수집기를 먼저 돌렸는지 확인하세요.")

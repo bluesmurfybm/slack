@@ -2953,16 +2953,24 @@
         }
         $('#ba-ev-count').textContent = d.total + '건';
         box.innerHTML = d.rows.map(function (r) {
-          var link = r.source_url
-            ? '<a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">슬랙 원본</a>'
-            : '<span class="ba-dim">링크 없음</span>';
-          return '<div class="ba-ev">' +
+          // R&D 에서 온 건은 **눈에 띄게 가른다.** 슬랙 업무와 성격이
+          // 다르고, 눌렀을 때 가는 곳도 다르다 (P10-3).
+          var isRnd = r.source === 'rnd';
+          var link = isRnd
+            ? (r.rnd_project_id
+                ? '<a href="rnd_view.php?id=' + r.rnd_project_id + '">과제 상세</a>'
+                : '<span class="ba-dim">과제 없음</span>')
+            : (r.source_url
+                ? '<a href="' + esc(r.source_url) + '" target="_blank" rel="noopener">슬랙 원본</a>'
+                : '<span class="ba-dim">링크 없음</span>');
+          return '<div class="ba-ev' + (isRnd ? ' ba-ev--rnd' : '') + '">' +
             '<div class="ba-ev__top">' +
+              (isRnd ? '<span class="ba-badge ba-badge--rndsrc">R&amp;D</span>' : '') +
               '<span class="ba-ev__diff" title="난이도">' +
                 '★'.repeat(r.difficulty || 0) +
                 '<em>' + (r.difficulty_by === 'rule' ? '규칙' :
                           r.difficulty_by === 'llm' ? '채점' : '수동') + '</em></span>' +
-              '<span class="ba-ev__org">' + esc(r.org_name || '기관 미상') + '</span>' +
+              (isRnd ? '' : '<span class="ba-ev__org">' + esc(r.org_name || '기관 미상') + '</span>') +
               '<span class="ba-ev__status">' + esc(r.status_raw || '') + '</span>' +
             '</div>' +
             '<div class="ba-ev__title">' + esc(r.title) + '</div>' +
@@ -3350,7 +3358,10 @@
         dev_start:    ($('#ba-r-start')        || {}).value || '',
         dev_end:      ($('#ba-r-end')          || {}).value || '',
         load_cap:     ($('#ba-r-loadcap')      || {}).value || '',
-        recruiting:   ($('#ba-r-f-recruiting') || {}).checked ? '1' : ''
+        recruiting:   ($('#ba-r-f-recruiting') || {}).checked ? '1' : '',
+        // 분야 태그 — 역량 반영에서 계열의 근거가 된다 (명세서 4.7).
+        domain_ids:   $$('.ba-r-dom').filter(function (c) { return c.checked; })
+                        .map(function (c) { return parseInt(c.value, 10); })
       };
       if (status) b.status = status;
       return b;
