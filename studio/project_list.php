@@ -38,6 +38,15 @@ bs_layout_head(
 
 <div class="ba-list" id="ba-list-app" data-is-admin="<?= $isAdmin ? '1' : '0' ?>">
 
+  <!-- ============ 프로젝트 / R&D 탭 ============
+       같은 bs_project 표를 쓰지만 성격이 다르다. 목록 쿼리는
+       project_type='project' 로 걸려 있어 R&D 가 섞이지 않는다
+       (ProjectRepo::buildWhere). -->
+  <div class="ba-typetabs" role="tablist" aria-label="과업 유형">
+    <a role="tab" aria-selected="true"  class="on" href="project_list.php">프로젝트</a>
+    <a role="tab" aria-selected="false" href="rnd_board.php">R&amp;D 과제</a>
+  </div>
+
   <!-- ============ 실행 줄 ============ -->
   <div class="ba-filters" style="justify-content:flex-start">
     <?php if ($canCreate): ?>

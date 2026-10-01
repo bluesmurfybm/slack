@@ -85,6 +85,7 @@ const BS_CAP_ALLOCATION_CONFIRM = 'allocation.confirm';  // 배정안 확정
 const BS_CAP_PROFILE_VIEW_ANY   = 'profile.view_any';    // 남의 프로파일 열람
 const BS_CAP_EVAL_RUN           = 'eval.run';            // 역량 재판정 실행
 const BS_CAP_OBJECTION_REVIEW   = 'objection.review';    // 이의 제기 처리
+const BS_CAP_RND_APPROVE        = 'rnd.approve';         // R&D 과제 승인·반려 (P9)
 
 /**
  * CLAUDE.md 가 강제하는 규칙을 코드에서 지키기 위한 상수.
@@ -114,6 +115,44 @@ const BS_PROJECT_STATUS = [
     'done'       => '완료',
     'hold'       => '보류',
 ];
+
+/**
+ * R&D 과제의 상태 (bs_project.status, project_type='rnd').
+ *
+ * 프로젝트와 **다른 목록**이다. 같은 칸을 쓰지만 생명주기가 다르다.
+ * 010_migration_rnd.sql 의 COMMENT 와 같아야 한다.
+ */
+const BS_RND_STATUS = [
+    'draft'    => '작성 중',
+    'proposed' => '발의됨',
+    'approved' => '승인됨',
+    'running'  => '진행 중',
+    'done'     => '종료',
+    'dropped'  => '중단',
+];
+
+/** bs_project.rnd_category — R&D 과제의 갈래 */
+const BS_RND_CATEGORY = [
+    'poc'        => 'PoC',
+    'enhance'    => '고도화',
+    'new_module' => '신규 모듈',
+    'research'   => '리서치',
+];
+
+/**
+ * bs_project.visibility — 공개 범위 (명세서 §8.6).
+ *
+ * **Repo 레벨에서 강제한다.** 화면에서만 숨기면 API 를 직접 불러 뚫린다.
+ * 판정은 inc/presenter.php 의 bs_rnd_visible_sql() 한 곳에 모아 둔다.
+ */
+const BS_RND_VISIBILITY = [
+    'private' => '비공개 — 발의자와 관리자만',
+    'open'    => '공개 — 열람과 합류 가능',
+    'public'  => '공개 — 열람만',
+];
+
+/** 합류 신청을 받는 공개 범위. private/public 과제에는 신청할 수 없다. */
+const BS_RND_JOINABLE = ['open'];
 
 /** bs_project.track */
 const BS_PROJECT_TRACK = [
@@ -606,6 +645,14 @@ function bs_can(string $capability, ?int $projectId = null): bool
         // 재판정과 이의 처리는 관리자 전용 — 위에서 이미 걸러졌다.
         BS_CAP_EVAL_RUN,
         BS_CAP_OBJECTION_REVIEW   => false,
+
+        // R&D 과제 승인도 지금은 관리자 전용 — 위에서 이미 걸러졌다.
+        //
+        // **승인 주체는 아직 미결이다** (명세서 11.3). 팀장이 자기 팀 과제를
+        // 승인하게 할지, 관리자만 할지 정해지지 않았다. 승인은 가용도를
+        // 깎는 행위라(§9.1) 느슨하게 열어 두면 배정 회피 통로가 된다.
+        // 정해지기 전까지는 **좁은 쪽**으로 둔다.
+        BS_CAP_RND_APPROVE        => false,
 
         default => false,
     };

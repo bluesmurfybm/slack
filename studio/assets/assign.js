@@ -3113,12 +3113,261 @@
     });
   }
 
+  // =====================================================================
+  // R&D 과제 — 보드와 발의 (명세서 §8.1 · §8.2)
+  //
+  // 권한 판정을 여기서 하지 않는다. 서버가 row.can / row.actions 를
+  // 붙여 보내므로 그것만 보고 그린다 (inc/presenter.php).
+  // =====================================================================
+  var RND_STATUS_ORDER = ['', 'draft', 'proposed', 'approved', 'running', 'done', 'dropped'];
+  var RND_STATUS_LABEL = {
+    '': '전체', draft: '작성 중', proposed: '발의됨', approved: '승인됨',
+    running: '진행 중', done: '종료', dropped: '중단'
+  };
+
+  function initRndBoard() {
+    var root = $('#ba-rnd-board');
+    if (!root) return;
+
+    var state = { status: '', page: 1 };
+    var debounceTimer;
+
+    function filters() {
+      return {
+        act:        'board',
+        status:     state.status,
+        category:   ($('#ba-r-category')   || {}).value || '',
+        keyword:    ($('#ba-r-keyword')    || {}).value || '',
+        sort:       ($('#ba-r-sort')       || {}).value || 'recent',
+        recruiting: ($('#ba-r-recruiting') || {}).checked ? '1' : '',
+        mine:       ($('#ba-r-mine')       || {}).checked ? '1' : '',
+        page:       state.page,
+        size:       24
+      };
+    }
+
+    function renderStats(s) {
+      s = s || {};
+      $$('#ba-rnd-stats .n').forEach(function (el) {
+        var v = s[el.dataset.k];
+        el.textContent = (v === undefined || v === null) ? '–' : v;
+      });
+    }
+
+    function renderTabs(counts) {
+      counts = counts || {};
+      $('#ba-r-tabs').innerHTML = RND_STATUS_ORDER.map(function (code) {
+        var n = counts[code] || 0;
+        return '<button type="button" role="tab" data-status="' + code + '"' +
+               ' aria-selected="' + (state.status === code) + '"' +
+               ' class="' + (n === 0 && code !== '' ? 'is-zero' : '') + '">' +
+               esc(RND_STATUS_LABEL[code] || code) + '<i>' + n + '</i></button>';
+      }).join('');
+    }
+
+    function card(r) {
+      var badges = '';
+      if (r.category_label) {
+        badges += '<span class="ba-badge">' + esc(r.category_label) + '</span>';
+      }
+      badges += '<span class="ba-badge ba-badge--' + esc(r.status) + '">'
+              + esc(r.status_label) + '</span>';
+      if (r.recruiting) {
+        badges += '<span class="ba-badge ba-badge--recruit">모집중</span>';
+      }
+      if (r.stale) {
+        // 정체는 비난이 아니라 신호다. 말투를 부드럽게 둔다.
+        badges += '<span class="ba-badge ba-badge--stale" title="4주 넘게 진행 기록이 없습니다">조용함</span>';
+      }
+      if (r.visibility === 'private') {
+        badges += '<span class="ba-badge ba-badge--private">비공개</span>';
+      }
+
+      // 단추는 서버가 내려준 actions 에 있는 것만 그린다.
+      var acts = (r.actions || []).map(function (a) {
+        if (a === 'update') {
+          return '<a class="ba-btn ba-btn--sm" href="rnd_form.php?id=' + r.id + '">수정</a>';
+        }
+        if (a === 'approve') {
+          return '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary"' +
+                 ' data-act="approve" data-id="' + r.id + '">승인</button>';
+        }
+        if (a === 'reject') {
+          return '<button type="button" class="ba-btn ba-btn--sm"' +
+                 ' data-act="reject" data-id="' + r.id + '">반려</button>';
+        }
+        return '';
+      }).join('');
+
+      return '<article class="ba-rnd-card" data-id="' + r.id + '">' +
+        '<div class="ba-rnd-card__head"><span class="ba-rnd-card__code">' + esc(r.code) + '</span>' +
+        badges + '</div>' +
+        '<h3 class="ba-rnd-card__title">' + esc(r.name) + '</h3>' +
+        '<p class="ba-rnd-card__sum">' + esc(r.summary || '') + '</p>' +
+        '<div class="ba-rnd-card__meta">' +
+          '<span>발의 ' + esc(r.proposer_name || '-') + '</span>' +
+          '<span>참여 ' + (r.member_count == null ? 0 : r.member_count) + '명</span>' +
+          '<span>기록 ' + (r.log_count == null ? 0 : r.log_count) + '</span>' +
+          '<span>산출물 ' + (r.output_count == null ? 0 : r.output_count) + '</span>' +
+        '</div>' +
+        (acts ? '<div class="ba-rnd-card__foot">' + acts + '</div>' : '') +
+      '</article>';
+    }
+
+    function render(d) {
+      renderStats(d.stats);
+      renderTabs(d.counts);
+
+      var grid = $('#ba-r-grid');
+      if (!d.rows.length) {
+        grid.innerHTML = '<div class="ba-empty">보이는 과제가 없습니다. ' +
+          '비공개 과제는 발의자와 관리자에게만 보입니다.</div>';
+      } else {
+        grid.innerHTML = d.rows.map(card).join('');
+      }
+
+      var pager = $('#ba-r-pager');
+      if (d.pages <= 1) { pager.innerHTML = ''; return; }
+      var html = '';
+      for (var i = 1; i <= d.pages; i++) {
+        html += '<button type="button" data-page="' + i + '"' +
+                (i === d.page ? ' class="on"' : '') + '>' + i + '</button>';
+      }
+      pager.innerHTML = html;
+    }
+
+    function load() {
+      api('api/rnd.php?' + qs(filters())).then(render).catch(function (e) {
+        $('#ba-r-grid').innerHTML = '<div class="ba-empty">' + esc(e.message) + '</div>';
+      });
+    }
+
+    // ---- 이벤트 ----
+    ['ba-r-category', 'ba-r-sort'].forEach(function (id) {
+      var el = $('#' + id);
+      if (el) el.addEventListener('change', function () { state.page = 1; load(); });
+    });
+    ['ba-r-recruiting', 'ba-r-mine'].forEach(function (id) {
+      var el = $('#' + id);
+      if (el) el.addEventListener('change', function () { state.page = 1; load(); });
+    });
+    var kw = $('#ba-r-keyword');
+    if (kw) {
+      kw.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function () { state.page = 1; load(); }, 250);
+      });
+    }
+    var reset = $('#ba-r-reset');
+    if (reset) {
+      reset.addEventListener('click', function () {
+        ['ba-r-category', 'ba-r-sort', 'ba-r-keyword'].forEach(function (id) {
+          var el = $('#' + id); if (el) el.value = id === 'ba-r-sort' ? 'recent' : '';
+        });
+        ['ba-r-recruiting', 'ba-r-mine'].forEach(function (id) {
+          var el = $('#' + id); if (el) el.checked = false;
+        });
+        state = { status: '', page: 1 };
+        load();
+      });
+    }
+    $('#ba-r-tabs').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-status]');
+      if (!b) return;
+      state.status = b.dataset.status;
+      state.page   = 1;
+      load();
+    });
+    $('#ba-r-pager').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-page]');
+      if (!b) return;
+      state.page = parseInt(b.dataset.page, 10);
+      load();
+    });
+
+    // 승인·반려
+    $('#ba-r-grid').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      var id  = parseInt(b.dataset.id, 10);
+      var act = b.dataset.act;
+
+      if (act === 'reject') {
+        var reason = window.prompt('반려 사유를 적어 주세요. 발의자가 고쳐서 다시 낼 수 있습니다.');
+        if (reason === null) return;
+        if (!reason.trim()) { toast('반려 사유를 입력하세요.', true); return; }
+        b.disabled = true;
+        api('api/rnd.php?act=reject', { method: 'POST', body: { id: id, reason: reason } })
+          .then(function (d) { toast(d.message); load(); })
+          .catch(function (err) { b.disabled = false; toast(err.message, true); });
+        return;
+      }
+
+      if (act === 'approve') {
+        if (!window.confirm('이 과제를 승인합니다.\n\n승인은 과제를 열어 줄 뿐이며, ' +
+                            '가용도는 사람이 합류해야 바뀝니다.')) return;
+        b.disabled = true;
+        api('api/rnd.php?act=approve', { method: 'POST', body: { id: id } })
+          .then(function (d) { toast(d.message); load(); })
+          .catch(function (err) { b.disabled = false; toast(err.message, true); });
+      }
+    });
+
+    load();
+  }
+
+  function initRndForm() {
+    var root = $('#ba-rnd-form');
+    if (!root) return;
+
+    var id = root.dataset.id ? parseInt(root.dataset.id, 10) : 0;
+
+    function body(status) {
+      var b = {
+        name:         ($('#ba-r-name')         || {}).value || '',
+        rnd_category: ($('#ba-r-f-category')   || {}).value || '',
+        visibility:   ($('#ba-r-f-visibility') || {}).value || 'private',
+        summary:      ($('#ba-r-summary')      || {}).value || '',
+        notes:        ($('#ba-r-notes')        || {}).value || '',
+        dev_start:    ($('#ba-r-start')        || {}).value || '',
+        dev_end:      ($('#ba-r-end')          || {}).value || '',
+        load_cap:     ($('#ba-r-loadcap')      || {}).value || '',
+        recruiting:   ($('#ba-r-f-recruiting') || {}).checked ? '1' : ''
+      };
+      if (status) b.status = status;
+      return b;
+    }
+
+    function save(status, btn) {
+      if (!body().name.trim()) { toast('과제명을 입력하세요.', true); return; }
+      btn.disabled = true;
+
+      var url = id ? 'api/rnd.php?act=update' : 'api/rnd.php?act=propose';
+      var b   = body(status);
+      if (id) b.id = id;
+
+      api(url, { method: 'POST', body: b })
+        .then(function (d) {
+          toast(d.message);
+          setTimeout(function () { location.href = 'rnd_board.php'; }, 600);
+        })
+        .catch(function (e) { btn.disabled = false; toast(e.message, true); });
+    }
+
+    var submit = $('#ba-r-submit');
+    if (submit) submit.addEventListener('click', function () { save('proposed', submit); });
+
+    var draft = $('#ba-r-save-draft');
+    if (draft) draft.addEventListener('click', function () { save('draft', draft); });
+  }
+
   // ---- 진입 ---------------------------------------------------------
   initDrawer();
 
   switch (NAV) {
     case 'dashboard': initDashboard(); break;
-    case 'project':   initProjectList(); initProjectForm(); initProjectView(); initWbs(); initAllocation(); break;
+    case 'project':   initProjectList(); initProjectForm(); initProjectView(); initWbs(); initAllocation();
+                      initRndBoard(); initRndForm(); break;
     case 'member':    initMemberList(); initMemberProfile(); break;
   }
 
