@@ -38,9 +38,9 @@ final class WbsExtractor
         private ?LlmClient $llm = null,
     ) {
         $this->parser ??= new OfficeDocumentParser(
-            defined('BA_PDFTOTEXT') && BA_PDFTOTEXT ? BA_PDFTOTEXT : null
+            defined('BS_PDFTOTEXT') && BS_PDFTOTEXT ? BS_PDFTOTEXT : null
         );
-        $this->llm ??= ba_llm_client();
+        $this->llm ??= bs_llm_client();
     }
 
     // =================================================================
@@ -48,7 +48,7 @@ final class WbsExtractor
     // =================================================================
 
     /**
-     * 출처 문서 한 건을 파싱해 ba_project_source.parsed_text 를 채운다.
+     * 출처 문서 한 건을 파싱해 bs_project_source.parsed_text 를 채운다.
      *
      * **예외를 밖으로 던지지 않는다.** 한 파일이 깨졌다고 나머지 파싱이
      * 멈추면 안 된다. 실패는 parse_status='fail' + parse_error 로 남는다.
@@ -206,7 +206,7 @@ final class WbsExtractor
         $tasks = [];
 
         foreach ($sources as $s) {
-            foreach (ba_parse_blocks((string)$s['parsed_text']) as $block) {
+            foreach (bs_parse_blocks((string)$s['parsed_text']) as $block) {
                 $lines = explode("\n", $block->text);
 
                 // 엑셀 블록(ref 에 시트명!범위가 들어 있다)은 **표로 읽는다.**
@@ -344,17 +344,17 @@ final class WbsExtractor
             $depth = 1;
             if ($map['group'] !== null) { $depth++; }
             if ($map['sub'] !== null)   { $depth++; }
-            $depth = min($depth, BA_TASK_MAX_DEPTH);
+            $depth = min($depth, BS_TASK_MAX_DEPTH);
 
             $est = null;
             if ($map['est'] !== null && is_numeric($cells[$map['est']] ?? '')) {
                 $v = (float)$cells[$map['est']];
-                if ($v > 0 && $v <= BA_TASK_MAX_EST_MD) { $est = round($v, 2); }
+                if ($v > 0 && $v <= BS_TASK_MAX_EST_MD) { $est = round($v, 2); }
             }
             $diff = null;
             if ($map['diff'] !== null && is_numeric($cells[$map['diff']] ?? '')) {
                 $v = (int)$cells[$map['diff']];
-                if ($v >= BA_TASK_DIFFICULTY_MIN && $v <= BA_TASK_DIFFICULTY_MAX) { $diff = $v; }
+                if ($v >= BS_TASK_DIFFICULTY_MIN && $v <= BS_TASK_DIFFICULTY_MAX) { $diff = $v; }
             }
 
             $out[] = ['title' => mb_substr($title, 0, 300), 'depth' => $depth,
@@ -403,7 +403,7 @@ final class WbsExtractor
             $depth = max($depth, 2);
             $head  = trim($m[1]);
         }
-        $depth = min($depth, BA_TASK_MAX_DEPTH);
+        $depth = min($depth, BS_TASK_MAX_DEPTH);
 
         // 너무 짧은 칸은 대개 표 머리글이나 꼬리표다("구분", "비고", "일정").
         // 4자를 기준으로 삼으면 "출석 통합"(5자) 같은 실제 업무는 남는다.
@@ -429,7 +429,7 @@ final class WbsExtractor
                 continue;
             }
             $f = (float)$v;
-            if ($est === null && $f > 0 && $f <= BA_TASK_MAX_EST_MD) {
+            if ($est === null && $f > 0 && $f <= BS_TASK_MAX_EST_MD) {
                 $est = round($f, 2);
             } elseif ($diff === null && $f >= 1 && $f <= 5 && (float)(int)$f === $f) {
                 $diff = (int)$f;
@@ -528,16 +528,16 @@ final class WbsExtractor
                         'properties' => [
                             'title'       => ['type' => 'string', 'minLength' => 1, 'maxLength' => 300],
                             'depth'       => ['type' => 'integer', 'minimum' => 1,
-                                              'maximum' => BA_TASK_MAX_DEPTH],
+                                              'maximum' => BS_TASK_MAX_DEPTH],
                             'description' => ['type' => ['string', 'null'], 'maxLength' => 2000],
                             'est_md'      => ['type' => ['number', 'null'], 'minimum' => 0,
-                                              'maximum' => BA_TASK_MAX_EST_MD],
+                                              'maximum' => BS_TASK_MAX_EST_MD],
                             'difficulty'  => ['type' => ['integer', 'null'],
-                                              'minimum' => BA_TASK_DIFFICULTY_MIN,
-                                              'maximum' => BA_TASK_DIFFICULTY_MAX],
+                                              'minimum' => BS_TASK_DIFFICULTY_MIN,
+                                              'maximum' => BS_TASK_DIFFICULTY_MAX],
                             'domain_codes' => [
                                 'type' => 'array',
-                                'maxItems' => BA_TASK_MAX_DOMAINS,
+                                'maxItems' => BS_TASK_MAX_DOMAINS,
                                 'items' => ['type' => 'string', 'enum' => array_keys($domains)],
                             ],
                             'source_ref'  => ['type' => ['string', 'null'], 'maxLength' => 200],
@@ -597,15 +597,15 @@ final class WbsExtractor
             }
 
             $depth = (int)($t['depth'] ?? 1);
-            $depth = max(1, min(BA_TASK_MAX_DEPTH, $depth));
+            $depth = max(1, min(BS_TASK_MAX_DEPTH, $depth));
 
             $est = $t['est_md'] ?? null;
-            $est = (is_numeric($est) && $est >= 0 && $est <= BA_TASK_MAX_EST_MD)
+            $est = (is_numeric($est) && $est >= 0 && $est <= BS_TASK_MAX_EST_MD)
                  ? round((float)$est, 2) : null;
 
             $diff = $t['difficulty'] ?? null;
-            $diff = (is_numeric($diff) && $diff >= BA_TASK_DIFFICULTY_MIN
-                     && $diff <= BA_TASK_DIFFICULTY_MAX) ? (int)$diff : null;
+            $diff = (is_numeric($diff) && $diff >= BS_TASK_DIFFICULTY_MIN
+                     && $diff <= BS_TASK_DIFFICULTY_MAX) ? (int)$diff : null;
 
             $codes = [];
             foreach ((array)($t['domain_codes'] ?? []) as $c) {
@@ -613,7 +613,7 @@ final class WbsExtractor
                     $codes[] = $c;
                 }
             }
-            $codes = array_slice($codes, 0, BA_TASK_MAX_DOMAINS);
+            $codes = array_slice($codes, 0, BS_TASK_MAX_DOMAINS);
 
             $out[] = [
                 'title'        => mb_substr($title, 0, 300),
@@ -680,7 +680,7 @@ final class WbsExtractor
         $head[] = '이름: ' . $project['name'];
         if (!empty($project['client'])) { $head[] = '고객: ' . $project['client']; }
         if (!empty($project['track']))  {
-            $head[] = '유형: ' . (BA_PROJECT_TRACK[$project['track']] ?? $project['track']);
+            $head[] = '유형: ' . (BS_PROJECT_TRACK[$project['track']] ?? $project['track']);
         }
         if (!empty($project['summary'])) { $head[] = '개요: ' . $project['summary']; }
         if (!empty($project['notes']))   { $head[] = '특이점: ' . $project['notes']; }
@@ -735,7 +735,7 @@ final class WbsExtractor
     }
 
     /**
-     * ba_domain.keywords 로 분야를 추정한다.
+     * bs_domain.keywords 로 분야를 추정한다.
      *
      * 한 낱말이 여러 분야에 걸리는 것은 정상이다 — 맞은 낱말 수로 가린다.
      * 분야 이름 자체도 낱말로 친다.
@@ -772,7 +772,7 @@ final class WbsExtractor
         }
 
         arsort($hit);
-        $hit = array_slice($hit, 0, BA_TASK_MAX_DOMAINS, true);
+        $hit = array_slice($hit, 0, BS_TASK_MAX_DOMAINS, true);
         $sum = array_sum($hit);
         return array_map(static fn($n) => round($n / $sum, 3), $hit);
     }
@@ -807,7 +807,7 @@ final class WbsExtractor
         $lastAt   = [];          // depth => 마지막 i
 
         foreach ($tasks as $t) {
-            $depth = max(1, min(BA_TASK_MAX_DEPTH, (int)($t['depth'] ?? 1)));
+            $depth = max(1, min(BS_TASK_MAX_DEPTH, (int)($t['depth'] ?? 1)));
             // 붙일 상위가 없으면 끌어올린다. 버리지 않는다 —
             // 사라진 항목은 사람이 알아챌 방법이 없다.
             while ($depth > 1 && !isset($lastAt[$depth - 1])) {
@@ -847,7 +847,7 @@ final class WbsExtractor
             $parentOf[$i] = $depth === 1 ? -1 : $lastAt[$depth - 1];
             $lastAt[$depth] = $i;
             // 더 깊은 단계는 이제 상위가 바뀌었으므로 버린다.
-            for ($d = $depth + 1; $d <= BA_TASK_MAX_DEPTH; $d++) {
+            for ($d = $depth + 1; $d <= BS_TASK_MAX_DEPTH; $d++) {
                 unset($lastAt[$d]);
             }
         }

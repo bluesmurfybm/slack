@@ -542,12 +542,12 @@ final class OfficeDocumentParser implements DocumentParser
         if ($this->pdfToText === null || !is_file($this->pdfToText)) {
             throw new DocumentParseError(
                 'PDF 를 읽을 도구가 설정돼 있지 않습니다. '
-                . 'pdftotext(poppler) 를 설치하고 BA_PDFTOTEXT 를 지정하거나, '
+                . 'pdftotext(poppler) 를 설치하고 BS_PDFTOTEXT 를 지정하거나, '
                 . '원본 문서(xlsx·pptx·docx)를 올려 주세요.'
             );
         }
 
-        $out = tempnam(sys_get_temp_dir(), 'ba_pdf');
+        $out = tempnam(sys_get_temp_dir(), 'bs_pdf');
         if ($out === false) {
             throw new DocumentParseError('임시 파일을 만들지 못했습니다.');
         }

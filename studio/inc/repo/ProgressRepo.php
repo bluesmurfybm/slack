@@ -1,12 +1,12 @@
 <?php
-/** ba_progress / ba_progress_comment 접근 담당 DAO. 개발자가 올리는 진행상황과 댓글을 다룬다. */
+/** bs_progress / bs_progress_comment 접근 담당 DAO. 개발자가 올리는 진행상황과 댓글을 다룬다. */
 
 declare(strict_types=1);
 
 /**
  * 진행상황 저장소.
  *
- * ba_progress 는 기록이라 수정하지 않는다(001_schema.sql 에 updated_at 이 없다).
+ * bs_progress 는 기록이라 수정하지 않는다(001_schema.sql 에 updated_at 이 없다).
  * 내용을 고쳐야 하면 새 기록을 하나 더 남긴다.
  *
  * ┌──────────────────────────────────────────────────────────────────┐
@@ -27,16 +27,16 @@ final class ProgressRepo
     public function __construct(private PDO $pdo) {}
 
     // =================================================================
-    // 진행상황 (ba_progress)
+    // 진행상황 (bs_progress)
     // =================================================================
 
     public function find(int $id): ?array
     {
         $st = $this->pdo->prepare(
             'SELECT ' . self::SELECT . '
-               FROM ba_progress p
-               JOIN ba_member m ON m.id = p.member_id
-               JOIN ba_task   t ON t.id = p.task_id
+               FROM bs_progress p
+               JOIN bs_member m ON m.id = p.member_id
+               JOIN bs_task   t ON t.id = p.task_id
               WHERE p.id = ?'
         );
         $st->execute([$id]);
@@ -47,12 +47,12 @@ final class ProgressRepo
     /** 한 태스크의 진행 기록. 최근 것이 앞. */
     public function byTask(int $taskId, int $limit = 50): array
     {
-        // ix_ba_progress_task (task_id, created_at) 를 탄다.
+        // ix_bs_progress_task (task_id, created_at) 를 탄다.
         $st = $this->pdo->prepare(
             'SELECT ' . self::SELECT . '
-               FROM ba_progress p
-               JOIN ba_member m ON m.id = p.member_id
-               JOIN ba_task   t ON t.id = p.task_id
+               FROM bs_progress p
+               JOIN bs_member m ON m.id = p.member_id
+               JOIN bs_task   t ON t.id = p.task_id
               WHERE p.task_id = ?
               ORDER BY p.created_at DESC, p.id DESC
               LIMIT ' . $this->lim($limit)
@@ -64,12 +64,12 @@ final class ProgressRepo
     /** 한 사람의 최근 진행 기록. 대시보드가 쓴다. */
     public function byMember(int $memberId, int $limit = 50): array
     {
-        // ix_ba_progress_member (member_id, created_at) 를 탄다.
+        // ix_bs_progress_member (member_id, created_at) 를 탄다.
         $st = $this->pdo->prepare(
             'SELECT ' . self::SELECT . '
-               FROM ba_progress p
-               JOIN ba_member m ON m.id = p.member_id
-               JOIN ba_task   t ON t.id = p.task_id
+               FROM bs_progress p
+               JOIN bs_member m ON m.id = p.member_id
+               JOIN bs_task   t ON t.id = p.task_id
               WHERE p.member_id = ?
               ORDER BY p.created_at DESC, p.id DESC
               LIMIT ' . $this->lim($limit)
@@ -83,9 +83,9 @@ final class ProgressRepo
     {
         $st = $this->pdo->prepare(
             'SELECT ' . self::SELECT . '
-               FROM ba_progress p
-               JOIN ba_task   t ON t.id = p.task_id
-               JOIN ba_member m ON m.id = p.member_id
+               FROM bs_progress p
+               JOIN bs_task   t ON t.id = p.task_id
+               JOIN bs_member m ON m.id = p.member_id
               WHERE t.project_id = ?
               ORDER BY p.created_at DESC, p.id DESC
               LIMIT ' . $this->lim($limit)
@@ -113,13 +113,13 @@ final class ProgressRepo
         $ph = implode(',', array_fill(0, count($ids), '?'));
         $st = $this->pdo->prepare(
             "SELECT " . self::SELECT . "
-               FROM ba_progress p
+               FROM bs_progress p
                JOIN (SELECT task_id, MAX(id) AS mx
-                       FROM ba_progress
+                       FROM bs_progress
                       WHERE task_id IN ($ph)
                       GROUP BY task_id) x ON x.mx = p.id
-               JOIN ba_member m ON m.id = p.member_id
-               JOIN ba_task   t ON t.id = p.task_id"
+               JOIN bs_member m ON m.id = p.member_id
+               JOIN bs_task   t ON t.id = p.task_id"
         );
         $st->execute($ids);
 
@@ -138,10 +138,10 @@ final class ProgressRepo
             return [];
         }
         $ph = implode(',', array_fill(0, count($ids), '?'));
-        // ix_ba_pcomment_progress (progress_id, id)
+        // ix_bs_pcomment_progress (progress_id, id)
         $st = $this->pdo->prepare(
             "SELECT id, progress_id, user_id, user_name, content, created_at
-               FROM ba_progress_comment
+               FROM bs_progress_comment
               WHERE progress_id IN ($ph)
               ORDER BY progress_id, id"
         );
@@ -163,7 +163,7 @@ final class ProgressRepo
     /**
      * 진행상황 등록.
      *
-     * ba_task.status / progress_pct 도 **같은 트랜잭션에서** 갱신한다.
+     * bs_task.status / progress_pct 도 **같은 트랜잭션에서** 갱신한다.
      * 따로 하면 기록은 남았는데 태스크 상태는 옛것인 상태가 생기고,
      * 칸반과 피드가 서로 다른 말을 하게 된다.
      *
@@ -173,7 +173,7 @@ final class ProgressRepo
     public function create(int $taskId, int $memberId, array $data): int
     {
         $status = $data['status'] ?? null;
-        if ($status !== null && !isset(BA_TASK_STATUS[$status])) {
+        if ($status !== null && !isset(BS_TASK_STATUS[$status])) {
             throw new InvalidArgumentException('알 수 없는 상태입니다: ' . $status);
         }
 
@@ -202,7 +202,7 @@ final class ProgressRepo
         $this->pdo->beginTransaction();
         try {
             $st = $this->pdo->prepare(
-                'INSERT INTO ba_progress
+                'INSERT INTO bs_progress
                     (task_id, member_id, status, progress_pct, content, blocker, worked_on)
                  VALUES (?,?,?,?,?,?,?)'
             );
@@ -223,7 +223,7 @@ final class ProgressRepo
             if ($set) {
                 $par[] = $taskId;
                 $this->pdo->prepare(
-                    'UPDATE ba_task SET ' . implode(', ', $set) . ' WHERE id = ?'
+                    'UPDATE bs_task SET ' . implode(', ', $set) . ' WHERE id = ?'
                 )->execute($par);
             }
 
@@ -245,12 +245,12 @@ final class ProgressRepo
      */
     public function delete(int $id): void
     {
-        // ba_progress_comment 는 FK CASCADE 로 함께 지워진다.
-        $this->pdo->prepare('DELETE FROM ba_progress WHERE id = ?')->execute([$id]);
+        // bs_progress_comment 는 FK CASCADE 로 함께 지워진다.
+        $this->pdo->prepare('DELETE FROM bs_progress WHERE id = ?')->execute([$id]);
     }
 
     // =================================================================
-    // 댓글 (ba_progress_comment)
+    // 댓글 (bs_progress_comment)
     // =================================================================
 
     public function comments(int $progressId): array
@@ -262,7 +262,7 @@ final class ProgressRepo
     /**
      * 댓글 등록.
      *
-     * 작성자는 ba_member 가 아니라 포털 계정이다(구성원이 아닌 PM 도 단다).
+     * 작성자는 bs_member 가 아니라 포털 계정이다(구성원이 아닌 PM 도 단다).
      * user_id 는 이메일, user_name 은 그 시점 이름 스냅샷.
      */
     public function addComment(int $progressId, array $actor, string $content): int
@@ -272,7 +272,7 @@ final class ProgressRepo
             throw new InvalidArgumentException('내용을 입력하세요.');
         }
         $st = $this->pdo->prepare(
-            'INSERT INTO ba_progress_comment (progress_id, user_id, user_name, content)
+            'INSERT INTO bs_progress_comment (progress_id, user_id, user_name, content)
              VALUES (?,?,?,?)'
         );
         $st->execute([
@@ -285,7 +285,7 @@ final class ProgressRepo
     public function findComment(int $commentId): ?array
     {
         $st = $this->pdo->prepare(
-            'SELECT * FROM ba_progress_comment WHERE id = ?'
+            'SELECT * FROM bs_progress_comment WHERE id = ?'
         );
         $st->execute([$commentId]);
         return $st->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -293,7 +293,7 @@ final class ProgressRepo
 
     public function deleteComment(int $commentId): void
     {
-        $this->pdo->prepare('DELETE FROM ba_progress_comment WHERE id = ?')
+        $this->pdo->prepare('DELETE FROM bs_progress_comment WHERE id = ?')
                   ->execute([$commentId]);
     }
 
@@ -317,10 +317,10 @@ final class ProgressRepo
     {
         $st = $this->pdo->prepare(
             'SELECT t.id, t.est_md, t.progress_pct, t.status
-               FROM ba_task t
+               FROM bs_task t
               WHERE t.project_id = ?
                 AND t.confirmed = 1
-                AND NOT EXISTS (SELECT 1 FROM ba_task c WHERE c.parent_id = t.id)'
+                AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)'
         );
         $st->execute([$projectId]);
         $rows = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -372,10 +372,10 @@ final class ProgressRepo
         $ph = implode(',', array_fill(0, count($ids), '?'));
         $st = $this->pdo->prepare(
             "SELECT t.project_id, t.id, t.est_md, t.progress_pct
-               FROM ba_task t
+               FROM bs_task t
               WHERE t.project_id IN ($ph)
                 AND t.confirmed = 1
-                AND NOT EXISTS (SELECT 1 FROM ba_task c WHERE c.parent_id = t.id)"
+                AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)"
         );
         $st->execute($ids);
 
@@ -428,25 +428,25 @@ final class ProgressRepo
     public function overdueTasks(int $projectId, ?string $today = null): array
     {
         $today ??= date('Y-m-d');
-        $ph = implode(',', array_fill(0, count(BA_TASK_OVERDUE_EXEMPT), '?'));
+        $ph = implode(',', array_fill(0, count(BS_TASK_OVERDUE_EXEMPT), '?'));
         $st = $this->pdo->prepare(
             "SELECT t.id, t.wbs_no, t.title, t.plan_end, t.status, t.progress_pct,
                     DATEDIFF(?, t.plan_end) AS overdue_days
-               FROM ba_task t
+               FROM bs_task t
               WHERE t.project_id = ?
                 AND t.confirmed = 1
                 AND t.plan_end IS NOT NULL
                 AND t.plan_end < ?
                 AND t.status NOT IN ($ph)
-                AND NOT EXISTS (SELECT 1 FROM ba_task c WHERE c.parent_id = t.id)
+                AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)
               ORDER BY t.plan_end"
         );
-        $st->execute(array_merge([$today, $projectId, $today], BA_TASK_OVERDUE_EXEMPT));
+        $st->execute(array_merge([$today, $projectId, $today], BS_TASK_OVERDUE_EXEMPT));
         return array_map(static function (array $r): array {
             $r['id']           = (int)$r['id'];
             $r['progress_pct'] = (int)$r['progress_pct'];
             $r['overdue_days'] = (int)$r['overdue_days'];
-            $r['status_label'] = BA_TASK_STATUS[$r['status']] ?? $r['status'];
+            $r['status_label'] = BS_TASK_STATUS[$r['status']] ?? $r['status'];
             return $r;
         }, $st->fetchAll(PDO::FETCH_ASSOC));
     }
@@ -467,7 +467,7 @@ final class ProgressRepo
             'task_title'   => $r['task_title'],
             'status'       => $r['status'],
             'status_label' => $r['status'] !== null
-                              ? (BA_TASK_STATUS[$r['status']] ?? $r['status']) : null,
+                              ? (BS_TASK_STATUS[$r['status']] ?? $r['status']) : null,
             'progress_pct' => $r['progress_pct'] !== null ? (int)$r['progress_pct'] : null,
             'content'      => $r['content'],
             'blocker'      => $r['blocker'],

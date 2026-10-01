@@ -28,7 +28,7 @@ if (!in_array($cfg['db']['host'], ['127.0.0.1', 'localhost', '::1'], true)) {
     exit(2);
 }
 
-$pdo      = ba_db();
+$pdo      = bs_db();
 $projects = new ProjectRepo($pdo);
 $tasks    = new TaskRepo($pdo);
 $members  = new MemberRepo($pdo);
@@ -48,16 +48,16 @@ if (!$p) {
 
 // 이전 것을 치우고 다시 만든다. 여러 번 돌려도 같은 상태가 되게.
 $pdo->prepare(
-    'DELETE pr FROM ba_progress pr JOIN ba_task t ON t.id = pr.task_id WHERE t.project_id = ?'
+    'DELETE pr FROM bs_progress pr JOIN bs_task t ON t.id = pr.task_id WHERE t.project_id = ?'
 )->execute([$pid]);
 $pdo->prepare(
-    "DELETE w FROM ba_workload w
-       JOIN ba_allocation_item i ON i.id = w.ref_id
-       JOIN ba_task t            ON t.id = i.task_id
+    "DELETE w FROM bs_workload w
+       JOIN bs_allocation_item i ON i.id = w.ref_id
+       JOIN bs_task t            ON t.id = i.task_id
       WHERE w.kind = 'assigned' AND w.ref_type = 'allocation_item' AND t.project_id = ?"
 )->execute([$pid]);
-$pdo->prepare('DELETE FROM ba_allocation WHERE project_id = ?')->execute([$pid]);
-$pdo->prepare("DELETE FROM ba_notification WHERE ref_type IN ('allocation','progress','progress_blocker')")
+$pdo->prepare('DELETE FROM bs_allocation WHERE project_id = ?')->execute([$pid]);
+$pdo->prepare("DELETE FROM bs_notification WHERE ref_type IN ('allocation','progress','progress_blocker')")
     ->execute();
 
 $confirmed = $tasks->confirmedForAllocation($pid);
@@ -97,7 +97,7 @@ echo "진행상황 {$n}건을 남겼습니다(하나는 블로커 포함).\n";
 // --- 지연이 보이도록 기한 하나를 과거로 ----------------------------------
 $late = $items[0]['task_id'] ?? null;
 if ($late) {
-    $pdo->prepare('UPDATE ba_task SET plan_end = ? WHERE id = ?')
+    $pdo->prepare('UPDATE bs_task SET plan_end = ? WHERE id = ?')
         ->execute([date('Y-m-d', strtotime('-10 days')), $late]);
     echo "지연이 보이도록 태스크 1건의 기한을 10일 전으로 당겼습니다.\n";
 }

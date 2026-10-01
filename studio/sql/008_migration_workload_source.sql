@@ -1,5 +1,5 @@
 -- =====================================================================
--- 008. 직접 등록한 점유의 출처와 작성자 (ba_workload)
+-- 008. 직접 등록한 점유의 출처와 작성자 (bs_workload)
 --
 --   mysql -u root iworks_local < studio/sql/008_migration_workload_source.sql
 --
@@ -14,7 +14,7 @@
 --   그 값이 **가용도를 그대로 깎습니다.** 점유 80% 를 한 줄 넣으면
 --   그 사람은 모든 프로젝트의 후보 목록에서 사실상 사라집니다.
 --
---   그런데 지금 ba_workload 에는 **누가 언제 무슨 근거로 넣었는지 적을
+--   그런데 지금 bs_workload 에는 **누가 언제 무슨 근거로 넣었는지 적을
 --   칸이 없습니다.** 그대로 열면 "이 사람 가용도가 왜 이렇지" 를 물었을 때
 --   아무도 답할 수 없습니다. 악의가 없어도 착오 한 건이 조용히 남습니다.
 --
@@ -28,7 +28,7 @@
 -- =====================================================================
 SET NAMES utf8mb4;
 
-ALTER TABLE `ba_workload`
+ALTER TABLE `bs_workload`
   ADD COLUMN `source`          VARCHAR(20)  NULL
       COMMENT '직접 등록 시 근거의 출처. slack|email|meeting|doc|etc'
       AFTER `ref_id`,
@@ -46,5 +46,5 @@ ALTER TABLE `ba_workload`
       AFTER `created_by`;
 
 -- 직접 등록만 따로 훑는 조회가 생깁니다(구성원 화면의 '내가 등록한 것').
-ALTER TABLE `ba_workload`
-  ADD KEY `ix_ba_workload_manual` (`kind`, `member_id`, `start_date`);
+ALTER TABLE `bs_workload`
+  ADD KEY `ix_bs_workload_manual` (`kind`, `member_id`, `start_date`);

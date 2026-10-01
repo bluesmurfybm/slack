@@ -12,7 +12,7 @@
  *
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ 등록은 **본인이 맡은 태스크만** 이다 (명세서 §7.2).               │
- * │ 확인은 ba_progress_allowed() 한 곳에서만 한다 — 확정된 배정안에    │
+ * │ 확인은 bs_progress_allowed() 한 곳에서만 한다 — 확정된 배정안에    │
  * │ 내 member_id 가 들어 있는지를 본다. 관리자도 남의 것을 대신        │
  * │ 올리지 않는다. 대신 올려 주면 기록의 주인이 흐려진다.             │
  * └──────────────────────────────────────────────────────────────────┘
@@ -20,30 +20,30 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
-require_once BA_ROOT . '/inc/repo/ProjectRepo.php';
-require_once BA_ROOT . '/inc/repo/TaskRepo.php';
-require_once BA_ROOT . '/inc/repo/MemberRepo.php';
-require_once BA_ROOT . '/inc/repo/AllocationRepo.php';
-require_once BA_ROOT . '/inc/repo/ProgressRepo.php';
-require_once BA_ROOT . '/inc/service/Notifier.php';
+require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
+require_once BS_ROOT . '/inc/repo/TaskRepo.php';
+require_once BS_ROOT . '/inc/repo/MemberRepo.php';
+require_once BS_ROOT . '/inc/repo/AllocationRepo.php';
+require_once BS_ROOT . '/inc/repo/ProgressRepo.php';
+require_once BS_ROOT . '/inc/service/Notifier.php';
 
-$pdo      = ba_db();
+$pdo      = bs_db();
 $projects = new ProjectRepo($pdo);
 $tasks    = new TaskRepo($pdo);
 $members  = new MemberRepo($pdo);
 $allocs   = new AllocationRepo($pdo);
 $progress = new ProgressRepo($pdo);
 
-ba_route(ba_param_str('act', 'list'), [
+bs_route(bs_param_str('act', 'list'), [
 
     'list' => function () use ($tasks, $progress): void {
-        ba_require_login_api();
-        $taskId = ba_param_int('task_id', 0);
+        bs_require_login_api();
+        $taskId = bs_param_int('task_id', 0);
         if (!$taskId) {
-            ba_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
         }
         if (!$tasks->find($taskId)) {
-            ba_json_error('NOT_FOUND', '태스크를 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '태스크를 찾을 수 없습니다.', 404);
         }
 
         $rows = $progress->byTask($taskId);
@@ -54,19 +54,19 @@ ba_route(ba_param_str('act', 'list'), [
         }
         unset($r);
 
-        ba_json_ok(['rows' => $rows]);
+        bs_json_ok(['rows' => $rows]);
     },
 
     /** 드로어가 여는 한 태스크 — 기록·댓글·내가 올릴 수 있는지. */
     'task' => function () use ($tasks, $members, $allocs, $progress): void {
-        $me     = ba_require_login_api();
-        $taskId = ba_param_int('task_id', 0);
+        $me     = bs_require_login_api();
+        $taskId = bs_param_int('task_id', 0);
         if (!$taskId) {
-            ba_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
         }
         $task = $tasks->find($taskId);
         if (!$task) {
-            ba_json_error('NOT_FOUND', '태스크를 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '태스크를 찾을 수 없습니다.', 404);
         }
 
         $rows = $progress->byTask($taskId);
@@ -76,9 +76,9 @@ ba_route(ba_param_str('act', 'list'), [
         }
         unset($r);
 
-        [$allowed, $why, $mine] = ba_progress_allowed($members, $allocs, $me, $task);
+        [$allowed, $why, $mine] = bs_progress_allowed($members, $allocs, $me, $task);
 
-        ba_json_ok([
+        bs_json_ok([
             'task' => [
                 'id'           => (int)$task['id'],
                 'project_id'   => (int)$task['project_id'],
@@ -86,7 +86,7 @@ ba_route(ba_param_str('act', 'list'), [
                 'title'        => $task['title'],
                 'description'  => $task['description'],
                 'status'       => $task['status'],
-                'status_label' => BA_TASK_STATUS[$task['status']] ?? $task['status'],
+                'status_label' => BS_TASK_STATUS[$task['status']] ?? $task['status'],
                 'progress_pct' => (int)$task['progress_pct'],
                 'plan_start'   => $task['plan_start'],
                 'plan_end'     => $task['plan_end'],
@@ -96,60 +96,60 @@ ba_route(ba_param_str('act', 'list'), [
             'can_write' => $allowed,
             'why'       => $why,
             'member_id' => $mine,
-            'statuses'  => BA_TASK_STATUS,
+            'statuses'  => BS_TASK_STATUS,
         ]);
     },
 
     'feed' => function () use ($projects, $progress): void {
-        ba_require_login_api();
-        $projectId = ba_param_int('project_id', 0);
+        bs_require_login_api();
+        $projectId = bs_param_int('project_id', 0);
         if (!$projectId) {
-            ba_json_error('MISSING_PARAM', '프로젝트 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '프로젝트 번호가 없습니다.', 400);
         }
         if (!$projects->find($projectId)) {
-            ba_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
         }
-        ba_json_ok([
-            'rows' => $progress->feedByProject($projectId, ba_param_int('limit', 30) ?? 30),
+        bs_json_ok([
+            'rows' => $progress->feedByProject($projectId, bs_param_int('limit', 30) ?? 30),
         ]);
     },
 
     /**
      * 진행상황 등록.
      *
-     * ba_progress 기록과 ba_task.status/progress_pct 를 같은 트랜잭션에서
+     * bs_progress 기록과 bs_task.status/progress_pct 를 같은 트랜잭션에서
      * 바꾼다(ProgressRepo::create). 알림은 **그 뒤**에 따로 접수한다 —
      * 슬랙 사정으로 등록이 실패하면 안 된다.
      */
     'create' => function () use ($pdo, $projects, $tasks, $members, $allocs, $progress): void {
-        $me     = ba_begin_write();
-        $taskId = ba_param_int('task_id', 0);
+        $me     = bs_begin_write();
+        $taskId = bs_param_int('task_id', 0);
         if (!$taskId) {
-            ba_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
         }
         $task = $tasks->find($taskId);
         if (!$task) {
-            ba_json_error('NOT_FOUND', '태스크를 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '태스크를 찾을 수 없습니다.', 404);
         }
 
-        [$allowed, $why, $mine] = ba_progress_allowed($members, $allocs, $me, $task);
+        [$allowed, $why, $mine] = bs_progress_allowed($members, $allocs, $me, $task);
         if (!$allowed) {
-            ba_json_error('FORBIDDEN', $why, 403);
+            bs_json_error('FORBIDDEN', $why, 403);
         }
 
         $id = $progress->create($taskId, $mine, [
-            'status'       => ba_has_param('status') ? ba_param_str('status') : null,
-            'progress_pct' => ba_has_param('progress_pct') ? ba_param_int('progress_pct') : null,
-            'content'      => ba_param_str('content'),
-            'blocker'      => ba_param_str('blocker'),
-            'worked_on'    => ba_param_str('worked_on'),
+            'status'       => bs_has_param('status') ? bs_param_str('status') : null,
+            'progress_pct' => bs_has_param('progress_pct') ? bs_param_int('progress_pct') : null,
+            'content'      => bs_param_str('content'),
+            'blocker'      => bs_param_str('blocker'),
+            'worked_on'    => bs_param_str('worked_on'),
         ]);
 
         // 알림 — 여기서 실패해도 등록은 이미 끝났다.
         $row      = $progress->find($id);
         $notifier = new OutboxNotifier($pdo);
         $sent     = $notifier->send(
-            ba_progress_notices($projects, $members, $allocs, $task, $row, $me)
+            bs_progress_notices($projects, $members, $allocs, $task, $row, $me)
         );
 
         $rows = $progress->byTask($taskId);
@@ -158,13 +158,13 @@ ba_route(ba_param_str('act', 'list'), [
         unset($r);
 
         $after = $tasks->find($taskId);
-        ba_json_ok([
+        bs_json_ok([
             'id'   => $id,
             'rows' => $rows,
             'task' => [
                 'id'           => $taskId,
                 'status'       => $after['status'],
-                'status_label' => BA_TASK_STATUS[$after['status']] ?? $after['status'],
+                'status_label' => BS_TASK_STATUS[$after['status']] ?? $after['status'],
                 'progress_pct' => (int)$after['progress_pct'],
             ],
             'notify'  => $sent,
@@ -176,19 +176,19 @@ ba_route(ba_param_str('act', 'list'), [
     },
 
     'comment' => function () use ($progress): void {
-        $me = ba_begin_write();
-        $progressId = ba_param_int('progress_id', 0);
+        $me = bs_begin_write();
+        $progressId = bs_param_int('progress_id', 0);
         if (!$progressId) {
-            ba_json_error('MISSING_PARAM', '진행 기록 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '진행 기록 번호가 없습니다.', 400);
         }
         if (!$progress->find($progressId)) {
-            ba_json_error('NOT_FOUND', '진행 기록을 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '진행 기록을 찾을 수 없습니다.', 404);
         }
 
         // 댓글은 본인 태스크가 아니어도 단다. PM 과 동료가 묻고 답하는 자리다.
-        $id = $progress->addComment($progressId, $me, ba_param_str('content'));
+        $id = $progress->addComment($progressId, $me, bs_param_str('content'));
 
-        ba_json_ok([
+        bs_json_ok([
             'id'       => $id,
             'comments' => $progress->comments($progressId),
             'message'  => '댓글을 남겼습니다.',
@@ -205,24 +205,24 @@ ba_route(ba_param_str('act', 'list'), [
      * 그 뒤에 일어난 일까지 없던 것이 되지는 않는다.
      */
     'delete' => function () use ($members, $progress): void {
-        $me = ba_begin_write();
-        $id = ba_param_int('id', 0);
+        $me = bs_begin_write();
+        $id = bs_param_int('id', 0);
         if (!$id) {
-            ba_json_error('MISSING_PARAM', '진행 기록 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '진행 기록 번호가 없습니다.', 400);
         }
         $row = $progress->find($id);
         if (!$row) {
-            ba_json_error('NOT_FOUND', '진행 기록을 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '진행 기록을 찾을 수 없습니다.', 404);
         }
 
         $mine = $members->findByUserId((string)$me['id']);
         $isMe = $mine && (int)$mine['id'] === (int)$row['member_id'];
-        if (!$isMe && !ba_is_admin()) {
-            ba_json_error('FORBIDDEN', '본인이 올린 기록만 지울 수 있습니다.', 403);
+        if (!$isMe && !bs_is_admin()) {
+            bs_json_error('FORBIDDEN', '본인이 올린 기록만 지울 수 있습니다.', 403);
         }
 
         $progress->delete($id);
-        ba_json_ok([
+        bs_json_ok([
             'message' => '진행 기록을 지웠습니다. 태스크의 상태와 진행률은 그대로입니다 '
                        . '— 되돌리려면 새 기록을 올려 주세요.',
             'rows'    => $progress->byTask((int)$row['task_id']),
@@ -230,21 +230,21 @@ ba_route(ba_param_str('act', 'list'), [
     },
 
     'delete_comment' => function () use ($progress): void {
-        $me = ba_begin_write();
-        $id = ba_param_int('id', 0);
+        $me = bs_begin_write();
+        $id = bs_param_int('id', 0);
         if (!$id) {
-            ba_json_error('MISSING_PARAM', '댓글 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '댓글 번호가 없습니다.', 400);
         }
         $c = $progress->findComment($id);
         if (!$c) {
-            ba_json_error('NOT_FOUND', '댓글을 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '댓글을 찾을 수 없습니다.', 404);
         }
-        if ((string)$c['user_id'] !== (string)$me['id'] && !ba_is_admin()) {
-            ba_json_error('FORBIDDEN', '본인이 쓴 댓글만 지울 수 있습니다.', 403);
+        if ((string)$c['user_id'] !== (string)$me['id'] && !bs_is_admin()) {
+            bs_json_error('FORBIDDEN', '본인이 쓴 댓글만 지울 수 있습니다.', 403);
         }
 
         $progress->deleteComment($id);
-        ba_json_ok([
+        bs_json_ok([
             'comments' => $progress->comments((int)$c['progress_id']),
             'message'  => '댓글을 지웠습니다.',
         ]);
@@ -267,7 +267,7 @@ ba_route(ba_param_str('act', 'list'), [
  *
  * @return array{0:bool,1:string,2:?int} [가능한가, 안 되는 이유, 내 member_id]
  */
-function ba_progress_allowed(MemberRepo $members, AllocationRepo $allocs,
+function bs_progress_allowed(MemberRepo $members, AllocationRepo $allocs,
                              array $me, array $task): array
 {
     $mine = $members->findByUserId((string)$me['id']);
@@ -300,7 +300,7 @@ function ba_progress_allowed(MemberRepo $members, AllocationRepo $allocs,
  *
  * @return Notice[]
  */
-function ba_progress_notices(ProjectRepo $projects, MemberRepo $members,
+function bs_progress_notices(ProjectRepo $projects, MemberRepo $members,
                              AllocationRepo $allocs, array $task, array $row, array $me): array
 {
     $p = $projects->find((int)$task['project_id']);
@@ -331,7 +331,7 @@ function ba_progress_notices(ProjectRepo $projects, MemberRepo $members,
 
     $out = [];
     // 1) 팀 채널
-    $out[] = new Notice('slack', (int)$row['member_id'], BA_PROGRESS_CHANNEL,
+    $out[] = new Notice('slack', (int)$row['member_id'], BS_PROGRESS_CHANNEL,
                         $body, $head, 'progress', (int)$row['id']);
 
     // 2) 블로커면 담당 PM 에게 DM

@@ -3,7 +3,7 @@
 
 declare(strict_types=1);
 
-define('BA_ROOT', dirname(__DIR__));
+define('BS_ROOT', dirname(__DIR__));
 
 /**
  * iworks 포털 루트.
@@ -14,9 +14,9 @@ define('BA_ROOT', dirname(__DIR__));
  *  스캐폴딩 단계에서는 분기를 늘리지 않는 쪽을 택했다. 필요해지면 BlueCart 의
  *  bluecart/includes/bootstrap.php 가 BC_PORTAL_ROOT 를 비워 두는 방식을 그대로 옮기면 된다.)
  */
-define('BA_PORTAL_ROOT', dirname(BA_ROOT));
+define('BS_PORTAL_ROOT', dirname(BS_ROOT));
 
-if (!is_file(BA_PORTAL_ROOT . '/core/auth.php')) {
+if (!is_file(BS_PORTAL_ROOT . '/core/auth.php')) {
     http_response_code(500);
     exit('BlueStudio 는 iworks 포털 안(<포털>/studio)에서만 동작합니다.');
 }
@@ -32,17 +32,17 @@ if (!is_file(BA_PORTAL_ROOT . '/core/auth.php')) {
 // core/auth.php 가 date_default_timezone_set('Asia/Seoul') 과 core/db.php 를
 // 함께 끌고 온다. 여기서 시간대를 다시 정하지 않는다.
 // ---------------------------------------------------------------------
-require_once BA_PORTAL_ROOT . '/core/auth.php';        // 세션 + current_portal_user() + portal_db()
-require_once BA_PORTAL_ROOT . '/core/worksystems.php'; // 상단바 업무 시스템 메뉴
-require_once BA_PORTAL_ROOT . '/core/board.php';       // board_is_admin() — 포털 관리자 판정
+require_once BS_PORTAL_ROOT . '/core/auth.php';        // 세션 + current_portal_user() + portal_db()
+require_once BS_PORTAL_ROOT . '/core/worksystems.php'; // 상단바 업무 시스템 메뉴
+require_once BS_PORTAL_ROOT . '/core/board.php';       // board_is_admin() — 포털 관리자 판정
 
-require_once BA_ROOT . '/inc/helpers.php';
+require_once BS_ROOT . '/inc/helpers.php';
 
 /**
  * worksystems.json 에 등록한 이 모듈의 key.
  * 상단바 현재 위치 표시와 미로그인 안내(?need_login=)에 쓰인다.
  */
-const BA_MODULE_KEY = 'assign';
+const BS_MODULE_KEY = 'assign';
 
 // =====================================================================
 // 권한
@@ -53,48 +53,48 @@ const BA_MODULE_KEY = 'assign';
 //
 //   ADMIN  : 포털 관리자 명단(portal_admin + core/board.php 의 OWNER_ADMINS)
 //            → board_is_admin($email) 로 판정. core 에 실제로 있는 함수다.
-//   PM     : 그 프로젝트의 ba_project.owner_id 인 사람 (프로젝트별로 달라진다)
+//   PM     : 그 프로젝트의 bs_project.owner_id 인 사람 (프로젝트별로 달라진다)
 //            → ProjectRepo 조회가 필요해 지금은 TODO
 //   MEMBER : 로그인한 나머지 전원
 //
 // 역할 표를 새로 만들지 말지는 P1 에서 정한다. 프로젝트마다 PM 이 다르므로
-// 전역 역할 표보다 ba_project.owner_id 쪽이 맞아 보인다.
+// 전역 역할 표보다 bs_project.owner_id 쪽이 맞아 보인다.
 // =====================================================================
 
 /** 역할 코드 */
-const BA_ROLE_ADMIN  = 'ADMIN';   // 모듈 전체 관리자 = 포털 관리자
-const BA_ROLE_PM     = 'PM';      // 특정 프로젝트의 담당 PM
-const BA_ROLE_MEMBER = 'MEMBER';  // 일반 구성원
+const BS_ROLE_ADMIN  = 'ADMIN';   // 모듈 전체 관리자 = 포털 관리자
+const BS_ROLE_PM     = 'PM';      // 특정 프로젝트의 담당 PM
+const BS_ROLE_MEMBER = 'MEMBER';  // 일반 구성원
 
-const BA_ROLES = [
-    BA_ROLE_ADMIN  => '관리자',
-    BA_ROLE_PM     => 'PM',
-    BA_ROLE_MEMBER => '구성원',
+const BS_ROLES = [
+    BS_ROLE_ADMIN  => '관리자',
+    BS_ROLE_PM     => 'PM',
+    BS_ROLE_MEMBER => '구성원',
 ];
 
 /**
  * 기능 권한(capability) 코드.
  *
  * 화면·API 가 역할 이름을 직접 비교하지 않고 이 코드로 묻게 한다.
- * 나중에 역할 체계가 바뀌어도 ba_can() 한 곳만 고치면 된다.
+ * 나중에 역할 체계가 바뀌어도 bs_can() 한 곳만 고치면 된다.
  */
-const BA_CAP_PROJECT_MANAGE     = 'project.manage';      // 프로젝트 등록·수정·삭제
-const BA_CAP_WBS_CONFIRM        = 'wbs.confirm';         // WBS 초안 확정(confirmed=1)
-const BA_CAP_ALLOCATION_PROPOSE = 'allocation.propose';  // 배정안 산출
-const BA_CAP_ALLOCATION_CONFIRM = 'allocation.confirm';  // 배정안 확정
-const BA_CAP_PROFILE_VIEW_ANY   = 'profile.view_any';    // 남의 프로파일 열람
-const BA_CAP_EVAL_RUN           = 'eval.run';            // 역량 재판정 실행
-const BA_CAP_OBJECTION_REVIEW   = 'objection.review';    // 이의 제기 처리
+const BS_CAP_PROJECT_MANAGE     = 'project.manage';      // 프로젝트 등록·수정·삭제
+const BS_CAP_WBS_CONFIRM        = 'wbs.confirm';         // WBS 초안 확정(confirmed=1)
+const BS_CAP_ALLOCATION_PROPOSE = 'allocation.propose';  // 배정안 산출
+const BS_CAP_ALLOCATION_CONFIRM = 'allocation.confirm';  // 배정안 확정
+const BS_CAP_PROFILE_VIEW_ANY   = 'profile.view_any';    // 남의 프로파일 열람
+const BS_CAP_EVAL_RUN           = 'eval.run';            // 역량 재판정 실행
+const BS_CAP_OBJECTION_REVIEW   = 'objection.review';    // 이의 제기 처리
 
 /**
  * CLAUDE.md 가 강제하는 규칙을 코드에서 지키기 위한 상수.
  * 값을 바꾸기 전에 docs/bluestudio-spec.md 와 CLAUDE.md 를 먼저 보라.
  */
 // 표본이 이보다 적은 구성원은 낮은 점수 대신 insufficient_data 플래그를 세운다.
-const BA_MIN_SAMPLE = 20;
+const BS_MIN_SAMPLE = 20;
 // 관리자 보정치 허용 범위.
-const BA_ADJUST_MIN = -20.0;
-const BA_ADJUST_MAX = 20.0;
+const BS_ADJUST_MIN = -20.0;
+const BS_ADJUST_MAX = 20.0;
 
 // =====================================================================
 // 도메인 상수
@@ -104,8 +104,8 @@ const BA_ADJUST_MAX = 20.0;
 // P1 에서는 프로젝트 것만 있어 여기 둔다.
 // =====================================================================
 
-/** ba_project.status — 001_schema.sql 의 COMMENT 와 같은 목록이어야 한다. */
-const BA_PROJECT_STATUS = [
+/** bs_project.status — 001_schema.sql 의 COMMENT 와 같은 목록이어야 한다. */
+const BS_PROJECT_STATUS = [
     'draft'      => '작성 중',
     'scoping'    => '범위 정리',
     'allocating' => '배정 중',
@@ -115,8 +115,8 @@ const BA_PROJECT_STATUS = [
     'hold'       => '보류',
 ];
 
-/** ba_project.track */
-const BA_PROJECT_TRACK = [
+/** bs_project.track */
+const BS_PROJECT_TRACK = [
     'lms_b2b'    => 'LMS (B2B)',
     'lxp'        => 'LXP',
     'lxp_hybrid' => 'LXP 하이브리드',
@@ -125,7 +125,7 @@ const BA_PROJECT_TRACK = [
 ];
 
 /**
- * ba_domain.category — 코스모스(무들) 컴포넌트 계열.
+ * bs_domain.category — 코스모스(무들) 컴포넌트 계열.
  *
  * **점수는 분야가 아니라 이 단위로 냅니다.** 분야 21개로는 (사람×분야) 칸의
  * 81%가 표본 부족으로 버려집니다(docs/scoring-design.md §1.3).
@@ -133,7 +133,7 @@ const BA_PROJECT_TRACK = [
  * 코스모스는 UBION 무들 배포판 계열이라, 무들 컴포넌트 체계를 그대로 쓰면
  * "어느 플러그인 계열을 다뤘는가" 가 배정 근거가 됩니다.
  */
-const BA_DOMAIN_CATEGORY = [
+const BS_DOMAIN_CATEGORY = [
     'activity'       => ['label' => '학습활동',      'moodle' => 'mod_*'],
     'grading'        => ['label' => '평가·이수',     'moodle' => 'grade*, completion'],
     'enrolment'      => ['label' => '사용자·수강',   'moodle' => 'auth_*, enrol_*, user'],
@@ -151,7 +151,7 @@ const BA_DOMAIN_CATEGORY = [
  * 슬랙 취합 시스템에 남지 않기 때문이며, 기획 담당자가 평가 제외
  * (is_evaluable=0)인 것과 같은 원인입니다.
  */
-const BA_CATEGORY_NOT_SCORED = ['planning'];
+const BS_CATEGORY_NOT_SCORED = ['planning'];
 
 // =====================================================================
 // 가용도 산출 (명세서 §5)
@@ -174,11 +174,11 @@ const BA_CATEGORY_NOT_SCORED = ['planning'];
  *   진행 중 49건 / 회신 대기·보류 203건
  * 203건까지 점유로 세면 전원이 포화로 보입니다.
  */
-const BA_WORKLOAD_ACTIVE_STATUS = ['진행중', '등록', '공수산정요청', '운영배포요청'];
+const BS_WORKLOAD_ACTIVE_STATUS = ['진행중', '등록', '공수산정요청', '운영배포요청'];
 
 /** 진행 중이 아닌 것으로 보는 접두/정확 일치 값. 위 목록의 보완재. */
-const BA_WORKLOAD_IDLE_PREFIX = ['확인요청'];
-const BA_WORKLOAD_IDLE_STATUS = ['보류', '완료', '처리불가'];
+const BS_WORKLOAD_IDLE_PREFIX = ['확인요청'];
+const BS_WORKLOAD_IDLE_STATUS = ['보류', '완료', '처리불가'];
 
 /**
  * 추정 점유 — 진행 중 건 하나가 먹는 가용량.
@@ -190,19 +190,19 @@ const BA_WORKLOAD_IDLE_STATUS = ['보류', '완료', '처리불가'];
  * 그래서 화면에서 확정 점유와 **절대 합쳐 보여주지 않습니다**.
  * 실측이 쌓이면 여기만 고치면 됩니다.
  */
-const BA_INFERRED_LOAD_PER_ITEM = 0.05;
+const BS_INFERRED_LOAD_PER_ITEM = 0.05;
 
 /** 추정만으로 100% 를 채우지 못하게 하는 상한. 추정으로 사람을 배제하면 안 된다. */
-const BA_INFERRED_LOAD_MAX = 0.60;
+const BS_INFERRED_LOAD_MAX = 0.60;
 
 /**
- * 직접 등록한 점유의 출처 (ba_workload.source).
+ * 직접 등록한 점유의 출처 (bs_workload.source).
  *
  * 슬랙 취합 시스템에 안 잡히는 업무를 사람이 넣을 때, **어디서 알게 된
  * 일인지**를 같이 받는다. 이 한 줄이 그 사람의 가용도를 깎기 때문에
  * 근거가 남아야 한다.
  */
-const BA_WORKLOAD_SOURCE = [
+const BS_WORKLOAD_SOURCE = [
     'slack'   => '슬랙',
     'email'   => '메일',
     'meeting' => '회의·구두',
@@ -210,15 +210,15 @@ const BA_WORKLOAD_SOURCE = [
     'etc'     => '기타',
 ];
 
-/** 추정 점유의 신뢰도. ba_workload.confidence 와 화면 표시에 쓴다. */
-const BA_INFERRED_CONFIDENCE = 0.50;
+/** 추정 점유의 신뢰도. bs_workload.confidence 와 화면 표시에 쓴다. */
+const BS_INFERRED_CONFIDENCE = 0.50;
 
 // =====================================================================
 // WBS 태스크 (명세서 §4)
 // =====================================================================
 
-/** ba_task.status. 001_schema.sql 의 컬럼 주석과 같은 목록이어야 한다. */
-const BA_TASK_STATUS = [
+/** bs_task.status. 001_schema.sql 의 컬럼 주석과 같은 목록이어야 한다. */
+const BS_TASK_STATUS = [
     'todo'          => '대기',
     'doing'         => '진행 중',
     'review'        => '검토',
@@ -237,7 +237,7 @@ const BA_TASK_STATUS = [
  *
  * 이 목록은 TaskRepo::confirmedForAllocation() 만 사용한다.
  */
-const BA_TASK_NOT_ASSIGNABLE_STATUS = ['done', 'hold'];
+const BS_TASK_NOT_ASSIGNABLE_STATUS = ['done', 'hold'];
 
 /**
  * 지연으로 보지 않을 상태 (명세서 §7.1 Step4).
@@ -247,10 +247,10 @@ const BA_TASK_NOT_ASSIGNABLE_STATUS = ['done', 'hold'];
  * 화면이 늘 빨갛고, 그러면 아무도 빨간색을 보지 않게 된다.
  * `hold` 도 뺀다 — 세워 둔 일은 늦은 것이 아니라 멈춘 것이다.
  */
-const BA_TASK_OVERDUE_EXEMPT = ['done', 'prod_deployed', 'hold'];
+const BS_TASK_OVERDUE_EXEMPT = ['done', 'prod_deployed', 'hold'];
 
 /** 칸반에 세울 열. 명세서 §7.1 Step4 의 6개. `hold` 는 따로 모은다. */
-const BA_KANBAN_COLUMNS = ['todo', 'doing', 'review', 'dev_deployed', 'prod_deployed', 'done'];
+const BS_KANBAN_COLUMNS = ['todo', 'doing', 'review', 'dev_deployed', 'prod_deployed', 'done'];
 
 /**
  * 대시보드 카드에 올릴 프로젝트 상태.
@@ -261,19 +261,19 @@ const BA_KANBAN_COLUMNS = ['todo', 'doing', 'review', 'dev_deployed', 'prod_depl
  *
  * 빼는 것은 둘뿐 — `draft`(아직 만드는 중)와 `done`(끝남).
  */
-const BA_DASH_PROJECT_STATUS = ['scoping', 'allocating', 'confirmed', 'running', 'hold'];
+const BS_DASH_PROJECT_STATUS = ['scoping', 'allocating', 'confirmed', 'running', 'hold'];
 
 /** 진행상황 알림을 보낼 슬랙 채널 (명세서 §7.2). */
-const BA_PROGRESS_CHANNEL = '#bluestudio-알림';
+const BS_PROGRESS_CHANNEL = '#bluestudio-알림';
 
 /** 대/중/소 3계층. 스키마의 depth TINYINT 과 짝이다. */
-const BA_TASK_MAX_DEPTH = 3;
+const BS_TASK_MAX_DEPTH = 3;
 
-const BA_TASK_DEPTH_LABEL = [1 => '대분류', 2 => '중분류', 3 => '소분류'];
+const BS_TASK_DEPTH_LABEL = [1 => '대분류', 2 => '중분류', 3 => '소분류'];
 
 /** 난이도 범위. 스키마에 CHECK 가 없으므로(MySQL 5.7 호환) 여기서 지킨다. */
-const BA_TASK_DIFFICULTY_MIN = 1;
-const BA_TASK_DIFFICULTY_MAX = 5;
+const BS_TASK_DIFFICULTY_MIN = 1;
+const BS_TASK_DIFFICULTY_MAX = 5;
 
 /**
  * 한 프로젝트의 태스크 수 상한.
@@ -282,7 +282,7 @@ const BA_TASK_DIFFICULTY_MAX = 5;
  * 한 번에 들어오는데, 전체 트리 저장은 한 트랜잭션이라 그대로 받으면
  * 잠금이 오래 걸립니다. 실수인지 의도인지 물어보는 편이 낫습니다.
  */
-const BA_TASK_MAX_PER_PROJECT = 1000;
+const BS_TASK_MAX_PER_PROJECT = 1000;
 
 /**
  * PDF 에서 글자를 뽑을 외부 도구(poppler 의 pdftotext) 경로.
@@ -295,21 +295,21 @@ const BA_TASK_MAX_PER_PROJECT = 1000;
  * xlsx·pptx·docx 는 이 설정과 무관하게 언제나 읽습니다.
  *
  * 설치 예 (윈도우): poppler 를 받아 풀고 bin/pdftotext.exe 경로를 적습니다.
- *   const BA_PDFTOTEXT = 'C:/tools/poppler/bin/pdftotext.exe';
+ *   const BS_PDFTOTEXT = 'C:/tools/poppler/bin/pdftotext.exe';
  */
-const BA_PDFTOTEXT = null;
+const BS_PDFTOTEXT = null;
 
 /** 태스크 하나에 붙일 수 있는 분야 수. 다 고르면 분야 조건이 무의미해진다. */
-const BA_TASK_MAX_DOMAINS = 5;
+const BS_TASK_MAX_DOMAINS = 5;
 
 /** 추정 공수(M/D) 상한. 한 태스크가 이보다 크면 쪼개야 한다. */
-const BA_TASK_MAX_EST_MD = 999.99;
+const BS_TASK_MAX_EST_MD = 999.99;
 // =====================================================================
 // 배정 엔진 (명세서 §6)
 // =====================================================================
 
 /** 엔진 버전. 배정안마다 기록해 둔다 — 식이 바뀌면 옛 결과를 설명할 수 없다. */
-const BA_ENGINE_VER = 'v1';
+const BS_ENGINE_VER = 'v1';
 
 /**
  * 적합도 가중치 기본값 (명세서 §6.1 표).
@@ -327,7 +327,7 @@ const BA_ENGINE_VER = 'v1';
  * │ 나눈다. comm_score 가 생기면 여기 한 줄만 넣으면 된다.            │
  * └──────────────────────────────────────────────────────────────────┘
  */
-const BA_ALLOC_WEIGHTS = [
+const BS_ALLOC_WEIGHTS = [
     'domain' => 0.35,   // 태스크 분야 ∩ 구성원 계열 역량
     'cap'    => 0.20,   // 종합 역량
     'avail'  => 0.25,   // 참여 가능도
@@ -338,7 +338,7 @@ const BA_ALLOC_WEIGHTS = [
 ];
 
 /** 가중치로 받을 수 있는 값의 범위. 화면 슬라이더도 이 범위를 쓴다. */
-const BA_ALLOC_WEIGHT_MAX = 1.0;
+const BS_ALLOC_WEIGHT_MAX = 1.0;
 
 /**
  * 제약 조건 기본값 (명세서 §6.2).
@@ -351,7 +351,7 @@ const BA_ALLOC_WEIGHT_MAX = 1.0;
  * top_ratio      : '상위자' 를 어디까지로 볼지. 0.5 면 중앙값 이상.
  * concentration  : 한 사람이 전체 공수의 이 비율을 넘게 맡으면 감점이 붙는다.
  */
-const BA_ALLOC_CONSTRAINTS = [
+const BS_ALLOC_CONSTRAINTS = [
     'capacity_ratio'  => 1.0,
     'max_support'     => 2,
     'group_bonus'     => 8.0,
@@ -361,30 +361,30 @@ const BA_ALLOC_CONSTRAINTS = [
 ];
 
 /** 지역 탐색(swap) 최대 왕복 횟수. 결정론을 지키려면 상한이 있어야 한다. */
-const BA_ALLOC_MAX_PASSES = 20;
+const BS_ALLOC_MAX_PASSES = 20;
 
-/** ba_allocation.status */
-const BA_ALLOC_STATUS = [
+/** bs_allocation.status */
+const BS_ALLOC_STATUS = [
     'proposed'  => '산출됨',
     'adjusted'  => '조정됨',
     'confirmed' => '확정',
     'archived'  => '지난 안',
 ];
 
-/** ba_allocation_item.role */
-const BA_ALLOC_ROLE = [
+/** bs_allocation_item.role */
+const BS_ALLOC_ROLE = [
     'owner'    => '담당',
     'support'  => '지원',
     'reviewer' => '검토',
 ];
 
-/** 알림 종류/상태 (ba_notification) */
-const BA_NOTIFY_CHANNEL = ['slack' => '슬랙 DM', 'email' => '메일'];
-const BA_NOTIFY_STATUS  = [
+/** 알림 종류/상태 (bs_notification) */
+const BS_NOTIFY_CHANNEL = ['slack' => '슬랙 DM', 'email' => '메일'];
+const BS_NOTIFY_STATUS  = [
     'queued' => '보낼 예정', 'sent' => '보냄', 'failed' => '실패', 'skipped' => '건너뜀',
 ];
-/** ba_project_source.kind */
-const BA_SOURCE_KIND = [
+/** bs_project_source.kind */
+const BS_SOURCE_KIND = [
     'xlsx'  => '엑셀',
     'pptx'  => 'PPT',
     'docx'  => '워드',
@@ -413,16 +413,16 @@ const BA_SOURCE_KIND = [
  * docs/conventions.md §9-10 에 "운영 저장 경로 미확인" 으로 남아 있던 항목이며
  * 여기가 그 결정을 내린 곳이다.
  */
-const BA_UPLOAD_DIR = BA_ROOT . '/var/source';
+const BS_UPLOAD_DIR = BS_ROOT . '/var/source';
 
 /** 한 파일 최대 크기. php.ini 의 upload_max_filesize 보다 작아야 의미가 있다. */
-const BA_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;   // 20MB
+const BS_UPLOAD_MAX_BYTES = 20 * 1024 * 1024;   // 20MB
 
 /** 한 번에 올릴 수 있는 파일 수. */
-const BA_UPLOAD_MAX_FILES = 10;
+const BS_UPLOAD_MAX_FILES = 10;
 
 /** 한 프로젝트가 가질 수 있는 출처 문서 수(파일·링크·텍스트 합계). */
-const BA_SOURCE_MAX_PER_PROJECT = 50;
+const BS_SOURCE_MAX_PER_PROJECT = 50;
 
 /**
  * 허용 확장자 → 그 확장자에서 나올 수 있는 MIME.
@@ -434,7 +434,7 @@ const BA_SOURCE_MAX_PER_PROJECT = 50;
  * 많다. 그래서 zip 을 함께 허용한다 — 확장자 위장을 완전히 막지는 못하지만,
  * 저장 경로가 웹에서 실행되지 않으므로 실행 위험은 없다.
  */
-const BA_UPLOAD_MIME = [
+const BS_UPLOAD_MIME = [
     'xlsx' => ['application/zip', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
     'pptx' => ['application/zip', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
     'docx' => ['application/zip', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
@@ -446,8 +446,8 @@ const BA_UPLOAD_MIME = [
     'webp' => ['image/webp'],
 ];
 
-/** 확장자 → ba_project_source.kind */
-const BA_EXT_KIND = [
+/** 확장자 → bs_project_source.kind */
+const BS_EXT_KIND = [
     'xlsx' => 'xlsx',
     'pptx' => 'pptx',
     'docx' => 'docx',
@@ -466,7 +466,7 @@ const BA_EXT_KIND = [
 /**
  * 이 모듈이 쓰는 PDO.
  *
- * 포털과 같은 DB 를 쓰고 ba_ 접두사 표만 건드린다. 접속 정보를 두 군데 적지
+ * 포털과 같은 DB 를 쓰고 bs_ 접두사 표만 건드린다. 접속 정보를 두 군데 적지
  * 않으려고 포털 core/db.php 의 portal_db() 를 그대로 재사용한다.
  * (BlueCart 는 자체 config 에 DB 정보를 복사해 두지만, 그 파일 주석도
  *  "접속 정보가 두 군데 적혀 있으면 한쪽만 바뀌었을 때 원인을 찾기 어렵습니다"
@@ -475,7 +475,7 @@ const BA_EXT_KIND = [
  * 주의: portal_db() 는 단순 커넥션이 아니라 portal_* 표를 만들고 구성원을
  * 시드하는 부수효과가 있다. 포털이 어차피 매 요청 부르는 함수라 문제는 없다.
  */
-function ba_db(): PDO
+function bs_db(): PDO
 {
     return portal_db();
 }
@@ -492,7 +492,7 @@ function ba_db(): PDO
  *
  * @return array{id:string,name:string,email:string,color:?string}|null
  */
-function ba_current_user(): ?array
+function bs_current_user(): ?array
 {
     static $cached = false;
     static $user = null;
@@ -518,11 +518,11 @@ function ba_current_user(): ?array
  * 화면 진입점용. 비로그인이면 포털로 돌려보낸다.
  * 포털이 ?need_login=<key> 를 받아 왜 튕겼는지 이름까지 알려 준다.
  */
-function ba_require_login(): array
+function bs_require_login(): array
 {
-    $user = ba_current_user();
+    $user = bs_current_user();
     if ($user === null) {
-        header('Location: ../index.php?need_login=' . rawurlencode(BA_MODULE_KEY));
+        header('Location: ../index.php?need_login=' . rawurlencode(BS_MODULE_KEY));
         exit;
     }
     return $user;
@@ -535,41 +535,41 @@ function ba_require_login(): array
  * {"error":"..."} 라 이 모듈의 {ok,data,error} 형식과 다르다. 형식을 맞추려고
  * 여기서 따로 받는다.
  */
-function ba_require_login_api(): array
+function bs_require_login_api(): array
 {
-    $user = ba_current_user();
+    $user = bs_current_user();
     if ($user === null) {
-        ba_json_error('LOGIN_REQUIRED', '로그인이 필요합니다.', 401);
+        bs_json_error('LOGIN_REQUIRED', '로그인이 필요합니다.', 401);
     }
     return $user;
 }
 
 /** 포털 관리자인가. core/board.php 의 board_is_admin() 을 그대로 쓴다. */
-function ba_is_admin(?string $email = null): bool
+function bs_is_admin(?string $email = null): bool
 {
-    $email ??= ba_current_user()['id'] ?? '';
+    $email ??= bs_current_user()['id'] ?? '';
     return $email !== '' && board_is_admin($email);
 }
 
 /**
- * 이 사람이 해당 프로젝트의 PM(ba_project.owner_id) 인가.
+ * 이 사람이 해당 프로젝트의 PM(bs_project.owner_id) 인가.
  *
  * 한 요청에서 같은 프로젝트를 여러 번 묻는다(화면 그리면서 버튼마다).
  * 매번 조회하지 않도록 프로젝트별로 owner_id 를 캐시한다.
  */
-function ba_is_pm(int $projectId, ?string $email = null): bool
+function bs_is_pm(int $projectId, ?string $email = null): bool
 {
     static $ownerCache = [];
 
-    $email ??= ba_current_user()['id'] ?? '';
+    $email ??= bs_current_user()['id'] ?? '';
     if ($email === '' || $projectId <= 0) {
         return false;
     }
 
     if (!array_key_exists($projectId, $ownerCache)) {
-        require_once BA_ROOT . '/inc/repo/ProjectRepo.php';
+        require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
         // 지워진 프로젝트도 본다 — 복구 권한을 PM 에게 주려면 여기서 걸러지면 안 된다.
-        $row = (new ProjectRepo(ba_db()))->find($projectId, true);
+        $row = (new ProjectRepo(bs_db()))->find($projectId, true);
         $ownerCache[$projectId] = $row['owner_id'] ?? null;
     }
 
@@ -581,38 +581,38 @@ function ba_is_pm(int $projectId, ?string $email = null): bool
  *
  * $projectId 를 주면 그 프로젝트의 PM 인지까지 본다. 안 주면 관리자만 통과한다.
  *
- * TODO(P1): ba_is_pm() 이 채워지면 PM 경로가 실제로 열린다.
+ * TODO(P1): bs_is_pm() 이 채워지면 PM 경로가 실제로 열린다.
  */
-function ba_can(string $capability, ?int $projectId = null): bool
+function bs_can(string $capability, ?int $projectId = null): bool
 {
-    if (ba_current_user() === null) {
+    if (bs_current_user() === null) {
         return false;
     }
-    if (ba_is_admin()) {
+    if (bs_is_admin()) {
         return true;    // 관리자는 전부 통과
     }
 
-    $isPm = $projectId !== null && ba_is_pm($projectId);
+    $isPm = $projectId !== null && bs_is_pm($projectId);
 
     return match ($capability) {
-        BA_CAP_PROJECT_MANAGE,
-        BA_CAP_WBS_CONFIRM,
-        BA_CAP_ALLOCATION_PROPOSE,
-        BA_CAP_ALLOCATION_CONFIRM => $isPm,
+        BS_CAP_PROJECT_MANAGE,
+        BS_CAP_WBS_CONFIRM,
+        BS_CAP_ALLOCATION_PROPOSE,
+        BS_CAP_ALLOCATION_CONFIRM => $isPm,
 
-        // 남의 프로파일 열람은 PM/관리자만. 본인 것은 ba_can_view_profile() 로 따로 본다.
-        BA_CAP_PROFILE_VIEW_ANY   => $isPm,
+        // 남의 프로파일 열람은 PM/관리자만. 본인 것은 bs_can_view_profile() 로 따로 본다.
+        BS_CAP_PROFILE_VIEW_ANY   => $isPm,
 
         // 재판정과 이의 처리는 관리자 전용 — 위에서 이미 걸러졌다.
-        BA_CAP_EVAL_RUN,
-        BA_CAP_OBJECTION_REVIEW   => false,
+        BS_CAP_EVAL_RUN,
+        BS_CAP_OBJECTION_REVIEW   => false,
 
         default => false,
     };
 }
 
 /**
- * 직접 등록한 점유(ba_workload.kind='manual')를 넣고 고칠 수 있는가.
+ * 직접 등록한 점유(bs_workload.kind='manual')를 넣고 고칠 수 있는가.
  *
  * 본인이거나, 어느 프로젝트든 PM 이거나, 관리자.
  *
@@ -624,23 +624,23 @@ function ba_can(string $capability, ?int $projectId = null): bool
  * api/candidate.php(단추를 그릴지)와 api/workload.php(실제 허용)가
  * 같이 쓴다. 두 벌로 두면 단추는 보이는데 누르면 403 이 나는 일이 생긴다.
  */
-function ba_can_edit_workload(string $memberUserId): bool
+function bs_can_edit_workload(string $memberUserId): bool
 {
-    $me = ba_current_user();
+    $me = bs_current_user();
     if ($me === null) {
         return false;
     }
     if ((string)$me['id'] === $memberUserId) {
         return true;    // 본인
     }
-    if (ba_is_admin()) {
+    if (bs_is_admin()) {
         return true;
     }
     // 어느 프로젝트든 담당 PM 이면 된다.
     static $isPm = null;
     if ($isPm === null) {
-        $st = ba_db()->prepare(
-            'SELECT 1 FROM ba_project WHERE owner_id = ? AND deleted_at IS NULL LIMIT 1'
+        $st = bs_db()->prepare(
+            'SELECT 1 FROM bs_project WHERE owner_id = ? AND deleted_at IS NULL LIMIT 1'
         );
         $st->execute([(string)$me['id']]);
         $isPm = (bool)$st->fetchColumn();
@@ -654,25 +654,25 @@ function ba_can_edit_workload(string $memberUserId): bool
  * CLAUDE.md: "본인은 자기 프로파일을 항상 열람할 수 있다" + "프로파일 조회
  * 권한: 본인 또는 PM/관리자". 본인 여부가 먼저다.
  *
- * TODO(P3): $memberUserId 는 ba_member.user_id(이메일)다. 화면이 ba_member.id
+ * TODO(P3): $memberUserId 는 bs_member.user_id(이메일)다. 화면이 bs_member.id
  *           (정수)만 들고 있으면 MemberRepo 로 이메일을 먼저 가져와야 한다.
  */
-function ba_can_view_profile(string $memberUserId, ?int $projectId = null): bool
+function bs_can_view_profile(string $memberUserId, ?int $projectId = null): bool
 {
-    $me = ba_current_user();
+    $me = bs_current_user();
     if ($me === null) {
         return false;
     }
     if ($me['id'] === $memberUserId) {
         return true;        // 본인은 항상
     }
-    return ba_can(BA_CAP_PROFILE_VIEW_ANY, $projectId);
+    return bs_can(BS_CAP_PROFILE_VIEW_ANY, $projectId);
 }
 
 /** 권한이 없으면 403 JSON 으로 끊는다. API 전용. */
-function ba_require_cap_api(string $capability, ?int $projectId = null): void
+function bs_require_cap_api(string $capability, ?int $projectId = null): void
 {
-    if (!ba_can($capability, $projectId)) {
-        ba_json_error('FORBIDDEN', '권한이 없습니다.', 403);
+    if (!bs_can($capability, $projectId)) {
+        bs_json_error('FORBIDDEN', '권한이 없습니다.', 403);
     }
 }

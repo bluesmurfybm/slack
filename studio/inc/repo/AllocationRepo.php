@@ -1,5 +1,5 @@
 <?php
-/** ba_allocation / ba_allocation_item / ba_workload 접근 담당 DAO. 배정안 버전과 점유 기록을 다룬다. */
+/** bs_allocation / bs_allocation_item / bs_workload 접근 담당 DAO. 배정안 버전과 점유 기록을 다룬다. */
 
 declare(strict_types=1);
 
@@ -21,12 +21,12 @@ final class AllocationRepo
     public function __construct(private PDO $pdo) {}
 
     // =================================================================
-    // 배정안 (ba_allocation)
+    // 배정안 (bs_allocation)
     // =================================================================
 
     public function find(int $id): ?array
     {
-        $st = $this->pdo->prepare('SELECT * FROM ba_allocation WHERE id = ?');
+        $st = $this->pdo->prepare('SELECT * FROM bs_allocation WHERE id = ?');
         $st->execute([$id]);
         return $st->fetch(PDO::FETCH_ASSOC) ?: null;
     }
@@ -34,13 +34,13 @@ final class AllocationRepo
     /** 프로젝트의 모든 배정안 버전. 최신 버전이 앞. */
     public function versions(int $projectId): array
     {
-        // uk_ba_alloc_ver (project_id, version) 를 탄다.
+        // uk_bs_alloc_ver (project_id, version) 를 탄다.
         $st = $this->pdo->prepare(
             'SELECT a.*,
-                    (SELECT COUNT(*) FROM ba_allocation_item i WHERE i.allocation_id = a.id) AS item_count,
-                    (SELECT COUNT(*) FROM ba_allocation_item i
+                    (SELECT COUNT(*) FROM bs_allocation_item i WHERE i.allocation_id = a.id) AS item_count,
+                    (SELECT COUNT(*) FROM bs_allocation_item i
                       WHERE i.allocation_id = a.id AND i.is_manual = 1) AS manual_count
-               FROM ba_allocation a
+               FROM bs_allocation a
               WHERE a.project_id = ?
               ORDER BY a.version DESC'
         );
@@ -52,7 +52,7 @@ final class AllocationRepo
     public function latest(int $projectId): ?array
     {
         $st = $this->pdo->prepare(
-            'SELECT * FROM ba_allocation WHERE project_id = ? ORDER BY version DESC LIMIT 1'
+            'SELECT * FROM bs_allocation WHERE project_id = ? ORDER BY version DESC LIMIT 1'
         );
         $st->execute([$projectId]);
         return $st->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -67,9 +67,9 @@ final class AllocationRepo
      */
     public function confirmed(int $projectId): ?array
     {
-        // ix_ba_alloc_status (project_id, status) 를 탄다.
+        // ix_bs_alloc_status (project_id, status) 를 탄다.
         $st = $this->pdo->prepare(
-            'SELECT * FROM ba_allocation
+            'SELECT * FROM bs_allocation
               WHERE project_id = ? AND status = ?
               ORDER BY version DESC LIMIT 1'
         );
@@ -106,14 +106,14 @@ final class AllocationRepo
             $next = (int)($this->latest($projectId)['version'] ?? 0) + 1;
             try {
                 $st = $this->pdo->prepare(
-                    'INSERT INTO ba_allocation
+                    'INSERT INTO bs_allocation
                         (project_id, version, status, engine_ver, eval_ver, params_json,
                          created_by, created_by_name)
                      VALUES (?,?,?,?,?,?,?,?)'
                 );
                 $st->execute([
                     $projectId, $next, 'proposed',
-                    $params['engine_ver'] ?? BA_ENGINE_VER,
+                    $params['engine_ver'] ?? BS_ENGINE_VER,
                     $evalVer !== null ? (int)$evalVer : null,
                     json_encode($params, JSON_UNESCAPED_UNICODE),
                     $actor['id'] ?? null, $actor['name'] ?? null,
@@ -134,7 +134,7 @@ final class AllocationRepo
     {
         // 확정된 것은 되돌리지 않는다. 확정본을 고치려면 새 버전을 낸다.
         $st = $this->pdo->prepare(
-            "UPDATE ba_allocation SET status = 'adjusted'
+            "UPDATE bs_allocation SET status = 'adjusted'
               WHERE id = ? AND status = 'proposed'"
         );
         $st->execute([$allocationId]);
@@ -146,7 +146,7 @@ final class AllocationRepo
      * 한 트랜잭션 안에서:
      *   1. confirmed_by / confirmed_by_name / confirmed_at 채우기
      *   2. 같은 프로젝트의 다른 버전을 archived 로 내리기
-     *   3. ba_workload 에 kind='assigned' 점유 기록 만들기
+     *   3. bs_workload 에 kind='assigned' 점유 기록 만들기
      * 2번이 빠지면 확정본이 둘이 된다.
      *
      * 알림은 여기서 보내지 않는다 — 바깥 사정 때문에 확정이 실패하면 안 된다.
@@ -182,13 +182,13 @@ final class AllocationRepo
         $this->pdo->beginTransaction();
         try {
             $this->pdo->prepare(
-                "UPDATE ba_allocation
+                "UPDATE bs_allocation
                     SET status = 'archived'
                   WHERE project_id = ? AND id <> ? AND status <> 'archived'"
             )->execute([(int)$a['project_id'], $allocationId]);
 
             $this->pdo->prepare(
-                "UPDATE ba_allocation
+                "UPDATE bs_allocation
                     SET status = 'confirmed', confirmed_by = ?, confirmed_by_name = ?,
                         confirmed_at = NOW()
                   WHERE id = ?"
@@ -206,7 +206,7 @@ final class AllocationRepo
     public function archive(int $allocationId): void
     {
         $this->pdo->prepare(
-            "UPDATE ba_allocation SET status = 'archived' WHERE id = ? AND status <> 'confirmed'"
+            "UPDATE bs_allocation SET status = 'archived' WHERE id = ? AND status <> 'confirmed'"
         )->execute([$allocationId]);
     }
 
@@ -224,27 +224,27 @@ final class AllocationRepo
         if (!$a) {
             return [];
         }
-        $ph = implode(',', array_fill(0, count(BA_TASK_NOT_ASSIGNABLE_STATUS), '?'));
+        $ph = implode(',', array_fill(0, count(BS_TASK_NOT_ASSIGNABLE_STATUS), '?'));
         $st = $this->pdo->prepare(
             "SELECT t.id, t.wbs_no, t.title
-               FROM ba_task t
+               FROM bs_task t
               WHERE t.project_id = ?
                 AND t.confirmed = 1
                 AND t.status NOT IN ($ph)
-                AND NOT EXISTS (SELECT 1 FROM ba_task c WHERE c.parent_id = t.id)
+                AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)
                 AND NOT EXISTS (
-                    SELECT 1 FROM ba_allocation_item i
+                    SELECT 1 FROM bs_allocation_item i
                      WHERE i.allocation_id = ? AND i.task_id = t.id AND i.role = 'owner')
               ORDER BY t.wbs_no"
         );
         $st->execute(array_merge(
-            [(int)$a['project_id']], BA_TASK_NOT_ASSIGNABLE_STATUS, [$allocationId]
+            [(int)$a['project_id']], BS_TASK_NOT_ASSIGNABLE_STATUS, [$allocationId]
         ));
         return $st->fetchAll(PDO::FETCH_ASSOC);
     }
 
     // =================================================================
-    // 배정 항목 (ba_allocation_item)
+    // 배정 항목 (bs_allocation_item)
     // =================================================================
 
     /** 한 배정안의 전체 항목. 태스크·구성원 정보까지 조인해서. */
@@ -255,9 +255,9 @@ final class AllocationRepo
                     t.wbs_no, t.title AS task_title, t.depth, t.seq, t.est_md, t.difficulty,
                     t.plan_start, t.plan_end, t.status AS task_status, t.parent_id,
                     m.emp_name, m.role_label, m.team
-               FROM ba_allocation_item i
-               JOIN ba_task   t ON t.id = i.task_id
-               JOIN ba_member m ON m.id = i.member_id
+               FROM bs_allocation_item i
+               JOIN bs_task   t ON t.id = i.task_id
+               JOIN bs_member m ON m.id = i.member_id
               WHERE i.allocation_id = ?
               ORDER BY t.wbs_no, FIELD(i.role, "owner", "support", "reviewer"), m.emp_name'
         );
@@ -270,9 +270,9 @@ final class AllocationRepo
         $st = $this->pdo->prepare(
             'SELECT i.*, t.wbs_no, t.title AS task_title, t.est_md, t.project_id,
                     m.emp_name
-               FROM ba_allocation_item i
-               JOIN ba_task   t ON t.id = i.task_id
-               JOIN ba_member m ON m.id = i.member_id
+               FROM bs_allocation_item i
+               JOIN bs_task   t ON t.id = i.task_id
+               JOIN bs_member m ON m.id = i.member_id
               WHERE i.id = ?'
         );
         $st->execute([$itemId]);
@@ -288,11 +288,11 @@ final class AllocationRepo
     {
         $this->pdo->beginTransaction();
         try {
-            $this->pdo->prepare('DELETE FROM ba_allocation_item WHERE allocation_id = ?')
+            $this->pdo->prepare('DELETE FROM bs_allocation_item WHERE allocation_id = ?')
                       ->execute([$allocationId]);
 
             $st = $this->pdo->prepare(
-                'INSERT INTO ba_allocation_item
+                'INSERT INTO bs_allocation_item
                     (allocation_id, task_id, member_id, role, alloc_ratio, fit_score,
                      reason_json, is_manual, manual_note)
                  VALUES (?,?,?,?,?,?,?,?,?)'
@@ -320,7 +320,7 @@ final class AllocationRepo
                     ]);
                 } catch (PDOException $e) {
                     if ($e->getCode() === '23000') {
-                        // uk_ba_allocitem_one 위반 = 엔진이 같은 조합을 두 번 냈다.
+                        // uk_bs_allocitem_one 위반 = 엔진이 같은 조합을 두 번 냈다.
                         // 조용히 넘기면 공수가 이중 계산된다. 드러낸다.
                         throw new DomainException(
                             '같은 태스크에 같은 사람이 같은 역할로 두 번 들어갔습니다: task#'
@@ -363,7 +363,7 @@ final class AllocationRepo
             $par[] = (int)$data['member_id'];
         }
         if (array_key_exists('role', $data)) {
-            if (!isset(BA_ALLOC_ROLE[$data['role']])) {
+            if (!isset(BS_ALLOC_ROLE[$data['role']])) {
                 throw new InvalidArgumentException('알 수 없는 역할입니다: ' . $data['role']);
             }
             $set[] = 'role = ?';
@@ -391,7 +391,7 @@ final class AllocationRepo
         $par[] = $itemId;
         try {
             $this->pdo->prepare(
-                'UPDATE ba_allocation_item SET ' . implode(', ', $set) . ' WHERE id = ?'
+                'UPDATE bs_allocation_item SET ' . implode(', ', $set) . ' WHERE id = ?'
             )->execute($par);
         } catch (PDOException $e) {
             if ($e->getCode() === '23000') {
@@ -416,14 +416,14 @@ final class AllocationRepo
         }
 
         $role = $data['role'] ?? 'support';
-        if (!isset(BA_ALLOC_ROLE[$role])) {
+        if (!isset(BS_ALLOC_ROLE[$role])) {
             throw new InvalidArgumentException('알 수 없는 역할입니다: ' . $role);
         }
         $note = trim((string)($data['manual_note'] ?? ''));
 
         try {
             $st = $this->pdo->prepare(
-                'INSERT INTO ba_allocation_item
+                'INSERT INTO bs_allocation_item
                     (allocation_id, task_id, member_id, role, alloc_ratio,
                      fit_score, reason_json, is_manual, manual_note)
                  VALUES (?,?,?,?,?, NULL, ?, 1, ?)'
@@ -460,14 +460,14 @@ final class AllocationRepo
         if (($alloc['status'] ?? '') === 'confirmed') {
             throw new DomainException('확정된 배정안은 고칠 수 없습니다.');
         }
-        $this->pdo->prepare('DELETE FROM ba_allocation_item WHERE id = ?')->execute([$itemId]);
+        $this->pdo->prepare('DELETE FROM bs_allocation_item WHERE id = ?')->execute([$itemId]);
     }
 
     /** 한 사람이 이 배정안에서 맡은 몫의 합. 과배정 확인용. */
     public function totalRatioOf(int $allocationId, int $memberId): float
     {
         $st = $this->pdo->prepare(
-            'SELECT COALESCE(SUM(alloc_ratio), 0) FROM ba_allocation_item
+            'SELECT COALESCE(SUM(alloc_ratio), 0) FROM bs_allocation_item
               WHERE allocation_id = ? AND member_id = ?'
         );
         $st->execute([$allocationId, $memberId]);
@@ -489,10 +489,10 @@ final class AllocationRepo
                     SUM(CASE WHEN c.n = 0 THEN COALESCE(t.est_md, 0) * i.alloc_ratio ELSE 0 END) AS md,
                     COUNT(*) AS items,
                     SUM(i.role = "owner") AS owner_n
-               FROM ba_allocation_item i
-               JOIN ba_task t ON t.id = i.task_id
-               JOIN (SELECT p.id, (SELECT COUNT(*) FROM ba_task c2 WHERE c2.parent_id = p.id) AS n
-                       FROM ba_task p) c ON c.id = t.id
+               FROM bs_allocation_item i
+               JOIN bs_task t ON t.id = i.task_id
+               JOIN (SELECT p.id, (SELECT COUNT(*) FROM bs_task c2 WHERE c2.parent_id = p.id) AS n
+                       FROM bs_task p) c ON c.id = t.id
               WHERE i.allocation_id = ?
               GROUP BY i.member_id'
         );
@@ -509,7 +509,7 @@ final class AllocationRepo
     }
 
     // =================================================================
-    // 점유 기록 (ba_workload)
+    // 점유 기록 (bs_workload)
     // =================================================================
 
     /**
@@ -532,9 +532,9 @@ final class AllocationRepo
             return [];
         }
         $ph = implode(',', array_fill(0, count($ids), '?'));
-        // ix_ba_workload_period (member_id, start_date, end_date)
+        // ix_bs_workload_period (member_id, start_date, end_date)
         $st = $this->pdo->prepare(
-            "SELECT * FROM ba_workload
+            "SELECT * FROM bs_workload
               WHERE member_id IN ($ph) AND start_date <= ? AND end_date >= ?
               ORDER BY member_id, start_date"
         );
@@ -583,7 +583,7 @@ final class AllocationRepo
                 throw new InvalidArgumentException(
                     '사유를 적어 주세요. 이 값이 가용도를 깎기 때문에 근거가 남아야 합니다.');
             }
-            if ($source !== null && !isset(BA_WORKLOAD_SOURCE[$source])) {
+            if ($source !== null && !isset(BS_WORKLOAD_SOURCE[$source])) {
                 throw new InvalidArgumentException('알 수 없는 출처입니다: ' . $source);
             }
             if (empty($data['created_by'])) {
@@ -592,7 +592,7 @@ final class AllocationRepo
         }
 
         $st = $this->pdo->prepare(
-            'INSERT INTO ba_workload
+            'INSERT INTO bs_workload
                 (member_id, kind, ref_type, ref_id, source, source_url, label,
                  start_date, end_date, load_ratio, confidence, note,
                  created_by, created_by_name)
@@ -618,7 +618,7 @@ final class AllocationRepo
     {
         $st = $this->pdo->prepare(
             'SELECT w.*, m.emp_name, m.user_id
-               FROM ba_workload w JOIN ba_member m ON m.id = w.member_id
+               FROM bs_workload w JOIN bs_member m ON m.id = w.member_id
               WHERE w.id = ?'
         );
         $st->execute([$workloadId]);
@@ -634,9 +634,9 @@ final class AllocationRepo
      */
     public function manualWorkloadOf(int $memberId, ?string $from = null, ?string $to = null): array
     {
-        // ix_ba_workload_manual (kind, member_id, start_date)
+        // ix_bs_workload_manual (kind, member_id, start_date)
         $sql = "SELECT w.*, m.emp_name, m.user_id
-                  FROM ba_workload w JOIN ba_member m ON m.id = w.member_id
+                  FROM bs_workload w JOIN bs_member m ON m.id = w.member_id
                  WHERE w.kind = 'manual' AND w.member_id = ?";
         $par = [$memberId];
         if ($from !== null && $to !== null) {
@@ -702,7 +702,7 @@ final class AllocationRepo
         }
 
         $par[] = $workloadId;
-        $this->pdo->prepare('UPDATE ba_workload SET ' . implode(', ', $set) . ' WHERE id = ?')
+        $this->pdo->prepare('UPDATE bs_workload SET ' . implode(', ', $set) . ' WHERE id = ?')
                   ->execute($par);
     }
 
@@ -718,7 +718,7 @@ final class AllocationRepo
                 '직접 등록한 점유만 지울 수 있습니다. 배정에서 나온 기록은 '
                 . '배정안에서 빼야 사라집니다.');
         }
-        $this->pdo->prepare('DELETE FROM ba_workload WHERE id = ?')->execute([$workloadId]);
+        $this->pdo->prepare('DELETE FROM bs_workload WHERE id = ?')->execute([$workloadId]);
     }
 
     private function wlValue(string $k, mixed $v): mixed
@@ -746,8 +746,8 @@ final class AllocationRepo
             'label'       => $r['label'],
             'note'        => $r['note'] ?? null,
             'source'      => $src,
-            'source_label' => ($src !== null && isset(BA_WORKLOAD_SOURCE[$src]))
-                              ? BA_WORKLOAD_SOURCE[$src] : null,
+            'source_label' => ($src !== null && isset(BS_WORKLOAD_SOURCE[$src]))
+                              ? BS_WORKLOAD_SOURCE[$src] : null,
             'source_url'  => $r['source_url'] ?? null,
             'start_date'  => $r['start_date'],
             'end_date'    => $r['end_date'],
@@ -771,7 +771,7 @@ final class AllocationRepo
     private function wlSource(mixed $v): ?string
     {
         $v = ($v !== null && $v !== '') ? (string)$v : null;
-        if ($v !== null && !isset(BA_WORKLOAD_SOURCE[$v])) {
+        if ($v !== null && !isset(BS_WORKLOAD_SOURCE[$v])) {
             throw new InvalidArgumentException('알 수 없는 출처입니다: ' . $v);
         }
         return $v;
@@ -831,7 +831,7 @@ final class AllocationRepo
 
         $p = $this->pdo->prepare(
             'SELECT dev_start, dev_end, test_start, test_end, deploy_date
-               FROM ba_project WHERE id = ?'
+               FROM bs_project WHERE id = ?'
         );
         $p->execute([$projectId]);
         $pr = $p->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -840,15 +840,15 @@ final class AllocationRepo
 
         // 이 프로젝트의 태스크에서 나온 assigned 기록만 지운다.
         $this->pdo->prepare(
-            "DELETE w FROM ba_workload w
-               JOIN ba_allocation_item i ON i.id = w.ref_id
-               JOIN ba_task t            ON t.id = i.task_id
+            "DELETE w FROM bs_workload w
+               JOIN bs_allocation_item i ON i.id = w.ref_id
+               JOIN bs_task t            ON t.id = i.task_id
               WHERE w.kind = 'assigned' AND w.ref_type = 'allocation_item'
                 AND t.project_id = ?"
         )->execute([$projectId]);
 
         $ins = $this->pdo->prepare(
-            "INSERT INTO ba_workload
+            "INSERT INTO bs_workload
                 (member_id, kind, ref_type, ref_id, label, start_date, end_date,
                  load_ratio, confidence)
              VALUES (?, 'assigned', 'allocation_item', ?, ?, ?, ?, ?, 1.000)"
@@ -879,7 +879,7 @@ final class AllocationRepo
         $r['id']           = (int)$r['id'];
         $r['project_id']   = (int)$r['project_id'];
         $r['version']      = (int)$r['version'];
-        $r['status_label'] = BA_ALLOC_STATUS[$r['status']] ?? $r['status'];
+        $r['status_label'] = BS_ALLOC_STATUS[$r['status']] ?? $r['status'];
         $r['eval_ver']     = $r['eval_ver'] !== null ? (int)$r['eval_ver'] : null;
         $r['params']       = $r['params_json'] ? json_decode($r['params_json'], true) : null;
         if (isset($r['item_count']))   { $r['item_count']   = (int)$r['item_count']; }
@@ -896,7 +896,7 @@ final class AllocationRepo
         $r['alloc_ratio'] = (float)$r['alloc_ratio'];
         $r['fit_score']   = $r['fit_score'] !== null ? (float)$r['fit_score'] : null;
         $r['is_manual']   = (int)$r['is_manual'] === 1;
-        $r['role_name']   = BA_ALLOC_ROLE[$r['role']] ?? $r['role'];
+        $r['role_name']   = BS_ALLOC_ROLE[$r['role']] ?? $r['role'];
         $r['est_md']      = isset($r['est_md']) && $r['est_md'] !== null ? (float)$r['est_md'] : null;
         $r['difficulty']  = isset($r['difficulty']) && $r['difficulty'] !== null
                             ? (int)$r['difficulty'] : null;

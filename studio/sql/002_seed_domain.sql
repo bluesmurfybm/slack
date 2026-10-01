@@ -1,5 +1,5 @@
 -- =====================================================================
--- BlueStudio 초기 데이터 — 분야 마스터(ba_domain)
+-- BlueStudio 초기 데이터 — 분야 마스터(bs_domain)
 --
 -- 실행:
 --   mysql -u <user> -p --default-character-set=utf8mb4 <db> < sql/002_seed_domain.sql
@@ -42,14 +42,14 @@
 -- · 영문 약어는 현장에서 한글보다 자주 쓰이는 것만 (SSO, API, IBT, SMS …)
 -- · 너무 일반적인 낱말(오류, 수정, 확인, 요청, 문의)은 넣지 않는다.
 --   모든 분야에 걸려 변별력이 사라진다
--- · 한 낱말이 두 분야에 걸리는 것은 괜찮다. ba_work_item_domain.confidence 로 가린다
+-- · 한 낱말이 두 분야에 걸리는 것은 괜찮다. bs_work_item_domain.confidence 로 가린다
 --
 -- 이 목록은 출발점입니다. P2(수집기) 를 돌려 실제 매칭률을 본 뒤 손봐야 합니다.
 -- =====================================================================
 
 SET NAMES utf8mb4;
 
-INSERT INTO `ba_domain` (`code`, `name`, `category`, `sort_no`, `is_active`, `keywords`) VALUES
+INSERT INTO `bs_domain` (`code`, `name`, `category`, `sort_no`, `is_active`, `keywords`) VALUES
 
 -- ---------------------------------------------------------------------
 -- 학습활동 (activity) · 평가·이수 (grading) · 운영·관리 (administration)
@@ -154,5 +154,5 @@ ON DUPLICATE KEY UPDATE
 --     `keywords` = VALUES(`keywords`)
 -- 로 바꿔 한 번 실행한 뒤 되돌려 놓으십시오.
 -- 운영 DB 에서 할 때는 먼저 백업하십시오:
---     mysqldump -u <user> -p <db> ba_domain > ba_domain_backup.sql
+--     mysqldump -u <user> -p <db> bs_domain > bs_domain_backup.sql
 -- ---------------------------------------------------------------------

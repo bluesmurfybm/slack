@@ -19,11 +19,11 @@ $PORTAL = dirname($MODULE);          // <포털>
 // 설정값 — 로컬 WAMP 기준. 다르면 여기만 고친다.
 // ---------------------------------------------------------------------
 $cfg = [
-    'host'    => getenv('BA_DB_HOST') ?: '127.0.0.1',
-    'port'    => (int)(getenv('BA_DB_PORT') ?: 3306),
-    'name'    => getenv('BA_DB_NAME') ?: 'iworks_local',
-    'user'    => getenv('BA_DB_USER') ?: 'root',
-    'pass'    => getenv('BA_DB_PASS') ?: '',
+    'host'    => getenv('BS_DB_HOST') ?: '127.0.0.1',
+    'port'    => (int)(getenv('BS_DB_PORT') ?: 3306),
+    'name'    => getenv('BS_DB_NAME') ?: 'iworks_local',
+    'user'    => getenv('BS_DB_USER') ?: 'root',
+    'pass'    => getenv('BS_DB_PASS') ?: '',
     'charset' => 'utf8mb4',
 ];
 
@@ -46,7 +46,7 @@ try {
 } catch (PDOException $e) {
     fail('MySQL 에 붙지 못했습니다: ' . $e->getMessage()
        . "\n       WAMP 가 떠 있는지, 접속 정보가 맞는지 확인하세요."
-       . "\n       다른 값을 쓰려면 환경변수 BA_DB_HOST/PORT/NAME/USER/PASS 를 주세요.");
+       . "\n       다른 값을 쓰려면 환경변수 BS_DB_HOST/PORT/NAME/USER/PASS 를 주세요.");
 }
 
 $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$cfg['name']}`
@@ -200,8 +200,8 @@ $tables  = (int)$pdo->query(
     "SELECT COUNT(*) FROM information_schema.tables
       WHERE table_schema = '{$cfg['name']}' AND table_name LIKE 'ba\\_%'"
 )->fetchColumn();
-$domains = (int)$pdo->query('SELECT COUNT(*) FROM ba_domain')->fetchColumn();
-say("      확인  ba_ 표 {$tables}개 / 분야 {$domains}개");
+$domains = (int)$pdo->query('SELECT COUNT(*) FROM bs_domain')->fetchColumn();
+say("      확인  bs_ 표 {$tables}개 / 분야 {$domains}개");
 
 // ---------------------------------------------------------------------
 // 4. 포털 표 + 계정

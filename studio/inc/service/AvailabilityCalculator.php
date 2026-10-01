@@ -12,7 +12,7 @@ declare(strict_types=1);
  * │   confirmed  assigned(확정 배정) + manual(휴가·교육 등 사람 입력) │
  * │   inferred   아직 진행 중인 슬랙 건에서 어림한 값                  │
  * │                                                                  │
- * │ 추정은 근거가 약하다. 건당 계수(BA_INFERRED_LOAD_PER_ITEM)는       │
+ * │ 추정은 근거가 약하다. 건당 계수(BS_INFERRED_LOAD_PER_ITEM)는       │
  * │ 실제 소요를 잰 값이 아니라 어림이다. 합쳐서 하나의 숫자로 보여주면  │
  * │ 사람이 그것을 사실로 읽고 배정을 결정한다.                         │
  * │                                                                  │
@@ -122,7 +122,7 @@ final class AvailabilityCalculator
 
         // 기본 가용량
         $st = $this->pdo->prepare(
-            "SELECT id, base_capacity FROM ba_member WHERE id IN ($ph)"
+            "SELECT id, base_capacity FROM bs_member WHERE id IN ($ph)"
         );
         $st->execute($memberIds);
         $cap = [];
@@ -134,15 +134,15 @@ final class AvailabilityCalculator
 
         // ── 확정 점유 (assigned + manual) ─────────────────────────────
         //
-        // kind='inferred' 는 **일부러 뺀다.** 추정은 아래에서 ba_work_item 으로
-        // 그때그때 다시 계산한다. ba_workload 에 저장된 추정치를 함께 쓰면
+        // kind='inferred' 는 **일부러 뺀다.** 추정은 아래에서 bs_work_item 으로
+        // 그때그때 다시 계산한다. bs_workload 에 저장된 추정치를 함께 쓰면
         // 언제 갱신됐는지 모르는 값이 섞이고, refreshInferred() 를 돌린 뒤에는
         // 같은 건을 두 번 세게 된다.
         $st = $this->pdo->prepare(
             "SELECT id, member_id, kind, label, ref_type, ref_id,
                     source, source_url, note, created_by, created_by_name,
                     start_date, end_date, load_ratio, confidence
-               FROM ba_workload
+               FROM bs_workload
               WHERE member_id IN ($ph)
                 AND kind IN ('assigned', 'manual')
                 AND start_date <= ? AND end_date >= ?"
@@ -171,8 +171,8 @@ final class AvailabilityCalculator
                 'label'         => $w['label'] ?: ($w['kind'] === 'manual' ? '직접 등록' : '확정 배정'),
                 'note'          => $w['note'] ?? null,
                 'origin'        => $w['source'] ?? null,
-                'origin_label'  => (isset($w['source']) && isset(BA_WORKLOAD_SOURCE[$w['source']]))
-                                   ? BA_WORKLOAD_SOURCE[$w['source']] : null,
+                'origin_label'  => (isset($w['source']) && isset(BS_WORKLOAD_SOURCE[$w['source']]))
+                                   ? BS_WORKLOAD_SOURCE[$w['source']] : null,
                 'origin_url'    => $w['source_url'] ?? null,
                 'created_by'      => $w['created_by'] ?? null,
                 'created_by_name' => $w['created_by_name'] ?? null,
@@ -194,13 +194,13 @@ final class AvailabilityCalculator
         foreach ($memberIds as $mid) {
             $base = $cap[$mid] ?? 1.0;
             $c    = round(min($base, $confirmed[$mid]), 4);
-            $i    = round(min(BA_INFERRED_LOAD_MAX, $inf[$mid]['load'] ?? 0.0), 4);
+            $i    = round(min(BS_INFERRED_LOAD_MAX, $inf[$mid]['load'] ?? 0.0), 4);
             $avail = max(0.0, $base - $c - $i);
 
             // 추정 비중이 클수록 이 숫자를 덜 믿어야 한다.
             $used = $c + $i;
             $conf = $used <= 0 ? 1.0
-                  : round(($c + $i * BA_INFERRED_CONFIDENCE) / $used, 3);
+                  : round(($c + $i * BS_INFERRED_CONFIDENCE) / $used, 3);
 
             $out[$mid] = [
                 'member_id'      => $mid,
@@ -230,7 +230,7 @@ final class AvailabilityCalculator
     /**
      * 진행 중인 슬랙 건에서 점유를 어림한다.
      *
-     * '진행 중' 판정은 BA_WORKLOAD_ACTIVE_STATUS 를 따른다. `확인요청(...)` 은
+     * '진행 중' 판정은 BS_WORKLOAD_ACTIVE_STATUS 를 따른다. `확인요청(...)` 은
      * 개발자 손을 떠나 고객 회신을 기다리는 상태라 빼야 한다 — 슬랙 취합
      * 시스템 자신도 그렇게 본다(slack/lists.php overdueDays).
      *
@@ -247,25 +247,25 @@ final class AvailabilityCalculator
             return [];
         }
         $mph = implode(',', array_fill(0, count($memberIds), '?'));
-        $sph = implode(',', array_fill(0, count(BA_WORKLOAD_ACTIVE_STATUS), '?'));
+        $sph = implode(',', array_fill(0, count(BS_WORKLOAD_ACTIVE_STATUS), '?'));
 
         $st = $this->pdo->prepare(
             "SELECT id, member_id, title, status_raw, difficulty, org_name,
                     source_url, requested_at
-               FROM ba_work_item
+               FROM bs_work_item
               WHERE member_id IN ($mph)
                 AND closed_at IS NULL
                 AND status_raw IN ($sph)
               ORDER BY difficulty DESC, requested_at ASC"
         );
-        $st->execute(array_merge($memberIds, BA_WORKLOAD_ACTIVE_STATUS));
+        $st->execute(array_merge($memberIds, BS_WORKLOAD_ACTIVE_STATUS));
 
         $out = array_fill_keys($memberIds, ['load' => 0.0, 'count' => 0, 'items' => []]);
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $mid  = (int)$r['member_id'];
             $diff = (int)($r['difficulty'] ?: 3);
             // 난이도 3 을 기준으로 보정한다. 어려운 건이 더 많이 먹는다.
-            $load = BA_INFERRED_LOAD_PER_ITEM * ($diff / 3.0);
+            $load = BS_INFERRED_LOAD_PER_ITEM * ($diff / 3.0);
 
             $out[$mid]['load']  += $load;
             $out[$mid]['count'] += 1;
@@ -284,14 +284,14 @@ final class AvailabilityCalculator
     }
 
     // =================================================================
-    // 점유 기록 관리 (ba_workload)
+    // 점유 기록 관리 (bs_workload)
     // =================================================================
 
     /** 기간이 겹치는 점유 기록. 화면이 내역을 보여줄 때 쓴다. */
     public function workloadOf(int $memberId, string $from, string $to): array
     {
         $st = $this->pdo->prepare(
-            'SELECT * FROM ba_workload
+            'SELECT * FROM bs_workload
               WHERE member_id = ? AND start_date <= ? AND end_date >= ?
               ORDER BY start_date'
         );
@@ -305,7 +305,7 @@ final class AvailabilityCalculator
      */
     public function syncAssignedFrom(int $allocationId): int
     {
-        // TODO(P5): ba_allocation_item + ba_task.plan_start/plan_end 로 점유를 만든다.
+        // TODO(P5): bs_allocation_item + bs_task.plan_start/plan_end 로 점유를 만든다.
         //           확정(AllocationRepo::confirm)에서 부른다.
         return 0;
     }

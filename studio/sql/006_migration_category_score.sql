@@ -13,14 +13,14 @@
 -- ---------------------------------------------------------------------
 -- 왜 표를 새로 만드는가
 -- ---------------------------------------------------------------------
--- `ba_member_skill` 은 (구성원 × **분야**) 단위입니다. 그런데 점수는
+-- `bs_member_skill` 은 (구성원 × **분야**) 단위입니다. 그런데 점수는
 -- **계열(category) 단위**로 냅니다(docs/scoring-design.md §1).
 -- 분야 22개로는 (사람×분야) 칸의 82%가 표본 부족으로 버려지기 때문입니다.
 --
 -- 계열 점수를 넣을 자리가 없어 표를 하나 더 둡니다. 역할이 다릅니다.
 --
---   ba_member_skill     분야별 처리 실적  → **근거 표시용**. 점수는 내지 않는다
---   ba_member_category  계열별 역량 점수  → **레이더 차트 + 배정 엔진**
+--   bs_member_skill     분야별 처리 실적  → **근거 표시용**. 점수는 내지 않는다
+--   bs_member_category  계열별 역량 점수  → **레이더 차트 + 배정 엔진**
 --
 -- ---------------------------------------------------------------------
 -- 절대 기준 점수
@@ -38,11 +38,11 @@
 SET NAMES utf8mb4;
 SET time_zone = '+09:00';
 
-CREATE TABLE IF NOT EXISTS `ba_member_category` (
+CREATE TABLE IF NOT EXISTS `bs_member_category` (
   `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `member_id`    INT UNSIGNED NOT NULL,
-  `category`     VARCHAR(40)  NOT NULL COMMENT 'ba_domain.category. BA_DOMAIN_CATEGORY 의 열쇠',
-  `eval_ver`     INT UNSIGNED NOT NULL COMMENT 'ba_eval_run.id',
+  `category`     VARCHAR(40)  NOT NULL COMMENT 'bs_domain.category. BS_DOMAIN_CATEGORY 의 열쇠',
+  `eval_ver`     INT UNSIGNED NOT NULL COMMENT 'bs_eval_run.id',
 
   `case_count`   INT          NOT NULL DEFAULT 0 COMMENT '그 계열 처리 건수',
   `weighted_qty` DECIMAL(8,2) NULL COMMENT '난이도 가중 처리량 = Σ(건별 난이도)',
@@ -58,23 +58,23 @@ CREATE TABLE IF NOT EXISTS `ba_member_category` (
 
   `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ba_mcat_ver` (`member_id`, `category`, `eval_ver`),
+  UNIQUE KEY `uk_bs_mcat_ver` (`member_id`, `category`, `eval_ver`),
   -- "이 계열을 잘하는 사람" 조회 — 후보 리스트의 주 경로
-  KEY `ix_ba_mcat_cat`  (`category`, `eval_ver`, `score`),
-  KEY `ix_ba_mcat_eval` (`eval_ver`),
-  CONSTRAINT `fk_ba_mcat_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  KEY `ix_bs_mcat_cat`  (`category`, `eval_ver`, `score`),
+  KEY `ix_bs_mcat_eval` (`eval_ver`),
+  CONSTRAINT `fk_bs_mcat_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   -- 판정 회차를 지우면 점수의 근거가 사라진다. 막는다.
-  CONSTRAINT `fk_ba_mcat_eval` FOREIGN KEY (`eval_ver`)
-    REFERENCES `ba_eval_run` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_mcat_eval` FOREIGN KEY (`eval_ver`)
+    REFERENCES `bs_eval_run` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='구성원 계열별 역량 점수 스냅샷. 판정 회차마다 보존';
 
 -- ---------------------------------------------------------------------
--- ba_member_skill 은 이제 '근거 표시용' 입니다.
+-- bs_member_skill 은 이제 '근거 표시용' 입니다.
 -- score 컬럼은 채우지 않습니다(계열 단위로만 점수를 냅니다).
 -- 주석만 바꿔 의도를 남깁니다.
 -- ---------------------------------------------------------------------
-ALTER TABLE `ba_member_skill`
+ALTER TABLE `bs_member_skill`
   MODIFY COLUMN `score` DECIMAL(5,2) NULL
-    COMMENT '쓰지 않습니다. 점수는 ba_member_category 에만 있습니다(계열 단위)';
+    COMMENT '쓰지 않습니다. 점수는 bs_member_category 에만 있습니다(계열 단위)';

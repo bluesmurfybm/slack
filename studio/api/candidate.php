@@ -18,58 +18,58 @@
  * │ CLAUDE.md 가 금지한 전사 랭킹이다.                                │
  * │                                                                  │
  * │ 이 화면(2단계 '참여 가능 개발자')은 PM 이 인원을 고르는 자리다.    │
- * │ 일반 구성원이 쓸 일이 없으므로 BA_CAP_ALLOCATION_PROPOSE 로 막는다.│
+ * │ 일반 구성원이 쓸 일이 없으므로 BS_CAP_ALLOCATION_PROPOSE 로 막는다.│
  * └──────────────────────────────────────────────────────────────────┘
  */
 
 declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
-require_once BA_ROOT . '/inc/repo/ProjectRepo.php';
-require_once BA_ROOT . '/inc/repo/MemberRepo.php';
-require_once BA_ROOT . '/inc/service/AvailabilityCalculator.php';
+require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
+require_once BS_ROOT . '/inc/repo/MemberRepo.php';
+require_once BS_ROOT . '/inc/service/AvailabilityCalculator.php';
 
-$pdo      = ba_db();
+$pdo      = bs_db();
 $projects = new ProjectRepo($pdo);
 $members  = new MemberRepo($pdo);
 $avail    = new AvailabilityCalculator($pdo);
 
-ba_route(ba_param_str('act', 'list'), [
+bs_route(bs_param_str('act', 'list'), [
 
     'list' => function () use ($projects, $members, $avail, $pdo): void {
-        ba_require_login_api();
+        bs_require_login_api();
 
-        $projectId = ba_param_int('project_id', 0);
+        $projectId = bs_param_int('project_id', 0);
         if (!$projectId) {
-            ba_json_error('MISSING_PARAM',
+            bs_json_error('MISSING_PARAM',
                 '프로젝트 번호가 없습니다. 후보는 과업 기준으로만 낼 수 있습니다.', 400);
         }
         $project = $projects->find($projectId);
         if (!$project) {
-            ba_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
         }
         // 여러 사람의 점수를 한 번에 내주는 응답이다. 배정을 짜는 사람만 본다.
-        ba_require_cap_api(BA_CAP_ALLOCATION_PROPOSE, $projectId);
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
 
-        [$from, $to] = ba_project_window($project);
+        [$from, $to] = bs_project_window($project);
         if ($from === null) {
-            ba_json_error('NO_PERIOD',
+            bs_json_error('NO_PERIOD',
                 '프로젝트 기간이 비어 있어 가용도를 계산할 수 없습니다. 개발 기간을 먼저 입력하세요.', 400);
         }
 
-        $minAvail = max(0, min(100, ba_param_int('min_availability', 0) ?? 0));
-        $minCap   = max(0, min(100, ba_param_int('min_capability', 0) ?? 0));
-        $domains  = array_values(array_filter(array_map('intval', ba_param_array('domains'))));
+        $minAvail = max(0, min(100, bs_param_int('min_availability', 0) ?? 0));
+        $minCap   = max(0, min(100, bs_param_int('min_capability', 0) ?? 0));
+        $domains  = array_values(array_filter(array_map('intval', bs_param_array('domains'))));
 
         // 고른 분야들이 속한 계열. 분야가 아니라 **계열 단위로 점수를 본다**
         // (분야 단위로는 표본이 안 찬다 — docs/scoring-design.md §1.3).
-        $cats = ba_categories_of($pdo, $domains);
+        $cats = bs_categories_of($pdo, $domains);
 
         $evalVer = $members->latestEvalVer();
-        $rows    = ba_candidate_rows($pdo, $evalVer, $cats);
+        $rows    = bs_candidate_rows($pdo, $evalVer, $cats);
         if (!$rows) {
-            ba_json_ok([
+            bs_json_ok([
                 'rows' => [], 'total' => 0,
-                'scope' => ba_scope($project, $from, $to, $cats, $evalVer),
+                'scope' => bs_scope($project, $from, $to, $cats, $evalVer),
                 'message' => $evalVer === null
                     ? '아직 역량 판정을 돌린 적이 없습니다.'
                     : '평가 대상 구성원이 없습니다.',
@@ -81,7 +81,7 @@ ba_route(ba_param_str('act', 'list'), [
         $out = [];
         foreach ($rows as $r) {
             $a   = $av[$r['member_id']] ?? null;
-            $fit = ba_fit_score($r, $a);
+            $fit = bs_fit_score($r, $a);
 
             $row = [
                 'member_id'   => $r['member_id'],
@@ -145,10 +145,10 @@ ba_route(ba_param_str('act', 'list'), [
             return $y['fit_score'] <=> $x['fit_score'];
         });
 
-        ba_json_ok([
+        bs_json_ok([
             'rows'  => $out,
             'total' => count($out),
-            'scope' => ba_scope($project, $from, $to, $cats, $evalVer),
+            'scope' => bs_scope($project, $from, $to, $cats, $evalVer),
         ]);
     },
 
@@ -157,40 +157,40 @@ ba_route(ba_param_str('act', 'list'), [
      * 후보 표의 행을 눌렀을 때 드로어에 뿌린다.
      */
     'detail' => function () use ($projects, $members, $avail): void {
-        ba_require_login_api();
+        bs_require_login_api();
 
-        $projectId = ba_param_int('project_id', 0);
-        $memberId  = ba_param_int('member_id', 0);
+        $projectId = bs_param_int('project_id', 0);
+        $memberId  = bs_param_int('member_id', 0);
         if (!$projectId || !$memberId) {
-            ba_json_error('MISSING_PARAM', '프로젝트와 구성원을 지정하세요.', 400);
+            bs_json_error('MISSING_PARAM', '프로젝트와 구성원을 지정하세요.', 400);
         }
         $project = $projects->find($projectId);
         if (!$project) {
-            ba_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
         }
         // 계열별 점수까지 내주는 응답이다. 목록과 같은 선을 쓴다.
-        ba_require_cap_api(BA_CAP_ALLOCATION_PROPOSE, $projectId);
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
 
         $member = $members->find($memberId);
         if (!$member) {
-            ba_json_error('NOT_FOUND', '구성원을 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '구성원을 찾을 수 없습니다.', 404);
         }
 
-        [$from, $to] = ba_project_window($project);
+        [$from, $to] = bs_project_window($project);
         if ($from === null) {
-            ba_json_error('NO_PERIOD', '프로젝트 기간이 비어 있습니다.', 400);
+            bs_json_error('NO_PERIOD', '프로젝트 기간이 비어 있습니다.', 400);
         }
 
         $a       = $avail->forMember($memberId, $from, $to);
         $evalVer = $members->latestEvalVer();
 
         // 최근 처리 건은 **근거**다. 프로파일 열람 권한과 같은 선을 적용한다.
-        $canSeeEvidence = ba_can_view_profile((string)$member['user_id'], $projectId);
+        $canSeeEvidence = bs_can_view_profile((string)$member['user_id'], $projectId);
         $recent = $canSeeEvidence && $evalVer !== null
             ? array_slice($members->evidence($memberId, '', null, $evalVer), 0, 20)
             : [];
 
-        ba_json_ok([
+        bs_json_ok([
             'member' => [
                 'id'         => (int)$member['id'],
                 'emp_name'   => $member['emp_name'],
@@ -209,12 +209,12 @@ ba_route(ba_param_str('act', 'list'), [
             'confirmed_breakdown' => $a['breakdown'],
             'inferred_items'      => $a['inferred_items'],
             'categories' => $evalVer !== null ? $members->categoryScores($memberId, $evalVer) : [],
-            'recent'     => array_map('ba_present_candidate_evidence', $recent),
+            'recent'     => array_map('bs_present_candidate_evidence', $recent),
             'can_see_evidence' => $canSeeEvidence,
             // 슬랙·메일에 안 잡히는 업무를 여기서 넣을 수 있는가.
             // 판단은 api/workload.php 와 같은 규칙을 쓴다 — 두 벌로 두면
             // 화면에는 단추가 보이는데 눌리면 403 이 나는 일이 생긴다.
-            'can_add_workload' => ba_can_edit_workload((string)$member['user_id']),
+            'can_add_workload' => bs_can_edit_workload((string)$member['user_id']),
         ]);
     },
 ]);
@@ -228,7 +228,7 @@ ba_route(ba_param_str('act', 'list'), [
  * 프로젝트의 가용도 판정 기간.
  * 개발 기간이 기본이고, 비어 있으면 테스트·배포일로 넓힌다.
  */
-function ba_project_window(array $p): array
+function bs_project_window(array $p): array
 {
     $from = $p['dev_start'] ?: ($p['test_start'] ?: null);
     $to   = $p['deploy_date'] ?: ($p['test_end'] ?: ($p['dev_end'] ?: null));
@@ -239,17 +239,17 @@ function ba_project_window(array $p): array
 }
 
 /** 고른 분야들이 속한 계열 코드. 중복 제거. */
-function ba_categories_of(PDO $pdo, array $domainIds): array
+function bs_categories_of(PDO $pdo, array $domainIds): array
 {
     if (!$domainIds) {
         return [];
     }
     $ph = implode(',', array_fill(0, count($domainIds), '?'));
-    $st = $pdo->prepare("SELECT DISTINCT category FROM ba_domain WHERE id IN ($ph)");
+    $st = $pdo->prepare("SELECT DISTINCT category FROM bs_domain WHERE id IN ($ph)");
     $st->execute($domainIds);
     return array_values(array_filter(
         $st->fetchAll(PDO::FETCH_COLUMN),
-        static fn($c) => $c !== null && $c !== '' && !in_array($c, BA_CATEGORY_NOT_SCORED, true)
+        static fn($c) => $c !== null && $c !== '' && !in_array($c, BS_CATEGORY_NOT_SCORED, true)
     ));
 }
 
@@ -259,13 +259,13 @@ function ba_categories_of(PDO $pdo, array $domainIds): array
  * 평가 제외자(is_evaluable=0)는 여기서 빠진다. 점수가 없는 사람을
  * 후보 표에 0 점으로 올리면 안 된다.
  */
-function ba_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
+function bs_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
 {
     if ($evalVer === null) {
         // 판정 전이라도 명단은 보여 준다 — 점수 없이.
         $st = $pdo->prepare(
             'SELECT id AS member_id, emp_name, role_label, team
-               FROM ba_member WHERE is_evaluable = 1 ORDER BY emp_name'
+               FROM bs_member WHERE is_evaluable = 1 ORDER BY emp_name'
         );
         $st->execute();
         return array_map(static function (array $r): array {
@@ -277,8 +277,8 @@ function ba_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
     $st = $pdo->prepare(
         'SELECT m.id AS member_id, m.emp_name, m.role_label, m.team,
                 t.cap_score, t.breadth_score, t.career_score, t.insufficient_data
-           FROM ba_member m
-      LEFT JOIN ba_member_metric t ON t.member_id = m.id AND t.eval_ver = ?
+           FROM bs_member m
+      LEFT JOIN bs_member_metric t ON t.member_id = m.id AND t.eval_ver = ?
           WHERE m.is_evaluable = 1
           ORDER BY m.emp_name'
     );
@@ -296,7 +296,7 @@ function ba_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
         $cph = implode(',', array_fill(0, count($cats), '?'));
         $q = $pdo->prepare(
             "SELECT member_id, category, score, case_count, confidence, insufficient_data
-               FROM ba_member_category
+               FROM bs_member_category
               WHERE eval_ver = ? AND member_id IN ($mph) AND category IN ($cph)"
         );
         $q->execute(array_merge([$evalVer], array_column($rows, 'member_id'), $cats));
@@ -319,7 +319,7 @@ function ba_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
             $has = (int)$c['insufficient_data'] === 0 && $c['score'] !== null;
             $matched[] = [
                 'category'   => $c['category'],
-                'label'      => BA_DOMAIN_CATEGORY[$c['category']]['label'] ?? $c['category'],
+                'label'      => BS_DOMAIN_CATEGORY[$c['category']]['label'] ?? $c['category'],
                 'score'      => $has ? (float)$c['score'] : null,
                 'case_count' => (int)$c['case_count'],
                 'confidence' => $c['confidence'],
@@ -347,7 +347,7 @@ function ba_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
  *
  * @return float|null 점수를 낼 수 없으면 null — 0 이 아니다
  */
-function ba_fit_score(array $r, ?array $avail): ?float
+function bs_fit_score(array $r, ?array $avail): ?float
 {
     if ($r['insufficient_data'] && $r['domain_fit'] === null) {
         return null;    // 판단 보류
@@ -368,14 +368,14 @@ function ba_fit_score(array $r, ?array $avail): ?float
     return round($ssum / $wsum, 2);
 }
 
-function ba_scope(array $project, ?string $from, ?string $to, array $cats, ?int $evalVer): array
+function bs_scope(array $project, ?string $from, ?string $to, array $cats, ?int $evalVer): array
 {
     return [
         'project_id'   => (int)$project['id'],
         'project_name' => $project['name'],
         'period'       => ['from' => $from, 'to' => $to],
         'categories'   => array_map(
-            static fn($c) => ['code' => $c, 'label' => BA_DOMAIN_CATEGORY[$c]['label'] ?? $c],
+            static fn($c) => ['code' => $c, 'label' => BS_DOMAIN_CATEGORY[$c]['label'] ?? $c],
             $cats
         ),
         'eval_ver'          => $evalVer,
@@ -384,7 +384,7 @@ function ba_scope(array $project, ?string $from, ?string $to, array $cats, ?int 
     ];
 }
 
-function ba_present_candidate_evidence(array $r): array
+function bs_present_candidate_evidence(array $r): array
 {
     return [
         'id'         => (int)$r['id'],
@@ -394,6 +394,6 @@ function ba_present_candidate_evidence(array $r): array
         'status_raw' => $r['status_raw'],
         'difficulty' => $r['difficulty'] !== null ? (int)$r['difficulty'] : null,
         'domains'    => $r['domains'] ?? null,
-        'closed_at'  => ba_date($r['closed_at']),
+        'closed_at'  => bs_date($r['closed_at']),
     ];
 }

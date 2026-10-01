@@ -24,7 +24,7 @@ final class ParsedBlock
 /**
  * 문서 한 건의 파싱 결과.
  *
- * `text` 는 ba_project_source.parsed_text 에 그대로 저장한다. 블록 경계를
+ * `text` 는 bs_project_source.parsed_text 에 그대로 저장한다. 블록 경계를
  * 표시해 두어서, 나중에 다시 읽어도 위치 정보가 살아 있다 — 컬럼을 새로
  * 만들지 않고 한 칸 안에서 해결한다(스키마 변경을 피한다).
  */
@@ -43,7 +43,7 @@ final class ParsedDoc
             if (trim($b->text) === '') {
                 continue;
             }
-            $out[] = ba_parse_marker($b->ref) . "\n" . $b->text;
+            $out[] = bs_parse_marker($b->ref) . "\n" . $b->text;
         }
         return implode("\n\n", $out);
     }
@@ -71,7 +71,7 @@ final class DocumentParseError extends RuntimeException
  */
 interface DocumentParser
 {
-    /** 이 파서가 다룰 수 있는 kind 인가. (ba_project_source.kind) */
+    /** 이 파서가 다룰 수 있는 kind 인가. (bs_project_source.kind) */
     public function supports(string $kind): bool;
 
     /**
@@ -84,9 +84,9 @@ interface DocumentParser
  * 블록 경계 표시.
  *
  * parsed_text 안에서 위치 정보를 살려 두기 위한 표시다. 이 형식은
- * ba_parse_blocks() 와 짝이다 — 한쪽만 고치지 말 것.
+ * bs_parse_blocks() 와 짝이다 — 한쪽만 고치지 말 것.
  */
-function ba_parse_marker(string $ref): string
+function bs_parse_marker(string $ref): string
 {
     // 표시 글자가 본문에 들어 있으면 경계가 깨진다. ref 쪽에서 막는다.
     return '[[' . str_replace([']]', '[['], '', $ref) . ']]';
@@ -97,7 +97,7 @@ function ba_parse_marker(string $ref): string
  *
  * @return ParsedBlock[] 표시가 없으면 통째로 한 블록(ref 없음)
  */
-function ba_parse_blocks(string $parsedText): array
+function bs_parse_blocks(string $parsedText): array
 {
     if (!preg_match('/^\[\[.+?\]\]$/m', $parsedText)) {
         return [new ParsedBlock('', $parsedText)];

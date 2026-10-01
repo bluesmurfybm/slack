@@ -1,5 +1,5 @@
 -- =====================================================================
--- 007. 알림 적재함 (ba_notification)
+-- 007. 알림 적재함 (bs_notification)
 --
 --   mysql -u root iworks_local < studio/sql/007_migration_notify_outbox.sql
 --
@@ -31,7 +31,7 @@
 -- =====================================================================
 SET NAMES utf8mb4;
 
-CREATE TABLE IF NOT EXISTS `ba_notification` (
+CREATE TABLE IF NOT EXISTS `bs_notification` (
   `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `channel`     VARCHAR(10)  NOT NULL COMMENT 'slack|email',
   `ref_type`    VARCHAR(20)  NOT NULL COMMENT '무엇 때문에 보내는가. allocation 등',
@@ -49,12 +49,12 @@ CREATE TABLE IF NOT EXISTS `ba_notification` (
   `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   -- 보낼 것을 집어 가는 조회.
-  KEY `ix_ba_notify_pending` (`status`, `id`),
+  KEY `ix_bs_notify_pending` (`status`, `id`),
   -- "이 배정안으로 누구에게 무엇이 나갔나" 를 되짚는 조회.
-  KEY `ix_ba_notify_ref`     (`ref_type`, `ref_id`),
-  KEY `ix_ba_notify_member`  (`member_id`),
+  KEY `ix_bs_notify_ref`     (`ref_type`, `ref_id`),
+  KEY `ix_bs_notify_member`  (`member_id`),
   -- 구성원을 지워도 알림 기록은 남긴다. 누구에게 보냈는지는 to_addr 스냅샷에 있다.
-  CONSTRAINT `fk_ba_notify_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_notify_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='보낼 알림 적재함. 실제 발송은 별도 경로가 읽어 간다';

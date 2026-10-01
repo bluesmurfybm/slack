@@ -10,7 +10,7 @@
   "_적용순서": [
     "1. core/worksystems.json 배열 끝에 worksystems_json_항목 을 추가한다",
     "2. 루트 index.php 의 ICONS 맵에 root_index_php_ICONS 의 키를 더한다",
-    "3. studio/inc/bootstrap.php 의 BA_MODULE_KEY 를 'studio' 로 바꾼다",
+    "3. studio/inc/bootstrap.php 의 BS_MODULE_KEY 를 'studio' 로 바꾼다",
     "4. 812건 시험을 다시 돌린다"
   ],
 
@@ -40,13 +40,13 @@
 
   "bootstrap_module_key": {
     "_위치": "studio/inc/bootstrap.php 45행",
-    "_현재": "const BA_MODULE_KEY = 'assign';",
-    "_바꿀값": "const BA_MODULE_KEY = 'studio';",
+    "_현재": "const BS_MODULE_KEY = 'assign';",
+    "_바꿀값": "const BS_MODULE_KEY = 'studio';",
     "_이유": "worksystems.json 의 key 와 같아야 상단바 메뉴에서 현재 위치가 표시되고, 미로그인 안내(?need_login=)가 맞는 모듈명을 집는다"
   },
 
   "_이번범위아님": {
-    "DB접두사": "ba_ 는 그대로 둔다. 별도 결정·별도 커밋 (CLAUDE.md)",
+    "DB접두사": "bs_ 는 그대로 둔다. 별도 결정·별도 커밋 (CLAUDE.md)",
     "시험DB": "blueassign_test 는 그대로 둔다 (rename-impact.md 4-C)",
     "자산파일명": "assets/assign.css / assign.js 는 그대로 둔다 (rename-impact.md 4-B)",
     "커밋scope": "assign 유지"

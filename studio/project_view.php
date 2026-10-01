@@ -8,28 +8,28 @@ require_once __DIR__ . '/inc/repo/ProjectRepo.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-$user      = ba_require_login();
-$projectId = ba_param_int('id', 0) ?? 0;
+$user      = bs_require_login();
+$projectId = bs_param_int('id', 0) ?? 0;
 
 if (!$projectId) {
     header('Location: project_list.php');
     exit;
 }
 
-$repo    = new ProjectRepo(ba_db());
-$project = $repo->find($projectId, ba_is_admin());
+$repo    = new ProjectRepo(bs_db());
+$project = $repo->find($projectId, bs_is_admin());
 if (!$project) {
     header('Location: project_list.php?err=notfound');
     exit;
 }
 
 $sources   = $repo->sources($projectId);
-$canManage = ba_can(BA_CAP_PROJECT_MANAGE, $projectId);
+$canManage = bs_can(BS_CAP_PROJECT_MANAGE, $projectId);
 
 // 2단계(참여 가능 개발자)는 **인원을 고르는 자리**다. 여러 사람의 점수를
 // 나란히 놓고 보므로, 배정을 짜는 사람에게만 연다. API 도 같은 선을 쓴다
 // (api/candidate.php) — 화면만 막으면 API 를 직접 불러 뚫린다.
-$canStaff = ba_can(BA_CAP_ALLOCATION_PROPOSE, $projectId);
+$canStaff = bs_can(BS_CAP_ALLOCATION_PROPOSE, $projectId);
 
 // 가용도 판정 기간 — 개발 기간이 기본. 비면 Step2 를 열 수 없다.
 $pFrom = $project['dev_start'] ?: ($project['test_start'] ?: null);
@@ -43,16 +43,16 @@ $hasPeriod = $pFrom !== null && $pTo !== null && $pFrom <= $pTo;
 //  · WBS 태스크 태그: 기획 업무도 실제로 존재하는 일이라 그대로 둔다. 고를 수
 //    없게 막으면 사람이 엉뚱한 분야로 갖다 붙인다. 역량을 못 맞추는 것은
 //    배정 단계에서 드러나면 된다.
-$allDomains = ba_db()->query(
-    'SELECT id, code, name, category FROM ba_domain WHERE is_active = 1 ORDER BY sort_no'
+$allDomains = bs_db()->query(
+    'SELECT id, code, name, category FROM bs_domain WHERE is_active = 1 ORDER BY sort_no'
 )->fetchAll(PDO::FETCH_ASSOC);
 
 $domains = array_values(array_filter(
     $allDomains,
-    static fn($d) => !in_array($d['category'], BA_CATEGORY_NOT_SCORED, true)
+    static fn($d) => !in_array($d['category'], BS_CATEGORY_NOT_SCORED, true)
 ));
 
-ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
+bs_layout_head($user, $project['name'], '업무 배정', '', 'project');
 ?>
 
 <div class="ba-pv" id="ba-pv"
@@ -64,14 +64,14 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
     <div>
       <h2><?= h($project['name']) ?>
         <span class="ba-badge ba-badge--<?= h($project['status']) ?>">
-          <?= h(BA_PROJECT_STATUS[$project['status']] ?? $project['status']) ?>
+          <?= h(BS_PROJECT_STATUS[$project['status']] ?? $project['status']) ?>
         </span>
       </h2>
       <p class="ba-panel__hint">
         <?= h($project['code']) ?>
         <?php if (!empty($project['client'])): ?> · <?= h($project['client']) ?><?php endif; ?>
         <?php if (!empty($project['track'])): ?>
-          · <?= h(BA_PROJECT_TRACK[$project['track']] ?? $project['track']) ?>
+          · <?= h(BS_PROJECT_TRACK[$project['track']] ?? $project['track']) ?>
         <?php endif; ?>
         · 담당 <?= h($project['owner_name']) ?>
       </p>
@@ -108,19 +108,19 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
       <div class="ba-periods ba-periods--ro">
         <div class="ba-period">
           <span class="ba-period__label">개발</span>
-          <b><?= h(ba_date($project['dev_start']) ?: '미정') ?></b>
+          <b><?= h(bs_date($project['dev_start']) ?: '미정') ?></b>
           <span class="ba-period__tilde">~</span>
-          <b><?= h(ba_date($project['dev_end']) ?: '미정') ?></b>
+          <b><?= h(bs_date($project['dev_end']) ?: '미정') ?></b>
         </div>
         <div class="ba-period">
           <span class="ba-period__label">테스트</span>
-          <b><?= h(ba_date($project['test_start']) ?: '미정') ?></b>
+          <b><?= h(bs_date($project['test_start']) ?: '미정') ?></b>
           <span class="ba-period__tilde">~</span>
-          <b><?= h(ba_date($project['test_end']) ?: '미정') ?></b>
+          <b><?= h(bs_date($project['test_end']) ?: '미정') ?></b>
         </div>
         <div class="ba-period">
           <span class="ba-period__label">운영 배포</span>
-          <b><?= h(ba_date($project['deploy_date']) ?: '미정') ?></b>
+          <b><?= h(bs_date($project['deploy_date']) ?: '미정') ?></b>
         </div>
       </div>
     </div>
@@ -137,7 +137,7 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
         <div class="ba-srclist">
           <?php foreach ($sources as $s): ?>
             <div class="ba-src">
-              <span class="ba-src__kind"><?= h(BA_SOURCE_KIND[$s['kind']] ?? $s['kind']) ?></span>
+              <span class="ba-src__kind"><?= h(BS_SOURCE_KIND[$s['kind']] ?? $s['kind']) ?></span>
               <span class="ba-src__title">
                 <?php if (!empty($s['url'])): ?>
                   <a href="<?= h($s['url']) ?>" target="_blank" rel="noopener"><?= h($s['title']) ?></a>
@@ -183,7 +183,7 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
     <div class="ba-panel">
       <h2>조건</h2>
       <p class="ba-panel__hint">
-        기간 <b><?= h(ba_date($pFrom)) ?> ~ <?= h(ba_date($pTo)) ?></b> 기준입니다.
+        기간 <b><?= h(bs_date($pFrom)) ?> ~ <?= h(bs_date($pTo)) ?></b> 기준입니다.
         <b>이 프로젝트 기준 순위이며 전사 순위가 아닙니다.</b>
       </p>
 
@@ -477,10 +477,10 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
         'id'        => (int)$d['id'],
         'name'      => $d['name'],
         'category'  => $d['category'],
-        'cat_label' => BA_DOMAIN_CATEGORY[$d['category']]['label'] ?? $d['category'],
+        'cat_label' => BS_DOMAIN_CATEGORY[$d['category']]['label'] ?? $d['category'],
         // 이 계열은 역량 점수를 내지 않는다. 골라도 되지만 배정 때
         // 역량으로 맞춰 볼 수 없다는 것을 화면이 말해 줘야 한다.
-        'scored'    => !in_array($d['category'], BA_CATEGORY_NOT_SCORED, true),
+        'scored'    => !in_array($d['category'], BS_CATEGORY_NOT_SCORED, true),
     ], $allDomains),
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 ) ?></script>
@@ -500,4 +500,4 @@ ba_layout_head($user, $project['name'], '업무 배정', '', 'project');
   </div>
 </div>
 
-<?php ba_layout_foot(); ?>
+<?php bs_layout_foot(); ?>

@@ -11,7 +11,7 @@
 --   단, 이미 만들어진 표의 정의를 바꾸지는 않습니다. 정의를 바꿀 때는
 --   sql/ 아래에 새 마이그레이션 파일을 추가하고 이 파일에도 반영하십시오.
 --
--- 이 스크립트는 ba_ 접두사 표만 만듭니다.
+-- 이 스크립트는 bs_ 접두사 표만 만듭니다.
 -- 포털 회원 표(portal_users)는 건드리지 않고 조회만 합니다.
 -- =====================================================================
 --
@@ -26,7 +26,7 @@
 --                         범위 검증(difficulty 1~5, progress_pct 0~100,
 --                         load_ratio 0.000~1.000, manual_adjust -20~+20)은
 --                         BlueCart 가 BC_STATUS 같은 PHP 상수로 하는 방식을 따라
---                         inc/workflow.php 의 BA_* 상수에서 합니다.
+--                         inc/workflow.php 의 BS_* 상수에서 합니다.
 --   * 함수 인덱스 / 내림차순 인덱스 / DEFAULT (expression)  — 8.0.13+ 전용
 --   * utf8mb4_0900_ai_ci 콜레이션 — 8.0 전용. 기존 표와 같은
 --                         utf8mb4_unicode_ci 를 씁니다(조인 시 콜레이션 충돌 방지).
@@ -51,7 +51,7 @@
 --
 -- (2) portal_users 로의 FK 는 걸지 않습니다.
 --     BlueCart 에 포털 회원 표를 가리키는 FK 가 하나도 없습니다. 같게 둡니다.
---     ba_ 표끼리는 실제 FK 를 겁니다(아래 (3)).
+--     bs_ 표끼리는 실제 FK 를 겁니다(아래 (3)).
 --     conventions.md §6.2
 --
 -- (3) FK: 논리적 관계가 아니라 **실제 FK 를 겁니다.**
@@ -74,8 +74,8 @@
 --       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 --     (포털 core/db.php 의 portal_* 표는 DEFAULT 없이 NULL 허용이라 방식이 다른데,
 --      conventions.md §6.2 의 판단대로 BlueCart 쪽을 따릅니다.)
---     명세서에 created_at 이 아예 없던 표(ba_domain, ba_member_skill,
---     ba_member_metric, ba_task_domain, ba_work_item_domain, ba_allocation_item)
+--     명세서에 created_at 이 아예 없던 표(bs_domain, bs_member_skill,
+--     bs_member_metric, bs_task_domain, bs_work_item_domain, bs_allocation_item)
 --     에도 넣었습니다. 적용 기준:
 --       · 사람이 고치는 표          → created_at + updated_at
 --       · 한 번 쓰고 안 고치는 표    → created_at 만
@@ -89,12 +89,12 @@
 --       FK      fk_<표>_<대상>   예) fk_bc_request_category
 --     표 이름이 길면 인덱스명에서 줄입니다(BlueCart 도 bc_request_history →
 --     ix_bc_hist_request 로 줄입니다). 이 파일의 줄임말은 아래와 같습니다.
---       ba_project_source    → psrc      ba_member_skill      → mskill
---       ba_task_domain       → tdom      ba_member_metric     → mmetric
---       ba_work_item         → witem     ba_eval_run          → evalrun
---       ba_work_item_domain  → widom     ba_profile_objection → objection
---       ba_allocation        → alloc     ba_allocation_item   → allocitem
---       ba_progress_comment  → pcomment  ba_sync_log          → synclog
+--       bs_project_source    → psrc      bs_member_skill      → mskill
+--       bs_task_domain       → tdom      bs_member_metric     → mmetric
+--       bs_work_item         → witem     bs_eval_run          → evalrun
+--       bs_work_item_domain  → widom     bs_profile_objection → objection
+--       bs_allocation        → alloc     bs_allocation_item   → allocitem
+--       bs_progress_comment  → pcomment  bs_sync_log          → synclog
 --     conventions.md §6.3
 --
 -- (6) 표 옵션: COLLATE=utf8mb4_unicode_ci 와 한글 COMMENT 를 모두 붙였습니다.
@@ -113,12 +113,12 @@
 --     BlueCart 는 2자리(01_schema.sql)입니다. 이번 지시에 맞춰 3자리를 씁니다.
 --     conventions.md §9-4 에 미결로 남겨 둔 항목이며, 이 파일로 3자리로 정합니다.
 --
--- (9) ba_member.emp_name 을 VARCHAR(50) → VARCHAR(80) 으로 넓혔습니다.
+-- (9) bs_member.emp_name 을 VARCHAR(50) → VARCHAR(80) 으로 넓혔습니다.
 --     BlueCart 의 이름 스냅샷 컬럼이 전부 VARCHAR(80) 입니다. 폭을 맞춰야
---     ba_ 표들 사이에서 이름 컬럼 길이가 갈리지 않습니다.
+--     bs_ 표들 사이에서 이름 컬럼 길이가 갈리지 않습니다.
 --
--- (10) 명세서의 `ba_project.owner_user_id` 는 `owner_id` + `owner_name` 으로,
---      `ba_progress_comment.user_id` 는 `user_id` + `user_name` 으로 바꿨습니다.
+-- (10) 명세서의 `bs_project.owner_user_id` 는 `owner_id` + `owner_name` 으로,
+--      `bs_progress_comment.user_id` 는 `user_id` + `user_name` 으로 바꿨습니다.
 --      (1) 과 같은 이유이며, `_user_id` 라는 이름이 남아 있으면 정수 PK 로 오해합니다.
 -- =====================================================================
 
@@ -130,7 +130,7 @@ SET time_zone = '+09:00';
 -- 1. 분야 마스터
 --    다른 거의 모든 표가 이걸 가리키므로 가장 먼저 만듭니다.
 -- =====================================================================
-CREATE TABLE IF NOT EXISTS `ba_domain` (
+CREATE TABLE IF NOT EXISTS `bs_domain` (
   `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `code`       VARCHAR(40)  NOT NULL COMMENT '영문 코드(변경 비권장). 예: attendance, quiz, sso',
   `name`       VARCHAR(80)  NOT NULL COMMENT '화면 표시명. 예: 출석부, 퀴즈·시험',
@@ -144,8 +144,8 @@ CREATE TABLE IF NOT EXISTS `ba_domain` (
   `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ba_domain_code` (`code`),
-  KEY `ix_ba_domain_active` (`is_active`, `sort_no`)
+  UNIQUE KEY `uk_bs_domain_code` (`code`),
+  KEY `ix_bs_domain_active` (`is_active`, `sort_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='업무 분야 마스터. 역량·과업·업무이력이 모두 이 축으로 묶인다';
 
@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS `ba_domain` (
 -- ---------------------------------------------------------------------
 -- 2.1 프로젝트
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_project` (
+CREATE TABLE IF NOT EXISTS `bs_project` (
   `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `code`        VARCHAR(40)  NOT NULL COMMENT '표시용 번호. 예: PRJ-2026-001',
   `name`        VARCHAR(200) NOT NULL,
@@ -192,19 +192,19 @@ CREATE TABLE IF NOT EXISTS `ba_project` (
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ba_project_code` (`code`),
+  UNIQUE KEY `uk_bs_project_code` (`code`),
   -- 목록은 거의 항상 "안 지워진 것" 만 본다.
-  KEY `ix_ba_project_live`   (`deleted_at`, `status`, `dev_start`),
+  KEY `ix_bs_project_live`   (`deleted_at`, `status`, `dev_start`),
   -- 지워진 것까지 포함해 훑는 관리자 조회용. 명세서의 idx_status_date 와 같은 축.
-  KEY `ix_ba_project_status` (`status`, `dev_start`),
-  KEY `ix_ba_project_owner`  (`owner_id`, `status`)
+  KEY `ix_bs_project_status` (`status`, `dev_start`),
+  KEY `ix_bs_project_owner`  (`owner_id`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='배정 대상 프로젝트';
 
 -- ---------------------------------------------------------------------
 -- 2.2 개발 범위 출처 문서
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_project_source` (
+CREATE TABLE IF NOT EXISTS `bs_project_source` (
   `id`               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `project_id`       INT UNSIGNED NOT NULL,
   -- image 는 명세서에 없던 값이다. 화면 시안을 사진/캡처로 받는 경우가 있어 P1 에서 추가했다.
@@ -225,19 +225,19 @@ CREATE TABLE IF NOT EXISTS `ba_project_source` (
   `created_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `ix_ba_psrc_project` (`project_id`),
+  KEY `ix_bs_psrc_project` (`project_id`),
   -- 파싱 대기 건을 배치가 집어 간다.
-  KEY `ix_ba_psrc_parse`   (`parse_status`, `id`),
+  KEY `ix_bs_psrc_parse`   (`parse_status`, `id`),
   -- 프로젝트가 지워지면 그 출처 문서도 남을 이유가 없다.
-  CONSTRAINT `fk_ba_psrc_project` FOREIGN KEY (`project_id`)
-    REFERENCES `ba_project` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_psrc_project` FOREIGN KEY (`project_id`)
+    REFERENCES `bs_project` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='개발 범위 출처 문서(엑셀·피그마·PPT 등)';
 
 -- ---------------------------------------------------------------------
 -- 2.3 태스크 (대/중/소 3계층)
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_task` (
+CREATE TABLE IF NOT EXISTS `bs_task` (
   `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `project_id`   INT UNSIGNED NOT NULL,
   `parent_id`    INT UNSIGNED NULL COMMENT '상위 태스크. depth=1 이면 NULL',
@@ -263,32 +263,32 @@ CREATE TABLE IF NOT EXISTS `ba_task` (
   `updated_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   -- WBS 트리를 그릴 때의 조회 순서 그대로.
-  KEY `ix_ba_task_project` (`project_id`, `depth`, `seq`),
-  KEY `ix_ba_task_parent`  (`parent_id`),
-  KEY `ix_ba_task_source`  (`source_id`),
+  KEY `ix_bs_task_project` (`project_id`, `depth`, `seq`),
+  KEY `ix_bs_task_parent`  (`parent_id`),
+  KEY `ix_bs_task_source`  (`source_id`),
   -- 배정 후보를 고를 때 "확정됐고 아직 안 끝난 태스크" 를 자주 센다.
-  KEY `ix_ba_task_confirm` (`project_id`, `confirmed`, `status`),
+  KEY `ix_bs_task_confirm` (`project_id`, `confirmed`, `status`),
 
-  CONSTRAINT `fk_ba_task_project` FOREIGN KEY (`project_id`)
-    REFERENCES `ba_project` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bs_task_project` FOREIGN KEY (`project_id`)
+    REFERENCES `bs_project` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
 
   -- 자기 참조. 상위가 지워지면 하위도 지운다.
   --   주의: InnoDB 는 **자기 참조 FK 의 CASCADE 를 여러 단계로 이어서 수행하지 않는다.**
   --   대→중→소 세 단계를 한 번에 지우려면 응용에서 잎(depth=3)부터 지워 올라가야 한다.
-  --   프로젝트째로 지우는 경우는 위 fk_ba_task_project 가 전 행을 한 번에 지우므로 문제없다.
-  CONSTRAINT `fk_ba_task_parent` FOREIGN KEY (`parent_id`)
-    REFERENCES `ba_task` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  --   프로젝트째로 지우는 경우는 위 fk_bs_task_project 가 전 행을 한 번에 지우므로 문제없다.
+  CONSTRAINT `fk_bs_task_parent` FOREIGN KEY (`parent_id`)
+    REFERENCES `bs_task` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
 
   -- 출처 문서를 지워도 이미 도출된 태스크는 살아 있어야 한다(근거 링크만 끊긴다).
-  CONSTRAINT `fk_ba_task_source` FOREIGN KEY (`source_id`)
-    REFERENCES `ba_project_source` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_task_source` FOREIGN KEY (`source_id`)
+    REFERENCES `bs_project_source` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='WBS 태스크(대/중/소 3계층)';
 
 -- ---------------------------------------------------------------------
 -- 2.4 태스크 ↔ 분야
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_task_domain` (
+CREATE TABLE IF NOT EXISTS `bs_task_domain` (
   `task_id`    INT UNSIGNED NOT NULL,
   `domain_id`  INT UNSIGNED NOT NULL,
   `weight`     DECIMAL(4,3) NOT NULL DEFAULT 1.000 COMMENT '이 태스크에서 해당 분야가 차지하는 비중 0.000~1.000',
@@ -297,12 +297,12 @@ CREATE TABLE IF NOT EXISTS `ba_task_domain` (
   PRIMARY KEY (`task_id`, `domain_id`),
   -- domain_id 로 거꾸로 찾는 조회(이 분야에 걸린 태스크)가 있으므로 따로 건다.
   -- 복합 PK 의 뒷 컬럼은 단독으로 인덱스 구실을 못 한다.
-  KEY `ix_ba_tdom_domain` (`domain_id`),
-  CONSTRAINT `fk_ba_tdom_task` FOREIGN KEY (`task_id`)
-    REFERENCES `ba_task` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  KEY `ix_bs_tdom_domain` (`domain_id`),
+  CONSTRAINT `fk_bs_tdom_task` FOREIGN KEY (`task_id`)
+    REFERENCES `bs_task` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   -- 쓰이고 있는 분야는 지우지 못하게 막는다. 쓰지 않으려면 is_active=0 으로 내린다.
-  CONSTRAINT `fk_ba_tdom_domain` FOREIGN KEY (`domain_id`)
-    REFERENCES `ba_domain` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_tdom_domain` FOREIGN KEY (`domain_id`)
+    REFERENCES `bs_domain` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='태스크가 어느 분야에 속하는지(다중)';
 
@@ -315,7 +315,7 @@ CREATE TABLE IF NOT EXISTS `ba_task_domain` (
 -- 3.1 구성원
 --     포털 계정(portal_users)과 1:1. FK 는 걸지 않는다 — 조정 (2).
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_member` (
+CREATE TABLE IF NOT EXISTS `bs_member` (
   `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   -- 조정 (1): 명세서 user_id INT UNSIGNED → 이메일
   `user_id`       VARCHAR(64)  NOT NULL COMMENT 'iworks 사용자 ID(이메일). portal_users.email 과 같은 값',
@@ -350,19 +350,19 @@ CREATE TABLE IF NOT EXISTS `ba_member` (
   `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ba_member_user` (`user_id`),
+  UNIQUE KEY `uk_bs_member_user` (`user_id`),
   -- 후보 리스트가 (배정 가능 ∩ 역할) 로 먼저 거른다.
-  KEY `ix_ba_member_assignable` (`is_assignable`, `role_label`),
+  KEY `ix_bs_member_assignable` (`is_assignable`, `role_label`),
   -- 점수 산출 배치는 (평가 대상 ∩ 역할) 로 훑는다.
-  KEY `ix_ba_member_evaluable`  (`is_evaluable`, `role_label`)
+  KEY `ix_bs_member_evaluable`  (`is_evaluable`, `role_label`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='배정 대상 구성원. 포털 계정과 1:1(FK 없음)';
 
 -- ---------------------------------------------------------------------
 -- 3.2 판정 실행 이력
---     역량 스냅샷(ba_member_skill / ba_member_metric)이 이걸 가리키므로 먼저 만든다.
+--     역량 스냅샷(bs_member_skill / bs_member_metric)이 이걸 가리키므로 먼저 만든다.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_eval_run` (
+CREATE TABLE IF NOT EXISTS `bs_eval_run` (
   `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '곧 eval_ver. 역량 스냅샷의 버전 번호',
   `started_at`  DATETIME     NULL,
   `finished_at` DATETIME     NULL,
@@ -375,18 +375,18 @@ CREATE TABLE IF NOT EXISTS `ba_eval_run` (
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   -- 화면이 "가장 최근 성공한 판정" 을 자주 찾는다.
-  KEY `ix_ba_evalrun_status` (`status`, `id`)
+  KEY `ix_bs_evalrun_status` (`status`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='역량 재판정 실행 이력. id 가 곧 역량 스냅샷의 버전';
 
 -- ---------------------------------------------------------------------
 -- 3.3 구성원 분야별 역량 (판정 회차마다 한 벌씩 쌓인다)
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_member_skill` (
+CREATE TABLE IF NOT EXISTS `bs_member_skill` (
   `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `member_id`    INT UNSIGNED NOT NULL,
   `domain_id`    INT UNSIGNED NOT NULL,
-  `eval_ver`     INT UNSIGNED NOT NULL COMMENT 'ba_eval_run.id',
+  `eval_ver`     INT UNSIGNED NOT NULL COMMENT 'bs_eval_run.id',
   `case_count`   INT          NOT NULL DEFAULT 0 COMMENT '해당 분야 처리 건수',
   `weighted_qty` DECIMAL(8,2) NULL COMMENT '난이도 가중 처리량',
   `avg_lead_hr`  DECIMAL(8,2) NULL COMMENT '평균 리드타임(시간)',
@@ -400,38 +400,38 @@ CREATE TABLE IF NOT EXISTS `ba_member_skill` (
   -- 한 번 쓰고 고치지 않는 스냅샷이라 updated_at 없음 — 조정 (4)
   `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ba_mskill_ver` (`member_id`, `domain_id`, `eval_ver`),
+  UNIQUE KEY `uk_bs_mskill_ver` (`member_id`, `domain_id`, `eval_ver`),
   -- "이 분야를 잘하는 사람" 을 뽑는 조회. 후보 리스트의 주 경로다.
-  KEY `ix_ba_mskill_domain` (`domain_id`, `eval_ver`, `score`),
-  KEY `ix_ba_mskill_eval`   (`eval_ver`),
-  CONSTRAINT `fk_ba_mskill_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_ba_mskill_domain` FOREIGN KEY (`domain_id`)
-    REFERENCES `ba_domain` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  KEY `ix_bs_mskill_domain` (`domain_id`, `eval_ver`, `score`),
+  KEY `ix_bs_mskill_eval`   (`eval_ver`),
+  CONSTRAINT `fk_bs_mskill_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bs_mskill_domain` FOREIGN KEY (`domain_id`)
+    REFERENCES `bs_domain` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   -- 판정 회차를 지우면 그 회차 점수의 근거가 사라진다. 지우지 못하게 막는다.
-  CONSTRAINT `fk_ba_mskill_eval` FOREIGN KEY (`eval_ver`)
-    REFERENCES `ba_eval_run` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_mskill_eval` FOREIGN KEY (`eval_ver`)
+    REFERENCES `bs_eval_run` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='구성원 분야별 역량 스냅샷. 판정 회차(eval_ver)마다 보존';
 
 -- ---------------------------------------------------------------------
 -- 3.3-b 구성원 계열별 역량 점수 (006_migration_category_score.sql 에서 추가)
 --
--- ba_member_skill 은 (구성원 × **분야**) 인데, 점수는 **계열 단위**로 냅니다.
+-- bs_member_skill 은 (구성원 × **분야**) 인데, 점수는 **계열 단위**로 냅니다.
 -- 분야 22개로는 (사람×분야) 칸의 82%가 표본 부족으로 버려지기 때문입니다
 -- (docs/scoring-design.md §1.3). 그래서 표를 나눕니다.
 --
---   ba_member_skill     분야별 처리 실적 → 근거 표시용. score 는 채우지 않는다
---   ba_member_category  계열별 역량 점수 → 레이더 차트 + 배정 엔진
+--   bs_member_skill     분야별 처리 실적 → 근거 표시용. score 는 채우지 않는다
+--   bs_member_category  계열별 역량 점수 → 레이더 차트 + 배정 엔진
 --
 -- 점수는 절대 기준입니다. score = min(100, weighted_qty / baseline * 100)
 -- baseline(분모)은 회차마다 달라지므로 그때 쓴 값을 행에 함께 저장합니다.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_member_category` (
+CREATE TABLE IF NOT EXISTS `bs_member_category` (
   `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `member_id`    INT UNSIGNED NOT NULL,
-  `category`     VARCHAR(40)  NOT NULL COMMENT 'ba_domain.category. BA_DOMAIN_CATEGORY 의 열쇠',
-  `eval_ver`     INT UNSIGNED NOT NULL COMMENT 'ba_eval_run.id',
+  `category`     VARCHAR(40)  NOT NULL COMMENT 'bs_domain.category. BS_DOMAIN_CATEGORY 의 열쇠',
+  `eval_ver`     INT UNSIGNED NOT NULL COMMENT 'bs_eval_run.id',
   `case_count`   INT          NOT NULL DEFAULT 0 COMMENT '그 계열 처리 건수',
   `weighted_qty` DECIMAL(8,2) NULL COMMENT '난이도 가중 처리량 = Σ(건별 난이도)',
   `baseline`     DECIMAL(8,2) NULL COMMENT '그때 쓴 기준값(상위 25% 지점). 점수의 분모',
@@ -440,13 +440,13 @@ CREATE TABLE IF NOT EXISTS `ba_member_category` (
   `insufficient_data` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1이면 점수를 그대로 노출하지 않는다',
   `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ba_mcat_ver` (`member_id`, `category`, `eval_ver`),
-  KEY `ix_ba_mcat_cat`  (`category`, `eval_ver`, `score`),
-  KEY `ix_ba_mcat_eval` (`eval_ver`),
-  CONSTRAINT `fk_ba_mcat_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_ba_mcat_eval` FOREIGN KEY (`eval_ver`)
-    REFERENCES `ba_eval_run` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  UNIQUE KEY `uk_bs_mcat_ver` (`member_id`, `category`, `eval_ver`),
+  KEY `ix_bs_mcat_cat`  (`category`, `eval_ver`, `score`),
+  KEY `ix_bs_mcat_eval` (`eval_ver`),
+  CONSTRAINT `fk_bs_mcat_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bs_mcat_eval` FOREIGN KEY (`eval_ver`)
+    REFERENCES `bs_eval_run` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='구성원 계열별 역량 점수 스냅샷. 판정 회차마다 보존';
 
@@ -455,10 +455,10 @@ CREATE TABLE IF NOT EXISTS `ba_member_category` (
 --     CLAUDE.md: 이 값들로 **전체 랭킹 화면을 만들지 않는다.**
 --     특정 과업 기준 적합도 계산의 입력으로만 쓴다.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_member_metric` (
+CREATE TABLE IF NOT EXISTS `bs_member_metric` (
   `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `member_id`     INT UNSIGNED NOT NULL,
-  `eval_ver`      INT UNSIGNED NOT NULL COMMENT 'ba_eval_run.id',
+  `eval_ver`      INT UNSIGNED NOT NULL COMMENT 'bs_eval_run.id',
   `period_from`   DATE         NULL,
   `period_to`     DATE         NULL,
   `total_cases`   INT          NOT NULL DEFAULT 0,
@@ -472,12 +472,12 @@ CREATE TABLE IF NOT EXISTS `ba_member_metric` (
   `insufficient_data` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '1이면 표본 부족(건수 < 20)',
   `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ba_mmetric_ver` (`member_id`, `eval_ver`),
-  KEY `ix_ba_mmetric_eval` (`eval_ver`),
-  CONSTRAINT `fk_ba_mmetric_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_ba_mmetric_eval` FOREIGN KEY (`eval_ver`)
-    REFERENCES `ba_eval_run` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  UNIQUE KEY `uk_bs_mmetric_ver` (`member_id`, `eval_ver`),
+  KEY `ix_bs_mmetric_eval` (`eval_ver`),
+  CONSTRAINT `fk_bs_mmetric_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bs_mmetric_eval` FOREIGN KEY (`eval_ver`)
+    REFERENCES `bs_eval_run` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='구성원 종합 지표 스냅샷. 전체 랭킹 화면 용도로 쓰지 않는다';
 
@@ -491,7 +491,7 @@ CREATE TABLE IF NOT EXISTS `ba_member_metric` (
 --     CLAUDE.md: 모든 점수는 이 표의 행으로 역추적 가능해야 한다.
 --     source_url 을 비우지 말 것 — 근거 링크가 없으면 이의 제기에 답할 수 없다.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_work_item` (
+CREATE TABLE IF NOT EXISTS `bs_work_item` (
   `id`               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `source`           VARCHAR(10)  NOT NULL COMMENT 'slack|gmail',
   `source_key`       VARCHAR(120) NOT NULL COMMENT '원천 고유키. 중복 적재 방지용',
@@ -516,40 +516,40 @@ CREATE TABLE IF NOT EXISTS `ba_work_item` (
   `updated_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   -- 수집기가 ON DUPLICATE KEY UPDATE 로 재적재하는 기준.
-  UNIQUE KEY `uk_ba_witem_source` (`source`, `source_key`),
+  UNIQUE KEY `uk_bs_witem_source` (`source`, `source_key`),
   -- 구성원별 기간 집계(역량 판정의 주 경로).
-  KEY `ix_ba_witem_member` (`member_id`, `closed_at`),
+  KEY `ix_bs_witem_member` (`member_id`, `closed_at`),
   -- 구성원 없이 기간 전체를 훑는 집계도 있다(§4 정규화 모집단).
-  KEY `ix_ba_witem_closed` (`closed_at`),
+  KEY `ix_bs_witem_closed` (`closed_at`),
   -- 담당자를 못 찾은 건을 나중에 손으로 이어 붙인다.
-  KEY `ix_ba_witem_org`    (`org_name`),
+  KEY `ix_bs_witem_org`    (`org_name`),
   -- 구성원을 지워도 수집된 사실 자체는 남긴다(근거 보존). 담당자만 끊는다.
-  CONSTRAINT `fk_ba_witem_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_witem_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='슬랙/지메일에서 수집한 원천 업무 이력. 모든 점수의 근거';
 
 -- ---------------------------------------------------------------------
 -- 4.2 업무 이력 ↔ 분야
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_work_item_domain` (
+CREATE TABLE IF NOT EXISTS `bs_work_item_domain` (
   `work_item_id` BIGINT UNSIGNED NOT NULL,
   `domain_id`    INT UNSIGNED    NOT NULL,
   `confidence`   DECIMAL(4,3)    NOT NULL DEFAULT 1.000 COMMENT '키워드 매칭 신뢰도 0.000~1.000',
   `created_at`   DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`work_item_id`, `domain_id`),
-  KEY `ix_ba_widom_domain` (`domain_id`),
-  CONSTRAINT `fk_ba_widom_item` FOREIGN KEY (`work_item_id`)
-    REFERENCES `ba_work_item` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_ba_widom_domain` FOREIGN KEY (`domain_id`)
-    REFERENCES `ba_domain` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  KEY `ix_bs_widom_domain` (`domain_id`),
+  CONSTRAINT `fk_bs_widom_item` FOREIGN KEY (`work_item_id`)
+    REFERENCES `bs_work_item` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bs_widom_domain` FOREIGN KEY (`domain_id`)
+    REFERENCES `bs_domain` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='업무 이력이 어느 분야인지(다중). ba_domain.keywords 매칭 결과';
+  COMMENT='업무 이력이 어느 분야인지(다중). bs_domain.keywords 매칭 결과';
 
 -- ---------------------------------------------------------------------
 -- 4.3 수집 실행 로그
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_sync_log` (
+CREATE TABLE IF NOT EXISTS `bs_sync_log` (
   `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `source`      VARCHAR(10)  NOT NULL COMMENT 'slack|gmail',
   `started_at`  DATETIME     NULL,
@@ -563,7 +563,7 @@ CREATE TABLE IF NOT EXISTS `ba_sync_log` (
   `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   -- "이 원천을 마지막으로 언제 어디까지 긁었나" 조회.
-  KEY `ix_ba_synclog_src` (`source`, `id`)
+  KEY `ix_bs_synclog_src` (`source`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='수집 배치 실행 로그';
 
@@ -571,7 +571,7 @@ CREATE TABLE IF NOT EXISTS `ba_sync_log` (
 -- 4.4 프로파일 이의 제기
 --     CLAUDE.md: 본인은 자기 프로파일을 항상 열람할 수 있고 이의를 제기할 수 있다.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_profile_objection` (
+CREATE TABLE IF NOT EXISTS `bs_profile_objection` (
   `id`               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `member_id`        INT UNSIGNED NOT NULL COMMENT '이의를 낸 본인',
   `eval_ver`         INT UNSIGNED NULL COMMENT '어느 판정 회차에 대한 이의인지',
@@ -588,18 +588,18 @@ CREATE TABLE IF NOT EXISTS `ba_profile_objection` (
   `created_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `ix_ba_objection_member` (`member_id`, `id`),
+  KEY `ix_bs_objection_member` (`member_id`, `id`),
   -- 관리자 화면이 미처리(open) 건을 먼저 본다.
-  KEY `ix_ba_objection_status` (`status`, `id`),
-  KEY `ix_ba_objection_domain` (`domain_id`),
-  KEY `ix_ba_objection_eval`   (`eval_ver`),
-  CONSTRAINT `fk_ba_objection_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  KEY `ix_bs_objection_status` (`status`, `id`),
+  KEY `ix_bs_objection_domain` (`domain_id`),
+  KEY `ix_bs_objection_eval`   (`eval_ver`),
+  CONSTRAINT `fk_bs_objection_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   -- 판정 회차나 분야가 정리돼도 이의 제기 기록 자체는 남긴다.
-  CONSTRAINT `fk_ba_objection_eval` FOREIGN KEY (`eval_ver`)
-    REFERENCES `ba_eval_run` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_ba_objection_domain` FOREIGN KEY (`domain_id`)
-    REFERENCES `ba_domain` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_objection_eval` FOREIGN KEY (`eval_ver`)
+    REFERENCES `bs_eval_run` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_bs_objection_domain` FOREIGN KEY (`domain_id`)
+    REFERENCES `bs_domain` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='구성원 프로파일 이의 제기';
 
@@ -611,11 +611,11 @@ CREATE TABLE IF NOT EXISTS `ba_profile_objection` (
 -- ---------------------------------------------------------------------
 -- 5.1 기간별 점유 (가용도 산출 입력)
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_workload` (
+CREATE TABLE IF NOT EXISTS `bs_workload` (
   `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `member_id`  INT UNSIGNED NOT NULL,
   `kind`       VARCHAR(10)  NOT NULL COMMENT 'assigned(모듈 내 확정)|inferred(슬랙·메일 추정)|manual(휴가·교육 등)',
-  -- ref_type/ref_id 는 가리키는 표가 그때그때 달라(ba_allocation_item, ba_work_item …)
+  -- ref_type/ref_id 는 가리키는 표가 그때그때 달라(bs_allocation_item, bs_work_item …)
   -- FK 를 걸 수 없다. 참조 무결성은 응용에서 지킨다. 명세서와 같음.
   `ref_type`   VARCHAR(20)  NULL COMMENT '참조 대상 종류. allocation_item|work_item 등',
   `ref_id`     BIGINT UNSIGNED NULL COMMENT '참조 대상 id. FK 아님(대상 표가 가변)',
@@ -628,11 +628,11 @@ CREATE TABLE IF NOT EXISTS `ba_workload` (
   `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   -- 가용도 계산이 (사람, 기간 겹침) 으로만 조회한다.
-  KEY `ix_ba_workload_period` (`member_id`, `start_date`, `end_date`),
-  KEY `ix_ba_workload_ref`    (`ref_type`, `ref_id`),
+  KEY `ix_bs_workload_period` (`member_id`, `start_date`, `end_date`),
+  KEY `ix_bs_workload_ref`    (`ref_type`, `ref_id`),
   -- 점유 기록은 배정·수집에서 다시 만들어낼 수 있는 파생 데이터라 같이 지운다.
-  CONSTRAINT `fk_ba_workload_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_workload_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='구성원 기간별 점유. 참여 가능도 산출 입력';
 
@@ -642,13 +642,13 @@ CREATE TABLE IF NOT EXISTS `ba_workload` (
 --     코드에서 건너뛸 수 없어야 한다. 이 표는 confirmed_by/confirmed_at 이
 --     같이 채워지도록 응용에서 강제한다.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_allocation` (
+CREATE TABLE IF NOT EXISTS `bs_allocation` (
   `id`                INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `project_id`        INT UNSIGNED NOT NULL,
   `version`           INT          NOT NULL DEFAULT 1 COMMENT '프로젝트 내 배정안 회차',
   `status`            VARCHAR(20)  NOT NULL DEFAULT 'proposed' COMMENT 'proposed|adjusted|confirmed|archived',
   `engine_ver`        VARCHAR(20)  NULL COMMENT '배정 엔진 버전',
-  `eval_ver`          INT UNSIGNED NULL COMMENT '사용된 역량 스냅샷(ba_eval_run.id)',
+  `eval_ver`          INT UNSIGNED NULL COMMENT '사용된 역량 스냅샷(bs_eval_run.id)',
   `params_json`       TEXT         NULL COMMENT '가중치/제약 조건(JSON)',
 
   -- 조정 (1)
@@ -661,24 +661,24 @@ CREATE TABLE IF NOT EXISTS `ba_allocation` (
   `created_at`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ba_alloc_ver` (`project_id`, `version`),
+  UNIQUE KEY `uk_bs_alloc_ver` (`project_id`, `version`),
   -- 대시보드가 프로젝트의 확정 배정안을 찾는다.
-  KEY `ix_ba_alloc_status` (`project_id`, `status`),
-  KEY `ix_ba_alloc_eval`   (`eval_ver`),
-  CONSTRAINT `fk_ba_alloc_project` FOREIGN KEY (`project_id`)
-    REFERENCES `ba_project` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  KEY `ix_bs_alloc_status` (`project_id`, `status`),
+  KEY `ix_bs_alloc_eval`   (`eval_ver`),
+  CONSTRAINT `fk_bs_alloc_project` FOREIGN KEY (`project_id`)
+    REFERENCES `bs_project` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   -- 판정 회차가 정리돼도 배정안 기록은 남긴다(어떤 스냅샷을 썼는지만 흐려진다).
-  CONSTRAINT `fk_ba_alloc_eval` FOREIGN KEY (`eval_ver`)
-    REFERENCES `ba_eval_run` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_alloc_eval` FOREIGN KEY (`eval_ver`)
+    REFERENCES `bs_eval_run` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='프로젝트 배정안. 버전 관리';
 
 -- ---------------------------------------------------------------------
 -- 5.3 배정안 항목
 --     CLAUDE.md: 모든 점수는 근거로 역추적 가능해야 한다.
---     reason_json 에 evidence(ba_work_item 링크)를 반드시 담는다.
+--     reason_json 에 evidence(bs_work_item 링크)를 반드시 담는다.
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_allocation_item` (
+CREATE TABLE IF NOT EXISTS `bs_allocation_item` (
   `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `allocation_id` INT UNSIGNED NOT NULL,
   `task_id`       INT UNSIGNED NOT NULL,
@@ -694,27 +694,27 @@ CREATE TABLE IF NOT EXISTS `ba_allocation_item` (
   PRIMARY KEY (`id`),
   -- 같은 배정안에서 한 사람이 한 태스크에 같은 역할로 두 번 들어갈 수 없다.
   -- (명세서에 없던 제약. 조정 화면에서 중복 추가를 막지 못하면 공수가 이중 계산된다.)
-  UNIQUE KEY `uk_ba_allocitem_one` (`allocation_id`, `task_id`, `member_id`, `role`),
-  KEY `ix_ba_allocitem_task`   (`task_id`),
-  KEY `ix_ba_allocitem_member` (`member_id`),
-  CONSTRAINT `fk_ba_allocitem_alloc` FOREIGN KEY (`allocation_id`)
-    REFERENCES `ba_allocation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_ba_allocitem_task` FOREIGN KEY (`task_id`)
-    REFERENCES `ba_task` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  UNIQUE KEY `uk_bs_allocitem_one` (`allocation_id`, `task_id`, `member_id`, `role`),
+  KEY `ix_bs_allocitem_task`   (`task_id`),
+  KEY `ix_bs_allocitem_member` (`member_id`),
+  CONSTRAINT `fk_bs_allocitem_alloc` FOREIGN KEY (`allocation_id`)
+    REFERENCES `bs_allocation` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bs_allocitem_task` FOREIGN KEY (`task_id`)
+    REFERENCES `bs_task` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   -- 배정받은 사람은 지우지 못하게 막는다. 빼려면 is_assignable=0 으로 내린다.
-  CONSTRAINT `fk_ba_allocitem_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_bs_allocitem_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='배정안 항목. 태스크 × 구성원';
 
 -- ---------------------------------------------------------------------
 -- 5.4 진행상황 (개발자 본인 등록)
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_progress` (
+CREATE TABLE IF NOT EXISTS `bs_progress` (
   `id`           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `task_id`      INT UNSIGNED NOT NULL,
   `member_id`    INT UNSIGNED NOT NULL COMMENT '등록한 본인',
-  `status`       VARCHAR(20)  NULL COMMENT 'ba_task.status 와 같은 체계',
+  `status`       VARCHAR(20)  NULL COMMENT 'bs_task.status 와 같은 체계',
   `progress_pct` TINYINT      NULL COMMENT '0~100',
   `content`      TEXT         NULL,
   `blocker`      TEXT         NULL COMMENT '이슈/블로커',
@@ -722,30 +722,30 @@ CREATE TABLE IF NOT EXISTS `ba_progress` (
   -- 기록이라 고치지 않는다 — 조정 (4)
   `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `ix_ba_progress_task`   (`task_id`, `created_at`),
+  KEY `ix_bs_progress_task`   (`task_id`, `created_at`),
   -- 대시보드가 사람별 최근 진행을 모은다.
-  KEY `ix_ba_progress_member` (`member_id`, `created_at`),
-  CONSTRAINT `fk_ba_progress_task` FOREIGN KEY (`task_id`)
-    REFERENCES `ba_task` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_ba_progress_member` FOREIGN KEY (`member_id`)
-    REFERENCES `ba_member` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
+  KEY `ix_bs_progress_member` (`member_id`, `created_at`),
+  CONSTRAINT `fk_bs_progress_task` FOREIGN KEY (`task_id`)
+    REFERENCES `bs_task` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bs_progress_member` FOREIGN KEY (`member_id`)
+    REFERENCES `bs_member` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='태스크 진행상황 기록';
 
 -- ---------------------------------------------------------------------
 -- 5.5 진행상황 댓글
 -- ---------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `ba_progress_comment` (
+CREATE TABLE IF NOT EXISTS `bs_progress_comment` (
   `id`          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `progress_id` BIGINT UNSIGNED NOT NULL,
-  -- 조정 (1)/(10): 구성원이 아닌 사람(PM 등)도 달 수 있어 ba_member 가 아니라 포털 계정을 쓴다.
+  -- 조정 (1)/(10): 구성원이 아닌 사람(PM 등)도 달 수 있어 bs_member 가 아니라 포털 계정을 쓴다.
   `user_id`     VARCHAR(64) NOT NULL COMMENT 'iworks 사용자 ID(이메일)',
   `user_name`   VARCHAR(80) NOT NULL COMMENT '작성 시점 성명 스냅샷',
   `content`     TEXT        NULL,
   `created_at`  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `ix_ba_pcomment_progress` (`progress_id`, `id`),
-  CONSTRAINT `fk_ba_pcomment_progress` FOREIGN KEY (`progress_id`)
-    REFERENCES `ba_progress` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  KEY `ix_bs_pcomment_progress` (`progress_id`, `id`),
+  CONSTRAINT `fk_bs_pcomment_progress` FOREIGN KEY (`progress_id`)
+    REFERENCES `bs_progress` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='진행상황 댓글';

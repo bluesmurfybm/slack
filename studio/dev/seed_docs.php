@@ -6,7 +6,7 @@ declare(strict_types=1);
 /* ┌──────────────────────────────────────────────────────────────────┐
    │ 왜 seed_dev.sql 이 아니라 PHP 인가                                │
    │                                                                  │
-   │ ba_project_source.file_path 는 **절대 경로**다(업로드된 파일의    │
+   │ bs_project_source.file_path 는 **절대 경로**다(업로드된 파일의    │
    │ 실제 위치). SQL 파일에는 이 저장소가 어디에 풀렸는지 적을 수      │
    │ 없다. 여기서 __DIR__ 로 구해 넣는다.                              │
    │                                                                  │
@@ -34,7 +34,7 @@ $pdo = new PDO(
 );
 
 $projectId = (int)($argv[1] ?? 1);
-$row = $pdo->prepare('SELECT name FROM ba_project WHERE id = ?');
+$row = $pdo->prepare('SELECT name FROM bs_project WHERE id = ?');
 $row->execute([$projectId]);
 $name = $row->fetchColumn();
 if ($name === false) {
@@ -63,12 +63,12 @@ if ($missing) {
 }
 
 // 같은 것을 두 번 넣지 않는다. 제목으로 알아본다.
-$del = $pdo->prepare('DELETE FROM ba_project_source WHERE project_id = ? AND title LIKE ?');
+$del = $pdo->prepare('DELETE FROM bs_project_source WHERE project_id = ? AND title LIKE ?');
 $del->execute([$projectId, '%(시험용)']);
 $del->execute([$projectId, '%(일부러)']);
 
 $ins = $pdo->prepare(
-    'INSERT INTO ba_project_source
+    'INSERT INTO bs_project_source
         (project_id, kind, title, file_path, file_size, parse_status, uploaded_by, uploaded_by_name)
      VALUES (?,?,?,?,?, "pending", "seed_docs.php", "시드")'
 );

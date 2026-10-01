@@ -6,7 +6,7 @@ declare(strict_types=1);
 define('ROOT', dirname(__DIR__, 2));
 // 운영/개발 DB 를 건드리지 않도록 **전용 시험 DB** 를 쓴다.
 // 없으면 아래 안내대로 만들면 된다.
-$TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
+$TESTDB = getenv('BS_TEST_DB') ?: 'blueassign_test';
 require ROOT . '/studio/inc/bootstrap.php';
 require ROOT . '/studio/inc/repo/ProjectRepo.php';
 require ROOT . '/studio/inc/service/SourceUploader.php';
@@ -32,15 +32,15 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname={$TESTDB};charset=utf8mb4", 'root', 
 ");
     exit(2);
 }
-$pdo->exec('DELETE FROM ba_project_source');
-$pdo->exec('DELETE FROM ba_project');
+$pdo->exec('DELETE FROM bs_project_source');
+$pdo->exec('DELETE FROM bs_project');
 
 $repo  = new ProjectRepo($pdo);
 $up    = new SourceUploader($repo);
 $actor = ['id' => 'kimhy@bluesoft.co.kr', 'name' => '김호영'];
 $pid   = $repo->create(['name' => '업로드 테스트'], $actor);
 
-$tmp = sys_get_temp_dir() . '/ba_up_test';
+$tmp = sys_get_temp_dir() . '/bs_up_test';
 @mkdir($tmp, 0777, true);
 
 $pass = 0; $fail = 0;
@@ -83,8 +83,8 @@ ok('원본명 보존', $r['title'] === '시안 이미지.png');
 ok('parse_status=pending', $r['parse_status'] === 'pending');
 
 $row = $repo->findSource($r['id']);
-ok('저장 경로가 BA_UPLOAD_DIR 아래', str_starts_with(str_replace('\\','/',$row['file_path']),
-                                                     str_replace('\\','/',BA_UPLOAD_DIR)));
+ok('저장 경로가 BS_UPLOAD_DIR 아래', str_starts_with(str_replace('\\','/',$row['file_path']),
+                                                     str_replace('\\','/',BS_UPLOAD_DIR)));
 ok('저장 파일명에 원본명이 안 들어간다', !str_contains($row['file_path'], '시안'));
 ok('저장 파일명은 해시_난수.확장자',
    (bool)preg_match('/[0-9a-f]{16}_[0-9a-f]{8}\.png$/', $row['file_path']), basename($row['file_path']));

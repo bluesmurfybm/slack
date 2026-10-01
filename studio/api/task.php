@@ -22,47 +22,47 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
-require_once BA_ROOT . '/inc/repo/ProjectRepo.php';
-require_once BA_ROOT . '/inc/repo/TaskRepo.php';
-require_once BA_ROOT . '/inc/service/WbsExtractor.php';
+require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
+require_once BS_ROOT . '/inc/repo/TaskRepo.php';
+require_once BS_ROOT . '/inc/service/WbsExtractor.php';
 
-$pdo      = ba_db();
+$pdo      = bs_db();
 $projects = new ProjectRepo($pdo);
 $tasks    = new TaskRepo($pdo);
 
-ba_route(ba_param_str('act', 'tree'), [
+bs_route(bs_param_str('act', 'tree'), [
 
     'tree' => function () use ($projects, $tasks): void {
-        ba_require_login_api();
-        $projectId = ba_task_project_param($projects);
+        bs_require_login_api();
+        $projectId = bs_task_project_param($projects);
 
         $flat    = $tasks->allByProject($projectId);
         $domains = $tasks->domainsFor(array_column($flat, 'id'));
         $tree    = $tasks->toTree($flat, $domains);
 
-        ba_json_ok([
+        bs_json_ok([
             'tree'     => $tree,
-            'counts'   => ba_task_counts($flat),
+            'counts'   => bs_task_counts($flat),
             // 화면은 이 값을 들고 있다가 저장할 때 그대로 돌려줘야 한다.
             // 그 사이 남이 저장했으면 서버가 거절한다.
             'revision' => $tasks->revision($projectId),
-            'can_edit'    => ba_can(BA_CAP_PROJECT_MANAGE, $projectId),
-            'can_confirm' => ba_can(BA_CAP_WBS_CONFIRM, $projectId),
+            'can_edit'    => bs_can(BS_CAP_PROJECT_MANAGE, $projectId),
+            'can_confirm' => bs_can(BS_CAP_WBS_CONFIRM, $projectId),
         ]);
     },
 
     'detail' => function () use ($tasks): void {
-        ba_require_login_api();
-        $id = ba_param_int('id', 0);
+        bs_require_login_api();
+        $id = bs_param_int('id', 0);
         if (!$id) {
-            ba_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
         }
         $task = $tasks->find($id);
         if (!$task) {
-            ba_json_error('NOT_FOUND', '태스크를 찾을 수 없습니다.', 404);
+            bs_json_error('NOT_FOUND', '태스크를 찾을 수 없습니다.', 404);
         }
-        ba_json_ok([
-            'task'    => ba_present_task($task),
+        bs_json_ok([
+            'task'    => bs_present_task($task),
             'domains' => $tasks->domains($id),
         ]);
     },
@@ -75,13 +75,13 @@ ba_route(ba_param_str('act', 'tree'), [
      * 나머지는 계속 간다(WbsExtractor::parseSource 가 예외를 삼킨다).
      */
     'parse' => function () use ($projects, $tasks): void {
-        ba_begin_write();
-        $projectId = ba_task_project_param($projects);
-        ba_require_cap_api(BA_CAP_PROJECT_MANAGE, $projectId);
+        bs_begin_write();
+        $projectId = bs_task_project_param($projects);
+        bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $projectId);
 
         $ex = new WbsExtractor($projects, $tasks);
         // 이미 읽은 것도 다시 읽을지. 기본은 대기 중인 것만.
-        $all = ba_param_int('all', 0) === 1;
+        $all = bs_param_int('all', 0) === 1;
 
         $results = $ex->parseProjectSources($projectId, !$all);
 
@@ -106,7 +106,7 @@ ba_route(ba_param_str('act', 'tree'), [
         $bad  = count(array_filter($results, static fn($r) => $r['status'] === 'fail'));
         $skip = count(array_filter($results, static fn($r) => $r['status'] === 'skip'));
 
-        ba_json_ok([
+        bs_json_ok([
             'sources' => $rows,
             'summary' => ['ok' => $ok, 'fail' => $bad, 'skip' => $skip,
                           'touched' => count($results)],
@@ -126,35 +126,35 @@ ba_route(ba_param_str('act', 'tree'), [
      * 이 응답만 보고 배정으로 넘어가는 경로를 만들지 말 것.
      */
     'extract' => function () use ($projects, $tasks): void {
-        ba_begin_write();
-        $projectId = ba_task_project_param($projects);
-        ba_require_cap_api(BA_CAP_PROJECT_MANAGE, $projectId);
+        bs_begin_write();
+        $projectId = bs_task_project_param($projects);
+        bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $projectId);
 
         $ex = new WbsExtractor($projects, $tasks);
 
         // use_llm=0 이면 규칙만 쓴다. 사외 반출이 걸리는 동안에도
         // 이 경로로는 쓸 수 있다.
-        $useLlm = ba_param_int('use_llm', 1) === 1;
+        $useLlm = bs_param_int('use_llm', 1) === 1;
 
         try {
             $r = $ex->extractForProject($projectId, $useLlm);
         } catch (LlmError $e) {
-            ba_json_error('LLM_ERROR', $e->getMessage(), 502);
+            bs_json_error('LLM_ERROR', $e->getMessage(), 502);
         }
 
-        ba_json_ok($r + [
+        bs_json_ok($r + [
             'origin' => 'auto',
             'notice' => '도출된 초안입니다. 검토해 저장하고 확정해야 배정 대상이 됩니다.',
         ]);
     },
 
     'save_tree' => function () use ($projects, $tasks): void {
-        $user      = ba_begin_write();
-        $projectId = ba_task_project_param($projects);
-        ba_require_cap_api(BA_CAP_PROJECT_MANAGE, $projectId);
+        $user      = bs_begin_write();
+        $projectId = bs_task_project_param($projects);
+        bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $projectId);
 
-        $tree = ba_param_array('tree');
-        $rev  = ba_param_str('revision', '');
+        $tree = bs_param_array('tree');
+        $rev  = bs_param_str('revision', '');
 
         $r = $tasks->saveTree($projectId, $tree, $user, $rev !== '' ? $rev : null);
 
@@ -162,10 +162,10 @@ ba_route(ba_param_str('act', 'tree'), [
         // 하면 그 사이에 남이 저장한 것과 섞인다.
         $flat = $tasks->allByProject($projectId);
 
-        ba_json_ok($r + [
-            'message' => ba_task_save_message($r),
+        bs_json_ok($r + [
+            'message' => bs_task_save_message($r),
             'tree'    => $tasks->toTree($flat, $tasks->domainsFor(array_column($flat, 'id'))),
-            'counts'  => ba_task_counts($flat),
+            'counts'  => bs_task_counts($flat),
         ]);
     },
 
@@ -173,93 +173,93 @@ ba_route(ba_param_str('act', 'tree'), [
      * 초안 확정. confirmed 를 1 로 올리는 유일한 API 경로다.
      */
     'confirm' => function () use ($tasks): void {
-        $user = ba_begin_write();
-        ba_task_set_confirm($tasks, $user, true);
+        $user = bs_begin_write();
+        bs_task_set_confirm($tasks, $user, true);
     },
 
     /** 확정 해제. 배정안에 들어간 태스크면 막힌다. */
     'unconfirm' => function () use ($tasks): void {
-        $user = ba_begin_write();
-        ba_task_set_confirm($tasks, $user, false);
+        $user = bs_begin_write();
+        bs_task_set_confirm($tasks, $user, false);
     },
 
     'move' => function () use ($tasks): void {
-        ba_begin_write();
-        $id = ba_param_int('id', 0);
+        bs_begin_write();
+        $id = bs_param_int('id', 0);
         if (!$id) {
-            ba_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
         }
         $projectId = $tasks->projectIdOf([$id]);
-        ba_require_cap_api(BA_CAP_PROJECT_MANAGE, $projectId);
+        bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $projectId);
 
         // parent_id 를 아예 안 보내는 것과 null 로 보내는 것은 다르다.
         // 전자는 잘못된 요청, 후자는 "최상위로 올려라" 다.
-        if (!ba_has_param('parent_id')) {
-            ba_json_error('MISSING_PARAM', '옮길 위치(parent_id)를 지정하세요. 최상위면 null.', 400);
+        if (!bs_has_param('parent_id')) {
+            bs_json_error('MISSING_PARAM', '옮길 위치(parent_id)를 지정하세요. 최상위면 null.', 400);
         }
-        $parentId = ba_param_int('parent_id', 0);
-        $tasks->move($id, $parentId ?: null, max(0, ba_param_int('seq', 0) ?? 0));
+        $parentId = bs_param_int('parent_id', 0);
+        $tasks->move($id, $parentId ?: null, max(0, bs_param_int('seq', 0) ?? 0));
 
         $flat = $tasks->allByProject($projectId);
-        ba_json_ok([
+        bs_json_ok([
             'message'  => '태스크를 옮겼습니다.',
             'tree'     => $tasks->toTree($flat, $tasks->domainsFor(array_column($flat, 'id'))),
-            'counts'   => ba_task_counts($flat),
+            'counts'   => bs_task_counts($flat),
             'revision' => $tasks->revision($projectId),
         ]);
     },
 
     'update' => function () use ($tasks): void {
-        ba_begin_write();
-        $id = ba_param_int('id', 0);
+        bs_begin_write();
+        $id = bs_param_int('id', 0);
         if (!$id) {
-            ba_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
         }
         $projectId = $tasks->projectIdOf([$id]);
-        ba_require_cap_api(BA_CAP_PROJECT_MANAGE, $projectId);
+        bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $projectId);
 
         // 넘어온 키만 바꾼다. confirmed 는 여기서 바꾸지 않는다 — act=confirm 으로만.
         $data = [];
         foreach (['title', 'description', 'est_md', 'difficulty',
                   'plan_start', 'plan_end', 'source_ref'] as $k) {
-            if (ba_has_param($k)) {
-                $data[$k] = ba_param($k);
+            if (bs_has_param($k)) {
+                $data[$k] = bs_param($k);
             }
         }
-        if (ba_has_param('domain_ids')) {
-            $data['domain_ids'] = ba_param_array('domain_ids');
+        if (bs_has_param('domain_ids')) {
+            $data['domain_ids'] = bs_param_array('domain_ids');
         }
         if (!$data) {
-            ba_json_error('MISSING_PARAM', '바꿀 내용이 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '바꿀 내용이 없습니다.', 400);
         }
         $tasks->update($id, $data);
 
-        ba_json_ok([
+        bs_json_ok([
             'id'       => $id,
             'message'  => '태스크를 수정했습니다.',
-            'task'     => ba_present_task($tasks->find($id) ?? []),
+            'task'     => bs_present_task($tasks->find($id) ?? []),
             'domains'  => $tasks->domains($id),
             'revision' => $tasks->revision($projectId),
         ]);
     },
 
     'delete' => function () use ($tasks): void {
-        ba_begin_write();
-        $id = ba_param_int('id', 0);
+        bs_begin_write();
+        $id = bs_param_int('id', 0);
         if (!$id) {
-            ba_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
+            bs_json_error('MISSING_PARAM', '태스크 번호가 없습니다.', 400);
         }
         $projectId = $tasks->projectIdOf([$id]);
-        ba_require_cap_api(BA_CAP_PROJECT_MANAGE, $projectId);
+        bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $projectId);
 
         // 배정안에 들어 있으면 TaskRepo 가 DomainException 으로 막는다.
         $tasks->delete($id);
 
         $flat = $tasks->allByProject($projectId);
-        ba_json_ok([
+        bs_json_ok([
             'message'  => '태스크를 삭제했습니다.',
             'tree'     => $tasks->toTree($flat, $tasks->domainsFor(array_column($flat, 'id'))),
-            'counts'   => ba_task_counts($flat),
+            'counts'   => bs_task_counts($flat),
             'revision' => $tasks->revision($projectId),
         ]);
     },
@@ -271,14 +271,14 @@ ba_route(ba_param_str('act', 'tree'), [
 // =====================================================================
 
 /** project_id 를 읽고 실재를 확인한다. 없으면 여기서 끊는다. */
-function ba_task_project_param(ProjectRepo $projects): int
+function bs_task_project_param(ProjectRepo $projects): int
 {
-    $projectId = ba_param_int('project_id', 0);
+    $projectId = bs_param_int('project_id', 0);
     if (!$projectId) {
-        ba_json_error('MISSING_PARAM', '프로젝트 번호가 없습니다.', 400);
+        bs_json_error('MISSING_PARAM', '프로젝트 번호가 없습니다.', 400);
     }
     if (!$projects->find($projectId)) {
-        ba_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+        bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
     }
     return $projectId;
 }
@@ -290,25 +290,25 @@ function ba_task_project_param(ProjectRepo $projects): int
  * project_id 를 요청에서 같이 받으면, 남의 태스크 id 에 내 프로젝트 번호를
  * 붙여 보내는 것으로 권한을 넘길 수 있다.
  */
-function ba_task_set_confirm(TaskRepo $tasks, array $user, bool $on): never
+function bs_task_set_confirm(TaskRepo $tasks, array $user, bool $on): never
 {
-    $ids = array_map('intval', ba_param_array('task_ids'));
+    $ids = array_map('intval', bs_param_array('task_ids'));
     if (!$ids) {
-        ba_json_error('MISSING_PARAM',
+        bs_json_error('MISSING_PARAM',
             ($on ? '확정할' : '확정을 풀') . ' 태스크를 지정하세요.', 400);
     }
     $projectId = $tasks->projectIdOf($ids);
-    ba_require_cap_api(BA_CAP_WBS_CONFIRM, $projectId);
+    bs_require_cap_api(BS_CAP_WBS_CONFIRM, $projectId);
 
     $n    = $tasks->confirm($ids, $on, $user);
     $flat = $tasks->allByProject($projectId);
 
-    ba_json_ok([
+    bs_json_ok([
         'changed'  => $n,
         'message'  => $n === 0
             ? '바뀐 것이 없습니다.'
             : $n . '건을 ' . ($on ? '확정했습니다.' : '확정 해제했습니다.'),
-        'counts'   => ba_task_counts($flat),
+        'counts'   => bs_task_counts($flat),
         'revision' => $tasks->revision($projectId),
     ]);
 }
@@ -320,7 +320,7 @@ function ba_task_set_confirm(TaskRepo $tasks, array $user, bool $on): never
  * 다를 수 있다(완료·보류는 빠진다). 두 숫자를 같이 보여줘야 "확정은 했는데
  * 왜 배정 후보에 안 뜨지" 를 화면에서 알 수 있다.
  */
-function ba_task_counts(array $flat): array
+function bs_task_counts(array $flat): array
 {
     $total = count($flat);
     $conf  = 0;
@@ -338,7 +338,7 @@ function ba_task_counts(array $flat): array
     foreach ($flat as $r) {
         if ((int)$r['confirmed'] === 1) {
             $conf++;
-            if (!in_array($r['status'], BA_TASK_NOT_ASSIGNABLE_STATUS, true)) {
+            if (!in_array($r['status'], BS_TASK_NOT_ASSIGNABLE_STATUS, true)) {
                 $assignable++;
             }
         }
@@ -363,7 +363,7 @@ function ba_task_counts(array $flat): array
     ];
 }
 
-function ba_present_task(array $r): ?array
+function bs_present_task(array $r): ?array
 {
     if (!$r) {
         return null;
@@ -384,14 +384,14 @@ function ba_present_task(array $r): ?array
         'origin'       => $r['origin'],
         'confirmed'    => (int)$r['confirmed'] === 1,
         'status'       => $r['status'],
-        'status_label' => BA_TASK_STATUS[$r['status']] ?? $r['status'],
+        'status_label' => BS_TASK_STATUS[$r['status']] ?? $r['status'],
         'progress_pct' => (int)$r['progress_pct'],
         'source_id'    => $r['source_id'] !== null ? (int)$r['source_id'] : null,
         'source_ref'   => $r['source_ref'],
     ];
 }
 
-function ba_task_save_message(array $r): string
+function bs_task_save_message(array $r): string
 {
     $parts = [];
     if ($r['created']) { $parts[] = '추가 ' . $r['created'] . '건'; }

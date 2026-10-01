@@ -6,7 +6,7 @@ declare(strict_types=1);
 define('ROOT', dirname(__DIR__, 2));
 // 운영/개발 DB 를 건드리지 않도록 **전용 시험 DB** 를 쓴다.
 // 없으면 아래 안내대로 만들면 된다.
-$TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
+$TESTDB = getenv('BS_TEST_DB') ?: 'blueassign_test';
 require ROOT . '/studio/inc/bootstrap.php';
 require ROOT . '/studio/inc/repo/ProjectRepo.php';
 
@@ -32,8 +32,8 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname={$TESTDB};charset=utf8mb4", 'root', 
     exit(2);
 }
 $pdo->exec("SET time_zone = '+09:00'");
-$pdo->exec('DELETE FROM ba_project_source');
-$pdo->exec('DELETE FROM ba_project');
+$pdo->exec('DELETE FROM bs_project_source');
+$pdo->exec('DELETE FROM bs_project');
 
 $repo  = new ProjectRepo($pdo);
 $actor = ['id' => 'kimhy@bluesoft.co.kr', 'name' => '김호영'];
@@ -125,7 +125,7 @@ $r = $repo->search(['keyword' => '%']);
 ok('% 는 전건 조회가 되면 안 된다', $r['total'] === 0, '총 ' . $r['total']);
 $r = $repo->search(['keyword' => "' OR 1=1 -- "]);
 ok('주입 문자열은 그냥 검색어', $r['total'] === 0);
-$r = $repo->search(['sort' => 'nonsense; DROP TABLE ba_project']);
+$r = $repo->search(['sort' => 'nonsense; DROP TABLE bs_project']);
 ok('정렬 화이트리스트', $r['total'] === 5 && $repo->find($id1) !== null);
 
 echo "\n[9] 기간 겹침 필터\n";

@@ -1,5 +1,5 @@
 <?php
-/** ba_project / ba_project_source 접근 담당 DAO. 프로젝트와 개발범위 출처 문서를 읽고 쓴다. */
+/** bs_project / bs_project_source 접근 담당 DAO. 프로젝트와 개발범위 출처 문서를 읽고 쓴다. */
 
 declare(strict_types=1);
 
@@ -34,7 +34,7 @@ final class ProjectRepo
      */
     public function find(int $id, bool $withDeleted = false): ?array
     {
-        $sql = 'SELECT ' . self::COLS . ' FROM ba_project WHERE id = ?';
+        $sql = 'SELECT ' . self::COLS . ' FROM bs_project WHERE id = ?';
         if (!$withDeleted) {
             $sql .= ' AND deleted_at IS NULL';
         }
@@ -48,7 +48,7 @@ final class ProjectRepo
     /** 표시용 코드(PRJ-2026-001)로 찾는다. 코드는 지워진 프로젝트도 계속 점유한다. */
     public function findByCode(string $code, bool $withDeleted = true): ?array
     {
-        $sql = 'SELECT ' . self::COLS . ' FROM ba_project WHERE code = ?';
+        $sql = 'SELECT ' . self::COLS . ' FROM bs_project WHERE code = ?';
         if (!$withDeleted) {
             $sql .= ' AND deleted_at IS NULL';
         }
@@ -63,8 +63,8 @@ final class ProjectRepo
      * 목록 + 총 건수.
      *
      * @param array $filter
-     *   status       ba_project.status 하나
-     *   track        ba_project.track 하나
+     *   status       bs_project.status 하나
+     *   track        bs_project.track 하나
      *   owner_id     담당 PM 이메일
      *   keyword      코드·이름·고객·개요에서 찾는다
      *   from, to     'YYYY-MM-DD'. 프로젝트 기간이 이 구간과 **겹치는** 것
@@ -82,7 +82,7 @@ final class ProjectRepo
         $size = max(1, min(100, $size));    // 상한을 두지 않으면 한 번에 전부 긁어갈 수 있다
 
         $total = (int)$this->scalar(
-            'SELECT COUNT(*) FROM ba_project WHERE ' . $where,
+            'SELECT COUNT(*) FROM bs_project WHERE ' . $where,
             $params
         );
 
@@ -111,8 +111,8 @@ final class ProjectRepo
                        p.dev_start, p.dev_end, p.test_start, p.test_end, p.deploy_date,
                        p.status, p.owner_id, p.owner_name, p.deleted_at,
                        p.created_at, p.updated_at,
-                       (SELECT COUNT(*) FROM ba_project_source s WHERE s.project_id = p.id) AS source_count
-                  FROM ba_project p
+                       (SELECT COUNT(*) FROM bs_project_source s WHERE s.project_id = p.id) AS source_count
+                  FROM bs_project p
                  WHERE ' . $this->prefixWhere($where) . '
                  ORDER BY ' . $order . '
                  LIMIT ? OFFSET ?';
@@ -143,12 +143,12 @@ final class ProjectRepo
         [$where, $params] = $this->buildWhere($f);
 
         $st = $this->pdo->prepare(
-            'SELECT status, COUNT(*) AS cnt FROM ba_project WHERE ' . $where . ' GROUP BY status'
+            'SELECT status, COUNT(*) AS cnt FROM bs_project WHERE ' . $where . ' GROUP BY status'
         );
         $st->execute($params);
 
         $out = ['' => 0];   // '' = 전체
-        foreach (array_keys(BA_PROJECT_STATUS) as $code) {
+        foreach (array_keys(BS_PROJECT_STATUS) as $code) {
             $out[$code] = 0;
         }
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -171,7 +171,7 @@ final class ProjectRepo
         // code 는 'PRJ-2026-001' 꼴이라 뒤 세 자리만 숫자로 끊어 최대값을 본다.
         $max = (int)$this->scalar(
             "SELECT COALESCE(MAX(CAST(SUBSTRING(code, ?) AS UNSIGNED)), 0)
-               FROM ba_project
+               FROM bs_project
               WHERE code LIKE ?",
             [strlen($prefix) + 1, $prefix . '%']
         );
@@ -187,7 +187,7 @@ final class ProjectRepo
      * 새 프로젝트. 만들어진 id 를 돌려준다.
      *
      * code 는 채번과 INSERT 사이에 다른 요청이 끼어들 수 있어, 충돌하면
-     * 몇 번 다시 시도한다(uk_ba_project_code 가 잡아 준다).
+     * 몇 번 다시 시도한다(uk_bs_project_code 가 잡아 준다).
      */
     public function create(array $data, array $actor): int
     {
@@ -203,7 +203,7 @@ final class ProjectRepo
 
             try {
                 $st = $this->pdo->prepare(
-                    'INSERT INTO ba_project
+                    'INSERT INTO bs_project
                         (code, name, summary, client, track,
                          dev_start, dev_end, test_start, test_end, deploy_date,
                          notes, extra, status, owner_id, owner_name)
@@ -272,7 +272,7 @@ final class ProjectRepo
 
         $params[] = $id;
         $st = $this->pdo->prepare(
-            'UPDATE ba_project SET ' . implode(', ', $sets) . ' WHERE id = ? AND deleted_at IS NULL'
+            'UPDATE bs_project SET ' . implode(', ', $sets) . ' WHERE id = ? AND deleted_at IS NULL'
         );
         $st->execute($params);
     }
@@ -280,11 +280,11 @@ final class ProjectRepo
     /** 상태 전이. 허용된 값인지 확인한다. */
     public function updateStatus(int $id, string $status, array $actor): void
     {
-        if (!isset(BA_PROJECT_STATUS[$status])) {
+        if (!isset(BS_PROJECT_STATUS[$status])) {
             throw new InvalidArgumentException('알 수 없는 상태입니다: ' . $status);
         }
         $st = $this->pdo->prepare(
-            'UPDATE ba_project SET status = ? WHERE id = ? AND deleted_at IS NULL'
+            'UPDATE bs_project SET status = ? WHERE id = ? AND deleted_at IS NULL'
         );
         $st->execute([$status, $id]);
     }
@@ -293,7 +293,7 @@ final class ProjectRepo
     public function changeOwner(int $id, string $ownerId, string $ownerName): void
     {
         $st = $this->pdo->prepare(
-            'UPDATE ba_project SET owner_id = ?, owner_name = ? WHERE id = ? AND deleted_at IS NULL'
+            'UPDATE bs_project SET owner_id = ?, owner_name = ? WHERE id = ? AND deleted_at IS NULL'
         );
         $st->execute([$ownerId, $ownerName, $id]);
     }
@@ -312,7 +312,7 @@ final class ProjectRepo
         }
 
         $st = $this->pdo->prepare(
-            'UPDATE ba_project
+            'UPDATE bs_project
                 SET deleted_at = NOW(), deleted_by = ?, deleted_by_name = ?, delete_reason = ?
               WHERE id = ? AND deleted_at IS NULL'
         );
@@ -323,7 +323,7 @@ final class ProjectRepo
     public function restore(int $id): void
     {
         $st = $this->pdo->prepare(
-            'UPDATE ba_project
+            'UPDATE bs_project
                 SET deleted_at = NULL, deleted_by = NULL, deleted_by_name = NULL, delete_reason = NULL
               WHERE id = ?'
         );
@@ -331,7 +331,7 @@ final class ProjectRepo
     }
 
     // =================================================================
-    // 출처 문서 (ba_project_source)
+    // 출처 문서 (bs_project_source)
     // =================================================================
 
     /** 해당 프로젝트의 출처 문서 목록. parsed_text 는 크니까 빼고 길이만 준다. */
@@ -342,7 +342,7 @@ final class ProjectRepo
                     parse_status, parse_error,
                     CHAR_LENGTH(COALESCE(parsed_text, "")) AS parsed_len,
                     uploaded_by, uploaded_by_name, created_at
-               FROM ba_project_source
+               FROM bs_project_source
               WHERE project_id = ?
               ORDER BY id ASC'
         );
@@ -363,7 +363,7 @@ final class ProjectRepo
     {
         $st = $this->pdo->prepare(
             'SELECT id, project_id, kind, title, url, parse_status, parsed_text
-               FROM ba_project_source
+               FROM bs_project_source
               WHERE project_id = ?
                 AND parse_status = "ok"
                 AND parsed_text IS NOT NULL
@@ -377,7 +377,7 @@ final class ProjectRepo
     /** 한 건. file_path 를 포함하므로 응답에 그대로 싣지 말 것. */
     public function findSource(int $sourceId): ?array
     {
-        $st = $this->pdo->prepare('SELECT * FROM ba_project_source WHERE id = ?');
+        $st = $this->pdo->prepare('SELECT * FROM bs_project_source WHERE id = ?');
         $st->execute([$sourceId]);
         $row = $st->fetch(PDO::FETCH_ASSOC);
 
@@ -387,7 +387,7 @@ final class ProjectRepo
     public function countSources(int $projectId): int
     {
         return (int)$this->scalar(
-            'SELECT COUNT(*) FROM ba_project_source WHERE project_id = ?',
+            'SELECT COUNT(*) FROM bs_project_source WHERE project_id = ?',
             [$projectId]
         );
     }
@@ -402,7 +402,7 @@ final class ProjectRepo
     public function addSource(int $projectId, array $data, array $actor): int
     {
         $st = $this->pdo->prepare(
-            'INSERT INTO ba_project_source
+            'INSERT INTO bs_project_source
                 (project_id, kind, title, url, file_path, file_size, mime,
                  parsed_text, parse_status, uploaded_by, uploaded_by_name)
              VALUES (?,?,?,?,?,?,?,?,?,?,?)'
@@ -427,7 +427,7 @@ final class ProjectRepo
     public function updateSourceParse(int $sourceId, string $status, ?string $parsedText, ?string $error): void
     {
         $st = $this->pdo->prepare(
-            'UPDATE ba_project_source
+            'UPDATE bs_project_source
                 SET parse_status = ?, parsed_text = ?, parse_error = ?
               WHERE id = ?'
         );
@@ -436,7 +436,7 @@ final class ProjectRepo
 
     /**
      * 출처 문서 삭제. 실제 파일도 지운다.
-     * ba_task.source_id 는 FK SET NULL 이라 이미 도출된 태스크는 남는다.
+     * bs_task.source_id 는 FK SET NULL 이라 이미 도출된 태스크는 남는다.
      */
     public function deleteSource(int $sourceId): void
     {
@@ -445,7 +445,7 @@ final class ProjectRepo
             throw new DomainException('출처 문서를 찾을 수 없습니다.');
         }
 
-        $st = $this->pdo->prepare('DELETE FROM ba_project_source WHERE id = ?');
+        $st = $this->pdo->prepare('DELETE FROM bs_project_source WHERE id = ?');
         $st->execute([$sourceId]);
 
         // DB 를 먼저 지우고 파일을 지운다. 순서를 뒤집으면 파일만 사라지고
@@ -461,7 +461,7 @@ final class ProjectRepo
         $limit = max(1, min(200, $limit));
         $st = $this->pdo->prepare(
             'SELECT id, project_id, kind, file_path, url, mime
-               FROM ba_project_source
+               FROM bs_project_source
               WHERE parse_status = ?
               ORDER BY id ASC
               LIMIT ?'
@@ -541,7 +541,7 @@ final class ProjectRepo
         if (!empty($f['status'])) {
             $wanted = array_values(array_filter(
                 (array)$f['status'],
-                static fn($x) => is_string($x) && isset(BA_PROJECT_STATUS[$x])
+                static fn($x) => is_string($x) && isset(BS_PROJECT_STATUS[$x])
             ));
             if ($wanted) {
                 $w[] = 'status IN (' . implode(',', array_fill(0, count($wanted), '?')) . ')';

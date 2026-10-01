@@ -60,7 +60,7 @@ final class LlmResult
  * │ 고, 화면은 "설정되지 않았다" 를 정직하게 말한다.                  │
  * │                                                                  │
  * │ 백엔드를 붙일 때 할 일은 이 인터페이스를 구현하고                │
- * │ ba_llm_client() 가 그것을 고르게 하는 것, 둘뿐이다.               │
+ * │ bs_llm_client() 가 그것을 고르게 하는 것, 둘뿐이다.               │
  * └──────────────────────────────────────────────────────────────────┘
  */
 interface LlmClient
@@ -101,7 +101,7 @@ final class NullLlmClient implements LlmClient
     {
         throw new LlmError(
             'LLM 이 설정돼 있지 않습니다. '
-            . BA_ROOT . '/inc/llm.config.php 를 만들고 백엔드를 지정하세요. '
+            . BS_ROOT . '/inc/llm.config.php 를 만들고 백엔드를 지정하세요. '
             . '(studio/inc/llm.config.sample.php 참고)',
             retryable: false
         );
@@ -166,14 +166,14 @@ final class FixtureLlmClient implements LlmClient
  *   <?php
  *   return new MyAnthropicClient(getenv('ANTHROPIC_API_KEY'));
  */
-function ba_llm_client(): LlmClient
+function bs_llm_client(): LlmClient
 {
     static $client = null;
     if ($client !== null) {
         return $client;
     }
 
-    $f = BA_ROOT . '/inc/llm.config.php';
+    $f = BS_ROOT . '/inc/llm.config.php';
     if (is_file($f)) {
         $c = require $f;
         if ($c instanceof LlmClient) {

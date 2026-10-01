@@ -1,5 +1,5 @@
 <?php
-/** ba_member / ba_member_skill / ba_member_metric / ba_eval_run 접근 담당 DAO. 구성원과 역량 스냅샷을 다룬다. */
+/** bs_member / bs_member_skill / bs_member_metric / bs_eval_run 접근 담당 DAO. 구성원과 역량 스냅샷을 다룬다. */
 
 declare(strict_types=1);
 
@@ -19,16 +19,16 @@ final class MemberRepo
 
     public function find(int $id): ?array
     {
-        $st = $this->pdo->prepare('SELECT * FROM ba_member WHERE id = ?');
+        $st = $this->pdo->prepare('SELECT * FROM bs_member WHERE id = ?');
         $st->execute([$id]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
         return $r === false ? null : $r;
     }
 
-    /** 포털 이메일로 찾는다. ba_member.user_id 가 이메일이다. */
+    /** 포털 이메일로 찾는다. bs_member.user_id 가 이메일이다. */
     public function findByUserId(string $userId): ?array
     {
-        $st = $this->pdo->prepare('SELECT * FROM ba_member WHERE user_id = ?');
+        $st = $this->pdo->prepare('SELECT * FROM bs_member WHERE user_id = ?');
         $st->execute([$userId]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
         return $r === false ? null : $r;
@@ -37,7 +37,7 @@ final class MemberRepo
     /** @param array $filter role_label, team, keyword, is_assignable */
     public function search(array $filter): array
     {
-        // TODO(P4): ix_ba_member_assignable (is_assignable, role_label) 를 탄다.
+        // TODO(P4): ix_bs_member_assignable (is_assignable, role_label) 를 탄다.
         return [];
     }
 
@@ -51,7 +51,7 @@ final class MemberRepo
     public function assignable(): array
     {
         $st = $this->pdo->prepare(
-            'SELECT * FROM ba_member WHERE is_assignable = 1 ORDER BY id'
+            'SELECT * FROM bs_member WHERE is_assignable = 1 ORDER BY id'
         );
         $st->execute();
         return $st->fetchAll(PDO::FETCH_ASSOC);
@@ -76,7 +76,7 @@ final class MemberRepo
      */
     public function evaluable(): array
     {
-        $st = $this->pdo->prepare('SELECT * FROM ba_member WHERE is_evaluable = 1 ORDER BY id');
+        $st = $this->pdo->prepare('SELECT * FROM bs_member WHERE is_evaluable = 1 ORDER BY id');
         $st->execute();
         return $st->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -95,7 +95,7 @@ final class MemberRepo
         }
         if ($evaluable) {
             $st = $this->pdo->prepare(
-                'UPDATE ba_member SET is_evaluable = 1, eval_exclude_reason = NULL,
+                'UPDATE bs_member SET is_evaluable = 1, eval_exclude_reason = NULL,
                         eval_excluded_at = NULL, eval_excluded_by = NULL
                   WHERE id = ?'
             );
@@ -103,7 +103,7 @@ final class MemberRepo
             return;
         }
         $st = $this->pdo->prepare(
-            'UPDATE ba_member SET is_evaluable = 0, eval_exclude_reason = ?,
+            'UPDATE bs_member SET is_evaluable = 0, eval_exclude_reason = ?,
                     eval_excluded_at = NOW(), eval_excluded_by = ?
               WHERE id = ?'
         );
@@ -118,7 +118,7 @@ final class MemberRepo
     public function evaluationStatus(int $memberId): array
     {
         $st = $this->pdo->prepare(
-            'SELECT is_evaluable, eval_exclude_reason FROM ba_member WHERE id = ?'
+            'SELECT is_evaluable, eval_exclude_reason FROM bs_member WHERE id = ?'
         );
         $st->execute([$memberId]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
@@ -146,7 +146,7 @@ final class MemberRepo
      */
     public function syncFromPortalUsers(): int
     {
-        // TODO(P3): portal_users 를 읽어 ba_member 에 없는 이메일만 넣는다.
+        // TODO(P3): portal_users 를 읽어 bs_member 에 없는 이메일만 넣는다.
         //           지우지는 않는다 — 퇴사자도 과거 기록의 주인이라 남겨야 한다.
         //           대신 is_assignable 을 0 으로 내린다.
         //
@@ -161,7 +161,7 @@ final class MemberRepo
     }
 
     // -----------------------------------------------------------------
-    // 역량 스냅샷 (ba_member_skill)
+    // 역량 스냅샷 (bs_member_skill)
     // -----------------------------------------------------------------
 
     /**
@@ -172,7 +172,7 @@ final class MemberRepo
      */
     public function skillsByDomain(int $domainId, ?int $evalVer = null, int $limit = 50): array
     {
-        // TODO(P4): ix_ba_mskill_domain (domain_id, eval_ver, score) 를 탄다.
+        // TODO(P4): ix_bs_mskill_domain (domain_id, eval_ver, score) 를 탄다.
         return [];
     }
 
@@ -183,7 +183,7 @@ final class MemberRepo
     }
 
     // -----------------------------------------------------------------
-    // 종합 지표 (ba_member_metric)
+    // 종합 지표 (bs_member_metric)
     // -----------------------------------------------------------------
 
     public function saveMetric(int $memberId, int $evalVer, array $data): void
@@ -193,13 +193,13 @@ final class MemberRepo
 
     /**
      * 관리자 보정치.
-     * 범위(BA_ADJUST_MIN ~ BA_ADJUST_MAX)와 사유 필수를 여기서 확인한다.
+     * 범위(BS_ADJUST_MIN ~ BS_ADJUST_MAX)와 사유 필수를 여기서 확인한다.
      */
     public function applyManualAdjust(int $memberId, int $evalVer, float $adjust, string $reason, array $actor): void
     {
-        if ($adjust < BA_ADJUST_MIN || $adjust > BA_ADJUST_MAX) {
+        if ($adjust < BS_ADJUST_MIN || $adjust > BS_ADJUST_MAX) {
             throw new InvalidArgumentException(
-                sprintf('보정치는 %+.0f ~ %+.0f 사이여야 합니다.', BA_ADJUST_MIN, BA_ADJUST_MAX)
+                sprintf('보정치는 %+.0f ~ %+.0f 사이여야 합니다.', BS_ADJUST_MIN, BS_ADJUST_MAX)
             );
         }
         if (trim($reason) === '') {
@@ -208,7 +208,7 @@ final class MemberRepo
         // 사유에 누가 언제 했는지를 덧붙인다 — 본인이 보고 물어볼 수 있어야 한다.
         $note = sprintf('%s (%s, %s)', trim($reason), $actor['name'], date('Y-m-d'));
         $st = $this->pdo->prepare(
-            'UPDATE ba_member_metric SET manual_adjust = ?, adjust_reason = ?
+            'UPDATE bs_member_metric SET manual_adjust = ?, adjust_reason = ?
               WHERE member_id = ? AND eval_ver = ?'
         );
         $st->execute([$adjust, mb_substr($note, 0, 300), $memberId, $evalVer]);
@@ -218,7 +218,7 @@ final class MemberRepo
     }
 
     // -----------------------------------------------------------------
-    // 판정 실행 (ba_eval_run)
+    // 판정 실행 (bs_eval_run)
     // -----------------------------------------------------------------
 
     /** 판정 시작. 돌려주는 id 가 곧 eval_ver 다. */
@@ -234,13 +234,13 @@ final class MemberRepo
     }
 
     // -----------------------------------------------------------------
-    // 이의 제기 (ba_profile_objection)
+    // 이의 제기 (bs_profile_objection)
     // -----------------------------------------------------------------
 
     public function addObjection(int $memberId, array $data): int
     {
         $st = $this->pdo->prepare(
-            'INSERT INTO ba_profile_objection (member_id, eval_ver, domain_id, content, status)
+            'INSERT INTO bs_profile_objection (member_id, eval_ver, domain_id, content, status)
              VALUES (?,?,?,?,"open")'
         );
         $st->execute([
@@ -262,9 +262,9 @@ final class MemberRepo
             $params[] = $filter['status'];
         }
         $sql = 'SELECT o.*, m.emp_name, d.name AS domain_name
-                  FROM ba_profile_objection o
-                  JOIN ba_member m ON m.id = o.member_id
-             LEFT JOIN ba_domain d ON d.id = o.domain_id'
+                  FROM bs_profile_objection o
+                  JOIN bs_member m ON m.id = o.member_id
+             LEFT JOIN bs_domain d ON d.id = o.domain_id'
              . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
              . ' ORDER BY FIELD(o.status, "open", "reviewed", "applied", "rejected"), o.id DESC';
         $st = $this->pdo->prepare($sql);
@@ -275,7 +275,7 @@ final class MemberRepo
     public function reviewObjection(int $objectionId, string $status, string $note, array $actor): void
     {
         $st = $this->pdo->prepare(
-            'UPDATE ba_profile_objection
+            'UPDATE bs_profile_objection
                 SET status = ?, review_note = ?, reviewed_by = ?, reviewed_by_name = ?,
                     reviewed_at = NOW()
               WHERE id = ?'
@@ -291,7 +291,7 @@ final class MemberRepo
     public function latestEvalVer(): ?int
     {
         $st = $this->pdo->prepare(
-            'SELECT id FROM ba_eval_run WHERE status = "ok" ORDER BY id DESC LIMIT 1'
+            'SELECT id FROM bs_eval_run WHERE status = "ok" ORDER BY id DESC LIMIT 1'
         );
         $st->execute();
         $v = $st->fetchColumn();
@@ -303,7 +303,7 @@ final class MemberRepo
         $st = $this->pdo->prepare(
             'SELECT id, started_at, finished_at, period_from, period_to,
                     formula_ver, status, note
-               FROM ba_eval_run WHERE id = ?'
+               FROM bs_eval_run WHERE id = ?'
         );
         $st->execute([$evalVer]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
@@ -321,7 +321,7 @@ final class MemberRepo
         $st = $this->pdo->prepare(
             'SELECT category, case_count, weighted_qty, baseline, score,
                     confidence, insufficient_data
-               FROM ba_member_category
+               FROM bs_member_category
               WHERE member_id = ? AND eval_ver = ?
               ORDER BY FIELD(confidence, "full", "partial", "none"), score DESC'
         );
@@ -332,8 +332,8 @@ final class MemberRepo
             $insuf = (int)$r['insufficient_data'] === 1;
             $out[] = [
                 'category'     => $r['category'],
-                'label'        => BA_DOMAIN_CATEGORY[$r['category']]['label'] ?? $r['category'],
-                'moodle'       => BA_DOMAIN_CATEGORY[$r['category']]['moodle'] ?? null,
+                'label'        => BS_DOMAIN_CATEGORY[$r['category']]['label'] ?? $r['category'],
+                'moodle'       => BS_DOMAIN_CATEGORY[$r['category']]['moodle'] ?? null,
                 'case_count'   => (int)$r['case_count'],
                 'weighted_qty' => $r['weighted_qty'] !== null ? (float)$r['weighted_qty'] : null,
                 'baseline'     => $r['baseline'] !== null ? (float)$r['baseline'] : null,
@@ -359,8 +359,8 @@ final class MemberRepo
         $st = $this->pdo->prepare(
             'SELECT s.domain_id, d.code, d.name, d.category,
                     s.case_count, s.weighted_qty
-               FROM ba_member_skill s
-               JOIN ba_domain d ON d.id = s.domain_id
+               FROM bs_member_skill s
+               JOIN bs_domain d ON d.id = s.domain_id
               WHERE s.member_id = ? AND s.eval_ver = ?
               ORDER BY s.case_count DESC'
         );
@@ -372,7 +372,7 @@ final class MemberRepo
                 'code'         => $r['code'],
                 'name'         => $r['name'],
                 'category'     => $r['category'],
-                'cat_label'    => BA_DOMAIN_CATEGORY[$r['category']]['label'] ?? $r['category'],
+                'cat_label'    => BS_DOMAIN_CATEGORY[$r['category']]['label'] ?? $r['category'],
                 'case_count'   => (int)$r['case_count'],
                 'weighted_qty' => (float)$r['weighted_qty'],
             ];
@@ -388,7 +388,7 @@ final class MemberRepo
         $st = $this->pdo->prepare(
             'SELECT total_cases, cap_score, breadth_score, career_score,
                     manual_adjust, adjust_reason, insufficient_data
-               FROM ba_member_metric WHERE member_id = ? AND eval_ver = ?'
+               FROM bs_member_metric WHERE member_id = ? AND eval_ver = ?'
         );
         $st->execute([$memberId, $evalVer]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
@@ -445,9 +445,9 @@ final class MemberRepo
                     w.difficulty, w.difficulty_by, w.msg_count,
                     w.requested_at, w.closed_at,
                     GROUP_CONCAT(DISTINCT d.name ORDER BY d.sort_no SEPARATOR ", ") AS domains
-               FROM ba_work_item w
-               JOIN ba_work_item_domain wd ON wd.work_item_id = w.id
-               JOIN ba_domain d            ON d.id = wd.domain_id
+               FROM bs_work_item w
+               JOIN bs_work_item_domain wd ON wd.work_item_id = w.id
+               JOIN bs_domain d            ON d.id = wd.domain_id
               WHERE ' . implode(' AND ', $where) . '
               GROUP BY w.id
               ORDER BY w.difficulty DESC, w.closed_at DESC

@@ -7,7 +7,7 @@ require_once __DIR__ . '/inc/layout.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-$user = ba_require_login();
+$user = bs_require_login();
 
 // ┌──────────────────────────────────────────────────────────────────┐
 // │ CLAUDE.md 가 금지한 것 — 이 화면을 만들 때 반드시 지킬 것           │
@@ -21,14 +21,14 @@ $user = ba_require_login();
 
 // TODO(P4): MemberRepo::search() — is_assignable, role_label, team 으로 거른다.
 $filter = [
-    'role_label'    => ba_param_str('role'),
-    'team'          => ba_param_str('team'),
-    'keyword'       => ba_param_str('keyword'),
-    'is_assignable' => ba_param_int('assignable', 1),
+    'role_label'    => bs_param_str('role'),
+    'team'          => bs_param_str('team'),
+    'keyword'       => bs_param_str('keyword'),
+    'is_assignable' => bs_param_int('assignable', 1),
 ];
 $rows = [];
 
-ba_layout_head(
+bs_layout_head(
     $user,
     '구성원',
     '업무 배정',
@@ -36,11 +36,11 @@ ba_layout_head(
     'member'
 );
 
-ba_placeholder('구성원 목록', 'P3~P4', [
+bs_placeholder('구성원 목록', 'P3~P4', [
     '열: 이름 · 역할(role_label) · 팀 · 기본 가용 M/M · 주요 분야 · 배정 가능 여부',
     '종합점수 열과 전체 정렬은 넣지 않는다 (CLAUDE.md)',
     '표본 부족(insufficient_data=1)인 사람은 점수 자리에 "표본 부족" 으로 표시',
     '이름 클릭 → member_profile.php?member_id= (본인 또는 PM/관리자만 열람)',
 ]);
 
-ba_layout_foot();
+bs_layout_foot();

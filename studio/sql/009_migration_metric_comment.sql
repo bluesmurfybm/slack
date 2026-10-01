@@ -1,5 +1,5 @@
 -- =====================================================================
--- 009. 폐기된 점수 방식이 컬럼 주석에 남아 있던 것 (ba_member, ba_member_skill, ba_member_metric)
+-- 009. 폐기된 점수 방식이 컬럼 주석에 남아 있던 것 (bs_member, bs_member_skill, bs_member_metric)
 --
 --   mysql -u root iworks_local     < studio/sql/009_migration_metric_comment.sql
 --   mysql -u root blueassign_test  < studio/sql/009_migration_metric_comment.sql
@@ -20,8 +20,8 @@
 --   DB 안에 들어 있어서 SHOW FULL COLUMNS 나 스키마 뷰어로 그대로 보입니다.
 --   지금 상태에서 스키마만 들여다본 사람은 이렇게 읽습니다.
 --
---     ba_member.role_label        '... 점수 정규화 그룹의 기준'
---     ba_member_skill.score       '... 역할(role_label) 그룹 내 정규화'
+--     bs_member.role_label        '... 점수 정규화 그룹의 기준'
+--     bs_member_skill.score       '... 역할(role_label) 그룹 내 정규화'
 --
 --   둘 다 더는 사실이 아닙니다. 역할로 사람을 나누지 않습니다.
 --   그대로 두면 폐기한 방식이 되살아납니다.
@@ -38,16 +38,16 @@
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- ba_member — 역할은 더 이상 정규화 그룹이 아니다
+-- bs_member — 역할은 더 이상 정규화 그룹이 아니다
 -- ---------------------------------------------------------------------
-ALTER TABLE `ba_member`
+ALTER TABLE `bs_member`
   MODIFY COLUMN `role_label` VARCHAR(50) NULL
     COMMENT '설계·개발 / UI·UX / 인프라 / 기획. 표시용. 점수를 나누는 기준이 아니다';
 
 -- ---------------------------------------------------------------------
--- ba_member_skill — 계열 기준값 대비 절대 점수
+-- bs_member_skill — 계열 기준값 대비 절대 점수
 -- ---------------------------------------------------------------------
-ALTER TABLE `ba_member_skill`
+ALTER TABLE `bs_member_skill`
   MODIFY COLUMN `avg_lead_hr` DECIMAL(8,2) NULL
     COMMENT '평균 리드타임(시간). 참고용이며 점수에 들어가지 않는다',
   MODIFY COLUMN `rework_rate` DECIMAL(5,4) NULL
@@ -56,9 +56,9 @@ ALTER TABLE `ba_member_skill`
     COMMENT '0~100. 그 계열 기준값 대비 절대 점수. 사람끼리 비교해 매기지 않는다';
 
 -- ---------------------------------------------------------------------
--- ba_member_metric — 삭제한 지표에 표시를 단다
+-- bs_member_metric — 삭제한 지표에 표시를 단다
 -- ---------------------------------------------------------------------
-ALTER TABLE `ba_member_metric`
+ALTER TABLE `bs_member_metric`
   MODIFY COLUMN `cap_score` DECIMAL(5,2) NULL
     COMMENT '난이도 가중 처리량(절대 기준). 화면 표기는 "처리량". 속도·재작업은 들어가지 않는다',
   MODIFY COLUMN `speed_score` DECIMAL(5,2) NULL

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 define('ROOT', dirname(__DIR__, 2));
-$TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
+$TESTDB = getenv('BS_TEST_DB') ?: 'blueassign_test';
 require ROOT . '/studio/inc/bootstrap.php';
 foreach (['ProjectRepo', 'TaskRepo', 'MemberRepo', 'AllocationRepo', 'ProgressRepo'] as $r) {
     require ROOT . "/studio/inc/repo/$r.php";
@@ -20,10 +20,10 @@ try {
     exit(2);
 }
 $pdo->exec("SET time_zone = '+09:00'");
-foreach (['ba_notification', 'ba_progress_comment', 'ba_progress', 'ba_workload',
-          'ba_allocation_item', 'ba_allocation', 'ba_task_domain', 'ba_task',
-          'ba_member_category', 'ba_member_metric', 'ba_eval_run',
-          'ba_project_source', 'ba_project', 'ba_member'] as $t) {
+foreach (['bs_notification', 'bs_progress_comment', 'bs_progress', 'bs_workload',
+          'bs_allocation_item', 'bs_allocation', 'bs_task_domain', 'bs_task',
+          'bs_member_category', 'bs_member_metric', 'bs_eval_run',
+          'bs_project_source', 'bs_project', 'bs_member'] as $t) {
     $pdo->exec("DELETE FROM $t");
 }
 
@@ -63,7 +63,7 @@ function countQueries(PDO $pdo, callable $fn): int {
 // 밑준비 — 사람 3명, 태스크 6건, 확정 배정안
 // =====================================================================
 $mk = $pdo->prepare(
-    'INSERT INTO ba_member (user_id, emp_name, role_label, career_months, is_assignable)
+    'INSERT INTO bs_member (user_id, emp_name, role_label, career_months, is_assignable)
      VALUES (?,?,?,?,1)'
 );
 $MEM = [];
@@ -163,7 +163,7 @@ ok('latestPerTask 는 1회', $q1 === 1, (string)$q1);
 // 트리 저장으로 늘리면 배정된 태스크를 빼려다 막힌다(그게 맞는 동작이다).
 // 여기서 재려는 것은 조회 질의 수뿐이라 행을 직접 넣는다.
 $ins = $pdo->prepare(
-    'INSERT INTO ba_task (project_id, parent_id, depth, seq, wbs_no, title, confirmed, status)
+    'INSERT INTO bs_task (project_id, parent_id, depth, seq, wbs_no, title, confirmed, status)
      VALUES (?, NULL, 1, ?, ?, ?, 1, "todo")'
 );
 $bulk = array_values($leaf);
@@ -182,7 +182,7 @@ $q2d = countQueries($pdo, fn() => $progress->feedByProject($pid, 30));
 ok('피드도 1회', $q2d === 1, (string)$q2d);
 
 // 늘린 것을 치운다
-$pdo->prepare("DELETE FROM ba_task WHERE project_id = ? AND title LIKE '대량 %'")->execute([$pid]);
+$pdo->prepare("DELETE FROM bs_task WHERE project_id = ? AND title LIKE '대량 %'")->execute([$pid]);
 
 $q3 = countQueries($pdo, fn() => $progress->commentsFor([1, 2, 3, 4, 5]));
 ok('댓글도 한 번에', $q3 === 1, (string)$q3);
@@ -218,15 +218,15 @@ ok('기한 없는 것은 지연이 아니다', !in_array('앞으로 일 B', $lat
 ok('며칠 늦었는지 알려 준다', ($late[0]['overdue_days'] ?? 0) === 28,
    (string)($late[0]['overdue_days'] ?? '?'));
 
-$pdo->prepare("UPDATE ba_task SET status='prod_deployed' WHERE id=?")
+$pdo->prepare("UPDATE bs_task SET status='prod_deployed' WHERE id=?")
     ->execute([$leaf['지난 일 B']]);
 // 이 시점의 지연은 '지난 일 B' 하나뿐이다. 면제 상태로 바꾸면 0 이 된다.
 ok('운영 배포는 지연으로 세지 않는다',
    count($progress->overdueTasks($pid, '2026-03-01')) === 0,
    (string)count($progress->overdueTasks($pid, '2026-03-01')));
-$pdo->prepare("UPDATE ba_task SET status='hold' WHERE id=?")->execute([$leaf['지난 일 B']]);
+$pdo->prepare("UPDATE bs_task SET status='hold' WHERE id=?")->execute([$leaf['지난 일 B']]);
 ok('보류도 지연이 아니다', count($progress->overdueTasks($pid, '2026-03-01')) === 0);
-$pdo->prepare("UPDATE ba_task SET status='doing' WHERE id=?")->execute([$leaf['지난 일 B']]);
+$pdo->prepare("UPDATE bs_task SET status='doing' WHERE id=?")->execute([$leaf['지난 일 B']]);
 
 // =====================================================================
 echo "\n[6] 댓글\n";
@@ -250,7 +250,7 @@ $progress->addComment($pgId, ['id' => 'x@x.kr', 'name' => 'X'], '지워질 댓�
 $progress->delete($pgId);
 ok('기록이 지워진다', count($progress->byTask($t1)) === 2, (string)count($progress->byTask($t1)));
 ok('댓글도 함께 지워진다(FK CASCADE)',
-   (int)$pdo->query("SELECT COUNT(*) FROM ba_progress_comment WHERE progress_id=$pgId")
+   (int)$pdo->query("SELECT COUNT(*) FROM bs_progress_comment WHERE progress_id=$pgId")
             ->fetchColumn() === 0);
 $after = $tasks->find($t1);
 ok('태스크 상태는 그대로', $after['status'] === $before['status'],

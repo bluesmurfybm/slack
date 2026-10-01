@@ -18,7 +18,7 @@ if (PHP_SAPI !== 'cli') {
     exit('명령줄에서만 실행할 수 있습니다.');
 }
 
-$BASE = getenv('BA_TEST_BASE') ?: 'http://127.0.0.1:8099';
+$BASE = getenv('BS_TEST_BASE') ?: 'http://127.0.0.1:8099';
 
 /* ┌──────────────────────────────────────────────────────────────────┐
    │ 시험 전용 계정을 쓴다. 사람이 쓰는 계정을 빌리지 않는다.           │
@@ -54,7 +54,7 @@ final class Client
 
     public function __construct(private string $base, string $tag)
     {
-        $this->jar = sys_get_temp_dir() . "/ba_cookie_$tag.txt";
+        $this->jar = sys_get_temp_dir() . "/bs_cookie_$tag.txt";
         @unlink($this->jar);
     }
 
@@ -171,7 +171,7 @@ function ensure_test_accounts(string $adminEmail, string $userEmail, string $pas
     //                시험이 끝난 뒤에도 남아, 누가 배정을 돌릴 때 엔진이
     //                이 유령에게 일을 맡긴다
     $member = $pdo->prepare(
-        'INSERT INTO ba_member (user_id, emp_name, is_assignable) VALUES (?,?,?)
+        'INSERT INTO bs_member (user_id, emp_name, is_assignable) VALUES (?,?,?)
          ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name),
                                  is_assignable = VALUES(is_assignable)'
     );
@@ -201,7 +201,7 @@ function ensure_test_scores(string $adminEmail): void
     $pdo = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
                    $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    $mid = $pdo->prepare('SELECT id FROM ba_member WHERE user_id = ?');
+    $mid = $pdo->prepare('SELECT id FROM bs_member WHERE user_id = ?');
     $mid->execute([$adminEmail]);
     $memberId = (int)$mid->fetchColumn();
     if ($memberId === 0) {
@@ -211,13 +211,13 @@ function ensure_test_scores(string $adminEmail): void
     // 회차는 매번 새로 만든다. latestEvalVer() 가 MAX(id) 를 보므로
     // 이 회차가 곧 최신이 되고, 앞 회차 값에 흔들리지 않는다.
     $pdo->prepare(
-        'INSERT INTO ba_eval_run (started_at, finished_at, period_from, period_to, status)
+        'INSERT INTO bs_eval_run (started_at, finished_at, period_from, period_to, status)
          VALUES (NOW(), NOW(), ?, ?, "ok")'
     )->execute([date('Y-m-d', strtotime('-180 day')), date('Y-m-d')]);
     $evalVer = (int)$pdo->lastInsertId();
 
     $pdo->prepare(
-        'INSERT INTO ba_member_metric (member_id, eval_ver, total_cases, cap_score,
+        'INSERT INTO bs_member_metric (member_id, eval_ver, total_cases, cap_score,
                                        breadth_score, career_score, insufficient_data)
          VALUES (?,?,?,?,?,?,0)'
     )->execute([$memberId, $evalVer, 48, 82.00, 70.00, 60.00]);
@@ -225,7 +225,7 @@ function ensure_test_scores(string $adminEmail): void
     // 표본이 충분한(=confidence full) 계열을 몇 개 둔다. 분야 1·2 가 속한
     // activity 가 반드시 있어야 [M] 의 '분야 매치도' 가 성립한다.
     $cat = $pdo->prepare(
-        'INSERT INTO ba_member_category (member_id, category, eval_ver, case_count,
+        'INSERT INTO bs_member_category (member_id, category, eval_ver, case_count,
                                          weighted_qty, baseline, score, confidence,
                                          insufficient_data)
          VALUES (?,?,?,?,?,?,?,"full",0)'
@@ -254,19 +254,19 @@ function ensure_busy_member(string $userEmail): void
     $pdo = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
                    $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    $st = $pdo->prepare('SELECT id FROM ba_member WHERE user_id = ?');
+    $st = $pdo->prepare('SELECT id FROM bs_member WHERE user_id = ?');
     $st->execute([$userEmail]);
     $memberId = (int)$st->fetchColumn();
     if ($memberId === 0) {
         return;
     }
 
-    $pdo->prepare("DELETE FROM ba_workload WHERE member_id = ? AND label = '시험용 선점유'")
+    $pdo->prepare("DELETE FROM bs_workload WHERE member_id = ? AND label = '시험용 선점유'")
         ->execute([$memberId]);
 
     // 어떤 프로젝트 기간을 잡든 겹치도록 앞뒤로 넉넉히 둔다.
     $pdo->prepare(
-        "INSERT INTO ba_workload
+        "INSERT INTO bs_workload
             (member_id, kind, source, label, start_date, end_date, load_ratio, confidence,
              created_by, created_by_name)
          VALUES (?, 'manual', 'meeting', '시험용 선점유', ?, ?, 0.600, 1.000,
@@ -386,7 +386,7 @@ ok('이름 반영', ($r['json']['data']['project']['name'] ?? '') === 'API 시�
 ok('상태 반영', ($r['json']['data']['project']['status'] ?? '') === 'scoping');
 
 // 회귀 — 안 보낸 칸이 지워지면 안 된다.
-// 예전에 ba_read_project_input() 이 늘 열한 칸을 돌려줘서, 이름만 고쳐도
+// 예전에 bs_read_project_input() 이 늘 열한 칸을 돌려줘서, 이름만 고쳐도
 // 고객·트랙·기간이 전부 NULL 이 됐다. 화면은 전 칸을 보내 눈에 안 띄었다.
 $r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
 $before = $r['json']['data']['project'];
@@ -440,7 +440,7 @@ section('[H] 출처 — 파일 업로드 (multipart)');
    │ 확인하려는 것은 "내용이 확장자와 다르면 거부하는가" 이므로         │
    │ 평범한 텍스트로도 똑같이 증명됩니다.                              │
    └──────────────────────────────────────────────────────────────────┘ */
-$tmp = sys_get_temp_dir() . '/ba_api_up_' . bin2hex(random_bytes(4));
+$tmp = sys_get_temp_dir() . '/bs_api_up_' . bin2hex(random_bytes(4));
 @mkdir($tmp, 0777, true);
 
 $png = "$tmp/시안.png";
@@ -539,7 +539,7 @@ $r = $admin->req('/studio/api/project.php?act=list&keyword=' . rawurlencode('%')
 ok('% 가 전건 조회를 만들지 않음', ($r['json']['data']['total'] ?? -1) === 0,
    '총 ' . ($r['json']['data']['total'] ?? '?'));
 
-$r = $admin->req('/studio/api/project.php?act=list&sort=' . rawurlencode('x; DROP TABLE ba_project'));
+$r = $admin->req('/studio/api/project.php?act=list&sort=' . rawurlencode('x; DROP TABLE bs_project'));
 ok('정렬 주입 무시', $r['status'] === 200 && ($r['json']['data']['total'] ?? 0) > 0);
 
 $r = $admin->req('/studio/api/project.php?act=list&from=2026-04-01&to=2026-04-30');
@@ -745,7 +745,7 @@ $planningId = (int)(function () {
     $d   = $cfg['db'];
     $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
                    $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    return $p->query("SELECT id FROM ba_domain WHERE category = 'planning' ORDER BY id LIMIT 1")
+    return $p->query("SELECT id FROM bs_domain WHERE category = 'planning' ORDER BY id LIMIT 1")
              ->fetchColumn();
 })();
 ok('기획 계열 분야가 시드에 있다', $planningId > 0);
@@ -1010,10 +1010,10 @@ if (!is_file("$fixDir/sample.xlsx")) {
             $d['user'], $d['pass'],
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
     })();
-    $pdoX->prepare('DELETE FROM ba_project_source WHERE project_id = ?')->execute([$pid]);
-    $pdoX->prepare('DELETE FROM ba_task WHERE project_id = ?')->execute([$pid]);
+    $pdoX->prepare('DELETE FROM bs_project_source WHERE project_id = ?')->execute([$pid]);
+    $pdoX->prepare('DELETE FROM bs_task WHERE project_id = ?')->execute([$pid]);
     $insX = $pdoX->prepare(
-        'INSERT INTO ba_project_source (project_id, kind, title, file_path, parse_status, uploaded_by)
+        'INSERT INTO bs_project_source (project_id, kind, title, file_path, parse_status, uploaded_by)
          VALUES (?,?,?,?, "pending", "api_test")'
     );
     foreach ([['xlsx', '요구사항 정의서', 'sample.xlsx'],
@@ -1022,7 +1022,7 @@ if (!is_file("$fixDir/sample.xlsx")) {
               ['xlsx', '깨진 파일',       'broken.xlsx']] as [$k, $t, $fn]) {
         $insX->execute([$pid, $k, $t, "$fixDir/$fn"]);
     }
-    $pdoX->prepare('INSERT INTO ba_project_source (project_id, kind, title, url, parse_status, uploaded_by)
+    $pdoX->prepare('INSERT INTO bs_project_source (project_id, kind, title, url, parse_status, uploaded_by)
                     VALUES (?, "figma", "화면 시안", "https://figma.com/x", "pending", "api_test")')
          ->execute([$pid]);
 
@@ -1127,7 +1127,7 @@ if (!is_file("$fixDir/sample.xlsx")) {
 
     // --- 남의 문서를 출처로 끼워 넣기 ---
     $otherSrcId = (int)$pdoX->query(
-        'SELECT id FROM ba_project_source WHERE project_id <> ' . (int)$pid . ' LIMIT 1'
+        'SELECT id FROM bs_project_source WHERE project_id <> ' . (int)$pid . ' LIMIT 1'
     )->fetchColumn();
     if ($otherSrcId) {
         $revX = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)
@@ -1150,7 +1150,7 @@ if (!is_file("$fixDir/sample.xlsx")) {
                   ['json']['data']['revision'];
     $admin->req('/studio/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
         'project_id' => $pid, 'tree' => [], 'revision' => $revX]]);
-    $pdoX->prepare('DELETE FROM ba_project_source WHERE project_id = ?')->execute([$pid]);
+    $pdoX->prepare('DELETE FROM bs_project_source WHERE project_id = ?')->execute([$pid]);
 }
 
 
@@ -1348,7 +1348,7 @@ $r = $admin->req('/studio/api/allocate.php?act=nope&project_id=' . $pid);
 ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
 
 // 뒷정리는 따로 하지 않는다. 뒤의 프로젝트 삭제는 소프트 삭제라
-// 배정안이 남아 있어도 걸리지 않는다(ba_allocation 은 FK CASCADE 라
+// 배정안이 남아 있어도 걸리지 않는다(bs_allocation 은 FK CASCADE 라
 // 실제로 지울 때 같이 사라진다).
 
 // 뒷정리
@@ -1365,9 +1365,9 @@ section('[Q] 대시보드와 진행상황 (명세서 §7.1 Step4 · §7.2)');
     $p = new PDO(
         "mysql:host={$dbq['host']};port={$dbq['port']};dbname={$dbq['name']};charset=utf8mb4",
         $dbq['user'], $dbq['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $p->prepare('DELETE FROM ba_allocation WHERE project_id = ?')->execute([$pid]);
+    $p->prepare('DELETE FROM bs_allocation WHERE project_id = ?')->execute([$pid]);
     $p->prepare(
-        'DELETE pr FROM ba_progress pr JOIN ba_task t ON t.id = pr.task_id
+        'DELETE pr FROM bs_progress pr JOIN bs_task t ON t.id = pr.task_id
           WHERE t.project_id = ?'
     )->execute([$pid]);
 })();
@@ -1436,7 +1436,7 @@ foreach ($admin->req('/studio/api/allocate.php?act=members&project_id=' . $pid)
 // 못 찾으면 여기서 말한다. 전에는 그냥 넘어가 60줄 뒤에 엉뚱한 403 과
 // 치명적 오류로 터졌고, 원인을 찾는 데 한참 걸렸다.
 ok('배정 가능한 시험관리자가 있다', $myMid !== null,
-   'ba_member 에 없거나 is_assignable=0 이다');
+   'bs_member 에 없거나 is_assignable=0 이다');
 $itemsQ = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $aidQ)
                 ['json']['data']['items'];
 if ($myMid) {
@@ -1595,11 +1595,11 @@ $pdoR = (function () {
         $dbr['user'], $dbr['pass'],
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 })();
-$pdoR->exec("DELETE FROM ba_workload WHERE kind = 'manual'");
+$pdoR->exec("DELETE FROM bs_workload WHERE kind = 'manual'");
 // 구성원은 ensure_test_accounts() 가 시작할 때 이미 만들어 두었다.
-$selfMid  = (int)$pdoR->query("SELECT id FROM ba_member WHERE user_id='batest-user@bluesoft.co.kr'")
+$selfMid  = (int)$pdoR->query("SELECT id FROM bs_member WHERE user_id='batest-user@bluesoft.co.kr'")
                       ->fetchColumn();
-$otherMid = (int)$pdoR->query("SELECT id FROM ba_member WHERE user_id='batest-admin@bluesoft.co.kr'")
+$otherMid = (int)$pdoR->query("SELECT id FROM bs_member WHERE user_id='batest-admin@bluesoft.co.kr'")
                       ->fetchColumn();
 
 $wlBase = ['label' => '상주 지원', 'note' => '4월 한 달 상주 확정',
@@ -1683,7 +1683,7 @@ ok('등록 단추를 그릴지 알려 준다',
    ($r['json']['data']['can_add_workload'] ?? null) === true);
 
 // --- 배정이 만든 점유는 못 건드린다 ---------------------------------------
-$asgnId = (int)$pdoR->query("SELECT id FROM ba_workload WHERE kind='assigned' LIMIT 1")
+$asgnId = (int)$pdoR->query("SELECT id FROM bs_workload WHERE kind='assigned' LIMIT 1")
                     ->fetchColumn();
 if ($asgnId) {
     $r = $admin->req('/studio/api/workload.php?act=delete',
@@ -1765,7 +1765,7 @@ ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? 
 
 // 이 시험이 만든 배정안과 점유 기록을 치운다.
 //
-// 프로젝트 삭제는 소프트 삭제라 ba_workload 의 assigned 기록이 남는다.
+// 프로젝트 삭제는 소프트 삭제라 bs_workload 의 assigned 기록이 남는다.
 // 그대로 두면 **다음 회차의 가용도가 조금씩 깎여** 후보 시험이 흔들린다.
 // 실제로 그렇게 새서 후보 구간의 가용도 단언이 깨졌다.
 (function () use ($pid) {
@@ -1775,25 +1775,25 @@ ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? 
         "mysql:host={$dbc['host']};port={$dbc['port']};dbname={$dbc['name']};charset=utf8mb4",
         $dbc['user'], $dbc['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
     $p->prepare(
-        "DELETE w FROM ba_workload w
-           JOIN ba_allocation_item i ON i.id = w.ref_id
-           JOIN ba_task t            ON t.id = i.task_id
+        "DELETE w FROM bs_workload w
+           JOIN bs_allocation_item i ON i.id = w.ref_id
+           JOIN bs_task t            ON t.id = i.task_id
           WHERE w.kind = 'assigned' AND w.ref_type = 'allocation_item' AND t.project_id = ?"
     )->execute([$pid]);
-    $p->prepare('DELETE FROM ba_allocation WHERE project_id = ?')->execute([$pid]);
-    $p->prepare("DELETE FROM ba_notification WHERE ref_type = 'allocation'")->execute();
+    $p->prepare('DELETE FROM bs_allocation WHERE project_id = ?')->execute([$pid]);
+    $p->prepare("DELETE FROM bs_notification WHERE ref_type = 'allocation'")->execute();
     // [R] 이 넣은 직접 등록 점유도 치운다. 남으면 다음 회차의 가용도가
     // 깎인 채로 시작해 후보 구간이 흔들린다.
-    $p->prepare("DELETE FROM ba_workload WHERE kind = 'manual'")->execute();
+    $p->prepare("DELETE FROM bs_workload WHERE kind = 'manual'")->execute();
 
     // 시험용 구성원을 후보 명단에서 내린다.
     //
-    // ba_member 행 자체는 남긴다 — 9개 표가 이 행을 참조하고 있어 지우려면
+    // bs_member 행 자체는 남긴다 — 9개 표가 이 행을 참조하고 있어 지우려면
     // 그 표들까지 건드려야 하는데, 뒷정리가 그렇게까지 할 일은 아니다.
     // 대신 배정 대상에서 빼 두면 데모 화면의 후보 표에 섞이지 않고,
     // 다음 회차에 누가 배정을 돌려도 이 유령이 일을 받지 않는다.
     // [R] 이 시작할 때 필요한 만큼 다시 올린다.
-    $p->prepare("UPDATE ba_member SET is_assignable = 0 WHERE user_id LIKE 'batest-%'")
+    $p->prepare("UPDATE bs_member SET is_assignable = 0 WHERE user_id LIKE 'batest-%'")
       ->execute();
 })();
 

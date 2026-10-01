@@ -7,17 +7,17 @@ require_once __DIR__ . '/inc/layout.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-$user = ba_require_login();
+$user = bs_require_login();
 
 // 등록 버튼 노출. 프로젝트가 특정되지 않은 화면이라 관리자만 통과한다.
-// PM 은 자기 프로젝트를 고친다(ba_is_pm 은 프로젝트별 판정이라 여기서는 못 쓴다).
-$canCreate = ba_can(BA_CAP_PROJECT_MANAGE);
-$isAdmin   = ba_is_admin();
+// PM 은 자기 프로젝트를 고친다(bs_is_pm 은 프로젝트별 판정이라 여기서는 못 쓴다).
+$canCreate = bs_can(BS_CAP_PROJECT_MANAGE);
+$isAdmin   = bs_is_admin();
 
 // 다른 화면에서 권한/존재 문제로 튕겨 왔을 때 이유를 알려 준다.
-$err = ba_param_str('err');
+$err = bs_param_str('err');
 
-ba_layout_head(
+bs_layout_head(
     $user,
     '프로젝트',
     '업무 배정',
@@ -54,7 +54,7 @@ ba_layout_head(
       <span>트랙</span>
       <select id="ba-f-track">
         <option value="">전체</option>
-        <?php foreach (BA_PROJECT_TRACK as $code => $label): ?>
+        <?php foreach (BS_PROJECT_TRACK as $code => $label): ?>
           <option value="<?= h($code) ?>"><?= h($label) ?></option>
         <?php endforeach; ?>
       </select>
@@ -133,4 +133,4 @@ ba_layout_head(
   <div class="ba-pager" id="ba-pager"></div>
 </div>
 
-<?php ba_layout_foot(); ?>
+<?php bs_layout_foot(); ?>

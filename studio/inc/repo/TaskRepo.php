@@ -1,5 +1,5 @@
 <?php
-/** ba_task / ba_task_domain 접근 담당 DAO. WBS 트리와 태스크-분야 연결을 다룬다. */
+/** bs_task / bs_task_domain 접근 담당 DAO. WBS 트리와 태스크-분야 연결을 다룬다. */
 
 declare(strict_types=1);
 
@@ -32,7 +32,7 @@ final class TaskRepo
 
     public function find(int $id): ?array
     {
-        $st = $this->pdo->prepare('SELECT * FROM ba_task WHERE id = ?');
+        $st = $this->pdo->prepare('SELECT * FROM bs_task WHERE id = ?');
         $st->execute([$id]);
         $row = $st->fetch(PDO::FETCH_ASSOC);
         return $row ?: null;
@@ -44,9 +44,9 @@ final class TaskRepo
      */
     public function allByProject(int $projectId): array
     {
-        // ix_ba_task_project (project_id, depth, seq) 를 탄다.
+        // ix_bs_task_project (project_id, depth, seq) 를 탄다.
         $st = $this->pdo->prepare(
-            'SELECT * FROM ba_task WHERE project_id = ? ORDER BY depth, seq, id'
+            'SELECT * FROM bs_task WHERE project_id = ? ORDER BY depth, seq, id'
         );
         $st->execute([$projectId]);
         return $st->fetchAll(PDO::FETCH_ASSOC);
@@ -60,16 +60,16 @@ final class TaskRepo
      */
     public function confirmedForAllocation(int $projectId): array
     {
-        $ph = implode(',', array_fill(0, count(BA_TASK_NOT_ASSIGNABLE_STATUS), '?'));
-        // ix_ba_task_confirm (project_id, confirmed, status)
+        $ph = implode(',', array_fill(0, count(BS_TASK_NOT_ASSIGNABLE_STATUS), '?'));
+        // ix_bs_task_confirm (project_id, confirmed, status)
         $st = $this->pdo->prepare(
-            "SELECT * FROM ba_task
+            "SELECT * FROM bs_task
               WHERE project_id = ?
                 AND confirmed = 1
                 AND status NOT IN ($ph)
               ORDER BY depth, seq, id"
         );
-        $st->execute(array_merge([$projectId], BA_TASK_NOT_ASSIGNABLE_STATUS));
+        $st->execute(array_merge([$projectId], BS_TASK_NOT_ASSIGNABLE_STATUS));
         return $st->fetchAll(PDO::FETCH_ASSOC);
     }
 
@@ -90,7 +90,7 @@ final class TaskRepo
         }
         $ph = implode(',', array_fill(0, count($taskIds), '?'));
         $st = $this->pdo->prepare(
-            "SELECT id, wbs_no, title, confirmed, status FROM ba_task WHERE id IN ($ph)"
+            "SELECT id, wbs_no, title, confirmed, status FROM bs_task WHERE id IN ($ph)"
         );
         $st->execute($taskIds);
         $rows  = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -105,9 +105,9 @@ final class TaskRepo
         foreach ($rows as $r) {
             if ((int)$r['confirmed'] !== 1) {
                 $bad[] = ($r['wbs_no'] ?: $r['id']) . ' ' . $r['title'] . ' (미확정)';
-            } elseif (in_array($r['status'], BA_TASK_NOT_ASSIGNABLE_STATUS, true)) {
+            } elseif (in_array($r['status'], BS_TASK_NOT_ASSIGNABLE_STATUS, true)) {
                 $bad[] = ($r['wbs_no'] ?: $r['id']) . ' ' . $r['title']
-                       . ' (' . (BA_TASK_STATUS[$r['status']] ?? $r['status']) . ')';
+                       . ' (' . (BS_TASK_STATUS[$r['status']] ?? $r['status']) . ')';
             }
         }
         if ($bad) {
@@ -194,7 +194,7 @@ final class TaskRepo
     public function children(int $parentId): array
     {
         $st = $this->pdo->prepare(
-            'SELECT * FROM ba_task WHERE parent_id = ? ORDER BY seq, id'
+            'SELECT * FROM bs_task WHERE parent_id = ? ORDER BY seq, id'
         );
         $st->execute([$parentId]);
         return $st->fetchAll(PDO::FETCH_ASSOC);
@@ -227,10 +227,10 @@ final class TaskRepo
                         CRC32(IFNULL(t.description, ''))))), 0) s,
                     (SELECT IFNULL(SUM(CRC32(CONCAT_WS('|',
                                 td.task_id, td.domain_id, td.weight))), 0)
-                       FROM ba_task_domain td
-                       JOIN ba_task t2 ON t2.id = td.task_id
+                       FROM bs_task_domain td
+                       JOIN bs_task t2 ON t2.id = td.task_id
                       WHERE t2.project_id = ?) d
-               FROM ba_task t WHERE t.project_id = ?"
+               FROM bs_task t WHERE t.project_id = ?"
         );
         $st->execute([$projectId, $projectId]);
         $r = $st->fetch(PDO::FETCH_ASSOC) ?: ['n' => 0, 'x' => 0, 's' => 0, 'd' => 0];
@@ -246,7 +246,7 @@ final class TaskRepo
         }
         $ph = implode(',', array_fill(0, count($taskIds), '?'));
         $st = $this->pdo->prepare(
-            "SELECT DISTINCT project_id FROM ba_task WHERE id IN ($ph)"
+            "SELECT DISTINCT project_id FROM bs_task WHERE id IN ($ph)"
         );
         $st->execute($taskIds);
         $pids = $st->fetchAll(PDO::FETCH_COLUMN);
@@ -302,10 +302,10 @@ final class TaskRepo
         $flat = [];
         $this->flatten($tree, null, 1, $flat);
 
-        if (count($flat) > BA_TASK_MAX_PER_PROJECT) {
+        if (count($flat) > BS_TASK_MAX_PER_PROJECT) {
             throw new DomainException(
                 '태스크가 너무 많습니다(' . count($flat) . '건). '
-                . '한 프로젝트에 ' . BA_TASK_MAX_PER_PROJECT . '건까지만 넣을 수 있습니다. '
+                . '한 프로젝트에 ' . BS_TASK_MAX_PER_PROJECT . '건까지만 넣을 수 있습니다. '
                 . '엑셀을 통째로 붙여 넣은 것은 아닌지 확인해 주세요.'
             );
         }
@@ -332,7 +332,7 @@ final class TaskRepo
         if ($srcIds) {
             $ph = implode(',', array_fill(0, count($srcIds), '?'));
             $st = $this->pdo->prepare(
-                "SELECT id FROM ba_project_source WHERE id IN ($ph) AND project_id = ?"
+                "SELECT id FROM bs_project_source WHERE id IN ($ph) AND project_id = ?"
             );
             $st->execute(array_merge($srcIds, [$projectId]));
             $good = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
@@ -398,9 +398,9 @@ final class TaskRepo
                 throw new DomainException('상위 태스크를 찾을 수 없습니다.');
             }
             $depth = (int)$p['depth'] + 1;
-            if ($depth > BA_TASK_MAX_DEPTH) {
+            if ($depth > BS_TASK_MAX_DEPTH) {
                 throw new DomainException(
-                    BA_TASK_MAX_DEPTH . '단계(대/중/소)까지만 만들 수 있습니다.');
+                    BS_TASK_MAX_DEPTH . '단계(대/중/소)까지만 만들 수 있습니다.');
             }
         }
 
@@ -443,7 +443,7 @@ final class TaskRepo
 
         if ($set) {
             $par[] = $id;
-            $st = $this->pdo->prepare('UPDATE ba_task SET ' . implode(', ', $set) . ' WHERE id = ?');
+            $st = $this->pdo->prepare('UPDATE bs_task SET ' . implode(', ', $set) . ' WHERE id = ?');
             $st->execute($par);
         }
 
@@ -475,7 +475,7 @@ final class TaskRepo
 
         $ph = implode(',', array_fill(0, count($taskIds), '?'));
         $st = $this->pdo->prepare(
-            "UPDATE ba_task SET confirmed = ? WHERE id IN ($ph) AND confirmed <> ?"
+            "UPDATE bs_task SET confirmed = ? WHERE id IN ($ph) AND confirmed <> ?"
         );
         $st->execute(array_merge([$on ? 1 : 0], $taskIds, [$on ? 1 : 0]));
         return $st->rowCount();
@@ -515,9 +515,9 @@ final class TaskRepo
         }
 
         $sub = $this->subtreeDepth($id);   // 자기 포함 하위까지의 높이
-        if ($depth + $sub - 1 > BA_TASK_MAX_DEPTH) {
+        if ($depth + $sub - 1 > BS_TASK_MAX_DEPTH) {
             throw new DomainException(
-                '하위 태스크까지 옮기면 ' . BA_TASK_MAX_DEPTH . '단계를 넘습니다.');
+                '하위 태스크까지 옮기면 ' . BS_TASK_MAX_DEPTH . '단계를 넘습니다.');
         }
 
         $this->pdo->beginTransaction();
@@ -525,9 +525,9 @@ final class TaskRepo
             // 끼어들 자리를 비운다. seq 는 renumber() 가 다시 촘촘하게 만든다.
             $st = $this->pdo->prepare(
                 $newParentId === null
-                    ? 'UPDATE ba_task SET seq = seq + 1
+                    ? 'UPDATE bs_task SET seq = seq + 1
                         WHERE project_id = ? AND parent_id IS NULL AND seq >= ? AND id <> ?'
-                    : 'UPDATE ba_task SET seq = seq + 1
+                    : 'UPDATE bs_task SET seq = seq + 1
                         WHERE project_id = ? AND parent_id = ? AND seq >= ? AND id <> ?'
             );
             $st->execute($newParentId === null
@@ -535,7 +535,7 @@ final class TaskRepo
                 : [$projectId, $newParentId, $newSeq, $id]);
 
             $st = $this->pdo->prepare(
-                'UPDATE ba_task SET parent_id = ?, depth = ?, seq = ? WHERE id = ?'
+                'UPDATE bs_task SET parent_id = ?, depth = ?, seq = ? WHERE id = ?'
             );
             $st->execute([$newParentId, $depth, $newSeq, $id]);
 
@@ -550,12 +550,12 @@ final class TaskRepo
 
     public function updateProgress(int $id, string $status, int $progressPct): void
     {
-        // TODO(P6): ba_progress 등록과 함께 불린다. 두 표가 어긋나지 않게 같은 트랜잭션 안에서.
-        if (!isset(BA_TASK_STATUS[$status])) {
+        // TODO(P6): bs_progress 등록과 함께 불린다. 두 표가 어긋나지 않게 같은 트랜잭션 안에서.
+        if (!isset(BS_TASK_STATUS[$status])) {
             throw new InvalidArgumentException('알 수 없는 상태입니다: ' . $status);
         }
         $st = $this->pdo->prepare(
-            'UPDATE ba_task SET status = ?, progress_pct = ? WHERE id = ?'
+            'UPDATE bs_task SET status = ?, progress_pct = ? WHERE id = ?'
         );
         $st->execute([$status, max(0, min(100, $progressPct)), $id]);
     }
@@ -582,13 +582,13 @@ final class TaskRepo
     }
 
     // =================================================================
-    // 분야 연결 (ba_task_domain)
+    // 분야 연결 (bs_task_domain)
     // =================================================================
 
     /**
      * 쓰이고 있는 분야 전체. code 를 열쇠로.
      *
-     * WBS 도출기가 쓴다. 거기서 ba_db() 를 직접 부르면 시험이 시험 DB 를
+     * WBS 도출기가 쓴다. 거기서 bs_db() 를 직접 부르면 시험이 시험 DB 를
      * 못 보게 된다 — 실제로 그렇게 막혔다. DB 접근은 리포지토리에 모은다.
      *
      * @return array<string, array{id:int,name:string,category:string,keywords:string[]}>
@@ -596,7 +596,7 @@ final class TaskRepo
     public function activeDomains(): array
     {
         $st = $this->pdo->query(
-            'SELECT id, code, name, category, keywords FROM ba_domain
+            'SELECT id, code, name, category, keywords FROM bs_domain
               WHERE is_active = 1 ORDER BY sort_no'
         );
         $out = [];
@@ -635,8 +635,8 @@ final class TaskRepo
         $st = $this->pdo->prepare(
             "SELECT td.task_id, td.domain_id, td.weight,
                     d.code, d.name, d.category
-               FROM ba_task_domain td
-               JOIN ba_domain d ON d.id = td.domain_id
+               FROM bs_task_domain td
+               JOIN bs_domain d ON d.id = td.domain_id
               WHERE td.task_id IN ($ph)
               ORDER BY d.sort_no, d.id"
         );
@@ -649,7 +649,7 @@ final class TaskRepo
                 'code'      => $r['code'],
                 'name'      => $r['name'],
                 'category'  => $r['category'],
-                'cat_label' => BA_DOMAIN_CATEGORY[$r['category']]['label'] ?? $r['category'],
+                'cat_label' => BS_DOMAIN_CATEGORY[$r['category']]['label'] ?? $r['category'],
                 'weight'    => (float)$r['weight'],
             ];
         }
@@ -669,12 +669,12 @@ final class TaskRepo
         $weights = $this->domainIds($domainIds);
         $auto    = count($weights) > 0 ? round(1 / count($weights), 3) : 0.0;
 
-        $this->pdo->prepare('DELETE FROM ba_task_domain WHERE task_id = ?')->execute([$taskId]);
+        $this->pdo->prepare('DELETE FROM bs_task_domain WHERE task_id = ?')->execute([$taskId]);
         if (!$weights) {
             return;
         }
         $st = $this->pdo->prepare(
-            'INSERT INTO ba_task_domain (task_id, domain_id, weight) VALUES (?, ?, ?)'
+            'INSERT INTO bs_task_domain (task_id, domain_id, weight) VALUES (?, ?, ?)'
         );
         foreach ($weights as $did => $w) {
             $st->execute([$taskId, $did, max(0.0, min(1.0, $w ?? $auto))]);
@@ -692,9 +692,9 @@ final class TaskRepo
     private function flatten(array $nodes, ?string $parentKey, int $depth, array &$out,
                              array &$wbsByKey = []): void
     {
-        if ($depth > BA_TASK_MAX_DEPTH) {
+        if ($depth > BS_TASK_MAX_DEPTH) {
             throw new DomainException(
-                BA_TASK_MAX_DEPTH . '단계(대/중/소)까지만 만들 수 있습니다.');
+                BS_TASK_MAX_DEPTH . '단계(대/중/소)까지만 만들 수 있습니다.');
         }
         $seq = 0;
         foreach ($nodes as $raw) {
@@ -755,7 +755,7 @@ final class TaskRepo
     private function insertRow(int $projectId, ?int $parentId, array $n): int
     {
         $st = $this->pdo->prepare(
-            'INSERT INTO ba_task
+            'INSERT INTO bs_task
                 (project_id, parent_id, depth, seq, wbs_no, title, description,
                  est_md, difficulty, plan_start, plan_end, source_id, source_ref, origin)
              VALUES (?,?,?,?,?,?,?, ?,?,?,?,?,?, ?)'
@@ -777,7 +777,7 @@ final class TaskRepo
     {
         // confirmed / status / progress_pct / origin 은 건드리지 않는다.
         $st = $this->pdo->prepare(
-            'UPDATE ba_task
+            'UPDATE bs_task
                 SET parent_id = ?, depth = ?, seq = ?, wbs_no = ?,
                     title = ?, description = ?, est_md = ?, difficulty = ?,
                     plan_start = ?, plan_end = ?, source_ref = ?
@@ -806,12 +806,12 @@ final class TaskRepo
         }
         $ph = implode(',', array_fill(0, count($ids), '?'));
         $st = $this->pdo->prepare(
-            "SELECT id FROM ba_task WHERE id IN ($ph) ORDER BY depth DESC, id DESC"
+            "SELECT id FROM bs_task WHERE id IN ($ph) ORDER BY depth DESC, id DESC"
         );
         $st->execute($ids);
         $ordered = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
 
-        $del = $this->pdo->prepare('DELETE FROM ba_task WHERE id = ?');
+        $del = $this->pdo->prepare('DELETE FROM bs_task WHERE id = ?');
         $n = 0;
         foreach ($ordered as $id) {
             $del->execute([$id]);
@@ -835,8 +835,8 @@ final class TaskRepo
         $ph = implode(',', array_fill(0, count($taskIds), '?'));
         $st = $this->pdo->prepare(
             "SELECT t.wbs_no, t.title, COUNT(*) n
-               FROM ba_allocation_item ai
-               JOIN ba_task t ON t.id = ai.task_id
+               FROM bs_allocation_item ai
+               JOIN bs_task t ON t.id = ai.task_id
               WHERE ai.task_id IN ($ph)
               GROUP BY t.id, t.wbs_no, t.title
               ORDER BY t.wbs_no"
@@ -858,9 +858,9 @@ final class TaskRepo
     {
         $out   = [$id];
         $level = [$id];
-        for ($d = 0; $d < BA_TASK_MAX_DEPTH; $d++) {
+        for ($d = 0; $d < BS_TASK_MAX_DEPTH; $d++) {
             $ph = implode(',', array_fill(0, count($level), '?'));
-            $st = $this->pdo->prepare("SELECT id FROM ba_task WHERE parent_id IN ($ph)");
+            $st = $this->pdo->prepare("SELECT id FROM bs_task WHERE parent_id IN ($ph)");
             $st->execute($level);
             $level = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
             if (!$level) {
@@ -880,7 +880,7 @@ final class TaskRepo
         }
         $ids = $this->subtreeIds($id);
         $ph  = implode(',', array_fill(0, count($ids), '?'));
-        $st  = $this->pdo->prepare("SELECT MAX(depth) FROM ba_task WHERE id IN ($ph)");
+        $st  = $this->pdo->prepare("SELECT MAX(depth) FROM bs_task WHERE id IN ($ph)");
         $st->execute($ids);
         return max(1, (int)$st->fetchColumn() - (int)$cur['depth'] + 1);
     }
@@ -893,7 +893,7 @@ final class TaskRepo
     /** 옮긴 뒤 하위 노드들의 depth 를 새 기준에 맞춘다. */
     private function shiftSubtreeDepth(int $rootId, int $rootDepth): void
     {
-        $st  = $this->pdo->prepare('UPDATE ba_task SET depth = ? WHERE id = ?');
+        $st  = $this->pdo->prepare('UPDATE bs_task SET depth = ? WHERE id = ?');
         $walk = function (int $id, int $depth) use (&$walk, $st): void {
             $st->execute([$depth, $id]);
             foreach ($this->children($id) as $c) {
@@ -920,7 +920,7 @@ final class TaskRepo
         }
         unset($list);
 
-        $st = $this->pdo->prepare('UPDATE ba_task SET seq = ?, wbs_no = ? WHERE id = ?');
+        $st = $this->pdo->prepare('UPDATE bs_task SET seq = ?, wbs_no = ? WHERE id = ?');
 
         $walk = function (int $parentKey, string $prefix) use (&$walk, &$byParent, $st): void {
             foreach ($byParent[$parentKey] ?? [] as $i => $r) {
@@ -955,7 +955,7 @@ final class TaskRepo
         if ($f < 0) {
             throw new InvalidArgumentException('추정 공수는 0 이상이어야 합니다.');
         }
-        if ($f > BA_TASK_MAX_EST_MD) {
+        if ($f > BS_TASK_MAX_EST_MD) {
             throw new InvalidArgumentException(
                 '추정 공수가 너무 큽니다(' . $f . ' M/D). 태스크를 쪼개 주세요.');
         }
@@ -968,9 +968,9 @@ final class TaskRepo
             return null;
         }
         $i = (int)$v;
-        if ($i < BA_TASK_DIFFICULTY_MIN || $i > BA_TASK_DIFFICULTY_MAX) {
+        if ($i < BS_TASK_DIFFICULTY_MIN || $i > BS_TASK_DIFFICULTY_MAX) {
             throw new InvalidArgumentException(
-                '난이도는 ' . BA_TASK_DIFFICULTY_MIN . '~' . BA_TASK_DIFFICULTY_MAX
+                '난이도는 ' . BS_TASK_DIFFICULTY_MIN . '~' . BS_TASK_DIFFICULTY_MAX
                 . ' 사이여야 합니다: ' . (string)$v);
         }
         return $i;
@@ -1030,9 +1030,9 @@ final class TaskRepo
                 $out[$id] = $w;
             }
         }
-        if (count($out) > BA_TASK_MAX_DOMAINS) {
+        if (count($out) > BS_TASK_MAX_DOMAINS) {
             throw new InvalidArgumentException(
-                '태스크 하나에 분야는 ' . BA_TASK_MAX_DOMAINS . '개까지만 붙일 수 있습니다.');
+                '태스크 하나에 분야는 ' . BS_TASK_MAX_DOMAINS . '개까지만 붙일 수 있습니다.');
         }
         return $out;
     }

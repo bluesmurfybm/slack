@@ -10,9 +10,9 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-$user = ba_require_login();
+$user = bs_require_login();
 
-ba_layout_head(
+bs_layout_head(
     $user,
     '대시보드',
     '업무 배정',
@@ -21,7 +21,7 @@ ba_layout_head(
 );
 ?>
 
-<div class="ba-dash" id="ba-dash" data-project="<?= (int)(ba_param_int('project_id', 0) ?? 0) ?>">
+<div class="ba-dash" id="ba-dash" data-project="<?= (int)(bs_param_int('project_id', 0) ?? 0) ?>">
 
   <div class="ba-alert" id="ba-dash-error" hidden></div>
 
@@ -103,4 +103,4 @@ ba_layout_head(
   </div>
 </div>
 
-<?php ba_layout_foot(); ?>
+<?php bs_layout_foot(); ?>

@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 define('ROOT', dirname(__DIR__, 2));
-$TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
+$TESTDB = getenv('BS_TEST_DB') ?: 'blueassign_test';
 require ROOT . '/studio/inc/bootstrap.php';
 require ROOT . '/studio/inc/repo/ProjectRepo.php';
 require ROOT . '/studio/inc/repo/TaskRepo.php';
@@ -20,11 +20,11 @@ try {
     exit(2);
 }
 $pdo->exec("SET time_zone = '+09:00'");
-$pdo->exec('DELETE FROM ba_allocation_item');
-$pdo->exec('DELETE FROM ba_task_domain');
-$pdo->exec('DELETE FROM ba_task');
-$pdo->exec('DELETE FROM ba_project_source');
-$pdo->exec('DELETE FROM ba_project');
+$pdo->exec('DELETE FROM bs_allocation_item');
+$pdo->exec('DELETE FROM bs_task_domain');
+$pdo->exec('DELETE FROM bs_task');
+$pdo->exec('DELETE FROM bs_project_source');
+$pdo->exec('DELETE FROM bs_project');
 
 $projects = new ProjectRepo($pdo);
 $repo     = new TaskRepo($pdo);
@@ -247,7 +247,7 @@ $kids  = count($repo->allByProject($pid));
 $repo->delete((int)$root0['id']);
 ok('하위까지 사라짐', count($repo->allByProject($pid)) < $kids);
 ok('고아가 남지 않았다', (int)$pdo->query(
-    'SELECT COUNT(*) FROM ba_task t LEFT JOIN ba_task p ON p.id = t.parent_id
+    'SELECT COUNT(*) FROM bs_task t LEFT JOIN bs_task p ON p.id = t.parent_id
       WHERE t.parent_id IS NOT NULL AND p.id IS NULL')->fetchColumn() === 0);
 $tree = treeOf($repo, $pid);
 ok('삭제 뒤 번호 다시 매김', !$tree || $tree[0]['wbs_no'] === '1');
@@ -259,17 +259,17 @@ $tid = (int)$repo->allByProject($pid)[0]['id'];
 $repo->confirm([$tid], true, $actor);
 
 $pdo->prepare(
-    'INSERT INTO ba_member (user_id, emp_name) VALUES (?, ?)
+    'INSERT INTO bs_member (user_id, emp_name) VALUES (?, ?)
      ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name)'
 )->execute(['tasktest@bluesoft.co.kr', '시험구성원']);
-$mid = (int)$pdo->query("SELECT id FROM ba_member WHERE user_id='tasktest@bluesoft.co.kr'")->fetchColumn();
+$mid = (int)$pdo->query("SELECT id FROM bs_member WHERE user_id='tasktest@bluesoft.co.kr'")->fetchColumn();
 
 $pdo->prepare(
-    'INSERT INTO ba_allocation (project_id, version, status, created_by, created_by_name)
+    'INSERT INTO bs_allocation (project_id, version, status, created_by, created_by_name)
      VALUES (?, 1, ?, ?, ?)'
 )->execute([$pid, 'draft', $actor['id'], $actor['name']]);
 $aid = (int)$pdo->lastInsertId();
-$pdo->prepare('INSERT INTO ba_allocation_item (allocation_id, task_id, member_id) VALUES (?,?,?)')
+$pdo->prepare('INSERT INTO bs_allocation_item (allocation_id, task_id, member_id) VALUES (?,?,?)')
     ->execute([$aid, $tid, $mid]);
 
 throws('배정된 태스크 삭제 거부', fn() => $repo->delete($tid));
@@ -281,7 +281,7 @@ ok('거부 뒤에도 태스크가 남아 있다', $repo->find($tid) !== null);
 // =====================================================================
 echo "\n[14] 상한\n";
 $big = [];
-for ($i = 0; $i < BA_TASK_MAX_PER_PROJECT + 1; $i++) {
+for ($i = 0; $i < BS_TASK_MAX_PER_PROJECT + 1; $i++) {
     $big[] = ['title' => '대량 ' . $i];
 }
 throws('상한을 넘으면 거절(엑셀 통째 붙여넣기 방어)',
@@ -292,7 +292,7 @@ throws('상한을 넘으면 거절(엑셀 통째 붙여넣기 방어)',
 echo "\n[15] WBS 도출 — 스키마 검증\n";
 
 // 분야표는 TaskRepo 가 읽는다. $repo 가 시험 DB 를 들고 있으므로
-// 따로 맞춰 줄 것이 없다 — 그러려고 ba_db() 호출을 걷어냈다.
+// 따로 맞춰 줄 것이 없다 — 그러려고 bs_db() 호출을 걷어냈다.
 $ex = new WbsExtractor($projects, $repo, null, new NullLlmClient());
 $dt = $ex->domainTable();
 ok('분야표를 읽는다', count($dt) > 10 && isset($dt['attendance']), (string)count($dt));
@@ -335,12 +335,12 @@ $messy = ['tasks' => [
 ]];
 $v = $ex->validate($messy, $dt);
 ok('고칠 수 있는 것은 살린다', count($v) === 7, (string)count($v));
-ok('깊이는 범위 안으로', $v[1]['depth'] === BA_TASK_MAX_DEPTH, (string)$v[1]['depth']);
+ok('깊이는 범위 안으로', $v[1]['depth'] === BS_TASK_MAX_DEPTH, (string)$v[1]['depth']);
 ok('범위 밖 난이도는 비운다', $v[2]['difficulty'] === null);
 ok('음수 공수는 비운다', $v[3]['est_md'] === null);
 ok('없는 분야 코드는 버린다', $v[4]['domain_codes'] === ['quiz'],
    json_encode($v[4]['domain_codes']));
-ok('분야는 상한까지만', count($v[5]['domain_codes']) === BA_TASK_MAX_DOMAINS,
+ok('분야는 상한까지만', count($v[5]['domain_codes']) === BS_TASK_MAX_DOMAINS,
    (string)count($v[5]['domain_codes']));
 ok('긴 제목은 자른다', mb_strlen($v[6]['title']) === 300, (string)mb_strlen($v[6]['title']));
 ok('버린 것을 알려 준다', isset($v[0]['_dropped']) && count($v[0]['_dropped']) === 2,

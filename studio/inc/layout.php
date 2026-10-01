@@ -11,13 +11,13 @@ declare(strict_types=1);
  * bluecart/index.php 의 것을 그대로 옮긴 것이다 — 포털 styles/topbar.css 가
  * .topbar / .user-chip / .dd-menu 를 그 이름으로 그린다.
  *
- * @param array  $user    ba_require_login() 이 돌려준 사용자
+ * @param array  $user    bs_require_login() 이 돌려준 사용자
  * @param string $title   브라우저 탭 제목(모듈명은 함수가 붙인다)
  * @param string $eyebrow 머리말 위 작은 글씨
  * @param string $desc    머리말 설명문
- * @param string $nav     현재 위치 표시용 화면 키. ba_layout_nav() 의 키와 맞춘다
+ * @param string $nav     현재 위치 표시용 화면 키. bs_layout_nav() 의 키와 맞춘다
  */
-function ba_layout_head(
+function bs_layout_head(
     array $user,
     string $title,
     string $eyebrow = '업무 배정',
@@ -39,7 +39,7 @@ function ba_layout_head(
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="../styles/topbar.css">
-<link rel="stylesheet" href="assets/assign.css?v=<?= ba_asset_v('assets/assign.css') ?>">
+<link rel="stylesheet" href="assets/assign.css?v=<?= bs_asset_v('assets/assign.css') ?>">
 </head>
 <body>
 
@@ -60,7 +60,7 @@ function ba_layout_head(
           <a href="../index.php">&#128100; 마이페이지</a>
           <div class="dd-sep"></div>
           <?php // core/worksystems.php — studio 가 현재 위치로 표시된다 ?>
-          <?= work_systems_menu('../', BA_MODULE_KEY) ?>
+          <?= work_systems_menu('../', BS_MODULE_KEY) ?>
           <div class="dd-sep"></div>
           <a href="javascript:void(0)" onclick="baLogout()">&#128682; 로그아웃</a>
         </div>
@@ -80,16 +80,16 @@ function ba_layout_head(
       <?php endif; ?>
     </div>
     <div class="ba-site__aside">
-      <?= ba_layout_nav($nav) ?>
+      <?= bs_layout_nav($nav) ?>
     </div>
   </div>
 </header>
 
 <div class="ba" id="ba-app"
-     data-csrf="<?= h(ba_csrf_token()) ?>"
+     data-csrf="<?= h(bs_csrf_token()) ?>"
      data-me-id="<?= h($user['id']) ?>"
      data-me-name="<?= h($user['name']) ?>"
-     data-is-admin="<?= ba_is_admin() ? '1' : '0' ?>"
+     data-is-admin="<?= bs_is_admin() ? '1' : '0' ?>"
      data-nav="<?= h($nav) ?>">
 <?php
 }
@@ -100,7 +100,7 @@ function ba_layout_head(
  * TODO(P1): 권한에 따라 감출 항목을 정한다. 지금은 전부 보여준다.
  *           (구성원 목록·프로파일은 열람 범위가 아직 미정 — spec §11-4)
  */
-function ba_layout_nav(string $current = ''): string
+function bs_layout_nav(string $current = ''): string
 {
     $items = [
         'dashboard' => ['index.php',        '대시보드'],
@@ -122,7 +122,7 @@ function ba_layout_nav(string $current = ''): string
  * 본문 컨테이너를 닫고 공통 스크립트를 붙인다.
  * 화면마다 추가 스크립트가 있으면 $extraScripts 에 경로를 넘긴다.
  */
-function ba_layout_foot(array $extraScripts = []): void
+function bs_layout_foot(array $extraScripts = []): void
 {
     ?>
   <div class="ba-toast" id="ba-toast" role="status" hidden></div>
@@ -145,9 +145,9 @@ function baLogout() {
     .then(function () { location.href = '../index.php'; });
 }
 </script>
-<script src="assets/assign.js?v=<?= ba_asset_v('assets/assign.js') ?>"></script>
+<script src="assets/assign.js?v=<?= bs_asset_v('assets/assign.js') ?>"></script>
 <?php foreach ($extraScripts as $src): ?>
-<script src="<?= h($src) ?>?v=<?= ba_asset_v($src) ?>"></script>
+<script src="<?= h($src) ?>?v=<?= bs_asset_v($src) ?>"></script>
 <?php endforeach; ?>
 </body>
 </html>
@@ -158,7 +158,7 @@ function baLogout() {
  * 아직 만들지 않은 화면 자리를 채우는 표시.
  * P1~P6 에서 이 호출을 실제 본문으로 바꿔 나간다.
  */
-function ba_placeholder(string $heading, string $phase, array $todo = []): void
+function bs_placeholder(string $heading, string $phase, array $todo = []): void
 {
     ?>
   <section class="ba-placeholder">

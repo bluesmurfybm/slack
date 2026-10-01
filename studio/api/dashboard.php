@@ -22,20 +22,20 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
-require_once BA_ROOT . '/inc/repo/ProjectRepo.php';
-require_once BA_ROOT . '/inc/repo/TaskRepo.php';
-require_once BA_ROOT . '/inc/repo/MemberRepo.php';
-require_once BA_ROOT . '/inc/repo/AllocationRepo.php';
-require_once BA_ROOT . '/inc/repo/ProgressRepo.php';
+require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
+require_once BS_ROOT . '/inc/repo/TaskRepo.php';
+require_once BS_ROOT . '/inc/repo/MemberRepo.php';
+require_once BS_ROOT . '/inc/repo/AllocationRepo.php';
+require_once BS_ROOT . '/inc/repo/ProgressRepo.php';
 
-$pdo      = ba_db();
+$pdo      = bs_db();
 $projects = new ProjectRepo($pdo);
 $tasks    = new TaskRepo($pdo);
 $members  = new MemberRepo($pdo);
 $allocs   = new AllocationRepo($pdo);
 $progress = new ProgressRepo($pdo);
 
-ba_route(ba_param_str('act', 'projects'), [
+bs_route(bs_param_str('act', 'projects'), [
 
     /**
      * 진행 중 프로젝트 카드.
@@ -44,27 +44,27 @@ ba_route(ba_param_str('act', 'projects'), [
      * 프로젝트가 몇 개든 이 수는 그대로다.
      */
     'projects' => function () use ($pdo, $projects, $progress): void {
-        ba_require_login_api();
+        bs_require_login_api();
 
-        $rows = ba_dash_projects($projects);
+        $rows = bs_dash_projects($projects);
         if (!$rows) {
-            ba_json_ok(['rows' => [], 'today' => date('Y-m-d')]);
+            bs_json_ok(['rows' => [], 'today' => date('Y-m-d')]);
         }
         $ids = array_column($rows, 'id');
 
         $prog    = $progress->projectProgressMany($ids);      // 1
-        $overdue = ba_dash_overdue_counts($pdo, $ids);        // 1
-        $confirm = ba_dash_confirmed_map($pdo, $ids);         // 1
-        $people  = ba_dash_people_counts($pdo, $ids);         // 1
+        $overdue = bs_dash_overdue_counts($pdo, $ids);        // 1
+        $confirm = bs_dash_confirmed_map($pdo, $ids);         // 1
+        $people  = bs_dash_people_counts($pdo, $ids);         // 1
 
         $out = [];
         foreach ($rows as $p) {
             $id = (int)$p['id'];
-            $out[] = ba_dash_card($p, $prog[$id] ?? null, $overdue[$id] ?? 0,
+            $out[] = bs_dash_card($p, $prog[$id] ?? null, $overdue[$id] ?? 0,
                                   $confirm[$id] ?? null, $people[$id] ?? 0);
         }
 
-        ba_json_ok(['rows' => $out, 'today' => date('Y-m-d')]);
+        bs_json_ok(['rows' => $out, 'today' => date('Y-m-d')]);
     },
 
     /**
@@ -74,16 +74,16 @@ ba_route(ba_param_str('act', 'projects'), [
      * 보여 주면 확정되지도 않은 배정을 사실로 받아들이게 된다.
      */
     'board' => function () use ($pdo, $projects, $tasks, $members, $allocs, $progress): void {
-        $me        = ba_require_login_api();
-        $projectId = ba_dash_project_param($projects);
+        $me        = bs_require_login_api();
+        $projectId = bs_dash_project_param($projects);
         $project   = $projects->find($projectId);
 
         $alloc = $allocs->confirmed($projectId);              // 1
         if ($alloc === null) {
-            ba_json_ok([
-                'project'    => ba_dash_project($project),
+            bs_json_ok([
+                'project'    => bs_dash_project($project),
                 'allocation' => null,
-                'columns'    => ba_dash_empty_columns(),
+                'columns'    => bs_dash_empty_columns(),
                 'by_member'  => [], 'overdue' => [], 'feed' => [], 'gantt' => [],
                 'message'    => '확정된 배정안이 없습니다. 3단계에서 배정을 확정해야 '
                               . '대시보드에 나옵니다.',
@@ -91,7 +91,7 @@ ba_route(ba_param_str('act', 'projects'), [
         }
 
         // --- 태스크와 배정을 한 번씩만 읽는다 ---------------------------
-        $leaf  = ba_dash_leaf_tasks($pdo, $projectId);        // 1
+        $leaf  = bs_dash_leaf_tasks($pdo, $projectId);        // 1
         $items = $allocs->items((int)$alloc['id']);           // 1
 
         $taskIds = array_keys($leaf);
@@ -125,7 +125,7 @@ ba_route(ba_param_str('act', 'projects'), [
                 'est_md'       => $t['est_md'] !== null ? (float)$t['est_md'] : null,
                 'difficulty'   => $t['difficulty'] !== null ? (int)$t['difficulty'] : null,
                 'status'       => $t['status'],
-                'status_label' => BA_TASK_STATUS[$t['status']] ?? $t['status'],
+                'status_label' => BS_TASK_STATUS[$t['status']] ?? $t['status'],
                 'progress_pct' => (int)$t['progress_pct'],
                 'plan_start'   => $t['plan_start'],
                 'plan_end'     => $t['plan_end'],
@@ -136,46 +136,46 @@ ba_route(ba_param_str('act', 'projects'), [
             ];
         }
 
-        ba_json_ok([
-            'project'    => ba_dash_project($project),
+        bs_json_ok([
+            'project'    => bs_dash_project($project),
             'allocation' => [
                 'id' => (int)$alloc['id'], 'version' => (int)$alloc['version'],
                 'confirmed_at' => $alloc['confirmed_at'],
                 'confirmed_by_name' => $alloc['confirmed_by_name'],
             ],
             'summary'   => $progress->projectProgress($projectId),   // 1
-            'columns'   => ba_dash_columns($cards),
-            'gantt'     => ba_dash_gantt($cards, $project),
-            'by_member' => ba_dash_members($byMember, $cards),
+            'columns'   => bs_dash_columns($cards),
+            'gantt'     => bs_dash_gantt($cards, $project),
+            'by_member' => bs_dash_members($byMember, $cards),
             'overdue'   => $overdue,
             'feed'      => $feed,
-            'me'        => ba_dash_me($members, $me, $byMember),     // 1
+            'me'        => bs_dash_me($members, $me, $byMember),     // 1
             'today'     => $today,
         ]);
     },
 
     /** 내가 맡은 태스크만. 개발자가 먼저 보는 화면. */
     'mine' => function () use ($pdo, $members, $progress): void {
-        $me = ba_require_login_api();
+        $me = bs_require_login_api();
 
         $mine = $members->findByUserId((string)$me['id']);            // 1
         if (!$mine) {
-            ba_json_ok(['rows' => [], 'member' => null,
+            bs_json_ok(['rows' => [], 'member' => null,
                 'message' => '구성원 명단에 없어 배정받은 태스크를 찾을 수 없습니다.']);
         }
 
-        $rows = ba_dash_my_tasks($pdo, (int)$mine['id']);             // 1
+        $rows = bs_dash_my_tasks($pdo, (int)$mine['id']);             // 1
         $last = $progress->latestPerTask(array_column($rows, 'task_id')); // 1
 
         $today = date('Y-m-d');
         foreach ($rows as &$r) {
             $r['overdue'] = $r['plan_end'] !== null && $r['plan_end'] < $today
-                         && !in_array($r['status'], BA_TASK_OVERDUE_EXEMPT, true);
+                         && !in_array($r['status'], BS_TASK_OVERDUE_EXEMPT, true);
             $r['last'] = $last[$r['task_id']] ?? null;
         }
         unset($r);
 
-        ba_json_ok([
+        bs_json_ok([
             'member' => ['id' => (int)$mine['id'], 'emp_name' => $mine['emp_name']],
             'rows'   => $rows,
             'today'  => $today,
@@ -188,30 +188,30 @@ ba_route(ba_param_str('act', 'projects'), [
 // 공통
 // =====================================================================
 
-function ba_dash_project_param(ProjectRepo $projects): int
+function bs_dash_project_param(ProjectRepo $projects): int
 {
-    $id = ba_param_int('project_id', 0);
+    $id = bs_param_int('project_id', 0);
     if (!$id) {
-        ba_json_error('MISSING_PARAM', '프로젝트 번호가 없습니다.', 400);
+        bs_json_error('MISSING_PARAM', '프로젝트 번호가 없습니다.', 400);
     }
     if (!$projects->find($id)) {
-        ba_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+        bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
     }
     return $id;
 }
 
 /** 카드에 올릴 프로젝트. 상태로 거른다. */
-function ba_dash_projects(ProjectRepo $projects): array
+function bs_dash_projects(ProjectRepo $projects): array
 {
     $r = $projects->search([
-        'status' => BA_DASH_PROJECT_STATUS,
+        'status' => BS_DASH_PROJECT_STATUS,
         'size'   => 50,
         'sort'   => 'deploy_date',
     ]);
     return $r['rows'] ?? [];
 }
 
-function ba_dash_project(array $p): array
+function bs_dash_project(array $p): array
 {
     return [
         'id'          => (int)$p['id'],
@@ -219,7 +219,7 @@ function ba_dash_project(array $p): array
         'name'        => $p['name'],
         'client'      => $p['client'],
         'status'      => $p['status'],
-        'status_label' => BA_PROJECT_STATUS[$p['status']] ?? $p['status'],
+        'status_label' => BS_PROJECT_STATUS[$p['status']] ?? $p['status'],
         'dev_start'   => $p['dev_start'],
         'dev_end'     => $p['dev_end'],
         'test_start'  => $p['test_start'],
@@ -236,7 +236,7 @@ function ba_dash_project(array $p): array
  * 무엇을 기준으로 셌는지 함께 돌려준다 — 날짜가 둘이면 화면이
  * 어느 쪽인지 말해야 한다.
  */
-function ba_dash_card(array $p, ?array $prog, int $overdue, ?array $conf, int $people): array
+function bs_dash_card(array $p, ?array $prog, int $overdue, ?array $conf, int $people): array
 {
     $base = $p['deploy_date'] ?: ($p['dev_end'] ?: null);
     $dday = null;
@@ -246,7 +246,7 @@ function ba_dash_card(array $p, ?array $prog, int $overdue, ?array $conf, int $p
         $dday = (int)$d1->diff($d2)->format('%r%a');
     }
 
-    return ba_dash_project($p) + [
+    return bs_dash_project($p) + [
         'dday'        => $dday,
         'dday_base'   => $base,
         'dday_of'     => $p['deploy_date'] ? '운영 배포' : ($p['dev_end'] ? '개발 완료' : null),
@@ -255,12 +255,12 @@ function ba_dash_card(array $p, ?array $prog, int $overdue, ?array $conf, int $p
         'people'      => $people,
         // 확정 전에는 null 이다. 화면이 "아직 확정 전" 을 그릴 수 있게.
         'allocation'  => $conf,
-        'stage'       => ba_dash_stage($p),
+        'stage'       => bs_dash_stage($p),
     ];
 }
 
 /** 단계별 상태(개발/테스트/배포). 오늘이 어느 구간인지. */
-function ba_dash_stage(array $p): array
+function bs_dash_stage(array $p): array
 {
     $today = date('Y-m-d');
     $mk = function (?string $from, ?string $to) use ($today): string {
@@ -281,22 +281,22 @@ function ba_dash_stage(array $p): array
 }
 
 /** 프로젝트별 지연 건수. 한 번의 질의로. */
-function ba_dash_overdue_counts(PDO $pdo, array $ids): array
+function bs_dash_overdue_counts(PDO $pdo, array $ids): array
 {
     if (!$ids) { return []; }
     $ph  = implode(',', array_fill(0, count($ids), '?'));
-    $sph = implode(',', array_fill(0, count(BA_TASK_OVERDUE_EXEMPT), '?'));
+    $sph = implode(',', array_fill(0, count(BS_TASK_OVERDUE_EXEMPT), '?'));
     $st = $pdo->prepare(
         "SELECT t.project_id, COUNT(*) n
-           FROM ba_task t
+           FROM bs_task t
           WHERE t.project_id IN ($ph)
             AND t.confirmed = 1
             AND t.plan_end IS NOT NULL AND t.plan_end < ?
             AND t.status NOT IN ($sph)
-            AND NOT EXISTS (SELECT 1 FROM ba_task c WHERE c.parent_id = t.id)
+            AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)
           GROUP BY t.project_id"
     );
-    $st->execute(array_merge($ids, [date('Y-m-d')], BA_TASK_OVERDUE_EXEMPT));
+    $st->execute(array_merge($ids, [date('Y-m-d')], BS_TASK_OVERDUE_EXEMPT));
     $out = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $out[(int)$r['project_id']] = (int)$r['n'];
@@ -305,13 +305,13 @@ function ba_dash_overdue_counts(PDO $pdo, array $ids): array
 }
 
 /** 프로젝트별 확정 배정안. 확정 전이면 키가 없다. */
-function ba_dash_confirmed_map(PDO $pdo, array $ids): array
+function bs_dash_confirmed_map(PDO $pdo, array $ids): array
 {
     if (!$ids) { return []; }
     $ph = implode(',', array_fill(0, count($ids), '?'));
     $st = $pdo->prepare(
         "SELECT project_id, id, version, confirmed_at
-           FROM ba_allocation
+           FROM bs_allocation
           WHERE project_id IN ($ph) AND status = 'confirmed'"
     );
     $st->execute($ids);
@@ -326,14 +326,14 @@ function ba_dash_confirmed_map(PDO $pdo, array $ids): array
 }
 
 /** 프로젝트별 참여 인원 수(확정 배정안 기준). */
-function ba_dash_people_counts(PDO $pdo, array $ids): array
+function bs_dash_people_counts(PDO $pdo, array $ids): array
 {
     if (!$ids) { return []; }
     $ph = implode(',', array_fill(0, count($ids), '?'));
     $st = $pdo->prepare(
         "SELECT a.project_id, COUNT(DISTINCT i.member_id) n
-           FROM ba_allocation a
-           JOIN ba_allocation_item i ON i.allocation_id = a.id
+           FROM bs_allocation a
+           JOIN bs_allocation_item i ON i.allocation_id = a.id
           WHERE a.project_id IN ($ph) AND a.status = 'confirmed'
           GROUP BY a.project_id"
     );
@@ -346,14 +346,14 @@ function ba_dash_people_counts(PDO $pdo, array $ids): array
 }
 
 /** 말단 태스크(확정된 것만). @return array<int, array> */
-function ba_dash_leaf_tasks(PDO $pdo, int $projectId): array
+function bs_dash_leaf_tasks(PDO $pdo, int $projectId): array
 {
     $st = $pdo->prepare(
         'SELECT t.id, t.wbs_no, t.title, t.est_md, t.difficulty, t.status,
                 t.progress_pct, t.plan_start, t.plan_end
-           FROM ba_task t
+           FROM bs_task t
           WHERE t.project_id = ? AND t.confirmed = 1
-            AND NOT EXISTS (SELECT 1 FROM ba_task c WHERE c.parent_id = t.id)
+            AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)
           ORDER BY t.wbs_no'
     );
     $st->execute([$projectId]);
@@ -365,15 +365,15 @@ function ba_dash_leaf_tasks(PDO $pdo, int $projectId): array
 }
 
 /** 칸반 열. 명세서 §7.1 Step4 의 6개 + 보류는 따로. */
-function ba_dash_columns(array $cards): array
+function bs_dash_columns(array $cards): array
 {
     $cols = [];
-    foreach (BA_KANBAN_COLUMNS as $k) {
-        $cols[$k] = ['key' => $k, 'label' => BA_TASK_STATUS[$k] ?? $k, 'cards' => []];
+    foreach (BS_KANBAN_COLUMNS as $k) {
+        $cols[$k] = ['key' => $k, 'label' => BS_TASK_STATUS[$k] ?? $k, 'cards' => []];
     }
     // 보류는 명세서의 6열에 없다. 그렇다고 버리면 화면에서 사라져
     // 아무도 다시 안 본다. 따로 모아 끝에 둔다.
-    $cols['hold'] = ['key' => 'hold', 'label' => BA_TASK_STATUS['hold'], 'cards' => []];
+    $cols['hold'] = ['key' => 'hold', 'label' => BS_TASK_STATUS['hold'], 'cards' => []];
 
     foreach ($cards as $c) {
         $k = isset($cols[$c['status']]) ? $c['status'] : 'todo';
@@ -386,13 +386,13 @@ function ba_dash_columns(array $cards): array
     return array_values($cols);
 }
 
-function ba_dash_empty_columns(): array
+function bs_dash_empty_columns(): array
 {
-    return ba_dash_columns([]);
+    return bs_dash_columns([]);
 }
 
 /** 간트용 — 기간이 있는 것만. 없으면 그릴 수 없다고 알린다. */
-function ba_dash_gantt(array $cards, array $project): array
+function bs_dash_gantt(array $cards, array $project): array
 {
     $from = $project['dev_start'] ?: ($project['test_start'] ?: null);
     $to   = $project['deploy_date'] ?: ($project['test_end'] ?: ($project['dev_end'] ?: null));
@@ -421,7 +421,7 @@ function ba_dash_gantt(array $cards, array $project): array
 }
 
 /** 담당자별 카드 — 배정 수, 진행률, 지연 건. */
-function ba_dash_members(array $byMember, array $cards): array
+function bs_dash_members(array $byMember, array $cards): array
 {
     $out = [];
     foreach ($byMember as $mid => $m) {
@@ -455,7 +455,7 @@ function ba_dash_members(array $byMember, array $cards): array
 }
 
 /** 지금 보는 사람이 이 프로젝트에서 맡은 것. 드로어를 열 수 있는지 판단에 쓴다. */
-function ba_dash_me(MemberRepo $members, array $me, array $byMember): array
+function bs_dash_me(MemberRepo $members, array $me, array $byMember): array
 {
     $mine = $members->findByUserId((string)$me['id']);
     if (!$mine) {
@@ -470,17 +470,17 @@ function ba_dash_me(MemberRepo $members, array $me, array $byMember): array
 }
 
 /** 내가 맡은 태스크 — 확정된 배정안에서만. */
-function ba_dash_my_tasks(PDO $pdo, int $memberId): array
+function bs_dash_my_tasks(PDO $pdo, int $memberId): array
 {
     $st = $pdo->prepare(
         "SELECT t.id AS task_id, t.wbs_no, t.title, t.status, t.progress_pct,
                 t.plan_start, t.plan_end, t.est_md, t.difficulty,
                 p.id AS project_id, p.name AS project_name, p.code AS project_code,
                 i.role
-           FROM ba_allocation_item i
-           JOIN ba_allocation a ON a.id = i.allocation_id AND a.status = 'confirmed'
-           JOIN ba_task       t ON t.id = i.task_id
-           JOIN ba_project    p ON p.id = t.project_id AND p.deleted_at IS NULL
+           FROM bs_allocation_item i
+           JOIN bs_allocation a ON a.id = i.allocation_id AND a.status = 'confirmed'
+           JOIN bs_task       t ON t.id = i.task_id
+           JOIN bs_project    p ON p.id = t.project_id AND p.deleted_at IS NULL
           WHERE i.member_id = ?
           ORDER BY (t.plan_end IS NULL), t.plan_end, t.wbs_no"
     );
@@ -491,8 +491,8 @@ function ba_dash_my_tasks(PDO $pdo, int $memberId): array
         $r['progress_pct'] = (int)$r['progress_pct'];
         $r['est_md']       = $r['est_md'] !== null ? (float)$r['est_md'] : null;
         $r['difficulty']   = $r['difficulty'] !== null ? (int)$r['difficulty'] : null;
-        $r['status_label'] = BA_TASK_STATUS[$r['status']] ?? $r['status'];
-        $r['role_name']    = BA_ALLOC_ROLE[$r['role']] ?? $r['role'];
+        $r['status_label'] = BS_TASK_STATUS[$r['status']] ?? $r['status'];
+        $r['role_name']    = BS_ALLOC_ROLE[$r['role']] ?? $r['role'];
         return $r;
     }, $st->fetchAll(PDO::FETCH_ASSOC));
 }

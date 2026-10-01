@@ -25,9 +25,9 @@ if (!function_exists('h')) {
  * 정적 파일 주소에 붙일 판 번호.
  * 파일 수정시각이라 고칠 때마다 저절로 바뀐다(BlueCart bc_asset_v 와 같은 방식).
  */
-function ba_asset_v(string $rel): string
+function bs_asset_v(string $rel): string
 {
-    $t = @filemtime(BA_ROOT . '/' . ltrim($rel, '/'));
+    $t = @filemtime(BS_ROOT . '/' . ltrim($rel, '/'));
     return (string)($t ?: 0);
 }
 
@@ -55,7 +55,7 @@ function ba_asset_v(string $rel): string
 // │ 호출부(api/*.php)는 건드릴 필요가 없습니다.                        │
 // └──────────────────────────────────────────────────────────────────┘
 
-function ba_json(mixed $payload, int $code = 200): never
+function bs_json(mixed $payload, int $code = 200): never
 {
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
@@ -65,9 +65,9 @@ function ba_json(mixed $payload, int $code = 200): never
 }
 
 /** 성공 응답. 페이로드는 data 아래로 들어간다. */
-function ba_json_ok(mixed $data = null): never
+function bs_json_ok(mixed $data = null): never
 {
-    ba_json(['ok' => true, 'data' => $data]);
+    bs_json(['ok' => true, 'data' => $data]);
 }
 
 /**
@@ -76,9 +76,9 @@ function ba_json_ok(mixed $data = null): never
  * @param string $code    기계가 읽는 코드. 대문자+밑줄. 예: NOT_FOUND
  * @param string $message 사람이 읽는 한글 문장. 화면이 그대로 보여준다.
  */
-function ba_json_error(string $code, string $message, int $httpStatus = 400): never
+function bs_json_error(string $code, string $message, int $httpStatus = 400): never
 {
-    ba_json(['ok' => false, 'error' => ['code' => $code, 'message' => $message]], $httpStatus);
+    bs_json(['ok' => false, 'error' => ['code' => $code, 'message' => $message]], $httpStatus);
 }
 
 // =====================================================================
@@ -86,7 +86,7 @@ function ba_json_error(string $code, string $message, int $httpStatus = 400): ne
 // =====================================================================
 
 /** JSON 본문과 폼 전송을 같게 취급한다(BlueCart bc_input 과 같은 방식). */
-function ba_input(): array
+function bs_input(): array
 {
     static $input = null;
     if ($input !== null) {
@@ -103,9 +103,9 @@ function ba_input(): array
     return $input;
 }
 
-function ba_param(string $key, mixed $default = null): mixed
+function bs_param(string $key, mixed $default = null): mixed
 {
-    $in = ba_input();
+    $in = bs_input();
     if (array_key_exists($key, $in)) {
         return $in[$key];
     }
@@ -119,20 +119,20 @@ function ba_param(string $key, mixed $default = null): mixed
  * 못하면, 보내지 않은 칸을 빈 값으로 덮어써 멀쩡한 데이터를 지운다.
  * (실제로 그렇게 새던 것을 HTTP 시험에서 잡았다.)
  */
-function ba_has_param(string $key): bool
+function bs_has_param(string $key): bool
 {
-    return array_key_exists($key, ba_input()) || array_key_exists($key, $_GET);
+    return array_key_exists($key, bs_input()) || array_key_exists($key, $_GET);
 }
 
-function ba_param_str(string $key, string $default = ''): string
+function bs_param_str(string $key, string $default = ''): string
 {
-    $v = ba_param($key, $default);
+    $v = bs_param($key, $default);
     return is_scalar($v) ? trim((string)$v) : $default;
 }
 
-function ba_param_int(string $key, ?int $default = null): ?int
+function bs_param_int(string $key, ?int $default = null): ?int
 {
-    $v = ba_param($key);
+    $v = bs_param($key);
     if ($v === null || $v === '') {
         return $default;
     }
@@ -140,9 +140,9 @@ function ba_param_int(string $key, ?int $default = null): ?int
 }
 
 /** 배열 파라미터(domains[] 등). 스칼라가 오면 한 칸짜리 배열로 만든다. */
-function ba_param_array(string $key): array
+function bs_param_array(string $key): array
 {
-    $v = ba_param($key, []);
+    $v = bs_param($key, []);
     if ($v === null || $v === '') {
         return [];
     }
@@ -150,15 +150,15 @@ function ba_param_array(string $key): array
 }
 
 /** 요청 메서드. */
-function ba_method(): string
+function bs_method(): string
 {
     return strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 }
 
-function ba_require_post(): void
+function bs_require_post(): void
 {
-    if (ba_method() !== 'POST') {
-        ba_json_error('METHOD_NOT_ALLOWED', 'POST 요청만 허용됩니다.', 405);
+    if (bs_method() !== 'POST') {
+        bs_json_error('METHOD_NOT_ALLOWED', 'POST 요청만 허용됩니다.', 405);
     }
 }
 
@@ -166,22 +166,22 @@ function ba_require_post(): void
 // CSRF
 // =====================================================================
 //
-// 세션 키를 ba_csrf 로 따로 둔다. BlueCart(bc_csrf)와 같은 세션을 공유하므로
+// 세션 키를 bs_csrf 로 따로 둔다. BlueCart(bc_csrf)와 같은 세션을 공유하므로
 // 키 이름이 겹치면 두 모듈이 서로의 토큰을 덮어쓴다.
 
-function ba_csrf_token(): string
+function bs_csrf_token(): string
 {
-    if (empty($_SESSION['ba_csrf'])) {
-        $_SESSION['ba_csrf'] = bin2hex(random_bytes(32));
+    if (empty($_SESSION['bs_csrf'])) {
+        $_SESSION['bs_csrf'] = bin2hex(random_bytes(32));
     }
-    return $_SESSION['ba_csrf'];
+    return $_SESSION['bs_csrf'];
 }
 
-function ba_verify_csrf(): void
+function bs_verify_csrf(): void
 {
-    $sent = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ba_param_str('_csrf');
-    if ($sent === '' || !hash_equals($_SESSION['ba_csrf'] ?? '', $sent)) {
-        ba_json_error('CSRF_EXPIRED', '요청이 만료되었습니다. 새로고침 후 다시 시도하세요.', 419);
+    $sent = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? bs_param_str('_csrf');
+    if ($sent === '' || !hash_equals($_SESSION['bs_csrf'] ?? '', $sent)) {
+        bs_json_error('CSRF_EXPIRED', '요청이 만료되었습니다. 새로고침 후 다시 시도하세요.', 419);
     }
 }
 
@@ -189,7 +189,7 @@ function ba_verify_csrf(): void
 // 포맷
 // =====================================================================
 
-function ba_date(?string $dt, string $fmt = 'Y-m-d'): string
+function bs_date(?string $dt, string $fmt = 'Y-m-d'): string
 {
     if ($dt === null || $dt === '' || str_starts_with($dt, '0000')) {
         return '';
@@ -199,7 +199,7 @@ function ba_date(?string $dt, string $fmt = 'Y-m-d'): string
 }
 
 /** http(s) 링크만 통과시킨다. javascript: 등 차단. */
-function ba_safe_url(?string $url): ?string
+function bs_safe_url(?string $url): ?string
 {
     if ($url === null || trim($url) === '') {
         return null;

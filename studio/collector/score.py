@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ba_work_item 에서 구성원 역량 점수를 산출해 ba_eval_run / ba_member_* 에 적재한다.
+"""bs_work_item 에서 구성원 역량 점수를 산출해 bs_eval_run / bs_member_* 에 적재한다.
 
     python score.py --dry-run              최근 6개월, 콘솔 표로만
     python score.py --from 2026-04-01 --to 2026-09-30
@@ -49,10 +49,10 @@ for _s in (sys.stdout, sys.stderr):
 
 FORMULA_VER = "v1.0"
 
-# 점수를 내지 않는 계열 (inc/bootstrap.php 의 BA_CATEGORY_NOT_SCORED 와 같아야 한다)
+# 점수를 내지 않는 계열 (inc/bootstrap.php 의 BS_CATEGORY_NOT_SCORED 와 같아야 한다)
 NOT_SCORED = {"planning"}
 
-# 계열 표시명 (inc/bootstrap.php 의 BA_DOMAIN_CATEGORY 와 같아야 한다)
+# 계열 표시명 (inc/bootstrap.php 의 BS_DOMAIN_CATEGORY 와 같아야 한다)
 CAT_LABEL = {
     "activity": "학습활동", "grading": "평가·이수", "enrolment": "사용자·수강",
     "integration": "연동·알림", "presentation": "화면·테마",
@@ -118,7 +118,7 @@ def percentile(values: list[float], p: float) -> float:
 # 조금 움직인다(순위 기반처럼 급변하지는 않는다). 완전한 절대 기준을 원하면
 # 첫 회차 값을 고정 상수로 못박고 주기적으로 재검토하는 편이 낫다 —
 # 그때는 baseline 을 설정에 직접 적는다. 어느 값을 썼는지는 회차마다
-# ba_member_category.baseline 에 남는다.
+# bs_member_category.baseline 에 남는다.
 DEFAULT_BASELINE_P = 0.90
 
 
@@ -187,7 +187,7 @@ def fetch_members(conn) -> list[dict]:
     with conn.cursor() as cur:
         cur.execute(
             "SELECT id, user_id, emp_name, role_label, career_months"
-            "  FROM ba_member WHERE is_evaluable = 1 ORDER BY id"
+            "  FROM bs_member WHERE is_evaluable = 1 ORDER BY id"
         )
         return cur.fetchall()
 
@@ -196,7 +196,7 @@ def fetch_work(conn, dfrom: date, dto: date) -> list[dict]:
     """
     기간 내 업무 이력 + 분야·계열.
 
-    **member_id IS NOT NULL** 로 거른다. ba_work_item 에는 협력사가 처리한 건이
+    **member_id IS NOT NULL** 로 거른다. bs_work_item 에는 협력사가 처리한 건이
     member_id=NULL 로 함께 들어 있다(6개월 기준 19.8%). 그것이 분모에 섞이면
     자사 구성원 점수가 낮아진다.
 
@@ -211,9 +211,9 @@ def fetch_work(conn, dfrom: date, dto: date) -> list[dict]:
                    w.requested_at, w.closed_at,
                    d.id AS domain_id, d.code AS domain_code,
                    d.name AS domain_name, d.category
-              FROM ba_work_item w
-              JOIN ba_work_item_domain wd ON wd.work_item_id = w.id
-              JOIN ba_domain d           ON d.id = wd.domain_id
+              FROM bs_work_item w
+              JOIN bs_work_item_domain wd ON wd.work_item_id = w.id
+              JOIN bs_domain d           ON d.id = wd.domain_id
              WHERE w.member_id IS NOT NULL
                AND w.source = 'slack'
                AND COALESCE(w.closed_at, w.requested_at) BETWEEN %s AND %s
@@ -232,7 +232,7 @@ def aggregate(work: list[dict], members: list[dict]) -> dict:
     """
     사람 × (분야 / 계열) 로 모은다.
 
-    난이도는 ba_work_item.difficulty 를 그대로 쓴다. 수집기가 이미 정해 뒀다 —
+    난이도는 bs_work_item.difficulty 를 그대로 쓴다. 수집기가 이미 정해 뒀다 —
     사람이 고친 값(manual) > 취합 시스템 채점(ai_stars) > 규칙 기반 순.
     여기서 다시 판정하지 않는다. LLM 은 쓰지 않는다.
     """
@@ -344,7 +344,7 @@ def start_run(conn, dfrom: date, dto: date, source_stat: str) -> int:
     """
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO ba_eval_run (started_at, period_from, period_to,"
+            "INSERT INTO bs_eval_run (started_at, period_from, period_to,"
             " source_stat, formula_ver, status)"
             " VALUES (NOW(), %s, %s, %s, %s, 'running')",
             (dfrom.isoformat(), dto.isoformat(), source_stat, FORMULA_VER),
@@ -355,7 +355,7 @@ def start_run(conn, dfrom: date, dto: date, source_stat: str) -> int:
 def finish_run(conn, eval_ver: int, status: str, note: str | None) -> None:
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE ba_eval_run SET finished_at = NOW(), status = %s, note = %s WHERE id = %s",
+            "UPDATE bs_eval_run SET finished_at = NOW(), status = %s, note = %s WHERE id = %s",
             (status, (note or "")[:300], eval_ver),
         )
 
@@ -373,7 +373,7 @@ def persist(conn, eval_ver: int, agg: dict, res: dict, members: list[dict]) -> d
                     continue
                 _, insuf = confidence_of(v["cases"])
                 cur.execute(
-                    "INSERT INTO ba_member_skill"
+                    "INSERT INTO bs_member_skill"
                     " (member_id, domain_id, eval_ver, case_count, weighted_qty,"
                     "  score, is_primary, insufficient_data)"
                     " VALUES (%s,%s,%s,%s,%s,NULL,0,%s)",
@@ -385,7 +385,7 @@ def persist(conn, eval_ver: int, agg: dict, res: dict, members: list[dict]) -> d
             for c in res["cats"]:
                 s = res["cat_scores"][(mid, c)]
                 cur.execute(
-                    "INSERT INTO ba_member_category"
+                    "INSERT INTO bs_member_category"
                     " (member_id, category, eval_ver, case_count, weighted_qty,"
                     "  baseline, score, confidence, insufficient_data)"
                     " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
@@ -397,12 +397,12 @@ def persist(conn, eval_ver: int, agg: dict, res: dict, members: list[dict]) -> d
             # 종합 지표
             mt = res["metrics"][mid]
             cur.execute(
-                "INSERT INTO ba_member_metric"
+                "INSERT INTO bs_member_metric"
                 " (member_id, eval_ver, period_from, period_to, total_cases,"
                 "  cap_score, speed_score, comm_score, breadth_score, career_score,"
                 "  manual_adjust, insufficient_data)"
-                " VALUES (%s,%s,(SELECT period_from FROM ba_eval_run WHERE id=%s),"
-                "         (SELECT period_to FROM ba_eval_run WHERE id=%s),"
+                " VALUES (%s,%s,(SELECT period_from FROM bs_eval_run WHERE id=%s),"
+                "         (SELECT period_to FROM bs_eval_run WHERE id=%s),"
                 "         %s,%s,%s,%s,%s,%s,0,%s)",
                 (mid, eval_ver, eval_ver, eval_ver, mt["total_cases"],
                  mt["cap_score"], mt["speed_score"], mt["comm_score"],
@@ -494,7 +494,7 @@ def main() -> int:
     try:
         members = fetch_members(conn)
         if not members:
-            sys.exit("평가 대상 구성원이 없습니다. ba_member 를 확인하세요.")
+            sys.exit("평가 대상 구성원이 없습니다. bs_member 를 확인하세요.")
         work = fetch_work(conn, dfrom, dto)
         print(f"  대상      구성원 {len(members)}명 / 업무-분야 행 {len(work)}건")
 

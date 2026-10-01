@@ -6,11 +6,11 @@
 -- =====================================================================
 SET NAMES utf8mb4;
 
-DELETE FROM ba_project_source;
-DELETE FROM ba_project;
-ALTER TABLE ba_project AUTO_INCREMENT = 1;
+DELETE FROM bs_project_source;
+DELETE FROM bs_project;
+ALTER TABLE bs_project AUTO_INCREMENT = 1;
 
-INSERT INTO ba_project
+INSERT INTO bs_project
   (code, name, summary, client, track, dev_start, dev_end, test_start, test_end,
    deploy_date, notes, status, owner_id, owner_name) VALUES
 ('PRJ-2026-001', 'A대 LXP 고도화', '학습경험 플랫폼 2차 고도화', 'A대학교', 'lxp',
@@ -33,7 +33,7 @@ INSERT INTO ba_project
  'kimhy@bluesoft.co.kr','김호영');
 
 -- 출처 문서 몇 건 (파일 없이 링크·텍스트만 — 실제 파일은 화면에서 올려 본다)
-INSERT INTO ba_project_source
+INSERT INTO bs_project_source
   (project_id, kind, title, url, parsed_text, parse_status, uploaded_by, uploaded_by_name) VALUES
 (1,'figma','A대 LXP 화면 시안','https://www.figma.com/file/sample/ADesign',NULL,'skip',
  'kimhy@bluesoft.co.kr','김호영'),
@@ -51,53 +51,53 @@ INSERT INTO ba_project_source
 --
 -- wbs_no / depth / seq 는 여기서 직접 적지만, 화면에서 한 번 저장하면
 -- TaskRepo 가 자리 기준으로 다시 매깁니다. 값이 다르면 그쪽이 맞습니다.
--- ba_project 를 위에서 지웠으므로 FK CASCADE 로 옛 태스크는 이미 없습니다.
+-- bs_project 를 위에서 지웠으므로 FK CASCADE 로 옛 태스크는 이미 없습니다.
 -- ---------------------------------------------------------------------
-INSERT INTO ba_task
+INSERT INTO bs_task
   (project_id, parent_id, depth, seq, wbs_no, title, description, est_md, difficulty,
    plan_start, plan_end, origin, confirmed, status, progress_pct) VALUES
 (1, NULL, 1, 0, '1', '출석 통합', '온라인·오프라인 출석을 하나로 본다', NULL, NULL,
  '2026-03-02','2026-04-10','manual', 0, 'todo', 0);
 SET @t1 = LAST_INSERT_ID();
-INSERT INTO ba_task
+INSERT INTO bs_task
   (project_id, parent_id, depth, seq, wbs_no, title, description, est_md, difficulty,
    plan_start, plan_end, origin, confirmed, status, progress_pct) VALUES
 (1, @t1, 2, 0, '1.1', '출석 데이터 모델 정리', NULL, 4, 3, '2026-03-02','2026-03-13','manual', 1, 'done', 100);
 -- 주의: 여러 행을 한 INSERT 로 넣으면 LAST_INSERT_ID() 는 **첫 행**의 id 를 준다.
 -- 처음에 둘을 묶어 넣었다가 1.2.1 / 1.2.2 가 1.1 밑으로 붙었다. 부모로 쓸 행은 따로 넣는다.
-INSERT INTO ba_task
+INSERT INTO bs_task
   (project_id, parent_id, depth, seq, wbs_no, title, description, est_md, difficulty,
    plan_start, plan_end, origin, confirmed, status, progress_pct) VALUES
 (1, @t1, 2, 1, '1.2', '통합 출석부 화면', '주차별 보기 + 일괄 처리', NULL, 4, '2026-03-16','2026-04-10','manual', 1, 'doing', 40);
 SET @t12 = LAST_INSERT_ID();
-INSERT INTO ba_task
+INSERT INTO bs_task
   (project_id, parent_id, depth, seq, wbs_no, title, description, est_md, difficulty,
    plan_start, plan_end, origin, confirmed, status, progress_pct) VALUES
 (1, @t12, 3, 0, '1.2.1', '주차별 보기', NULL, 5, 3, '2026-03-16','2026-03-27','manual', 1, 'doing', 60),
 (1, @t12, 3, 1, '1.2.2', '일괄 출결 처리', '엑셀 업로드 포함', 4, 4, '2026-03-30','2026-04-10','manual', 0, 'todo', 0);
 
-INSERT INTO ba_task
+INSERT INTO bs_task
   (project_id, parent_id, depth, seq, wbs_no, title, description, est_md, difficulty,
    plan_start, plan_end, origin, confirmed, status, progress_pct) VALUES
 (1, NULL, 1, 1, '2', '성적부 연동', '출석 결과를 성적부로 넘긴다', NULL, NULL,
  '2026-04-13','2026-05-29','manual', 0, 'todo', 0);
 SET @t2 = LAST_INSERT_ID();
-INSERT INTO ba_task
+INSERT INTO bs_task
   (project_id, parent_id, depth, seq, wbs_no, title, description, est_md, difficulty,
    plan_start, plan_end, origin, confirmed, status, progress_pct) VALUES
 (1, @t2, 2, 0, '2.1', '성적 산출 규칙 반영', NULL, 6, 4, '2026-04-13','2026-05-01','manual', 1, 'todo', 0),
 (1, @t2, 2, 1, '2.2', '마이그레이션 검증', '지난 학기 데이터로 대조', 3, 5, '2026-05-04','2026-05-29','manual', 0, 'hold', 0);
 
 -- 분야 태그. 가중치는 고른 개수로 균등하게 — TaskRepo::replaceDomains() 와 같은 규칙.
-INSERT INTO ba_task_domain (task_id, domain_id, weight)
+INSERT INTO bs_task_domain (task_id, domain_id, weight)
 SELECT t.id, d.id, 1.000
-  FROM ba_task t JOIN ba_domain d ON d.code = 'attendance'
+  FROM bs_task t JOIN bs_domain d ON d.code = 'attendance'
  WHERE t.project_id = 1 AND t.wbs_no IN ('1.1','1.2','1.2.1','1.2.2');
-INSERT INTO ba_task_domain (task_id, domain_id, weight)
+INSERT INTO bs_task_domain (task_id, domain_id, weight)
 SELECT t.id, d.id, 0.500
-  FROM ba_task t JOIN ba_domain d ON d.code IN ('gradebook','migration')
+  FROM bs_task t JOIN bs_domain d ON d.code IN ('gradebook','migration')
  WHERE t.project_id = 1 AND t.wbs_no = '2.2';
-INSERT INTO ba_task_domain (task_id, domain_id, weight)
+INSERT INTO bs_task_domain (task_id, domain_id, weight)
 SELECT t.id, d.id, 1.000
-  FROM ba_task t JOIN ba_domain d ON d.code = 'gradebook'
+  FROM bs_task t JOIN bs_domain d ON d.code = 'gradebook'
  WHERE t.project_id = 1 AND t.wbs_no = '2.1';

@@ -1,5 +1,5 @@
 -- =====================================================================
--- 수집기 시험용 샘플 — 슬랙 취합 시스템 쪽 표 + ba_member
+-- 수집기 시험용 샘플 — 슬랙 취합 시스템 쪽 표 + bs_member
 --
 --   mysql -u root iworks_local < studio/dev/seed_slack.sql
 --
@@ -78,18 +78,18 @@ CREATE TABLE IF NOT EXISTS `local_assignments` (
 -- ---------------------------------------------------------------------
 -- 초기화
 -- ---------------------------------------------------------------------
-DELETE FROM ba_work_item_domain;
-DELETE FROM ba_work_item;
-DELETE FROM ba_sync_log;
+DELETE FROM bs_work_item_domain;
+DELETE FROM bs_work_item;
+DELETE FROM bs_sync_log;
 DELETE FROM local_assignments;
 DELETE FROM requests;
 DELETE FROM schools;
 
 -- ---------------------------------------------------------------------
--- ba_member — 운영에서는 MemberRepo::syncFromPortalUsers() 가 채웁니다(P3).
+-- bs_member — 운영에서는 MemberRepo::syncFromPortalUsers() 가 채웁니다(P3).
 -- 수집기가 담당자를 붙이려면 이 표가 있어야 해서 여기서 미리 넣습니다.
 -- ---------------------------------------------------------------------
-INSERT INTO ba_member (user_id, emp_name, role_label, team, career_months, base_capacity, is_assignable)
+INSERT INTO bs_member (user_id, emp_name, role_label, team, career_months, base_capacity, is_assignable)
 VALUES
   ('kimhy@bluesoft.co.kr',    '김호영', '설계·개발', '개발1팀', 180, 1.00, 1),
   ('jian@bluesoft.co.kr',     '김지안', '설계·개발', '개발1팀',  96, 1.00, 1),
@@ -109,7 +109,7 @@ ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name);
 -- **배정은 그대로 가능합니다** — is_assignable 은 1로 둡니다.
 -- 평가만 빼는 것이지 사람을 빼는 게 아닙니다.
 -- ---------------------------------------------------------------------
-UPDATE ba_member
+UPDATE bs_member
    SET is_evaluable = 0,
        eval_exclude_reason = '기획 직무 — 슬랙 취합 시스템에 업무 기록이 남지 않아 이 데이터로 평가할 수 없습니다.',
        eval_excluded_at = NOW(),
@@ -132,7 +132,7 @@ INSERT INTO schools (name, ver, dev, ops, active, created_at, updated_at) VALUES
 --   · 상태 전 구간 (등록 / 진행중 / 확인요청(개발서버반영) / 확인요청(운영서버반영)
 --                   / 운영배포요청 / 완료 / 보류 / 처리불가)
 --   · 기관을 LMS 링크로만 알 수 있는 건 / 제목에만 있는 건 / 아예 모르는 건
---   · ba_member 에 없는 담당자 (박모름, 외주업체) → 미매칭으로 빠져야 함
+--   · bs_member 에 없는 담당자 (박모름, 외주업체) → 미매칭으로 빠져야 함
 --   · 담당자 미지정 '—'
 --   · ai_stars 있는 건 / 없는 건 (규칙 기반으로 계산되어야 함)
 --   · archived=1 / 제목 빈 건 (skip_empty_title 확인용)
@@ -179,7 +179,7 @@ INSERT INTO requests
  '진행중', '긴급', '시스템개발', 24,
  '2026-09-10', NULL, UNIX_TIMESTAMP('2026-09-10 09:00:00'), UNIX_TIMESTAMP('2026-09-25 18:00:00'), NULL, '블루소프트', 0),
 
--- 담당자가 ba_member 에 없음 → 미매칭으로 빠져야 함
+-- 담당자가 bs_member 에 없음 → 미매칭으로 빠져야 함
 ('R006', '[충북대] 수료증 발급 양식 변경',
  '수료증 하단 직인 이미지와 발급 문구를 변경해 주세요.',
  'https://lms.chungbuk.ac.kr', '고객사', '박모름', NULL,

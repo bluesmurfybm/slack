@@ -1034,7 +1034,7 @@
     // ---- 선택 상태 ------------------------------------------------------
     //
     // 화면을 옮겨 다녀도 고른 후보가 날아가지 않게 브라우저에 잠깐 둔다.
-    // **DB 저장은 Step3(배정안 생성) 에서 한다** — 그때 ba_allocation.params_json
+    // **DB 저장은 Step3(배정안 생성) 에서 한다** — 그때 bs_allocation.params_json
     // 에 들어간다. 여기서 저장하면 확정 전 선택이 영구 기록으로 남는다.
     function loadPicked() {
       try {
@@ -1328,7 +1328,7 @@
       if (!picked.length) { toast('후보를 한 명 이상 고르세요.', true); return; }
       savePicked();
       toast(picked.length + '명을 후보로 확정했습니다. 배정안 생성(3단계)에서 씁니다.');
-      // TODO(P5): 배정안 생성 시 ba_allocation.params_json 에 담아 보낸다.
+      // TODO(P5): 배정안 생성 시 bs_allocation.params_json 에 담아 보낸다.
     });
 
     // ---- 행 클릭 → 근거 드로어 --------------------------------------------

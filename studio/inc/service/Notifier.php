@@ -72,7 +72,7 @@ final class OutboxNotifier implements Notifier
         $queued = 0; $skipped = 0; $failed = 0; $detail = [];
 
         $st = $this->pdo->prepare(
-            'INSERT INTO ba_notification
+            'INSERT INTO bs_notification
                 (channel, ref_type, ref_id, member_id, to_addr, subject, body, status, error)
              VALUES (?,?,?,?,?,?,?,?,?)'
         );

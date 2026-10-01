@@ -1,6 +1,6 @@
 -- =====================================================================
 -- BlueStudio 마이그레이션 v3 → v4
---   - ba_domain.category 를 코스모스(무들) 컴포넌트 계열로 교체
+--   - bs_domain.category 를 코스모스(무들) 컴포넌트 계열로 교체
 --   - 화상강의 분야 신설
 --   - 미분류를 줄이기 위한 keywords 보강
 --
@@ -37,7 +37,7 @@
 -- 있다는 뜻입니다. 해석 가능성까지 보면 계열 쪽이 낫습니다.
 --
 -- ---------------------------------------------------------------------
--- category 코드 (영문 코드 + 한글 표시명은 PHP 상수 BA_DOMAIN_CATEGORY 에)
+-- category 코드 (영문 코드 + 한글 표시명은 PHP 상수 BS_DOMAIN_CATEGORY 에)
 -- ---------------------------------------------------------------------
 --   activity       학습활동        mod_*
 --   grading        평가·이수       grade*, completion
@@ -56,28 +56,28 @@ SET time_zone = '+09:00';
 -- 1. category 재분류
 -- ---------------------------------------------------------------------
 
-UPDATE `ba_domain` SET `category` = 'activity'
+UPDATE `bs_domain` SET `category` = 'activity'
  WHERE `code` IN ('attendance', 'assignment', 'quiz', 'ibt', 'board', 'syllabus', 'media');
 
-UPDATE `ba_domain` SET `category` = 'grading'
+UPDATE `bs_domain` SET `category` = 'grading'
  WHERE `code` IN ('gradebook', 'certificate');
 
-UPDATE `ba_domain` SET `category` = 'enrolment'
+UPDATE `bs_domain` SET `category` = 'enrolment'
  WHERE `code` IN ('sso', 'academic_sync', 'shared_univ');
 
-UPDATE `ba_domain` SET `category` = 'integration'
+UPDATE `bs_domain` SET `category` = 'integration'
  WHERE `code` IN ('external_api', 'notify');
 
-UPDATE `ba_domain` SET `category` = 'presentation'
+UPDATE `bs_domain` SET `category` = 'presentation'
  WHERE `code` IN ('frontend_ui');
 
-UPDATE `ba_domain` SET `category` = 'administration'
+UPDATE `bs_domain` SET `category` = 'administration'
  WHERE `code` IN ('admin', 'analytics');
 
-UPDATE `ba_domain` SET `category` = 'platform'
+UPDATE `bs_domain` SET `category` = 'platform'
  WHERE `code` IN ('infra', 'migration', 'security');
 
-UPDATE `ba_domain` SET `category` = 'planning'
+UPDATE `bs_domain` SET `category` = 'planning'
  WHERE `code` IN ('planning');
 
 -- ---------------------------------------------------------------------
@@ -89,7 +89,7 @@ UPDATE `ba_domain` SET `category` = 'planning'
 --   동영상·콘텐츠 = 녹화된 강의, 업로드 콘텐츠, 인코딩
 --   화상강의      = 실시간 수업, ZOOM/Webex 연동
 -- ---------------------------------------------------------------------
-INSERT INTO `ba_domain` (`code`, `name`, `category`, `sort_no`, `is_active`, `keywords`) VALUES
+INSERT INTO `bs_domain` (`code`, `name`, `category`, `sort_no`, `is_active`, `keywords`) VALUES
 ('webconf', '화상강의', 'activity', 65, 1,
  '화상강의,화상수업,실시간강의,실시간수업,비대면강의,라이브강의,원격수업,화상회의,zoom,webex,웹엑스,구글미트,화상연동,수업참여코드')
 ON DUPLICATE KEY UPDATE
@@ -104,22 +104,22 @@ ON DUPLICATE KEY UPDATE
 -- ---------------------------------------------------------------------
 
 -- '표절률' 이 안 걸렸습니다. 키워드가 '표절검사' 로만 있어서입니다.
-UPDATE `ba_domain`
+UPDATE `bs_domain`
    SET `keywords` = CONCAT(`keywords`, ',표절,표절률,유사도검사')
  WHERE `code` = 'assignment' AND `keywords` NOT LIKE '%,표절,%';
 
 -- 설문 관련 (무들 mod_feedback / mod_survey / mod_choice)
-UPDATE `ba_domain`
+UPDATE `bs_domain`
    SET `keywords` = CONCAT(`keywords`, ',설문,설문조사,투표,만족도조사,피드백조사')
  WHERE `code` = 'board' AND `keywords` NOT LIKE '%,설문,%';
 
 -- 자율강좌·강좌분류 (코스 관리 계열)
-UPDATE `ba_domain`
+UPDATE `bs_domain`
    SET `keywords` = CONCAT(`keywords`, ',자율강좌,강좌분류,카테고리추가,강좌검색,강좌복사,강좌초기화')
  WHERE `code` = 'admin' AND `keywords` NOT LIKE '%,자율강좌,%';
 
 -- 언어팩·다국어 (화면 문구)
-UPDATE `ba_domain`
+UPDATE `bs_domain`
    SET `keywords` = CONCAT(`keywords`, ',언어팩,다국어,영문화,번역,문구수정,텍스트수정,라벨')
  WHERE `code` = 'frontend_ui' AND `keywords` NOT LIKE '%,언어팩,%';
 
@@ -129,5 +129,5 @@ UPDATE `ba_domain`
 -- 아래로 결과를 확인하십시오. category 가 8종이어야 하고,
 -- 분야는 22개(기존 21 + 화상강의)여야 합니다.
 --
---   SELECT category, COUNT(*) FROM ba_domain WHERE is_active=1 GROUP BY category;
---   SELECT COUNT(*) FROM ba_domain WHERE is_active=1;
+--   SELECT category, COUNT(*) FROM bs_domain WHERE is_active=1 GROUP BY category;
+--   SELECT COUNT(*) FROM bs_domain WHERE is_active=1;

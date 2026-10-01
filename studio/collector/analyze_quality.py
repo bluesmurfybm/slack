@@ -123,10 +123,10 @@ def main() -> int:
 
     # ── 참조 자료 ─────────────────────────────────────────────────────
     #
-    # 운영 DB 에는 BlueStudio 가 아직 배포되지 않아 ba_member / ba_domain 이 없다.
+    # 운영 DB 에는 BlueStudio 가 아직 배포되지 않아 bs_member / bs_domain 이 없다.
     # 그래서 원천(requests·schools)은 운영에서 읽고, 우리 쪽 정의는 아래처럼 구한다.
-    #   구성원 : 운영 ba_member → 없으면 운영 portal_users 에서 만든다(실제 명단)
-    #   분야   : 운영 ba_domain → 없으면 [db_local] 로컬 DB 에서 읽는다
+    #   구성원 : 운영 bs_member → 없으면 운영 portal_users 에서 만든다(실제 명단)
+    #   분야   : 운영 bs_domain → 없으면 [db_local] 로컬 DB 에서 읽는다
     # 운영에는 아무것도 만들지 않는다.
     nrm = cp["normalize"]
     try:
@@ -155,24 +155,24 @@ def main() -> int:
         finally:
             lc.close()
 
-    member_src = "운영 `ba_member`"
+    member_src = "운영 `bs_member`"
     try:
-        member_rows = q("SELECT id, user_id, emp_name FROM ba_member")
+        member_rows = q("SELECT id, user_id, emp_name FROM bs_member")
         if not member_rows:
             raise pymysql.Error("비어 있음")
     except pymysql.Error:
-        # ba_member 는 MemberRepo::syncFromPortalUsers() 가 portal_users 로 채울 표다.
+        # bs_member 는 MemberRepo::syncFromPortalUsers() 가 portal_users 로 채울 표다.
         # 아직 없으니 같은 원본에서 같은 모양으로 만들어 쓴다 — 실제 명단 그대로다.
         member_rows = [{"id": r["id"], "user_id": r["email"], "emp_name": r["name"]}
                        for r in q("SELECT id, email, name FROM portal_users")]
-        member_src = "운영 `portal_users` (ba_member 미배포)"
+        member_src = "운영 `portal_users` (bs_member 미배포)"
 
-    # 평가 제외 플래그는 ba_member 에만 있다. 운영에 그 표가 없으면 로컬에서 가져와
+    # 평가 제외 플래그는 bs_member 에만 있다. 운영에 그 표가 없으면 로컬에서 가져와
     # 이메일로 붙인다 — 누가 평가 대상인지는 우리가 정한 값이지 운영 데이터가 아니다.
     excluded: dict[str, str] = {}
     if not any("is_evaluable" in m for m in member_rows):
         try:
-            for r in q_local("SELECT user_id, is_evaluable, eval_exclude_reason FROM ba_member"):
+            for r in q_local("SELECT user_id, is_evaluable, eval_exclude_reason FROM bs_member"):
                 if int(r.get("is_evaluable", 1)) == 0:
                     excluded[(r["user_id"] or "").lower()] = r.get("eval_exclude_reason") or ""
         except Exception:
@@ -183,16 +183,16 @@ def main() -> int:
                 excluded[(m["user_id"] or "").lower()] = m.get("eval_exclude_reason") or ""
     members = MemberResolver(HERE / nrm.get("aliases_file", "member_aliases.json"), member_rows)
 
-    domain_src = "운영 `ba_domain`"
+    domain_src = "운영 `bs_domain`"
     try:
-        domain_rows = q("SELECT id, code, name, keywords FROM ba_domain WHERE is_active = 1")
+        domain_rows = q("SELECT id, code, name, keywords FROM bs_domain WHERE is_active = 1")
         if not domain_rows:
             raise pymysql.Error("비어 있음")
     except pymysql.Error:
-        domain_rows = q_local("SELECT id, code, name, keywords FROM ba_domain WHERE is_active = 1")
-        domain_src = "로컬 `ba_domain` (운영 미배포)"
+        domain_rows = q_local("SELECT id, code, name, keywords FROM bs_domain WHERE is_active = 1")
+        domain_src = "로컬 `bs_domain` (운영 미배포)"
     if not domain_rows:
-        sys.exit("ba_domain 을 어디서도 읽지 못했습니다. config 에 [db_local] 을 넣으세요.")
+        sys.exit("bs_domain 을 어디서도 읽지 못했습니다. config 에 [db_local] 을 넣으세요.")
     tagger = DomainTagger(domain_rows)
     dname = {int(x["id"]): x["name"] for x in domain_rows}
 
@@ -251,7 +251,7 @@ def main() -> int:
     if not dcat:
         try:
             dcat = {int(x["id"]): (x.get("category") or "?")
-                    for x in q_local("SELECT id, category FROM ba_domain")}
+                    for x in q_local("SELECT id, category FROM bs_domain")}
         except Exception:
             dcat = {}
 
@@ -279,10 +279,10 @@ def main() -> int:
     # 3. 상태 전이 / 리드타임
     # =================================================================
     # 취합 시스템과 BlueStudio·포털이 **같은 DB** 를 쓰므로 SHOW TABLES 에는
-    # ba_* / portal_* 도 섞여 나온다. "취합 시스템의 표" 를 말하려면 걸러야 한다.
+    # bs_* / portal_* 도 섞여 나온다. "취합 시스템의 표" 를 말하려면 걸러야 한다.
     all_tables = {t[list(t)[0]] for t in q("SHOW TABLES")}
     slack_tables = {t for t in all_tables
-                    if not t.startswith(("ba_", "portal_", "bc_"))}
+                    if not t.startswith(("bs_", "portal_", "bc_"))}
     history_like = sorted(t for t in slack_tables
                           if re.search(r"hist|audit|revision|trail|changelog", t, re.I))
 
@@ -469,7 +469,7 @@ def main() -> int:
     A(f"### 미분류 건 제목 샘플 ({min(args.samples, len(untagged))}건)")
     A("")
     if untagged:
-        A("여기 자주 나오는 표현을 `ba_domain.keywords` 에 넣으면 커버리지가 올라갑니다.")
+        A("여기 자주 나오는 표현을 `bs_domain.keywords` 에 넣으면 커버리지가 올라갑니다.")
         A("")
         for i, r in enumerate(untagged[:args.samples], 1):
             A(f"{i}. {esc(r['title'])}")
@@ -536,7 +536,7 @@ def main() -> int:
     A("")
     target = len(member_rows) - n_excluded
     A(f"자사 구성원 {len(member_rows)}명 가운데 **평가 제외 {n_excluded}명**"
-      f"(`ba_member.is_evaluable = 0`)을 뺀 {target}명이 평가 대상이고,")
+      f"(`bs_member.is_evaluable = 0`)을 뺀 {target}명이 평가 대상이고,")
     A(f"그중 **{len(scored)}명**이 실제로 점수를 낼 수 있습니다.")
     A("")
     A("> **평가 제외**와 **표본 부족**은 다릅니다. 화면에서 같은 문구를 쓰지 마십시오.")

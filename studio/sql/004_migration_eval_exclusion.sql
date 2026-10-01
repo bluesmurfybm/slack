@@ -1,6 +1,6 @@
 -- =====================================================================
 -- BlueStudio 마이그레이션 v2 → v3
---   - 구성원 평가 제외 옵션 (ba_member.is_evaluable 외 3개 컬럼)
+--   - 구성원 평가 제외 옵션 (bs_member.is_evaluable 외 3개 컬럼)
 --
 -- 이미 설치된 환경에만 실행하세요.
 -- 새로 설치하는 경우 001_schema.sql 에 이미 반영되어 있어 실행할 필요가 없습니다.
@@ -46,7 +46,7 @@
 SET NAMES utf8mb4;
 SET time_zone = '+09:00';
 
-ALTER TABLE `ba_member`
+ALTER TABLE `bs_member`
   ADD COLUMN `is_evaluable` TINYINT(1) NOT NULL DEFAULT 1
       COMMENT '0이면 역량 점수를 내지 않는다. 배정 가능 여부(is_assignable)와는 별개'
       AFTER `is_assignable`,
@@ -61,5 +61,5 @@ ALTER TABLE `ba_member`
       AFTER `eval_excluded_at`;
 
 -- 점수 산출 배치가 "평가 대상인 사람" 만 훑는다.
-ALTER TABLE `ba_member`
-  ADD KEY `ix_ba_member_evaluable` (`is_evaluable`, `role_label`);
+ALTER TABLE `bs_member`
+  ADD KEY `ix_bs_member_evaluable` (`is_evaluable`, `role_label`);

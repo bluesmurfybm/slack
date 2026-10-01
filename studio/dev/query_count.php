@@ -23,7 +23,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 define('ROOT', dirname(__DIR__, 2));
-$TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
+$TESTDB = getenv('BS_TEST_DB') ?: 'blueassign_test';
 require ROOT . '/studio/inc/bootstrap.php';
 foreach (['ProjectRepo', 'TaskRepo', 'MemberRepo', 'AllocationRepo', 'ProgressRepo'] as $r) {
     require ROOT . "/studio/inc/repo/$r.php";
@@ -74,10 +74,10 @@ function measure(PDO $pdo, int $oh, string $label, callable $fn): int
 // ---------------------------------------------------------------------
 // 밑준비 — 태스크 N 건짜리 프로젝트
 // ---------------------------------------------------------------------
-foreach (['ba_notification', 'ba_progress_comment', 'ba_progress', 'ba_workload',
-          'ba_allocation_item', 'ba_allocation', 'ba_task_domain', 'ba_task',
-          'ba_member_category', 'ba_member_metric', 'ba_eval_run',
-          'ba_project_source', 'ba_project', 'ba_member'] as $t) {
+foreach (['bs_notification', 'bs_progress_comment', 'bs_progress', 'bs_workload',
+          'bs_allocation_item', 'bs_allocation', 'bs_task_domain', 'bs_task',
+          'bs_member_category', 'bs_member_metric', 'bs_eval_run',
+          'bs_project_source', 'bs_project', 'bs_member'] as $t) {
     $pdo->exec("DELETE FROM $t");
 }
 
@@ -89,7 +89,7 @@ $progress = new ProgressRepo($pdo);
 $actor    = ['id' => 'pm@x.kr', 'name' => 'PM'];
 
 $mk = $pdo->prepare(
-    'INSERT INTO ba_member (user_id, emp_name, role_label, career_months, base_capacity,
+    'INSERT INTO bs_member (user_id, emp_name, role_label, career_months, base_capacity,
                             is_assignable, is_evaluable)
      VALUES (?,?,?,?,1.00,1,1)'
 );
@@ -141,7 +141,7 @@ $allocs->confirm($aid, $actor);
 
 // 진행 기록 — 태스크당 2건
 $mkP = $pdo->prepare(
-    'INSERT INTO ba_progress (task_id, member_id, status, progress_pct, content, worked_on)
+    'INSERT INTO bs_progress (task_id, member_id, status, progress_pct, content, worked_on)
      VALUES (?,?,?,?,?,?)'
 );
 foreach ($leaf as $i => $tid) {
@@ -163,7 +163,7 @@ echo "측정 오차 보정값: {$oh}\n\n";
 echo "[act=projects] 프로젝트 카드\n";
 $total = 0;
 $total += measure($pdo, $oh, 'ProjectRepo::search (목록 + 건수)', function () use ($projects) {
-    $projects->search(['status' => BA_DASH_PROJECT_STATUS, 'size' => 50, 'sort' => 'deploy_date']);
+    $projects->search(['status' => BS_DASH_PROJECT_STATUS, 'size' => 50, 'sort' => 'deploy_date']);
 });
 $ids = [$pid];
 $total += measure($pdo, $oh, 'ProgressRepo::projectProgressMany', function () use ($progress, $ids) {
@@ -171,20 +171,20 @@ $total += measure($pdo, $oh, 'ProgressRepo::projectProgressMany', function () us
 });
 $total += measure($pdo, $oh, '지연 건수 / 확정본 / 인원 수 (3회)', function () use ($pdo, $ids) {
     $ph = implode(',', array_fill(0, count($ids), '?'));
-    $sph = implode(',', array_fill(0, count(BA_TASK_OVERDUE_EXEMPT), '?'));
-    $st = $pdo->prepare("SELECT t.project_id, COUNT(*) n FROM ba_task t
+    $sph = implode(',', array_fill(0, count(BS_TASK_OVERDUE_EXEMPT), '?'));
+    $st = $pdo->prepare("SELECT t.project_id, COUNT(*) n FROM bs_task t
                           WHERE t.project_id IN ($ph) AND t.confirmed=1
                             AND t.plan_end IS NOT NULL AND t.plan_end < ?
                             AND t.status NOT IN ($sph)
-                            AND NOT EXISTS (SELECT 1 FROM ba_task c WHERE c.parent_id=t.id)
+                            AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id=t.id)
                           GROUP BY t.project_id");
-    $st->execute(array_merge($ids, [date('Y-m-d')], BA_TASK_OVERDUE_EXEMPT));
+    $st->execute(array_merge($ids, [date('Y-m-d')], BS_TASK_OVERDUE_EXEMPT));
     $st->fetchAll();
-    $st = $pdo->prepare("SELECT project_id,id,version,confirmed_at FROM ba_allocation
+    $st = $pdo->prepare("SELECT project_id,id,version,confirmed_at FROM bs_allocation
                           WHERE project_id IN ($ph) AND status='confirmed'");
     $st->execute($ids); $st->fetchAll();
-    $st = $pdo->prepare("SELECT a.project_id, COUNT(DISTINCT i.member_id) n FROM ba_allocation a
-                           JOIN ba_allocation_item i ON i.allocation_id=a.id
+    $st = $pdo->prepare("SELECT a.project_id, COUNT(DISTINCT i.member_id) n FROM bs_allocation a
+                           JOIN bs_allocation_item i ON i.allocation_id=a.id
                           WHERE a.project_id IN ($ph) AND a.status='confirmed'
                           GROUP BY a.project_id");
     $st->execute($ids); $st->fetchAll();
@@ -199,8 +199,8 @@ $total += measure($pdo, $oh, 'AllocationRepo::confirmed', function () use ($allo
     $allocs->confirmed($pid);
 });
 $total += measure($pdo, $oh, '말단 태스크 목록', function () use ($pdo, $pid) {
-    $st = $pdo->prepare('SELECT t.id FROM ba_task t WHERE t.project_id=? AND t.confirmed=1
-                           AND NOT EXISTS (SELECT 1 FROM ba_task c WHERE c.parent_id=t.id)');
+    $st = $pdo->prepare('SELECT t.id FROM bs_task t WHERE t.project_id=? AND t.confirmed=1
+                           AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id=t.id)');
     $st->execute([$pid]); $st->fetchAll();
 });
 $total += measure($pdo, $oh, 'AllocationRepo::items', function () use ($allocs, $aid) {
@@ -230,9 +230,9 @@ $total += measure($pdo, $oh, 'MemberRepo::findByUserId', function () use ($membe
 });
 $myTasks = [];
 $total += measure($pdo, $oh, '내 배정 태스크 목록', function () use ($pdo, $MEM, &$myTasks) {
-    $st = $pdo->prepare("SELECT t.id AS task_id FROM ba_allocation_item i
-                           JOIN ba_allocation a ON a.id=i.allocation_id AND a.status='confirmed'
-                           JOIN ba_task t ON t.id=i.task_id
+    $st = $pdo->prepare("SELECT t.id AS task_id FROM bs_allocation_item i
+                           JOIN bs_allocation a ON a.id=i.allocation_id AND a.status='confirmed'
+                           JOIN bs_task t ON t.id=i.task_id
                           WHERE i.member_id=?");
     $st->execute([$MEM[0]]);
     $myTasks = array_column($st->fetchAll(), 'task_id');

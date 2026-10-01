@@ -11,9 +11,9 @@ declare(strict_types=1);
  * │                                                                  │
  * │ 1. 정규화는 **역할(role_label) 그룹 안에서** 한다.                 │
  * │    백엔드와 퍼블리셔를 같은 축에 올려 비교하지 않는다.             │
- * │ 2. 표본이 BA_MIN_SAMPLE 미만이면 낮은 점수를 주는 대신             │
+ * │ 2. 표본이 BS_MIN_SAMPLE 미만이면 낮은 점수를 주는 대신             │
  * │    insufficient_data 플래그를 세운다.                             │
- * │ 3. 모든 점수는 근거(ba_work_item)로 역추적 가능해야 한다.          │
+ * │ 3. 모든 점수는 근거(bs_work_item)로 역추적 가능해야 한다.          │
  * │ 4. 이건 인사평가가 아니라 배정 보조다.                             │
  * │                                                                  │
  * │ 이 원칙을 우회하는 변경을 요청받으면 먼저 지적하고 확인을 구할 것.  │
@@ -36,25 +36,25 @@ final class CapabilityScorer
     /**
      * 한 회차 재판정을 통째로 돌린다.
      *
-     * 1. ba_eval_run 시작 (id 가 곧 eval_ver)
+     * 1. bs_eval_run 시작 (id 가 곧 eval_ver)
      * 2. 대상 기간의 업무 이력을 읽어 사람×분야로 모은다
      * 3. 난이도 가중 처리량·리드타임·재작업률 계산
      * 4. 역할 그룹 안에서 정규화
-     * 5. ba_member_skill / ba_member_metric 에 스냅샷 저장
-     * 6. ba_eval_run 종료
+     * 5. bs_member_skill / bs_member_metric 에 스냅샷 저장
+     * 6. bs_eval_run 종료
      *
      * @return int 만들어진 eval_ver
      */
     public function run(?string $periodFrom, ?string $periodTo, string $formulaVer = 'v1.0'): int
     {
-        // TODO(P3): 중간에 실패하면 ba_eval_run.status 를 fail 로 남기고 예외를 던진다.
+        // TODO(P3): 중간에 실패하면 bs_eval_run.status 를 fail 로 남기고 예외를 던진다.
         //           반쪽짜리 스냅샷이 latestEvalVer() 에 잡히면 안 된다.
         //
         // 대상은 **MemberRepo::evaluable()** 로 가져온다. 전원을 훑지 말 것.
         // 평가 제외자(is_evaluable=0)까지 돌리면 0점짜리 스냅샷이 쌓이고,
         // 그 0점이 정규화 분모에 들어가 다른 사람 점수까지 밀어 올린다.
         //
-        // 모집단도 자사 구성원 것만이다. ba_work_item 에는 협력사가 처리한 건이
+        // 모집단도 자사 구성원 것만이다. bs_work_item 에는 협력사가 처리한 건이
         // member_id=NULL 로 함께 들어 있으므로, 집계·정규화 쿼리는 항상
         // member_id IS NOT NULL 로 한정한다.
         // (근거: docs/data-quality-report.md — 6개월 1457건 중 289건이 그렇다)
@@ -117,7 +117,7 @@ final class CapabilityScorer
      */
     public function domainScore(int $memberId, int $domainId, array $workItems): array
     {
-        // TODO(P3): count($workItems) < BA_MIN_SAMPLE 이면 insufficient_data=1 로 두고
+        // TODO(P3): count($workItems) < BS_MIN_SAMPLE 이면 insufficient_data=1 로 두고
         //           score 는 채우지 않는다(null). 0 을 넣으면 "못하는 사람" 이 된다.
         return [];
     }
@@ -152,7 +152,7 @@ final class CapabilityScorer
         return null;
     }
 
-    /** 경력 환산 — ba_member.career_months 기반. */
+    /** 경력 환산 — bs_member.career_months 기반. */
     public function careerScore(int $careerMonths): float
     {
         // TODO(P3): 경력이 길수록 단조 증가하되 어느 지점부터 완만해지게.

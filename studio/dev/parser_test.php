@@ -116,17 +116,17 @@ throws('pdf 도구가 없으면 그렇다고 말한다',
 echo "\n[6] parsed_text 왕복 — 위치 정보가 살아남는가\n";
 $d = $p->parse(fixture('sample.xlsx'), 'xlsx');
 $stored = $d->text();
-$back   = ba_parse_blocks($stored);
+$back   = bs_parse_blocks($stored);
 ok('블록 수 보존', count($back) === count($d->blocks),
    count($back) . ' vs ' . count($d->blocks));
 ok('ref 보존', array_map(fn($b) => $b->ref, $back) === array_map(fn($b) => $b->ref, $d->blocks));
 ok('본문 보존', trim($back[0]->text) === trim($d->blocks[0]->text));
-ok('표시가 없는 글은 한 덩어리로', count(ba_parse_blocks('그냥 글자')) === 1);
-ok('빈 글도 터지지 않는다', count(ba_parse_blocks('')) === 1);
+ok('표시가 없는 글은 한 덩어리로', count(bs_parse_blocks('그냥 글자')) === 1);
+ok('빈 글도 터지지 않는다', count(bs_parse_blocks('')) === 1);
 
 // ref 에 표시 글자가 섞여 들어와도 경계가 깨지지 않아야 한다
-ok('ref 안의 ]] 는 지운다', ba_parse_marker('시트]]이상!A1') === '[[시트이상!A1]]',
-   ba_parse_marker('시트]]이상!A1'));
+ok('ref 안의 ]] 는 지운다', bs_parse_marker('시트]]이상!A1') === '[[시트이상!A1]]',
+   bs_parse_marker('시트]]이상!A1'));
 
 // =====================================================================
 echo "\n[7] LLM 클라이언트 — 설정이 없을 때\n";
@@ -135,7 +135,7 @@ ok('available=false', !$null->available());
 ok('name=none', $null->name() === 'none');
 // 빈 결과를 조용히 돌려주면 화면이 "문서가 부실하다" 로 읽는다. 던져야 한다.
 try {
-    define('BA_ROOT', ROOT . '/studio');
+    define('BS_ROOT', ROOT . '/studio');
     $null->generate('a', 'b', []);
     ok('설정 없으면 예외', false, '예외가 안 났다');
 } catch (LlmError $e) {

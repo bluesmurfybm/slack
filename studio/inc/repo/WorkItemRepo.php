@@ -1,5 +1,5 @@
 <?php
-/** ba_work_item / ba_work_item_domain / ba_sync_log 접근 담당 DAO. 수집된 원천 업무 이력을 다룬다. */
+/** bs_work_item / bs_work_item_domain / bs_sync_log 접근 담당 DAO. 수집된 원천 업무 이력을 다룬다. */
 
 declare(strict_types=1);
 
@@ -30,7 +30,7 @@ final class WorkItemRepo
     /** 원천 고유키로 찾는다. 중복 적재 방지용. */
     public function findBySourceKey(string $source, string $sourceKey): ?array
     {
-        // TODO(P2): uk_ba_witem_source (source, source_key) 를 탄다.
+        // TODO(P2): uk_bs_witem_source (source, source_key) 를 탄다.
         return null;
     }
 
@@ -42,7 +42,7 @@ final class WorkItemRepo
      */
     public function byMemberPeriod(int $memberId, ?string $from, ?string $to): array
     {
-        // TODO(P3): ix_ba_witem_member (member_id, closed_at) 를 탄다.
+        // TODO(P3): ix_bs_witem_member (member_id, closed_at) 를 탄다.
         return [];
     }
 
@@ -52,7 +52,7 @@ final class WorkItemRepo
      */
     public function byPeriod(?string $from, ?string $to): array
     {
-        // TODO(P3): ix_ba_witem_closed (closed_at) 를 탄다.
+        // TODO(P3): ix_bs_witem_closed (closed_at) 를 탄다.
         return [];
     }
 
@@ -62,14 +62,14 @@ final class WorkItemRepo
      */
     public function evidence(int $memberId, int $domainId, ?int $evalVer = null, int $limit = 50): array
     {
-        // TODO(P3): ba_work_item_domain 과 조인. source_url 을 반드시 싣는다.
+        // TODO(P3): bs_work_item_domain 과 조인. source_url 을 반드시 싣는다.
         return [];
     }
 
     /** 담당자를 못 찾아 member_id 가 비어 있는 건. 손으로 이어 붙일 목록. */
     public function unmatched(int $limit = 100): array
     {
-        // TODO(P2): ix_ba_witem_org 로 기관명 단서를 같이 본다.
+        // TODO(P2): ix_bs_witem_org 로 기관명 단서를 같이 본다.
         return [];
     }
 
@@ -80,11 +80,11 @@ final class WorkItemRepo
     /**
      * 수집 결과를 넣거나 갱신한다(있으면 update).
      *
-     * @return int ba_work_item.id
+     * @return int bs_work_item.id
      */
     public function upsert(array $data): int
     {
-        // TODO(P2): uk_ba_witem_source 기준. Python 수집기와 같은 규칙으로 맞춘다.
+        // TODO(P2): uk_bs_witem_source 기준. Python 수집기와 같은 규칙으로 맞춘다.
         return 0;
     }
 
@@ -101,7 +101,7 @@ final class WorkItemRepo
     }
 
     // -----------------------------------------------------------------
-    // 분야 연결 (ba_work_item_domain)
+    // 분야 연결 (bs_work_item_domain)
     // -----------------------------------------------------------------
 
     public function domains(int $workItemId): array
@@ -110,7 +110,7 @@ final class WorkItemRepo
         return [];
     }
 
-    /** ba_domain.keywords 매칭 결과를 통째로 교체한다. */
+    /** bs_domain.keywords 매칭 결과를 통째로 교체한다. */
     public function replaceDomains(int $workItemId, array $domainConfidence): void
     {
         // TODO(P2): $domainConfidence = [domain_id => confidence]
@@ -118,7 +118,7 @@ final class WorkItemRepo
 
     /**
      * 분야별 처리 건수. 역량 점수의 case_count 입력이자
-     * 표본 부족(BA_MIN_SAMPLE) 판정의 기준이 된다.
+     * 표본 부족(BS_MIN_SAMPLE) 판정의 기준이 된다.
      *
      * @return array [domain_id => count]
      */
@@ -129,7 +129,7 @@ final class WorkItemRepo
     }
 
     // -----------------------------------------------------------------
-    // 수집 로그 (ba_sync_log)
+    // 수집 로그 (bs_sync_log)
     // -----------------------------------------------------------------
 
     public function startSync(string $source): int
@@ -146,7 +146,7 @@ final class WorkItemRepo
     /** 이 원천을 마지막으로 언제까지 긁었나. 증분 수집의 기준점. */
     public function lastSync(string $source): ?array
     {
-        // TODO(P2): ix_ba_synclog_src (source, id) 를 탄다.
+        // TODO(P2): ix_bs_synclog_src (source, id) 를 탄다.
         return null;
     }
 }

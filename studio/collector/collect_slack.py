@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""슬랙 취합 시스템(requests)의 업무 이력을 ba_work_item 으로 적재한다.
+"""슬랙 취합 시스템(requests)의 업무 이력을 bs_work_item 으로 적재한다.
 
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 왜 HTML 파싱이 아닌가                                                  │
@@ -148,7 +148,7 @@ def _open(sec) -> "pymysql.connections.Connection":
 
 
 def connect(cfg: configparser.ConfigParser):
-    """적재할 곳(ba_* 를 쓰는 DB)."""
+    """적재할 곳(bs_* 를 쓰는 DB)."""
     return _open(cfg["db"])
 
 
@@ -157,7 +157,7 @@ def connect_source(cfg: configparser.ConfigParser):
     원천(requests 를 읽을 곳).
 
     운영에서는 취합 시스템과 BlueStudio 가 **같은 DB** 라 [db] 하나면 됩니다.
-    개발·분석 중에는 다릅니다 — 운영 requests 를 읽되 ba_* 는 로컬에 적재해야
+    개발·분석 중에는 다릅니다 — 운영 requests 를 읽되 bs_* 는 로컬에 적재해야
     합니다(운영에 BlueStudio 가 아직 배포되지 않았고, 읽기 전용 계정이라
     쓰지도 못합니다). 그때만 [db_source] 를 둡니다.
 
@@ -239,13 +239,13 @@ def fetch_schools(conn, log: Log) -> list[dict]:
 
 def fetch_members(conn) -> list[dict]:
     with conn.cursor() as cur:
-        cur.execute("SELECT id, user_id, emp_name FROM ba_member")
+        cur.execute("SELECT id, user_id, emp_name FROM bs_member")
         return cur.fetchall()
 
 
 def fetch_domains(conn) -> list[dict]:
     with conn.cursor() as cur:
-        cur.execute("SELECT id, code, name, keywords FROM ba_domain WHERE is_active = 1")
+        cur.execute("SELECT id, code, name, keywords FROM bs_domain WHERE is_active = 1")
         return cur.fetchall()
 
 
@@ -264,7 +264,7 @@ def _ts(unix: int | None) -> datetime | None:
 
 def to_work_item(r: dict, cfg, orgs: OrgNormalizer, members: MemberResolver,
                  local_asg: dict[str, str]) -> dict:
-    """requests 한 행 → ba_work_item 한 행."""
+    """requests 한 행 → bs_work_item 한 행."""
     status = (r.get("status") or "").strip()
     updated = _ts(r.get("updated"))
     created = _ts(r.get("created"))
@@ -336,7 +336,7 @@ def to_work_item(r: dict, cfg, orgs: OrgNormalizer, members: MemberResolver,
 # =====================================================================
 
 UPSERT = """
-INSERT INTO ba_work_item
+INSERT INTO bs_work_item
   (source, source_key, source_url, title, body_excerpt, org_name, member_id,
    requested_at, first_reply_at, dev_deployed_at, prod_deployed_at, closed_at,
    status_raw, reopen_count, msg_count, body_len, difficulty, difficulty_by,
@@ -385,7 +385,7 @@ def upsert_items(conn, items: list[dict], tagger: DomainTagger, log: Log) -> dic
 
             # 방금 넣거나 고친 행의 id
             cur.execute(
-                "SELECT id FROM ba_work_item WHERE source = %s AND source_key = %s",
+                "SELECT id FROM bs_work_item WHERE source = %s AND source_key = %s",
                 (it["source"], it["source_key"]),
             )
             row = cur.fetchone()
@@ -395,10 +395,10 @@ def upsert_items(conn, items: list[dict], tagger: DomainTagger, log: Log) -> dic
 
             # 분야 태깅 — 통째로 갈아 끼운다. 키워드가 바뀌면 결과도 바뀌어야 한다.
             tags = tagger.tag(it["title"], it["body_excerpt"])
-            cur.execute("DELETE FROM ba_work_item_domain WHERE work_item_id = %s", (wid,))
+            cur.execute("DELETE FROM bs_work_item_domain WHERE work_item_id = %s", (wid,))
             for domain_id, conf in tags.items():
                 cur.execute(
-                    "INSERT INTO ba_work_item_domain (work_item_id, domain_id, confidence)"
+                    "INSERT INTO bs_work_item_domain (work_item_id, domain_id, confidence)"
                     " VALUES (%s, %s, %s)",
                     (wid, domain_id, conf),
                 )
@@ -410,7 +410,7 @@ def upsert_items(conn, items: list[dict], tagger: DomainTagger, log: Log) -> dic
 def start_sync(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO ba_sync_log (source, started_at, status) VALUES ('slack', NOW(), 'running')"
+            "INSERT INTO bs_sync_log (source, started_at, status) VALUES ('slack', NOW(), 'running')"
         )
         return cur.lastrowid
 
@@ -418,7 +418,7 @@ def start_sync(conn) -> int:
 def finish_sync(conn, sync_id: int, counts: dict, status: str, message: str | None) -> None:
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE ba_sync_log SET finished_at = NOW(), fetched = %s, inserted = %s,"
+            "UPDATE bs_sync_log SET finished_at = NOW(), fetched = %s, inserted = %s,"
             " updated = %s, skipped = %s, status = %s, message = %s WHERE id = %s",
             (counts.get("fetched", 0), counts.get("inserted", 0),
              counts.get("updated", 0), counts.get("skipped", 0),
@@ -447,7 +447,7 @@ def print_table(items: list[dict], limit: int, tagger: DomainTagger,
 
         asg = it["_asg_raw"] or "-"
         if it["member_id"] is None:
-            # ! = ba_member 에 못 붙임 → 적재될 때 member_id 가 NULL 로 들어간다
+            # ! = bs_member 에 못 붙임 → 적재될 때 member_id 가 NULL 로 들어간다
             asg = f"{_cut(asg, 6)} !"
 
         req = it["requested_at"]
@@ -467,7 +467,7 @@ def print_table(items: list[dict], limit: int, tagger: DomainTagger,
 
     print()
     print("  난이도 뒤 기호:  * = 이미 채점된 값(ai_stars)    . = 규칙 기반")
-    print("  담당 뒤 !     :  ba_member 에 못 붙임. member_id 없이 적재됩니다")
+    print("  담당 뒤 !     :  bs_member 에 못 붙임. member_id 없이 적재됩니다")
 
 
 def print_summary(items: list[dict], members: MemberResolver) -> None:
@@ -496,7 +496,7 @@ def print_summary(items: list[dict], members: MemberResolver) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="슬랙 취합 시스템 → ba_work_item 적재",
+        description="슬랙 취합 시스템 → bs_work_item 적재",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("--config", default=str(HERE / "config.ini"), help="설정 파일 경로")
@@ -535,7 +535,7 @@ def main() -> int:
     print(f"  DB      {cfg['db'].get('user')}@{cfg['db'].get('host')}/{cfg['db'].get('name')}")
     print()
 
-    conn = connect(cfg)            # 적재할 곳 (ba_*)
+    conn = connect(cfg)            # 적재할 곳 (bs_*)
     src_conn = connect_source(cfg) # 원천 (requests). 없으면 conn 과 같은 DB
     reader = src_conn or conn
     if src_conn is not None:
@@ -575,7 +575,7 @@ def main() -> int:
             return 0
 
         # ── 적재 (전부 아니면 전무) ───────────────────────────────────
-        # ba_sync_log 는 실패해도 남아야 하므로 본 트랜잭션과 분리한다.
+        # bs_sync_log 는 실패해도 남아야 하므로 본 트랜잭션과 분리한다.
         sync_id = start_sync(conn)
         conn.commit()
 

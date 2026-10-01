@@ -16,17 +16,17 @@ header('Referrer-Policy: same-origin');
  */
 set_exception_handler(function (Throwable $e) {
     if ($e instanceof InvalidArgumentException) {
-        ba_json_error('INVALID_ARGUMENT', $e->getMessage(), 400);
+        bs_json_error('INVALID_ARGUMENT', $e->getMessage(), 400);
     }
     if ($e instanceof DomainException) {
-        ba_json_error('DOMAIN_ERROR', $e->getMessage(), 400);
+        bs_json_error('DOMAIN_ERROR', $e->getMessage(), 400);
     }
     error_log('[BlueStudio] ' . $e->getMessage() . "\n" . $e->getTraceAsString());
 
     // TODO(P1): 디버그 여부를 어디서 읽을지 정한다. BlueCart 는 자체 config 의
     //           app.debug 를 보지만 이 모듈은 별도 config 가 없다.
     //           지금은 항상 감춘다 — 운영에서 내부 메시지가 새는 쪽이 더 나쁘다.
-    ba_json_error('INTERNAL_ERROR', '처리 중 오류가 발생했습니다.', 500);
+    bs_json_error('INTERNAL_ERROR', '처리 중 오류가 발생했습니다.', 500);
 });
 
 /**
@@ -34,18 +34,18 @@ set_exception_handler(function (Throwable $e) {
  *
  * 각 엔드포인트가 아래처럼 쓴다.
  *
- *   ba_route(ba_param_str('act', 'list'), [
+ *   bs_route(bs_param_str('act', 'list'), [
  *       'list'   => fn() => ...,
  *       'create' => fn() => ...,
  *   ]);
  *
  * 없는 act 면 400 으로 끊고, 어떤 값이 가능한지 함께 알려준다.
- * 핸들러 안에서 ba_json_ok() 를 부르므로 정상 경로는 여기로 돌아오지 않는다.
+ * 핸들러 안에서 bs_json_ok() 를 부르므로 정상 경로는 여기로 돌아오지 않는다.
  */
-function ba_route(string $act, array $handlers): never
+function bs_route(string $act, array $handlers): never
 {
     if (!isset($handlers[$act])) {
-        ba_json_error(
+        bs_json_error(
             'UNKNOWN_ACT',
             '알 수 없는 요청입니다: ' . $act . ' (가능: ' . implode(', ', array_keys($handlers)) . ')',
             400
@@ -54,17 +54,17 @@ function ba_route(string $act, array $handlers): never
     $handlers[$act]();
 
     // 핸들러가 응답하지 않고 끝난 경우 — 구현이 덜 된 것이다.
-    ba_json_error('NOT_IMPLEMENTED', '아직 구현되지 않은 기능입니다: ' . $act, 501);
+    bs_json_error('NOT_IMPLEMENTED', '아직 구현되지 않은 기능입니다: ' . $act, 501);
 }
 
 /**
  * 쓰기 요청 공통 전처리.
  * POST 확인 → 로그인 → CSRF 순. BlueCart 의 진입부 순서와 같다.
  */
-function ba_begin_write(): array
+function bs_begin_write(): array
 {
-    ba_require_post();
-    $user = ba_require_login_api();
-    ba_verify_csrf();
+    bs_require_post();
+    $user = bs_require_login_api();
+    bs_verify_csrf();
     return $user;
 }

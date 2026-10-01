@@ -8,9 +8,9 @@ require_once __DIR__ . '/inc/repo/ProjectRepo.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-$user      = ba_require_login();
-$projectId = ba_param_int('id', 0) ?? 0;
-$repo      = new ProjectRepo(ba_db());
+$user      = bs_require_login();
+$projectId = bs_param_int('id', 0) ?? 0;
+$repo      = new ProjectRepo(bs_db());
 
 $project = null;
 if ($projectId > 0) {
@@ -22,7 +22,7 @@ if ($projectId > 0) {
 }
 
 // 수정이면 그 프로젝트 기준, 신규면 프로젝트 없이 권한을 본다.
-if (!ba_can(BA_CAP_PROJECT_MANAGE, $projectId > 0 ? $projectId : null)) {
+if (!bs_can(BS_CAP_PROJECT_MANAGE, $projectId > 0 ? $projectId : null)) {
     header('Location: project_list.php?err=denied');
     exit;
 }
@@ -57,7 +57,7 @@ $sizeLabel = static function (int $bytes): string {
     return round($bytes / 1048576, 1) . 'MB';
 };
 
-ba_layout_head(
+bs_layout_head(
     $user,
     $projectId ? '프로젝트 수정' : '프로젝트 등록',
     '업무 배정',
@@ -86,7 +86,7 @@ ba_layout_head(
     <p class="ba-panel__hint">
       <?php if ($projectId): ?>
         코드 <b><?= h($v('code')) ?></b> · 담당 <b><?= h($v('owner_name')) ?></b>
-        · 상태 <b><?= h(BA_PROJECT_STATUS[$v('status')] ?? $v('status')) ?></b>
+        · 상태 <b><?= h(BS_PROJECT_STATUS[$v('status')] ?? $v('status')) ?></b>
       <?php else: ?>
         프로젝트 코드는 저장할 때 자동으로 매겨집니다(PRJ-연도-일련번호).
       <?php endif; ?>
@@ -109,7 +109,7 @@ ba_layout_head(
           <span>트랙</span>
           <select id="ba-in-track">
             <option value="">선택 안 함</option>
-            <?php foreach (BA_PROJECT_TRACK as $code => $label): ?>
+            <?php foreach (BS_PROJECT_TRACK as $code => $label): ?>
               <option value="<?= h($code) ?>"<?= $v('track') === $code ? ' selected' : '' ?>>
                 <?= h($label) ?>
               </option>
@@ -128,7 +128,7 @@ ba_layout_head(
       <label>
         <span>상태</span>
         <select id="ba-in-status">
-          <?php foreach (BA_PROJECT_STATUS as $code => $label): ?>
+          <?php foreach (BS_PROJECT_STATUS as $code => $label): ?>
             <option value="<?= h($code) ?>"<?= $v('status') === $code ? ' selected' : '' ?>>
               <?= h($label) ?>
             </option>
@@ -199,8 +199,8 @@ ba_layout_head(
                accept=".xlsx,.pptx,.docx,.pdf,.jpg,.jpeg,.png,.gif,.webp">
         <em class="ba-help">
           xlsx · pptx · docx · pdf · 이미지 /
-          한 개 최대 <?= (int)round(BA_UPLOAD_MAX_BYTES / 1048576) ?>MB /
-          한 번에 <?= BA_UPLOAD_MAX_FILES ?>개까지
+          한 개 최대 <?= (int)round(BS_UPLOAD_MAX_BYTES / 1048576) ?>MB /
+          한 번에 <?= BS_UPLOAD_MAX_FILES ?>개까지
         </em>
       </label>
       <button type="button" class="ba-btn" id="ba-src-upload">올리기</button>
@@ -240,7 +240,7 @@ ba_layout_head(
       <?php else: ?>
         <?php foreach ($sources as $s): ?>
           <div class="ba-src" data-id="<?= (int)$s['id'] ?>">
-            <span class="ba-src__kind"><?= h(BA_SOURCE_KIND[$s['kind']] ?? $s['kind']) ?></span>
+            <span class="ba-src__kind"><?= h(BS_SOURCE_KIND[$s['kind']] ?? $s['kind']) ?></span>
             <span class="ba-src__title">
               <?php if (!empty($s['url'])): ?>
                 <a href="<?= h($s['url']) ?>" target="_blank" rel="noopener"><?= h($s['title']) ?></a>
@@ -298,4 +298,4 @@ ba_layout_head(
 </div>
 
 <?php
-ba_layout_foot();
+bs_layout_foot();

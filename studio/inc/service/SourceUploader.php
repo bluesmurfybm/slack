@@ -8,7 +8,7 @@ declare(strict_types=1);
  *
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ 저장 규칙                                                         │
- * │   · 저장 경로는 웹에서 직접 못 여는 곳(BA_UPLOAD_DIR)             │
+ * │   · 저장 경로는 웹에서 직접 못 여는 곳(BS_UPLOAD_DIR)             │
  * │   · 저장 파일명은 내용 해시 + 난수. 원본명은 DB 에만 둔다          │
  * │   · 확장자 화이트리스트 통과 후 finfo 로 실제 내용을 다시 확인     │
  * │                                                                  │
@@ -42,9 +42,9 @@ final class SourceUploader
     {
         $items = $this->normalizeFilesArray($files);
 
-        if (count($items) > BA_UPLOAD_MAX_FILES) {
+        if (count($items) > BS_UPLOAD_MAX_FILES) {
             throw new DomainException(
-                sprintf('한 번에 최대 %d개까지 올릴 수 있습니다.', BA_UPLOAD_MAX_FILES)
+                sprintf('한 번에 최대 %d개까지 올릴 수 있습니다.', BS_UPLOAD_MAX_FILES)
             );
         }
         $this->assertRoom($projectId, count($items));
@@ -75,7 +75,7 @@ final class SourceUploader
     }
 
     /**
-     * 파일 하나를 저장하고 ba_project_source 행을 만든다.
+     * 파일 하나를 저장하고 bs_project_source 행을 만든다.
      * @return array 화면에 돌려줄 요약
      */
     public function storeOne(int $projectId, array $file, array $actor): array
@@ -85,11 +85,11 @@ final class SourceUploader
         $origName = $this->sanitizeName((string)$file['name']);
         $ext      = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
 
-        if ($ext === '' || !isset(BA_UPLOAD_MIME[$ext])) {
+        if ($ext === '' || !isset(BS_UPLOAD_MIME[$ext])) {
             throw new DomainException(sprintf(
                 '허용되지 않는 형식입니다(.%s). 가능한 확장자: %s',
                 $ext !== '' ? $ext : '없음',
-                implode(', ', array_keys(BA_UPLOAD_MIME))
+                implode(', ', array_keys(BS_UPLOAD_MIME))
             ));
         }
 
@@ -97,17 +97,17 @@ final class SourceUploader
         if ($size <= 0) {
             throw new DomainException('빈 파일은 올릴 수 없습니다.');
         }
-        if ($size > BA_UPLOAD_MAX_BYTES) {
+        if ($size > BS_UPLOAD_MAX_BYTES) {
             throw new DomainException(sprintf(
                 '파일이 너무 큽니다(%s). 최대 %s 까지 올릴 수 있습니다.',
                 self::humanSize($size),
-                self::humanSize(BA_UPLOAD_MAX_BYTES)
+                self::humanSize(BS_UPLOAD_MAX_BYTES)
             ));
         }
 
         // 확장자만 믿지 않는다. 실제 내용을 보고 대조한다.
         $mime     = $this->detectMime((string)$file['tmp_name']);
-        $expected = BA_UPLOAD_MIME[$ext];
+        $expected = BS_UPLOAD_MIME[$ext];
         if (!in_array($mime, $expected, true)) {
             throw new DomainException(sprintf(
                 '파일 내용이 확장자(.%s)와 맞지 않습니다. 감지된 형식: %s',
@@ -129,7 +129,7 @@ final class SourceUploader
 
         try {
             $sourceId = $this->projects->addSource($projectId, [
-                'kind'         => BA_EXT_KIND[$ext],
+                'kind'         => BS_EXT_KIND[$ext],
                 'title'        => $origName,
                 'file_path'    => $stored,
                 'file_size'    => $size,
@@ -145,7 +145,7 @@ final class SourceUploader
 
         return [
             'id'           => $sourceId,
-            'kind'         => BA_EXT_KIND[$ext],
+            'kind'         => BS_EXT_KIND[$ext],
             'title'        => $origName,
             'file_size'    => $size,
             'size_label'   => self::humanSize($size),
@@ -169,7 +169,7 @@ final class SourceUploader
     {
         $this->assertRoom($projectId, 1);
 
-        $safe = ba_safe_url($url);
+        $safe = bs_safe_url($url);
         if ($safe === null) {
             throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
         }
@@ -249,10 +249,10 @@ final class SourceUploader
     private function assertRoom(int $projectId, int $adding): void
     {
         $have = $this->projects->countSources($projectId);
-        if ($have + $adding > BA_SOURCE_MAX_PER_PROJECT) {
+        if ($have + $adding > BS_SOURCE_MAX_PER_PROJECT) {
             throw new DomainException(sprintf(
                 '출처 문서는 프로젝트당 최대 %d개입니다. (현재 %d개)',
-                BA_SOURCE_MAX_PER_PROJECT,
+                BS_SOURCE_MAX_PER_PROJECT,
                 $have
             ));
         }
@@ -289,7 +289,7 @@ final class SourceUploader
     /** 프로젝트별 하위 폴더. 한 폴더에 파일이 수천 개 쌓이지 않게 나눈다. */
     private function dirFor(int $projectId): string
     {
-        return rtrim(BA_UPLOAD_DIR, '/\\') . '/' . date('Y') . '/' . $projectId;
+        return rtrim(BS_UPLOAD_DIR, '/\\') . '/' . date('Y') . '/' . $projectId;
     }
 
     private function ensureDir(string $dir): void

@@ -8,9 +8,9 @@ require_once __DIR__ . '/inc/repo/MemberRepo.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
-$user     = ba_require_login();
-$memberId = ba_param_int('member_id', 0) ?? 0;
-$repo     = new MemberRepo(ba_db());
+$user     = bs_require_login();
+$memberId = bs_param_int('member_id', 0) ?? 0;
+$repo     = new MemberRepo(bs_db());
 
 // ┌──────────────────────────────────────────────────────────────────┐
 // │ 열람 권한 (CLAUDE.md)                                             │
@@ -21,25 +21,25 @@ $repo     = new MemberRepo(ba_db());
 $target = $memberId > 0 ? $repo->find($memberId) : $repo->findByUserId($user['id']);
 
 if (!$target) {
-    ba_layout_head($user, '프로파일', '업무 배정', '', 'member');
+    bs_layout_head($user, '프로파일', '업무 배정', '', 'member');
     echo '<div class="ba-alert">'
        . ($memberId > 0 ? '구성원을 찾을 수 없습니다.'
                         : '구성원으로 등록되어 있지 않아 프로파일이 없습니다.')
        . '</div>';
-    ba_layout_foot();
+    bs_layout_foot();
     exit;
 }
 
-if (!ba_can_view_profile((string)$target['user_id'])) {
+if (!bs_can_view_profile((string)$target['user_id'])) {
     header('Location: member_list.php?err=denied');
     exit;
 }
 
 $isSelf    = $target['user_id'] === $user['id'];
 $evaluable = (int)($target['is_evaluable'] ?? 1) === 1;
-$canAdjust = ba_can(BA_CAP_EVAL_RUN);
+$canAdjust = bs_can(BS_CAP_EVAL_RUN);
 
-ba_layout_head(
+bs_layout_head(
     $user,
     $isSelf ? '내 프로파일' : '구성원 프로파일',
     '업무 배정',
@@ -204,15 +204,15 @@ ba_layout_head(
   <section class="ba-panel ba-panel--admin">
     <h2>관리자 보정</h2>
     <p class="ba-panel__hint">
-      보정치는 <b><?= (int)BA_ADJUST_MIN ?> ~ +<?= (int)BA_ADJUST_MAX ?></b> 범위이고
+      보정치는 <b><?= (int)BS_ADJUST_MIN ?> ~ +<?= (int)BS_ADJUST_MAX ?></b> 범위이고
       <b>사유가 필수</b>입니다. 사유는 본인에게 그대로 표시됩니다.
     </p>
     <div class="ba-form">
       <div class="ba-form__row">
         <label>
           <span class="ba-req">보정치</span>
-          <input type="number" id="ba-adj-value" min="<?= (int)BA_ADJUST_MIN ?>"
-                 max="<?= (int)BA_ADJUST_MAX ?>" step="0.5" value="0">
+          <input type="number" id="ba-adj-value" min="<?= (int)BS_ADJUST_MIN ?>"
+                 max="<?= (int)BS_ADJUST_MAX ?>" step="0.5" value="0">
         </label>
         <label>
           <span class="ba-req">사유</span>
@@ -262,4 +262,4 @@ ba_layout_head(
   </div>
 </div>
 
-<?php ba_layout_foot(); ?>
+<?php bs_layout_foot(); ?>

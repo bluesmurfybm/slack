@@ -129,7 +129,7 @@ class MemberResolution:
 
 
 class MemberResolver:
-    """담당자 문자열을 ba_member 행으로 잇는다.
+    """담당자 문자열을 bs_member 행으로 잇는다.
 
     못 찾으면 **건너뛴다**(member_id=None). 비슷한 이름에 억지로 붙이지 않는다.
     엉뚱한 사람에게 실적이 붙으면 역량 점수가 틀리고, 그 점수로 배정이 나간다.
@@ -154,7 +154,7 @@ class MemberResolver:
         # 매칭할 필요가 없는 값들 ('—', '미지정' 등)
         self._ignore = {_norm(x) for x in data.get("ignore", [])}
 
-        # ba_member 현황 — user_id(이메일) 와 이름 양쪽으로 찾을 수 있게
+        # bs_member 현황 — user_id(이메일) 와 이름 양쪽으로 찾을 수 있게
         self._by_email: dict[str, dict] = {}
         self._by_name: dict[str, dict] = {}
         for row in members:
@@ -188,11 +188,11 @@ class MemberResolver:
             row = self._by_email.get(email)
             if row:
                 return MemberResolution(int(row["id"]), email, "별칭표 일치")
-            # 별칭표에는 있는데 ba_member 에 없다 — 구성원 동기화가 안 된 것
+            # 별칭표에는 있는데 bs_member 에 없다 — 구성원 동기화가 안 된 것
             self._mark(raw)
-            return MemberResolution(reason=f"별칭표에는 있으나 ba_member 에 없음({email})")
+            return MemberResolution(reason=f"별칭표에는 있으나 bs_member 에 없음({email})")
 
-        # 3) ba_member.emp_name 과 정확히 일치
+        # 3) bs_member.emp_name 과 정확히 일치
         row = self._by_name.get(n)
         if row:
             return MemberResolution(int(row["id"]), row.get("user_id"), "이름 일치")
@@ -221,7 +221,7 @@ class DomainRule:
 
 
 class DomainTagger:
-    """ba_domain.keywords 로 업무 이력의 분야를 가른다.
+    """bs_domain.keywords 로 업무 이력의 분야를 가른다.
 
     confidence 는 '이 분야 키워드가 몇 개나 걸렸나' 를 0~1 로 누른 값이다.
     한 건이 여러 분야에 걸리는 것은 정상이다(출석부 연동 + 성적부 반영 등).

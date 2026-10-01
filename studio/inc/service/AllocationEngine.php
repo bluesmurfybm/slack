@@ -30,7 +30,7 @@ final class AllocationEngine
         private MemberRepo $members,
         private AllocationRepo $allocations,
         private AvailabilityCalculator $availability,
-        // 프로젝트 기간을 읽는다. ba_db() 를 직접 부르면 시험이 시험 DB 를
+        // 프로젝트 기간을 읽는다. bs_db() 를 직접 부르면 시험이 시험 DB 를
         // 못 보게 된다 — WbsExtractor 에서 같은 것에 한 번 막혔다.
         private ?ProjectRepo $projects = null,
     ) {}
@@ -44,7 +44,7 @@ final class AllocationEngine
      *
      * 명세서 §6.1 의 식 그대로다. 다만 `w_comm * comm_score` 는 빠졌다 —
      * comm_score 를 산출하지 않기로 이미 정했다(bootstrap.php 의
-     * BA_ALLOC_WEIGHTS 주석). 없는 점수를 0 으로 넣으면 모두가 그만큼
+     * BS_ALLOC_WEIGHTS 주석). 없는 점수를 0 으로 넣으면 모두가 그만큼
      * 깎이므로, **실제로 쓴 가중치의 합으로 나눈다.**
      *
      *   base = Σ(w_i × s_i) / Σ(w_i)
@@ -60,7 +60,7 @@ final class AllocationEngine
      */
     public function fitScore(array $task, array $member, array $context): array
     {
-        $w = $context['weights'] ?? BA_ALLOC_WEIGHTS;
+        $w = $context['weights'] ?? BS_ALLOC_WEIGHTS;
 
         $parts = [];
         $flags = [];
@@ -152,7 +152,7 @@ final class AllocationEngine
     /**
      * 태스크의 분야와 사람의 계열 역량을 맞춰 본다.
      *
-     * 태스크가 여러 분야에 걸리면 ba_task_domain.weight 로 가중 평균한다.
+     * 태스크가 여러 분야에 걸리면 bs_task_domain.weight 로 가중 평균한다.
      * 점수는 **계열(category) 단위**로 본다 — 분야 단위로는 표본이 안 찬다
      * (docs/scoring-design.md §1.3).
      *
@@ -173,7 +173,7 @@ final class AllocationEngine
         $byCat = [];   // category => weight 합
         foreach ($doms as $d) {
             $cat = $d['category'];
-            if ($cat === null || $cat === '' || in_array($cat, BA_CATEGORY_NOT_SCORED, true)) {
+            if ($cat === null || $cat === '' || in_array($cat, BS_CATEGORY_NOT_SCORED, true)) {
                 continue;
             }
             $byCat[$cat] = ($byCat[$cat] ?? 0) + (float)$d['weight'];
@@ -196,7 +196,7 @@ final class AllocationEngine
                 $matched = true;
                 $evidence[] = [
                     'category'   => $cat,
-                    'label'      => BA_DOMAIN_CATEGORY[$cat]['label'] ?? $cat,
+                    'label'      => BS_DOMAIN_CATEGORY[$cat]['label'] ?? $cat,
                     'score'      => round($s, 1),
                     'case_count' => (int)$row['case_count'],
                     'estimated'  => false,
@@ -206,7 +206,7 @@ final class AllocationEngine
                 $estimated = true;
                 $evidence[] = [
                     'category'   => $cat,
-                    'label'      => BA_DOMAIN_CATEGORY[$cat]['label'] ?? $cat,
+                    'label'      => BS_DOMAIN_CATEGORY[$cat]['label'] ?? $cat,
                     'score'      => round($s, 1),
                     'case_count' => (int)($row['case_count'] ?? 0),
                     'estimated'  => true,
@@ -377,7 +377,7 @@ final class AllocationEngine
             'unassigned' => $unassigned,
             'summary'    => $this->summarize($assign, $ctx),
             'meta'       => [
-                'engine_ver'   => BA_ENGINE_VER,
+                'engine_ver'   => BS_ENGINE_VER,
                 'eval_ver'     => $ctx['eval_ver'],
                 'weights'      => $ctx['weights'],
                 'constraints'  => $ctx['constraints'],
@@ -505,7 +505,7 @@ final class AllocationEngine
         $order  = $ctx['order'];
         $n      = count($order);
         $passes = 0;
-        $max    = (int)($ctx['constraints']['max_passes'] ?? BA_ALLOC_MAX_PASSES);
+        $max    = (int)($ctx['constraints']['max_passes'] ?? BS_ALLOC_MAX_PASSES);
 
         for ($pass = 0; $pass < $max; $pass++) {
             $passes++;
@@ -575,7 +575,7 @@ final class AllocationEngine
 
     /**
      * 산출 근거를 사람이 읽을 수 있는 모양으로.
-     * ba_allocation_item.reason_json 에 그대로 들어간다.
+     * bs_allocation_item.reason_json 에 그대로 들어간다.
      *
      * 이 값이 비면 "왜 이 사람인가" 에 답할 수 없다. 반드시 채운다.
      * 명세서 §6.2-4 가 요구하는 "근거 3줄" 을 지킨다.
@@ -655,7 +655,7 @@ final class AllocationEngine
             'evidence'   => $fit['evidence'],
             // 근거 건 링크 — 이 계열에서 실제로 처리한 일들.
             'work_items' => $items,
-            'engine_ver' => BA_ENGINE_VER,
+            'engine_ver' => BS_ENGINE_VER,
             'eval_ver'   => $ctx['eval_ver'],
         ];
     }
@@ -732,7 +732,7 @@ final class AllocationEngine
     private function buildContext(int $projectId, array $params): array
     {
         $weights     = $this->mergeWeights($params['weights'] ?? []);
-        $constraints = ($params['constraints'] ?? []) + BA_ALLOC_CONSTRAINTS;
+        $constraints = ($params['constraints'] ?? []) + BS_ALLOC_CONSTRAINTS;
 
         // --- 태스크: 확정된 것만. 이 경로 말고 다른 조회를 쓰지 말 것 ---
         $all = $this->tasks->confirmedForAllocation($projectId);
@@ -784,7 +784,7 @@ final class AllocationEngine
         $rootOf = [];
         foreach ($tasks as $id => $_) {
             $cur = $id;
-            for ($i = 0; $i < BA_TASK_MAX_DEPTH && ($parentOf[$cur] ?? null) !== null; $i++) {
+            for ($i = 0; $i < BS_TASK_MAX_DEPTH && ($parentOf[$cur] ?? null) !== null; $i++) {
                 $cur = $parentOf[$cur];
             }
             $rootOf[$id] = $cur;
@@ -857,7 +857,7 @@ final class AllocationEngine
     /** 가중치를 기본값 위에 얹고 범위를 지킨다. */
     private function mergeWeights(array $given): array
     {
-        $out = BA_ALLOC_WEIGHTS;
+        $out = BS_ALLOC_WEIGHTS;
         foreach ($given as $k => $v) {
             if (!array_key_exists($k, $out)) {
                 continue;   // 모르는 가중치는 무시한다(오타로 식이 바뀌면 안 된다)
@@ -865,7 +865,7 @@ final class AllocationEngine
             if (!is_numeric($v)) {
                 throw new InvalidArgumentException("가중치는 숫자여야 합니다: $k");
             }
-            $out[$k] = max(0.0, min(BA_ALLOC_WEIGHT_MAX, (float)$v));
+            $out[$k] = max(0.0, min(BS_ALLOC_WEIGHT_MAX, (float)$v));
         }
         if (array_sum($out) <= 0) {
             throw new InvalidArgumentException(
@@ -966,7 +966,7 @@ final class AllocationEngine
 
     /**
      * 가용도를 볼 기간. 개발 기간이 기본이고, 비면 테스트·배포일로 넓힌다.
-     * api/candidate.php 의 ba_project_window() 와 같은 규칙이다.
+     * api/candidate.php 의 bs_project_window() 와 같은 규칙이다.
      */
     private function projectWindow(int $projectId): array
     {

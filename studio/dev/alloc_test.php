@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 define('ROOT', dirname(__DIR__, 2));
-$TESTDB = getenv('BA_TEST_DB') ?: 'blueassign_test';
+$TESTDB = getenv('BS_TEST_DB') ?: 'blueassign_test';
 require ROOT . '/studio/inc/bootstrap.php';
 foreach (['ProjectRepo', 'TaskRepo', 'MemberRepo', 'AllocationRepo'] as $r) {
     require ROOT . "/studio/inc/repo/$r.php";
@@ -23,9 +23,9 @@ try {
     exit(2);
 }
 $pdo->exec("SET time_zone = '+09:00'");
-foreach (['ba_notification', 'ba_workload', 'ba_allocation_item', 'ba_allocation',
-          'ba_task_domain', 'ba_task', 'ba_member_category', 'ba_member_metric',
-          'ba_eval_run', 'ba_project_source', 'ba_project', 'ba_member'] as $t) {
+foreach (['bs_notification', 'bs_workload', 'bs_allocation_item', 'bs_allocation',
+          'bs_task_domain', 'bs_task', 'bs_member_category', 'bs_member_metric',
+          'bs_eval_run', 'bs_project_source', 'bs_project', 'bs_member'] as $t) {
     $pdo->exec("DELETE FROM $t");
 }
 
@@ -68,7 +68,7 @@ function sig(array $res): string {
 // 밑준비 — 사람 5명, 역량 판정 1회, 프로젝트와 WBS
 // =====================================================================
 $mkMember = $pdo->prepare(
-    'INSERT INTO ba_member (user_id, emp_name, role_label, career_months, base_capacity,
+    'INSERT INTO bs_member (user_id, emp_name, role_label, career_months, base_capacity,
                             slack_handle, email, is_assignable, is_evaluable)
      VALUES (?,?,?,?,?,?,?,?,1)'
 );
@@ -84,20 +84,20 @@ foreach ([
     $MEM[$m[1]] = (int)$pdo->lastInsertId();
 }
 
-// ba_eval_run 은 id 가 곧 판정 회차다(eval_ver 컬럼이 따로 없다).
+// bs_eval_run 은 id 가 곧 판정 회차다(eval_ver 컬럼이 따로 없다).
 $pdo->prepare(
-    'INSERT INTO ba_eval_run (started_at, finished_at, period_from, period_to, status)
+    'INSERT INTO bs_eval_run (started_at, finished_at, period_from, period_to, status)
      VALUES (NOW(), NOW(), ?, ?, "ok")'
 )->execute(['2026-01-01', '2026-12-31']);
 $evalRunId = (int)$pdo->lastInsertId();
 
 $mkMetric = $pdo->prepare(
-    'INSERT INTO ba_member_metric (member_id, eval_ver, cap_score, breadth_score, career_score,
+    'INSERT INTO bs_member_metric (member_id, eval_ver, cap_score, breadth_score, career_score,
                                    insufficient_data)
      VALUES (?,?,?,?,?,?)'
 );
 $mkCat = $pdo->prepare(
-    'INSERT INTO ba_member_category (member_id, category, eval_ver, case_count, score,
+    'INSERT INTO bs_member_category (member_id, category, eval_ver, case_count, score,
                                      confidence, insufficient_data)
      VALUES (?,?,?,?,?,?,?)'
 );
@@ -126,7 +126,7 @@ $pid = $projects->create([
 // 에 20 을 적어 두었는데, DB 를 새로 만들면 20 이 '인프라·배포'(platform) 가
 // 되어 화면 과업이 인프라 과업으로 둔갑했다.
 $domId = static function (string $code) use ($pdo): int {
-    $st = $pdo->prepare('SELECT id FROM ba_domain WHERE code = ?');
+    $st = $pdo->prepare('SELECT id FROM bs_domain WHERE code = ?');
     $st->execute([$code]);
     $id = (int)$st->fetchColumn();
     if ($id === 0) {
@@ -222,7 +222,7 @@ ok('모르는 가중치는 무시한다(오타로 식이 바뀌지 않게)',
    abs($rx['meta']['weights']['domain'] - 0.35) < 0.001
    && !isset($rx['meta']['weights']['없는가중치']));
 $rc = $engine->propose($pid, ['weights' => ['domain' => 99]]);
-ok('범위를 벗어난 값은 상한으로', abs($rc['meta']['weights']['domain'] - BA_ALLOC_WEIGHT_MAX) < 0.001,
+ok('범위를 벗어난 값은 상한으로', abs($rc['meta']['weights']['domain'] - BS_ALLOC_WEIGHT_MAX) < 0.001,
    (string)$rc['meta']['weights']['domain']);
 
 // =====================================================================
@@ -313,10 +313,10 @@ throws('확정본의 항목은 못 지운다',
     fn() => $allocs->deleteItem((int)$allocs->items($aid)[0]['id']));
 
 ok('점유 기록이 만들어진다',
-   (int)$pdo->query("SELECT COUNT(*) FROM ba_workload WHERE kind='assigned'")->fetchColumn() === 4,
-   (string)$pdo->query("SELECT COUNT(*) FROM ba_workload WHERE kind='assigned'")->fetchColumn());
+   (int)$pdo->query("SELECT COUNT(*) FROM bs_workload WHERE kind='assigned'")->fetchColumn() === 4,
+   (string)$pdo->query("SELECT COUNT(*) FROM bs_workload WHERE kind='assigned'")->fetchColumn());
 ok('점유는 배정 항목을 가리킨다',
-   (int)$pdo->query("SELECT COUNT(*) FROM ba_workload
+   (int)$pdo->query("SELECT COUNT(*) FROM bs_workload
                       WHERE kind='assigned' AND ref_type='allocation_item'")->fetchColumn() === 4);
 
 // =====================================================================
@@ -335,13 +335,13 @@ $allocs->confirm($aid2, $actor);
 ok('새 것을 확정하면 그것이 확정본', (int)$allocs->confirmed($pid)['id'] === $aid2);
 ok('옛 확정본은 archived 로 내려간다', $allocs->find($aid)['status'] === 'archived');
 ok('확정본은 언제나 하나뿐',
-   (int)$pdo->query("SELECT COUNT(*) FROM ba_allocation
+   (int)$pdo->query("SELECT COUNT(*) FROM bs_allocation
                       WHERE project_id=$pid AND status='confirmed'")->fetchColumn() === 1);
 throws('지난 안은 확정할 수 없다', fn() => $allocs->confirm($aid, $actor));
 
 // =====================================================================
 echo "\n[12] 알림 — 확정을 막지 않는다\n";
-$pdo->exec('DELETE FROM ba_notification');
+$pdo->exec('DELETE FROM bs_notification');
 $notifier = new OutboxNotifier($pdo);
 $res = $notifier->send([
     new Notice('slack', $MEM['가개발'], '@ga', '본문', '제목', 'allocation', $aid2),
@@ -351,11 +351,11 @@ $res = $notifier->send([
 ok('보낼 것 2건 적재', $res['queued'] === 2, json_encode($res));
 ok('주소 없는 1건은 건너뜀(실패가 아니다)', $res['skipped'] === 1 && $res['failed'] === 0);
 ok('건너뛴 이유를 남긴다',
-   (string)$pdo->query("SELECT error FROM ba_notification WHERE status='skipped'")->fetchColumn() !== '');
+   (string)$pdo->query("SELECT error FROM bs_notification WHERE status='skipped'")->fetchColumn() !== '');
 ok('적재만 하고 보내지는 않는다',
-   (int)$pdo->query("SELECT COUNT(*) FROM ba_notification WHERE status='sent'")->fetchColumn() === 0);
+   (int)$pdo->query("SELECT COUNT(*) FROM bs_notification WHERE status='sent'")->fetchColumn() === 0);
 ok('어느 배정안 때문인지 남는다',
-   (int)$pdo->query("SELECT COUNT(*) FROM ba_notification
+   (int)$pdo->query("SELECT COUNT(*) FROM bs_notification
                       WHERE ref_type='allocation' AND ref_id=$aid2")->fetchColumn() === 3);
 
 // =====================================================================
