@@ -1,19 +1,16 @@
 {
   "_설명": [
-    "정식 오픈 시점에 포털에 BlueStudio 를 등록하기 위한 수정안이다.",
-    "지금은 적용하지 않는다 — 이 파일은 붙여 넣을 값을 적어 둔 기록일 뿐이다.",
-    "등록은 세 곳을 함께 고쳐야 하며, 한 곳만 하면 타일이 깨지거나 메뉴에서",
-    "현재 위치 표시가 되지 않는다. 근거는 docs/conventions.md 3.2~3.4,",
-    "bluestudio-spec.md 0.2, rename-impact.md 0.1."
+    "포털에 BlueStudio 를 등록한 기록이다. **2026-10-01 에 세 곳 모두 반영을 마쳤다.**",
+    "앞으로 key 나 경로를 또 바꾼다면 세 곳을 함께 보라 — 한 곳만 고치면 타일이",
+    "깨지거나 상단바에서 현재 위치 표시가 되지 않는다.",
+    "근거는 docs/conventions.md 3.2~3.4, bluestudio-spec.md 0.2, rename-impact.md 0.1."
   ],
-
   "_적용순서": [
-    "1. core/worksystems.json 배열 끝에 worksystems_json_항목 을 추가한다",
-    "2. (끝남) 루트 index.php 의 ICONS 맵 — studio: studioIcon 이 이미 들어가 있다",
-    "3. studio/inc/bootstrap.php 의 BS_MODULE_KEY 를 'studio' 로 바꾼다",
-    "4. 812건 시험을 다시 돌린다"
+    "1. (끝남) core/worksystems.json 배열 끝에 worksystems_json_항목 을 추가",
+    "2. (끝남) 루트 index.php 의 ICONS 맵 — studio: studioIcon",
+    "3. (끝남) studio/inc/bootstrap.php 의 BS_MODULE_KEY 를 'studio' 로",
+    "4. (끝남) 시험 1,004건 재실행 — 전부 통과"
   ],
-
   "worksystems_json_항목": {
     "key": "studio",
     "emoji": "🧩",
@@ -22,28 +19,22 @@
     "desc": "개발 과업을 편성하고 진행 상황을 공유합니다.",
     "color": "#2B7A4B"
   },
-
   "_worksystems_json_주의": [
     "path 는 다수 관례(bluecart/index.php)를 따라 파일까지 적는다.",
     "color 는 studio/assets/assign.css 의 --ba-brand 와 같은 값이어야 한다.",
-    "작업 트리에 옛 키 'assign' 으로 등록하는 미커밋 변경이 남아 있다.",
-    "이 항목을 넣기 전에 그 변경을 먼저 정리하라 (git restore core/worksystems.json)."
+    "옛 키 'assign' 으로 등록하던 미커밋 변경은 이 항목으로 덮어 없앴다."
   ],
-
   "root_index_php_ICONS": {
     "_상태": "끝났다. studioIcon 상수와 ICONS 맵 항목이 이미 들어가 있다",
     "_위치": "index.php 의 studioIcon 상수 + ICONS 맵",
     "_모양": "보드 — 둥근 사각형에 머리줄 하나와 세로 칸막이 둘. 24x24 stroke SVG",
     "_왜먼저넣었나": "쓰이지 않는 키라 json 이 studio 를 등록하기 전에는 아무 일도 하지 않는다. 등록 때 SVG 를 새로 그리느라 막히지 않도록 미리 넣어 두었다"
   },
-
   "bootstrap_module_key": {
+    "_상태": "끝났다. const BS_MODULE_KEY = 'studio';",
     "_위치": "studio/inc/bootstrap.php 의 BS_MODULE_KEY 상수",
-    "_현재": "const BS_MODULE_KEY = 'assign';",
-    "_바꿀값": "const BS_MODULE_KEY = 'studio';",
     "_이유": "worksystems.json 의 key 와 같아야 상단바 메뉴에서 현재 위치가 표시되고, 미로그인 안내(?need_login=)가 맞는 모듈명을 집는다"
   },
-
   "_이번범위아님": {
     "DB접두사": "bs_ 는 그대로 둔다. 별도 결정·별도 커밋 (CLAUDE.md)",
     "시험DB": "blueassign_test 는 그대로 둔다 (rename-impact.md 4-C)",

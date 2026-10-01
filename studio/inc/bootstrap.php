@@ -67,7 +67,7 @@ function bs_env(string $key, $default = null)
  * worksystems.json 에 등록한 이 모듈의 key.
  * 상단바 현재 위치 표시와 미로그인 안내(?need_login=)에 쓰인다.
  */
-const BS_MODULE_KEY = 'assign';
+const BS_MODULE_KEY = 'studio';
 
 // =====================================================================
 // 권한

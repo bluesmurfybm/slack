@@ -9,26 +9,23 @@
 
 ---
 
-## 0. 올리기 전 — 아직 끝나지 않은 것
+## 0. 포털 등록 — 끝났습니다
 
-**포털 등록 3곳이 아직 옛 이름(`assign`)입니다.** 이대로 올리면 포털 타일이
-없거나, 있어도 죽은 경로를 가리킵니다. 세 곳을 **함께** 고쳐야 합니다.
+세 곳 모두 `studio` 로 맞췄습니다 (2026-10-01).
 
-| 위치 | 지금 | 바꿀 값 |
-|---|---|---|
-| `core/worksystems.json` | 항목 없음 / 옛 `assign` 항목 | `docs/worksystems-entry.json` 의 값 |
-| `studio/inc/bootstrap.php` | `const BS_MODULE_KEY = 'assign';` | `'studio'` |
-| 루트 `index.php` ICONS 맵 | **끝남** — `studio: studioIcon` 이 들어가 있습니다 | — |
+| 위치 | 값 |
+|---|---|
+| `core/worksystems.json` | `key: "studio"`, `path: "studio/index.php"`, `label: "BlueStudio"` |
+| 루트 `index.php` ICONS 맵 | `studio: studioIcon` |
+| `studio/inc/bootstrap.php` | `const BS_MODULE_KEY = 'studio';` |
 
-ICONS 는 미리 넣어 두었습니다. 쓰이지 않는 키라 json 이 `studio` 를 등록하기
-전까지는 아무 일도 하지 않습니다. 나머지 둘은 **반드시 함께** 고치십시오 —
+**한 곳만 고치면 어긋납니다.** json 만 고치면 상단바에서 현재 위치 표시가
+안 되고, `BS_MODULE_KEY` 만 고치면 타일이 없는데 모듈만 자기를 `studio` 라고
+부릅니다. 나중에 키를 또 바꾼다면 세 곳을 함께 보십시오.
 
-- json 만: 타일은 뜨지만 상단바에서 현재 위치 표시가 안 됩니다
-- `BS_MODULE_KEY` 만: 타일이 없는데 모듈만 자기를 `studio` 라고 부릅니다.
-  미로그인 안내(`?need_login=`)가 없는 모듈 이름을 집습니다
-
-고친 뒤 시험을 다시 돌리십시오. 붙여 넣을 값과 사유는
-`docs/worksystems-entry.json` 에 있습니다.
+`worksystems.json` 의 `color` 는 `assets/assign.css` 의 `--ba-brand` 와 같은
+값이어야 합니다(`#2B7A4B`). 한쪽만 바꾸면 포털 타일과 모듈 안의 색이
+어긋납니다.
 
 ---
 
