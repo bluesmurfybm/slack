@@ -592,14 +592,33 @@ ok('상한값이 bs_setting 에 있다',
          $sv['rnd_concurrent_max'], $sv['rnd_stale_weeks']),
    json_encode($sv));
 
-/** 데모용 과제 하나를 만들어 승인한다. 관리자가 발의해 lead 가 된다. */
-$mkRnd = function (string $name) use ($admin): int {
+/**
+ * 데모용 과제 하나를 만들어 승인한다. 관리자가 발의해 lead 가 된다.
+ *
+ * **승인하면 발의자도 점유를 쓴다**(상한 우회를 막은 뒤부터). 여기서 재려는
+ * 것은 '시험사용자' 의 상한이므로, 과제를 만드는 동안에는 상한을 잠시
+ * 올려 두어 발의자(관리자) 쪽에 걸리지 않게 한다. 바로 되돌린다.
+ */
+$withCapRaised = function (callable $fn) use ($pdo) {
+    $pdo->exec("UPDATE bs_setting SET v='0.99' WHERE k='rnd_total_cap'");
+    $pdo->exec("UPDATE bs_setting SET v='0.99' WHERE k='rnd_per_project_cap'");
+    $pdo->exec("UPDATE bs_setting SET v='99'   WHERE k='rnd_concurrent_max'");
+    try   { return $fn(); }
+    finally {
+        $pdo->exec("UPDATE bs_setting SET v='0.30' WHERE k='rnd_total_cap'");
+        $pdo->exec("UPDATE bs_setting SET v='0.20' WHERE k='rnd_per_project_cap'");
+        $pdo->exec("UPDATE bs_setting SET v='2'    WHERE k='rnd_concurrent_max'");
+    }
+};
+$mkRnd = function (string $name) use ($admin, $withCapRaised): int {
+  return $withCapRaised(function () use ($admin, $name): int {
     $r = $admin->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
         'name' => '[시험] ' . $name, 'visibility' => 'open', 'recruiting' => '1',
         'status' => 'proposed']]);
     $id = (int)($r['json']['data']['id'] ?? 0);
     $admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $id]]);
     return $id;
+  });
 };
 $rowIdOf = function (int $pid) use ($pdo, $USER): int {
     $st = $pdo->prepare('SELECT rm.id FROM bs_rnd_member rm JOIN bs_member m ON m.id = rm.member_id
@@ -1041,6 +1060,93 @@ if (!$before) {
     $pdo->exec("DELETE FROM bs_project WHERE project_type='rnd' AND code LIKE 'RNDT-%'");
     $pdo->exec("DELETE FROM bs_work_item WHERE source = 'rnd'");
 }
+
+// ---------------------------------------------------------------------
+echo "\n[23] 리뷰에서 나온 구멍 — 상한 우회와 이름 누출\n";
+
+/* ① 과제 승인 경로의 상한 우회
+   승인되면 발의자가 lead 로 앉으며 점유가 올라간다. 그 자리에 상한 검사가
+   없으면, 과제를 여러 개 발의해 승인받는 것만으로 상한을 통째로 넘긴다. */
+$pdo->exec("DELETE FROM bs_project WHERE project_type='rnd' AND code LIKE 'RNDX-%'");
+
+// 앞 구간이 남긴 참여를 비운다. 여기서는 **발의자 경로만** 재야 한다.
+$pdo->exec("DELETE rm FROM bs_rnd_member rm JOIN bs_member m ON m.id = rm.member_id
+             WHERE m.user_id = '$USER'");
+$pdo->exec("DELETE w FROM bs_workload w JOIN bs_member m ON m.id = w.member_id
+             WHERE w.ref_type = 'rnd' AND m.user_id = '$USER'");
+
+$mkOwn = function (string $code, float $cap) use ($pdo, $USER): int {
+    $pdo->exec("INSERT INTO bs_project (code, project_type, visibility, name, status,
+                    rnd_category, owner_id, owner_name, proposer_id, proposer_name, load_cap)
+                VALUES ('$code','rnd','open','[시험] $code','proposed','poc',
+                        '$USER','시험사용자','$USER','시험사용자', $cap)");
+    return (int)$pdo->lastInsertId();
+};
+
+// 상한(0.30) 안에서 두 건까지는 승인된다.
+$x1 = $mkOwn('RNDX-0001', 0.15);
+$r = $admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $x1]]);
+ok('첫 과제 승인 200', $r['status'] === 200, substr($r['body'], 0, 140));
+
+$x2 = $mkOwn('RNDX-0002', 0.15);
+$r = $admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $x2]]);
+ok('둘째 과제도 승인 200 (합계 0.30, 아직 상한 안)', $r['status'] === 200,
+   substr($r['body'], 0, 200));
+
+// 셋째는 총량(0.45 > 0.30)과 동시 건수(3 > 2) 양쪽에 걸린다.
+$x3 = $mkOwn('RNDX-0003', 0.15);
+$r = $admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $x3]]);
+ok('셋째 과제 승인이 상한에 막힌다 (발의자 경로도 검사한다)',
+   $r['status'] === 400, 'status=' . $r['status']);
+ok('코드는 RND_CAP_EXCEEDED', ($r['json']['error']['code'] ?? '') === 'RND_CAP_EXCEEDED',
+   (string)($r['json']['error']['code'] ?? ''));
+
+$st = $pdo->prepare('SELECT status FROM bs_project WHERE id = ?');
+$st->execute([$x3]);
+ok('막혔으면 과제도 승인되지 않는다', ($st->fetch()['status'] ?? '') === 'proposed');
+
+$st = $pdo->prepare("SELECT COUNT(*) AS n FROM bs_workload WHERE ref_type='rnd' AND ref_id = ?");
+$st->execute([$x3]);
+ok('점유도 올라가지 않는다', (int)$st->fetch()['n'] === 0);
+
+/* ② 비공개 과제 이름 누출
+   가시성을 Repo 에서 막아 놓고, 점유 내역과 근거 목록으로 이름이 샜다. */
+$pdo->exec("INSERT INTO bs_project (code, project_type, visibility, name, status,
+                rnd_category, owner_id, owner_name, proposer_id, proposer_name,
+                load_cap, approved_at)
+            VALUES ('RNDX-9001','rnd','private','[시험] 관리자 비밀 과제','approved','poc',
+                    '$ADMIN','시험관리자','$ADMIN','시험관리자', 0.100, NOW())");
+$secret = (int)$pdo->lastInsertId();
+$mAdmin2 = (int)$pdo->query("SELECT id FROM bs_member WHERE user_id='$ADMIN'")->fetch()['id'];
+$pdo->prepare("INSERT INTO bs_rnd_member (project_id, member_id, role, load_ratio, status,
+                   approved_at, joined_at) VALUES (?,?,'lead',0.100,'approved',NOW(),NOW())")
+    ->execute([$secret, $mAdmin2]);
+$pdo->prepare("INSERT INTO bs_workload (member_id, kind, ref_type, ref_id, label,
+                   start_date, end_date, load_ratio, confidence)
+               VALUES (?, 'assigned','rnd', ?, '비밀', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 60 DAY), 0.100, 1.000)")
+    ->execute([$mAdmin2, $secret]);
+
+// 일반 사용자에게는 배정 권한이 없으므로 애초에 403 이어야 한다.
+$r = $user->req('/studio/api/rnd.php?act=member_load&member_id=' . $mAdmin2);
+ok('권한 없는 사람은 남의 점유 내역을 못 본다', $r['status'] === 403);
+
+// 관리자는 자기 것이므로 이름을 본다.
+$r = $admin->req('/studio/api/rnd.php?act=member_load&member_id=' . $mAdmin2);
+ok('관리자는 자기 비공개 과제 이름을 본다',
+   str_contains($r['body'], '관리자 비밀 과제'), substr($r['body'], 0, 200));
+
+// 가려진 응답 모양 — 점유율은 남고 이름만 사라져야 한다.
+$d23 = $r['json']['data'] ?? [];
+$hasRatio = true;
+foreach ($d23['projects'] ?? [] as $p23) {
+    if (!array_key_exists('load_ratio', $p23)) { $hasRatio = false; }
+}
+ok('과제마다 점유율이 남는다 (합계가 맞아야 하므로)', $hasRatio);
+ok('합계가 과제별 점유율의 합과 같다',
+   abs(array_sum(array_column($d23['projects'] ?? [], 'load_ratio')) - (float)($d23['total'] ?? -1)) < 0.001,
+   json_encode([$d23['total'] ?? null, array_column($d23['projects'] ?? [], 'load_ratio')]));
+
+$pdo->exec("DELETE FROM bs_project WHERE project_type='rnd' AND code LIKE 'RNDX-%'");
 
 // ---------------------------------------------------------------------
 echo "\n[뒷정리]\n";
