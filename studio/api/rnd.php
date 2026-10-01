@@ -144,7 +144,13 @@ bs_route(bs_param_str('act', 'board'), [
             bs_json_error('MISSING_PARAM', '과제 번호가 없습니다.', 400);
         }
 
-        $repo->approve($id, $user);
+        try {
+            $repo->approve($id, $user);
+        } catch (RndCapExceededException $e) {
+            // 발의자가 상한에 걸리면 과제 승인 자체가 막힌다 — 승인되면
+            // 그 자리에서 lead 점유가 올라가기 때문이다.
+            bs_json_error('RND_CAP_EXCEEDED', $e->getMessage(), 400, $e->check);
+        }
         $r = $repo->find($id);
 
         bs_json_ok([
@@ -249,7 +255,8 @@ bs_route(bs_param_str('act', 'board'), [
             'emp_name'  => $members->find($mid)['emp_name'] ?? null,
             'total'     => $cur['total'],
             'count'     => $cur['count'],
-            'projects'  => $cur['projects'],
+            // 못 볼 과제는 이름을 가린다. 숫자는 그대로라 합계가 맞는다.
+            'projects'  => $svc->maskInvisible($cur['projects']),
             'stale'     => $svc->staleProjectsOf($mid),
             'limit'     => $lim,
             // 상한 대비 여유. 음수면 이미 넘은 것이다(설정을 낮춘 경우).
@@ -291,23 +298,76 @@ bs_route(bs_param_str('act', 'board'), [
                 AND p.deleted_at IS NULL AND p.status IN ('approved','running')"
         )->fetchAll(PDO::FETCH_COLUMN);
 
-        $members = new MemberRepo($pdo);
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 사람 수에 비례해 묻지 않는다                                  │
+        // │                                                              │
+        // │ 전에는 구성원 1명마다 3회씩(점유·이름·정체) 물었다 —          │
+        // │ 10명이면 31회다. 한 번에 묶어 가져와 PHP 에서 나눈다.          │
+        // │ 질의 수가 **인원과 무관하게 고정**이 된다.                     │
+        // └──────────────────────────────────────────────────────────────┘
         $rows = [];
-        foreach ($ids as $mid) {
-            $mid = (int)$mid;
-            $cur = $svc->currentLoad($mid);
-            $m   = $members->find($mid);
-            $rows[] = [
-                'member_id'  => $mid,
-                'emp_name'   => $m['emp_name'] ?? ('#' . $mid),
-                'role_label' => $m['role_label'] ?? null,
-                'total'      => $cur['total'],
-                'count'      => $cur['count'],
-                'projects'   => $cur['projects'],
-                'stale'      => $svc->staleProjectsOf($mid),
-                'headroom'   => round($lim['total_cap'] - $cur['total'], 3),
-                'over'       => $cur['total'] > $lim['total_cap'],
-            ];
+        if ($ids) {
+            $ids = array_map('intval', $ids);
+            $ph  = implode(',', array_fill(0, count($ids), '?'));
+
+            // ① 이름 — 한 번
+            $st = $pdo->prepare("SELECT id, emp_name, role_label FROM bs_member WHERE id IN ($ph)");
+            $st->execute($ids);
+            $names = [];
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $m) {
+                $names[(int)$m['id']] = $m;
+            }
+
+            // ② 참여 중인 과제 — 한 번. 정체 여부도 같은 줄에서 낸다.
+            $weeks   = bs_setting_int('rnd_stale_weeks');
+            $limitTs = strtotime('-' . ($weeks * 7) . ' day');
+
+            $st = $pdo->prepare(
+                "SELECT rm.member_id, p.id, p.code, p.name, p.visibility, rm.load_ratio,
+                        COALESCE(
+                          (SELECT MAX(l.created_at) FROM bs_rnd_log l WHERE l.project_id = p.id),
+                          p.approved_at) AS last_at
+                   FROM bs_rnd_member rm
+                   JOIN bs_project p ON p.id = rm.project_id
+                  WHERE rm.member_id IN ($ph) AND rm.status = 'approved'
+                    AND p.project_type = 'rnd' AND p.deleted_at IS NULL
+                    AND p.status IN ('approved','running')"
+            );
+            $st->execute($ids);
+
+            $byMember = [];
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $byMember[(int)$r['member_id']][] = [
+                    'project_id'  => (int)$r['id'],
+                    'code'        => $r['code'],
+                    'name'        => $r['name'],
+                    'visibility'  => $r['visibility'],
+                    'load_ratio'  => (float)$r['load_ratio'],
+                    'last_log_at' => bs_date($r['last_at']),
+                    'is_stale'    => $r['last_at'] !== null
+                                     && strtotime((string)$r['last_at']) < $limitTs,
+                ];
+            }
+
+            foreach ($ids as $mid) {
+                $ps    = $byMember[$mid] ?? [];
+                $total = 0.0;
+                foreach ($ps as $one) { $total += $one['load_ratio']; }
+                $total = round($total, 3);
+                $stale = array_values(array_filter($ps, static fn($o) => $o['is_stale']));
+
+                $rows[] = [
+                    'member_id'  => $mid,
+                    'emp_name'   => $names[$mid]['emp_name'] ?? ('#' . $mid),
+                    'role_label' => $names[$mid]['role_label'] ?? null,
+                    'total'      => $total,
+                    'count'      => count($ps),
+                    'projects'   => $svc->maskInvisible($ps),
+                    'stale'      => $svc->maskInvisible($stale),
+                    'headroom'   => round($lim['total_cap'] - $total, 3),
+                    'over'       => $total > $lim['total_cap'],
+                ];
+            }
         }
         usort($rows, static fn($a, $b) => ($b['total'] <=> $a['total'])
                                        ?: ($a['member_id'] <=> $b['member_id']));

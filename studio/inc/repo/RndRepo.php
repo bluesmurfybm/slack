@@ -349,6 +349,27 @@ final class RndRepo
     {
         $cur = $this->requireForDecision($id);
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 발의자의 상한도 **여기서** 본다                               │
+        // │                                                              │
+        // │ 승인되면 발의자가 lead 로 앉고 그 자리에서 점유가 올라간다.   │
+        // │ 이 검사가 없으면 과제를 여러 개 발의해 승인받는 것만으로      │
+        // │ rnd_total_cap 과 rnd_concurrent_max 를 통째로 우회할 수 있다  │
+        // │ — approve_member 만 막아 둔 것이 의미가 없어진다.             │
+        // │                                                              │
+        // │ 관리자라도 넘겨 줄 수 없다. 예외를 한 번 열면 그 길로만 다닌다│
+        // └──────────────────────────────────────────────────────────────┘
+        $svc        = new RndLoadService($this->pdo);
+        $proposerId = $this->memberIdOf((string)$cur['proposer_id']);
+        $leadRatio  = $cur['load_cap'] !== null ? (float)$cur['load_cap'] : 0.100;
+
+        if ($proposerId !== null) {
+            $check = $svc->checkCap($proposerId, $id, $leadRatio);
+            if (!$check['ok']) {
+                throw new RndCapExceededException($check, (string)($cur['proposer_name'] ?? ''));
+            }
+        }
+
         $this->pdo->beginTransaction();
         try {
             $this->pdo->prepare(
@@ -363,7 +384,7 @@ final class RndRepo
             // **과제가 승인될 때** 만든다. 발의 시점에 만들면, 승인되지 않은
             // 과제에 '승인된 참여자' 가 생겨 P9-4 의 적재가 §9.1 을 우회할
             // 길이 열린다. 주도자가 없으면 합류 신청을 승인할 사람도 없다.
-            $mid = $this->memberIdOf((string)$cur['proposer_id']);
+            $mid = $proposerId;
             if ($mid !== null) {
                 $this->pdo->prepare(
                     "INSERT INTO bs_rnd_member
@@ -375,15 +396,14 @@ final class RndRepo
                         approved_at = COALESCE(approved_at, NOW()),
                         joined_at   = COALESCE(joined_at, NOW())"
                 )->execute([
-                    $id, $mid,
-                    $cur['load_cap'] !== null ? (float)$cur['load_cap'] : 0.100,
+                    $id, $mid, $leadRatio,
                     $actor['id'] ?? null, $actor['name'] ?? null,
                 ]);
             }
 
             // 주도자의 점유도 이 자리에서 올린다. 과제가 지금 막 승인됐으므로
             // §9.1 의 조건이 채워졌다.
-            (new RndLoadService($this->pdo))->syncWorkload($id);
+            $svc->syncWorkload($id);
 
             $this->pdo->commit();
         } catch (Throwable $e) {
