@@ -36,6 +36,12 @@ sh studio/sql/dump.sh  <db> -u <user> -p -o ~/backup    # 먼저. 반드시.
 sh studio/sql/apply.sh <db> -u <user> -p
 ```
 
+**`sh` 를 붙여 부르십시오.** 윈도우에서 만든 저장소라 실행 권한이 붙지 않은
+채로 올라갈 수 있습니다(`core.fileMode=false`). 그대로 부르면
+`Permission denied` 가 납니다. `sh` 로 부르면 권한과 무관하게 돌아갑니다.
+직접 실행하고 싶으면 `chmod +x studio/sql/*.sh` 를 한 번 하십시오.
+
+
 ### 왜 스크립트를 쓰는가
 
 **번호 순서대로 다 돌리면 003 에서 멈춥니다.**
