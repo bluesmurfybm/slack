@@ -267,6 +267,18 @@ def materialize_rnd(conn, dfrom: date, dto: date) -> dict:
 
     한 과제에 참여한 **사람마다 한 건**을 넣는다. 역량은 사람 단위이므로.
     source_key 는 'rnd:<과제>:<구성원>' 이라 여러 번 돌려도 늘지 않는다.
+
+    ┌──────────────────────────────────────────────────────────────────┐
+    │ 이미 적재한 건은 **고치지 않는다**                                 │
+    │                                                                  │
+    │ 전에는 title·closed_at·difficulty 를 덮어썼다. 그러면 산출물이     │
+    │ 2건에서 3건이 될 때 난이도가 3에서 4로 바뀌고, **지난 회차의**     │
+    │ 근거 화면이 그때와 다른 숫자를 보여 준다. 점수는 그대로인데        │
+    │ 근거만 달라지면 "점수와 근거의 모집단이 같아야 한다" 가 깨진다.    │
+    │                                                                  │
+    │ 종료된 과제는 닫힌 사실이다. 처음 적재한 값으로 둔다.              │
+    │ 분야 태그도 같은 이유로 **새로 넣을 때만** 쓴다.                   │
+    └──────────────────────────────────────────────────────────────────┘
     """
     with conn.cursor() as cur:
         cur.execute(
@@ -324,9 +336,7 @@ def materialize_rnd(conn, dfrom: date, dto: date) -> dict:
                          requested_at, closed_at, status_raw,
                          difficulty, difficulty_by, collected_at)
                     VALUES ('rnd', %s, %s, %s, %s, %s, %s, 'done', %s, 'rule', NOW())
-                    ON DUPLICATE KEY UPDATE
-                        title = VALUES(title), closed_at = VALUES(closed_at),
-                        difficulty = VALUES(difficulty), collected_at = NOW()
+                    ON DUPLICATE KEY UPDATE collected_at = NOW()
                     """,
                     (key, f"rnd_view.php?id={p['id']}",
                      f"[R&D] {p['code']} {p['name']}", mid,
@@ -338,13 +348,17 @@ def materialize_rnd(conn, dfrom: date, dto: date) -> dict:
                 )
                 wid = cur.fetchone()["id"]
 
-                # 분야 태그를 그대로 옮긴다. 계열은 bs_domain 이 들고 있다.
-                cur.execute("DELETE FROM bs_work_item_domain WHERE work_item_id = %s", (wid,))
-                for d in domain_ids:
-                    cur.execute(
-                        "INSERT INTO bs_work_item_domain (work_item_id, domain_id) VALUES (%s, %s)",
-                        (wid, d),
-                    )
+                # 분야 태그는 **없을 때만** 넣는다. 이미 있으면 그대로 둔다 —
+                # 지난 회차가 그 태그로 계열을 갈랐기 때문이다.
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM bs_work_item_domain WHERE work_item_id = %s", (wid,))
+                if int(cur.fetchone()["n"]) == 0:
+                    for d in domain_ids:
+                        cur.execute(
+                            "INSERT INTO bs_work_item_domain (work_item_id, domain_id)"
+                            " VALUES (%s, %s)",
+                            (wid, d),
+                        )
             stat["items"] += 1
 
     conn.commit()
