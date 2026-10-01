@@ -25,8 +25,34 @@ bs_layout_head(
 
   <div class="ba-alert" id="ba-dash-error" hidden></div>
 
+  <!-- ============ 뷰 전환 (P11) ============
+       한 화면에 다 쌓지 않고 보는 축을 고르게 한다. 지시형 프로젝트와
+       자발형 R&D 는 성격이 달라서, 섞어 놓으면 둘 다 잘 안 보인다. -->
+  <div class="ba-viewtabs" id="ba-dash-views" role="tablist" aria-label="대시보드 보기">
+    <button type="button" role="tab" data-view="all"     aria-selected="true">통합</button>
+    <button type="button" role="tab" data-view="project" aria-selected="false">프로젝트</button>
+    <button type="button" role="tab" data-view="rnd"     aria-selected="false">R&amp;D</button>
+  </div>
+
+  <!-- ============ 조직 지표 ============ -->
+  <div class="ba-rnd-stats" id="ba-dash-org">
+    <div class="ba-rnd-stat"><span class="n" data-k="project_running">–</span><span class="t">진행 중 프로젝트</span></div>
+    <div class="ba-rnd-stat"><span class="n" data-k="rnd_running">–</span><span class="t">진행 중 R&amp;D 과제</span></div>
+    <div class="ba-rnd-stat"><span class="n" data-k="output_quarter">–</span><span class="t" id="ba-dash-q">이번 분기 산출물</span></div>
+  </div>
+
+  <!-- ============ 내 점유 구성 ============ -->
+  <section class="ba-panel" id="ba-me-load-wrap">
+    <h2>내 점유 구성 <span class="ba-dim" id="ba-me-load-sum"></span></h2>
+    <p class="ba-panel__hint">
+      앞으로 60일 기준입니다. <b>합산 숫자 하나로 보여 주지 않습니다</b> —
+      무엇이 얼마나 차지하는지 나눠 적습니다.
+    </p>
+    <div id="ba-me-load"><div class="ba-loading">불러오는 중…</div></div>
+  </section>
+
   <!-- ============ 내가 맡은 것 ============ -->
-  <section class="ba-panel">
+  <section class="ba-panel" data-view-of="project all">
     <h2>내가 맡은 일 <span class="ba-dim" id="ba-mine-sum"></span></h2>
     <p class="ba-panel__hint">
       <b>확정된 배정안</b>에서 내가 맡은 태스크입니다. 확정 전 배정안은 나오지 않습니다.
@@ -34,8 +60,17 @@ bs_layout_head(
     <div id="ba-mine"><div class="ba-loading">불러오는 중…</div></div>
   </section>
 
+  <!-- ============ 내 R&D 과제 ============ -->
+  <section class="ba-panel" data-view-of="rnd all">
+    <h2>내 R&amp;D 과제 <span class="ba-dim" id="ba-myrnd-sum"></span></h2>
+    <p class="ba-panel__hint">
+      승인되어 참여 중인 과제입니다. 진행 기록이 오래 없으면 <b>조용함</b>으로 표시합니다.
+    </p>
+    <div id="ba-myrnd"><div class="ba-loading">불러오는 중…</div></div>
+  </section>
+
   <!-- ============ 진행 중 프로젝트 카드 ============ -->
-  <section class="ba-panel">
+  <section class="ba-panel" data-view-of="project all">
     <h2>진행 중 프로젝트 <span class="ba-dim" id="ba-cards-sum"></span></h2>
     <div id="ba-cards"><div class="ba-loading">불러오는 중…</div></div>
   </section>

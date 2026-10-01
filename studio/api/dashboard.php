@@ -161,6 +161,88 @@ bs_route(bs_param_str('act', 'projects'), [
     },
 
     /** 내가 맡은 태스크만. 개발자가 먼저 보는 화면. */
+    /**
+     * 통합 뷰의 머리 — 조직 지표와 내 점유 구성 (P11).
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 질의 수는 **데이터 양과 무관하게 고정**이다                   │
+     * │                                                              │
+     * │ 조직 지표 3개는 서브셀렉트 하나로 묶어 한 번에 묻는다.        │
+     * │ 세 번 나눠 물으면 화면 하나에 질의가 셋 는다 — 대시보드는     │
+     * │ 모두가 하루에 여러 번 여는 화면이라 그 셋이 쌓인다.           │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    'overview' => function () use ($pdo, $members): void {
+        $me = bs_require_login_api();
+
+        // ── 조직 단위 — 한 문장으로 ──────────────────────────── 1
+        //
+        // 이번 분기 산출물: 올해 분기 시작일부터 센다. '최근 90일' 이 아니라
+        // 분기로 끊는 이유는, 보고 주기가 분기라 사람이 그 숫자를 기대하기
+        // 때문이다.
+        $qStart = date('Y-m-d', mktime(0, 0, 0, (int)(floor((((int)date('n')) - 1) / 3) * 3 + 1), 1));
+
+        $st = $pdo->prepare(
+            "SELECT
+               (SELECT COUNT(*) FROM bs_project
+                 WHERE project_type = 'project' AND deleted_at IS NULL
+                   AND status IN ('allocating','confirmed','running')) AS project_running,
+               (SELECT COUNT(*) FROM bs_project
+                 WHERE project_type = 'rnd' AND deleted_at IS NULL
+                   AND status IN ('approved','running'))               AS rnd_running,
+               (SELECT COUNT(*) FROM bs_rnd_output o
+                  JOIN bs_project p ON p.id = o.project_id
+                 WHERE p.deleted_at IS NULL AND o.created_at >= ?)     AS output_quarter"
+        );
+        $st->execute([$qStart . ' 00:00:00']);
+        $org = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+
+        $mine = $members->findByUserId((string)$me['id']);             // 1
+        if (!$mine) {
+            bs_json_ok([
+                'org'  => bs_dash_org($org, $qStart),
+                'me'   => null,
+                'message' => '구성원 명단에 없어 개인 점유를 낼 수 없습니다.',
+            ]);
+        }
+        $mid = (int)$mine['id'];
+
+        // ── 내 점유 구성 ─────────────────────────────────────────
+        //
+        // 창은 '오늘부터 60일' 이다. 개인 뷰가 답하는 질문은 "앞으로 내가
+        // 얼마나 비어 있나" 이므로 지난 기간을 섞지 않는다.
+        require_once BS_ROOT . '/inc/service/AvailabilityCalculator.php';
+        require_once BS_ROOT . '/inc/service/RndLoadService.php';
+
+        $from = date('Y-m-d');
+        $to   = date('Y-m-d', strtotime('+60 day'));
+        $a = (new AvailabilityCalculator($pdo))->forMembers([$mid], $from, $to)[$mid] ?? null;  // 3
+
+        $svc   = new RndLoadService($pdo);
+        $stale = $svc->staleProjectsOf($mid);                          // 1
+
+        bs_json_ok([
+            'org' => bs_dash_org($org, $qStart),
+            'me'  => [
+                'member_id' => $mid,
+                'emp_name'  => $mine['emp_name'],
+                'period'    => ['from' => $from, 'to' => $to],
+                // 도넛 네 조각. 합이 기준 근무량(capacity_pct)이 되게 맞춘다 —
+                // 반일 근무자는 100 이 아니다.
+                'donut' => $a ? [
+                    'project_pct'   => $a['project_pct'],
+                    'rnd_pct'       => $a['rnd_pct'],
+                    'inferred_pct'  => $a['inferred_pct'],
+                    'available_pct' => $a['available_pct'],
+                    'capacity_pct'  => $a['capacity_pct'],
+                    'confidence'    => $a['confidence'],
+                ] : null,
+                // 내가 들고 있는 정체 과제. 경고로 띄운다 (CLAUDE.md 2항).
+                'stale' => $stale,
+            ],
+        ]);
+    },
+
     'mine' => function () use ($pdo, $members, $progress): void {
         $me = bs_require_login_api();
 
@@ -181,13 +263,76 @@ bs_route(bs_param_str('act', 'projects'), [
         }
         unset($r);
 
+        // 통합 뷰 — 내가 참여 중인 R&D 과제도 한 화면에 (P11).
+        //
+        // 한 문장이다. 과제 수와 무관하게 질의가 늘지 않는다.
+        $rnd = bs_dash_my_rnd($pdo, (int)$mine['id']);                // 1
+
         bs_json_ok([
             'member' => ['id' => (int)$mine['id'], 'emp_name' => $mine['emp_name']],
             'rows'   => $rows,
+            'rnd'    => $rnd,
             'today'  => $today,
         ]);
     },
 ]);
+
+/** 조직 지표 — 숫자에 말을 붙여 내보낸다. 화면이 라벨을 다시 짓지 않게. */
+function bs_dash_org(array $org, string $quarterStart): array
+{
+    return [
+        'project_running' => (int)($org['project_running'] ?? 0),
+        'rnd_running'     => (int)($org['rnd_running'] ?? 0),
+        'output_quarter'  => (int)($org['output_quarter'] ?? 0),
+        'quarter_from'    => $quarterStart,
+    ];
+}
+
+/**
+ * 내가 참여 중인 R&D 과제 (P11).
+ *
+ * 승인된 참여만 본다. 신청 중인 것은 아직 내 일이 아니다.
+ * 정체 여부는 마지막 진행 기록으로 판단하되, 기준(주)은 설정값을 따른다.
+ */
+function bs_dash_my_rnd(PDO $pdo, int $memberId): array
+{
+    $weeks = bs_setting_int('rnd_stale_weeks');
+
+    $st = $pdo->prepare(
+        "SELECT p.id, p.code, p.name, p.status, p.rnd_category, p.recruiting,
+                rm.role, rm.load_ratio,
+                (SELECT COUNT(*) FROM bs_rnd_output o WHERE o.project_id = p.id) AS output_count,
+                (SELECT MAX(l.created_at) FROM bs_rnd_log l WHERE l.project_id = p.id) AS last_log_at,
+                p.approved_at
+           FROM bs_rnd_member rm
+           JOIN bs_project p ON p.id = rm.project_id
+          WHERE rm.member_id = ? AND rm.status = 'approved'
+            AND p.project_type = 'rnd' AND p.deleted_at IS NULL
+            AND p.status IN ('approved', 'running')
+          ORDER BY p.id DESC"
+    );
+    $st->execute([$memberId]);
+
+    $limit = strtotime('-' . ($weeks * 7) . ' day');
+
+    return array_map(static function (array $r) use ($limit): array {
+        $last = $r['last_log_at'] ?? $r['approved_at'];
+        return [
+            'project_id'   => (int)$r['id'],
+            'code'         => $r['code'],
+            'name'         => $r['name'],
+            'status'       => $r['status'],
+            'status_label' => BS_RND_STATUS[$r['status']] ?? $r['status'],
+            'category_label' => BS_RND_CATEGORY[$r['rnd_category']] ?? null,
+            'role'         => $r['role'],
+            'role_name'    => BS_RND_MEMBER_ROLE[$r['role']] ?? $r['role'],
+            'load_ratio'   => (float)$r['load_ratio'],
+            'output_count' => (int)$r['output_count'],
+            'last_log_at'  => bs_date($last),
+            'stale'        => $last !== null && strtotime((string)$last) < $limit,
+        ];
+    }, $st->fetchAll(PDO::FETCH_ASSOC));
+}
 
 
 // =====================================================================

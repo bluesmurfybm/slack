@@ -613,9 +613,119 @@
               (r.overdue ? ' <b>지연</b>' : '') + '</span>' +
           '</button>';
         }).join('') + '</div>';
+        renderMyRnd(d.rnd || []);
       }).catch(function (e) {
         $('#ba-mine').innerHTML = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
       });
+    }
+
+    // ---- 내 R&D 과제 (P11) ----------------------------------------------
+    function renderMyRnd(rows) {
+      var box = $('#ba-myrnd');
+      if (!box) return;
+      if (!rows.length) {
+        box.innerHTML = '<p class="ba-empty-inline">참여 중인 R&amp;D 과제가 없습니다.</p>';
+        $('#ba-myrnd-sum').textContent = '';
+        return;
+      }
+      var quiet = rows.filter(function (r) { return r.stale; }).length;
+      $('#ba-myrnd-sum').textContent = rows.length + '건' + (quiet ? ' · 조용함 ' + quiet + '건' : '');
+
+      box.innerHTML = '<div class="ba-mylist">' + rows.map(function (r) {
+        return '<a class="ba-my' + (r.stale ? ' is-quiet' : '') +
+               '" href="rnd_view.php?id=' + r.project_id + '">' +
+          '<span class="ba-my__p">' + esc(r.code) + '</span>' +
+          '<span class="ba-my__t">' + esc(r.name) + '</span>' +
+          '<span class="ba-my__s">' + esc(r.role_name) + ' · ' +
+            Math.round(r.load_ratio * 100) + '%</span>' +
+          '<span class="ba-my__n">산출물 ' + r.output_count + '</span>' +
+          '<span class="ba-my__d">' +
+            (r.last_log_at ? '최근 기록 ' + esc(r.last_log_at) : '기록 없음') +
+            (r.stale ? ' <b>조용함</b>' : '') + '</span>' +
+        '</a>';
+      }).join('') + '</div>';
+    }
+
+    // ---- 조직 지표 + 내 점유 구성 (P11) ----------------------------------
+    function loadOverview() {
+      api('api/dashboard.php?' + qs({ act: 'overview' })).then(function (d) {
+        $$('#ba-dash-org .n').forEach(function (el) {
+          var v = d.org[el.dataset.k];
+          el.textContent = (v === undefined || v === null) ? '–' : v;
+        });
+        var q = $('#ba-dash-q');
+        if (q && d.org.quarter_from) q.textContent = d.org.quarter_from + ' 이후 산출물';
+
+        var box = $('#ba-me-load');
+        if (!d.me || !d.me.donut) {
+          box.innerHTML = '<p class="ba-empty-inline">' +
+            esc(d.message || '점유를 낼 수 없습니다.') + '</p>';
+          return;
+        }
+        box.innerHTML = donut(d.me) + staleWarn(d.me.stale || []);
+        $('#ba-me-load-sum').textContent =
+          '가용 ' + d.me.donut.available_pct + '%';
+      }).catch(function (e) {
+        $('#ba-me-load').innerHTML = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
+      });
+    }
+
+    /**
+     * 점유 구성 도넛. conic-gradient 로 그린다 — 외부 라이브러리를 쓰지 않는다.
+     * 네 조각(프로젝트 / R&D / 추정 / 여유)을 **각각** 적는다.
+     */
+    function donut(me) {
+      var d = me.donut;
+      var cap = d.capacity_pct || 100;
+      // 기준 근무량이 100 이 아닌 사람(반일 등)은 그만큼만 원을 채운다.
+      var p = d.project_pct, r = d.rnd_pct, i = d.inferred_pct, a = d.available_pct;
+      var a1 = p, a2 = a1 + r, a3 = a2 + i, a4 = a3 + a;
+      var seg = 'conic-gradient(' +
+        '#2B7A4B 0 ' + a1 + '%,' +
+        '#7a5bd6 ' + a1 + '% ' + a2 + '%,' +
+        '#c3cad6 ' + a2 + '% ' + a3 + '%,' +
+        '#eef1f6 ' + a3 + '% ' + a4 + '%,' +
+        '#f7f9fc ' + a4 + '% 100%)';
+
+      function row(cls, label, v) {
+        return '<li><i class="' + cls + '"></i>' + label + ' <b>' + v + '%</b></li>';
+      }
+      return '<div class="ba-donut">' +
+        '<div class="ba-donut__ring" style="background:' + seg + '">' +
+          '<span>' + d.available_pct + '%</span><em>가용</em>' +
+        '</div>' +
+        '<ul class="ba-donut__legend">' +
+          row('is-proj', '프로젝트', p) +
+          row('is-rnd', 'R&D', r) +
+          row('is-inf', '추정', i) +
+          row('is-free', '여유', a) +
+          (cap < 100 ? '<li class="ba-dim">기준 근무 ' + cap + '%</li>' : '') +
+        '</ul></div>';
+    }
+
+    /** 내가 들고 있는 정체 과제 경고 (CLAUDE.md 2항). */
+    function staleWarn(stale) {
+      if (!stale.length) return '';
+      return '<div class="ba-alert ba-alert--warn"><b>조용한 과제 ' + stale.length + '건</b> — ' +
+        stale.map(function (s) {
+          return '<a href="rnd_view.php?id=' + s.project_id + '">' + esc(s.name) + '</a>' +
+                 '<span class="ba-dim">(최근 기록 ' + esc(s.last_log_at || '없음') + ')</span>';
+        }).join(', ') +
+        '<p class="ba-dim">진행 기록이 오래 없습니다. 점유 신뢰도가 낮아집니다.</p></div>';
+    }
+
+    // ---- 뷰 전환 (P11) ---------------------------------------------------
+    //
+    // 서버를 다시 부르지 않는다. 받아 둔 것을 보이고 감출 뿐이다 —
+    // 탭을 누를 때마다 질의가 나가면 대시보드가 금방 무거워진다.
+    function applyView(v) {
+      $$('#ba-dash-views [data-view]').forEach(function (b) {
+        b.setAttribute('aria-selected', String(b.dataset.view === v));
+      });
+      $$('[data-view-of]').forEach(function (el) {
+        el.hidden = el.dataset.viewOf.split(' ').indexOf(v) < 0;
+      });
+      try { localStorage.setItem('bs.dash.view', v); } catch (e) { /* 꺼져 있어도 된다 */ }
     }
 
     // ---- 프로젝트 카드 ---------------------------------------------------
@@ -998,6 +1108,18 @@
       PID = 0;
     });
 
+    var views = $('#ba-dash-views');
+    if (views) {
+      views.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-view]');
+        if (b) applyView(b.dataset.view);
+      });
+      var saved = 'all';
+      try { saved = localStorage.getItem('bs.dash.view') || 'all'; } catch (e) { /* 무시 */ }
+      applyView(saved);
+    }
+
+    loadOverview();
     loadMine();
     loadCards();
   }

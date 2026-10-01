@@ -1413,3 +1413,45 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 /* R&D 에서 온 근거 (P10-3) — 슬랙 업무와 눈으로 가른다 */
 .ba-ev--rnd { border-left: 3px solid #7a5bd6; }
 .ba-badge--rndsrc { background: #efeafc; color: #5a3eb0; }
+
+/* ---- 대시보드 통합 뷰 (P11) ----------------------------------------- */
+.ba-viewtabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.ba-viewtabs button {
+  padding: 7px 16px; font-weight: 600; font-size: 13px;
+  color: var(--ba-ink-soft); background: var(--ba-surface);
+  border: 1px solid var(--ba-line); border-radius: 999px; cursor: pointer;
+}
+.ba-viewtabs button[aria-selected="true"] {
+  background: var(--ba-brand); border-color: var(--ba-brand); color: #fff;
+}
+
+/* 점유 구성 도넛 — 외부 라이브러리 없이 conic-gradient 로 그린다. */
+.ba-donut { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+.ba-donut__ring {
+  width: 128px; height: 128px; border-radius: 50%;
+  display: grid; place-content: center; text-align: center;
+  position: relative; flex: 0 0 auto;
+}
+.ba-donut__ring::after {
+  content: ''; position: absolute; inset: 22px;
+  background: var(--ba-paper); border-radius: 50%;
+}
+.ba-donut__ring span, .ba-donut__ring em {
+  position: relative; z-index: 1; display: block;
+}
+.ba-donut__ring span { font-size: 22px; font-weight: 700; color: var(--ba-ink); }
+.ba-donut__ring em { font-size: 11px; color: var(--ba-ink-soft); font-style: normal; }
+
+.ba-donut__legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.ba-donut__legend li { display: flex; align-items: center; gap: 8px; }
+.ba-donut__legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.ba-donut__legend .is-proj { background: #2B7A4B; }
+.ba-donut__legend .is-rnd  { background: #7a5bd6; }
+.ba-donut__legend .is-inf  { background: #c3cad6; }
+.ba-donut__legend .is-free { background: #eef1f6; border: 1px solid var(--ba-line); }
+
+.ba-alert--warn { background: #fdf6e9; border: 1px solid #f0dcb4; color: #7a5a14; margin-top: 14px; }
+.ba-alert--warn a { color: inherit; font-weight: 600; }
+.ba-alert--warn p { margin: 6px 0 0; font-size: 12px; }
+
+.ba-my.is-quiet { border-left: 3px solid var(--ba-warn); }
