@@ -273,10 +273,19 @@ ok('승인자가 남는다', ($r['json']['data']['rnd']['approved_by'] ?? '') ==
 ok('승인 시각이 찬다', !empty($r['json']['data']['rnd']['approved_at']));
 ok('승인이 점유를 만들지 않는다고 알려 준다', !empty($r['json']['data']['notice']));
 
-$row = $pdo->prepare('SELECT COUNT(*) AS n FROM bs_workload WHERE ref_type = ?');
-$row->execute(['rnd']);
-ok('bs_workload 에 아무것도 적재되지 않았다 (합류는 P9-3)',
-   (int)$row->fetch()['n'] === 0);
+// 과제가 승인되면 주도자의 점유가 그 자리에서 올라간다 (P10-2).
+$st = $pdo->prepare(
+    "SELECT w.* FROM bs_workload w JOIN bs_member m ON m.id = w.member_id
+      WHERE w.ref_type = 'rnd' AND w.ref_id = ? AND m.user_id = ?"
+);
+$st->execute([$openId, $USER]);
+$wl = $st->fetch();
+ok('과제 승인과 함께 주도자의 점유가 올라간다', $wl !== false);
+ok("kind='assigned'", ($wl['kind'] ?? '') === 'assigned');
+ok("ref_type='rnd', ref_id=과제번호",
+   ($wl['ref_type'] ?? '') === 'rnd' && (int)($wl['ref_id'] ?? 0) === $openId);
+ok('정체가 아니면 confidence=1.0', abs((float)($wl['confidence'] ?? 0) - 1.0) < 0.001,
+   (string)($wl['confidence'] ?? ''));
 
 $r = $admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $openId]]);
 ok('두 번 승인할 수 없다', $r['status'] !== 200, 'status=' . $r['status']);
@@ -400,10 +409,16 @@ ok('보내지는 않는다 (발송 경로 없음)',
    (int)$pdo->query("SELECT COUNT(*) AS n FROM bs_notification
                       WHERE ref_type='rnd_member' AND status='sent'")->fetch()['n'] === 0);
 
-$row = $pdo->prepare('SELECT COUNT(*) AS n FROM bs_workload WHERE ref_type = ?');
-$row->execute(['rnd']);
-ok('합류를 승인해도 bs_workload 는 비어 있다 (적재는 P9-4)',
-   (int)$row->fetch()['n'] === 0);
+$st = $pdo->prepare(
+    "SELECT w.load_ratio FROM bs_workload w JOIN bs_member m ON m.id = w.member_id
+      WHERE w.ref_type = 'rnd' AND w.ref_id = ? AND m.user_id = ?"
+);
+$st->execute([$openId, $ADMIN]);
+$wl2 = $st->fetch();
+ok('합류 승인과 함께 그 사람의 점유가 올라간다', $wl2 !== false);
+ok('신고한 점유율 그대로 올라간다 (0.15)',
+   abs((float)($wl2['load_ratio'] ?? 0) - 0.15) < 0.001,
+   (string)($wl2['load_ratio'] ?? ''));
 
 $r = $user->req('/studio/api/rnd.php?act=approve_member', ['csrf' => true,
     'json' => ['member_row_id' => (int)$joinRow['id']]]);
@@ -543,10 +558,27 @@ ok('종료 뒤에는 write_log 가 닫힌다', ($can['write_log'] ?? null) === f
 ok('종료 뒤에는 finish 도 닫힌다', ($can['finish'] ?? null) === false);
 ok('종료 뒤에는 join 이 닫힌다', ($can['join'] ?? null) === false);
 
-echo "\n[16] bs_workload 를 끝까지 건드리지 않았다\n";
-$row = $pdo->prepare('SELECT COUNT(*) AS n FROM bs_workload WHERE ref_type = ?');
-$row->execute(['rnd']);
-ok('이 단계는 점유를 한 줄도 만들지 않는다', (int)$row->fetch()['n'] === 0);
+echo "\n[16] 종료·이탈은 점유를 지우지 않고 끝 날짜만 당긴다 (§8.5)\n";
+
+// [14] 에서 $openId 를 종료했다. 그 점유 행이 어떻게 됐는지 본다.
+$st = $pdo->prepare("SELECT member_id, end_date FROM bs_workload
+                      WHERE ref_type = 'rnd' AND ref_id = ?");
+$st->execute([$openId]);
+$after = $st->fetchAll();
+ok('종료해도 점유 행은 남는다', count($after) > 0, '행 ' . count($after) . '건');
+$allClosed = true;
+foreach ($after as $w) {
+    if ($w['end_date'] > date('Y-m-d')) { $allClosed = false; }
+}
+ok('끝 날짜가 오늘 이하로 당겨진다', $allClosed,
+   json_encode(array_column($after, 'end_date')));
+
+// 끝난 과제의 점유는 지금 기간의 가용도를 더는 먹지 않는다.
+$st = $pdo->prepare("SELECT COUNT(*) AS n FROM bs_workload
+                      WHERE ref_type = 'rnd' AND ref_id = ?
+                        AND start_date <= CURDATE() AND end_date >= DATE_ADD(CURDATE(), INTERVAL 7 DAY)");
+$st->execute([$openId]);
+ok('다음 주 가용도에는 더 이상 잡히지 않는다', (int)$st->fetch()['n'] === 0);
 
 // ---------------------------------------------------------------------
 echo "\n[17] 점유 통제 (명세서 §9, P10-1)\n";
@@ -690,10 +722,167 @@ $r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
 ok('연속이 아니면 경고하지 않는다', ($r['json']['data']['warning'] ?? null) === null,
    json_encode($r['json']['data']['warning'] ?? null, JSON_UNESCAPED_UNICODE));
 
-$row = $pdo->prepare('SELECT COUNT(*) AS n FROM bs_workload WHERE ref_type = ?');
-$row->execute(['rnd']);
-ok('통제 단계는 여전히 점유를 만들지 않는다 (적재는 P10-2)',
-   (int)$row->fetch()['n'] === 0);
+// 상한에 막힌 승인은 점유도 만들지 않는다 — 승인과 적재가 한 트랜잭션이다.
+$st = $pdo->prepare("SELECT COUNT(*) AS n FROM bs_workload
+                      WHERE ref_type = 'rnd' AND ref_id = ?");
+$st->execute([$c1]);
+ok('상한에 막힌 과제에는 신청자의 점유가 없다',
+   (int)$st->fetch()['n'] <= 1,   // 주도자(관리자) 몫 1건까지만
+   '행 수');
+
+// ---------------------------------------------------------------------
+echo "\n[18] 회귀 — R&D 가 0인 사람의 가용도는 **완전히 그대로다**\n";
+
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ P10-2 가 가장 조심해야 할 것                                      │
+   │                                                                  │
+   │ 가용도 계산에 손을 대면, R&D 와 아무 상관없는 사람의 숫자가       │
+   │ 조용히 1~2% 틀어질 수 있다. 그러면 기존 배정안의 적합도가 바뀌고  │
+   │ 아무도 왜 바뀌었는지 모른다.                                      │
+   │                                                                  │
+   │ 그래서 **같은 사람을 두 가지 방법으로 재어 맞대어 본다.**         │
+   │   ① 지금 코드가 내는 값                                          │
+   │   ② R&D 행을 아예 제외하고 손으로 다시 계산한 값                 │
+   │ R&D 가 0인 사람은 둘이 소수점까지 같아야 한다.                    │
+   └──────────────────────────────────────────────────────────────────┘ */
+
+$cfgR = require dirname(__DIR__, 2) . '/config.php';
+$dR   = $cfgR['db'];
+putenv('BS_SKIP'); // (환경 오염 방지용 자리표시 — 아무 일도 하지 않는다)
+
+require_once dirname(__DIR__) . '/inc/bootstrap.php';
+require_once dirname(__DIR__) . '/inc/service/AvailabilityCalculator.php';
+
+$calc = new AvailabilityCalculator($pdo);
+$from = date('Y-m-d');
+$to   = date('Y-m-d', strtotime('+60 day'));
+
+// R&D 점유가 **하나도 없는** 구성원을 고른다.
+$noRnd = $pdo->query(
+    "SELECT m.id, m.emp_name FROM bs_member m
+      WHERE NOT EXISTS (SELECT 1 FROM bs_workload w
+                         WHERE w.member_id = m.id AND w.ref_type = 'rnd')
+      ORDER BY m.id LIMIT 5"
+)->fetchAll();
+ok('R&D 점유가 없는 구성원을 찾았다', count($noRnd) > 0, (string)count($noRnd));
+
+$ids  = array_map(static fn($r) => (int)$r['id'], $noRnd);
+$res  = $calc->forMembers($ids, $from, $to);
+
+$same = true; $detail = '';
+foreach ($ids as $mid) {
+    $a = $res[$mid] ?? null;
+    if (!$a) { continue; }
+    // rnd_load 는 0 이어야 하고, project_load 가 곧 confirmed_load 다.
+    if (abs($a['rnd_load']) > 0.00001) { $same = false; $detail .= "m$mid rnd≠0 "; }
+    if (abs($a['project_load'] - $a['confirmed_load']) > 0.00001) {
+        $same = false; $detail .= "m$mid project≠confirmed ";
+    }
+    if ($a['project_pct'] !== $a['confirmed_pct'] || $a['rnd_pct'] !== 0) {
+        $same = false; $detail .= "m$mid pct 어긋남 ";
+    }
+    if ($a['capped'] !== false && $a['confirmed_raw'] <= $a['base_capacity']) {
+        $same = false; $detail .= "m$mid capped 오탐 ";
+    }
+}
+ok('R&D 0인 사람: rnd_load=0 이고 project_load == confirmed_load', $same, $detail);
+
+// 분해가 **언제나** 합과 맞는지 — R&D 가 있든 없든.
+$all = $pdo->query('SELECT id FROM bs_member ORDER BY id')->fetchAll();
+$allIds = array_map(static fn($r) => (int)$r['id'], $all);
+$res2 = $calc->forMembers($allIds, $from, $to);
+$sumOk = true; $bad = '';
+foreach ($res2 as $mid => $a) {
+    if (abs(($a['project_load'] + $a['rnd_load']) - $a['confirmed_load']) > 0.0002) {
+        $sumOk = false; $bad .= "m$mid ";
+    }
+    if ($a['project_pct'] + $a['rnd_pct'] !== $a['confirmed_pct']) {
+        $sumOk = false; $bad .= "m{$mid}%";
+    }
+}
+ok('모든 구성원에서 project + rnd = confirmed (소수·정수 둘 다)', $sumOk, $bad);
+
+// 기존 계산식이 그대로인지 — available 을 손으로 다시 계산해 맞대어 본다.
+$formulaOk = true; $fb = '';
+foreach ($res2 as $mid => $a) {
+    $expect = round(max(0.0, $a['base_capacity'] - $a['confirmed_load'] - $a['inferred_load']), 4);
+    if (abs($a['available'] - $expect) > 0.00001) {
+        $formulaOk = false; $fb .= "m$mid ";
+    }
+}
+ok('available = base - confirmed - inferred (식이 그대로다)', $formulaOk, $fb);
+
+echo "\n[19] 확정 배정의 가용도가 흔들리지 않았다\n";
+
+// 확정 배정(ref_type='allocation_item')이 만든 점유는 project 쪽으로만 간다.
+$st = $pdo->query(
+    "SELECT DISTINCT member_id FROM bs_workload
+      WHERE kind = 'assigned' AND ref_type <> 'rnd'"
+);
+$allocIds = array_map(static fn($r) => (int)$r['member_id'], $st->fetchAll());
+if ($allocIds) {
+    $res3 = $calc->forMembers($allocIds, $from, $to);
+    $ok3 = true; $b3 = '';
+    foreach ($res3 as $mid => $a) {
+        // 이 사람들에게 R&D 점유가 없다면 project 가 confirmed 전부여야 한다.
+        if ($a['rnd_load'] == 0.0 && abs($a['project_load'] - $a['confirmed_load']) > 0.00001) {
+            $ok3 = false; $b3 .= "m$mid ";
+        }
+    }
+    ok('배정 점유는 전부 project 쪽으로 분류된다', $ok3, $b3);
+} else {
+    ok('배정 점유를 가진 구성원이 없어 건너뜀 (확인할 것 없음)', true);
+}
+
+// ---------------------------------------------------------------------
+echo "\n[20] 화면이 받는 값 — 합산 숫자만 주는 자리가 없다\n";
+
+$r = $admin->req('/studio/api/rnd.php?act=member_load');
+ok('본인 점유 내역은 언제나 볼 수 있다', $r['status'] === 200, 'status=' . $r['status']);
+$d = $r['json']['data'] ?? [];
+ok('과제 목록과 상한·여유가 함께 온다',
+   isset($d['projects'], $d['limit'], $d['headroom'], $d['stale']));
+ok('역량 점수가 섞여 있지 않다',
+   !str_contains($r['body'], 'cap_score') && !str_contains($r['body'], 'breadth_score')
+   && !str_contains($r['body'], 'fit_score'),
+   '점수 칸이 샜다');
+
+// 남의 것은 배정을 짜는 사람만.
+$mAdmin = $pdo->query("SELECT id FROM bs_member WHERE user_id='$ADMIN'")->fetch()['id'];
+$r = $user->req('/studio/api/rnd.php?act=member_load&member_id=' . (int)$mAdmin);
+ok('일반 사용자는 남의 점유 내역을 못 본다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $user->req('/studio/api/rnd.php?act=admin_load');
+ok('관리자용 현황은 관리자만', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/rnd.php?act=admin_load');
+ok('관리자는 본다', $r['status'] === 200);
+ok('상한값이 함께 온다', isset($r['json']['data']['limit']['total_cap']));
+ok('여기에도 역량 점수가 없다',
+   !str_contains($r['body'], 'cap_score') && !str_contains($r['body'], 'breadth_score'),
+   '점수 칸이 샜다');
+
+// 후보 표의 가용도가 분해되어 오는지.
+$pidP = (int)$pdo->query("SELECT id FROM bs_project WHERE project_type='project'
+                           AND deleted_at IS NULL ORDER BY id LIMIT 1")->fetch()['id'];
+if ($pidP) {
+    $r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pidP);
+    $rows = $r['json']['data']['rows'] ?? [];
+    $hasSplit = true;
+    foreach ($rows as $row2) {
+        $a = $row2['availability'] ?? null;
+        if ($a === null) { continue; }
+        if (!array_key_exists('project_pct', $a) || !array_key_exists('rnd_pct', $a)) {
+            $hasSplit = false;
+        } elseif ($a['project_pct'] + $a['rnd_pct'] !== $a['confirmed_pct']) {
+            $hasSplit = false;
+        }
+    }
+    ok('후보 표 가용도에 프로젝트/R&D 분해가 실린다', $hasSplit && count($rows) > 0,
+       '행 ' . count($rows) . '건');
+} else {
+    ok('후보 표를 볼 프로젝트가 없어 건너뜀', true);
+}
 
 // ---------------------------------------------------------------------
 echo "\n[뒷정리]\n";
