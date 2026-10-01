@@ -21,6 +21,15 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../presenter.php';
 
+/**
+ * 산출물 없이 종료하려 할 때 (명세서 §8.5 — `RND_NO_OUTPUT`).
+ *
+ * DomainException 을 갈라 두는 이유는 **화면이 이 경우만 다르게 다뤄야** 하기
+ * 때문이다. 다른 오류는 그냥 알리면 되지만, 이것은 "산출물을 먼저 등록하라"
+ * 는 다음 행동으로 이어 줘야 한다. api/rnd.php 가 전용 코드로 바꿔 내보낸다.
+ */
+final class RndNoOutputException extends DomainException {}
+
 final class RndRepo
 {
     private const COLS = 'p.id, p.code, p.name, p.summary, p.notes, p.extra,
@@ -48,6 +57,10 @@ final class RndRepo
     {
         [$vis, $visParams] = bs_rnd_visible_sql('p');
 
+        // 내 참여 상태를 함께 집어 온다. 화면이 "신청" 단추를 그릴지,
+        // "기록 남기기" 를 열지 여기서 갈린다 — 따로 묻지 않게 한다.
+        $me = (string)(bs_current_user()['id'] ?? '');
+
         $st = $this->pdo->prepare(
             'SELECT ' . self::COLS . ',
                     (SELECT COUNT(*) FROM bs_rnd_member m
@@ -55,11 +68,20 @@ final class RndRepo
                     (SELECT COUNT(*) FROM bs_rnd_output o WHERE o.project_id = p.id) AS output_count,
                     (SELECT COUNT(*) FROM bs_rnd_log    l WHERE l.project_id = p.id) AS log_count,
                     (SELECT COUNT(*) FROM bs_rnd_interest i WHERE i.project_id = p.id) AS interest_count,
-                    (SELECT MAX(l2.created_at) FROM bs_rnd_log l2 WHERE l2.project_id = p.id) AS last_log_at
+                    (SELECT MAX(l2.created_at) FROM bs_rnd_log l2 WHERE l2.project_id = p.id) AS last_log_at,
+                    (SELECT rm.status FROM bs_rnd_member rm
+                       JOIN bs_member mm ON mm.id = rm.member_id
+                      WHERE rm.project_id = p.id AND mm.user_id = ?) AS my_status,
+                    (SELECT rm.role FROM bs_rnd_member rm
+                       JOIN bs_member mm ON mm.id = rm.member_id
+                      WHERE rm.project_id = p.id AND mm.user_id = ?) AS my_role,
+                    (SELECT COUNT(*) FROM bs_rnd_interest ri
+                       JOIN bs_member mi ON mi.id = ri.member_id
+                      WHERE ri.project_id = p.id AND mi.user_id = ?) AS my_interest
                FROM bs_project p
               WHERE p.id = ? AND p.deleted_at IS NULL AND ' . $vis
         );
-        $st->execute(array_merge([$id], $visParams));
+        $st->execute(array_merge([$me, $me, $me, $id], $visParams));
         $r = $st->fetch(PDO::FETCH_ASSOC);
 
         return $r ?: null;
@@ -295,12 +317,43 @@ final class RndRepo
     {
         $cur = $this->requireForDecision($id);
 
-        $this->pdo->prepare(
-            "UPDATE bs_project
-                SET status = 'approved', approved_by = ?, approved_by_name = ?,
-                    approved_at = NOW()
-              WHERE id = ? AND project_type = 'rnd' AND status = 'proposed'"
-        )->execute([$actor['id'] ?? null, $actor['name'] ?? null, $id]);
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare(
+                "UPDATE bs_project
+                    SET status = 'approved', approved_by = ?, approved_by_name = ?,
+                        approved_at = NOW()
+                  WHERE id = ? AND project_type = 'rnd' AND status = 'proposed'"
+            )->execute([$actor['id'] ?? null, $actor['name'] ?? null, $id]);
+
+            // 발의자를 주도자(lead)로 앉힌다.
+            //
+            // **과제가 승인될 때** 만든다. 발의 시점에 만들면, 승인되지 않은
+            // 과제에 '승인된 참여자' 가 생겨 P9-4 의 적재가 §9.1 을 우회할
+            // 길이 열린다. 주도자가 없으면 합류 신청을 승인할 사람도 없다.
+            $mid = $this->memberIdOf((string)$cur['proposer_id']);
+            if ($mid !== null) {
+                $this->pdo->prepare(
+                    "INSERT INTO bs_rnd_member
+                        (project_id, member_id, role, load_ratio, status,
+                         join_reason, approved_by, approved_by_name, approved_at, joined_at)
+                     VALUES (?,?, 'lead', ?, 'approved', '발의자', ?,?, NOW(), NOW())
+                     ON DUPLICATE KEY UPDATE
+                        role = 'lead', status = 'approved',
+                        approved_at = COALESCE(approved_at, NOW()),
+                        joined_at   = COALESCE(joined_at, NOW())"
+                )->execute([
+                    $id, $mid,
+                    $cur['load_cap'] !== null ? (float)$cur['load_cap'] : 0.100,
+                    $actor['id'] ?? null, $actor['name'] ?? null,
+                ]);
+            }
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
     }
 
     /**
@@ -329,8 +382,518 @@ final class RndRepo
     }
 
     // =================================================================
+    // 참여자 (명세서 §8.3 · §8.4)
+    // =================================================================
+
+    /** 참여자 목록. 신청 중인 사람까지 함께 돌려준다 — lead 가 승인해야 하므로. */
+    public function members(int $projectId): array
+    {
+        $this->requireVisible($projectId);
+
+        $st = $this->pdo->prepare(
+            'SELECT rm.id, rm.member_id, rm.role, rm.load_ratio, rm.status,
+                    rm.join_reason, rm.reject_reason,
+                    rm.approved_by, rm.approved_by_name, rm.approved_at,
+                    rm.joined_at, rm.left_at, rm.created_at,
+                    m.emp_name, m.user_id, m.role_label
+               FROM bs_rnd_member rm
+               JOIN bs_member m ON m.id = rm.member_id
+              WHERE rm.project_id = ?
+              ORDER BY FIELD(rm.status, \'requested\',\'approved\',\'left\',\'done\',\'rejected\'),
+                       FIELD(rm.role, \'lead\',\'member\'), rm.id'
+        );
+        $st->execute([$projectId]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * 합류 신청 (명세서 §8.4).
+     *
+     * 사유와 신고 점유율을 함께 받는다. 사유 없이 붙으면 lead 가 무엇을 보고
+     * 승인할지 알 수 없다.
+     *
+     * **상한 검증은 여기서 하지 않는다.** 신청은 되고 승인이 막히는 것이
+     * 명세서 §8.4 의 설계다 — 신청 단계에서 막으면 "왜 안 되는지" 를 말해 줄
+     * 자리가 없다.
+     */
+    public function requestJoin(int $projectId, array $data, array $actor): int
+    {
+        $rnd = $this->requireVisible($projectId);
+
+        if (!bs_rnd_join_open($rnd)) {
+            throw new DomainException(
+                '지금은 합류 신청을 받지 않는 과제입니다. '
+                . '공개 범위가 "공개(합류 가능)" 이고 모집 중이며 승인된 과제여야 합니다.'
+            );
+        }
+
+        $mid = $this->memberIdOf((string)$actor['id']);
+        if ($mid === null) {
+            throw new DomainException('구성원 명단에 없습니다. 관리자에게 문의하세요.');
+        }
+
+        $reason = trim((string)($data['join_reason'] ?? ''));
+        if ($reason === '') {
+            throw new InvalidArgumentException('합류 사유를 입력하세요.');
+        }
+        $ratio = $this->ratio($data['load_ratio'] ?? null);
+        if ($ratio === null) {
+            throw new InvalidArgumentException('신고 점유율을 입력하세요.');
+        }
+
+        // 이미 있는 행이면 되살린다. 한 번 나갔다가 다시 들어오는 경우가 있다.
+        $cur = $this->memberRowOf($projectId, $mid);
+        if ($cur && in_array((string)$cur['status'], ['requested', 'approved'], true)) {
+            throw new DomainException('이미 신청했거나 참여 중입니다.');
+        }
+
+        if ($cur) {
+            $this->pdo->prepare(
+                "UPDATE bs_rnd_member
+                    SET status = 'requested', role = 'member', load_ratio = ?,
+                        join_reason = ?, reject_reason = NULL,
+                        approved_by = NULL, approved_by_name = NULL, approved_at = NULL,
+                        left_at = NULL
+                  WHERE id = ?"
+            )->execute([$ratio, $reason, (int)$cur['id']]);
+            return (int)$cur['id'];
+        }
+
+        $this->pdo->prepare(
+            "INSERT INTO bs_rnd_member
+                (project_id, member_id, role, load_ratio, status, join_reason)
+             VALUES (?,?, 'member', ?, 'requested', ?)"
+        )->execute([$projectId, $mid, $ratio, $reason]);
+
+        return (int)$this->pdo->lastInsertId();
+    }
+
+    /**
+     * 합류 승인. lead 또는 관리자만.
+     *
+     * TODO(P9-4): 점유 상한 검증을 여기에 넣는다 — 1인 합계 rnd_total_cap(0.30),
+     *             과제당 rnd_per_project_cap(0.20), 동시 참여 2건. 모두 전역
+     *             설정값이며 하드코딩하지 않는다(명세서 §9.2). 넘으면 승인을
+     *             막고 현재 점유율을 함께 돌려준다.
+     * TODO(P9-4): 승인된 참여를 bs_workload 에 kind='rnd' 로 적재한다.
+     *             과제가 approved_at 이 찬 상태인지 **반드시 함께 본다** —
+     *             과제 승인 없이 참여만 승인되면 §9.1 이 뚫린다.
+     */
+    public function approveMember(int $rowId, array $actor): array
+    {
+        $row = $this->requireMemberRow($rowId);
+        $this->requireTeamAuthority((int)$row['project_id']);
+
+        if ((string)$row['status'] !== 'requested') {
+            throw new DomainException('신청 상태인 사람만 승인할 수 있습니다.');
+        }
+
+        $this->pdo->prepare(
+            "UPDATE bs_rnd_member
+                SET status = 'approved', approved_by = ?, approved_by_name = ?,
+                    approved_at = NOW(), joined_at = NOW(), reject_reason = NULL
+              WHERE id = ? AND status = 'requested'"
+        )->execute([$actor['id'] ?? null, $actor['name'] ?? null, $rowId]);
+
+        return $this->requireMemberRow($rowId);
+    }
+
+    /** 합류 반려. 사유 필수 — 왜 안 되는지 모르면 다시 신청할 수 없다. */
+    public function rejectMember(int $rowId, string $reason, array $actor): array
+    {
+        $row = $this->requireMemberRow($rowId);
+        $this->requireTeamAuthority((int)$row['project_id']);
+
+        if ((string)$row['status'] !== 'requested') {
+            throw new DomainException('신청 상태인 사람만 반려할 수 있습니다.');
+        }
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new InvalidArgumentException('반려 사유를 입력하세요.');
+        }
+
+        $this->pdo->prepare(
+            "UPDATE bs_rnd_member
+                SET status = 'rejected', reject_reason = ?,
+                    approved_by = ?, approved_by_name = ?, approved_at = NULL
+              WHERE id = ? AND status = 'requested'"
+        )->execute([$reason, $actor['id'] ?? null, $actor['name'] ?? null, $rowId]);
+
+        return $this->requireMemberRow($rowId);
+    }
+
+    /**
+     * 스스로 나가기. **본인만** 한다.
+     *
+     * lead 는 혼자 나갈 수 없다. 주도자가 사라진 과제가 모집 중인 채로 남으면
+     * 신청한 사람을 승인할 사람이 없어진다. 먼저 과제를 종료하거나 중단한다.
+     */
+    public function leave(int $projectId, array $actor): void
+    {
+        $this->requireVisible($projectId);
+
+        $mid = $this->memberIdOf((string)$actor['id']);
+        $row = $mid === null ? null : $this->memberRowOf($projectId, $mid);
+        if (!$row || !in_array((string)$row['status'], ['requested', 'approved'], true)) {
+            throw new DomainException('이 과제에 참여하고 있지 않습니다.');
+        }
+        if ((string)$row['role'] === 'lead') {
+            throw new DomainException(
+                '주도자는 혼자 나갈 수 없습니다. 과제를 종료하거나 중단해 주세요.'
+            );
+        }
+
+        $this->pdo->prepare(
+            "UPDATE bs_rnd_member SET status = 'left', left_at = NOW() WHERE id = ?"
+        )->execute([(int)$row['id']]);
+
+        // 이 사람의 점유를 오늘로 끊는다. **지우지 않는다** — 그때까지
+        // 점유한 것은 사실이다. 적재가 없는 지금은 바뀌는 행이 없고,
+        // P9-4 에서 적재가 시작되면 이 경로가 그대로 동작한다.
+        $this->closeWorkloadFor($projectId, (int)$row['id']);
+    }
+
+    // =================================================================
+    // 진행 기록 · 산출물 · 관심
+    // =================================================================
+
+    /** 진행 기록 목록. 최근 것이 위로. */
+    public function logs(int $projectId, int $limit = 100): array
+    {
+        $this->requireVisible($projectId);
+
+        $st = $this->pdo->prepare(
+            'SELECT l.id, l.member_id, l.content, l.finding, l.worked_on, l.created_at,
+                    m.emp_name
+               FROM bs_rnd_log l
+               JOIN bs_member m ON m.id = l.member_id
+              WHERE l.project_id = ?
+              ORDER BY l.id DESC
+              LIMIT ' . max(1, min(500, $limit))
+        );
+        $st->execute([$projectId]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * 진행 기록 등록. **승인된 참여자만.**
+     *
+     * content 와 finding 을 나눠 받는다(명세서 §8.3). 과제의 값어치는 대개
+     * "무엇을 했다" 가 아니라 "무엇을 알아냈다" 에 쌓이는데, 한 칸에 섞어
+     * 받으면 알아낸 것이 작업 일지에 묻힌다.
+     */
+    public function addLog(int $projectId, array $data, array $actor): int
+    {
+        $this->requireVisible($projectId);
+        $mid = $this->requireActiveMember($projectId, $actor);
+
+        $content = trim((string)($data['content'] ?? ''));
+        if ($content === '') {
+            throw new InvalidArgumentException('진행 내용을 입력하세요.');
+        }
+        $workedOn = $this->nn($data['worked_on'] ?? null);
+        if ($workedOn !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$workedOn)) {
+            throw new InvalidArgumentException('작업한 날짜 형식이 올바르지 않습니다.');
+        }
+
+        $this->pdo->prepare(
+            'INSERT INTO bs_rnd_log (project_id, member_id, content, finding, worked_on)
+             VALUES (?,?,?,?,?)'
+        )->execute([$projectId, $mid, $content, $this->nn($data['finding'] ?? null), $workedOn]);
+
+        return (int)$this->pdo->lastInsertId();
+    }
+
+    /** 산출물 목록. */
+    public function outputs(int $projectId): array
+    {
+        $this->requireVisible($projectId);
+
+        $st = $this->pdo->prepare(
+            'SELECT id, kind, title, url, file_path, summary,
+                    created_by, created_by_name, created_at
+               FROM bs_rnd_output
+              WHERE project_id = ?
+              ORDER BY id DESC'
+        );
+        $st->execute([$projectId]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * 산출물 등록. **승인된 참여자만.**
+     *
+     * 파일 업로드는 아직 붙이지 않았다 — 링크와 설명만 받는다.
+     * TODO(P9-5): SourceUploader 를 써서 파일 첨부를 받는다. bs_rnd_output.file_path
+     *             칸은 이미 있다. 저장 위치는 bs_project_source 와 같은 BS_UPLOAD_DIR
+     *             아래로 하되 과제용 하위 폴더를 따로 둘지 그때 정한다.
+     */
+    public function addOutput(int $projectId, array $data, array $actor): int
+    {
+        $this->requireVisible($projectId);
+        $this->requireActiveMember($projectId, $actor);
+
+        $title = trim((string)($data['title'] ?? ''));
+        if ($title === '') {
+            throw new InvalidArgumentException('산출물 제목을 입력하세요.');
+        }
+        $kind = (string)($data['kind'] ?? 'doc');
+        if (!isset(BS_RND_OUTPUT_KIND[$kind])) {
+            throw new InvalidArgumentException('알 수 없는 산출물 갈래입니다.');
+        }
+        $url = $this->nn($data['url'] ?? null);
+        if ($url !== null && !preg_match('#^https?://#i', (string)$url)) {
+            throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
+        }
+
+        $this->pdo->prepare(
+            'INSERT INTO bs_rnd_output
+                (project_id, kind, title, url, summary, created_by, created_by_name)
+             VALUES (?,?,?,?,?,?,?)'
+        )->execute([
+            $projectId, $kind, $title, $url,
+            $this->nn($data['summary'] ?? null),
+            $actor['id'] ?? null, $actor['name'] ?? null,
+        ]);
+
+        return (int)$this->pdo->lastInsertId();
+    }
+
+    /**
+     * 관심 표시 토글. 누르면 켜지고 다시 누르면 꺼진다.
+     *
+     * 합류와 다르다 — **점유를 만들지 않는다.** "이런 거 하면 끼고 싶다" 를
+     * 가볍게 남기는 자리다.
+     */
+    public function toggleInterest(int $projectId, array $actor): bool
+    {
+        $this->requireVisible($projectId);
+
+        $mid = $this->memberIdOf((string)$actor['id']);
+        if ($mid === null) {
+            throw new DomainException('구성원 명단에 없습니다.');
+        }
+
+        $st = $this->pdo->prepare(
+            'SELECT 1 FROM bs_rnd_interest WHERE project_id = ? AND member_id = ?'
+        );
+        $st->execute([$projectId, $mid]);
+
+        if ($st->fetchColumn()) {
+            $this->pdo->prepare(
+                'DELETE FROM bs_rnd_interest WHERE project_id = ? AND member_id = ?'
+            )->execute([$projectId, $mid]);
+            return false;
+        }
+
+        $this->pdo->prepare(
+            'INSERT INTO bs_rnd_interest (project_id, member_id) VALUES (?,?)'
+        )->execute([$projectId, $mid]);
+        return true;
+    }
+
+    // =================================================================
+    // 종료 (명세서 §8.5)
+    // =================================================================
+
+    /**
+     * 종료 — **산출물이 1건 이상이어야 한다.**
+     *
+     * 없으면 RndNoOutputException 을 던진다. 산출물 없이 끝낸 과제를 역량에
+     * 반영하면, 발의만 하고 아무것도 남기지 않아도 점수가 오른다. 그런 길을
+     * 열어 두면 반드시 그쪽으로 간다(CLAUDE.md 2항).
+     */
+    public function finish(int $projectId, array $actor): void
+    {
+        $rnd = $this->requireVisible($projectId);
+        $this->requireTeamAuthority($projectId);
+        $this->requireLive($rnd);
+
+        $n = (int)$this->scalar('SELECT COUNT(*) FROM bs_rnd_output WHERE project_id = ?', [$projectId]);
+        if ($n === 0) {
+            throw new RndNoOutputException(
+                '산출물이 한 건도 없습니다. 무엇이 남았는지 먼저 등록해 주세요. '
+                . '남길 것이 없다면 "중단" 으로 끝냅니다.'
+            );
+        }
+
+        $this->closeProject($projectId, 'done');
+    }
+
+    /**
+     * 중단 — 산출물 없이 끝낸다.
+     *
+     * **역량 지표에 반영하지 않는다**(CLAUDE.md 2항). 그 판정은 P9-4 의
+     * 점유·역량 쪽에서 status='dropped' 를 보고 한다.
+     */
+    public function drop(int $projectId, string $reason, array $actor): void
+    {
+        $rnd = $this->requireVisible($projectId);
+        $this->requireTeamAuthority($projectId);
+        $this->requireLive($rnd);
+
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw new InvalidArgumentException('중단 사유를 입력하세요.');
+        }
+
+        $note = '[중단 ' . date('Y-m-d H:i') . ' ' . ($actor['name'] ?? '') . "]\n" . $reason;
+        $this->pdo->prepare(
+            "UPDATE bs_project SET notes = CONCAT_WS('\n\n', notes, ?)
+              WHERE id = ? AND project_type = 'rnd'"
+        )->execute([$note, $projectId]);
+
+        $this->closeProject($projectId, 'dropped');
+    }
+
+    // =================================================================
     // 안쪽
     // =================================================================
+
+    /**
+     * 과제를 닫고 점유의 끝을 오늘로 당긴다.
+     *
+     * **bs_workload 행을 지우지 않는다**(명세서 §8.5). 끝났다고 지우면
+     * "그때 이 사람이 이만큼 점유하고 있었다" 는 사실이 사라져, 지난 기간의
+     * 가용도를 다시 계산할 수 없게 된다.
+     *
+     * 지금은 적재가 없어 아무 행도 바뀌지 않는다. 적재는 P9-4 에서 시작한다.
+     */
+    private function closeProject(int $projectId, string $status): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare(
+                "UPDATE bs_project SET status = ?, recruiting = 0
+                  WHERE id = ? AND project_type = 'rnd'"
+            )->execute([$status, $projectId]);
+
+            $this->pdo->prepare(
+                "UPDATE bs_rnd_member
+                    SET status = 'done', left_at = COALESCE(left_at, NOW())
+                  WHERE project_id = ? AND status = 'approved'"
+            )->execute([$projectId]);
+
+            $this->closeWorkloadFor($projectId, null);
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * 점유의 end_date 를 오늘로 당긴다. **DELETE 하지 않는다.**
+     *
+     * $memberRowId 를 주면 그 사람 것만, 안 주면 과제 전체.
+     * 적재가 시작되기 전까지는 바뀌는 행이 없다 (P9-4).
+     */
+    private function closeWorkloadFor(int $projectId, ?int $memberRowId): void
+    {
+        $sql = "UPDATE bs_workload w
+                  JOIN bs_rnd_member rm ON rm.id = w.ref_id
+                   SET w.end_date = CURDATE()
+                 WHERE w.ref_type = 'rnd'
+                   AND rm.project_id = ?
+                   AND (w.end_date IS NULL OR w.end_date > CURDATE())";
+        $p = [$projectId];
+        if ($memberRowId !== null) {
+            $sql .= ' AND rm.id = ?';
+            $p[]  = $memberRowId;
+        }
+        $this->pdo->prepare($sql)->execute($p);
+    }
+
+    /** 볼 수 있는 과제인지 확인하고 돌려준다. 못 보면 '없다' 로 끊는다. */
+    private function requireVisible(int $projectId): array
+    {
+        $r = $this->find($projectId);
+        if (!$r) {
+            throw new DomainException('과제를 찾을 수 없습니다.');
+        }
+        return $r;
+    }
+
+    /** 아직 돌아가는 과제인가. 이미 끝난 것을 또 끝낼 수 없다. */
+    private function requireLive(array $rnd): void
+    {
+        if (!in_array((string)$rnd['status'], ['approved', 'running'], true)) {
+            throw new DomainException(
+                '진행 중인 과제만 종료할 수 있습니다. 지금 상태: '
+                . (BS_RND_STATUS[$rnd['status']] ?? $rnd['status'])
+            );
+        }
+    }
+
+    /** 팀을 다룰 권한 — lead 이거나 관리자. */
+    private function requireTeamAuthority(int $projectId): void
+    {
+        if (bs_is_admin()) {
+            return;
+        }
+        $me  = bs_current_user();
+        $mid = $this->memberIdOf((string)($me['id'] ?? ''));
+        $row = $mid === null ? null : $this->memberRowOf($projectId, $mid);
+
+        if (!$row || (string)$row['role'] !== 'lead' || (string)$row['status'] !== 'approved') {
+            throw new DomainException('과제를 주도하는 사람과 관리자만 할 수 있습니다.');
+        }
+    }
+
+    /** 승인된 참여자인가. 기록·산출물 등록에 쓴다. */
+    private function requireActiveMember(int $projectId, array $actor): int
+    {
+        $mid = $this->memberIdOf((string)$actor['id']);
+        $row = $mid === null ? null : $this->memberRowOf($projectId, $mid);
+
+        if (!$row || (string)$row['status'] !== 'approved') {
+            throw new DomainException('승인된 참여자만 등록할 수 있습니다.');
+        }
+        return $mid;
+    }
+
+    /** 참여 행 한 건. 볼 수 있는 과제의 것만. */
+    private function requireMemberRow(int $rowId): array
+    {
+        $st = $this->pdo->prepare(
+            'SELECT rm.*, m.emp_name, m.user_id
+               FROM bs_rnd_member rm
+               JOIN bs_member m ON m.id = rm.member_id
+              WHERE rm.id = ?'
+        );
+        $st->execute([$rowId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            throw new DomainException('참여 기록을 찾을 수 없습니다.');
+        }
+        // 과제를 볼 수 없으면 참여 기록도 없는 것으로 다룬다.
+        $this->requireVisible((int)$row['project_id']);
+        return $row;
+    }
+
+    private function memberRowOf(int $projectId, int $memberId): ?array
+    {
+        $st = $this->pdo->prepare(
+            'SELECT * FROM bs_rnd_member WHERE project_id = ? AND member_id = ?'
+        );
+        $st->execute([$projectId, $memberId]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ?: null;
+    }
+
+    /** 0 < v <= 1 인 점유율. 아니면 null. */
+    private function ratio(mixed $v): ?float
+    {
+        if ($v === null || $v === '') {
+            return null;
+        }
+        $f = (float)$v;
+        if ($f <= 0 || $f > 1) {
+            throw new InvalidArgumentException('점유율은 0 보다 크고 1 이하여야 합니다.');
+        }
+        return $f;
+    }
 
     /** 승인·반려 공통 전처리. 볼 수 있고, 권한이 있고, proposed 여야 한다. */
     private function requireForDecision(int $id): array

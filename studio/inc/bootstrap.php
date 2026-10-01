@@ -154,6 +154,31 @@ const BS_RND_VISIBILITY = [
 /** 합류 신청을 받는 공개 범위. private/public 과제에는 신청할 수 없다. */
 const BS_RND_JOINABLE = ['open'];
 
+/** bs_rnd_member.status — 합류 상태 */
+const BS_RND_MEMBER_STATUS = [
+    'requested' => '신청',
+    'approved'  => '참여 중',
+    'rejected'  => '반려',
+    'left'      => '이탈',
+    'done'      => '종료',
+];
+
+/** bs_rnd_member.role */
+const BS_RND_MEMBER_ROLE = [
+    'lead'   => '주도',
+    'member' => '참여',
+];
+
+/** bs_rnd_output.kind — 산출물 갈래 */
+const BS_RND_OUTPUT_KIND = [
+    'doc'    => '문서',
+    'repo'   => '저장소',
+    'demo'   => '시연',
+    'report' => '보고서',
+    'module' => '모듈',
+    'slide'  => '발표자료',
+];
+
 /** bs_project.track */
 const BS_PROJECT_TRACK = [
     'lms_b2b'    => 'LMS (B2B)',

@@ -3202,7 +3202,8 @@
       return '<article class="ba-rnd-card" data-id="' + r.id + '">' +
         '<div class="ba-rnd-card__head"><span class="ba-rnd-card__code">' + esc(r.code) + '</span>' +
         badges + '</div>' +
-        '<h3 class="ba-rnd-card__title">' + esc(r.name) + '</h3>' +
+        '<h3 class="ba-rnd-card__title">' +
+          '<a href="rnd_view.php?id=' + r.id + '">' + esc(r.name) + '</a></h3>' +
         '<p class="ba-rnd-card__sum">' + esc(r.summary || '') + '</p>' +
         '<div class="ba-rnd-card__meta">' +
           '<span>발의 ' + esc(r.proposer_name || '-') + '</span>' +
@@ -3361,13 +3362,284 @@
     if (draft) draft.addEventListener('click', function () { save('draft', draft); });
   }
 
+  // =====================================================================
+  // R&D 과제 상세 — 개요 / 참여자 / 진행 기록 / 산출물 (명세서 §8.3)
+  // =====================================================================
+  function initRndView() {
+    var root = $('#ba-rnd-view');
+    if (!root) return;
+
+    var ID  = parseInt(root.dataset.id, 10);
+    var tab = 'overview';
+    var D   = null;
+
+    function post(act, body) {
+      body = body || {};
+      body.id = ID;
+      return api('api/rnd.php?act=' + act, { method: 'POST', body: body })
+        .then(function (d) {
+          if (d.message) toast(d.message);
+          if (d.notify_notice) toast(d.notify_notice);
+          paint(d);
+        })
+        .catch(function (e) {
+          // 산출물 없이 종료하려 한 경우만 다음 행동으로 이어 준다 (§8.5).
+          if (e.code === 'RND_NO_OUTPUT') {
+            toast(e.message, true);
+            showTab('outputs');
+            return;
+          }
+          toast(e.message, true);
+        });
+    }
+
+    function head(r) {
+      var b = '';
+      if (r.category_label) b += '<span class="ba-badge">' + esc(r.category_label) + '</span>';
+      b += '<span class="ba-badge ba-badge--' + esc(r.status) + '">' + esc(r.status_label) + '</span>';
+      if (r.recruiting) b += '<span class="ba-badge ba-badge--recruit">모집중</span>';
+      if (r.stale)      b += '<span class="ba-badge ba-badge--stale">조용함</span>';
+      if (r.visibility === 'private') b += '<span class="ba-badge ba-badge--private">비공개</span>';
+
+      var acts = [];
+      if (r.can.edit)   acts.push('<a class="ba-btn ba-btn--sm" href="rnd_form.php?id=' + r.id + '">수정</a>');
+      if (r.can.join)   acts.push('<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" data-rv="join">합류 신청</button>');
+      if (r.can.leave)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="leave">나가기</button>');
+      acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="interest">' +
+                (r.my_interest ? '관심 해제' : '관심 표시') + '</button>');
+      if (r.can.approve) acts.push('<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" data-rv="approve">과제 승인</button>');
+      if (r.can.reject)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="reject">과제 반려</button>');
+      if (r.can.finish)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="finish">종료</button>');
+      if (r.can.drop)    acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="drop">중단</button>');
+
+      return '<div class="ba-rnd-head__top"><span class="ba-rnd-card__code">' + esc(r.code) + '</span>' +
+             b + '</div>' +
+             '<h2 class="ba-rnd-head__title">' + esc(r.name) + '</h2>' +
+             '<div class="ba-rnd-head__meta">발의 ' + esc(r.proposer_name || '-') +
+             (r.approved_at ? ' · 승인 ' + esc(r.approved_at) + ' (' + esc(r.approved_by_name || '') + ')' : '') +
+             (r.my_status_label ? ' · 내 상태 <strong>' + esc(r.my_status_label) + '</strong>' : '') +
+             '</div>' +
+             '<div class="ba-rnd-head__acts">' + acts.join('') + '</div>';
+    }
+
+    function overview(r) {
+      function row(k, v) {
+        return '<div class="ba-kv"><dt>' + esc(k) + '</dt><dd>' + (v || '—') + '</dd></div>';
+      }
+      return '<dl class="ba-kvs">' +
+        row('공개 범위', esc(r.visibility_label)) +
+        row('갈래', esc(r.category_label || '')) +
+        row('예상 기간', esc((r.dev_start || '') + (r.dev_end ? ' ~ ' + r.dev_end : ''))) +
+        row('신고 점유율', r.load_cap == null ? '' : esc(String(r.load_cap))) +
+        row('참여', (r.member_count || 0) + '명') +
+        '</dl>' +
+        '<h3 class="ba-rv-h">배경 · 목적</h3><p class="ba-rv-text">' + esc(r.summary || '—') + '</p>' +
+        '<h3 class="ba-rv-h">검토 범위 · 기대 산출물</h3><p class="ba-rv-text">' + esc(r.notes || '—') + '</p>';
+    }
+
+    function members(list, r) {
+      var rows = list.map(function (m) {
+        var acts = '';
+        if (m.can.approve) {
+          acts += '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary"' +
+                  ' data-rv="approve_member" data-row="' + m.id + '">승인</button> ';
+        }
+        if (m.can.reject) {
+          acts += '<button type="button" class="ba-btn ba-btn--sm"' +
+                  ' data-rv="reject_member" data-row="' + m.id + '">반려</button>';
+        }
+        return '<tr>' +
+          '<td>' + esc(m.emp_name) + '</td>' +
+          '<td>' + esc(m.role_name) + '</td>' +
+          '<td>' + esc(String(m.load_ratio)) + '</td>' +
+          '<td><span class="ba-badge">' + esc(m.status_label) + '</span></td>' +
+          '<td class="ba-rv-reason">' + esc(m.join_reason || '') +
+            (m.reject_reason ? '<em>반려: ' + esc(m.reject_reason) + '</em>' : '') + '</td>' +
+          '<td>' + acts + '</td>' +
+        '</tr>';
+      }).join('');
+
+      var join = r.can.join
+        ? '<div class="ba-rv-form">' +
+          '<label class="ba-field" style="flex:1 1 260px"><span>합류 사유</span>' +
+          '<input type="text" id="ba-rv-join-reason" placeholder="왜 참여하려 하는지"></label>' +
+          '<label class="ba-field"><span>신고 점유율</span>' +
+          '<input type="number" id="ba-rv-join-ratio" min="0.05" max="1" step="0.05" value="0.1"></label>' +
+          '<button type="button" class="ba-btn ba-btn--primary" data-rv="join">신청</button>' +
+          '</div>'
+        : '';
+
+      return join + '<div class="ba-table-wrap"><table class="ba-table"><thead><tr>' +
+        '<th>이름</th><th style="width:70px">역할</th><th style="width:80px">점유율</th>' +
+        '<th style="width:90px">상태</th><th>사유</th><th style="width:130px"></th>' +
+        '</tr></thead><tbody>' +
+        (rows || '<tr><td colspan="6" class="ba-empty">아직 참여자가 없습니다.</td></tr>') +
+        '</tbody></table></div>';
+    }
+
+    function logs(list, r) {
+      // content 와 finding 을 끝까지 나눠 보여 준다. 과제의 값어치는 대개
+      // '무엇을 했다' 가 아니라 '무엇을 알아냈다' 에 쌓인다 (명세서 §8.3).
+      var items = list.map(function (l) {
+        return '<li class="ba-rv-log">' +
+          '<div class="ba-rv-log__meta">' + esc(l.emp_name) +
+          ' · ' + esc(l.worked_on || l.created_at || '') + '</div>' +
+          '<div class="ba-rv-log__content">' + esc(l.content) + '</div>' +
+          (l.finding
+            ? '<div class="ba-rv-log__finding"><strong>발견</strong> ' + esc(l.finding) + '</div>'
+            : '') +
+        '</li>';
+      }).join('');
+
+      var form = r.can.write_log
+        ? '<div class="ba-rv-form ba-rv-form--col">' +
+          '<label class="ba-field ba-field--wide"><span>진행 내용</span>' +
+          '<textarea id="ba-rv-log-content" rows="3" placeholder="무엇을 했는지"></textarea></label>' +
+          '<label class="ba-field ba-field--wide"><span>발견사항</span>' +
+          '<textarea id="ba-rv-log-finding" rows="2" placeholder="알아낸 것 (선택)"></textarea></label>' +
+          '<label class="ba-field"><span>작업한 날</span>' +
+          '<input type="date" id="ba-rv-log-date"></label>' +
+          '<button type="button" class="ba-btn ba-btn--primary" data-rv="log">기록 남기기</button>' +
+          '</div>'
+        : '';
+
+      return form + '<ul class="ba-rv-logs">' +
+        (items || '<li class="ba-empty">아직 진행 기록이 없습니다.</li>') + '</ul>';
+    }
+
+    function outputs(list, r) {
+      var items = list.map(function (o) {
+        return '<li class="ba-rv-output">' +
+          '<span class="ba-badge">' + esc(o.kind_label) + '</span> ' +
+          (o.url ? '<a href="' + esc(o.url) + '" target="_blank" rel="noopener">' + esc(o.title) + '</a>'
+                 : '<strong>' + esc(o.title) + '</strong>') +
+          '<div class="ba-rv-output__sum">' + esc(o.summary || '') + '</div>' +
+          '<div class="ba-rv-log__meta">' + esc(o.created_by_name || '') +
+          ' · ' + esc(o.created_at || '') + '</div>' +
+        '</li>';
+      }).join('');
+
+      var kinds = ['doc', 'repo', 'demo', 'report', 'module', 'slide'];
+      var kindLabel = { doc: '문서', repo: '저장소', demo: '시연', report: '보고서',
+                        module: '모듈', slide: '발표자료' };
+      var form = r.can.add_output
+        ? '<div class="ba-rv-form ba-rv-form--col">' +
+          '<label class="ba-field"><span>갈래</span><select id="ba-rv-out-kind">' +
+          kinds.map(function (k) { return '<option value="' + k + '">' + kindLabel[k] + '</option>'; }).join('') +
+          '</select></label>' +
+          '<label class="ba-field" style="flex:1 1 260px"><span>제목</span>' +
+          '<input type="text" id="ba-rv-out-title"></label>' +
+          '<label class="ba-field" style="flex:1 1 260px"><span>링크</span>' +
+          '<input type="url" id="ba-rv-out-url" placeholder="https://"></label>' +
+          '<label class="ba-field ba-field--wide"><span>요약</span>' +
+          '<textarea id="ba-rv-out-summary" rows="2"></textarea></label>' +
+          '<button type="button" class="ba-btn ba-btn--primary" data-rv="output">산출물 등록</button>' +
+          '</div>'
+        : '';
+
+      return form + '<ul class="ba-rv-outputs">' +
+        (items || '<li class="ba-empty">아직 산출물이 없습니다. ' +
+                  '종료하려면 한 건 이상 있어야 합니다.</li>') + '</ul>';
+    }
+
+    function showTab(name) {
+      tab = name;
+      $$('#ba-rv-tabs [data-tab]').forEach(function (b) {
+        b.setAttribute('aria-selected', String(b.dataset.tab === name));
+      });
+      $$('.ba-rv-pane').forEach(function (p) {
+        p.hidden = p.dataset.pane !== name;
+      });
+    }
+
+    function paint(d) {
+      D = d;
+      var r = d.rnd;
+      $('#ba-rv-head').innerHTML        = head(r);
+      $('#ba-rv-overview').innerHTML    = overview(r);
+      $('#ba-rv-members').innerHTML     = members(d.members || [], r);
+      $('#ba-rv-logs').innerHTML        = logs(d.logs || [], r);
+      $('#ba-rv-outputs').innerHTML     = outputs(d.outputs || [], r);
+      $('#ba-rv-n-members').textContent = (d.members || []).length;
+      $('#ba-rv-n-logs').textContent    = (d.logs || []).length;
+      $('#ba-rv-n-outputs').textContent = (d.outputs || []).length;
+      showTab(tab);
+    }
+
+    $('#ba-rv-tabs').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-tab]');
+      if (b) showTab(b.dataset.tab);
+    });
+
+    root.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-rv]');
+      if (!b) return;
+      var act = b.dataset.rv;
+
+      if (act === 'join') {
+        var reason = ($('#ba-rv-join-reason') || {}).value || '';
+        var ratio  = ($('#ba-rv-join-ratio')  || {}).value || '';
+        if (!reason.trim()) { showTab('members'); toast('합류 사유를 입력하세요.', true); return; }
+        post('join', { join_reason: reason, load_ratio: ratio });
+        return;
+      }
+      if (act === 'leave') {
+        if (!window.confirm('이 과제에서 나갑니다.')) return;
+        post('leave'); return;
+      }
+      if (act === 'interest') { post('interest'); return; }
+      if (act === 'approve')  { post('approve'); return; }
+
+      if (act === 'reject' || act === 'drop') {
+        var what = act === 'reject' ? '반려' : '중단';
+        var why  = window.prompt(what + ' 사유를 적어 주세요.');
+        if (why === null) return;
+        if (!why.trim()) { toast(what + ' 사유를 입력하세요.', true); return; }
+        post(act, { reason: why });
+        return;
+      }
+      if (act === 'finish') {
+        if (!window.confirm('과제를 종료합니다.\n\n산출물이 한 건도 없으면 종료할 수 없습니다.')) return;
+        post('finish'); return;
+      }
+      if (act === 'approve_member') { post('approve_member', { member_row_id: +b.dataset.row }); return; }
+      if (act === 'reject_member') {
+        var r2 = window.prompt('반려 사유를 적어 주세요.');
+        if (r2 === null) return;
+        if (!r2.trim()) { toast('반려 사유를 입력하세요.', true); return; }
+        post('reject_member', { member_row_id: +b.dataset.row, reason: r2 });
+        return;
+      }
+      if (act === 'log') {
+        var c = ($('#ba-rv-log-content') || {}).value || '';
+        if (!c.trim()) { toast('진행 내용을 입력하세요.', true); return; }
+        post('log', { content: c,
+                      finding:   ($('#ba-rv-log-finding') || {}).value || '',
+                      worked_on: ($('#ba-rv-log-date')    || {}).value || '' });
+        return;
+      }
+      if (act === 'output') {
+        var t = ($('#ba-rv-out-title') || {}).value || '';
+        if (!t.trim()) { toast('산출물 제목을 입력하세요.', true); return; }
+        post('output', { title: t,
+                         kind:    ($('#ba-rv-out-kind')    || {}).value || 'doc',
+                         url:     ($('#ba-rv-out-url')     || {}).value || '',
+                         summary: ($('#ba-rv-out-summary') || {}).value || '' });
+      }
+    });
+
+    api('api/rnd.php?act=get&id=' + ID).then(paint).catch(function (e) {
+      $('#ba-rv-head').innerHTML = '<div class="ba-empty">' + esc(e.message) + '</div>';
+    });
+  }
+
   // ---- 진입 ---------------------------------------------------------
   initDrawer();
 
   switch (NAV) {
     case 'dashboard': initDashboard(); break;
     case 'project':   initProjectList(); initProjectForm(); initProjectView(); initWbs(); initAllocation();
-                      initRndBoard(); initRndForm(); break;
+                      initRndBoard(); initRndForm(); initRndView(); break;
     case 'member':    initMemberList(); initMemberProfile(); break;
   }
 

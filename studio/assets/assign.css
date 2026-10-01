@@ -1315,3 +1315,65 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   border-top: 1px solid var(--ba-line);
   padding-top: 14px;
 }
+
+/* ---- 과제 상세 (명세서 §8.3) ---------------------------------------- */
+.ba-rnd-card__title a { color: inherit; text-decoration: none; }
+.ba-rnd-card__title a:hover { text-decoration: underline; }
+
+.ba-rnd-head {
+  background: var(--ba-paper);
+  border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r);
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.ba-rnd-head__top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ba-rnd-head__title { margin: 8px 0 4px; font-size: 19px; color: var(--ba-ink); }
+.ba-rnd-head__meta { font-size: 12px; color: var(--ba-ink-soft); }
+.ba-rnd-head__acts {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--ba-line);
+}
+
+.ba-rv-pane[hidden] { display: none; }
+.ba-rv-h { margin: 16px 0 6px; font-size: 14px; color: var(--ba-ink); }
+.ba-rv-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ba-ink-soft); white-space: pre-wrap; }
+
+.ba-kvs { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
+.ba-kv { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.ba-kv dt { color: var(--ba-ink-soft); margin: 0; }
+.ba-kv dd { margin: 0; color: var(--ba-ink); font-weight: 600; }
+
+/* 입력 줄 — 참여자·기록·산출물 탭이 공통으로 쓴다. */
+.ba-rv-form {
+  display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;
+  background: var(--ba-surface);
+  border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.ba-rv-form--col { align-items: flex-start; }
+.ba-rv-reason { font-size: 12px; color: var(--ba-ink-soft); }
+.ba-rv-reason em { display: block; color: var(--ba-danger); font-style: normal; }
+
+/* 진행 기록 — 한 일과 알아낸 것을 눈으로도 가른다. */
+.ba-rv-logs, .ba-rv-outputs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ba-rv-log, .ba-rv-output {
+  background: var(--ba-paper);
+  border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r);
+  padding: 12px 14px;
+}
+.ba-rv-log__meta { font-size: 12px; color: var(--ba-ink-soft); margin-bottom: 6px; }
+.ba-rv-log__content { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+.ba-rv-log__finding {
+  margin-top: 8px; padding: 8px 10px;
+  background: #f3f8f5;
+  border-left: 3px solid var(--ba-brand);
+  border-radius: 0 6px 6px 0;
+  font-size: 13px; line-height: 1.6; white-space: pre-wrap;
+}
+.ba-rv-log__finding strong { color: var(--ba-brand-dk); margin-right: 4px; }
+.ba-rv-output__sum { font-size: 12px; color: var(--ba-ink-soft); margin: 6px 0; }

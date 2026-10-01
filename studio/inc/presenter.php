@@ -164,17 +164,144 @@ function bs_present_rnd(array $r, array $extra = []): array
         'created_at'      => bs_date($r['created_at'] ?? null),
         'updated_at'      => bs_date($r['updated_at'] ?? null),
 
+        // ---- 내 참여 상태 (find() 가 함께 집어 온다) ----
+        'my_status'       => $r['my_status'] ?? null,
+        'my_status_label' => isset($r['my_status'])
+                             ? (BS_RND_MEMBER_STATUS[$r['my_status']] ?? null) : null,
+        'my_role'         => $r['my_role'] ?? null,
+        'my_interest'     => (int)($r['my_interest'] ?? 0) > 0,
+
         // ---- 서버가 계산한 권한 ----
         'is_proposer'     => bs_rnd_is_proposer($r),
+        'is_lead'         => bs_rnd_is_lead($r),
         'can'             => [
-            'edit'    => $canEdit,
-            'approve' => $canApprove,
-            'reject'  => $canApprove,
-            // 합류는 P9-3 범위다. 지금은 "받을 수 있는 상태인가" 만 알려 준다.
-            'join'    => bs_rnd_join_open($r),
+            'edit'         => $canEdit,
+            'approve'      => $canApprove,
+            'reject'       => $canApprove,
+            'join'         => bs_rnd_can_join($r),
+            'leave'        => bs_rnd_can_leave($r),
+            'manage_team'  => bs_rnd_can_manage_team($r),
+            'write_log'    => bs_rnd_can_contribute($r),
+            'add_output'   => bs_rnd_can_contribute($r),
+            'finish'       => bs_rnd_can_close($r),
+            'drop'         => bs_rnd_can_close($r),
+            'interest'     => true,
         ],
         'actions'         => bs_rnd_actions($r, $canEdit, $canApprove),
     ] + $extra;
+}
+
+/** 이 과제를 주도하는 사람인가. */
+function bs_rnd_is_lead(array $rnd): bool
+{
+    return (string)($rnd['my_role'] ?? '') === 'lead'
+        && (string)($rnd['my_status'] ?? '') === 'approved';
+}
+
+/** 팀을 다룰 수 있는가 — 승인·반려. lead 이거나 관리자. */
+function bs_rnd_can_manage_team(array $rnd): bool
+{
+    return bs_is_admin() || bs_rnd_is_lead($rnd);
+}
+
+/**
+ * 기록·산출물을 남길 수 있는가. **승인된 참여자만.**
+ *
+ * 관리자라고 남의 과제에 진행 기록을 쓰지는 않는다 — 기록은 한 일을
+ * 적는 자리이지 관리 권한의 자리가 아니다.
+ */
+function bs_rnd_can_contribute(array $rnd): bool
+{
+    return (string)($rnd['my_status'] ?? '') === 'approved'
+        && in_array((string)$rnd['status'], ['approved', 'running'], true);
+}
+
+/** 종료·중단할 수 있는가. lead 이거나 관리자이고, 아직 돌아가는 과제여야 한다. */
+function bs_rnd_can_close(array $rnd): bool
+{
+    return bs_rnd_can_manage_team($rnd)
+        && in_array((string)$rnd['status'], ['approved', 'running'], true);
+}
+
+/**
+ * 합류를 신청할 수 있는가.
+ *
+ * 받는 상태(§8.4)이면서, **내가 아직 안 붙어 있어야** 한다.
+ * 이미 신청했거나 참여 중이면 단추를 그리지 않는다.
+ */
+function bs_rnd_can_join(array $rnd): bool
+{
+    if (!bs_rnd_join_open($rnd)) {
+        return false;
+    }
+    return !in_array((string)($rnd['my_status'] ?? ''), ['requested', 'approved'], true);
+}
+
+/** 나갈 수 있는가. 참여 중이고 주도자가 아니어야 한다. */
+function bs_rnd_can_leave(array $rnd): bool
+{
+    return in_array((string)($rnd['my_status'] ?? ''), ['requested', 'approved'], true)
+        && (string)($rnd['my_role'] ?? '') !== 'lead';
+}
+
+/** 참여자 한 명. */
+function bs_present_rnd_member(array $m, bool $canManage): array
+{
+    $status = (string)$m['status'];
+    return [
+        'id'            => (int)$m['id'],
+        'member_id'     => (int)$m['member_id'],
+        'emp_name'      => $m['emp_name'],
+        'role_label'    => $m['role_label'] ?? null,
+        'role'          => (string)$m['role'],
+        'role_name'     => BS_RND_MEMBER_ROLE[$m['role']] ?? $m['role'],
+        'load_ratio'    => (float)$m['load_ratio'],
+        'status'        => $status,
+        'status_label'  => BS_RND_MEMBER_STATUS[$status] ?? $status,
+        'join_reason'   => $m['join_reason'] ?? null,
+        'reject_reason' => $m['reject_reason'] ?? null,
+        'approved_by_name' => $m['approved_by_name'] ?? null,
+        'approved_at'   => bs_date($m['approved_at'] ?? null),
+        'joined_at'     => bs_date($m['joined_at'] ?? null),
+        'left_at'       => bs_date($m['left_at'] ?? null),
+        // 신청 상태인 사람에게만 승인·반려 단추가 의미 있다.
+        'can'           => [
+            'approve' => $canManage && $status === 'requested',
+            'reject'  => $canManage && $status === 'requested',
+        ],
+    ];
+}
+
+/** 진행 기록 한 건. content 와 finding 을 끝까지 나눠 둔다 (명세서 §8.3). */
+function bs_present_rnd_log(array $l): array
+{
+    return [
+        'id'         => (int)$l['id'],
+        'member_id'  => (int)$l['member_id'],
+        'emp_name'   => $l['emp_name'],
+        'content'    => $l['content'],
+        'finding'    => $l['finding'] ?? null,
+        'worked_on'  => $l['worked_on'] ?? null,
+        'created_at' => bs_date($l['created_at'] ?? null),
+    ];
+}
+
+/** 산출물 한 건. */
+function bs_present_rnd_output(array $o): array
+{
+    $kind = (string)$o['kind'];
+    return [
+        'id'         => (int)$o['id'],
+        'kind'       => $kind,
+        'kind_label' => BS_RND_OUTPUT_KIND[$kind] ?? $kind,
+        'title'      => $o['title'],
+        'url'        => bs_safe_url($o['url'] ?? null),
+        // file_path 는 **내보내지 않는다.** 서버 안쪽 경로다.
+        'has_file'   => !empty($o['file_path']),
+        'summary'    => $o['summary'] ?? null,
+        'created_by_name' => $o['created_by_name'] ?? null,
+        'created_at' => bs_date($o['created_at'] ?? null),
+    ];
 }
 
 /** 목록 카드에 올릴 만큼만. 상세 전용 칸은 싣지 않는다. */
@@ -193,13 +320,12 @@ function bs_present_rnd_row(array $r): array
 function bs_rnd_actions(array $rnd, bool $canEdit, bool $canApprove): array
 {
     $out = [];
-    if ($canEdit) {
-        $out[] = 'update';
-    }
-    if ($canApprove) {
-        $out[] = 'approve';
-        $out[] = 'reject';
-    }
+    if ($canEdit)                     { $out[] = 'update'; }
+    if ($canApprove)                  { $out[] = 'approve'; $out[] = 'reject'; }
+    if (bs_rnd_can_join($rnd))        { $out[] = 'join'; }
+    if (bs_rnd_can_leave($rnd))       { $out[] = 'leave'; }
+    if (bs_rnd_can_contribute($rnd))  { $out[] = 'log'; $out[] = 'output'; }
+    if (bs_rnd_can_close($rnd))       { $out[] = 'finish'; $out[] = 'drop'; }
     return $out;
 }
 

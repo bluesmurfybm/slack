@@ -2,23 +2,37 @@
 /**
  * R&D 과제 API — 보드·상세·발의·수정·승인·반려 (명세서 §8).
  *
- * GET  api/rnd.php?act=board     보드 목록 + 상태별 건수 + 머리 통계
- * GET  api/rnd.php?act=get&id=1  상세
- * POST api/rnd.php?act=propose   발의
- * POST api/rnd.php?act=update    수정 (발의자는 승인 전까지만)
- * POST api/rnd.php?act=approve   승인
- * POST api/rnd.php?act=reject    반려 (사유 필수)
+ * GET  api/rnd.php?act=board           보드 목록 + 상태별 건수 + 머리 통계
+ * GET  api/rnd.php?act=get&id=1        상세 — 개요·참여자·진행 기록·산출물 한 벌
+ * POST api/rnd.php?act=propose         발의
+ * POST api/rnd.php?act=update          수정 (발의자는 승인 전까지만)
+ * POST api/rnd.php?act=approve         과제 승인
+ * POST api/rnd.php?act=reject          과제 반려 (사유 필수)
+ *
+ * POST api/rnd.php?act=join            합류 신청 (사유 + 신고 점유율)
+ * POST api/rnd.php?act=approve_member  합류 승인 — lead 또는 관리자
+ * POST api/rnd.php?act=reject_member   합류 반려 (사유 필수)
+ * POST api/rnd.php?act=leave           스스로 나가기 — 본인만
+ * POST api/rnd.php?act=log             진행 기록 (content + finding)
+ * POST api/rnd.php?act=output          산출물 등록
+ * POST api/rnd.php?act=interest        관심 표시 토글
+ * POST api/rnd.php?act=finish          종료 — 산출물 1건 이상 필수
+ * POST api/rnd.php?act=drop            중단 (사유 필수)
  *
  * **가시성은 RndRepo 가 쿼리에서 강제한다.** 이 파일은 그 결과를 그대로
  * 내보낸다 — 여기서 다시 거르지 않는다. 두 곳에서 거르면 언젠가 어긋난다.
  *
- * 합류와 점유 반영은 P9-3 범위다. 이 파일에는 없다.
+ * **점유(bs_workload) 적재는 아직 없다.** 승인·합류가 가용도를 바꾸지 않는다.
+ * 적재는 P9-4 에서 시작한다. 종료·이탈이 end_date 를 당기는 경로는 지금
+ * 미리 넣어 두었고(지우지 않는다), 적재가 시작되면 그대로 동작한다.
  */
 
 declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
 require_once BS_ROOT . '/inc/presenter.php';
 require_once BS_ROOT . '/inc/repo/RndRepo.php';
+require_once BS_ROOT . '/inc/repo/MemberRepo.php';
+require_once BS_ROOT . '/inc/service/Notifier.php';
 
 $repo = new RndRepo(bs_db());
 
@@ -68,14 +82,10 @@ bs_route(bs_param_str('act', 'board'), [
             bs_json_error('MISSING_PARAM', '과제 번호가 없습니다.', 400);
         }
 
-        $r = $repo->find($id);
-        if (!$r) {
-            // 못 보는 과제와 없는 과제를 **같게** 답한다. 가르면
-            // 비공개 과제가 존재한다는 사실이 샌다.
-            bs_json_error('NOT_FOUND', '과제를 찾을 수 없습니다.', 404);
-        }
-
-        bs_json_ok(['rnd' => bs_present_rnd($r)]);
+        // 상세 화면의 네 탭(개요·참여자·진행 기록·산출물)이 쓰는 것을
+        // 한 번에 돌려준다. 못 보는 과제와 없는 과제는 **같게** 답한다 —
+        // 가르면 비공개 과제가 존재한다는 사실이 샌다.
+        bs_json_ok(bs_rnd_detail($repo, $id));
     },
 
     // =================================================================
@@ -148,7 +158,242 @@ bs_route(bs_param_str('act', 'board'), [
             'message' => '반려했습니다. 발의자가 고쳐서 다시 낼 수 있습니다.',
         ]);
     },
+
+    // =================================================================
+    // 합류 (명세서 §8.4)
+    // =================================================================
+
+    'join' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+
+        $repo->requestJoin($pid, [
+            'join_reason' => bs_param_str('join_reason'),
+            'load_ratio'  => bs_param_str('load_ratio'),
+        ], $user);
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + [
+            'message' => '합류를 신청했습니다. 과제를 주도하는 사람이 승인하면 참여가 시작됩니다.',
+        ]);
+    },
+
+    'approve_member' => function () use ($repo): void {
+        $user = bs_begin_write();
+
+        $rowId = bs_param_int('member_row_id', 0);
+        if (!$rowId) {
+            bs_json_error('MISSING_PARAM', '참여 기록 번호가 없습니다.', 400);
+        }
+
+        $row = $repo->approveMember($rowId, $user);
+        $pid = (int)$row['project_id'];
+
+        $queued = bs_rnd_notify_member($repo, $pid, $row, true, '');
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + [
+            'message' => $row['emp_name'] . ' 님의 합류를 승인했습니다.'
+                       . ($queued ? ' 알림 ' . $queued . '건을 보낼 목록에 넣었습니다.' : ''),
+            'notify_notice' => '알림은 적재만 된 상태입니다. 실제 발송 경로는 아직 없습니다.',
+        ]);
+    },
+
+    'reject_member' => function () use ($repo): void {
+        $user = bs_begin_write();
+
+        $rowId = bs_param_int('member_row_id', 0);
+        if (!$rowId) {
+            bs_json_error('MISSING_PARAM', '참여 기록 번호가 없습니다.', 400);
+        }
+        $reason = bs_param_str('reason');
+
+        $row = $repo->rejectMember($rowId, $reason, $user);
+        $pid = (int)$row['project_id'];
+
+        $queued = bs_rnd_notify_member($repo, $pid, $row, false, $reason);
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + [
+            'message' => $row['emp_name'] . ' 님의 합류를 반려했습니다.'
+                       . ($queued ? ' 알림 ' . $queued . '건을 보낼 목록에 넣었습니다.' : ''),
+            'notify_notice' => '알림은 적재만 된 상태입니다. 실제 발송 경로는 아직 없습니다.',
+        ]);
+    },
+
+    'leave' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+
+        $repo->leave($pid, $user);
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + [
+            'message' => '이 과제에서 나왔습니다.',
+        ]);
+    },
+
+    // =================================================================
+    // 진행 기록 · 산출물 · 관심
+    // =================================================================
+
+    'log' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+
+        $repo->addLog($pid, [
+            'content'   => bs_param_str('content'),
+            'finding'   => bs_param_str('finding'),
+            'worked_on' => bs_param_str('worked_on'),
+        ], $user);
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '진행 기록을 남겼습니다.']);
+    },
+
+    'output' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+
+        $repo->addOutput($pid, [
+            'kind'    => bs_param_str('kind', 'doc'),
+            'title'   => bs_param_str('title'),
+            'url'     => bs_param_str('url'),
+            'summary' => bs_param_str('summary'),
+        ], $user);
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '산출물을 등록했습니다.']);
+    },
+
+    'interest' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+
+        $on = $repo->toggleInterest($pid, $user);
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + [
+            'interested' => $on,
+            'message'    => $on ? '관심 과제로 표시했습니다.' : '관심 표시를 지웠습니다.',
+        ]);
+    },
+
+    // =================================================================
+    // 종료 (명세서 §8.5)
+    // =================================================================
+
+    'finish' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+
+        try {
+            $repo->finish($pid, $user);
+        } catch (RndNoOutputException $e) {
+            // 이것만 전용 코드로 내보낸다 — 화면이 "산출물을 먼저 등록하라" 는
+            // 다음 행동으로 이어 줘야 하기 때문이다 (명세서 §8.5).
+            bs_json_error('RND_NO_OUTPUT', $e->getMessage(), 400);
+        }
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + [
+            'message' => '과제를 종료했습니다.',
+            'notice'  => '점유 기록은 끝 날짜만 당겨 두고 지우지 않습니다. '
+                       . '지난 기간의 가용도를 다시 계산할 수 있어야 합니다.',
+        ]);
+    },
+
+    'drop' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+
+        $repo->drop($pid, bs_param_str('reason'), $user);
+
+        bs_json_ok(bs_rnd_detail($repo, $pid) + [
+            'message' => '과제를 중단했습니다.',
+            'notice'  => '중단한 과제는 역량 지표에 반영하지 않습니다.',
+        ]);
+    },
 ]);
+
+// =====================================================================
+
+/** 과제 번호. 없으면 400 으로 끊는다. */
+function bs_rnd_project_param(): int
+{
+    $id = bs_param_int('id', 0);
+    if (!$id) {
+        bs_json_error('MISSING_PARAM', '과제 번호가 없습니다.', 400);
+    }
+    return $id;
+}
+
+/**
+ * 상세 한 벌 — 네 탭이 쓰는 것을 한 번에 돌려준다 (명세서 §8.3).
+ *
+ * 탭을 옮길 때마다 묻지 않게 한 번에 싣는다. 과제 하나의 참여자·기록·
+ * 산출물은 많아야 수십 건이라 나눠 받을 이유가 없다.
+ */
+function bs_rnd_detail(RndRepo $repo, int $pid): array
+{
+    $r = $repo->find($pid);
+    if (!$r) {
+        bs_json_error('NOT_FOUND', '과제를 찾을 수 없습니다.', 404);
+    }
+    $rnd       = bs_present_rnd($r);
+    $canManage = $rnd['can']['manage_team'];
+
+    return [
+        'rnd'     => $rnd,
+        'members' => array_map(
+            static fn(array $m) => bs_present_rnd_member($m, $canManage),
+            $repo->members($pid)
+        ),
+        'logs'    => array_map('bs_present_rnd_log', $repo->logs($pid)),
+        'outputs' => array_map('bs_present_rnd_output', $repo->outputs($pid)),
+    ];
+}
+
+/**
+ * 합류 승인·반려를 당사자에게 알린다.
+ *
+ * 보내지 않고 **적재만 한다** — 발송 경로가 아직 없다
+ * (sql/007_migration_notify_outbox.sql). 알림이 실패해도 승인은 이미 끝났다.
+ *
+ * @return int 적재한 건수
+ */
+function bs_rnd_notify_member(RndRepo $repo, int $pid, array $row, bool $approved, string $reason): int
+{
+    $r = $repo->find($pid);
+    if (!$r) {
+        return 0;
+    }
+
+    $head = '[' . $r['name'] . '] 합류 ' . ($approved ? '승인' : '반려');
+    $lines = [$head, ''];
+    $lines[] = $approved
+        ? '합류가 승인되었습니다. 진행 기록과 산출물을 남길 수 있습니다.'
+        : '합류가 반려되었습니다.';
+    if (!$approved && $reason !== '') {
+        $lines[] = '';
+        $lines[] = '[사유] ' . $reason;
+    }
+    if ($approved) {
+        $lines[] = '';
+        $lines[] = '신고 점유율 ' . (float)$row['load_ratio'];
+    }
+    $body = implode("\n", $lines);
+
+    $notices = [];
+    $m = (new MemberRepo(bs_db()))->find((int)$row['member_id']);
+    if ($m) {
+        $slack = (string)($m['slack_handle'] ?? '');
+        $mail  = (string)($m['email'] ?? '');
+        // 슬랙과 메일 둘 다 접수한다. 어느 쪽이 살아 있을지 모른다.
+        $notices[] = new Notice('slack', (int)$row['member_id'], $slack, $body, $head,
+                                'rnd_member', (int)$row['id']);
+        $notices[] = new Notice('email', (int)$row['member_id'], $mail, $body, $head,
+                                'rnd_member', (int)$row['id']);
+    }
+    if (!$notices) {
+        return 0;
+    }
+
+    $sent = (new OutboxNotifier(bs_db()))->send($notices);
+    return (int)($sent['queued'] ?? 0);
+}
 
 // =====================================================================
 
