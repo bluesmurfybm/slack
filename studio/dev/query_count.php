@@ -29,6 +29,7 @@ foreach (['ProjectRepo', 'TaskRepo', 'MemberRepo', 'AllocationRepo', 'ProgressRe
     require ROOT . "/studio/inc/repo/$r.php";
 }
 require ROOT . '/studio/inc/service/AvailabilityCalculator.php';
+require ROOT . '/studio/inc/service/RndLoadService.php';
 require ROOT . '/studio/inc/service/AllocationEngine.php';
 
 $N = max(10, (int)($argv[1] ?? 200));
@@ -86,6 +87,8 @@ $tasks    = new TaskRepo($pdo);
 $members  = new MemberRepo($pdo);
 $allocs   = new AllocationRepo($pdo);
 $progress = new ProgressRepo($pdo);
+$avail    = new AvailabilityCalculator($pdo);
+$rndsvc   = new RndLoadService($pdo);
 $actor    = ['id' => 'pm@x.kr', 'name' => 'PM'];
 
 $mk = $pdo->prepare(
@@ -219,6 +222,13 @@ $total += measure($pdo, $oh, 'ProgressRepo::projectProgress', function () use ($
 });
 $total += measure($pdo, $oh, 'MemberRepo::findByUserId (내 것 표시)',
     function () use ($members) { $members->findByUserId('m1@x.kr'); });
+
+// P10-2 에서 담당자 카드에 가용도가 붙었다. **모사에도 넣어야 숫자가 참이 된다** —
+// 안 넣으면 이 도구가 실제보다 적은 수를 말한다.
+// forMembers() 는 구성원 수와 무관하게 묶어 묻는다.
+$total += measure($pdo, $oh, 'AvailabilityCalculator::forMembers (담당자 가용도)',
+    function () use ($avail, $MEM) { $avail->forMembers($MEM, '2026-01-01', '2026-12-31'); });
+
 echo "  " . str_repeat('-', 44) . " ---\n";
 printf("  %-44s %3d 회\n\n", '합계', $total);
 $boardTotal = $total;
@@ -240,9 +250,57 @@ $total += measure($pdo, $oh, '내 배정 태스크 목록', function () use ($pd
 $total += measure($pdo, $oh, 'ProgressRepo::latestPerTask', function () use ($progress, &$myTasks) {
     $progress->latestPerTask($myTasks);
 });
+
+// 통합 뷰 — 내가 참여 중인 R&D 과제 (P11). **한 문장**이다.
+//
+// api/dashboard.php 의 bs_dash_my_rnd() 와 같은 쿼리다. 그 파일은 include 하면
+// bs_route() 가 돌아 버려서 가져다 쓸 수 없다. 같은 모양으로 적어 두되,
+// 바뀌면 이쪽도 함께 고쳐야 한다.
+$total += measure($pdo, $oh, '내 R&D 과제 목록 (P11)', function () use ($pdo, $MEM) {
+    $st = $pdo->prepare(
+        "SELECT p.id, p.code, p.name, p.status, rm.role, rm.load_ratio,
+                (SELECT COUNT(*) FROM bs_rnd_output o WHERE o.project_id = p.id) AS output_count,
+                (SELECT MAX(l.created_at) FROM bs_rnd_log l WHERE l.project_id = p.id) AS last_log_at
+           FROM bs_rnd_member rm
+           JOIN bs_project p ON p.id = rm.project_id
+          WHERE rm.member_id = ? AND rm.status = 'approved'
+            AND p.project_type = 'rnd' AND p.deleted_at IS NULL
+            AND p.status IN ('approved','running')");
+    $st->execute([$MEM[0]]);
+    $st->fetchAll();
+});
 echo "  " . str_repeat('-', 44) . " ---\n";
 printf("  %-44s %3d 회\n\n", '합계', $total);
 $mineTotal = $total;
+
+// =====================================================================
+echo "[act=overview] 조직 지표 + 내 점유 구성 (P11)\n";
+$total = 0;
+
+// 조직 지표 셋을 **서브셀렉트 하나로 묶어** 한 번에 묻는다.
+// 세 번 나눠 물으면 모두가 하루에 여러 번 여는 화면에 질의가 셋 는다.
+$total += measure($pdo, $oh, '조직 지표 3개 (한 문장)', function () use ($pdo) {
+    $st = $pdo->prepare(
+        "SELECT
+           (SELECT COUNT(*) FROM bs_project WHERE project_type='project' AND deleted_at IS NULL
+             AND status IN ('allocating','confirmed','running')) AS a,
+           (SELECT COUNT(*) FROM bs_project WHERE project_type='rnd' AND deleted_at IS NULL
+             AND status IN ('approved','running')) AS b,
+           (SELECT COUNT(*) FROM bs_rnd_output o JOIN bs_project p ON p.id=o.project_id
+             WHERE p.deleted_at IS NULL AND o.created_at >= ?) AS c");
+    $st->execute(['2026-01-01 00:00:00']);
+    $st->fetch();
+});
+$total += measure($pdo, $oh, 'MemberRepo::findByUserId', function () use ($members) {
+    $members->findByUserId('m1@x.kr');
+});
+$total += measure($pdo, $oh, 'AvailabilityCalculator::forMembers (내 점유)',
+    function () use ($avail, $MEM) { $avail->forMembers([$MEM[0]], '2026-01-01', '2026-12-31'); });
+$total += measure($pdo, $oh, 'RndLoadService::staleProjectsOf (정체 경고)',
+    function () use ($rndsvc, $MEM) { $rndsvc->staleProjectsOf($MEM[0]); });
+echo "  " . str_repeat('-', 44) . " ---\n";
+printf("  %-44s %3d 회\n\n", '합계', $total);
+$overviewTotal = $total;
 
 // ---------------------------------------------------------------------
 // 태스크 수를 바꿔도 같은지
@@ -250,6 +308,8 @@ $mineTotal = $total;
 echo str_repeat('=', 62) . "\n";
 printf("태스크 %d건 기준 — projects %d회 · board %d회 · mine %d회\n",
     count($leaf), $projectsTotal, $boardTotal, $mineTotal);
+printf("                 overview %d회 (P11)
+", $overviewTotal);
 echo "\n태스크 수와 무관해야 맞습니다. 확인하려면 건수를 바꿔 다시 재 보세요:\n";
 echo "  php studio/dev/query_count.php 50\n";
 echo "  php studio/dev/query_count.php 500\n\n";
