@@ -1,8 +1,8 @@
 -- =====================================================================
 -- 009. 폐기된 점수 방식이 컬럼 주석에 남아 있던 것 (ba_member, ba_member_skill, ba_member_metric)
 --
---   mysql -u root iworks_local     < assign/sql/009_migration_metric_comment.sql
---   mysql -u root blueassign_test  < assign/sql/009_migration_metric_comment.sql
+--   mysql -u root iworks_local     < studio/sql/009_migration_metric_comment.sql
+--   mysql -u root blueassign_test  < studio/sql/009_migration_metric_comment.sql
 --
 -- 여러 번 실행해도 안전합니다. 주석만 바꿉니다 — 타입·NULL 여부·기본값·
 -- 데이터는 하나도 건드리지 않습니다.

@@ -2,7 +2,7 @@
 /**
  * LLM 백엔드 설정 표본.
  *
- *   cp assign/inc/llm.config.sample.php assign/inc/llm.config.php
+ *   cp studio/inc/llm.config.sample.php studio/inc/llm.config.php
  *
  * 이 파일은 LlmClient 를 하나 return 해야 합니다.
  * llm.config.php 는 .gitignore 로 막혀 있습니다(키가 들어갈 자리).

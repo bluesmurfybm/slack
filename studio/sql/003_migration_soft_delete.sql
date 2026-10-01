@@ -1,5 +1,5 @@
 -- =====================================================================
--- BlueAssign 마이그레이션 v1 → v2
+-- BlueStudio 마이그레이션 v1 → v2
 --   - 프로젝트 소프트 삭제 (ba_project.deleted_at / deleted_by / deleted_by_name)
 --
 -- 이미 001_schema.sql 로 설치한 환경에만 실행하세요.

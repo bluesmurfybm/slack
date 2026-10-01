@@ -1,5 +1,5 @@
 <?php
-/** BlueAssign 공용 헬퍼 — HTML 이스케이프, JSON 응답, 요청 파라미터, CSRF. */
+/** BlueStudio 공용 헬퍼 — HTML 이스케이프, JSON 응답, 요청 파라미터, CSRF. */
 
 declare(strict_types=1);
 
@@ -42,7 +42,7 @@ function ba_asset_v(string $rel): string
 // │   성공  {"ok":true,  "data":{...}}                               │
 // │   실패  {"ok":false, "error":{"code":"...","message":"..."}}     │
 // │                                                                  │
-// │ 근거: docs/blueassign-spec.md §8 과 CLAUDE.md 가 둘 다 이 형식을   │
+// │ 근거: docs/bluestudio-spec.md §8 과 CLAUDE.md 가 둘 다 이 형식을   │
 // │ 적고 있습니다.                                                    │
 // │                                                                  │
 // │ 주의: **BlueCart 는 다릅니다.** BlueCart 는 data 로 감싸지 않고     │

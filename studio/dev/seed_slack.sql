@@ -1,7 +1,7 @@
 -- =====================================================================
 -- 수집기 시험용 샘플 — 슬랙 취합 시스템 쪽 표 + ba_member
 --
---   mysql -u root iworks_local < assign/dev/seed_slack.sql
+--   mysql -u root iworks_local < studio/dev/seed_slack.sql
 --
 -- 운영 DB 에서 실행하지 마세요. 아래 DELETE 가 실제 업무 이력을 지웁니다.
 --

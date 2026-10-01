@@ -10,8 +10,8 @@ declare(strict_types=1);
    │ 실제 위치). SQL 파일에는 이 저장소가 어디에 풀렸는지 적을 수      │
    │ 없다. 여기서 __DIR__ 로 구해 넣는다.                              │
    │                                                                  │
-   │   php assign/dev/seed_docs.php            (기본: 1번 프로젝트)    │
-   │   php assign/dev/seed_docs.php 2                                  │
+   │   php studio/dev/seed_docs.php            (기본: 1번 프로젝트)    │
+   │   php studio/dev/seed_docs.php 2                                  │
    └──────────────────────────────────────────────────────────────────┘ */
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
@@ -58,7 +58,7 @@ foreach ($docs as [, , $f]) {
 }
 if ($missing) {
     fwrite(STDERR, "시험 문서가 없습니다: " . implode(', ', $missing) . "\n"
-        . "만들려면:  python assign/dev/fixtures/make_fixtures.py assign/dev/fixtures\n");
+        . "만들려면:  python studio/dev/fixtures/make_fixtures.py studio/dev/fixtures\n");
     exit(2);
 }
 
@@ -80,4 +80,4 @@ echo "프로젝트 #$projectId ($name) 에 문서 " . count($docs) . "건을 붙
 echo "화면에서 3단계 탭 → [문서 분석] → [문서에서 WBS 도출] 순으로 눌러 보십시오.\n";
 echo "\nLLM 은 설정하지 않았으므로 규칙만으로 뽑습니다. 화면이 그 사실을 알려 줍니다.\n";
 echo "고정 응답으로 LLM 경로까지 보려면:\n";
-echo "  cp assign/inc/llm.config.sample.php assign/inc/llm.config.php\n";
+echo "  cp studio/inc/llm.config.sample.php studio/inc/llm.config.php\n";

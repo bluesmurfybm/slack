@@ -8,7 +8,7 @@ declare(strict_types=1);
    │ 비어 있어서 무엇이 되는지 볼 수 없다. 이 스크립트가 그 앞까지     │
    │ 밀어 준다 — 산출 → 확정 → 진행상황 몇 건.                        │
    │                                                                  │
-   │   php assign/dev/seed_board.php          (기본: 1번 프로젝트)     │
+   │   php studio/dev/seed_board.php          (기본: 1번 프로젝트)     │
    └──────────────────────────────────────────────────────────────────┘ */
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
@@ -102,7 +102,7 @@ if ($late) {
     echo "지연이 보이도록 태스크 1건의 기한을 10일 전으로 당겼습니다.\n";
 }
 
-echo "\n대시보드에서 확인하세요:  /assign/index.php\n";
+echo "\n대시보드에서 확인하세요:  /studio/index.php\n";
 // 알림은 API 층(api/progress.php)이 접수한다. 이 스크립트는 리포지토리를
 // 직접 부르므로 알림이 쌓이지 않는다 — 화면에서 한 건 올려 보면 쌓인다.
 echo "알림 적재함은 비어 있습니다. 화면에서 진행상황을 올리면 그때 쌓입니다

@@ -1,5 +1,5 @@
 -- =====================================================================
--- BlueAssign 초기 데이터 — 분야 마스터(ba_domain)
+-- BlueStudio 초기 데이터 — 분야 마스터(ba_domain)
 --
 -- 실행:
 --   mysql -u <user> -p --default-character-set=utf8mb4 <db> < sql/002_seed_domain.sql

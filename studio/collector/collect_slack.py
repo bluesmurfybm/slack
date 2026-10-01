@@ -4,7 +4,7 @@
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 왜 HTML 파싱이 아닌가                                                  │
 │                                                                      │
-│ 취합 시스템과 BlueAssign 은 **같은 DB** 를 쓴다.                       │
+│ 취합 시스템과 BlueStudio 는 **같은 DB** 를 쓴다.                       │
 │   - slack/db.php 가 포털 config.php 의 db 설정을 그대로 읽는다         │
 │   - core/db.php 주석: "slack 모듈과 같은 slackapi DB를 그대로 씀"      │
 │                                                                      │
@@ -156,9 +156,9 @@ def connect_source(cfg: configparser.ConfigParser):
     """
     원천(requests 를 읽을 곳).
 
-    운영에서는 취합 시스템과 BlueAssign 이 **같은 DB** 라 [db] 하나면 됩니다.
+    운영에서는 취합 시스템과 BlueStudio 가 **같은 DB** 라 [db] 하나면 됩니다.
     개발·분석 중에는 다릅니다 — 운영 requests 를 읽되 ba_* 는 로컬에 적재해야
-    합니다(운영에 BlueAssign 이 아직 배포되지 않았고, 읽기 전용 계정이라
+    합니다(운영에 BlueStudio 가 아직 배포되지 않았고, 읽기 전용 계정이라
     쓰지도 못합니다). 그때만 [db_source] 를 둡니다.
 
     [db_source] 가 없으면 [db] 를 그대로 씁니다.

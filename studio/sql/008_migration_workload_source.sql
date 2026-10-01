@@ -1,7 +1,7 @@
 -- =====================================================================
 -- 008. 직접 등록한 점유의 출처와 작성자 (ba_workload)
 --
---   mysql -u root iworks_local < assign/sql/008_migration_workload_source.sql
+--   mysql -u root iworks_local < studio/sql/008_migration_workload_source.sql
 --
 -- 여러 번 실행해도 안전합니다. 이미 있으면 ALTER 가 실패하는데, 그때는
 -- 아래 안내대로 건너뛰면 됩니다(컬럼 존재 여부를 조건으로 거는 문법이

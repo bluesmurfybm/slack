@@ -1,5 +1,5 @@
 /* =====================================================================
-   BlueAssign client
+   BlueStudio client
 
    의존 라이브러리 없음. iworks 페이지 안에 얹히므로 전역을 오염시키지
    않도록 IIFE 안에 전부 가둔다(BlueCart assets/app.js 와 같은 방식).
@@ -1978,7 +1978,7 @@
     // 엑셀에서 셀 범위를 복사하면 칸 사이가 탭, 줄 사이가 줄바꿈으로 온다.
     // 계층을 표현하려면 왼쪽 빈 칸이 그대로 앞쪽 탭으로 따라온다.
     /* ==WBS-PARSE-BEGIN==
-       아래 네 함수는 DOM 을 타지 않는 순수 변환이다. assign/dev/wbs_parse_test.js
+       아래 네 함수는 DOM 을 타지 않는 순수 변환이다. studio/dev/wbs_parse_test.js
        가 이 표시 사이를 그대로 떼어 내 node 에서 돌린다 — 표시를 지우지 말 것.
        바깥에서 쓰는 것은 newNode() 와 MAX_DEPTH 둘뿐이고, 시험은 그 둘을 대신 넣는다. */
     function parsePaste(text) {

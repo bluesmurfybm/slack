@@ -1,4 +1,4 @@
-/* 엑셀 붙여넣기 파서 시험 — node assign/dev/wbs_parse_test.js
+/* 엑셀 붙여넣기 파서 시험 — node studio/dev/wbs_parse_test.js
  *
  * assign.js 의 파서는 DOM 을 타지 않는 순수 변환이라 브라우저 없이 돌릴 수 있다.
  * 같은 코드를 여기 옮겨 적으면 둘이 갈라지므로, 원본에서 표시 구간을 떼어 온다.

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """수집기 검증 — dry-run 출력과 실제 적재 결과를 seed_slack.sql 의 기댓값과 대조한다.
 
-    python assign/dev/collector_test.py
+    python studio/dev/collector_test.py
 
 seed_slack.sql 을 먼저 적재해 두어야 합니다. 이 스크립트가 알아서 다시 넣습니다.
 """

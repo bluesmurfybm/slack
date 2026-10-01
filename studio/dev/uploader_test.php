@@ -25,9 +25,9 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname={$TESTDB};charset=utf8mb4", 'root', 
 "
         . "  mysql -u root -e \"CREATE DATABASE {$TESTDB} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci\"
 "
-        . "  mysql -u root {$TESTDB} < assign/sql/001_schema.sql
+        . "  mysql -u root {$TESTDB} < studio/sql/001_schema.sql
 "
-        . "  mysql -u root {$TESTDB} < assign/sql/002_seed_domain.sql
+        . "  mysql -u root {$TESTDB} < studio/sql/002_seed_domain.sql
 
 ");
     exit(2);

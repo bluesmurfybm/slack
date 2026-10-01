@@ -11,7 +11,7 @@ declare(strict_types=1);
    │ 세션 쿠키, CSRF 헤더, multipart 업로드, 권한 401/403 까지.        │
    │ 화면과 API 사이의 배선 오류는 이 층에서만 잡힌다.                  │
    │                                                                  │
-   │ 먼저 서버를 띄워야 한다:  assign\dev\serve.bat                    │
+   │ 먼저 서버를 띄워야 한다:  studio\dev\serve.bat                    │
    └──────────────────────────────────────────────────────────────────┘ */
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
@@ -100,7 +100,7 @@ final class Client
         return ['status' => $status, 'body' => $body, 'json' => is_array($json) ? $json : null];
     }
 
-    /** 포털 로그인 후 assign 화면에서 CSRF 토큰을 긁어 온다. */
+    /** 포털 로그인 후 BlueStudio 화면에서 CSRF 토큰을 긁어 온다. */
     public function login(array $cred): bool
     {
         $r = $this->req('/api/login.php', ['json' => $cred]);
@@ -885,7 +885,7 @@ section('[O] 문서 분석 → WBS 도출');
 $fixDir = __DIR__ . '/fixtures';
 if (!is_file("$fixDir/sample.xlsx")) {
     echo "  (건너뜀) dev/fixtures 에 시험 문서가 없습니다.\n"
-       . "  만들려면: python assign/dev/fixtures/make_fixtures.py assign/dev/fixtures\n";
+       . "  만들려면: python studio/dev/fixtures/make_fixtures.py studio/dev/fixtures\n";
 } else {
     $pdoX = (function () {
         $cfg = require dirname(__DIR__, 2) . '/config.php';

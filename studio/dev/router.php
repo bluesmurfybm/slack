@@ -16,13 +16,13 @@ if (!in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)) {
     exit('로컬에서만 접근할 수 있습니다.');
 }
 
-$MODULE = dirname(__DIR__);      // <포털>/assign
+$MODULE = dirname(__DIR__);      // <포털>/studio
 $PORTAL = dirname($MODULE);      // <포털>
 
 if (!is_file($PORTAL . '/config.php')) {
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');
-    exit("포털 config.php 가 없습니다.\n먼저 실행하세요:  php assign/dev/setup_local.php\n");
+    exit("포털 config.php 가 없습니다.\n먼저 실행하세요:  php studio/dev/setup_local.php\n");
 }
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
@@ -31,7 +31,7 @@ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 // .htaccess 대신 막기
 //
 // 내장 서버는 .htaccess 를 읽지 않는다. 운영(Apache)과 같은 결과를 로컬에서도
-// 보려면 여기서 직접 404 를 내야 한다. 목록은 assign/.htaccess 와 같아야 한다.
+// 보려면 여기서 직접 404 를 내야 한다. 목록은 studio/.htaccess 와 같아야 한다.
 // 한쪽만 고치면 "로컬에선 막히는데 운영에선 뚫리는" 상태가 된다.
 // ---------------------------------------------------------------------
 $blocked = ['inc', 'sql', 'docs', 'collector', 'var', 'dev'];
@@ -56,7 +56,7 @@ if (preg_match('#^/(\.sessions|config\.php|sso_secret\.key|\.git)(/|$)#', $path)
 // ---------------------------------------------------------------------
 $file = $PORTAL . ($path === '/' ? '/index.php' : $path);
 
-// 디렉터리면 index.php (예: /assign/ → /assign/index.php)
+// 디렉터리면 index.php (예: /studio/ → /studio/index.php)
 if (is_dir($file) && is_file(rtrim($file, '/') . '/index.php')) {
     $file = rtrim($file, '/') . '/index.php';
 }

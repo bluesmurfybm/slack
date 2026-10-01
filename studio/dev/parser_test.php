@@ -15,7 +15,7 @@ require ROOT . '/studio/inc/service/LlmClient.php';
    │ parse_status 를 남기는지 등)은 api_test.php 가 HTTP 로 확인한다.   │
    │                                                                  │
    │ 시험 문서는 dev/fixtures/ 에 들어 있다. 다시 만들려면             │
-   │   python assign/dev/fixtures/make_fixtures.py assign/dev/fixtures │
+   │   python studio/dev/fixtures/make_fixtures.py studio/dev/fixtures │
    └──────────────────────────────────────────────────────────────────┘ */
 
 const FIX = __DIR__ . '/fixtures';
@@ -38,7 +38,7 @@ function fixture(string $n): string {
     $p = FIX . '/' . $n;
     if (!is_file($p)) {
         fwrite(STDERR, "\n시험 문서가 없습니다: $p\n"
-            . "만들려면:  python assign/dev/fixtures/make_fixtures.py assign/dev/fixtures\n\n");
+            . "만들려면:  python studio/dev/fixtures/make_fixtures.py studio/dev/fixtures\n\n");
         exit(2);
     }
     return $p;

@@ -1,5 +1,5 @@
 <?php
-/** BlueAssign 화면 공통 레이아웃 — 포털 상단바·모듈 머리말·꼬리말. 6개 화면이 모두 이걸 쓴다. */
+/** BlueStudio 화면 공통 레이아웃 — 포털 상단바·모듈 머리말·꼬리말. 6개 화면이 모두 이걸 쓴다. */
 
 declare(strict_types=1);
 
@@ -59,7 +59,7 @@ function ba_layout_head(
         <div class="dd-menu" id="hdrUserDd">
           <a href="../index.php">&#128100; 마이페이지</a>
           <div class="dd-sep"></div>
-          <?php // core/worksystems.php — assign 이 현재 위치로 표시된다 ?>
+          <?php // core/worksystems.php — studio 가 현재 위치로 표시된다 ?>
           <?= work_systems_menu('../', BA_MODULE_KEY) ?>
           <div class="dd-sep"></div>
           <a href="javascript:void(0)" onclick="baLogout()">&#128682; 로그아웃</a>

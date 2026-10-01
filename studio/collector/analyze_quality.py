@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""수집 대상 데이터의 품질을 점검하고 assign/docs/data-quality-report.md 를 쓴다.
+"""수집 대상 데이터의 품질을 점검하고 studio/docs/data-quality-report.md 를 쓴다.
 
 점수식을 설계하기 전에 "이 데이터로 무엇을 잴 수 있는가" 를 먼저 확인하기 위한 도구다.
 적재하지 않는다 — 읽기만 한다.
@@ -123,7 +123,7 @@ def main() -> int:
 
     # ── 참조 자료 ─────────────────────────────────────────────────────
     #
-    # 운영 DB 에는 BlueAssign 이 아직 배포되지 않아 ba_member / ba_domain 이 없다.
+    # 운영 DB 에는 BlueStudio 가 아직 배포되지 않아 ba_member / ba_domain 이 없다.
     # 그래서 원천(requests·schools)은 운영에서 읽고, 우리 쪽 정의는 아래처럼 구한다.
     #   구성원 : 운영 ba_member → 없으면 운영 portal_users 에서 만든다(실제 명단)
     #   분야   : 운영 ba_domain → 없으면 [db_local] 로컬 DB 에서 읽는다
@@ -278,7 +278,7 @@ def main() -> int:
     # =================================================================
     # 3. 상태 전이 / 리드타임
     # =================================================================
-    # 취합 시스템과 BlueAssign·포털이 **같은 DB** 를 쓰므로 SHOW TABLES 에는
+    # 취합 시스템과 BlueStudio·포털이 **같은 DB** 를 쓰므로 SHOW TABLES 에는
     # ba_* / portal_* 도 섞여 나온다. "취합 시스템의 표" 를 말하려면 걸러야 한다.
     all_tables = {t[list(t)[0]] for t in q("SHOW TABLES")}
     slack_tables = {t for t in all_tables
@@ -375,7 +375,7 @@ def main() -> int:
     A("# 수집 데이터 품질 점검")
     A("")
     A("> 점수식을 설계하기 전에 **이 데이터로 무엇을 잴 수 있는지** 확인한 결과입니다.")
-    A("> `assign/collector/analyze_quality.py` 가 생성합니다. 손으로 고치지 마세요.")
+    A("> `studio/collector/analyze_quality.py` 가 생성합니다. 손으로 고치지 마세요.")
     A("")
     A(md_table(["항목", "값"], [
         ["생성 시각", datetime.now().strftime("%Y-%m-%d %H:%M")],
@@ -733,7 +733,7 @@ def main() -> int:
     A("")
     A("---")
     A("")
-    A("*이 보고서는 `python assign/collector/analyze_quality.py` 로 다시 생성할 수 있습니다.*")
+    A("*이 보고서는 `python studio/collector/analyze_quality.py` 로 다시 생성할 수 있습니다.*")
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

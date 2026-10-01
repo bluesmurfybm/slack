@@ -1,5 +1,5 @@
 <?php
-/** BlueAssign 대시보드 — 확정 배정안과 진행상황을 한눈에 본다. 모듈 기본 진입 화면. */
+/** BlueStudio 대시보드 — 확정 배정안과 진행상황을 한눈에 본다. 모듈 기본 진입 화면. */
 
 declare(strict_types=1);
 require_once __DIR__ . '/inc/bootstrap.php';

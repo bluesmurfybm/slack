@@ -102,7 +102,7 @@ final class NullLlmClient implements LlmClient
         throw new LlmError(
             'LLM 이 설정돼 있지 않습니다. '
             . BA_ROOT . '/inc/llm.config.php 를 만들고 백엔드를 지정하세요. '
-            . '(assign/inc/llm.config.sample.php 참고)',
+            . '(studio/inc/llm.config.sample.php 참고)',
             retryable: false
         );
     }

@@ -1,5 +1,5 @@
 <?php
-/** BlueAssign 모든 진입점(화면·API·배치)이 최초로 include 하는 파일. 포털 연동과 권한 상수를 정의한다. */
+/** BlueStudio 모든 진입점(화면·API·배치)이 최초로 include 하는 파일. 포털 연동과 권한 상수를 정의한다. */
 
 declare(strict_types=1);
 
@@ -8,7 +8,7 @@ define('BA_ROOT', dirname(__DIR__));
 /**
  * iworks 포털 루트.
  *
- * 이 모듈은 포털 저장소 안의 한 폴더(<포털>/assign)로 들어간다.
+ * 이 모듈은 포털 저장소 안의 한 폴더(<포털>/studio)로 들어간다.
  * BlueCart 와 달리 단독 실행은 지원하지 않는다 — 포털이 없으면 그대로 멈춘다.
  * (단독 실행 지원 여부는 docs/conventions.md §9-6 에 미결로 남아 있었고,
  *  스캐폴딩 단계에서는 분기를 늘리지 않는 쪽을 택했다. 필요해지면 BlueCart 의
@@ -48,7 +48,7 @@ const BA_MODULE_KEY = 'assign';
 // 권한
 // =====================================================================
 //
-// BlueCart 는 역할 배정 표(bc_role_assign)를 따로 두지만, BlueAssign 은
+// BlueCart 는 역할 배정 표(bc_role_assign)를 따로 두지만, BlueStudio 는
 // 001_schema.sql 에 그런 표가 없다. 역할을 아래 세 곳에서 끌어낸다.
 //
 //   ADMIN  : 포털 관리자 명단(portal_admin + core/board.php 의 OWNER_ADMINS)
@@ -88,7 +88,7 @@ const BA_CAP_OBJECTION_REVIEW   = 'objection.review';    // 이의 제기 처리
 
 /**
  * CLAUDE.md 가 강제하는 규칙을 코드에서 지키기 위한 상수.
- * 값을 바꾸기 전에 docs/blueassign-spec.md 와 CLAUDE.md 를 먼저 보라.
+ * 값을 바꾸기 전에 docs/bluestudio-spec.md 와 CLAUDE.md 를 먼저 보라.
  */
 // 표본이 이보다 적은 구성원은 낮은 점수 대신 insufficient_data 플래그를 세운다.
 const BA_MIN_SAMPLE = 20;
@@ -406,7 +406,7 @@ const BA_SOURCE_KIND = [
 /**
  * 업로드 파일이 실제로 저장되는 곳.
  *
- * assign/var/ 는 모듈 .htaccess 와 var/.htaccess 로 웹 직접 접근이 막혀 있다
+ * studio/var/ 는 모듈 .htaccess 와 var/.htaccess 로 웹 직접 접근이 막혀 있다
  * (learn/var 와 같은 방식). BlueCart 는 웹 루트 바깥(/var/www/iworks-data)을
  * 쓰는데, 그쪽이 더 안전하므로 운영에서는 이 상수만 바꿔 옮기면 된다.
  *

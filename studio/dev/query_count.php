@@ -14,8 +14,8 @@ declare(strict_types=1);
    │ 가 실제로 DB 에 보낸 것** 이 아니라 우리가 부른 횟수를 세게 된다. │
    │ 준비(prepare)와 실행이 나뉘는 경우를 놓친다.                      │
    │                                                                  │
-   │   php assign/dev/query_count.php                                  │
-   │   php assign/dev/query_count.php 300     (태스크 300건으로 재기)   │
+   │   php studio/dev/query_count.php                                  │
+   │   php studio/dev/query_count.php 300     (태스크 300건으로 재기)   │
    └──────────────────────────────────────────────────────────────────┘ */
 if (PHP_SAPI !== 'cli') {
     http_response_code(403);
@@ -251,5 +251,5 @@ echo str_repeat('=', 62) . "\n";
 printf("태스크 %d건 기준 — projects %d회 · board %d회 · mine %d회\n",
     count($leaf), $projectsTotal, $boardTotal, $mineTotal);
 echo "\n태스크 수와 무관해야 맞습니다. 확인하려면 건수를 바꿔 다시 재 보세요:\n";
-echo "  php assign/dev/query_count.php 50\n";
-echo "  php assign/dev/query_count.php 500\n\n";
+echo "  php studio/dev/query_count.php 50\n";
+echo "  php studio/dev/query_count.php 500\n\n";

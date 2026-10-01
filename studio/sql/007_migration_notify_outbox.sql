@@ -1,7 +1,7 @@
 -- =====================================================================
 -- 007. 알림 적재함 (ba_notification)
 --
---   mysql -u root iworks_local < assign/sql/007_migration_notify_outbox.sql
+--   mysql -u root iworks_local < studio/sql/007_migration_notify_outbox.sql
 --
 -- 여러 번 실행해도 안전합니다(CREATE TABLE IF NOT EXISTS 뿐).
 -- =====================================================================

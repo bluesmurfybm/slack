@@ -12,7 +12,7 @@ if (PHP_SAPI !== 'cli') {
     exit('dev/setup_local.php 는 명령줄에서만 실행할 수 있습니다.');
 }
 
-$MODULE = dirname(__DIR__);          // <포털>/assign
+$MODULE = dirname(__DIR__);          // <포털>/studio
 $PORTAL = dirname($MODULE);          // <포털>
 
 // ---------------------------------------------------------------------
@@ -76,7 +76,7 @@ if (is_file($configPath)) {
     $php = <<<PHP
 <?php
 /**
- * 포털 로컬 개발 설정 — assign/dev/setup_local.php 가 만들었습니다.
+ * 포털 로컬 개발 설정 — studio/dev/setup_local.php 가 만들었습니다.
  *
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ 이 파일은 로컬 전용입니다. git 에 올리지 마세요.                   │
@@ -223,10 +223,10 @@ say(str_repeat('=', 60));
 say('준비 끝났습니다.');
 say('');
 say('  서버 띄우기   assign\\dev\\serve.bat');
-say('                또는  php -S 127.0.0.1:8099 -t . assign/dev/router.php');
-say('  접속          http://127.0.0.1:8099/assign/');
-say('  API 시험      php assign/dev/api_test.php');
+say('                또는  php -S 127.0.0.1:8099 -t . studio/dev/router.php');
+say('  접속          http://127.0.0.1:8099/studio/');
+say('  API 시험      php studio/dev/api_test.php');
 say('');
 say('  샘플 데이터가 필요하면:');
-say('     mysql -u ' . $cfg['user'] . ' ' . $cfg['name'] . ' < assign/dev/seed_dev.sql');
+say('     mysql -u ' . $cfg['user'] . ' ' . $cfg['name'] . ' < studio/dev/seed_dev.sql');
 say('');

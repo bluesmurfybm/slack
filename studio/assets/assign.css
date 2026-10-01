@@ -1,5 +1,5 @@
 /* =====================================================================
-   BlueAssign 화면 스타일
+   BlueStudio 화면 스타일
 
    포털 styles/topbar.css 위에 얹힌다. 상단바는 그쪽이 그리므로 여기서
    .topbar 계열을 다시 정의하지 않는다.
@@ -18,7 +18,7 @@
   --ba-line:      #e3e8f0;
   --ba-paper:     #ffffff;
   --ba-surface:   #f7f9fc;
-  --ba-brand:     #2B7A4B;   /* worksystems.json 의 assign 색과 같다 */
+  --ba-brand:     #2B7A4B;   /* worksystems.json 의 studio 색과 같다 */
   --ba-brand-dk:  #23653e;
   --ba-danger:    #c0392b;
   --ba-warn:      #b9770e;

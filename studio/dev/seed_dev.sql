@@ -1,6 +1,6 @@
 -- =====================================================================
--- BlueAssign 로컬 개발용 샘플 데이터
---   mysql -u root iworks_local < assign/dev/seed_dev.sql
+-- BlueStudio 로컬 개발용 샘플 데이터
+--   mysql -u root iworks_local < studio/dev/seed_dev.sql
 --
 -- 운영 DB 에서 실행하지 마세요. 아래 DELETE 가 프로젝트를 전부 지웁니다.
 -- =====================================================================
