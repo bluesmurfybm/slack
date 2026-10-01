@@ -1,0 +1,4 @@
+# 업로드된 출처 문서가 쌓이는 곳. git 에 올리지 않는다.
+*
+!.gitignore
+!.htaccess

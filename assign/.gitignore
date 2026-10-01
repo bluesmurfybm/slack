@@ -1,0 +1,17 @@
+# 이 컴퓨터에만 해당하는 값 — bluecart/.gitignore 와 같은 방식
+dev/php-path.txt
+dev/mysql-path.txt
+
+# 업로드된 출처 문서 (var/.gitignore 에서도 막고 있음)
+var/source/
+
+# 수집기 — 접속 정보와 실행 산출물
+collector/config.ini
+collector/unmatched_members.log
+collector/__pycache__/
+collector/config.prod.ini
+collector/config.pull.ini
+
+# LLM 백엔드 설정. API 키가 들어갈 자리라 올리지 않는다.
+# 표본은 inc/llm.config.sample.php 에 있다.
+inc/llm.config.php
