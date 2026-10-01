@@ -1,0 +1,96 @@
+{
+  "_readme": [
+    "담당자 문자열 → ba_member.user_id(이메일) 별칭표.",
+    "",
+    "requests.asg 는 슬랙 표시 이름이라 표기가 흔들립니다.",
+    "'김호영', '호영', 'kimhy', '김호영(블루)' 이 모두 한 사람입니다.",
+    "",
+    "매칭 순서 (normalize.py resolve_member)",
+    "  1) requests.asg_id(슬랙 사용자 ID) → 이 표의 slack_ids",
+    "  2) 정규화한 asg 문자열 → 이 표의 aliases",
+    "  3) ba_member.emp_name 과 정확히 일치",
+    "  4) 못 찾으면 **건너뜁니다**. 추측으로 붙이지 않습니다.",
+    "",
+    "4번이 중요합니다. 엉뚱한 사람에게 실적이 붙으면 역량 점수가 틀리고,",
+    "그 점수로 배정이 나갑니다. 모르면 비워 두는 편이 낫습니다.",
+    "건너뛴 문자열은 unmatched_members.log 에 쌓이니 그걸 보고 여기 채우십시오.",
+    "",
+    "email 은 portal_users.email = ba_member.user_id 와 같아야 합니다."
+  ],
+
+  "members": [
+    {
+      "email": "kimhy@bluesoft.co.kr",
+      "aliases": ["김호영", "호영", "kimhy"],
+      "slack_ids": []
+    },
+    {
+      "email": "jian@bluesoft.co.kr",
+      "aliases": ["김지안", "지안", "jian"],
+      "slack_ids": []
+    },
+    {
+      "email": "scpark@bluesoft.co.kr",
+      "aliases": ["박성철", "성철", "scpark"],
+      "slack_ids": []
+    },
+    {
+      "email": "pink@bluesoft.co.kr",
+      "aliases": ["김태주", "태주", "pink"],
+      "slack_ids": []
+    },
+    {
+      "email": "venus@bluesoft.co.kr",
+      "aliases": ["안정민", "정민", "venus"],
+      "slack_ids": []
+    },
+    {
+      "email": "akddd@bluesoft.co.kr",
+      "aliases": ["조성훈", "성훈", "akddd"],
+      "slack_ids": []
+    },
+    {
+      "email": "lenda83@bluesoft.co.kr",
+      "aliases": ["진소현", "소현", "lenda83", "lenda"],
+      "slack_ids": []
+    },
+    {
+      "email": "amitoa@bluesoft.co.kr",
+      "aliases": ["김아랑", "아랑", "amitoa"],
+      "slack_ids": []
+    },
+    {
+      "email": "phr@bluesoft.co.kr",
+      "aliases": ["박화랑", "화랑", "phr"],
+      "slack_ids": []
+    },
+    {
+      "email": "bnmmnbhj@bluesoft.co.kr",
+      "aliases": ["유병문", "병문", "bnmmnbhj"],
+      "slack_ids": []
+    },
+    {
+      "email": "siyu@bluesoft.co.kr",
+      "aliases": ["유승인", "승인", "siyu"],
+      "slack_ids": []
+    },
+    {
+      "email": "hjlee@bluesoft.co.kr",
+      "aliases": ["이한재", "한재", "hjlee"],
+      "slack_ids": []
+    },
+    {
+      "email": "jun0@bluesoft.co.kr",
+      "aliases": ["이준영", "준영", "jun0"],
+      "slack_ids": []
+    }
+  ],
+
+  "ignore": [
+    "—",
+    "-",
+    "미지정",
+    "없음",
+    "n/a"
+  ]
+}
