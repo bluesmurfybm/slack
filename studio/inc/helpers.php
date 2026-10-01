@@ -76,9 +76,20 @@ function bs_json_ok(mixed $data = null): never
  * @param string $code    기계가 읽는 코드. 대문자+밑줄. 예: NOT_FOUND
  * @param string $message 사람이 읽는 한글 문장. 화면이 그대로 보여준다.
  */
-function bs_json_error(string $code, string $message, int $httpStatus = 400): never
+/**
+ * $detail 은 **거절한 이유를 사람이 고칠 수 있게** 할 때만 쓴다.
+ *
+ * "안 됩니다" 만 돌려주면 받는 쪽이 무엇을 바꿔야 하는지 모른다. 점유
+ * 상한처럼 "지금 얼마이고 상한이 얼마인지" 를 알려 줘야 다음 행동이
+ * 나오는 경우에 싣는다. 봉투 모양(error.code / error.message)은 그대로다.
+ */
+function bs_json_error(string $code, string $message, int $httpStatus = 400, ?array $detail = null): never
 {
-    bs_json(['ok' => false, 'error' => ['code' => $code, 'message' => $message]], $httpStatus);
+    $err = ['code' => $code, 'message' => $message];
+    if ($detail !== null) {
+        $err['detail'] = $detail;
+    }
+    bs_json(['ok' => false, 'error' => $err], $httpStatus);
 }
 
 // =====================================================================
@@ -206,4 +217,73 @@ function bs_safe_url(?string $url): ?string
     }
     $url = trim($url);
     return preg_match('#^https?://#i', $url) ? $url : null;
+}
+
+// =====================================================================
+// 전역 설정 (bs_setting — 011 마이그레이션)
+// =====================================================================
+
+/**
+ * 설정 행이 없을 때의 폴백.
+ *
+ * **이것은 하드코딩이 아니라 안전장치다.** 표의 값이 언제나 이기고, 여기
+ * 값은 행이 없을 때만 쓰인다. 설정 행이 지워졌다고 통제가 통째로 열리면
+ * 안 되기 때문에 둔다 — 명세서 §9.2 의 기본값과 같게 유지할 것.
+ *
+ * 값을 바꾸려면 코드가 아니라 bs_setting 표를 고친다.
+ */
+function bs_setting_default(string $k): mixed
+{
+    return match ($k) {
+        'rnd_total_cap'       => 0.30,   // 1인 R&D 점유 합계
+        'rnd_per_project_cap' => 0.20,   // 과제 하나당 1인 점유
+        'rnd_concurrent_max'  => 2,      // 동시 참여 과제 수
+        'rnd_stale_weeks'     => 4,      // 정체 판정 기간(주)
+        default               => null,
+    };
+}
+
+/**
+ * 설정 한 건. 요청당 한 번만 읽는다.
+ *
+ * 표가 아직 없으면(마이그레이션 전) 조용히 폴백으로 간다 — 설정 하나
+ * 때문에 화면이 통째로 500 이 되면 안 된다.
+ */
+function bs_setting(string $k, mixed $default = null): mixed
+{
+    static $cache = null;
+
+    if ($cache === null) {
+        $cache = [];
+        try {
+            foreach (bs_db()->query('SELECT k, v FROM bs_setting')->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $cache[(string)$r['k']] = $r['v'];
+            }
+        } catch (Throwable $e) {
+            // 표가 없거나 못 읽는다. 폴백으로 간다.
+            error_log('[BlueStudio] bs_setting 읽기 실패: ' . $e->getMessage());
+        }
+    }
+
+    if (array_key_exists($k, $cache) && $cache[$k] !== null && $cache[$k] !== '') {
+        return $cache[$k];
+    }
+    return $default ?? bs_setting_default($k);
+}
+
+/** 설정을 실수로 바꿔 통제가 풀리지 않게, 범위를 벗어난 값은 폴백으로 되돌린다. */
+function bs_setting_ratio(string $k): float
+{
+    $v = (float)bs_setting($k);
+    if ($v <= 0 || $v > 1) {
+        return (float)bs_setting_default($k);
+    }
+    return $v;
+}
+
+/** 1 이상의 정수 설정. */
+function bs_setting_int(string $k): int
+{
+    $v = (int)bs_setting($k);
+    return $v >= 1 ? $v : (int)bs_setting_default($k);
 }
