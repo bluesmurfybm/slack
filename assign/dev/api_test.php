@@ -1,0 +1,1686 @@
+<?php
+/** HTTP 레벨 API 시험 — 실제로 뜬 서버에 붙어 로그인·CSRF·권한·업로드까지 통째로 확인한다. */
+
+declare(strict_types=1);
+
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 이것이 단위 테스트와 다른 점                                       │
+   │                                                                  │
+   │ ProjectRepo / SourceUploader 는 클래스를 직접 불러 시험했다.       │
+   │ 여기서는 **브라우저가 하는 것과 같은 방식**으로 HTTP 를 탄다 —     │
+   │ 세션 쿠키, CSRF 헤더, multipart 업로드, 권한 401/403 까지.        │
+   │ 화면과 API 사이의 배선 오류는 이 층에서만 잡힌다.                  │
+   │                                                                  │
+   │ 먼저 서버를 띄워야 한다:  assign\dev\serve.bat                    │
+   └──────────────────────────────────────────────────────────────────┘ */
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('명령줄에서만 실행할 수 있습니다.');
+}
+
+$BASE = getenv('BA_TEST_BASE') ?: 'http://127.0.0.1:8099';
+
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 시험 전용 계정을 쓴다. 사람이 쓰는 계정을 빌리지 않는다.           │
+   │                                                                  │
+   │ 처음에는 kimhy@bluesoft.co.kr / blue$123 을 썼는데, 그 계정으로    │
+   │ 브라우저에서 한 번 로그인하자 포털이 초기 비밀번호 변경을 강제해   │
+   │ (core/auth.php 의 needs_setup) 시험이 통째로 401 이 됐다.         │
+   │ 사람이 손대는 계정에 시험을 묶으면 이런 일이 반복된다.             │
+   │                                                                  │
+   │ 아래 계정은 ensure_test_accounts() 가 로컬 DB 에 직접 만든다.      │
+   │ 사람은 이 계정으로 로그인할 일이 없으므로 비밀번호가 바뀌지 않는다.│
+   └──────────────────────────────────────────────────────────────────┘ */
+const TEST_PASSWORD = 'ba-test-1234';
+$ADMIN = ['email' => 'batest-admin@bluesoft.co.kr', 'password' => TEST_PASSWORD];
+$USER  = ['email' => 'batest-user@bluesoft.co.kr',  'password' => TEST_PASSWORD];
+
+$pass = 0; $fail = 0; $failures = [];
+
+function ok(string $what, bool $cond, string $extra = ''): void {
+    global $pass, $fail, $failures;
+    if ($cond) { $pass++; echo "  OK   $what\n"; }
+    else { $fail++; $failures[] = $what . ($extra ? " — $extra" : ''); echo "  FAIL $what" . ($extra ? " — $extra" : '') . "\n"; }
+}
+function section(string $s): void { echo "\n$s\n"; }
+
+// ---------------------------------------------------------------------
+// HTTP 클라이언트 — 사용자별로 쿠키 항아리를 따로 둔다
+// ---------------------------------------------------------------------
+final class Client
+{
+    private string $jar;
+    public ?string $csrf = null;
+
+    public function __construct(private string $base, string $tag)
+    {
+        $this->jar = sys_get_temp_dir() . "/ba_cookie_$tag.txt";
+        @unlink($this->jar);
+    }
+
+    /** @return array{status:int,body:string,json:?array} */
+    public function req(string $path, array $opt = []): array
+    {
+        $ch = curl_init($this->base . $path);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_COOKIEJAR      => $this->jar,
+            CURLOPT_COOKIEFILE     => $this->jar,
+            CURLOPT_FOLLOWLOCATION => false,
+            CURLOPT_TIMEOUT        => 20,
+        ]);
+
+        $headers = [];
+        if (!empty($opt['json'])) {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($opt['json'], JSON_UNESCAPED_UNICODE));
+            $headers[] = 'Content-Type: application/json';
+        } elseif (!empty($opt['form'])) {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $opt['form']);   // multipart
+        }
+        if (!empty($opt['csrf']) && $this->csrf !== null) {
+            $headers[] = 'X-CSRF-Token: ' . $this->csrf;
+        }
+        if ($headers) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        }
+
+        $body   = (string)curl_exec($ch);
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err    = curl_error($ch);
+        // curl_close() 는 PHP 8 에서 deprecated (CurlHandle 객체라 GC 가 정리한다)
+
+        if ($err !== '') {
+            fwrite(STDERR, "\n[연결 실패] $err\n서버가 떠 있습니까?  assign\\dev\\serve.bat\n");
+            exit(1);
+        }
+        $json = json_decode($body, true);
+
+        return ['status' => $status, 'body' => $body, 'json' => is_array($json) ? $json : null];
+    }
+
+    /** 포털 로그인 후 assign 화면에서 CSRF 토큰을 긁어 온다. */
+    public function login(array $cred): bool
+    {
+        $r = $this->req('/api/login.php', ['json' => $cred]);
+        if ($r['status'] !== 200) {
+            return false;
+        }
+        $page = $this->req('/assign/project_list.php');
+        if (preg_match('/data-csrf="([a-f0-9]{64})"/', $page['body'], $m)) {
+            $this->csrf = $m[1];
+        }
+        return $this->csrf !== null;
+    }
+}
+
+/**
+ * 시험 전용 계정을 만들고(없으면) 비밀번호를 맞춰 둔다.
+ *
+ * 로컬 개발 DB 에만 쓴다. 포털 config.php 를 그대로 읽으므로 운영 설정을
+ * 가리키고 있으면 그쪽에 계정이 생긴다 — 그래서 로컬 호스트인지 먼저 본다.
+ */
+function ensure_test_accounts(string $adminEmail, string $userEmail, string $password): void
+{
+    $portal = dirname(__DIR__, 2);
+    $cfg    = require $portal . '/config.php';
+    $d      = $cfg['db'];
+
+    if (!in_array($d['host'], ['127.0.0.1', 'localhost', '::1'], true)) {
+        fwrite(STDERR, "\n[중단] config.php 의 DB 가 로컬이 아닙니다 ({$d['host']}).\n"
+            . "시험 계정을 만들지 않았습니다. 운영 DB 에서 돌리지 마십시오.\n");
+        exit(2);
+    }
+
+    $pdo = new PDO(
+        "mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+        $d['user'], $d['pass'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+    $ins  = $pdo->prepare(
+        'INSERT INTO portal_users (name, email, pw_hash, color, created_at)
+              VALUES (?, ?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE pw_hash = VALUES(pw_hash)'
+    );
+    $ins->execute(['시험관리자', $adminEmail, $hash, '#5A667F']);
+    $ins->execute(['시험사용자', $userEmail,  $hash, '#8C7055']);
+
+    // 관리자 판정은 core/board.php 의 portal_admin 명단을 본다.
+    $pdo->prepare('INSERT INTO portal_admin (email, added_by, created_at)
+                        VALUES (?, ?, NOW())
+                   ON DUPLICATE KEY UPDATE email = email')
+        ->execute([$adminEmail, 'api_test.php']);
+
+    // 일반 사용자 쪽이 관리자 명단에 남아 있으면 권한 시험이 무의미해진다.
+    $pdo->prepare('DELETE FROM portal_admin WHERE email = ?')->execute([$userEmail]);
+}
+
+ensure_test_accounts($ADMIN['email'], $USER['email'], TEST_PASSWORD);
+
+echo "\nBlueAssign API 시험  ($BASE)\n" . str_repeat('=', 62) . "\n";
+
+$admin = new Client($BASE, 'admin');
+$guest = new Client($BASE, 'guest');
+$anon  = new Client($BASE, 'anon');
+
+// =====================================================================
+section('[A] 인증 — 로그인 없이');
+$r = $anon->req('/assign/api/project.php?act=list');
+ok('API 는 401', $r['status'] === 401, 'status=' . $r['status']);
+ok('오류 형식 {ok:false,error:{code,message}}',
+   ($r['json']['ok'] ?? null) === false && isset($r['json']['error']['code']),
+   substr($r['body'], 0, 90));
+ok('code=LOGIN_REQUIRED', ($r['json']['error']['code'] ?? '') === 'LOGIN_REQUIRED');
+
+$r = $anon->req('/assign/project_list.php');
+ok('화면은 포털로 리다이렉트', $r['status'] === 302, 'status=' . $r['status']);
+
+// =====================================================================
+section('[B] .htaccess 가 막아야 할 경로 (라우터가 같은 규칙으로 대신)');
+foreach ([
+    '/assign/inc/bootstrap.php'            => '부트스트랩',
+    '/assign/inc/repo/ProjectRepo.php'     => '리포지토리',
+    '/assign/sql/001_schema.sql'           => '스키마',
+    '/assign/dev/setup_local.php'          => '개발 스크립트',
+    '/assign/var/source/'                  => '업로드 폴더',
+    '/assign/docs/conventions.md'          => '문서',
+    '/config.php'                          => '포털 설정',
+] as $p => $label) {
+    $r = $anon->req($p);
+    ok("$label 차단 ($p)", $r['status'] === 404, 'status=' . $r['status']);
+}
+
+// =====================================================================
+section('[C] 로그인');
+ok('관리자 로그인 + CSRF 토큰 확보', $admin->login($ADMIN));
+ok('일반 사용자 로그인', $guest->login($USER));
+
+$r = $admin->req('/assign/api/project.php?act=list');
+ok('로그인 후 목록 200', $r['status'] === 200, 'status=' . $r['status']);
+ok('응답이 {ok:true,data:{...}}', ($r['json']['ok'] ?? null) === true && isset($r['json']['data']));
+ok('counts 포함', isset($r['json']['data']['counts']));
+
+// =====================================================================
+section('[D] CSRF');
+$r = $admin->req('/assign/api/project.php?act=create', ['json' => ['name' => 'CSRF 없이']]);
+ok('토큰 없으면 419', $r['status'] === 419, 'status=' . $r['status']);
+ok('code=CSRF_EXPIRED', ($r['json']['error']['code'] ?? '') === 'CSRF_EXPIRED');
+
+$r = $admin->req('/assign/api/project.php?act=list', ['json' => ['x' => 1], 'csrf' => true]);
+ok('GET 전용 act 는 POST 여도 동작', $r['status'] === 200);
+
+// =====================================================================
+section('[E] 권한');
+$r = $guest->req('/assign/api/project.php?act=create',
+                 ['json' => ['name' => '권한 없는 등록'], 'csrf' => true]);
+ok('일반 사용자 등록은 403', $r['status'] === 403, 'status=' . $r['status']);
+ok('code=FORBIDDEN', ($r['json']['error']['code'] ?? '') === 'FORBIDDEN');
+
+$r = $guest->req('/assign/api/project.php?act=list');
+ok('일반 사용자도 조회는 200', $r['status'] === 200);
+
+// =====================================================================
+section('[F] 등록 / 기간 검증');
+$r = $admin->req('/assign/api/project.php?act=create', ['json' => ['name' => ''], 'csrf' => true]);
+ok('이름 없으면 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'MISSING_PARAM');
+
+$r = $admin->req('/assign/api/project.php?act=create', ['csrf' => true, 'json' => [
+    'name' => '기간 역전', 'dev_start' => '2026-05-01', 'dev_end' => '2026-04-01']]);
+ok('기간 역전 400', $r['status'] === 400, 'status=' . $r['status']);
+ok('사람이 읽을 메시지', str_contains($r['json']['error']['message'] ?? '', '뒤집'),
+   $r['json']['error']['message'] ?? '');
+
+$r = $admin->req('/assign/api/project.php?act=create', ['csrf' => true, 'json' => [
+    'name' => 'API 시험 프로젝트', 'client' => 'Z대학교', 'track' => 'lxp',
+    'summary' => 'HTTP 레벨 시험용',
+    'dev_start' => '2026-03-01', 'dev_end' => '2026-05-31',
+    'test_start' => '2026-05-01', 'test_end' => '2026-06-30',
+    'deploy_date' => '2026-07-10']]);
+ok('정상 등록 200', $r['status'] === 200, substr($r['body'], 0, 120));
+$pid = (int)($r['json']['data']['id'] ?? 0);
+ok('id 반환', $pid > 0);
+ok('코드 자동 채번', preg_match('/^PRJ-2026-\d{3}$/', $r['json']['data']['project']['code'] ?? '') === 1,
+   $r['json']['data']['project']['code'] ?? '');
+ok('개발·테스트 겹침 허용', ($r['json']['data']['project']['test_start'] ?? '') === '2026-05-01');
+
+// =====================================================================
+section('[G] 조회 / 수정');
+$r = $admin->req('/assign/api/project.php?act=get&id=' . $pid);
+ok('상세 200', $r['status'] === 200);
+ok('sources 배열 포함', isset($r['json']['data']['sources']));
+ok('can.manage true (등록자=관리자)', ($r['json']['data']['can']['manage'] ?? null) === true);
+ok('file_path 는 노출 안 됨', !str_contains($r['body'], 'file_path'));
+
+$r = $admin->req('/assign/api/project.php?act=get&id=99999');
+ok('없는 id 404', $r['status'] === 404 && ($r['json']['error']['code'] ?? '') === 'NOT_FOUND');
+
+$r = $admin->req('/assign/api/project.php?act=update',
+    ['csrf' => true, 'json' => ['id' => $pid, 'name' => 'API 시험 프로젝트 (수정)', 'status' => 'scoping']]);
+ok('수정 200', $r['status'] === 200);
+ok('이름 반영', ($r['json']['data']['project']['name'] ?? '') === 'API 시험 프로젝트 (수정)');
+ok('상태 반영', ($r['json']['data']['project']['status'] ?? '') === 'scoping');
+
+// 회귀 — 안 보낸 칸이 지워지면 안 된다.
+// 예전에 ba_read_project_input() 이 늘 열한 칸을 돌려줘서, 이름만 고쳐도
+// 고객·트랙·기간이 전부 NULL 이 됐다. 화면은 전 칸을 보내 눈에 안 띄었다.
+$r = $admin->req('/assign/api/project.php?act=get&id=' . $pid);
+$before = $r['json']['data']['project'];
+ok('수정 전 — 고객/기간이 살아 있다',
+   $before['client'] === 'Z대학교' && $before['dev_start'] === '2026-03-01',
+   json_encode([$before['client'], $before['dev_start']], JSON_UNESCAPED_UNICODE));
+
+$admin->req('/assign/api/project.php?act=update',
+    ['csrf' => true, 'json' => ['id' => $pid, 'name' => '이름만 바꾼다']]);
+$after = $admin->req('/assign/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
+ok('이름만 보내도 고객이 안 지워진다', $after['client'] === 'Z대학교', var_export($after['client'], true));
+ok('이름만 보내도 트랙이 안 지워진다', $after['track'] === 'lxp', var_export($after['track'], true));
+ok('이름만 보내도 개발기간이 안 지워진다',
+   $after['dev_start'] === '2026-03-01' && $after['dev_end'] === '2026-05-31',
+   $after['dev_start'] . '~' . $after['dev_end']);
+ok('이름만 보내도 배포일이 안 지워진다', $after['deploy_date'] === '2026-07-10',
+   var_export($after['deploy_date'], true));
+ok('보낸 칸은 바뀐다', $after['name'] === '이름만 바꾼다');
+
+// 빈 문자열을 **명시적으로** 보내면 지워지는 게 맞다(안 보낸 것과 다르다).
+$admin->req('/assign/api/project.php?act=update',
+    ['csrf' => true, 'json' => ['id' => $pid, 'client' => '']]);
+$after2 = $admin->req('/assign/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
+ok('빈 값을 보내면 지워진다', $after2['client'] === null, var_export($after2['client'], true));
+ok('그래도 다른 칸은 그대로', $after2['track'] === 'lxp');
+
+// 뒤 절(J)이 이 프로젝트의 이름·고객으로 검색한다. 바꿔 놓은 값을 되돌린다.
+// 시험끼리 상태를 물려주면 엉뚱한 곳이 빨개진다 — 실제로 한 번 그랬다.
+$admin->req('/assign/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'name' => 'API 시험 프로젝트 (수정)', 'client' => 'Z대학교']]);
+$restored = $admin->req('/assign/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
+ok('상태 되돌리기', $restored['client'] === 'Z대학교'
+   && $restored['name'] === 'API 시험 프로젝트 (수정)'
+   && $restored['dev_start'] === '2026-03-01');
+
+// PM 권한: 이 프로젝트의 owner 는 관리자다. 일반 사용자는 PM 이 아니다.
+$r = $guest->req('/assign/api/project.php?act=update',
+    ['csrf' => true, 'json' => ['id' => $pid, 'name' => '남의 프로젝트 수정']]);
+ok('PM 아닌 사람의 수정은 403', $r['status'] === 403, 'status=' . $r['status']);
+
+// =====================================================================
+section('[H] 출처 — 파일 업로드 (multipart)');
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 시험용 파일에 웹셸 문자열(<?php system(...))을 쓰지 마세요.        │
+   │                                                                  │
+   │ 윈도 디펜더가 그 내용을 탐지해 **파일을 만들자마자 지워 버립니다.** │
+   │ 그러면 curl 이 읽을 파일이 없어 errno 42(aborted by callback)로   │
+   │ 끊기고, 마치 업로드 기능이 깨진 것처럼 보입니다. 실제로 그렇게     │
+   │ 한 번 헤맸습니다.                                                 │
+   │                                                                  │
+   │ 확인하려는 것은 "내용이 확장자와 다르면 거부하는가" 이므로         │
+   │ 평범한 텍스트로도 똑같이 증명됩니다.                              │
+   └──────────────────────────────────────────────────────────────────┘ */
+$tmp = sys_get_temp_dir() . '/ba_api_up_' . bin2hex(random_bytes(4));
+@mkdir($tmp, 0777, true);
+
+$png = "$tmp/시안.png";
+file_put_contents($png, base64_decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
+
+// 확장자로 먼저 걸리므로 내용은 아무래도 상관없다.
+$evil = "$tmp/notallowed.php";
+file_put_contents($evil, "평범한 텍스트입니다. 확장자만으로 걸려야 합니다.");
+
+// 확장자는 png 인데 내용은 텍스트 → MIME 재검증에서 걸려야 한다.
+$fakePng = "$tmp/fake.png";
+file_put_contents($fakePng, '이것은 PNG 가 아니라 그냥 글자입니다.');
+
+/** 업로드 직전에 파일이 실제로 있는지 본다. 없으면 시험 환경 문제다. */
+function fixture(string $path): CURLFile
+{
+    clearstatcache(true, $path);
+    if (!is_file($path) || @file_get_contents($path) === false) {
+        fwrite(STDERR, "\n[시험 환경 문제] 시험용 파일을 읽지 못했습니다: $path\n"
+            . "백신이 지웠을 수 있습니다. 제품 결함이 아닙니다.\n");
+        exit(2);
+    }
+    return new CURLFile($path, 'image/png', basename($path));
+}
+
+$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+    'project_id' => $pid, 'source_type' => 'file',
+    'files[]' => fixture($png),
+]]);
+ok('PNG 업로드 200', $r['status'] === 200, substr($r['body'], 0, 120));
+ok('1건 저장', count($r['json']['data']['saved'] ?? []) === 1);
+ok('parse_status=pending', ($r['json']['data']['saved'][0]['parse_status'] ?? '') === 'pending');
+ok('원본 파일명 보존', ($r['json']['data']['saved'][0]['title'] ?? '') === '시안.png');
+$srcId = (int)($r['json']['data']['sources'][0]['id'] ?? 0);
+
+$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+    'project_id' => $pid, 'source_type' => 'file',
+    'files[]' => fixture($evil),
+]]);
+ok('php 업로드 거부', count($r['json']['data']['failed'] ?? []) === 1, substr($r['body'], 0, 140));
+
+$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+    'project_id' => $pid, 'source_type' => 'file',
+    'files[]' => fixture($fakePng),
+]]);
+ok('확장자 위장 거부', count($r['json']['data']['failed'] ?? []) === 1);
+ok('거부 사유가 내용 불일치',
+   str_contains($r['json']['data']['failed'][0]['message'] ?? '', '맞지 않'),
+   $r['json']['data']['failed'][0]['message'] ?? '');
+
+// 부분 성공
+$png2 = "$tmp/b.png"; copy($png, $png2);
+$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+    'project_id' => $pid, 'source_type' => 'file',
+    'files[0]' => fixture($png2),
+    'files[1]' => fixture($evil),
+]]);
+ok('부분 성공 — 1건 저장 / 1건 실패',
+   count($r['json']['data']['saved'] ?? []) === 1 && count($r['json']['data']['failed'] ?? []) === 1,
+   substr($r['body'], 0, 160));
+
+// 업로드된 파일에 웹으로 직접 접근 불가
+$r = $anon->req('/assign/var/source/' . date('Y') . '/' . $pid . '/');
+ok('업로드 경로 직접 접근 404', $r['status'] === 404);
+
+// =====================================================================
+section('[I] 출처 — 링크 / 직접 입력');
+$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'link',
+    'url' => 'https://www.figma.com/file/abc/Design']]);
+ok('피그마 링크 200', $r['status'] === 200);
+ok('kind=figma', ($r['json']['data']['saved'][0]['kind'] ?? '') === 'figma');
+
+$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'link', 'url' => 'javascript:alert(1)']]);
+ok('javascript: 거부 400', $r['status'] === 400, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'text',
+    'text' => "첫 줄이 제목\n본문 내용입니다"]]);
+ok('직접 입력 200', $r['status'] === 200);
+ok('첫 줄을 제목으로', ($r['json']['data']['saved'][0]['title'] ?? '') === '첫 줄이 제목');
+ok('parse_status=ok', ($r['json']['data']['saved'][0]['parse_status'] ?? '') === 'ok');
+
+$r = $guest->req('/assign/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'text', 'text' => '권한 없음']]);
+ok('PM 아닌 사람의 출처 등록 403', $r['status'] === 403);
+
+// =====================================================================
+section('[J] 목록 필터');
+$r = $admin->req('/assign/api/project.php?act=list&keyword=' . rawurlencode('Z대학교'));
+ok('키워드 검색', ($r['json']['data']['total'] ?? 0) >= 1);
+
+$r = $admin->req('/assign/api/project.php?act=list&keyword=' . rawurlencode('%'));
+ok('% 가 전건 조회를 만들지 않음', ($r['json']['data']['total'] ?? -1) === 0,
+   '총 ' . ($r['json']['data']['total'] ?? '?'));
+
+$r = $admin->req('/assign/api/project.php?act=list&sort=' . rawurlencode('x; DROP TABLE ba_project'));
+ok('정렬 주입 무시', $r['status'] === 200 && ($r['json']['data']['total'] ?? 0) > 0);
+
+$r = $admin->req('/assign/api/project.php?act=list&from=2026-04-01&to=2026-04-30');
+$names = array_column($r['json']['data']['rows'] ?? [], 'name');
+ok('기간 겹침 — 3~5월 건이 4월 조회에 잡힘',
+   in_array('API 시험 프로젝트 (수정)', $names, true), implode(' / ', $names));
+
+$r = $admin->req('/assign/api/project.php?act=list&size=2&page=1');
+ok('페이징 size=2', count($r['json']['data']['rows'] ?? []) <= 2);
+
+$r = $admin->req('/assign/api/project.php?act=list&mine=1');
+ok('내 프로젝트만', ($r['json']['data']['total'] ?? 0) >= 1);
+
+// =====================================================================
+section('[K] 삭제');
+$r = $admin->req('/assign/api/project.php?act=delete_source',
+                 ['csrf' => true, 'json' => ['source_id' => $srcId]]);
+ok('출처 삭제 200', $r['status'] === 200);
+
+$r = $admin->req('/assign/api/project.php?act=delete',
+                 ['csrf' => true, 'json' => ['id' => $pid, 'confirm' => '엉뚱한값']]);
+ok('코드 확인 틀리면 400', $r['status'] === 400 &&
+   ($r['json']['error']['code'] ?? '') === 'CONFIRM_REQUIRED', 'status=' . $r['status']);
+
+$code = $admin->req('/assign/api/project.php?act=get&id=' . $pid)['json']['data']['project']['code'];
+$r = $admin->req('/assign/api/project.php?act=delete',
+                 ['csrf' => true, 'json' => ['id' => $pid, 'confirm' => $code, 'reason' => 'API 시험']]);
+ok('코드 맞으면 삭제', $r['status'] === 200, substr($r['body'], 0, 120));
+
+$r = $admin->req('/assign/api/project.php?act=get&id=' . $pid);
+ok('삭제 후 조회 — 관리자는 보임', $r['status'] === 200);
+ok('is_deleted=true', ($r['json']['data']['project']['is_deleted'] ?? null) === true);
+
+$r = $guest->req('/assign/api/project.php?act=get&id=' . $pid);
+ok('삭제 후 일반 사용자는 404', $r['status'] === 404);
+
+$r = $admin->req('/assign/api/project.php?act=list&with_deleted=1');
+$del = array_filter($r['json']['data']['rows'] ?? [], fn($x) => !empty($x['is_deleted']));
+ok('with_deleted 로 보임 (관리자)', count($del) >= 1);
+
+$r = $guest->req('/assign/api/project.php?act=list&with_deleted=1');
+$del = array_filter($r['json']['data']['rows'] ?? [], fn($x) => !empty($x['is_deleted']));
+ok('일반 사용자는 with_deleted 무시', count($del) === 0);
+
+$r = $admin->req('/assign/api/project.php?act=restore', ['csrf' => true, 'json' => ['id' => $pid]]);
+ok('복구 200', $r['status'] === 200);
+
+// =====================================================================
+section('[L] 잘못된 요청');
+$r = $admin->req('/assign/api/project.php?act=nonsense');
+ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
+ok('가능한 act 를 알려 줌', str_contains($r['json']['error']['message'] ?? '', 'create'));
+
+$r = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid);
+ok('아직 안 만든 기능도 형식은 지킴(200 + data)',
+   $r['status'] === 200 && isset($r['json']['data']));
+
+
+// =====================================================================
+section('[M] 후보 리스트 (명세서 §5 · §7.1 Step2)');
+
+// ┌────────────────────────────────────────────────────────────────┐
+// │ 후보 목록은 **배정을 짜는 사람만** 부를 수 있다.                 │
+// │                                                                │
+// │ 한때 로그인만 보고 내주었다. 그러면 profile.php 가 403 을 내는  │
+// │ 같은 점수를 이쪽이 12명분 한 번에 내주게 되고, 정렬 한 번이면   │
+// │ CLAUDE.md 가 금지한 전사 랭킹이 된다. 아래 단언이 그 문을 잠근다.│
+// └────────────────────────────────────────────────────────────────┘
+$r = $guest->req('/assign/api/candidate.php?act=list&project_id=' . $pid);
+ok('배정 권한이 없으면 후보 목록 403', $r['status'] === 403, 'status=' . $r['status']);
+ok('code=FORBIDDEN', ($r['json']['error']['code'] ?? '') === 'FORBIDDEN');
+ok('점수가 한 건도 새지 않는다', empty($r['json']['data']['rows']),
+   substr($r['body'], 0, 120));
+
+$r = $guest->req('/assign/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=1');
+ok('후보 상세도 403 (계열별 점수가 여기로 샜었다)', $r['status'] === 403,
+   'status=' . $r['status']);
+
+// 화면도 같은 선을 쓴다. API 만 막고 화면을 열어 두면 빈 표가 뜨고,
+// 화면만 막으면 API 를 직접 불러 뚫린다.
+$r = $guest->req('/assign/project_view.php?id=' . $pid);
+ok('화면의 2단계 탭이 잠긴다',
+   str_contains($r['body'], 'data-pv-tab="candidate"')
+   && str_contains($r['body'], 'disabled title="배정을 맡은'),
+   '탭이 열려 있다');
+ok('왜 못 보는지 알려 준다',
+   str_contains($r['body'], '배정을 맡은 PM 과 관리자만 볼 수 있습니다'));
+ok('본인 프로파일로 가는 길을 함께 준다',
+   str_contains($r['body'], 'member_profile.php'));
+
+// 프로젝트 번호 없이는 후보를 낼 수 없다 — 전역 순위를 만들지 않기 위한 방어다.
+$r = $admin->req('/assign/api/candidate.php?act=list');
+ok('project_id 없으면 400', $r['status'] === 400, 'status=' . $r['status']);
+ok('code=MISSING_PARAM', ($r['json']['error']['code'] ?? '') === 'MISSING_PARAM');
+
+$r = $admin->req('/assign/api/candidate.php?act=list&project_id=99999999');
+ok('없는 프로젝트 404', $r['status'] === 404);
+
+$r = $anon->req('/assign/api/candidate.php?act=list&project_id=' . $pid);
+ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
+
+// 기간이 비면 가용도를 낼 수 없다. 0% 로 때우지 않고 거절해야 한다.
+$admin->req('/assign/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'dev_start' => '', 'dev_end' => '',
+    'test_start' => '', 'test_end' => '', 'deploy_date' => '']]);
+$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid);
+ok('기간 없으면 400 NO_PERIOD',
+   $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'NO_PERIOD',
+   'status=' . $r['status'] . ' ' . ($r['json']['error']['code'] ?? ''));
+
+$admin->req('/assign/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'dev_start' => '2026-10-01', 'dev_end' => '2026-12-18']]);
+
+$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid);
+ok('기간 넣으면 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
+$d = $r['json']['data'] ?? [];
+ok('rows 반환', isset($d['rows']) && is_array($d['rows']) && count($d['rows']) > 0,
+   'total=' . ($d['total'] ?? '?'));
+ok('전역 순위가 아님을 응답이 밝힘', ($d['scope']['is_global_ranking'] ?? null) === false);
+ok('scope 에 기간이 담김', ($d['scope']['period']['from'] ?? '') === '2026-10-01');
+
+$row = $d['rows'][0] ?? [];
+
+// --- 여기가 이 화면의 핵심 규칙이다 --------------------------------
+// 확정 점유와 추정 점유를 하나의 숫자로 합쳐 내보내면 안 된다.
+ok('가용도에 확정/추정이 따로 들어 있다',
+   array_key_exists('confirmed_pct', $row['availability'] ?? [])
+   && array_key_exists('inferred_pct', $row['availability'] ?? []));
+ok('합친 점유 필드를 내보내지 않는다',
+   !array_key_exists('load_pct', $row['availability'] ?? [])
+   && !array_key_exists('total_load', $row['availability'] ?? []));
+ok('추정에는 신뢰도가 붙는다', array_key_exists('confidence', $row['availability'] ?? []));
+
+// 합이 언제나 100 인 것은 아니다. 두 가지 때문이다 —
+//   · 반일 근무자는 기준이 50 이다(capacity_pct)
+//   · 점유가 기준을 넘으면 가용은 0 에서 멈춘다(확정+추정 > 기준)
+// 그래서 "합 100" 이 아니라 **가용 = max(0, 기준 - 확정 - 추정)** 을 본다.
+$sumOk = true; $negOk = true; $capOk = true; $bad = '';
+foreach ($d['rows'] as $x) {
+    $a = $x['availability'] ?? null;
+    if (!$a) { continue; }
+    if (!array_key_exists('capacity_pct', $a)) { $capOk = false; continue; }
+    $expect = max(0, $a['capacity_pct'] - $a['confirmed_pct'] - $a['inferred_pct']);
+    if (abs($a['available_pct'] - $expect) > 1) {
+        $sumOk = false;
+        $bad = $x['emp_name'] . ' ' . json_encode($a);
+    }
+    if ($a['available_pct'] < 0 || $a['confirmed_pct'] < 0 || $a['inferred_pct'] < 0) { $negOk = false; }
+}
+ok('기준 근무량을 함께 준다', $capOk);
+ok('가용 = max(0, 기준 - 확정 - 추정)', $sumOk, $bad);
+ok('음수 가용도 없음', $negOk);
+
+// 표본 부족은 '낮은 점수' 가 아니다 — 0 점으로 깔면 영원히 배정되지 않는다.
+$nullFit = array_filter($d['rows'], fn($x) => $x['fit_score'] === null);
+$zeroFit = array_filter($d['rows'], fn($x) => $x['fit_score'] === 0.0);
+ok('판단 보류는 null 이지 0 이 아니다', count($zeroFit) === 0 || count($nullFit) > 0,
+   'null=' . count($nullFit) . ' zero=' . count($zeroFit));
+
+// 정렬 — 걸러진 사람은 뒤, 점수 없는 사람은 그 앞. 지우지는 않는다.
+$seenOut = false; $orderOk = true; $seenNull = false; $nullOrderOk = true;
+foreach ($d['rows'] as $x) {
+    if ($x['filtered_out']) { $seenOut = true; }
+    elseif ($seenOut) { $orderOk = false; }
+    if (!$x['filtered_out']) {
+        if ($x['fit_score'] === null) { $seenNull = true; }
+        elseif ($seenNull) { $nullOrderOk = false; }
+    }
+}
+ok('걸러진 후보는 뒤로 간다', $orderOk);
+ok('점수 없는 후보는 0 점이 아니라 뒤로 간다', $nullOrderOk);
+
+$total = $d['total'];
+$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid . '&min_availability=100');
+$d2 = $r['json']['data'];
+ok('조건을 올려도 명단에서 지우지 않는다', $d2['total'] === $total,
+   "{$d2['total']} vs $total");
+ok('대신 filtered_out 으로 표시', count(array_filter($d2['rows'], fn($x) => $x['filtered_out'])) > 0);
+
+$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid . '&min_availability=9999');
+ok('범위를 벗어난 조건도 안전하게 처리', $r['status'] === 200);
+
+// 분야를 고르면 그 분야가 속한 '계열' 로 본다 (분야 단위는 표본이 안 찬다)
+$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid
+                 . '&domains[]=1&domains[]=2');
+$d3 = $r['json']['data'];
+ok('분야 선택 200', $r['status'] === 200);
+ok('scope 에 계열이 잡힌다', count($d3['scope']['categories'] ?? []) > 0,
+   json_encode($d3['scope']['categories'] ?? [], JSON_UNESCAPED_UNICODE));
+ok('계열로 묶인다 (분야 2개 → activity 1계열)',
+   count($d3['scope']['categories']) === 1
+   && ($d3['scope']['categories'][0]['code'] ?? '') === 'activity');
+$withFit = array_filter($d3['rows'], fn($x) => $x['domain_fit'] !== null);
+ok('분야 매치도가 붙는다', count($withFit) > 0, 'n=' . count($withFit));
+
+// 점수를 내지 않는 계열(기획)은 조건에서 빠진다
+$r = $admin->req('/assign/api/candidate.php?act=list&project_id=' . $pid . '&domains[]=21');
+ok('기획 분야는 계열 조건이 되지 않는다',
+   count($r['json']['data']['scope']['categories'] ?? []) === 0);
+
+// --- 근거 드로어 ----------------------------------------------------
+$mid = (int)($d['rows'][0]['member_id'] ?? 0);
+$r = $admin->req('/assign/api/candidate.php?act=detail&project_id=' . $pid);
+ok('member_id 없으면 400', $r['status'] === 400);
+
+$r = $admin->req('/assign/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=99999999');
+ok('없는 구성원 404', $r['status'] === 404);
+
+$r = $admin->req('/assign/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=' . $mid);
+ok('근거 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
+$dt = $r['json']['data'] ?? [];
+ok('확정 내역과 추정 내역이 따로 담긴다',
+   array_key_exists('confirmed_breakdown', $dt) && array_key_exists('inferred_items', $dt));
+ok('영업일 수가 담긴다', ($dt['period']['workdays'] ?? 0) > 0, 'workdays=' . ($dt['period']['workdays'] ?? '?'));
+ok('계열별 점수가 담긴다', is_array($dt['categories'] ?? null));
+
+// 추정 건은 'load', 확정 건은 'load_ratio' 로 이름이 다르다. 일부러 그렇다 —
+// 확정은 사람이 정한 배정률이고 추정은 난이도로 어림한 값이라 같은 종류의
+// 숫자가 아니다. 이름이 같으면 화면이나 뒷사람이 둘을 더하게 된다.
+$infOk = true;
+foreach ($dt['inferred_items'] ?? [] as $it) {
+    if (!array_key_exists('load', $it) || array_key_exists('load_ratio', $it)) { $infOk = false; }
+}
+ok('추정 건마다 계수를 밝히되 확정과 다른 이름을 쓴다', $infOk);
+$cfOk = true;
+foreach ($dt['confirmed_breakdown'] ?? [] as $it) {
+    if (($it['source'] ?? '') !== 'confirmed') { $cfOk = false; }
+}
+ok('확정 내역에 추정이 섞이지 않는다', $cfOk);
+
+$r = $anon->req('/assign/api/candidate.php?act=detail&project_id=' . $pid . '&member_id=' . $mid);
+ok('근거도 로그인 없이는 401', $r['status'] === 401);
+
+$r = $admin->req('/assign/api/candidate.php?act=nope&project_id=' . $pid);
+ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
+
+
+// =====================================================================
+section('[N] WBS (명세서 §7.1 Step3 앞단)');
+
+$r = $anon->req('/assign/api/task.php?act=tree&project_id=' . $pid);
+ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/task.php?act=tree');
+ok('project_id 없으면 400', $r['status'] === 400);
+$r = $admin->req('/assign/api/task.php?act=tree&project_id=99999999');
+ok('없는 프로젝트 404', $r['status'] === 404);
+
+$r = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid);
+ok('빈 트리도 200', $r['status'] === 200 && is_array($r['json']['data']['tree'] ?? null));
+$rev = $r['json']['data']['revision'] ?? '';
+ok('revision 을 내려 준다', strlen($rev) === 16, $rev);
+ok('편집·확정 권한을 같이 알려 준다',
+   isset($r['json']['data']['can_edit']) && isset($r['json']['data']['can_confirm']));
+
+// --- 저장 -----------------------------------------------------------
+$wbsTree = [
+    ['title' => '분석', 'children' => [
+        ['title' => '현행 조사', 'est_md' => 3, 'difficulty' => 2],
+        ['title' => '인터뷰', 'children' => [
+            ['title' => '교수 인터뷰', 'est_md' => 1.5, 'domain_ids' => [1, 5]],
+        ]],
+    ]],
+    ['title' => '개발', 'children' => [
+        ['title' => '출석부 개선', 'est_md' => 8, 'difficulty' => 4,
+         'plan_start' => '2026-07-06', 'plan_end' => '2026-07-31'],
+    ]],
+];
+
+$r = $admin->req('/assign/api/task.php?act=save_tree',
+                 ['json' => ['project_id' => $pid, 'tree' => $wbsTree]]);
+ok('CSRF 없으면 419', $r['status'] === 419, 'status=' . $r['status']);
+
+$r = $guest->req('/assign/api/task.php?act=save_tree',
+                 ['csrf' => true, 'json' => ['project_id' => $pid, 'tree' => $wbsTree]]);
+ok('PM 아닌 사람은 403', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/task.php?act=save_tree',
+                 ['csrf' => true, 'json' => ['project_id' => $pid, 'tree' => $wbsTree, 'revision' => $rev]]);
+ok('저장 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 140));
+$d = $r['json']['data'];
+ok('6건 저장', ($d['created'] ?? 0) === 6, json_encode($d['created'] ?? null));
+ok('저장 응답이 트리를 같이 돌려준다', count($d['tree'] ?? []) === 2);
+ok('번호는 서버가 매긴다', ($d['tree'][0]['wbs_no'] ?? '') === '1'
+   && ($d['tree'][0]['children'][0]['wbs_no'] ?? '') === '1.1',
+   json_encode(array_column($d['tree'], 'wbs_no')));
+ok('새 revision 을 돌려준다', ($d['revision'] ?? '') !== $rev);
+$rev = $d['revision'];
+
+$counts = $d['counts'];
+ok('아직 확정 0건', $counts['confirmed'] === 0);
+ok('배정 가능 0건', $counts['assignable'] === 0, json_encode($counts));
+ok('총 공수 12.5', abs($counts['est_md_total'] - 12.5) < 0.01, (string)$counts['est_md_total']);
+
+// --- 확정 -----------------------------------------------------------
+$taskIds = [];
+$walk = function (array $ns) use (&$walk, &$taskIds): void {
+    foreach ($ns as $n) {
+        if (!$n['children']) { $taskIds[] = $n['id']; }
+        $walk($n['children']);
+    }
+};
+$walk($d['tree']);
+ok('말단 3건', count($taskIds) === 3, (string)count($taskIds));
+
+$r = $guest->req('/assign/api/task.php?act=confirm',
+                 ['csrf' => true, 'json' => ['task_ids' => $taskIds]]);
+ok('확정도 PM 아니면 403', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/task.php?act=confirm', ['csrf' => true, 'json' => ['task_ids' => []]]);
+ok('대상 없으면 400', $r['status'] === 400);
+
+$r = $admin->req('/assign/api/task.php?act=confirm',
+                 ['csrf' => true, 'json' => ['task_ids' => $taskIds]]);
+ok('확정 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
+ok('배정 가능 3건이 됨', ($r['json']['data']['counts']['assignable'] ?? 0) === 3,
+   json_encode($r['json']['data']['counts'] ?? null));
+$rev = $r['json']['data']['revision'];
+
+// 이 화면의 핵심 규칙 — 트리 저장으로 확정이 딸려 바뀌면 안 된다.
+$strip = function (array $ns) use (&$strip): array {
+    return array_map(static fn($n) => [
+        'id' => $n['id'], 'title' => $n['title'],
+        'confirmed' => false, 'status' => 'done',     // 일부러 끼워 넣는다
+        'children' => $strip($n['children']),
+    ], $ns);
+};
+$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'tree' => $strip($cur['tree']), 'revision' => $cur['revision']]]);
+ok('save_tree 에 confirmed 를 끼워 보내도 무시된다',
+   ($r['json']['data']['counts']['confirmed'] ?? -1) === 3,
+   json_encode($r['json']['data']['counts'] ?? null));
+ok('status 도 끼워 넣기로 못 바꾼다',
+   ($r['json']['data']['counts']['assignable'] ?? -1) === 3);
+$rev = $r['json']['data']['revision'];
+
+// --- 낙관적 잠금 -----------------------------------------------------
+$stale = $rev;
+$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$mod = $cur['tree'];
+$mod[0]['title'] = '분석 (먼저 저장)';
+$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'tree' => $mod, 'revision' => $cur['revision']]]);
+ok('먼저 저장한 쪽은 통과', $r['status'] === 200);
+
+$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'tree' => $mod, 'revision' => $stale]]);
+ok('낡은 revision 은 거절', $r['status'] === 400
+   && str_contains($r['json']['error']['message'] ?? '', '먼저 저장'),
+   'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
+
+$rev = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data']['revision'];
+
+// --- 검증 -----------------------------------------------------------
+$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'revision' => $rev,
+    'tree' => [['title' => 'A', 'children' => [['title' => 'B', 'children' => [
+        ['title' => 'C', 'children' => [['title' => 'D']]]]]]]]]]);
+ok('4단계는 400', $r['status'] === 400 && str_contains($r['json']['error']['message'] ?? '', '3단계'),
+   substr($r['body'], 0, 120));
+
+$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'revision' => $rev, 'tree' => [['title' => '   ']]]]);
+ok('빈 제목은 400', $r['status'] === 400);
+
+$after = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+ok('거절된 저장이 트리를 건드리지 않았다', ($after['counts']['total'] ?? 0) === 6,
+   json_encode($after['counts'] ?? null));
+
+// --- 한 건 수정 ------------------------------------------------------
+$one = $taskIds[0];
+$r = $admin->req('/assign/api/task.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $one, 'est_md' => 5.5, 'difficulty' => 3]]);
+ok('한 건 수정 200', $r['status'] === 200, substr($r['body'], 0, 120));
+ok('값이 바뀜', abs(($r['json']['data']['task']['est_md'] ?? 0) - 5.5) < 0.01);
+ok('확정은 그대로', ($r['json']['data']['task']['confirmed'] ?? null) === true);
+
+$r = $admin->req('/assign/api/task.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $one, 'confirmed' => false]]);
+ok('update 로는 확정을 못 바꾼다 (바꿀 내용 없음)', $r['status'] === 400,
+   'status=' . $r['status']);
+
+$r = $guest->req('/assign/api/task.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $one, 'title' => '남의 태스크']]);
+ok('PM 아니면 수정 403', $r['status'] === 403);
+
+// --- 이동 ------------------------------------------------------------
+$r = $admin->req('/assign/api/task.php?act=move', ['csrf' => true, 'json' => ['id' => $one]]);
+ok('parent_id 를 빼면 400', $r['status'] === 400
+   && str_contains($r['json']['error']['message'] ?? '', 'parent_id'),
+   substr($r['body'], 0, 120));
+
+$cur  = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$last = end($cur['tree'])['id'];
+$r = $admin->req('/assign/api/task.php?act=move',
+                 ['csrf' => true, 'json' => ['id' => $last, 'parent_id' => null, 'seq' => 0]]);
+ok('최상위로 이동 200', $r['status'] === 200, substr($r['body'], 0, 120));
+ok('맨 앞으로 갔고 번호가 다시 매겨짐',
+   ($r['json']['data']['tree'][0]['id'] ?? 0) === $last
+   && ($r['json']['data']['tree'][0]['wbs_no'] ?? '') === '1');
+
+// --- 확정 해제 / 삭제 -------------------------------------------------
+$r = $admin->req('/assign/api/task.php?act=unconfirm',
+                 ['csrf' => true, 'json' => ['task_ids' => [$one]]]);
+ok('확정 해제 200', $r['status'] === 200);
+ok('배정 가능이 2건으로 줄어듦', ($r['json']['data']['counts']['assignable'] ?? 0) === 2,
+   json_encode($r['json']['data']['counts'] ?? null));
+
+$r = $guest->req('/assign/api/task.php?act=delete', ['csrf' => true, 'json' => ['id' => $one]]);
+ok('PM 아니면 삭제 403', $r['status'] === 403);
+
+$r = $admin->req('/assign/api/task.php?act=delete', ['csrf' => true, 'json' => ['id' => $one]]);
+ok('삭제 200', $r['status'] === 200, substr($r['body'], 0, 120));
+
+// --- 직접 입력한 글도 도출 입력이다 ---------------------------------------
+// 앞 [I] 에서 넣은 text 출처가 parse_status='ok' 로 남아 있다. 파일만
+// 입력인 것이 아니다 — 회의 중에 적어 넣은 글도 그대로 근거가 된다.
+$r = $admin->req('/assign/api/task.php?act=extract',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('직접 입력한 글에서도 도출된다', $r['status'] === 200, 'status=' . $r['status']);
+ok('초안이 나온다', !empty($r['json']['data']['tree']));
+$beforeX = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+                 ['json']['data']['counts']['total'];
+$admin->req('/assign/api/task.php?act=extract', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('도출은 저장하지 않는다',
+   $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+         ['json']['data']['counts']['total'] === $beforeX,
+   '도출 전 ' . $beforeX . '건');
+
+$r = $admin->req('/assign/api/task.php?act=nope&project_id=' . $pid);
+ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
+
+// 뒷정리 — 이 프로젝트는 뒤에서 삭제 시험에 쓰이므로 태스크를 비워 둔다.
+$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'tree' => [], 'revision' => $cur['revision']]]);
+
+
+// =====================================================================
+section('[O] 문서 분석 → WBS 도출');
+
+// 시험용 문서를 이 프로젝트에 붙인다. 파일은 dev/fixtures 의 실제 문서다.
+$fixDir = __DIR__ . '/fixtures';
+if (!is_file("$fixDir/sample.xlsx")) {
+    echo "  (건너뜀) dev/fixtures 에 시험 문서가 없습니다.\n"
+       . "  만들려면: python assign/dev/fixtures/make_fixtures.py assign/dev/fixtures\n";
+} else {
+    $pdoX = (function () {
+        $cfg = require dirname(__DIR__, 2) . '/config.php';
+        $d = $cfg['db'];
+        return new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+            $d['user'], $d['pass'],
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+    })();
+    $pdoX->prepare('DELETE FROM ba_project_source WHERE project_id = ?')->execute([$pid]);
+    $pdoX->prepare('DELETE FROM ba_task WHERE project_id = ?')->execute([$pid]);
+    $insX = $pdoX->prepare(
+        'INSERT INTO ba_project_source (project_id, kind, title, file_path, parse_status, uploaded_by)
+         VALUES (?,?,?,?, "pending", "api_test")'
+    );
+    foreach ([['xlsx', '요구사항 정의서', 'sample.xlsx'],
+              ['pptx', '킥오프 자료',     'sample.pptx'],
+              ['docx', '회의록',          'sample.docx'],
+              ['xlsx', '깨진 파일',       'broken.xlsx']] as [$k, $t, $fn]) {
+        $insX->execute([$pid, $k, $t, "$fixDir/$fn"]);
+    }
+    $pdoX->prepare('INSERT INTO ba_project_source (project_id, kind, title, url, parse_status, uploaded_by)
+                    VALUES (?, "figma", "화면 시안", "https://figma.com/x", "pending", "api_test")')
+         ->execute([$pid]);
+
+    // --- 권한 ---
+    $r = $guest->req('/assign/api/task.php?act=parse',
+                     ['csrf' => true, 'json' => ['project_id' => $pid]]);
+    ok('문서 분석은 PM 아니면 403', $r['status'] === 403, 'status=' . $r['status']);
+
+    $r = $admin->req('/assign/api/task.php?act=parse', ['json' => ['project_id' => $pid]]);
+    ok('CSRF 없으면 419', $r['status'] === 419);
+
+    // --- 분석 ---
+    $r = $admin->req('/assign/api/task.php?act=parse',
+                     ['csrf' => true, 'json' => ['project_id' => $pid]]);
+    ok('문서 분석 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 140));
+    $sum = $r['json']['data']['summary'] ?? [];
+    ok('3건 읽음', ($sum['ok'] ?? 0) === 3, json_encode($sum));
+
+    // 한 파일이 깨져도 나머지가 계속 가야 한다. 이게 이 단계의 핵심이다.
+    ok('깨진 파일 1건만 실패', ($sum['fail'] ?? 0) === 1, json_encode($sum));
+    ok('링크는 실패가 아니라 건너뜀', ($sum['skip'] ?? 0) === 1, json_encode($sum));
+
+    $bad = null;
+    foreach ($r['json']['data']['sources'] as $s) {
+        if ($s['status'] === 'fail') { $bad = $s; }
+    }
+    ok('실패 사유를 남긴다', !empty($bad['error']), json_encode($bad, JSON_UNESCAPED_UNICODE));
+    ok('읽은 문서는 글자 수를 알려 준다',
+       count(array_filter($r['json']['data']['sources'],
+             fn($x) => $x['status'] === 'ok' && $x['chars'] > 0)) === 3);
+
+    $r = $admin->req('/assign/api/task.php?act=parse',
+                     ['csrf' => true, 'json' => ['project_id' => $pid]]);
+    ok('두 번째는 대기 중인 것만 본다', ($r['json']['data']['summary']['touched'] ?? -1) === 0,
+       json_encode($r['json']['data']['summary'] ?? null));
+
+    $r = $admin->req('/assign/api/task.php?act=parse',
+                     ['csrf' => true, 'json' => ['project_id' => $pid, 'all' => 1]]);
+    ok('all=1 이면 다시 읽는다', ($r['json']['data']['summary']['touched'] ?? 0) === 5,
+       json_encode($r['json']['data']['summary'] ?? null));
+
+    // --- 도출 ---
+    $r = $guest->req('/assign/api/task.php?act=extract',
+                     ['csrf' => true, 'json' => ['project_id' => $pid]]);
+    ok('도출도 PM 아니면 403', $r['status'] === 403);
+
+    $r = $admin->req('/assign/api/task.php?act=extract',
+                     ['csrf' => true, 'json' => ['project_id' => $pid]]);
+    ok('도출 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 160));
+    $dx = $r['json']['data'];
+    ok('초안 트리가 온다', !empty($dx['tree']));
+    ok('저장하지 않는다',
+       $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+             ['json']['data']['counts']['total'] === 0,
+       '도출만으로 태스크가 생기면 안 된다');
+
+    $flatX = [];
+    $walkX = function (array $ns) use (&$walkX, &$flatX): void {
+        foreach ($ns as $n) { $flatX[] = $n; $walkX($n['children']); }
+    };
+    $walkX($dx['tree']);
+    ok('전부 origin=auto',
+       count(array_filter($flatX, fn($n) => $n['origin'] === 'auto')) === count($flatX));
+    ok('전부 미확정',
+       count(array_filter($flatX, fn($n) => !empty($n['confirmed']))) === 0);
+    ok('출처가 붙어 있다',
+       count(array_filter($flatX, fn($n) => !empty($n['source_ref']))) === count($flatX),
+       json_encode(array_column($flatX, 'source_ref'), JSON_UNESCAPED_UNICODE));
+    ok('어느 문서에서 왔는지도 남는다',
+       count(array_filter($flatX, fn($n) => !empty($n['source_id']))) === count($flatX));
+
+    // LLM 이 없으면 조용히 규칙으로 내려가지 않고 그렇다고 말해야 한다.
+    ok('LLM 이 없으면 그 사실을 알려 준다',
+       ($dx['meta']['llm_available'] ?? true) === false
+       && !empty($dx['meta']['fallback_reason']),
+       json_encode($dx['meta'] ?? null, JSON_UNESCAPED_UNICODE));
+    ok('규칙 결과는 품질 주의를 함께 준다', !empty($dx['meta']['quality_note']));
+    ok('검토가 필요하다고 못 박는다',
+       str_contains($dx['notice'] ?? '', '확정해야 배정 대상'));
+
+    // --- 초안을 저장해도 배정 대상이 되지 않는다 ---
+    $revX = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+                  ['json']['data']['revision'];
+    $r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'tree' => $dx['tree'], 'revision' => $revX]]);
+    ok('초안 저장 200', $r['status'] === 200, substr($r['body'], 0, 140));
+    ok('저장해도 배정 가능 0건', ($r['json']['data']['counts']['assignable'] ?? -1) === 0,
+       json_encode($r['json']['data']['counts'] ?? null));
+    ok('전부 미확정으로 들어간다',
+       $r['json']['data']['counts']['confirmed'] === 0);
+
+    $savedX = [];
+    $walkY = function (array $ns) use (&$walkY, &$savedX): void {
+        foreach ($ns as $n) { $savedX[] = $n; $walkY($n['children']); }
+    };
+    $walkY($r['json']['data']['tree']);
+    ok('저장 뒤에도 origin=auto 가 남는다',
+       count(array_filter($savedX, fn($n) => $n['origin'] === 'auto')) === count($savedX),
+       json_encode(array_count_values(array_column($savedX, 'origin'))));
+    ok('저장 뒤에도 출처가 남는다',
+       count(array_filter($savedX, fn($n) => !empty($n['source_ref']))) === count($savedX));
+
+    // --- 남의 문서를 출처로 끼워 넣기 ---
+    $otherSrcId = (int)$pdoX->query(
+        'SELECT id FROM ba_project_source WHERE project_id <> ' . (int)$pid . ' LIMIT 1'
+    )->fetchColumn();
+    if ($otherSrcId) {
+        $revX = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+                      ['json']['data']['revision'];
+        $r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+            'project_id' => $pid, 'revision' => $revX,
+            'tree' => [['title' => '가로채기', 'source_id' => $otherSrcId]]]]);
+        ok('남의 프로젝트 문서를 출처로 못 쓴다', $r['status'] === 400
+           && str_contains($r['json']['error']['message'] ?? '', '문서가 아닌 출처'),
+           'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
+    }
+
+    // --- 문서가 없으면 ---
+    $r = $admin->req('/assign/api/task.php?act=extract',
+                     ['csrf' => true, 'json' => ['project_id' => 99999999]]);
+    ok('없는 프로젝트 404', $r['status'] === 404);
+
+    // 뒷정리 — 뒤의 삭제 시험이 쓰도록 비워 둔다
+    $revX = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)
+                  ['json']['data']['revision'];
+    $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'tree' => [], 'revision' => $revX]]);
+    $pdoX->prepare('DELETE FROM ba_project_source WHERE project_id = ?')->execute([$pid]);
+}
+
+
+// =====================================================================
+section('[P] 배정안 (명세서 §6)');
+
+// 이 프로젝트에는 확정된 태스크가 없다. 그 상태부터 확인한다.
+$r = $anon->req('/assign/api/allocate.php?act=versions&project_id=' . $pid);
+ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/allocate.php?act=versions');
+ok('project_id 없으면 400', $r['status'] === 400);
+
+$r = $admin->req('/assign/api/allocate.php?act=current&project_id=' . $pid);
+// 주의: `$a['k'] ?? 'x'` 는 값이 null 이어도 'x' 를 준다. null 인지 보려면
+// 키가 있는지와 값이 null 인지를 따로 봐야 한다.
+$d0 = $r['json']['data'];
+ok('확정본이 없으면 null',
+   array_key_exists('allocation', $d0) && $d0['allocation'] === null,
+   substr($r['body'], 0, 120));
+ok('그 사실을 말로 알려 준다',
+   str_contains($r['json']['data']['message'] ?? '', '확정'));
+
+$r = $admin->req('/assign/api/allocate.php?act=propose',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('확정된 태스크가 없으면 400', $r['status'] === 400
+   && ($r['json']['error']['code'] ?? '') === 'NO_TASKS',
+   'status=' . $r['status'] . ' ' . substr($r['body'], 0, 100));
+
+// --- WBS 를 만들고 확정한다 -------------------------------------------
+$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'revision' => $cur['revision'],
+    'tree' => [
+        ['title' => '배정 시험 대분류', 'children' => [
+            ['title' => '가 태스크', 'est_md' => 4, 'difficulty' => 3, 'domain_ids' => [1]],
+            ['title' => '나 태스크', 'est_md' => 3, 'difficulty' => 2, 'domain_ids' => [20]],
+        ]],
+    ],
+]]);
+ok('시험용 WBS 저장', $r['status'] === 200, substr($r['body'], 0, 120));
+
+$leafIds = [];
+$walkP = function (array $ns) use (&$walkP, &$leafIds): void {
+    foreach ($ns as $n) {
+        if (!$n['children']) { $leafIds[] = $n['id']; }
+        $walkP($n['children']);
+    }
+};
+$walkP($r['json']['data']['tree']);
+$admin->req('/assign/api/task.php?act=confirm', ['csrf' => true, 'json' => ['task_ids' => $leafIds]]);
+
+// --- 권한 -------------------------------------------------------------
+$r = $guest->req('/assign/api/allocate.php?act=propose',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('PM 아니면 산출 403', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/allocate.php?act=propose', ['json' => ['project_id' => $pid]]);
+ok('CSRF 없으면 419', $r['status'] === 419);
+
+// --- 산출 -------------------------------------------------------------
+$r = $admin->req('/assign/api/allocate.php?act=propose',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('산출 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 160));
+$al   = $r['json']['data'];
+$aid  = $al['allocation_id'];
+ok('1차로 시작', $al['version'] === 1, (string)$al['version']);
+ok('proposed 로 시작', $al['status'] === 'proposed');
+ok('항목 2건', count($al['items']) === 2, (string)count($al['items']));
+ok('부하가 함께 온다', count($al['load']) > 0);
+ok('결정론임을 밝힌다', ($al['meta']['deterministic'] ?? null) === true);
+ok('가중치에 comm 이 없다', !array_key_exists('comm', $al['meta']['weights'] ?? []),
+   json_encode($al['meta']['weights'] ?? null));
+ok('모든 항목에 근거가 있다',
+   count(array_filter($al['items'], fn($i) => !empty($i['reason']['lines']))) === count($al['items']));
+ok('근거는 3줄', count($al['items'][0]['reason']['lines']) === 3);
+
+// 같은 입력이면 같은 결과 — HTTP 로도 확인한다.
+$sigP = function (array $items): string {
+    $a = [];
+    foreach ($items as $i) { $a[] = $i['task_id'] . ':' . $i['member_id'] . ':' . $i['fit_score']; }
+    sort($a);
+    return sha1(implode('|', $a));
+};
+$r2 = $admin->req('/assign/api/allocate.php?act=propose',
+                  ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('다시 산출해도 같은 결과', $sigP($r2['json']['data']['items']) === $sigP($al['items']));
+ok('버전은 올라간다', $r2['json']['data']['version'] === 2);
+$aid2 = $r2['json']['data']['allocation_id'];
+
+// --- 확정 전 노출 차단 -------------------------------------------------
+$r = $admin->req('/assign/api/allocate.php?act=current&project_id=' . $pid);
+$d1 = $r['json']['data'];
+ok('산출만으로는 대시보드에 안 나온다',
+   array_key_exists('allocation', $d1) && $d1['allocation'] === null,
+   substr($r['body'], 0, 120));
+
+$r = $guest->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aid2);
+ok('PM 아니면 초안을 못 연다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $guest->req('/assign/api/allocate.php?act=versions&project_id=' . $pid);
+ok('목록에서도 초안이 빠진다', count($r['json']['data']['rows']) === 0,
+   (string)count($r['json']['data']['rows']));
+ok('몇 개가 감춰졌는지는 알려 준다', ($r['json']['data']['hidden_drafts'] ?? 0) === 2,
+   (string)($r['json']['data']['hidden_drafts'] ?? -1));
+
+$r = $guest->req('/assign/api/allocate.php?act=members&project_id=' . $pid);
+ok('구성원 목록도 PM 전용', $r['status'] === 403);
+
+// --- 가중치 ------------------------------------------------------------
+$r = $admin->req('/assign/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid,
+    'weights' => ['domain' => 1.0, 'cap' => 0, 'avail' => 0, 'career' => 0, 'growth' => 0]]]);
+ok('가중치를 바꿔 산출 200', $r['status'] === 200);
+ok('바꾼 가중치가 기록된다',
+   abs(($r['json']['data']['meta']['weights']['domain'] ?? 0) - 1.0) < 0.001);
+$aid3 = $r['json']['data']['allocation_id'];
+
+$r = $admin->req('/assign/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid,
+    'weights' => ['domain' => 0, 'cap' => 0, 'avail' => 0, 'career' => 0, 'growth' => 0]]]);
+ok('가중치가 전부 0 이면 400', $r['status'] === 400, 'status=' . $r['status']);
+
+// --- 수동 조정 ---------------------------------------------------------
+$det   = $admin->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aid3)['json']['data'];
+$item  = $det['items'][0];
+$mlist = $admin->req('/assign/api/allocate.php?act=members&project_id=' . $pid)['json']['data']['rows'];
+$otherM = null;
+foreach ($mlist as $m) { if ($m['id'] !== $item['member_id']) { $otherM = $m['id']; break; } }
+
+$r = $admin->req('/assign/api/allocate.php?act=update_item',
+                 ['csrf' => true, 'json' => ['item_id' => $item['id'], 'member_id' => $otherM]]);
+ok('사유 없이 담당자 변경은 400', $r['status'] === 400
+   && str_contains($r['json']['error']['message'] ?? '', '사유'),
+   substr($r['body'], 0, 120));
+
+$r = $admin->req('/assign/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
+    'item_id' => $item['id'], 'member_id' => $otherM, 'manual_note' => '본인 요청']]);
+ok('사유와 함께면 200', $r['status'] === 200, substr($r['body'], 0, 120));
+ok('adjusted 로 바뀐다', ($r['json']['data']['allocation']['status'] ?? '') === 'adjusted');
+$changed = null;
+foreach ($r['json']['data']['items'] as $x) { if ($x['id'] === $item['id']) { $changed = $x; } }
+ok('수동 표시가 붙는다', $changed['is_manual'] === true);
+ok('엔진 점수는 지운다', $changed['fit_score'] === null,
+   json_encode($changed['fit_score']));
+ok('부하가 다시 계산돼 온다', count($r['json']['data']['load']) > 0);
+
+$r = $guest->req('/assign/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
+    'item_id' => $item['id'], 'member_id' => $otherM, 'manual_note' => 'x']]);
+ok('PM 아니면 조정 403', $r['status'] === 403);
+
+// --- 확정 --------------------------------------------------------------
+$r = $guest->req('/assign/api/allocate.php?act=confirm',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+ok('PM 아니면 확정 403', $r['status'] === 403);
+
+$r = $admin->req('/assign/api/allocate.php?act=confirm',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+if ($r['status'] === 409) {
+    ok('과배정이면 한 번 더 묻는다', ($r['json']['error']['code'] ?? '') === 'OVERLOAD');
+    $r = $admin->req('/assign/api/allocate.php?act=confirm', ['csrf' => true, 'json' => [
+        'allocation_id' => $aid3, 'accept_overload' => 1]]);
+} else {
+    ok('과배정이 없으면 바로 확정', $r['status'] === 200, 'status=' . $r['status']);
+}
+ok('확정 200', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 140));
+ok('보냈다고 말하지 않는다',
+   str_contains($r['json']['data']['notify_notice'] ?? '', '적재만'),
+   $r['json']['data']['notify_notice'] ?? '(없음)');
+
+$r = $admin->req('/assign/api/allocate.php?act=current&project_id=' . $pid);
+ok('이제 대시보드에 나온다', ($r['json']['data']['allocation']['id'] ?? 0) === $aid3);
+ok('항목도 함께', count($r['json']['data']['items']) === 2);
+
+$r = $guest->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aid3);
+ok('확정본은 일반 사용자도 볼 수 있다', $r['status'] === 200, 'status=' . $r['status']);
+ok('편집 권한은 없다', ($r['json']['data']['can_edit'] ?? true) === false);
+
+$r = $admin->req('/assign/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
+    'item_id' => $item['id'], 'member_id' => $item['member_id'], 'manual_note' => '되돌리기']]);
+ok('확정본은 고칠 수 없다', $r['status'] === 400
+   && str_contains($r['json']['error']['message'] ?? '', '확정'),
+   substr($r['body'], 0, 120));
+
+$r = $admin->req('/assign/api/allocate.php?act=confirm',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+ok('두 번 확정 불가', $r['status'] === 400);
+
+$r = $admin->req('/assign/api/allocate.php?act=versions&project_id=' . $pid);
+$confirmedN = count(array_filter($r['json']['data']['rows'],
+                                 fn($x) => $x['status'] === 'confirmed'));
+ok('확정본은 언제나 하나', $confirmedN === 1, (string)$confirmedN);
+
+$r = $admin->req('/assign/api/allocate.php?act=nope&project_id=' . $pid);
+ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
+
+// 뒷정리는 따로 하지 않는다. 뒤의 프로젝트 삭제는 소프트 삭제라
+// 배정안이 남아 있어도 걸리지 않는다(ba_allocation 은 FK CASCADE 라
+// 실제로 지울 때 같이 사라진다).
+
+// 뒷정리
+
+// =====================================================================
+section('[Q] 대시보드와 진행상황 (명세서 §7.1 Step4 · §7.2)');
+
+// 앞 [P] 구간이 확정 배정안을 남겨 둔다. 여기서는 '확정 전' 상태부터
+// 봐야 하므로 배정안을 치운다. 태스크가 배정안에 묶여 있으면 WBS 도
+// 못 고친다(그게 맞는 동작이다) — 그래서 DB 에서 직접 지운다.
+(function () use ($pid) {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $dbq = $cfg['db'];
+    $p = new PDO(
+        "mysql:host={$dbq['host']};port={$dbq['port']};dbname={$dbq['name']};charset=utf8mb4",
+        $dbq['user'], $dbq['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $p->prepare('DELETE FROM ba_allocation WHERE project_id = ?')->execute([$pid]);
+    $p->prepare(
+        'DELETE pr FROM ba_progress pr JOIN ba_task t ON t.id = pr.task_id
+          WHERE t.project_id = ?'
+    )->execute([$pid]);
+})();
+
+$r = $anon->req('/assign/api/dashboard.php?act=projects');
+ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
+$r = $anon->req('/assign/index.php');
+ok('대시보드 화면도 로그인 필요', $r['status'] === 302, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/index.php');
+ok('대시보드 화면 200', $r['status'] === 200);
+ok('플레이스홀더가 남아 있지 않다', !str_contains($r['body'], 'ba-placeholder'));
+foreach (['ba-mine' => '내 일', 'ba-cards' => '프로젝트 카드', 'ba-bd-kanban' => '칸반',
+          'ba-bd-gantt' => '간트', 'ba-bd-late' => '지연', 'ba-bd-feed' => '피드',
+          'ba-pg-drawer' => '진행 드로어'] as $id => $label) {
+    ok("화면에 $label 있음", str_contains($r['body'], 'id="' . $id . '"'));
+}
+
+// --- 확정 전에는 보드가 비어 있다 -------------------------------------
+$r = $admin->req('/assign/api/dashboard.php?act=board&project_id=' . $pid);
+$dq = $r['json']['data'];
+ok('확정 배정안이 없으면 allocation=null',
+   array_key_exists('allocation', $dq) && $dq['allocation'] === null,
+   substr($r['body'], 0, 120));
+ok('왜 비었는지 말해 준다', str_contains($dq['message'] ?? '', '확정'));
+ok('칸반 뼈대는 그려 준다(열이 사라지지 않게)', count($dq['columns']) === 7,
+   (string)count($dq['columns']));
+$empty = array_sum(array_column($dq['columns'], 'count'));
+ok('다만 카드는 없다', $empty === 0, (string)$empty);
+
+$r = $admin->req('/assign/api/dashboard.php?act=board');
+ok('project_id 없으면 400', $r['status'] === 400);
+$r = $admin->req('/assign/api/dashboard.php?act=board&project_id=99999999');
+ok('없는 프로젝트 404', $r['status'] === 404);
+
+// --- WBS 확정 → 배정 확정 ---------------------------------------------
+$cur = $admin->req('/assign/api/task.php?act=tree&project_id=' . $pid)['json']['data'];
+$r = $admin->req('/assign/api/task.php?act=save_tree', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'revision' => $cur['revision'],
+    'tree' => [['title' => '대시보드 시험', 'children' => [
+        ['title' => '지난 태스크', 'est_md' => 5, 'difficulty' => 3,
+         'plan_start' => '2026-01-05', 'plan_end' => '2026-02-01'],
+        ['title' => '앞으로 태스크', 'est_md' => 3, 'difficulty' => 2,
+         'plan_start' => '2026-05-01', 'plan_end' => '2099-12-31'],
+    ]]],
+]]);
+ok('시험용 WBS 저장', $r['status'] === 200, substr($r['body'], 0, 120));
+$leafQ = [];
+$wq = function (array $ns) use (&$wq, &$leafQ): void {
+    foreach ($ns as $n) { if (!$n['children']) { $leafQ[$n['title']] = $n['id']; } $wq($n['children']); }
+};
+$wq($r['json']['data']['tree']);
+$admin->req('/assign/api/task.php?act=confirm',
+            ['csrf' => true, 'json' => ['task_ids' => array_values($leafQ)]]);
+
+$r = $admin->req('/assign/api/allocate.php?act=propose',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$aidQ = $r['json']['data']['allocation_id'];
+
+// 시험 계정을 담당자로 바꿔 둔다 — 진행상황은 본인만 올릴 수 있다.
+$myMid = null;
+foreach ($admin->req('/assign/api/allocate.php?act=members&project_id=' . $pid)
+                ['json']['data']['rows'] as $m) {
+    if ($m['emp_name'] === '시험관리자') { $myMid = $m['id']; }
+}
+$itemsQ = $admin->req('/assign/api/allocate.php?act=detail&allocation_id=' . $aidQ)
+                ['json']['data']['items'];
+if ($myMid) {
+    $admin->req('/assign/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
+        'item_id' => $itemsQ[0]['id'], 'member_id' => $myMid, 'manual_note' => '시험용']]);
+}
+$r = $admin->req('/assign/api/allocate.php?act=confirm',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aidQ]]);
+if ($r['status'] === 409) {
+    $r = $admin->req('/assign/api/allocate.php?act=confirm', ['csrf' => true, 'json' => [
+        'allocation_id' => $aidQ, 'accept_overload' => 1]]);
+}
+ok('배정 확정', $r['status'] === 200, substr($r['body'], 0, 120));
+
+// --- 확정 후 보드 -------------------------------------------------------
+$r = $admin->req('/assign/api/dashboard.php?act=board&project_id=' . $pid);
+$dq = $r['json']['data'];
+ok('이제 배정안이 보인다', ($dq['allocation']['id'] ?? 0) === $aidQ);
+$cards = array_sum(array_column($dq['columns'], 'count'));
+ok('칸반에 카드 2건', $cards === 2, (string)$cards);
+ok('담당자 카드가 있다', count($dq['by_member']) > 0);
+ok('지연 1건(기한 지난 것)', count($dq['overdue']) === 1,
+   json_encode(array_column($dq['overdue'], 'title'), JSON_UNESCAPED_UNICODE));
+ok('지연은 며칠 늦었는지 함께', ($dq['overdue'][0]['overdue_days'] ?? 0) > 0);
+ok('간트 막대 2개', count($dq['gantt']['bars']) === 2, (string)count($dq['gantt']['bars']));
+ok('진척률이 계산된다', isset($dq['summary']['pct']));
+ok('공수 미입력 건수를 함께 알려 준다', array_key_exists('no_est', $dq['summary']));
+
+// 칸반 열은 명세서의 6개 + 보류
+$keys = array_column($dq['columns'], 'key');
+ok('칸반 열이 명세서대로',
+   array_slice($keys, 0, 6) === ['todo', 'doing', 'review', 'dev_deployed', 'prod_deployed', 'done'],
+   json_encode($keys));
+ok('보류는 따로 끝에 둔다(버리지 않는다)', end($keys) === 'hold');
+
+// --- 프로젝트 카드 -------------------------------------------------------
+$r = $admin->req('/assign/api/dashboard.php?act=projects');
+ok('카드 200', $r['status'] === 200);
+$mine = null;
+foreach ($r['json']['data']['rows'] as $c) { if ($c['id'] === $pid) { $mine = $c; } }
+ok('이 프로젝트 카드가 있다', $mine !== null);
+ok('D-day 를 준다', array_key_exists('dday', $mine));
+ok('무엇을 기준으로 셌는지도', !empty($mine['dday_of']), json_encode($mine['dday_of']));
+ok('단계 상태를 준다', isset($mine['stage']['dev']['state']));
+ok('확정 배정안을 표시', ($mine['allocation']['id'] ?? 0) === $aidQ);
+ok('지연 건수를 표시', ($mine['overdue'] ?? -1) === 1, (string)($mine['overdue'] ?? -1));
+
+// --- 진행상황 (§7.2) -----------------------------------------------------
+$myTask = $itemsQ[0]['task_id'];
+$r = $admin->req('/assign/api/progress.php?act=task&task_id=' . $myTask);
+ok('드로어 조회 200', $r['status'] === 200);
+ok('본인 태스크면 올릴 수 있다', ($r['json']['data']['can_write'] ?? false) === true,
+   $r['json']['data']['why'] ?? '');
+ok('상태 목록을 함께 준다', count($r['json']['data']['statuses'] ?? []) === 7);
+
+$r = $admin->req('/assign/api/progress.php?act=create', ['json' => ['task_id' => $myTask]]);
+ok('CSRF 없으면 419', $r['status'] === 419);
+
+$r = $admin->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+    'task_id' => $myTask, 'status' => 'doing', 'progress_pct' => 40, 'content' => '절반쯤']]);
+ok('등록 200', $r['status'] === 200, substr($r['body'], 0, 140));
+ok('태스크 상태가 함께 바뀐다', ($r['json']['data']['task']['status'] ?? '') === 'doing');
+ok('진행률도', ($r['json']['data']['task']['progress_pct'] ?? 0) === 40);
+ok('보냈다고 말하지 않는다', str_contains($r['json']['data']['notify_notice'] ?? '', '적재만'));
+ok('팀 채널로 한 건 접수', ($r['json']['data']['notify']['queued'] ?? 0) >= 1,
+   json_encode($r['json']['data']['notify'] ?? null, JSON_UNESCAPED_UNICODE));
+
+$r = $admin->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+    'task_id' => $myTask, 'blocker' => 'API 스펙 대기', 'content' => '막힘']]);
+ok('블로커 등록 200', $r['status'] === 200);
+ok('PM 에게 따로 알린다고 말한다', str_contains($r['json']['data']['message'] ?? '', 'PM'));
+$ch = array_column($r['json']['data']['notify']['detail'] ?? [], 'channel');
+ok('알림이 2건(채널 + PM)', count($ch) === 2, json_encode($ch));
+
+$r = $admin->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+    'task_id' => $myTask]]);
+ok('빈 등록은 400', $r['status'] === 400, substr($r['body'], 0, 100));
+$r = $admin->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+    'task_id' => $myTask, 'progress_pct' => 999]]);
+ok('진행률 범위 밖 400', $r['status'] === 400);
+
+// 본인 것이 아니면 못 올린다 — 이 화면의 핵심 규칙이다.
+$r = $guest->req('/assign/api/progress.php?act=task&task_id=' . $myTask);
+ok('남은 can_write=false', ($r['json']['data']['can_write'] ?? true) === false);
+ok('왜 안 되는지 말해 준다', !empty($r['json']['data']['why']));
+$r = $guest->req('/assign/api/progress.php?act=create', ['csrf' => true, 'json' => [
+    'task_id' => $myTask, 'progress_pct' => 10]]);
+ok('남의 태스크에 등록하면 403', $r['status'] === 403, 'status=' . $r['status']);
+
+// --- 댓글 ---------------------------------------------------------------
+$rows = $admin->req('/assign/api/progress.php?act=list&task_id=' . $myTask)['json']['data']['rows'];
+ok('기록 목록에 댓글 칸이 있다', array_key_exists('comments', $rows[0]));
+$pgQ = $rows[0]['id'];
+
+$r = $admin->req('/assign/api/progress.php?act=comment',
+                 ['csrf' => true, 'json' => ['progress_id' => $pgQ, 'content' => '확인했습니다']]);
+ok('댓글 200', $r['status'] === 200);
+ok('댓글이 붙는다', count($r['json']['data']['comments']) === 1);
+
+// 댓글은 본인 태스크가 아니어도 단다 — PM 과 동료가 묻고 답하는 자리다.
+$r = $guest->req('/assign/api/progress.php?act=comment',
+                 ['csrf' => true, 'json' => ['progress_id' => $pgQ, 'content' => '남이 다는 댓글']]);
+ok('남도 댓글은 달 수 있다', $r['status'] === 200, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/progress.php?act=comment',
+                 ['csrf' => true, 'json' => ['progress_id' => $pgQ, 'content' => '   ']]);
+ok('빈 댓글은 400', $r['status'] === 400);
+
+$cmts = $admin->req('/assign/api/progress.php?act=list&task_id=' . $myTask)
+              ['json']['data']['rows'][0]['comments'];
+$otherCm = null;
+foreach ($cmts as $c) { if ($c['user_name'] !== '시험관리자') { $otherCm = $c['id']; } }
+if ($otherCm) {
+    $r = $guest->req('/assign/api/progress.php?act=delete_comment',
+                     ['csrf' => true, 'json' => ['id' => $otherCm]]);
+    ok('본인 댓글은 지울 수 있다', $r['status'] === 200, 'status=' . $r['status']);
+}
+
+// --- 내가 맡은 일 ---------------------------------------------------------
+$r = $admin->req('/assign/api/dashboard.php?act=mine');
+ok('내 일 200', $r['status'] === 200);
+ok('맡은 태스크가 나온다', count($r['json']['data']['rows']) >= 1,
+   (string)count($r['json']['data']['rows']));
+$mineRow = null;
+foreach ($r['json']['data']['rows'] as $x) { if ($x['task_id'] === $myTask) { $mineRow = $x; } }
+ok('내 태스크가 들어 있다', $mineRow !== null);
+ok('지연 여부를 표시', array_key_exists('overdue', $mineRow ?? []));
+ok('마지막 진행 기록을 함께', array_key_exists('last', $mineRow ?? []));
+
+$r = $guest->req('/assign/api/dashboard.php?act=mine');
+ok('구성원이 아니면 빈 목록 + 설명', $r['status'] === 200
+   && count($r['json']['data']['rows']) === 0,
+   substr($r['body'], 0, 120));
+
+// --- 피드에 반영 -----------------------------------------------------------
+$r = $admin->req('/assign/api/progress.php?act=feed&project_id=' . $pid);
+ok('피드 200', $r['status'] === 200);
+ok('올린 것이 피드에 있다', count($r['json']['data']['rows']) >= 2,
+   (string)count($r['json']['data']['rows']));
+
+$r = $admin->req('/assign/api/dashboard.php?act=nope');
+ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
+$r = $admin->req('/assign/api/progress.php?act=nope');
+ok('진행 API 도 모르는 act 400', $r['status'] === 400);
+
+
+// =====================================================================
+section('[R] 직접 등록한 점유 — 슬랙·메일에 없는 업무');
+
+// 시험용 구성원. 시험 계정 자신이 구성원이어야 '본인' 경로를 볼 수 있다.
+$pdoR = (function () {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $dbr = $cfg['db'];
+    return new PDO(
+        "mysql:host={$dbr['host']};port={$dbr['port']};dbname={$dbr['name']};charset=utf8mb4",
+        $dbr['user'], $dbr['pass'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
+})();
+$pdoR->exec("DELETE FROM ba_workload WHERE kind = 'manual'");
+// 시험사용자는 **배정 대상이 아니다**(is_assignable=0).
+//
+// 처음에는 1 로 넣었는데, 이 줄이 시험이 끝난 뒤에도 DB 에 남는다.
+// 그러면 그 다음에 누가 프로젝트 1 에 배정을 한 번 돌리는 순간 엔진이
+// 이 유령을 후보로 집어 배정해 버리고, 다음 회차의
+// '구성원이 아니면 빈 목록' 단언이 까닭 없이 깨진다. 실제로 깨졌다.
+// 여기서 시험사용자에게 필요한 것은 '본인' 경로뿐이라 0 이면 충분하다.
+$pdoR->prepare('INSERT INTO ba_member (user_id, emp_name, is_assignable) VALUES (?,?,0)
+                ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name),
+                                        is_assignable = VALUES(is_assignable)')
+     ->execute(['batest-user@bluesoft.co.kr', '시험사용자']);
+// 시험관리자는 후보 표에 나와야 한다 — 가용도가 깎이는 것을 거기서 확인한다.
+$pdoR->prepare('INSERT INTO ba_member (user_id, emp_name, is_assignable) VALUES (?,?,1)
+                ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name),
+                                        is_assignable = VALUES(is_assignable)')
+     ->execute(['batest-admin@bluesoft.co.kr', '시험관리자']);
+$selfMid  = (int)$pdoR->query("SELECT id FROM ba_member WHERE user_id='batest-user@bluesoft.co.kr'")
+                      ->fetchColumn();
+$otherMid = (int)$pdoR->query("SELECT id FROM ba_member WHERE user_id='batest-admin@bluesoft.co.kr'")
+                      ->fetchColumn();
+
+$wlBase = ['label' => '상주 지원', 'note' => '4월 한 달 상주 확정',
+           'start_date' => '2026-04-01', 'end_date' => '2026-04-30'];
+
+$r = $anon->req('/assign/api/workload.php?act=list&member_id=' . $otherMid);
+ok('로그인 없이 401', $r['status'] === 401, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/workload.php?act=list');
+ok('member_id 없으면 400', $r['status'] === 400);
+$r = $admin->req('/assign/api/workload.php?act=list&member_id=99999999');
+ok('없는 구성원 404', $r['status'] === 404);
+
+// --- 등록 -------------------------------------------------------------
+$r = $admin->req('/assign/api/workload.php?act=create',
+                 ['json' => ['member_id' => $otherMid] + $wlBase]);
+ok('CSRF 없으면 419', $r['status'] === 419, 'status=' . $r['status']);
+
+$r = $admin->req('/assign/api/workload.php?act=create', ['csrf' => true, 'json' =>
+    ['member_id' => $otherMid, 'label' => '상주 지원',
+     'start_date' => '2026-04-01', 'end_date' => '2026-04-30']]);
+ok('사유 없이는 못 넣는다', $r['status'] === 400
+   && str_contains($r['json']['error']['message'] ?? '', '사유'),
+   substr($r['body'], 0, 120));
+
+$r = $admin->req('/assign/api/workload.php?act=create', ['csrf' => true, 'json' =>
+    ['member_id' => $otherMid, 'note' => '사유만 있음',
+     'start_date' => '2026-04-01', 'end_date' => '2026-04-30']]);
+ok('제목 없이도 못 넣는다', $r['status'] === 400);
+
+foreach ([
+    ['기간이 뒤집히면 거절', ['start_date' => '2026-05-01', 'end_date' => '2026-04-01']],
+    ['없는 날짜 거절',       ['start_date' => '2026-02-30', 'end_date' => '2026-04-01']],
+    ['점유율 0 거절',        ['load_pct' => 0]],
+    ['점유율 150 거절',      ['load_pct' => 150]],
+    ['모르는 출처 거절',      ['source' => 'zzz']],
+    ['javascript 링크 거절',  ['source_url' => 'javascript:alert(1)']],
+] as [$what, $bad]) {
+    $r = $admin->req('/assign/api/workload.php?act=create',
+                     ['csrf' => true, 'json' => ['member_id' => $otherMid] + $bad + $wlBase]);
+    ok($what, $r['status'] === 400, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 90));
+}
+
+$r = $admin->req('/assign/api/workload.php?act=create', ['csrf' => true, 'json' =>
+    ['member_id' => $otherMid, 'source' => 'email',
+     'source_url' => 'https://mail.example.com/x', 'load_pct' => 80,
+     'from' => '2026-03-02', 'to' => '2026-06-22'] + $wlBase]);
+ok('제대로 넣으면 200', $r['status'] === 200, substr($r['body'], 0, 140));
+$wlId = $r['json']['data']['id'];
+$row  = $r['json']['data']['rows'][0] ?? [];
+ok('작성자가 남는다', ($row['created_by'] ?? '') === 'batest-admin@bluesoft.co.kr',
+   json_encode($row['created_by'] ?? null));
+ok('작성자 이름도', !empty($row['created_by_name']));
+ok('출처가 남는다', ($row['source'] ?? '') === 'email' && !empty($row['source_label']));
+ok('근거 링크도', !empty($row['source_url']));
+ok('사유가 남는다', !empty($row['note']));
+ok('가용도를 함께 돌려준다', isset($r['json']['data']['availability']['available_pct']));
+
+// --- 가용도에 반영되는가 -------------------------------------------------
+$before = null;
+$after  = null;
+foreach ($admin->req('/assign/api/candidate.php?act=list&project_id=1')
+                ['json']['data']['rows'] as $x) {
+    if ($x['member_id'] === $otherMid) { $after = $x['availability']; }
+}
+ok('후보 표의 가용도에 반영된다', $after !== null && $after['confirmed_pct'] > 0,
+   json_encode($after));
+
+$r = $admin->req('/assign/api/candidate.php?act=detail&project_id=1&member_id=' . $otherMid);
+$manual = null;
+foreach ($r['json']['data']['confirmed_breakdown'] as $w) {
+    if (($w['kind'] ?? '') === 'manual') { $manual = $w; }
+}
+ok('드로어 내역에 직접 등록이 나온다', $manual !== null);
+ok('배정과 구분해 표시한다', ($manual['kind_label'] ?? '') === '직접 등록',
+   json_encode($manual['kind_label'] ?? null));
+ok('누가 넣었는지 함께', !empty($manual['created_by_name']));
+ok('사유도 함께', !empty($manual['note']));
+ok('출처도 함께', !empty($manual['origin_label']));
+ok('등록 단추를 그릴지 알려 준다',
+   ($r['json']['data']['can_add_workload'] ?? null) === true);
+
+// --- 배정이 만든 점유는 못 건드린다 ---------------------------------------
+$asgnId = (int)$pdoR->query("SELECT id FROM ba_workload WHERE kind='assigned' LIMIT 1")
+                    ->fetchColumn();
+if ($asgnId) {
+    $r = $admin->req('/assign/api/workload.php?act=delete',
+                     ['csrf' => true, 'json' => ['id' => $asgnId]]);
+    ok('배정이 만든 점유는 못 지운다', $r['status'] === 400
+       && str_contains($r['json']['error']['message'] ?? '', '직접 등록'),
+       substr($r['body'], 0, 120));
+    $r = $admin->req('/assign/api/workload.php?act=update',
+                     ['csrf' => true, 'json' => ['id' => $asgnId, 'label' => '바꿔보기']]);
+    ok('배정이 만든 점유는 못 고친다', $r['status'] === 400);
+}
+
+// --- 권한 ---------------------------------------------------------------
+$r = $guest->req('/assign/api/workload.php?act=list&member_id=' . $otherMid);
+ok('PM 아닌 사람은 남의 것을 못 본다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $guest->req('/assign/api/workload.php?act=create',
+                 ['csrf' => true, 'json' => ['member_id' => $otherMid] + $wlBase]);
+ok('PM 아닌 사람은 남의 것을 못 넣는다', $r['status'] === 403);
+
+$r = $guest->req('/assign/api/workload.php?act=delete',
+                 ['csrf' => true, 'json' => ['id' => $wlId]]);
+ok('PM 아닌 사람은 남의 것을 못 지운다', $r['status'] === 403);
+
+// 등록 단추를 그릴지는 후보 상세가 알려 주는데, 이제 그 화면 자체가
+// 배정 권한을 요구한다. 단추를 그릴 기회조차 없다는 것을 확인한다.
+$r = $guest->req('/assign/api/candidate.php?act=detail&project_id=1&member_id=' . $otherMid);
+ok('후보 상세를 아예 못 연다', $r['status'] === 403, 'status=' . $r['status']);
+
+// 본인 것은 언제나 — 자기 가용도가 왜 그런지 알 권리가 있다
+$r = $guest->req('/assign/api/workload.php?act=list&member_id=' . $selfMid);
+ok('본인은 자기 것을 볼 수 있다', $r['status'] === 200, 'status=' . $r['status']);
+ok('본인은 넣을 수도 있다', ($r['json']['data']['can_write'] ?? false) === true);
+
+$r = $guest->req('/assign/api/workload.php?act=create', ['csrf' => true, 'json' =>
+    ['member_id' => $selfMid, 'label' => '사내 교육', 'note' => '3일 교육',
+     'source' => 'meeting', 'start_date' => '2026-04-01', 'end_date' => '2026-04-03']]);
+ok('본인이 자기 것을 넣는다', $r['status'] === 200, substr($r['body'], 0, 120));
+$selfWl = $r['json']['data']['id'];
+
+$r = $guest->req('/assign/api/workload.php?act=delete',
+                 ['csrf' => true, 'json' => ['id' => $selfWl]]);
+ok('본인이 자기 것을 지운다', $r['status'] === 200);
+
+// --- 고치기 -------------------------------------------------------------
+$r = $admin->req('/assign/api/workload.php?act=update', ['csrf' => true, 'json' =>
+    ['id' => $wlId, 'load_pct' => 40, 'note' => '절반으로 줄어 재조정',
+     'from' => '2026-03-02', 'to' => '2026-06-22']]);
+ok('점유율을 고친다', $r['status'] === 200, substr($r['body'], 0, 120));
+ok('고친 값이 반영된다', ($r['json']['data']['rows'][0]['load_pct'] ?? 0) === 40,
+   (string)($r['json']['data']['rows'][0]['load_pct'] ?? -1));
+
+$r = $admin->req('/assign/api/workload.php?act=update',
+                 ['csrf' => true, 'json' => ['id' => $wlId, 'note' => '   ']]);
+ok('사유를 비울 수 없다', $r['status'] === 400,
+   'status=' . $r['status'] . ' ' . substr($r['body'], 0, 90));
+
+$r = $admin->req('/assign/api/workload.php?act=update',
+                 ['csrf' => true, 'json' => ['id' => $wlId]]);
+ok('바꿀 내용이 없으면 400', $r['status'] === 400);
+
+$r = $admin->req('/assign/api/workload.php?act=update',
+                 ['csrf' => true, 'json' => ['id' => 99999999, 'label' => 'x']]);
+ok('없는 기록 404', $r['status'] === 404);
+
+// --- 지우면 가용도가 돌아온다 ----------------------------------------------
+$avBefore = $admin->req('/assign/api/workload.php?act=list&member_id=' . $otherMid
+                        . '&from=2026-03-02&to=2026-06-22')
+                  ['json']['data']['availability']['available_pct'];
+$r = $admin->req('/assign/api/workload.php?act=delete', ['csrf' => true, 'json' =>
+    ['id' => $wlId, 'from' => '2026-03-02', 'to' => '2026-06-22']]);
+ok('지우기 200', $r['status'] === 200);
+ok('가용도가 돌아온다', ($r['json']['data']['availability']['available_pct'] ?? 0) > $avBefore,
+   $avBefore . ' → ' . ($r['json']['data']['availability']['available_pct'] ?? '?'));
+ok('목록에서도 사라진다', count($r['json']['data']['rows']) === 0);
+
+$r = $admin->req('/assign/api/workload.php?act=nope&member_id=' . $otherMid);
+ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
+
+// 이 시험이 만든 배정안과 점유 기록을 치운다.
+//
+// 프로젝트 삭제는 소프트 삭제라 ba_workload 의 assigned 기록이 남는다.
+// 그대로 두면 **다음 회차의 가용도가 조금씩 깎여** 후보 시험이 흔들린다.
+// 실제로 그렇게 새서 후보 구간의 가용도 단언이 깨졌다.
+(function () use ($pid) {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $dbc = $cfg['db'];
+    $p = new PDO(
+        "mysql:host={$dbc['host']};port={$dbc['port']};dbname={$dbc['name']};charset=utf8mb4",
+        $dbc['user'], $dbc['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $p->prepare(
+        "DELETE w FROM ba_workload w
+           JOIN ba_allocation_item i ON i.id = w.ref_id
+           JOIN ba_task t            ON t.id = i.task_id
+          WHERE w.kind = 'assigned' AND w.ref_type = 'allocation_item' AND t.project_id = ?"
+    )->execute([$pid]);
+    $p->prepare('DELETE FROM ba_allocation WHERE project_id = ?')->execute([$pid]);
+    $p->prepare("DELETE FROM ba_notification WHERE ref_type = 'allocation'")->execute();
+    // [R] 이 넣은 직접 등록 점유도 치운다. 남으면 다음 회차의 가용도가
+    // 깎인 채로 시작해 후보 구간이 흔들린다.
+    $p->prepare("DELETE FROM ba_workload WHERE kind = 'manual'")->execute();
+
+    // 시험용 구성원을 후보 명단에서 내린다.
+    //
+    // ba_member 행 자체는 남긴다 — 9개 표가 이 행을 참조하고 있어 지우려면
+    // 그 표들까지 건드려야 하는데, 뒷정리가 그렇게까지 할 일은 아니다.
+    // 대신 배정 대상에서 빼 두면 데모 화면의 후보 표에 섞이지 않고,
+    // 다음 회차에 누가 배정을 돌려도 이 유령이 일을 받지 않는다.
+    // [R] 이 시작할 때 필요한 만큼 다시 올린다.
+    $p->prepare("UPDATE ba_member SET is_assignable = 0 WHERE user_id LIKE 'batest-%'")
+      ->execute();
+})();
+
+array_map('unlink', glob("$tmp/*") ?: []);
+@rmdir($tmp);
+$admin->req('/assign/api/project.php?act=delete',
+    ['csrf' => true, 'json' => ['id' => $pid, 'confirm' => $code, 'reason' => '시험 뒷정리']]);
+
+echo "\n" . str_repeat('=', 62) . "\n";
+echo "통과 $pass / 실패 $fail\n";
+if ($failures) {
+    echo "\n실패 목록:\n";
+    foreach ($failures as $f) { echo "  · $f\n"; }
+}
+echo "\n";
+exit($fail > 0 ? 1 : 0);
