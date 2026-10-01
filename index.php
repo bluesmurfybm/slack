@@ -54,6 +54,8 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <link rel="stylesheet" href="styles/topbar.css">
 <link rel="stylesheet" href="styles/default.css">
 <link rel="stylesheet" href="styles/chatbot.css">
@@ -449,8 +451,12 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     <div class="chat-head">
       <span class="bot-av" id="chat-botav"></span>
       <div class="tt">
-        <h3>blue chatbot</h3>
-        <div class="st">데모 챗봇입니다. 무엇이든 물어보세요</div>
+        <h3 id="chat-title">blue chatbot</h3>
+        <div class="st" id="chat-st">데모 챗봇입니다. 무엇이든 물어보세요</div>
+      </div>
+      <div class="chat-bots">
+        <button type="button" class="chat-bot on" data-bot="iworks" onclick="selectBot('iworks')">iworks</button>
+        <button type="button" class="chat-bot" data-bot="blui" onclick="selectBot('blui')">블리</button>
       </div>
       <button class="chat-x" onclick="closeChat()" title="닫기">&times;</button>
     </div>
@@ -1970,7 +1976,29 @@ document.querySelectorAll('.eye').forEach(b=>{
 });
 
 /* ---- 챗봇 ---- */
-const CHAT_API="/chatapi"; // nginx 가 chatbot 서버(8003)로 넘긴다
+// 맨 URL 은 URL 문자(ASCII)까지만 링크로 잡는다. 기본은 공백 전까지라 "…request.php에서" 의 조사까지 딸려 간다
+if(window.marked) marked.use({tokenizer:{url(src){
+  const m=/^https?:\/\/[A-Za-z0-9\-._~:\/?#\[\]@!$&'()*+,;=%]+/.exec(src);
+  if(!m) return false;
+  let href=m[0].replace(/[.,;:!?]+$/, "");
+  if(href.endsWith(")") && !href.includes("(")) href=href.slice(0, -1);
+  return {type:"link", raw:href, text:href, href, tokens:[{type:"text", raw:href, text:href}]};
+}}});
+// nginx 가 접두사별로 넘긴다. /chatapi 는 chatbot 서버(8003), /bluiapi 는 blui 서버(8004)
+const CHAT_BOTS={
+  iworks:{api:"/chatapi", start:"GET", title:"blue chatbot", st:"데모 챗봇입니다. 무엇이든 물어보세요",
+    greet:()=>`${current?current.name+"님, ":""}무엇을 도와드릴까요?`, renew:"대화가 만료되어 새로 시작했습니다."},
+  blui:{api:"/bluiapi", start:"POST", title:"블리", st:"홈페이지 상담 챗봇입니다. 블루소프트 서비스에 관해 물어보세요",
+    greet:()=>"안녕하세요, 블루소프트 상담 도우미 블리입니다.\n서비스 안내부터 견적 문의 접수까지 도와드려요. 무엇이 궁금하신가요?",
+    renew:"대화가 길어져 새로 시작했습니다.",
+    starters:[
+      ["제작 비용", "홈페이지 제작 비용이 궁금해요."],
+      ["쇼핑몰 제작", "쇼핑몰을 제작하고 싶어요."],
+      ["제작 사례", "제작 사례를 보고 싶어요."],
+      ["견적 문의", "견적 문의를 남기고 싶어요."],
+    ]},
+};
+let chatBot="iworks";
 let chatBusy=false;
 
 /* POST /ask 는 GET /conversations 가 발급한 쿠키를 요구한다. 부트스트랩 약속을
@@ -1983,7 +2011,8 @@ function chatBootstrap(){
   return chatReady;
 }
 async function chatLoadConversation(){
-  const r=await fetch(`${CHAT_API}/conversations`,{credentials:"same-origin"});
+  const bot=CHAT_BOTS[chatBot];
+  const r=await fetch(`${bot.api}/conversations`,{method:bot.start,credentials:"same-origin"});
   if(!r.ok) throw new Error(`대화를 시작하지 못했습니다. (HTTP ${r.status})`);
   const d=await r.json().catch(()=>({}));
   chatRestore(d.messages || []);
@@ -1991,7 +2020,31 @@ async function chatLoadConversation(){
 function chatRestore(messages){
   document.getElementById("chat-log").innerHTML="";
   for(const m of messages) chatAppend(m.role==="user" ? "me" : "bot", m.content);
-  if(!messages.length) chatAppend("bot", `${current?current.name+"님, ":""}무엇을 도와드릴까요?`);
+  if(!messages.length){ chatAppend("bot", CHAT_BOTS[chatBot].greet()); chatStartersOn(); }
+}
+/* 온보딩 카드. 이력이 없는 새 대화에서만 인사말 아래에 깔리고, 누르면 그 문장을 그대로 질문으로 보낸다.
+   사용자 메시지가 하나라도 붙으면(chatAppend "me") 걷어낸다 — 카드로 보냈든 직접 쳤든 온보딩은 끝난 것이다. */
+function chatStartersOn(){
+  const starters=CHAT_BOTS[chatBot].starters;
+  if(!starters || !starters.length) return;
+  const log=document.getElementById("chat-log");
+  const box=document.createElement("div");
+  box.className="chat-starters"; box.id="chat-starters";
+  for(const [label, question] of starters){
+    const b=document.createElement("button");
+    b.type="button"; b.className="chat-starter";
+    const t=document.createElement("b"); t.textContent=label;
+    const q=document.createElement("span"); q.textContent=question;
+    b.append(t, q);
+    b.onclick=()=>sendChat(question);
+    box.appendChild(b);
+  }
+  log.appendChild(box);
+  log.scrollTop=log.scrollHeight;
+}
+function chatStartersOff(){
+  const el=document.getElementById("chat-starters");
+  if(el) el.remove();
 }
 
 function setChatVisible(on){
@@ -2012,14 +2065,38 @@ function toggleChat(){
   if(document.getElementById("chat-panel").classList.contains("hidden")) openChat();
   else closeChat();
 }
+function selectBot(name){
+  if(name===chatBot || chatBusy) return;
+  chatBot=name;
+  const bot=CHAT_BOTS[name];
+  document.getElementById("chat-title").textContent=bot.title;
+  document.getElementById("chat-st").textContent=bot.st;
+  document.querySelectorAll(".chat-bot").forEach(b=>b.classList.toggle("on", b.dataset.bot===name));
+  document.getElementById("chat-log").innerHTML="";
+  chatReady=null;
+  chatBootstrap().catch(e=>chatAppend("err", e.message));
+}
 
 function chatAppend(cls, text){
+  if(cls==="me") chatStartersOff();
   const log=document.getElementById("chat-log");
   const el=document.createElement("div");
   el.className="chat-msg "+cls;
-  el.textContent=text; // 서버가 준 문자열이라 HTML 로 해석시키지 않는다
+  if(cls==="bot" && window.marked && window.DOMPurify){
+    el.classList.add("md");
+    el.innerHTML=chatMarkdown(text);
+  }else{
+    el.textContent=text; // 서버가 준 문자열이라 HTML 로 해석시키지 않는다
+  }
   log.appendChild(el);
   log.scrollTop=log.scrollHeight;
+}
+function chatMarkdown(text){
+  const box=document.createElement("div");
+  box.innerHTML=DOMPurify.sanitize(marked.parse(text, {gfm:true, breaks:true}),
+    {ALLOWED_TAGS:["p","br","strong","em","del","a","ul","ol","li","code","pre","blockquote","h1","h2","h3","h4","hr"], ALLOWED_ATTR:["href"]});
+  box.querySelectorAll("a").forEach(a=>{ a.target="_blank"; a.rel="noopener"; });
+  return box.innerHTML;
 }
 function chatTypingOn(){
   const log=document.getElementById("chat-log");
@@ -2042,16 +2119,17 @@ function chatKeydown(e){
   if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendChat(); }
 }
 
-async function sendChat(){
+async function sendChat(preset){ // preset 은 온보딩 카드가 넘기는 문장. 없으면 입력창 내용을 보낸다
   if(chatBusy) return;
   const box=document.getElementById("chat-input");
-  const text=box.value.trim();
+  const fromCard=typeof preset==="string";
+  const text=(fromCard ? preset : box.value).trim();
   if(!text) return;
   chatBusy=true;
   document.getElementById("chat-send").disabled=true;
   try{
     await chatBootstrap(); // 쿠키가 있어야 /ask 가 받는다. 실패하면 입력은 남겨 둔다
-    box.value=""; chatGrow(box);
+    if(!fromCard){ box.value=""; chatGrow(box); }
     chatAppend("me", text);
     chatTypingOn();
     chatAppend("bot", await askBot(text));
@@ -2066,7 +2144,7 @@ async function sendChat(){
 }
 
 async function askBot(text, retried){
-  const r=await fetch(`${CHAT_API}/ask`,{method:"POST",credentials:"same-origin",
+  const r=await fetch(`${CHAT_BOTS[chatBot].api}/ask`,{method:"POST",credentials:"same-origin",
     headers:{"Content-Type":"application/json"},body:JSON.stringify({question:text})});
   const d=await r.json().catch(()=>({}));
   if(r.ok){
@@ -2079,7 +2157,7 @@ async function askBot(text, retried){
     chatTypingOff();
     chatReady=null;
     await chatBootstrap();
-    if(r.status===409) chatAppend("err", "대화가 만료되어 새로 시작했습니다.");
+    if(r.status===409) chatAppend("err", CHAT_BOTS[chatBot].renew);
     chatAppend("me", text);
     chatTypingOn();
     return askBot(text, true);

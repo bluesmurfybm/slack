@@ -266,7 +266,7 @@ const MENTION_NAMES = {};
 function mnSeed(){
   DATA.forEach(r=>{
     if(r.req_id && r.req && r.req!=="—") MENTION_NAMES[r.req_id]=r.req;
-    if(r.asg_id && r.asg && r.asg!=="—") MENTION_NAMES[r.asg_id]=r.asg;
+    asgPairs(r).forEach(([id,name])=>{ MENTION_NAMES[id]=name; });
   });
 }
 /* 이름 미해석 멘션(…) 을 서버에서 일괄 해석해 채움 */
@@ -375,7 +375,7 @@ function mentionUsers(){                     // {id, name} 목록 (요청자+담
   const m={};
   DATA.forEach(r=>{
     if(r.req_id && r.req && r.req!=='—') m[r.req_id]=r.req;
-    if(r.asg_id && r.asg && r.asg!=='—') m[r.asg_id]=r.asg;
+    asgPairs(r).forEach(([id,name])=>{ m[id]=name; });
   });
   return _mUsers=Object.entries(m).map(([id,name])=>({id,name}));
 }
@@ -435,7 +435,7 @@ function overdueDays(r){
   if(r.eta >= t) return 0;
   return Math.max(1, Math.round((new Date(t) - new Date(r.eta)) / 86400000));
 }
-function filteredItems(){   return DATA.filter(r => visible(r) && matchBase(r, true) && selPass('asg','asg', r) && (!dueOnly || overdueDays(r) > 0)); }
+function filteredItems(){   return DATA.filter(r => visible(r) && matchBase(r, true) && asgPass(r) && (!dueOnly || overdueDays(r) > 0)); }
 // 미지정 패널: 담당자·진행상태 필터는 적용하지 않음(항상 미지정 + 상태 '등록'만)
 const INIT_STATUS = { "블루소프트":"등록", "와이오즈":"시작 전" };   // 보드별 '미지정 대상' 초기상태
 function unassignedItems(){ return DATA.filter(r => visible(r) && matchBase(r, false) && (!r.asg || r.asg === '—') && r.status === (INIT_STATUS[r.board] || '등록')); }
@@ -446,7 +446,7 @@ function rowHtml(r){
     <div class="row${unread?' unread':' read'}${r.is_pinned?' pinned':''}${r.is_hidden?' hid':''}" data-id="${esc(r.id)}" ${open?'style="background:var(--bg2)"':''}>
       <input type="checkbox" class="chk" data-id="${esc(r.id)}" ${selected.has(r.id)?'checked':''}>
       <div class="pinBtn doPin${r.is_pinned?' on':''}" data-id="${esc(r.id)}" data-pin="${r.is_pinned?0:1}" title="${r.is_pinned?'고정 해제':'상단 고정'}">📌</div>
-      <div class="names">${esc(r.req||'—')}${r.asg && r.asg!=='—' ? `, ${esc(r.asg)}` : ''}</div>
+      <div class="names">${esc(r.req||'—')}${(()=>{ const a=asgNames(r); if(!a.length) return ''; const d = a.length<=2 ? a.join(', ') : a.slice(0,2).join(', ')+'…'; return `, ${esc(d)}`; })()}</div>
       ${!archivedMode && fboardTab==="all" && r.board ? `<span class="bdot ${r.board==='와이오즈'?'w':'b'}" title="${esc(boardLabel(r.board))}">${r.board==='와이오즈'?'W':'U'}</span>` : ''}
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px">
@@ -475,7 +475,7 @@ function rowHtml(r){
             : `<div class="mi"><span class="ml">진행상태</span><select class="edit-status" data-id="${esc(r.id)}">${statusEditOptions(r.status, r.board)}</select></div>`}
           ${r.archived
             ? metaItem('담당자', r.asg||'—')
-            : `<div class="mi"><span class="ml">담당자</span><select class="edit-asg" data-id="${esc(r.id)}">${asgEditOptions(r.asg_id)}</select></div>`}
+            : `<div class="mi asg-mi"><span class="ml">처리담당자</span>${asgMultiEditor(r)}</div>`}
           ${metaItem('요청일', r.date?fmtYmd(r.date):fmtDate(r.created))}
           ${(!r.archived && r.board!=="와이오즈")?`<div class="mi"><span class="ml">예상완료일</span><input type="date" class="edit-eta" data-id="${esc(r.id)}" value="${esc(r.eta||'')}"></div>`:''}
           ${r.done?metaItem('완료일', fmtYmd(r.done)):''}
@@ -527,10 +527,46 @@ function statusEditOptions(cur, board){
   if(cur && !list.includes(cur)) list = [cur, ...list];   // 현재값이 목록에 없으면 유지
   return list.map(s=>`<option${s===cur?' selected':''}>${esc(s)}</option>`).join("");
 }
+/* 한 레코드의 담당자 [ [id,name], ... ] (콤마구분 다중) */
+function asgPairs(r){
+  if(!r || !r.asg_id || !r.asg || r.asg==="—") return [];
+  const ids=String(r.asg_id).split(","), nms=String(r.asg).split(/,\s*/);
+  const out=[]; ids.forEach((id,i)=>{ id=id.trim(); if(id) out.push([id, (nms[i]||id).trim()]); });
+  return out;
+}
+function asgNames(r){ return asgPairs(r).map(p=>p[1]); }   // 이름 배열
 function asgUsers(){   // 데이터에서 distinct 담당자 {id:name}
   const m={};
-  DATA.forEach(r=>{ if(r.asg_id && r.asg && r.asg!=="—") m[r.asg_id]=r.asg; });
-  return Object.entries(m).sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+  DATA.forEach(r=>{ asgPairs(r).forEach(([id,name])=>{ m[id]=name; }); });
+  return Object.entries(m).sort((a,b)=>String(a[1]).localeCompare(String(b[1]),'ko'));
+}
+/* 담당자 필터: 선택된 이름 중 하나라도 이 레코드 담당자에 포함되면 통과 */
+function asgPass(r){ const s=FILT.asg[r.board]; if(!s || s.size===0) return true; return asgNames(r).some(n=>s.has(n)); }
+/* 담당자 후보(요청자+담당자 distinct). 아래 팀원은 상단에 지정 순서로 표시 */
+const ASG_TOP = ["김아랑","김호영","박성철","박화랑","안정민","유병문","유승인","이준영","조성훈"];
+function userCandidates(){
+  const m={};
+  DATA.forEach(r=>{ if(r.req_id && r.req && r.req!=='—') m[r.req_id]=r.req; asgPairs(r).forEach(([id,name])=>{ m[id]=name; }); });
+  Object.entries(MENTION_NAMES).forEach(([id,n])=>{ if(ASG_TOP.includes(n)) m[id]=n; });   // 지정 팀원은 멘션 해석분도 후보 포함
+  return Object.entries(m).filter(([id,n])=>n && n!=='—').sort((a,b)=>{
+    const ia=ASG_TOP.indexOf(a[1]), ib=ASG_TOP.indexOf(b[1]);
+    if(ia!==-1 || ib!==-1){ if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib; }   // 팀원 우선(지정 순서)
+    return String(a[1]).localeCompare(String(b[1]),'ko');                                    // 나머지 가나다
+  });
+}
+function asgChipsHtml(cur){
+  return (cur.length ? cur.map(([id,name])=>`<span class="asg-chip">${esc(name)}<button type="button" class="asg-x" data-uid="${escAttr(id)}" title="제거">✕</button></span>`).join("")
+                     : '<span class="asg-empty">미지정</span>')
+    + '<button type="button" class="asg-add" title="담당자 추가">＋</button>';
+}
+/* 슬랙식 다중 담당자 에디터 (칩 + 드롭다운 체크) */
+function asgMultiEditor(r){
+  const cur=asgPairs(r), curIds=new Set(cur.map(p=>p[0]));
+  const opts=userCandidates().map(([id,name])=>`<label class="asg-opt"><input type="checkbox" value="${escAttr(id)}" ${curIds.has(id)?'checked':''}><span>${esc(name)}</span></label>`).join("") || '<div class="ms-empty">사용자 없음</div>';
+  return `<div class="asg-box" data-id="${escAttr(r.id)}">
+    <div class="asg-chips">${asgChipsHtml(cur)}</div>
+    <div class="asg-menu" hidden><input type="text" class="asg-search" placeholder="이름 검색"><div class="asg-opts">${opts}</div></div>
+  </div>`;
 }
 function asgEditOptions(curId){
   let h=`<option value=""${!curId?' selected':''}>미지정</option>`;
@@ -566,6 +602,24 @@ async function updateField(id, field, value){
     }
     render();
   }catch(err){ alert("수정 실패: " + err.message); }
+}
+/* 다중 담당자: 체크/칩 변경 시 칩 즉시 갱신 + 디바운스 저장(메뉴 유지) */
+let _asgT=null;
+function applyAsg(bx, id){
+  const checked=[...bx.querySelectorAll(".asg-opt input:checked")];
+  const cur=checked.map(i=>[i.value, i.parentElement.querySelector("span").textContent]);
+  bx.querySelector(".asg-chips").innerHTML = asgChipsHtml(cur);
+  clearTimeout(_asgT); _asgT=setTimeout(()=>saveAsg(id, cur.map(p=>p[0])), 500);
+}
+async function saveAsg(id, ids){
+  const r0=DATA.find(x=>x.id===id); const expect=r0?(r0.asg_id||""):"";
+  try{
+    const j=await (await fetch("update.php",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({request_id:id, field:"asg", value:ids.join(","), expect})})).json();
+    if(j.conflict){ const r=DATA.find(x=>x.id===id); if(r){ r.asg_id=j.current_id||null; r.asg=j.current; } render(); alert("⚠️ 다른 사람이 이미 담당자를 변경했습니다.\n현재: "+(j.current||"—")+"\n최신 상태로 갱신했습니다."); return; }
+    if(!j.ok) throw new Error(j.error||"실패");
+    const r=DATA.find(x=>x.id===id); if(r){ r.asg_id=j.asg_id||null; r.asg=j.asg; }   // DATA 동기화(목록/필터 반영은 다음 렌더)
+  }catch(err){ alert("담당자 수정 실패: "+err.message); }
 }
 function cmtInitial(n){ return (n||"?").trim().slice(0,1) || "?"; }
 function authorColor(name){            // 작성자 이름 → 고유 색상(HSL 해시)
@@ -1075,9 +1129,18 @@ function bindRows(box){
     el.addEventListener("click", e=>e.stopPropagation());
     el.addEventListener("change", e=>{ e.stopPropagation(); updateField(el.dataset.id,"status",e.target.value); });
   });
-  box.querySelectorAll(".edit-asg").forEach(el=>{
-    el.addEventListener("click", e=>e.stopPropagation());
-    el.addEventListener("change", e=>{ e.stopPropagation(); updateField(el.dataset.id,"asg",e.target.value); });
+  box.querySelectorAll(".asg-box").forEach(bx=>{
+    const id=bx.dataset.id, menu=bx.querySelector(".asg-menu");
+    bx.addEventListener("click", e=>{
+      const add=e.target.closest(".asg-add");
+      if(add){ e.stopPropagation(); menu.hidden=!menu.hidden; const s=bx.querySelector(".asg-search"); if(!menu.hidden && s) setTimeout(()=>s.focus(),0); return; }
+      const x=e.target.closest(".asg-x");
+      if(x){ e.stopPropagation(); const cb=[...bx.querySelectorAll(".asg-opt input")].find(i=>i.value===x.dataset.uid); if(cb) cb.checked=false; applyAsg(bx,id); return; }
+    });
+    menu.addEventListener("click", e=>e.stopPropagation());
+    bx.addEventListener("change", e=>{ if(e.target.matches(".asg-opt input")){ e.stopPropagation(); applyAsg(bx,id); } });
+    const sr=bx.querySelector(".asg-search");
+    if(sr) sr.addEventListener("input", ()=>{ const q=sr.value.toLowerCase(); bx.querySelectorAll(".asg-opt").forEach(o=>{ o.style.display=o.textContent.toLowerCase().includes(q)?'':'none'; }); });
   });
   box.querySelectorAll(".edit-eta").forEach(el=>{
     el.addEventListener("click", e=>e.stopPropagation());
@@ -1370,6 +1433,10 @@ const CANON = {
 };
 function dimValues(field, board){
   if(CANON[field] && CANON[field][board]) return CANON[field][board];   // 고정 목록
+  if(field==='asg'){   // 담당자는 개별 이름으로 분해
+    const set=new Set(); DATA.filter(r=>r.board===board).forEach(r=>asgNames(r).forEach(n=>set.add(n)));
+    return [...set].sort((a,b)=>a.localeCompare(b,'ko'));
+  }
   return [...new Set(DATA.filter(r=>r.board===board).map(r=>r[field]).filter(v=>v && v!=="—"))].sort((a,b)=>a.localeCompare(b,'ko'));
 }
 function dimSelCount(dim){ return FILT[dim]["블루소프트"].size + FILT[dim]["와이오즈"].size; }
@@ -1412,6 +1479,7 @@ function buildMS(cfg){
 }
 function buildAllMS(){ MS.forEach(buildMS); }
 document.addEventListener("click", closeAllMS);   // 바깥 클릭 시 메뉴 닫기
+document.addEventListener("click", ()=>{ document.querySelectorAll(".asg-menu").forEach(m=>m.hidden=true); });   // 담당자 드롭다운 닫기
 
 /* ---------- 필터 상태 저장/복원 (새로고침에도 유지) ---------- */
 const FILTER_KEY = "slackapi_filters";   // 운영 lists.php 와 별도 키

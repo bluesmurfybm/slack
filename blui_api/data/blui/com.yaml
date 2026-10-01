@@ -1,0 +1,53 @@
+- id: COM-001
+  question: 블루소프트는 어떤 회사인가요?
+  aliases:
+    - 회사 소개
+    - 뭐 하는 회사예요
+  answer: 2002년 설립된 충북 청주 소재 SW 개발 기업입니다. 웹에이전시(BLUELAB), 솔루션(BLUEAPP), 디지털마케팅(블리다) 세 개 사업부를 운영합니다.
+
+- id: COM-002
+  question: 사무실이 어디인가요?
+  aliases:
+    - 오시는 길
+    - 위치
+    - 주소
+  answer: 충북 청주시 청원구 상당로 314 (내덕2동 201-31) 청주문화산업단지 344호입니다.
+
+- id: COM-003
+  question: 연락처를 알려주세요.
+  aliases:
+    - 전화번호
+    - 이메일
+  answer: 전화 043-219-1777, 팩스 043-219-1258, 메일 blue@bluesoft.co.kr입니다.
+
+- id: COM-004
+  question: 어떤 일을 하나요?
+  aliases:
+    - 사업 영역
+    - 서비스 종류
+  answer: 반응형 홈페이지·쇼핑몰 구축, 이러닝(LMS) 시스템 개발, SHE(안전·보건·환경) 시스템 개발, 디지털마케팅 컨설팅을 합니다.
+
+- id: COM-005
+  question: 회사 연혁이 어떻게 되나요?
+  aliases:
+    - 얼마나 된 회사예요
+    - 업력
+  answer: 2002년 설립, 2009년 벤처기업 인증, 2010년 기업부설연구소 인가 및 ISO 9001:2008 인증, 2013년 학습관리시스템 코스모스 출시, 2026년 COURSEMOS LXP 4.5 패키지 출시입니다.
+
+- id: COM-006
+  question: 대표자가 누구인가요?
+  answer: 김호영 대표이며, 2026년부터 단독 대표 체제입니다.
+
+- id: COM-007
+  question: 어떤 인증을 보유하고 있나요?
+  aliases:
+    - 신뢰할 수 있나요
+    - 인증
+  answer: 벤처기업 인증, ISO 9001:2008, 기업부설연구소 인가, 직접생산 인증, 소프트웨어품질인증을 보유하고 있습니다.
+
+- id: COM-008
+  question: 작업한 사례를 볼 수 있나요?
+  aliases:
+    - 포트폴리오
+    - 레퍼런스
+  answer: 웹 제작사례는 BLUELAB 제작사례 페이지(https://bluesoft.co.kr/Lab/works.php)에서, LMS·SHE 구축사례는 BLUEAPP WORKS 페이지(https://bluesoft.co.kr/App/works.php)에서 보실 수 있습니다.

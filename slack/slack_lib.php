@@ -208,6 +208,7 @@ function slackIndexFields($fields) {
 
 function slackFieldText($f)   { return isset($f['text']) ? $f['text'] : (isset($f['value']) ? $f['value'] : ''); }
 function slackFieldUser($f)   { return isset($f['user'][0])   ? $f['user'][0]   : null; }
+function slackFieldUsers($f)  { return (isset($f['user']) && is_array($f['user'])) ? array_values(array_filter($f['user'])) : []; }   // 담당자 여러 명
 function slackFieldSelect($f) { return isset($f['select'][0]) ? $f['select'][0] : null; }
 function slackFieldDate($f)   { return isset($f['date'][0])   ? $f['date'][0]   : null; }
 function slackFieldAttach($f) { return isset($f['attachment']) && is_array($f['attachment']) ? $f['attachment'] : []; }
@@ -375,9 +376,9 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
         $m = slackIndexFields(isset($item['fields']) ? $item['fields'] : []);
 
         $reqId = isset($m[$COL['req']]) ? slackFieldUser($m[$COL['req']]) : null;
-        $asgId = isset($m[$COL['asg']]) ? slackFieldUser($m[$COL['asg']]) : null;
+        $asgIds = isset($m[$COL['asg']]) ? slackFieldUsers($m[$COL['asg']]) : [];   // 담당자 전체
         $userIds[] = $reqId;
-        $userIds[] = $asgId;
+        foreach ($asgIds as $u) $userIds[] = $u;
 
         $fileIds = isset($m[$COL['attach']]) ? slackFieldAttach($m[$COL['attach']]) : [];
         foreach ($fileIds as $fid) $allFileIds[] = $fid;
@@ -390,7 +391,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
             'momo'        => isset($m[$COL['momo']])  ? slackFieldText($m[$COL['momo']])  : '',
             'lms'         => isset($m[$COL['lms']])   ? slackFieldText($m[$COL['lms']])   : '',
             'req_id'      => $reqId,
-            'asg_id'      => $asgId,
+            'asg_id'      => implode(',', $asgIds),
             'status_id'   => isset($m[$COL['status']])   ? slackFieldSelect($m[$COL['status']])   : null,
             'priority_id' => isset($m[$COL['priority']]) ? slackFieldSelect($m[$COL['priority']]) : null,
             'team_id'     => isset($m[$COL['team']])     ? slackFieldSelect($m[$COL['team']])     : null,
@@ -413,7 +414,8 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
     $files = slackResolveFiles($token, $allFileIds);   // 파일ID → 메타(영구 캐시)
     foreach ($rows as $i => $r) {
         $rows[$i]['req']      = $r['req_id'] ? (isset($names[$r['req_id']]) ? $names[$r['req_id']] : $r['req_id']) : '—';
-        $rows[$i]['asg']      = $r['asg_id'] ? (isset($names[$r['asg_id']]) ? $names[$r['asg_id']] : $r['asg_id']) : '—';
+        $aids = $r['asg_id'] !== '' ? explode(',', $r['asg_id']) : [];
+        $rows[$i]['asg']      = $aids ? implode(', ', array_map(function ($id) use ($names) { return isset($names[$id]) ? $names[$id] : $id; }, $aids)) : '—';
         $rows[$i]['status']   = $r['status_id']   ? ($statusMap[$r['status_id']]     ?? $r['status_id'])   : '';
         $rows[$i]['priority'] = $r['priority_id'] ? ($priorityMap[$r['priority_id']] ?? $r['priority_id']) : '';
         $rows[$i]['team']     = $r['team_id']     ? ($teamMap[$r['team_id']]         ?? $r['team_id'])     : '';
