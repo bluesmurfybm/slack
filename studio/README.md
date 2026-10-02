@@ -94,6 +94,7 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 011_migration_rnd_cap.sql           bs_setting + 점유 상한 4행
 012_migration_rnd_domain.sql        R&D 분야 태그
 013_migration_domain_group.sql      분야 묶음(코스모스 LXP / 일반) + 일반 분야 6개
+014_migration_project_track.sql     사업 유형 — LXP 학내형/개방형
 ```
 
 ### 적용 뒤 확인
@@ -110,6 +111,7 @@ mysql <db> -e "SELECT * FROM bs_setting"           # 4행인가
 |---|---|
 | 002 · 005 · 006 · 007 · 010 · 011 · 012 | 안전 (`IF NOT EXISTS` / `ON DUPLICATE KEY`) |
 | 013 | **안전하지 않음** — 맨 `ALTER` 라 두 번째에 죽습니다 (INSERT 쪽은 안전) |
+| 014 | 안전 (`UPDATE` + `MODIFY COLUMN`. 둘 다 다시 돌려도 같은 결과) |
 | 001 | 안전하지 않음 (`CREATE TABLE`) |
 | 008 · 009 | **안전하지 않음** — 맨 `ALTER` 라 두 번째에 죽습니다 |
 
@@ -119,7 +121,7 @@ mysql <db> -e "SELECT * FROM bs_setting"           # 4행인가
 
 ## 2. 되돌리기
 
-되돌리기 스크립트는 `010`·`011`·`012`·`013` 에만 있습니다.
+되돌리기 스크립트는 `010`~`014` 에만 있습니다.
 **`001`~`009` 에는 없습니다.** 그 구간을 되돌리는 방법은 덤프 복원 하나뿐입니다.
 그래서 `apply.sh` 전에 `dump.sh` 를 먼저 돌려야 합니다.
 
@@ -139,6 +141,7 @@ sh studio/sql/dump.sh --drop-sql <db> | mysql <db>
 gunzip -c <db>_bs_<시각>.sql.gz | mysql --default-character-set=utf8mb4 <db>
 
 # 010~012 만 되돌리기 (R&D 기능만 물리고 싶을 때)
+mysql --default-character-set=utf8mb4 <db> < studio/sql/014_rollback_project_track.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/013_rollback_domain_group.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/012_rollback_rnd_domain.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/011_rollback_rnd_cap.sql

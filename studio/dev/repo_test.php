@@ -59,7 +59,7 @@ ok('첫 코드 PRJ-2026-001', $repo->nextCode(2026) === 'PRJ-2026-001', $repo->n
 
 echo "\n[2] 생성\n";
 $id1 = $repo->create([
-    'name' => 'OO대 LXP 고도화', 'client' => 'OO대학교', 'track' => 'lxp',
+    'name' => 'OO대 LXP 고도화', 'client' => 'OO대학교', 'track' => 'lxp_campus',
     'summary' => '학습경험 플랫폼 고도화',
     'dev_start' => '2026-03-02', 'dev_end' => '2026-05-29',
     'test_start' => '2026-05-11', 'test_end' => '2026-06-12',
@@ -96,7 +96,7 @@ echo "\n[5] 수정\n";
 $repo->update($id1, ['name' => 'OO대 LXP 고도화 (2차)', 'client' => 'OO대학교 정보전산원']);
 $p1 = $repo->find($id1);
 ok('이름 변경', $p1['name'] === 'OO대 LXP 고도화 (2차)');
-ok('안 보낸 칸은 유지', $p1['track'] === 'lxp');
+ok('안 보낸 칸은 유지', $p1['track'] === 'lxp_campus');
 throws('수정 시에도 기간 검증', fn() => $repo->update($id1, ['dev_end' => '2026-01-01']));
 ok('실패한 수정은 반영 안 됨', $repo->find($id1)['dev_end'] === '2026-05-29');
 
@@ -111,7 +111,7 @@ ok('전체 조회', $r['total'] === 5, '총 ' . $r['total']);
 ok('source_count 포함', array_key_exists('source_count', $r['rows'][0]));
 $r = $repo->search(['status' => 'scoping']);
 ok('상태 필터', $r['total'] === 1);
-$r = $repo->search(['track' => 'lxp']);
+$r = $repo->search(['track' => 'lxp_campus']);
 ok('트랙 필터', $r['total'] === 1);
 $r = $repo->search(['owner_id' => $other['id']]);
 ok('담당자 필터', $r['total'] === 1);

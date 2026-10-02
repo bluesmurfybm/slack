@@ -356,7 +356,7 @@ ok('사람이 읽을 메시지', str_contains($r['json']['error']['message'] ?? 
    $r['json']['error']['message'] ?? '');
 
 $r = $admin->req('/studio/api/project.php?act=create', ['csrf' => true, 'json' => [
-    'name' => 'API 시험 프로젝트', 'client' => 'Z대학교', 'track' => 'lxp',
+    'name' => 'API 시험 프로젝트', 'client' => 'Z대학교', 'track' => 'lxp_campus',
     'summary' => 'HTTP 레벨 시험용',
     'dev_start' => '2026-03-01', 'dev_end' => '2026-05-31',
     'test_start' => '2026-05-01', 'test_end' => '2026-06-30',
@@ -398,7 +398,7 @@ $admin->req('/studio/api/project.php?act=update',
     ['csrf' => true, 'json' => ['id' => $pid, 'name' => '이름만 바꾼다']]);
 $after = $admin->req('/studio/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
 ok('이름만 보내도 고객이 안 지워진다', $after['client'] === 'Z대학교', var_export($after['client'], true));
-ok('이름만 보내도 트랙이 안 지워진다', $after['track'] === 'lxp', var_export($after['track'], true));
+ok('이름만 보내도 트랙이 안 지워진다', $after['track'] === 'lxp_campus', var_export($after['track'], true));
 ok('이름만 보내도 개발기간이 안 지워진다',
    $after['dev_start'] === '2026-03-01' && $after['dev_end'] === '2026-05-31',
    $after['dev_start'] . '~' . $after['dev_end']);
@@ -411,7 +411,7 @@ $admin->req('/studio/api/project.php?act=update',
     ['csrf' => true, 'json' => ['id' => $pid, 'client' => '']]);
 $after2 = $admin->req('/studio/api/project.php?act=get&id=' . $pid)['json']['data']['project'];
 ok('빈 값을 보내면 지워진다', $after2['client'] === null, var_export($after2['client'], true));
-ok('그래도 다른 칸은 그대로', $after2['track'] === 'lxp');
+ok('그래도 다른 칸은 그대로', $after2['track'] === 'lxp_campus');
 
 // 뒤 절(J)이 이 프로젝트의 이름·고객으로 검색한다. 바꿔 놓은 값을 되돌린다.
 // 시험끼리 상태를 물려주면 엉뚱한 곳이 빨개진다 — 실제로 한 번 그랬다.

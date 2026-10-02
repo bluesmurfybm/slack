@@ -13,7 +13,7 @@ ALTER TABLE bs_project AUTO_INCREMENT = 1;
 INSERT INTO bs_project
   (code, name, summary, client, track, dev_start, dev_end, test_start, test_end,
    deploy_date, notes, status, owner_id, owner_name) VALUES
-('PRJ-2026-001', 'A대 LXP 고도화', '학습경험 플랫폼 2차 고도화', 'A대학교', 'lxp',
+('PRJ-2026-001', 'A대 LXP 고도화', '학습경험 플랫폼 2차 고도화', 'A대학교', 'lxp_campus',
  '2026-03-02','2026-05-29','2026-05-11','2026-06-12','2026-06-22','출석 연동 주의','allocating',
  'kimhy@bluesoft.co.kr','김호영'),
 ('PRJ-2026-002', 'B대 LMS 신규 구축', '무들 기반 신규 구축', 'B대학교', 'lms_b2b',

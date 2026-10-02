@@ -101,6 +101,7 @@ FILES="
 011_migration_rnd_cap.sql
 012_migration_rnd_domain.sql
 013_migration_domain_group.sql
+014_migration_project_track.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

@@ -204,10 +204,25 @@ const BS_RND_OUTPUT_KIND = [
     'slide'  => '발표자료',
 ];
 
-/** bs_project.track */
+/**
+ * bs_project.track — 사업 유형.
+ *
+ * LXP 는 셋으로 갈린다. 학교 구성원만 쓰는 **학내형**, 외부에 열어 두는
+ * **개방형**, 둘을 겸하는 **하이브리드**. 범위도 인증 방식도 달라서
+ * 한 덩어리로 두면 과업 성격이 가려진다.
+ *
+ * 코드는 화면 문구와 따로 간다 — 문구는 바뀌어도 DB 에 쌓인 값은 그대로
+ * 두는 것이 맞기 때문이다. 다만 `lxp` 하나뿐일 때 붙인 이름이 이제
+ * 학내형만 가리키게 되어, 값이 거의 없는 지금 `lxp_campus` 로 바꿨다
+ * (014_migration_project_track.sql).
+ *
+ * 여기 없는 코드가 DB 에 있어도 화면은 코드를 그대로 보여 준다
+ * (`BS_PROJECT_TRACK[$t] ?? $t`). 값을 지우거나 막지 않는다.
+ */
 const BS_PROJECT_TRACK = [
     'lms_b2b'    => 'LMS (B2B)',
-    'lxp'        => 'LXP',
+    'lxp_campus' => 'LXP 학내형',
+    'lxp_open'   => 'LXP 개방형',
     'lxp_hybrid' => 'LXP 하이브리드',
     '용역'        => '용역',
     '사내'        => '사내',
