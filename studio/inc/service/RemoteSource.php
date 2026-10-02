@@ -271,12 +271,20 @@ final class RemoteSource
      */
     private function fetchFigma(string $fileKey, string $nodeId = ''): array
     {
-        // 페이지를 짚었으면 그 가지만 받는다 — 응답이 훨씬 작고, 사람이
-        // 보라고 한 곳이 그대로 글자가 된다.
-        $url = $nodeId !== ''
-            ? 'https://api.figma.com/v1/files/' . rawurlencode($fileKey)
-              . '/nodes?ids=' . rawurlencode($nodeId)
-            : 'https://api.figma.com/v1/files/' . rawurlencode($fileKey);
+        // ┌──────────────────────────────────────────────────────────┐
+        // │ node-id 가 있어도 **파일 전체**를 읽는다                   │
+        // │                                                          │
+        // │ 한때는 node-id 가 있으면 그 가지만 읽었다. "사람이 특정   │
+        // │ 페이지를 짚었다" 고 봤는데 틀렸다 — 피그마의 '링크 복사'는│
+        // │ 무엇을 고르고 있든 **언제나** node-id 를 붙인다. 그래서   │
+        // │ 그냥 복사해 붙여 넣은 주소가 프레임 하나로 좁혀졌고,      │
+        // │ 실제로 17자만 읽힌 적이 있다.                             │
+        // │                                                          │
+        // │ 전체를 읽어도 잃는 것이 없다. 짚은 가지는 그 안에 들어    │
+        // │ 있고, 글자 수는 MAX_CHARS 에서 자른다.                    │
+        // └──────────────────────────────────────────────────────────┘
+        unset($nodeId);
+        $url = 'https://api.figma.com/v1/files/' . rawurlencode($fileKey);
 
         // **깊이를 걸지 않는다.** 전에는 depth=4 로 잘랐는데, 실제 글자는
         // 프레임 안쪽 깊은 곳에 있어 이름만 긁고 내용을 통째로 놓쳤다.
@@ -286,35 +294,28 @@ final class RemoteSource
             throw new RemoteSourceError('피그마가 뜻 모를 응답을 돌려줬습니다.');
         }
 
-        $name  = (string)($j['name'] ?? $fileKey);
-        $roots = [];
-        if ($nodeId !== '') {
-            foreach (($j['nodes'] ?? []) as $n) {
-                if (is_array($n) && isset($n['document'])) {
-                    $roots[] = $n['document'];
-                }
-            }
-            if ($roots === []) {
-                throw new RemoteSourceError(
-                    '주소가 가리키는 페이지를 찾지 못했습니다. 지워졌거나 주소가 낡았을 수 있습니다.'
-                );
-            }
-        } elseif (isset($j['document'])) {
-            $roots[] = $j['document'];
-        } else {
+        $name = (string)($j['name'] ?? $fileKey);
+        if (!isset($j['document'])) {
             throw new RemoteSourceError('피그마 응답에 문서가 없습니다.');
         }
 
         $lines = [];
-        foreach ($roots as $root) {
-            $this->walkFigma($root, 0, $lines);
-        }
+        $this->walkFigma($j['document'], 0, $lines);
 
         if ($lines === []) {
             throw new RemoteSourceError(
                 '읽을 글자가 없습니다. 화면이 전부 이미지(캡처)로 되어 있으면 '
                 . '피그마에도 글자가 없어 뽑을 것이 없습니다.'
             );
+        }
+        // 이름이 Frame 12 · IMG_5203 뿐인 파일은 읽어도 쓸 것이 없다.
+        // 성공으로 돌려주면 "읽었는데 왜 WBS 가 안 나오지" 가 된다.
+        if (count($lines) < 3) {
+            throw new RemoteSourceError(sprintf(
+                '읽을 만한 글자가 %d줄뿐입니다. 화면이 캡처 이미지이거나 '
+                . '레이어 이름이 자동 생성 이름(Frame 12 · IMG_0001)뿐일 때 그렇습니다.',
+                count($lines)
+            ));
         }
         $text = implode("
 ", $lines);

@@ -2103,8 +2103,10 @@ foreach ([
        RemoteSource::identify($bad) === null, json_encode(RemoteSource::identify($bad)));
 }
 
-// 피그마 주소에 node-id 가 있으면 그 페이지만 읽는다. 사람이 특정 페이지를
-// 짚어 붙여 넣었는데 파일 전체를 읽으면 보라고 한 곳이 묻힌다.
+// node-id 는 알아보되 **읽을 범위를 좁히는 데 쓰지 않는다.** 피그마의
+// '링크 복사' 는 무엇을 고르고 있든 언제나 node-id 를 붙여서, 그냥 복사해
+// 붙여 넣은 주소가 프레임 하나로 좁혀지는 일이 생긴다(실제로 17자만 읽혔다).
+// 뽑아 두는 것은 나중에 "어느 화면을 가리키는가" 를 보여 줄 때 쓰려는 것이다.
 foreach ([
     ['https://www.figma.com/design/AbCdEf123456/x?node-id=40006486-417499', '40006486:417499'],
     ['https://www.figma.com/design/AbCdEf123456/x?node-id=4000%3A417',       '4000:417'],
