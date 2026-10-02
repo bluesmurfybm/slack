@@ -64,6 +64,16 @@ try {
 
             $link = $an->nextPending($projectId);
             if ($link === null) {
+                // 대기는 남았는데 집을 것이 없다 = 전부 쉬는 중(호출 제한).
+                // 끝났다고 하면 안 된다 — 큐로 되돌려 다음 회차에 이어 간다.
+                if ($an->pendingCount($projectId) > 0) {
+                    $jobs->finish($jobId, 'queued', sprintf(
+                        '호출 제한으로 쉬는 중입니다. %d분 뒤 다시 시도합니다.',
+                        LinkAnalyzer::RETRY_AFTER_MINUTES
+                    ));
+                    $log("작업 #$jobId 대기 — 호출 제한");
+                    exit(0);
+                }
                 $jobs->finish($jobId, 'done', sprintf(
                     '%d건 중 %d건 실패', (int)$now['done'], (int)$now['failed']
                 ));
@@ -71,9 +81,16 @@ try {
                 exit(0);
             }
 
-            $ok = $an->fetchOne($link);
-            $jobs->progress($jobId, $ok);
-            $log(($ok ? '  읽음  ' : '  실패  ') . mb_substr((string)$link['url'], 0, 80));
+            $r = $an->fetchOne($link);
+            if ($r === 'retry') {
+                // 아직 안 끝났다. 진행률을 올리면 되시도할 때 두 번 세어
+                // done 이 total 을 넘는다. 살아 있다는 신호만 보낸다.
+                $jobs->beat($jobId);
+                $log('  미룸  ' . mb_substr((string)$link['url'], 0, 80));
+                continue;
+            }
+            $jobs->progress($jobId, $r === 'ok');
+            $log(($r === 'ok' ? '  읽음  ' : '  실패  ') . mb_substr((string)$link['url'], 0, 80));
         }
         // 시간이 다 됐다. 대기로 돌려 다음 크론이 이어 가게 한다.
         $jobs->finish($jobId, 'queued', '이어서 진행합니다.');

@@ -33,8 +33,22 @@ require_once __DIR__ . '/Integration.php';
 // 에서 Class not found 로 터진다.
 require_once __DIR__ . '/OfficeDocumentParser.php';
 
-/** 읽어 오지 못했다. 메시지는 사람이 읽을 것이라 그대로 화면에 쓴다. */
-class RemoteSourceError extends RuntimeException {}
+/**
+ * 읽어 오지 못했다. 메시지는 사람이 읽을 것이라 그대로 화면에 쓴다.
+ *
+ * `retryable` 은 **기다리면 될 일인가**를 가른다. 호출 제한(429)이나 상대
+ * 서버 오류(5xx)는 설정이 틀린 것이 아니라 지금이 아닐 뿐이다. 그런 것을
+ * 실패로 못 박으면 사람이 토큰을 의심하며 헤맨다.
+ *
+ * LlmError 가 같은 방식으로 나눈다.
+ */
+class RemoteSourceError extends RuntimeException
+{
+    public function __construct(string $message, public readonly bool $retryable = false)
+    {
+        parent::__construct($message);
+    }
+}
 
 final class RemoteSource
 {
@@ -284,7 +298,14 @@ final class RemoteSource
         // │ 있고, 글자 수는 MAX_CHARS 에서 자른다.                    │
         // └──────────────────────────────────────────────────────────┘
         unset($nodeId);
-        $url = 'https://api.figma.com/v1/files/' . rawurlencode($fileKey);
+
+        // 깊이를 건다. 한때 아예 없앴더니 응답이 커져 **호출 제한(429)** 에
+        // 걸렸다. 피그마의 제한은 돌려주는 노드 수에 비례한다.
+        //
+        // 6단계면 페이지 > 섹션 > 프레임 > 요소 > 글자까지 닿는다. 예전의
+        // 4단계로는 바깥 이름만 긁혔다. 더 깊이 있는 글자는 놓치지만,
+        // 아예 못 읽는 것보다 낫다.
+        $url = 'https://api.figma.com/v1/files/' . rawurlencode($fileKey) . '?depth=6';
 
         // **깊이를 걸지 않는다.** 전에는 depth=4 로 잘랐는데, 실제 글자는
         // 프레임 안쪽 깊은 곳에 있어 이름만 긁고 내용을 통째로 놓쳤다.
@@ -424,7 +445,9 @@ final class RemoteSource
             throw new RemoteSourceError('바깥으로 나가지 못했습니다: ' . $err);
         }
         if ($code >= 400) {
-            throw new RemoteSourceError($this->explain($code, (string)$res));
+            // 429(호출 제한)와 5xx(상대 서버)는 기다리면 될 일이다.
+            throw new RemoteSourceError($this->explain($code, (string)$res),
+                                        retryable: $code === 429 || $code >= 500);
         }
         return (string)$res;
     }
@@ -440,7 +463,7 @@ final class RemoteSource
             $code === 403 => '권한이 없습니다(403). 그 문서를 연결된 계정이 볼 수 있는지 확인하세요.'
                              . ($msg !== '' ? " — $msg" : ''),
             $code === 404 => '그 문서를 찾지 못했습니다(404). 주소가 맞는지, 지워지지 않았는지 보세요.',
-            $code === 429 => '요청이 너무 잦습니다(429). 잠시 뒤에 다시 하세요.',
+            $code === 429 => '피그마 호출 제한에 걸렸습니다(429). 잠시 뒤에 저절로 다시 시도합니다.',
             $code >= 500  => "상대 서버 쪽 오류입니다($code). 잠시 뒤에 다시 하세요.",
             default       => "읽지 못했습니다($code)" . ($msg !== '' ? " — $msg" : ''),
         };

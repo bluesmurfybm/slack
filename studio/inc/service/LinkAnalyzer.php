@@ -26,6 +26,15 @@ final class LinkAnalyzer
     /** 한 프로젝트에서 한 번에 다룰 링크 수. 넘으면 앞에서부터 자른다. */
     public const MAX_LINKS = 300;
 
+    /**
+     * 되시도까지 쉬는 시간(분).
+     *
+     * 호출 제한(429)에 걸렸을 때 곧바로 다시 부르면 또 걸린다. 그 사이에는
+     * 다른 링크를 읽는다 — fetched_at 을 찍어 두고 그보다 오래된 것만 집는다.
+     * 칸을 새로 만들지 않고 이미 있는 칸으로 뒤로 미루는 방법이다.
+     */
+    public const RETRY_AFTER_MINUTES = 5;
+
     private RemoteSource $remote;
 
     public function __construct(private PDO $pdo)
@@ -138,14 +147,22 @@ final class LinkAnalyzer
         return (int)$st->fetchColumn();
     }
 
-    /** 다음에 읽을 링크 하나. 없으면 null. */
+    /**
+     * 다음에 읽을 링크 하나. 없으면 null.
+     *
+     * 방금 호출 제한에 걸린 것은 건너뛴다. **대기(pending)인데 돌려줄 것이
+     * 없는 상태**가 생길 수 있는데, 그때는 워커가 작업을 큐로 되돌려
+     * 다음 회차에 이어 간다.
+     */
     public function nextPending(int $projectId): ?array
     {
         $st = $this->pdo->prepare(
             'SELECT * FROM bs_source_link
-              WHERE project_id = ? AND status = "pending" ORDER BY id LIMIT 1'
+              WHERE project_id = ? AND status = "pending"
+                AND (fetched_at IS NULL OR fetched_at < DATE_SUB(NOW(), INTERVAL ? MINUTE))
+              ORDER BY id LIMIT 1'
         );
-        $st->execute([$projectId]);
+        $st->execute([$projectId, self::RETRY_AFTER_MINUTES]);
         $r = $st->fetch(PDO::FETCH_ASSOC);
         return $r === false ? null : $r;
     }
@@ -156,9 +173,13 @@ final class LinkAnalyzer
      * **예외를 밖으로 던지지 않는다.** 하나가 실패했다고 나머지가 멈추면
      * 안 된다. 실패는 status='fail' 과 error 로 남는다.
      *
-     * @return bool 성공 여부
+     * 세 갈래로 돌려준다. 'retry' 는 **아직 안 끝난 것**이라 진행률을
+     * 올리면 안 된다 — 올리면 되시도할 때마다 두 번 세어 done 이 total 을
+     * 넘는다.
+     *
+     * @return 'ok'|'fail'|'retry'
      */
-    public function fetchOne(array $link): bool
+    public function fetchOne(array $link): string
     {
         $id  = (int)$link['id'];
         $url = (string)$link['url'];
@@ -182,7 +203,7 @@ final class LinkAnalyzer
             }
 
             $this->save($id, 'ok', mb_substr((string)$got['name'], 0, 200), $text, null);
-            return true;
+            return 'ok';
 
         } catch (Throwable $e) {
             $msg = $e instanceof RemoteSourceError || $e instanceof DocumentParseError
@@ -191,8 +212,13 @@ final class LinkAnalyzer
             if (!($e instanceof RemoteSourceError) && !($e instanceof DocumentParseError)) {
                 error_log('[BlueStudio] fetchOne#' . $id . ': ' . $e);
             }
-            $this->save($id, 'fail', null, null, $msg);
-            return false;
+
+            // 기다리면 될 일(호출 제한·상대 서버 오류)은 **실패로 못 박지
+            // 않는다.** 대기로 두고 사유만 적어 둔다 — 사람이 토큰을
+            // 의심하며 헤매지 않게. fetched_at 을 찍어 두면 그만큼 쉰다.
+            $retry = $e instanceof RemoteSourceError && $e->retryable;
+            $this->save($id, $retry ? 'pending' : 'fail', null, null, $msg);
+            return $retry ? 'retry' : 'fail';
 
         } finally {
             // 임시 파일은 어떤 길로 끝나든 지운다. 서버에 사업 문서가 쌓이면 안 된다.
