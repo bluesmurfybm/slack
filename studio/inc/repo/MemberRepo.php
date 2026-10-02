@@ -284,20 +284,96 @@ final class MemberRepo
      * 포털 계정(portal_users)을 훑어 빠진 구성원을 채운다.
      * 사람이 들어오고 나갈 때마다 손으로 넣지 않으려는 장치.
      */
-    public function syncFromPortalUsers(): int
+    /**
+     * 포털 사용자(`portal_users`)를 구성원 표로 가져온다.
+     *
+     * **구성원의 원본은 `portal_users` 하나다.** 슬랙 취합 시스템의 담당자
+     * 이름으로 구성원을 만들지 않는다 — 거기에는 협력사 인력이 섞여 있고,
+     * 평가 대상은 자사 구성원뿐이다 (CLAUDE.md).
+     *
+     * 세 가지만 한다.
+     *
+     *   1. 포털에 있는데 구성원 표에 없는 사람을 넣는다
+     *   2. 포털에서 이름이 바뀐 사람의 이름을 맞춘다
+     *   3. 포털에서 사라진 사람을 `is_assignable = 0` 으로 내린다
+     *
+     * **행을 지우지 않는다.** 퇴사자도 과거 배정·업무 이력의 주인이라
+     * 남아야 한다. 지우면 그 기록이 주인 없는 것이 된다.
+     *
+     * **`is_evaluable` 은 건드리지 않는다.** 사람이 손으로 정한 값이라
+     * 동기화가 돌 때마다 1 로 되돌리면 평가 제외가 조용히 풀린다
+     * (기획 담당자처럼 이 데이터로 평가할 수 없는 직무가 있다).
+     * 새로 들어온 사람만 스키마 기본값 1 로 들어간다.
+     *
+     * **한 번 내려간 `is_assignable` 을 다시 올리지 않는다.** 그 값은 휴직
+     * 처리로도 사람이 직접 내린다. 자동으로 올리면 그 판단을 덮어쓴다.
+     * 포털에 있는데 배정 제외인 사람 수를 따로 세어 돌려주므로, 화면이
+     * 그 사실을 알리고 사람이 판단하면 된다.
+     *
+     * 역할·팀·경력·기본 가용은 `portal_users` 에 없다(이름·이메일·색뿐이다).
+     * 그래서 채우지 못하고 비워 둔다 — HR 정보라 사람이 넣어야 한다.
+     * 비어 있어도 점수는 멀쩡하다. 절대 기준이라 role_label 로 정규화하지
+     * 않는다(명세서 §4). 화면 표시와 후보 거르개에만 쓰인다.
+     *
+     * @return array{added:int, renamed:int, deactivated:int, excluded_but_active:int, total:int}
+     */
+    public function syncFromPortalUsers(): array
     {
-        // TODO(P3): portal_users 를 읽어 bs_member 에 없는 이메일만 넣는다.
-        //           지우지는 않는다 — 퇴사자도 과거 기록의 주인이라 남겨야 한다.
-        //           대신 is_assignable 을 0 으로 내린다.
-        //
-        // 주의: **is_evaluable 을 건드리지 말 것.** 사람이 손으로 정한 값이라
-        //       동기화가 돌 때마다 1 로 되돌리면 평가 제외가 조용히 풀린다.
-        //       새로 들어온 사람만 기본값 1 로 들어간다.
-        //
-        // 주의: 슬랙 취합 시스템의 담당자 이름으로 구성원을 만들지 말 것.
-        //       거기에는 협력사 인력이 섞여 있고, 평가 대상은 자사 구성원뿐이다.
-        //       구성원의 원본은 portal_users 하나다.
-        return 0;
+        // portal_users 는 포털 DB 에 있고 BlueStudio 는 같은 DB 를 쓴다
+        // (bs_db() → portal_db()). 그래서 한 연결에서 그대로 읽는다.
+        $this->pdo->beginTransaction();
+        try {
+            // 1. 새로 들어온 사람.
+            //    역할·팀·경력은 비워 둔다. 나머지는 스키마 기본값이다
+            //    (base_capacity 1.00 / is_assignable 1 / is_evaluable 1).
+            $added = $this->pdo->exec(
+                'INSERT INTO bs_member (user_id, emp_name)
+                 SELECT u.email, u.name
+                   FROM portal_users u
+                   LEFT JOIN bs_member m ON m.user_id = u.email
+                  WHERE m.id IS NULL'
+            );
+
+            // 2. 포털에서 이름이 바뀐 사람. 이름의 원본은 포털이다.
+            $renamed = $this->pdo->exec(
+                'UPDATE bs_member m
+                   JOIN portal_users u ON u.email = m.user_id
+                    SET m.emp_name = u.name
+                  WHERE m.emp_name <> u.name'
+            );
+
+            // 3. 포털에서 사라진 사람. 지우지 않고 배정 후보에서만 내린다.
+            $deactivated = $this->pdo->exec(
+                'UPDATE bs_member m
+                   LEFT JOIN portal_users u ON u.email = m.user_id
+                    SET m.is_assignable = 0
+                  WHERE u.id IS NULL AND m.is_assignable = 1'
+            );
+
+            // 포털에는 있는데 배정 제외인 사람. 자동으로 올리지 않으므로
+            // 사람이 보고 판단하라고 수만 세어 준다.
+            $st = $this->pdo->query(
+                'SELECT COUNT(*) FROM bs_member m
+                   JOIN portal_users u ON u.email = m.user_id
+                  WHERE m.is_assignable = 0'
+            );
+            $excluded = (int)$st->fetchColumn();
+
+            $total = (int)$this->pdo->query('SELECT COUNT(*) FROM bs_member')->fetchColumn();
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        return [
+            'added'               => (int)$added,
+            'renamed'             => (int)$renamed,
+            'deactivated'         => (int)$deactivated,
+            'excluded_but_active' => $excluded,
+            'total'               => $total,
+        ];
     }
 
     // -----------------------------------------------------------------

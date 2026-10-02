@@ -1884,6 +1884,74 @@ $some = substr_count($pcts['body'], 'member_profile.php?member_id=');
 ok('키워드의 % 가 와일드카드로 새지 않는다', $some < $all || $all === 0,
    "전체 $all / '%' 조회 $some");
 
+// ---------------------------------------------------------------------
+// 구성원 가져오기
+//
+// 이 표가 비면 후보·배정·역량이 전부 멈춘다. 그런데 채우는 길이 코드
+// 안에만 있고(syncFromPortalUsers 가 빈 TODO 였다) 화면에는 없었다.
+// 화면은 "돌려야 합니다" 라 적어 두고 돌릴 방법을 주지 않았다.
+// ---------------------------------------------------------------------
+ok('관리자에게 가져오기 단추가 보인다', str_contains($r['body'], 'ba-m-sync'));
+
+$r4 = $anon->req('/studio/api/member.php?act=sync', ['json' => ['_' => 1]]);
+ok('미로그인은 못 돌린다', $r4['status'] === 401, '상태 ' . $r4['status']);
+
+$r4 = $guest->req('/studio/api/member.php?act=sync', ['csrf' => true, 'json' => ['_' => 1]]);
+ok('일반 사용자는 못 돌린다', $r4['status'] === 403, '상태 ' . $r4['status']);
+
+$r4 = $admin->req('/studio/api/member.php?act=sync', ['json' => ['_' => 1]]);
+ok('CSRF 없이는 못 돌린다', $r4['status'] === 419, '상태 ' . $r4['status']);
+
+$r4 = $admin->req('/studio/api/member.php?act=sync');
+ok('GET 으로는 못 돌린다', $r4['status'] === 405, '상태 ' . $r4['status']);
+
+// 지금 상태를 적어 두고 돌린다. 시험 계정 둘은 이미 구성원이라 다시
+// 넣으면 안 된다 — 같은 이메일로 두 줄이 생기면 가용도가 쪼개진다.
+$before = (int)$pdoR->query('SELECT COUNT(*) FROM bs_member')->fetchColumn();
+$keep   = $pdoR->query(
+    "SELECT is_evaluable, eval_exclude_reason FROM bs_member
+      WHERE user_id = 'batest-user@bluesoft.co.kr'"
+)->fetch(PDO::FETCH_ASSOC);
+
+$r4 = $admin->req('/studio/api/member.php?act=sync', ['csrf' => true, 'json' => ['_' => 1]]);
+ok('관리자가 돌린다', $r4['status'] === 200, $r4['body']);
+$sync = $r4['json']['data'] ?? [];
+ok('결과를 사람이 읽을 문장으로 준다', ($sync['message'] ?? '') !== '');
+ok('전체 인원을 돌려준다', ($sync['total'] ?? 0) > 0, json_encode($sync));
+
+$after = (int)$pdoR->query('SELECT COUNT(*) FROM bs_member')->fetchColumn();
+ok('포털 사용자를 가져온다', $after >= $before, "$before → $after");
+
+// 두 번 돌려도 늘지 않아야 한다. 같은 이메일로 줄이 겹치면 그 사람의
+// 가용도와 배정이 두 쪽으로 갈린다.
+$r4 = $admin->req('/studio/api/member.php?act=sync', ['csrf' => true, 'json' => ['_' => 1]]);
+$again = (int)$pdoR->query('SELECT COUNT(*) FROM bs_member')->fetchColumn();
+ok('다시 돌려도 늘지 않는다', $again === $after, "$after → $again");
+ok('두 번째는 새로 넣은 것이 없다', (int)($r4['json']['data']['added'] ?? -1) === 0);
+
+// 중복 이메일이 없어야 한다.
+$dup = (int)$pdoR->query(
+    'SELECT COUNT(*) FROM (SELECT user_id FROM bs_member
+      GROUP BY user_id HAVING COUNT(*) > 1) d'
+)->fetchColumn();
+ok('같은 이메일로 두 줄이 생기지 않는다', $dup === 0, "$dup 건");
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ is_evaluable 은 사람이 손으로 정한 값이다. 동기화가 돌 때마다 1 로│
+// │ 되돌리면 평가 제외가 조용히 풀린다 (CLAUDE.md).                   │
+// └──────────────────────────────────────────────────────────────────┘
+$nowKeep = $pdoR->query(
+    "SELECT is_evaluable, eval_exclude_reason FROM bs_member
+      WHERE user_id = 'batest-user@bluesoft.co.kr'"
+)->fetch(PDO::FETCH_ASSOC);
+ok('is_evaluable 을 건드리지 않는다', $nowKeep == $keep,
+   json_encode([$keep, $nowKeep], JSON_UNESCAPED_UNICODE));
+
+// 돌린 뒤에는 목록에 사람이 보여야 한다.
+$r5 = $admin->req('/studio/member_list.php');
+ok('가져온 뒤 목록이 비어 있지 않다',
+   !str_contains($r5['body'], '구성원이 없습니다'), '여전히 비었다');
+
 // 일반 사용자도 목록은 본다. 다만 남의 프로파일 링크는 안 걸린다.
 $r3 = $guest->req('/studio/member_list.php');
 ok('일반 사용자도 목록은 본다', $r3['status'] === 200, '상태 ' . $r3['status']);

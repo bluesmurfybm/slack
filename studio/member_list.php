@@ -96,6 +96,13 @@ bs_layout_head(
   <!-- ============ 실행 줄 ============ -->
   <div class="ba-filters" style="justify-content:flex-start">
     <a class="ba-btn ba-btn--primary" href="member_profile.php">내 프로파일</a>
+    <?php if (bs_is_admin()): ?>
+      <!-- 구성원 표가 비면 모듈이 통째로 멈춘다. 채우는 길을 화면에 둔다. -->
+      <button type="button" class="ba-btn" id="ba-m-sync"
+              title="포털 사용자 목록을 읽어 구성원 표에 넣습니다. 행을 지우지 않습니다.">
+        포털에서 구성원 가져오기
+      </button>
+    <?php endif; ?>
     <span class="ba-head__sub">
       본인 프로파일은 언제든 볼 수 있습니다. 다른 구성원의 것은 PM·관리자만 열립니다.
     </span>
@@ -170,9 +177,12 @@ bs_layout_head(
           <td colspan="7" class="ba-cell-none">
             <?php if ($fRole !== '' || $fTeam !== '' || $fKeyword !== ''): ?>
               조건에 맞는 구성원이 없습니다.
+            <?php elseif (bs_is_admin()): ?>
+              구성원이 없습니다. 위의 <b>포털에서 구성원 가져오기</b>를 누르십시오.
+              <br>
+              <span class="ba-dim">구성원 표가 비어 있으면 후보 도출·배정·역량이 모두 돌지 않습니다.</span>
             <?php else: ?>
-              구성원이 없습니다. 포털 사용자에서 가져오려면 관리자가
-              <code>MemberRepo::syncFromPortalUsers()</code> 를 돌려야 합니다.
+              구성원이 없습니다. 관리자가 포털 사용자에서 가져와야 합니다.
             <?php endif; ?>
           </td>
         </tr>

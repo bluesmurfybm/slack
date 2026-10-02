@@ -2930,7 +2930,42 @@
 
   // TODO(P4): 구성원 목록 — 역할·팀 필터
   //           종합점수 열로 전체 정렬하는 기능을 넣지 말 것 (CLAUDE.md)
-  function initMemberList() {}
+  // ===================================================================
+  // 구성원 목록
+  //
+  // 표는 서버가 그린다(member_list.php). 여기서 하는 일은 하나 —
+  // 포털 사용자 가져오기. 구성원 표가 비면 후보·배정·역량이 전부 멈추는데,
+  // 그 표를 채우는 길이 코드 안에만 있고 화면에는 없었다.
+  // ===================================================================
+  function initMemberList() {
+    var btn = $('#ba-m-sync');
+    if (!btn) return;          // 관리자가 아니면 단추를 안 그린다
+
+    btn.addEventListener('click', function () {
+      // 배정 후보 전체가 바뀌는 일이다. 한 번 묻는다.
+      if (!confirm('포털 사용자 목록을 읽어 구성원 표에 넣습니다.\n\n'
+                 + '· 이미 있는 사람은 건드리지 않습니다\n'
+                 + '· 행을 지우지 않습니다\n'
+                 + '· 포털에서 사라진 사람은 배정 후보에서만 내립니다\n\n'
+                 + '진행할까요?')) {
+        return;
+      }
+      btn.disabled = true;
+      var was = btn.textContent;
+      btn.textContent = '가져오는 중…';
+
+      api('api/member.php?act=sync', { method: 'POST' }).then(function (d) {
+        // 결과를 사람이 읽을 문장으로 서버가 만들어 준다. 숫자만 띄우면
+        // "그래서 뭘 하라는 건가" 가 된다.
+        alert(d.message + '\n\n모두 ' + d.total + '명입니다.');
+        location.reload();
+      }).catch(function (e) {
+        toast(e.message, true);
+        btn.disabled = false;
+        btn.textContent = was;
+      });
+    });
+  }
 
   // ===================================================================
   // 프로파일 — 계열별 역량 레이더 + 근거 추적
