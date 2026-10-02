@@ -103,6 +103,7 @@ FILES="
 013_migration_domain_group.sql
 014_migration_project_track.sql
 015_migration_integration.sql
+016_migration_analysis.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

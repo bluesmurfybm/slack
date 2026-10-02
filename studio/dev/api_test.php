@@ -2229,6 +2229,115 @@ ok('모르는 서비스 링크는 그대로 분석 안 함',
 
 $pdoR->exec("DELETE FROM bs_integration");
 
+// ---------------------------------------------------------------------
+section('[V] 링크 분석 — 찾기·큐·워커');
+
+require_once dirname(__DIR__) . '/inc/service/LinkAnalyzer.php';
+require_once dirname(__DIR__) . '/inc/repo/JobRepo.php';
+
+// 출처 문서에 IA 시트 모양의 글자를 심는다. 엑셀 파서가 셀 링크를
+// `글자 <주소>` 로 붙여 두므로 그 모양 그대로.
+$iaText = "대분류	화면명	기획
+"
+        . "학습	출석부	기획안 <https://www.figma.com/design/TESTKEY1234/plan?node-id=1-2>
+"
+        . "학습	과제	설계 <https://docs.google.com/spreadsheets/d/TESTSHEET123/edit>
+"
+        . "공통	로그인	메모 https://notion.so/zz
+"
+        . "학습	출석부2	같은 화면 <https://www.figma.com/design/TESTKEY1234/plan?node-id=1-2>";
+$pdoR->prepare(
+    'INSERT INTO bs_project_source (project_id, kind, title, parsed_text, parse_status,
+                                    uploaded_by, uploaded_by_name)
+          VALUES (?, "xlsx", "IA 시트", ?, "ok", "t@t", "시험")'
+)->execute([$pid, $iaText]);
+
+// ---- 권한 ----
+$r = $anon->req('/studio/api/analysis.php?act=status&project_id=' . $pid);
+ok('미로그인은 못 본다', $r['status'] === 401, '상태 ' . $r['status']);
+$r = $guest->req('/studio/api/analysis.php?act=scan',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('권한 없으면 못 찾는다', $r['status'] === 403, '상태 ' . $r['status']);
+
+// ---- 찾기 ----
+$r = $admin->req('/studio/api/analysis.php?act=scan',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('링크를 찾는다', $r['status'] === 200, $r['body']);
+$d = $r['json']['data'] ?? [];
+ok('같은 주소는 한 번만 담는다', ($d['total'] ?? 0) === 3,
+   '담긴 수 ' . ($d['total'] ?? -1));
+ok('읽을 수 있는 것은 대기로', ($d['count']['pending'] ?? 0) === 2, json_encode($d['count'] ?? []));
+ok('읽을 수 없는 서비스는 건너뜀으로', ($d['count']['skip'] ?? 0) === 1, json_encode($d['count'] ?? []));
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 어느 항목의 링크인지가 남아야 한다. 이게 없으면 읽어 온 글이      │
+// │ 어느 태스크 것인지 알 수 없다.                                     │
+// └──────────────────────────────────────────────────────────────────┘
+$ctx = '';
+foreach (($d['links'] ?? []) as $l) {
+    if (str_contains((string)$l['url'], 'TESTKEY1234')) { $ctx = (string)$l['context']; }
+}
+ok('그 주소가 있던 줄을 함께 담는다', str_contains($ctx, '출석부'), $ctx);
+
+// 다시 찾아도 이미 담긴 것은 그대로다. 읽어 둔 내용이 날아가면 안 된다.
+$r = $admin->req('/studio/api/analysis.php?act=scan',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('다시 찾아도 늘지 않는다', ($r['json']['data']['total'] ?? 0) === 3);
+
+// ---- 큐 ----
+$r = $admin->req('/studio/api/analysis.php?act=start',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('큐에 넣는다', $r['status'] === 200, $r['body']);
+$job1 = $r['json']['data']['job']['id'] ?? 0;
+ok('진행 중 작업을 알려 준다', $job1 > 0, json_encode($r['json']['data']['job'] ?? null));
+
+// 두 사람이 동시에 눌러도 두 번 돌면 안 된다 — 같은 링크를 두 번 읽으면
+// 상대 서비스의 호출 제한에 걸린다.
+$r = $admin->req('/studio/api/analysis.php?act=start',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('두 번 눌러도 작업은 하나', (int)($r['json']['data']['job']['id'] ?? 0) === (int)$job1,
+   $r['body']);
+
+// ---- 워커 ----
+// 자격 정보가 없으므로 전부 실패한다. 중요한 것은 **끝까지 돌고 사유가
+// 남는가** 다. 조용히 멈추면 "왜 안 되지" 를 알 길이 없다.
+$worker = shell_exec(escapeshellarg(PHP_BINARY) . ' '
+        . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
+ok('워커가 작업을 집어 간다', str_contains((string)$worker, '작업 #' . $job1 . ' 시작'), trim((string)$worker));
+
+$r = $admin->req('/studio/api/analysis.php?act=status&project_id=' . $pid);
+$d = $r['json']['data'] ?? [];
+ok('워커가 끝까지 돈다', ($d['count']['pending'] ?? 1) === 0, json_encode($d['count'] ?? []));
+ok('연결 전이라 실패로 남는다', ($d['count']['fail'] ?? 0) === 2, json_encode($d['count'] ?? []));
+ok('끝난 뒤에는 진행 중 작업이 없다', ($d['job'] ?? null) === null, json_encode($d['job'] ?? null));
+
+$why = '';
+foreach (($d['links'] ?? []) as $l) {
+    if ($l['status'] === 'fail') { $why = (string)$l['error']; break; }
+}
+ok('왜 실패했는지 사람 말로 남는다', str_contains($why, '연결') || str_contains($why, '등록'), $why);
+
+// ---- 다시 읽기 ----
+$r = $admin->req('/studio/api/analysis.php?act=retry',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('실패한 것만 되돌린다',
+   ($r['json']['data']['count']['pending'] ?? 0) === 2
+   && ($r['json']['data']['count']['skip'] ?? 0) === 1, $r['body']);
+
+// ---- 멈추기 ----
+$admin->req('/studio/api/analysis.php?act=start', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$r = $admin->req('/studio/api/analysis.php?act=cancel',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('멈출 수 있다', ($r['json']['data']['job'] ?? null) === null, $r['body']);
+
+$worker = shell_exec(escapeshellarg(PHP_BINARY) . ' '
+        . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
+ok('멈춘 뒤에는 워커가 집어갈 것이 없다', trim((string)$worker) === '', trim((string)$worker));
+
+// 뒷정리
+$pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);
+$pdoR->prepare('DELETE FROM bs_source_link WHERE project_id = ?')->execute([$pid]);
+
 array_map('unlink', glob("$tmp/*") ?: []);
 @rmdir($tmp);
 $admin->req('/studio/api/project.php?act=delete',

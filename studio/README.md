@@ -96,6 +96,7 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 013_migration_domain_group.sql      분야 묶음(코스모스 LXP / 일반) + 일반 분야 6개
 014_migration_project_track.sql     사업 유형 — LXP 학내형/개방형
 015_migration_integration.sql       외부 연동 자격 정보(구글·피그마)
+016_migration_analysis.sql          링크 분석 — 찾은 링크·작업 큐
 ```
 
 ### 적용 뒤 확인
@@ -114,6 +115,7 @@ mysql <db> -e "SELECT * FROM bs_setting"           # 4행인가
 | 013 | **안전하지 않음** — 맨 `ALTER` 라 두 번째에 죽습니다 (INSERT 쪽은 안전) |
 | 014 | 안전 (`UPDATE` + `MODIFY COLUMN`. 둘 다 다시 돌려도 같은 결과) |
 | 015 | 안전 (`CREATE TABLE IF NOT EXISTS`) |
+| 016 | **안전하지 않음** — bs_task 에 맨 `ALTER` 가 있어 두 번째에 죽습니다 |
 | 001 | 안전하지 않음 (`CREATE TABLE`) |
 | 008 · 009 | **안전하지 않음** — 맨 `ALTER` 라 두 번째에 죽습니다 |
 
@@ -123,7 +125,7 @@ mysql <db> -e "SELECT * FROM bs_setting"           # 4행인가
 
 ## 2. 되돌리기
 
-되돌리기 스크립트는 `010`~`015` 에만 있습니다.
+되돌리기 스크립트는 `010`~`016` 에만 있습니다.
 **`001`~`009` 에는 없습니다.** 그 구간을 되돌리는 방법은 덤프 복원 하나뿐입니다.
 그래서 `apply.sh` 전에 `dump.sh` 를 먼저 돌려야 합니다.
 
@@ -143,6 +145,7 @@ sh studio/sql/dump.sh --drop-sql <db> | mysql <db>
 gunzip -c <db>_bs_<시각>.sql.gz | mysql --default-character-set=utf8mb4 <db>
 
 # 010~012 만 되돌리기 (R&D 기능만 물리고 싶을 때)
+mysql --default-character-set=utf8mb4 <db> < studio/sql/016_rollback_analysis.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/015_rollback_integration.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/014_rollback_project_track.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/013_rollback_domain_group.sql
@@ -289,7 +292,32 @@ mysql <db> -e "SELECT status, COUNT(*) FROM bs_notification GROUP BY status"
 
 ---
 
-## 5. 올리지 말 것
+## 5. 크론 — 링크 분석 워커
+
+IA 시트에 걸린 기획 화면(피그마·드라이브) 링크를 따라가 읽는 일은 **웹 요청
+안에서 할 수 없습니다.** 항목이 100개면 외부 호출이 100번이라 타임아웃으로
+죽습니다. 큐에 넣고 크론이 하나씩 처리합니다.
+
+```
+* * * * *  /usr/bin/php /home/blueapp_core/studio/cron/analyze.php >> /var/log/bs-analyze.log 2>&1
+```
+
+- 할 일이 없으면 **아무것도 하지 않고 즉시 끝납니다.** 1분 주기가 부담되지 않습니다
+- 한 번에 50초만 일하고 물러납니다. 남은 것은 다음 회차에 이어 갑니다
+- 워커가 죽어도 15분 뒤 다른 워커가 집어 갑니다 — 큐가 영영 막히지 않습니다
+
+**이걸 걸지 않으면** 화면에서 [링크 분석 시작] 을 눌러도 진행률이 0에서
+움직이지 않습니다. 오류는 안 나고 조용히 멈춰 있습니다.
+
+로그를 한 번씩 보십시오.
+
+```sh
+tail -50 /var/log/bs-analyze.log
+```
+
+---
+
+## 6. 올리지 말 것
 
 `dev/` 와 `collector/` 는 운영에 필요 없습니다.
 `.htaccess` 와 각 폴더의 `Require all denied` 로 이중으로 막아 두었지만,
@@ -300,7 +328,7 @@ mysql <db> -e "SELECT status, COUNT(*) FROM bs_notification GROUP BY status"
 
 ---
 
-## 6. 올린 뒤 손으로 볼 것
+## 7. 올린 뒤 손으로 볼 것
 
 - [ ] 포털 타일이 뜨고 아이콘이 `＋` 가 아닌가
 - [ ] 타일을 눌러 `studio/index.php` 로 들어가지는가
