@@ -3,6 +3,7 @@ from functools import partial
 from fastapi import Depends, Request, Response
 
 from blui import answer, db, guard
+from blui.classifier import Classifier
 from blui.configs import config
 from blui.tools.handoff import HandoffTool
 from common import guard as common_guard
@@ -50,6 +51,10 @@ def get_guard(light_llm_client: LLMClient = Depends(get_light_llm_client)) -> Gu
     return guard.build(light_llm_client)
 
 
+def get_classifier(light_llm_client: LLMClient = Depends(get_light_llm_client)) -> Classifier:
+    return Classifier(light_llm_client)
+
+
 def get_handoff_tool() -> HandoffTool:
     return HandoffTool(config.request_url)
 
@@ -67,6 +72,7 @@ def get_conversation_service(
     message_repository: ConversationMessageRepository = Depends(get_message_repository),
     llm_client: LLMClient = Depends(get_llm_client),
     guard: Guard = Depends(get_guard),
+    classifier: Classifier = Depends(get_classifier),
     knowledge: list[KnowledgeEntry] = Depends(get_knowledge),
     handoff: HandoffTool = Depends(get_handoff_tool),
 ) -> ConversationService[answer.Answer]:
@@ -77,6 +83,7 @@ def get_conversation_service(
             answer.answer,
             llm_client,
             guard,
+            classifier,
             knowledge,
             config.inquiry_url,
             config.request_url,

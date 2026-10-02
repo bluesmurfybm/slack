@@ -2,7 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from blui.prompt import build_system
+from blui.classifier import Classifier
+from blui.prompt import build_system, entries_for
 from blui.tools.handoff import HandoffParams, HandoffTool
 from common.guard import Guard
 from common.knowledge import KnowledgeEntry, answerable
@@ -42,6 +43,7 @@ class Answer(BaseModel):
 def answer(
     llm_client: LLMClient,
     guard: Guard,
+    classifier: Classifier,
     entries: list[KnowledgeEntry],
     inquiry_url: str,
     request_url: str,
@@ -52,22 +54,29 @@ def answer(
     llm_messages = _to_llm_messages(messages)
     if guard.is_forbidden_message(llm_messages):
         return Answer(content=OUT_OF_SCOPE, matched_ids=[])
+    fallback = Answer(
+        content=FALLBACK.format(inquiry_url=inquiry_url, request_url=request_url),
+        matched_ids=[],
+    )
+    domain = classifier.classify(llm_messages)
+    if domain is None or domain == "other":
+        return fallback
+    entries = entries_for(entries, domain)
     generated = llm_client.generate(
-        system=build_system(entries),
+        system=build_system(entries, domain),
         messages=llm_messages,
         output_format=LLMOutput,
         tools=[],
     )
     output = generated.output
-    fallback = Answer(
-        content=FALLBACK.format(inquiry_url=inquiry_url, request_url=request_url),
-        matched_ids=[],
-    )
     if output is None:
         return fallback
     if output.handoff:
         result = handoff.run(HandoffParams(request=output.handoff))
-        return Answer(content=result.reply or fallback.content, matched_ids=[])
+        if not output.content.strip():
+            return Answer(content=result.reply or fallback.content, matched_ids=[])
+        request_guide = REQUEST_GUIDE.format(request_url=request_url)
+        return Answer(content=f"{output.content}\n\n{request_guide}", matched_ids=[])
     if not output.content.strip():
         return fallback
     if not set(output.matched_ids) <= {entry.id for entry in answerable(entries)}:
