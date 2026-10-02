@@ -57,7 +57,7 @@ def answer(
         matched_ids=[],
     )
     domain = classifier.classify(llm_messages)
-    if domain is None or domain == "other":
+    if domain is None:
         return fallback
     entries = entries_for(entries, domain)
     generated = llm_client.generate(
@@ -75,10 +75,8 @@ def answer(
             return Answer(content=result.reply or fallback.content, matched_ids=[])
         request_guide = REQUEST_GUIDE.format(request_url=request_url)
         return Answer(content=f"{output.content}\n\n{request_guide}", matched_ids=[])
-    if not output.matched_ids:
-        return Answer(content=UNKNOWN, matched_ids=[])
     if not output.content.strip():
-        return fallback
+        return fallback if output.matched_ids else Answer(content=UNKNOWN, matched_ids=[])
     if not set(output.matched_ids) <= {entry.id for entry in answerable(entries)}:
         return fallback
     guides = {

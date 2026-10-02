@@ -91,6 +91,9 @@ MKT_INSTRUCTIONS = """form 선택:
 
 COM_INSTRUCTIONS = """- form: none"""
 
+OTHER_INSTRUCTIONS = """- form: none
+- 판정 4에 해당하면 C 대신, 유저의 메시지를 언급하며 홈페이지, 쇼핑몰, LMS(COURSEMOS·Moodle), SHEblue, 디지털 마케팅 중 어떤 서비스에 관한 문의인지 묻는 한 문장을 content에 작성하세요. matched_ids는 비우고, handoff는 빈 문자열입니다."""
+
 
 DOMAIN_INSTRUCTIONS: dict[Domain, str] = {
     "web": WEB_INSTRUCTIONS,
@@ -99,6 +102,7 @@ DOMAIN_INSTRUCTIONS: dict[Domain, str] = {
     "she": SHE_INSTRUCTIONS,
     "mkt": MKT_INSTRUCTIONS,
     "com": COM_INSTRUCTIONS,
+    "other": OTHER_INSTRUCTIONS,
 }
 
 
@@ -106,7 +110,9 @@ SHARED_DOMAINS = ("pro",)
 
 
 def entries_for(entries: list[KnowledgeEntry], domain: Domain) -> list[KnowledgeEntry]:
-    """분류된 domain과 공통 domain의 지식 항목을 반환합니다."""
+    """분류된 domain과 공통 domain의 지식 항목을 반환하며, other이면 전체를 반환합니다."""
+    if domain == "other":
+        return entries
     return [entry for entry in entries if entry.domain in (domain, *SHARED_DOMAINS)]
 
 
