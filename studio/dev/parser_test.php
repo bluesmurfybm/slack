@@ -161,5 +161,29 @@ catch (LlmError $e) { ok('오류를 흉내 낼 수 있다', $e->retryable === tr
 ok('LlmSchemaError 는 LlmError 다', new LlmSchemaError('x') instanceof LlmError);
 ok('스키마 오류는 재시도 가능', (new LlmSchemaError('x'))->retryable === true);
 
+// ---------------------------------------------------------------------
+// IA 시트의 링크
+//
+// IA 시트는 항목마다 기획 화면(피그마·드라이브) 주소를 셀 링크로 걸어 두는
+// 일이 흔하다. 보이는 글자만 뽑으면 그 연결이 통째로 사라진다 — 어느 항목이
+// 어느 화면인지 알 수 없게 된다.
+//
+// 엑셀은 링크를 셀 안이 아니라 두 군데에 나눠 둔다. 구글 시트는 =HYPERLINK()
+// 수식으로 거는 경우도 있다. 둘 다 읽어야 한다.
+// ---------------------------------------------------------------------
+$ia = (new OfficeDocumentParser(null))->parse(FIX . '/ia_links.xlsx', 'xlsx')->text();
+
+ok('셀 링크를 글자 옆에 붙인다',
+   str_contains($ia, '기획안 <https://www.figma.com/design/ABCDEFGH1234/plan?node-id=40006486-417499>'),
+   $ia);
+ok('=HYPERLINK() 수식 링크도 읽는다',
+   str_contains($ia, '설계 <https://www.figma.com/design/KEY12345678/x?node-id=11-22>'));
+ok('범위(C5:C9)에 건 링크는 그 안의 칸에 다 붙는다',
+   str_contains($ia, '범위링크 <https://docs.google.com/spreadsheets/d/SHEETID123456/edit>'));
+
+// 문서 안으로 가는 링크(location=)는 주소가 아니다. 붙이면 WBS 도출이
+// 그걸 따라가려 한다.
+ok('문서 안 링크는 붙이지 않는다', !str_contains($ia, '로그인 <'));
+
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";
 exit($fail > 0 ? 1 : 0);

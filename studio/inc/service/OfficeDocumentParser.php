@@ -90,7 +90,8 @@ final class OfficeDocumentParser implements DocumentParser
                     $notes[] = '글자 수 상한을 넘어 이후 시트를 읽지 않았습니다: ' . $sheet['name'];
                     continue;
                 }
-                $r = $this->xlsxSheetText($zip, $sheet['path'], $shared);
+                $r = $this->xlsxSheetText($zip, $sheet['path'], $shared,
+                                           $this->xlsxLinks($zip, $sheet['path']));
                 if ($r['text'] === '') {
                     continue;
                 }
@@ -182,7 +183,8 @@ final class OfficeDocumentParser implements DocumentParser
      *
      * @return array{text:string,range:string,truncated:bool}
      */
-    private function xlsxSheetText(ZipArchive $zip, string $path, array $shared): array
+    private function xlsxSheetText(ZipArchive $zip, string $path, array $shared,
+                                   array $links = []): array
     {
         $xml = $this->zipRead($zip, $path);
         if ($xml === null) {
@@ -236,6 +238,21 @@ final class OfficeDocumentParser implements DocumentParser
                 continue;
             }
 
+            // ┌──────────────────────────────────────────────────────┐
+            // │ 링크를 글자 옆에 붙여 둔다                             │
+            // │                                                      │
+            // │ IA 시트는 항목마다 기획 화면(피그마·드라이브) 주소를   │
+            // │ 셀 링크로 걸어 두는 일이 흔하다. 보이는 글자만 뽑으면  │
+            // │ 그 연결이 통째로 사라진다.                             │
+            // │                                                      │
+            // │ 칸을 새로 만들지 않고 같은 줄에 적는다 — 그래야 WBS    │
+            // │ 도출이 "이 항목의 링크" 로 바로 읽는다.                │
+            // └──────────────────────────────────────────────────────┘
+            $url = $links[strtoupper($ref)] ?? ($this->xlsxFormulaLink($node) ?? '');
+            if ($url !== '' && !str_contains($val, $url)) {
+                $val .= ' <' . $url . '>';
+            }
+
             [$col, $row] = $this->refToColRow($ref, $rowNo);
             $cells[$col] = $val;
             $minC = min($minC, $col); $maxC = max($maxC, $col);
@@ -282,6 +299,106 @@ final class OfficeDocumentParser implements DocumentParser
     }
 
     /** "B7" → [2, 7]. 주소가 없으면 현재 행을 쓰고 열은 순서대로 매긴다. */
+    /**
+     * 시트의 셀 링크를 [셀주소 => URL] 로 읽는다.
+     *
+     * 엑셀은 링크를 셀 안이 아니라 **두 군데에 나눠** 둔다.
+     *   sheetN.xml          <hyperlink ref="C5" r:id="rId3"/>
+     *   _rels/sheetN.xml.rels   rId3 → 실제 주소
+     * 둘을 맞춰야 "어느 칸이 어디로 가는가" 가 나온다.
+     *
+     * ref 가 범위(C5:C20)면 그 안의 셀 전부에 같은 주소를 건다.
+     * location= 만 있는 것은 문서 안으로 가는 링크라 건너뛴다.
+     *
+     * @return array<string,string>
+     */
+    private function xlsxLinks(ZipArchive $zip, string $sheetPath): array
+    {
+        $xml = $this->zipRead($zip, $sheetPath);
+        if ($xml === null || !str_contains($xml, '<hyperlink')) {
+            return [];                       // 링크가 아예 없는 시트가 대부분이다
+        }
+
+        $relPath = dirname($sheetPath) . '/_rels/' . basename($sheetPath) . '.rels';
+        $targets = [];
+        $rx = $this->zipRead($zip, $relPath);
+        if ($rx !== null) {
+            $sx = $this->simple($rx);
+            foreach ($sx->Relationship ?? [] as $rel) {
+                // 바깥으로 나가는 것만 쓴다. 시트 간 이동은 주소가 아니다.
+                if ((string)$rel['TargetMode'] === 'External') {
+                    $targets[(string)$rel['Id']] = (string)$rel['Target'];
+                }
+            }
+        }
+
+        $out = [];
+        if (!preg_match_all('#<(?:\w+:)?hyperlink([^>]*)/?>#i', $xml, $ms)) {
+            return $out;
+        }
+        foreach ($ms[1] as $attrs) {
+            if (!preg_match('#ref="([^"]+)"#i', $attrs, $m)) {
+                continue;
+            }
+            $ref = strtoupper($m[1]);
+            $url = '';
+            if (preg_match('#r:id="([^"]+)"#i', $attrs, $m2)) {
+                $url = $targets[$m2[1]] ?? '';
+            }
+            if ($url === '') {
+                continue;
+            }
+            foreach ($this->expandRef($ref) as $cell) {
+                $out[$cell] = $url;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * `=HYPERLINK("주소","글자")` 수식에서 주소를 뽑는다.
+     *
+     * 구글 시트에서 함수로 링크를 건 칸은 셀 링크가 아니라 **수식**으로
+     * 내려온다. 사람이 보기에는 똑같은 링크라 둘 다 읽어야 한다.
+     */
+    private function xlsxFormulaLink(string $cellXml): ?string
+    {
+        if (!preg_match('#<(?:\w+:)?f[^>]*>(.*?)</(?:\w+:)?f>#si', $cellXml, $m)) {
+            return null;
+        }
+        $f = $this->unxml($m[1]);
+        if (!preg_match('#HYPERLINK\s*\(\s*"([^"]+)"#i', $f, $m2)) {
+            return null;
+        }
+        return $m2[1];
+    }
+
+    /** `C5` 는 그대로, `C5:C20` 은 그 안의 셀 전부로 편다. */
+    private function expandRef(string $ref): array
+    {
+        if (!str_contains($ref, ':')) {
+            return [$ref];
+        }
+        [$a, $b] = explode(':', $ref, 2);
+        [$c1, $r1] = $this->refToColRow($a, 0);
+        [$c2, $r2] = $this->refToColRow($b, 0);
+        if ($c1 < 1 || $c2 < 1 || $r1 < 1 || $r2 < 1) {
+            return [];
+        }
+        // 넓은 범위에 링크를 거는 일은 드물다. 터무니없이 크면 포기한다 —
+        // 시트 전체(A1:XFD1048576)에 링크가 걸린 파일을 본 적이 있다.
+        if (($c2 - $c1 + 1) * ($r2 - $r1 + 1) > 5000) {
+            return [];
+        }
+        $out = [];
+        for ($c = min($c1, $c2); $c <= max($c1, $c2); $c++) {
+            for ($r = min($r1, $r2); $r <= max($r1, $r2); $r++) {
+                $out[] = $this->colName($c) . $r;
+            }
+        }
+        return $out;
+    }
+
     private function refToColRow(string $ref, int $rowFallback): array
     {
         if (!preg_match('/^([A-Z]+)(\d+)$/i', $ref, $m)) {
