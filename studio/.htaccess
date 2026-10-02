@@ -9,10 +9,10 @@
 # 읽히지 않는다 — 운영에서는 dev/ 와 collector/ 를 아예 올리지 않는 쪽이 낫다.
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteRule ^(inc|sql|docs|collector|dev|var)(/|$) - [R=404,L]
+  RewriteRule ^(inc|sql|docs|collector|cron|dev|var)(/|$) - [R=404,L]
 </IfModule>
 
 # mod_rewrite 가 없을 때를 위한 대비
 <IfModule !mod_rewrite.c>
-  RedirectMatch 404 /(inc|sql|docs|collector|dev|var)/
+  RedirectMatch 404 /(inc|sql|docs|collector|cron|dev|var)/
 </IfModule>

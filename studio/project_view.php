@@ -275,6 +275,56 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 
   <!-- ============ 3. 업무 배정 — 먼저 WBS (명세서 §7.1 Step3) ============ -->
   <section data-pv-pane="wbs" hidden>
+
+    <?php if ($canManage): ?>
+    <!-- ============ 링크 분석 ============
+         IA 시트에는 항목마다 기획 화면(피그마·드라이브) 주소가 걸려 있다.
+         그 주소를 따라가 내용까지 읽어야 태스크의 성격을 알 수 있다.
+
+         읽기는 바깥을 타므로 **크론 워커가 한다.** 이 화면은 넣고 진행률만
+         본다 — 항목이 100개면 외부 호출이 100번이라 요청 안에서 못 한다. -->
+    <div class="ba-panel ba-links" id="ba-links" data-project-id="<?= (int)$projectId ?>" hidden>
+      <h2>기획 링크 <span class="ba-dim" id="ba-lk-sum"></span></h2>
+      <p class="ba-panel__hint">
+        출처 문서에 걸린 <b>구글 드라이브·피그마</b> 주소를 따라가 내용을 읽어 둡니다.
+        읽어 둔 내용은 WBS 도출과 난이도 판정의 근거가 됩니다.
+        <br>
+        읽을 수 없는 주소(노션·사내 위키 등)는 <b>건너뜀</b>으로 남습니다 — 오류가 아닙니다.
+      </p>
+
+      <div class="ba-wbsbar">
+        <button type="button" class="ba-btn" id="ba-lk-scan"
+                title="출처 문서의 글자에서 주소를 찾습니다. 바깥으로 나가지 않습니다">링크 찾기</button>
+        <button type="button" class="ba-btn ba-btn--primary" id="ba-lk-start"
+                title="찾은 주소를 따라가 내용을 읽습니다">링크 분석 시작</button>
+        <button type="button" class="ba-btn" id="ba-lk-retry" hidden
+                title="실패한 것만 다시 읽습니다. 성공한 것은 다시 읽지 않습니다">실패한 것만 다시</button>
+        <button type="button" class="ba-btn ba-btn--danger" id="ba-lk-cancel" hidden>멈추기</button>
+        <span class="ba-spacer"></span>
+        <span class="ba-dim" id="ba-lk-msg"></span>
+      </div>
+
+      <div class="ba-lk-prog" id="ba-lk-prog" hidden>
+        <div class="ba-lk-bar"><i id="ba-lk-fill"></i></div>
+        <span class="ba-dim" id="ba-lk-progtxt"></span>
+      </div>
+
+      <div class="ba-table-wrap">
+        <table class="ba-table" id="ba-lk-table">
+          <thead>
+            <tr>
+              <th style="width:86px">상태</th>
+              <th>어느 항목</th>
+              <th style="width:230px">읽어 온 문서</th>
+              <th style="width:74px">글자</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <?php endif; ?>
+
     <div class="ba-panel">
       <h2>업무 분해(WBS) <span class="ba-dim" id="ba-w-sum"></span></h2>
       <p class="ba-panel__hint">

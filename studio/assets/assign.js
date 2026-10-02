@@ -1594,6 +1594,103 @@
   // 표시라서 편집 저장의 부산물이 되면 안 된다 — 서버도 같은 이유로
   // save_tree 에서 이 칸을 받지 않는다.
   // ===================================================================
+  // ===================================================================
+  // 기획 링크 분석
+  //
+  // 읽기는 **크론 워커가 한다.** 이 화면은 큐에 넣고 진행률만 본다 —
+  // IA 항목이 100개면 외부 호출이 100번이라 요청 안에서 못 한다.
+  //
+  // 그래서 [링크 분석 시작] 을 눌러도 **곧바로는 아무 일도 안 일어난다.**
+  // 크론이 집어 갈 때까지 1분쯤 걸린다. 그 사실을 화면이 말해 줘야
+  // 사람이 '안 되네' 하고 다시 누르지 않는다.
+  // ===================================================================
+  function initLinks() {
+    var root = $('#ba-links');
+    if (!root) return;                 // 권한이 없으면 서버가 안 그린다
+    var pid = parseInt(root.dataset.projectId, 10);
+    var timer = null;
+
+    var LK_LABEL = { pending: '대기', ok: '읽음', fail: '실패', skip: '건너뜀' };
+
+    function draw(d) {
+      root.hidden = false;
+      var c = d.count || {};
+      $('#ba-lk-sum').textContent = d.total
+        ? '전체 ' + d.total + '건 · 읽음 ' + (c.ok || 0)
+          + ' · 대기 ' + (c.pending || 0)
+          + ' · 실패 ' + (c.fail || 0)
+          + ' · 건너뜀 ' + (c.skip || 0)
+        : '아직 찾은 링크가 없습니다';
+
+      var job = d.job;
+      $('#ba-lk-cancel').hidden = !job;
+      $('#ba-lk-start').disabled = !!job || !(c.pending > 0);
+      $('#ba-lk-retry').hidden = !(c.fail > 0) || !!job;
+
+      var prog = $('#ba-lk-prog');
+      if (job) {
+        prog.hidden = false;
+        var pct = job.total ? Math.round(job.done / job.total * 100) : 0;
+        $('#ba-lk-fill').style.width = pct + '%';
+        $('#ba-lk-progtxt').textContent =
+          job.status === 'queued'
+            ? '대기 중입니다. 크론이 집어 갈 때까지 1분쯤 걸립니다.'
+            : job.done + ' / ' + job.total + ' 건'
+              + (job.failed ? ' (실패 ' + job.failed + ')' : '');
+      } else {
+        prog.hidden = true;
+      }
+
+      var tb = $('#ba-lk-table tbody');
+      tb.innerHTML = (d.links || []).length
+        ? d.links.map(function (l) {
+            return '<tr>' +
+              '<td><span class="ba-badge ba-lk--' + esc(l.status) + '">' +
+                esc(LK_LABEL[l.status] || l.status) + '</span></td>' +
+              // 어느 항목의 링크인지. 이게 없으면 읽어 온 글이 어느
+              // 태스크 것인지 알 수 없다.
+              '<td>' + esc(l.context || '') +
+                '<div class="ba-dim ba-lk-url">' + esc(l.url) + '</div>' +
+                (l.error ? '<div class="ba-lk-err">' + esc(l.error) + '</div>' : '') +
+              '</td>' +
+              '<td>' + esc(l.title || '—') + '</td>' +
+              '<td>' + (l.chars > 0 ? Number(l.chars).toLocaleString() : '—') + '</td>' +
+            '</tr>';
+          }).join('')
+        : '<tr><td colspan="4" class="ba-cell-none">[링크 찾기] 를 눌러 출처 문서에서 주소를 찾으세요.</td></tr>';
+
+      // 도는 중일 때만 되묻는다. 끝났는데 계속 물으면 서버가 공연히 바쁘다.
+      if (job && !timer) { timer = setInterval(load, 3000); }
+      if (!job && timer) { clearInterval(timer); timer = null; }
+    }
+
+    function load() {
+      api('api/analysis.php?act=status&project_id=' + pid)
+        .then(draw)
+        .catch(function (e) { toast(e.message, true); });
+    }
+
+    function post(act, okMsg) {
+      return api('api/analysis.php?act=' + act, { method: 'POST', body: { project_id: pid } })
+        .then(function (d) {
+          if (d.message) { $('#ba-lk-msg').textContent = d.message; }
+          draw(d);
+          if (okMsg) toast(okMsg);
+        })
+        .catch(function (e) { toast(e.message, true); });
+    }
+
+    $('#ba-lk-scan').addEventListener('click', function () { post('scan'); });
+    $('#ba-lk-start').addEventListener('click', function () { post('start'); });
+    $('#ba-lk-retry').addEventListener('click', function () { post('retry'); });
+    $('#ba-lk-cancel').addEventListener('click', function () {
+      if (!confirm('분석을 멈춥니다. 읽던 한 건은 끝내고 멈춥니다.')) return;
+      post('cancel');
+    });
+
+    load();
+  }
+
   function initWbs() {
     var table = $('#ba-w-table');
     if (!table) return;
@@ -4085,7 +4182,7 @@
 
   switch (NAV) {
     case 'dashboard': initDashboard(); break;
-    case 'project':   initProjectList(); initProjectForm(); initProjectView(); initWbs(); initAllocation();
+    case 'project':   initProjectList(); initProjectForm(); initProjectView(); initWbs(); initAllocation(); initLinks();
                       initRndBoard(); initRndForm(); initRndView(); break;
     case 'member':    initMemberList(); initMemberProfile(); break;
     case 'settings': initSettings(); break;

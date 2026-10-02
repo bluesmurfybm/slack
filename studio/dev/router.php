@@ -34,7 +34,7 @@ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 // 보려면 여기서 직접 404 를 내야 한다. 목록은 studio/.htaccess 와 같아야 한다.
 // 한쪽만 고치면 "로컬에선 막히는데 운영에선 뚫리는" 상태가 된다.
 // ---------------------------------------------------------------------
-$blocked = ['inc', 'sql', 'docs', 'collector', 'var', 'dev'];
+$blocked = ['inc', 'sql', 'docs', 'collector', 'cron', 'var', 'dev'];
 foreach ($blocked as $dir) {
     if (preg_match('#^/studio/' . $dir . '(/|$)#', $path)) {
         http_response_code(404);
