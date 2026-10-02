@@ -94,7 +94,23 @@ bs_layout_head(
             <b>승인된 리디렉션 URI</b> 에 아래 주소를 <b>글자 그대로</b> 넣습니다.
             <div class="ba-ig__uri"><code id="ba-ig-redir"><?= h($redir) ?></code>
               <button type="button" class="ba-btn ba-btn--sm" id="ba-ig-copy">복사</button></div>
-            한 글자라도 다르면 <code>redirect_uri_mismatch</code> 로 거부됩니다.</li>
+            한 글자라도 다르면 <code>redirect_uri_mismatch</code> 로 거부됩니다.
+            <?php if (str_starts_with($redir, 'http://') && ($_SERVER['HTTP_HOST'] ?? '') !== 'localhost'
+                      && !str_starts_with((string)($_SERVER['HTTP_HOST'] ?? ''), '127.0.0.1')): ?>
+              <div class="ba-alert" style="margin:8px 0">
+                <b>이 주소가 <code>http://</code> 로 시작합니다.</b>
+                브라우저로는 <code>https</code> 로 들어오는데 서버가 그 사실을 모르고 있습니다
+                (리버스 프록시가 TLS 를 끊어 주는 구성에서 흔합니다).
+                이대로 연결하면 구글이 <code>redirect_uri_mismatch</code> 로 거부합니다.
+                <br>
+                <code>studio/inc/env.config.php</code> 에 아래 한 줄을 넣으십시오.
+                <br>
+                <code>'base_url' =&gt; 'https://<?= h((string)($_SERVER['HTTP_HOST'] ?? '')) ?><?php
+                  $p = parse_url($redir, PHP_URL_PATH);
+                  echo h(substr((string)$p, 0, -strlen('/api/google_oauth.php')));
+                ?>',</code>
+              </div>
+            <?php endif; ?></li>
         <li>발급된 <b>클라이언트 ID</b> 와 <b>시크릿</b> 을 아래에 넣고 저장한 뒤 <b>[구글 연결]</b> 을 누릅니다.</li>
       </ol>
       <p class="ba-head__sub">

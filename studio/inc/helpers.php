@@ -244,9 +244,24 @@ function bs_safe_url(?string $url): ?string
  */
 function bs_oauth_redirect_uri(): string
 {
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-             || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
-             || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 가장 확실한 길 — 설정에 적어 둔다                             │
+    // │                                                              │
+    // │ 리버스 프록시 뒤에서는 PHP 가 https 인지 알 길이 확실하지     │
+    // │ 않다. 어떤 프록시는 X-Forwarded-Proto 를, 어떤 것은           │
+    // │ X-Forwarded-Ssl 을 보내고, 아무것도 안 보내는 것도 있다.      │
+    // │ 그때 http:// 로 만들어 보내면 구글이 redirect_uri_mismatch    │
+    // │ 로 거부하는데, 화면만 보고는 원인을 알기 어렵다.              │
+    // │                                                              │
+    // │ 그래서 env.config.php 의 base_url 로 못 박을 수 있게 둔다.    │
+    // │ 적어 두면 추측하지 않는다.                                    │
+    // └──────────────────────────────────────────────────────────────┘
+    $fixed = (string)bs_env('base_url', '');
+    if ($fixed !== '') {
+        return rtrim($fixed, '/') . '/api/google_oauth.php';
+    }
+
+    $https = bs_request_is_https();
     $host  = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
 
     // 모듈의 웹 경로를 찾는다.
@@ -269,6 +284,40 @@ function bs_oauth_redirect_uri(): string
     }
 
     return ($https ? 'https://' : 'http://') . $host . $base . '/api/google_oauth.php';
+}
+
+/**
+ * 지금 요청이 https 인가.
+ *
+ * 프록시마다 알리는 방법이 달라 알려진 것을 모두 본다. 헤더는 클라이언트가
+ * 지어낼 수 있지만, 이 값으로 하는 일은 **자기 주소를 만드는 것**뿐이라
+ * 지어내 봐야 자기 요청이 구글에서 거부될 뿐이다. 권한 판단에는 쓰지 않는다.
+ */
+function bs_request_is_https(): bool
+{
+    if (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') {
+        return true;
+    }
+    if ((int)($_SERVER['SERVER_PORT'] ?? 0) === 443) {
+        return true;
+    }
+    // 프록시가 여러 단이면 "https, http" 처럼 쉼표로 이어 온다. 맨 앞이 원래 것.
+    foreach (['HTTP_X_FORWARDED_PROTO', 'HTTP_X_FORWARDED_SCHEME', 'HTTP_X_URL_SCHEME'] as $h) {
+        $v = (string)($_SERVER[$h] ?? '');
+        if ($v !== '' && strtolower(trim(explode(',', $v)[0])) === 'https') {
+            return true;
+        }
+    }
+    foreach (['HTTP_X_FORWARDED_SSL', 'HTTP_FRONT_END_HTTPS'] as $h) {
+        $v = strtolower((string)($_SERVER[$h] ?? ''));
+        if ($v === 'on' || $v === '1') {
+            return true;
+        }
+    }
+    if ((int)($_SERVER['HTTP_X_FORWARDED_PORT'] ?? 0) === 443) {
+        return true;
+    }
+    return false;
 }
 
 function bs_setting_default(string $k): mixed

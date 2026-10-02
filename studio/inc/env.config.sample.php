@@ -42,6 +42,27 @@ return [
      * bs_project_source.file_path 에 절대경로가 들어 있으므로, 옮겼다면
      * 그 칸도 함께 고쳐야 합니다. 오픈 전이라면 올라온 파일이 없습니다.
      */
+    /**
+     * 이 모듈의 바깥에서 보이는 주소. 끝의 / 는 빼고 적습니다.
+     *
+     *   'base_url' => 'https://iworks.bizblue.co.kr/studio',
+     *
+     * 기본값: null — 요청에서 알아서 짐작합니다.
+     *
+     * **리버스 프록시 뒤라면 적어 두십시오.** 프록시가 TLS 를 끊어 주면
+     * PHP 는 https 인지 알 길이 확실하지 않습니다. 프록시마다 알리는 헤더가
+     * 달라(X-Forwarded-Proto · X-Forwarded-Ssl …) 아무것도 안 보내는 경우도
+     * 있습니다. 그러면 http:// 로 주소를 만들고, 구글 OAuth 가
+     * redirect_uri_mismatch 로 거부합니다 — 화면만 보고는 원인을 알기 어렵습니다.
+     *
+     * 지금 무엇으로 만들어지는지는 **연동 설정 화면**에 그대로 보입니다.
+     * 거기 http:// 로 보이면 이 값을 적으십시오.
+     *
+     * 구글 콘솔의 '승인된 리디렉션 URI' 와 아귀가 맞아야 합니다 —
+     * 여기 적은 값 + /api/google_oauth.php 가 그 주소입니다.
+     */
+    'base_url' => null,
+
     'upload_dir' => null,
 
     /**

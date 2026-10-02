@@ -232,6 +232,16 @@ SSH 터널(`127.0.0.1:13306`)이 떠 있어야 동작합니다.
 구글 콘솔의 **승인된 리디렉션 URI** 는 설정 화면이 만들어 보여 줍니다.
 한 글자라도 다르면 `redirect_uri_mismatch` 로 거부됩니다.
 
+**그 주소가 `http://` 로 보이면** 리버스 프록시가 TLS 를 끊어 주는데 PHP 가
+그 사실을 모르는 것입니다. `inc/env.config.php` 에 못 박으십시오.
+
+```php
+'base_url' => 'https://iworks.bizblue.co.kr/studio',
+```
+
+프록시마다 알리는 헤더가 달라(X-Forwarded-Proto · X-Forwarded-Ssl …) 자동
+판정이 언제나 맞지는 않습니다. 적어 두면 추측하지 않습니다.
+
 저장한 비밀은 포털 `config.php` 의 `key` 로 암호화해 `bs_integration` 에
 담습니다. **그 열쇠를 잃으면 토큰도 잃습니다** — 다시 연결하면 됩니다.
 
