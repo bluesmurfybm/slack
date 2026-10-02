@@ -25,6 +25,9 @@ $store  = new Integration(bs_db());
 $google = $store->status(Integration::GOOGLE);
 $figma  = $store->status(Integration::FIGMA);
 $redir  = bs_oauth_redirect_uri();
+// localhost 는 구글이 http 를 받아 준다. 로컬 개발에서는 경고하지 않는다.
+$__h    = (string)($_SERVER['HTTP_HOST'] ?? '');
+$isLocal = str_starts_with($__h, 'localhost') || str_starts_with($__h, '127.0.0.1');
 
 // google_oauth.php 가 왕복을 마치고 결과를 들고 돌아온다.
 $okMsg  = bs_param_str('ok');
@@ -95,20 +98,28 @@ bs_layout_head(
             <div class="ba-ig__uri"><code id="ba-ig-redir"><?= h($redir) ?></code>
               <button type="button" class="ba-btn ba-btn--sm" id="ba-ig-copy">복사</button></div>
             한 글자라도 다르면 <code>redirect_uri_mismatch</code> 로 거부됩니다.
-            <?php if (str_starts_with($redir, 'http://') && ($_SERVER['HTTP_HOST'] ?? '') !== 'localhost'
-                      && !str_starts_with((string)($_SERVER['HTTP_HOST'] ?? ''), '127.0.0.1')): ?>
+            <?php if (str_starts_with($redir, 'http://') && !$isLocal): ?>
               <div class="ba-alert" style="margin:8px 0">
-                <b>이 주소가 <code>http://</code> 로 시작합니다.</b>
-                브라우저로는 <code>https</code> 로 들어오는데 서버가 그 사실을 모르고 있습니다
-                (리버스 프록시가 TLS 를 끊어 주는 구성에서 흔합니다).
-                이대로 연결하면 구글이 <code>redirect_uri_mismatch</code> 로 거부합니다.
-                <br>
+                <b>이 주소가 <code>http://</code> 입니다. 이대로는 구글이 거부합니다.</b>
+                구글은 리디렉션 주소에 <b>https 만</b> 받습니다
+                (<code>localhost</code> 만 예외입니다). 둘 중 어느 쪽인지 보고 고르십시오.
+                <br><br>
+                <b>① 브라우저로는 https 로 들어오는데 이 주소만 http 로 보인다면</b><br>
+                리버스 프록시가 TLS 를 끊어 주는데 서버가 그 사실을 모르는 것입니다.
                 <code>studio/inc/env.config.php</code> 에 아래 한 줄을 넣으십시오.
                 <br>
                 <code>'base_url' =&gt; 'https://<?= h((string)($_SERVER['HTTP_HOST'] ?? '')) ?><?php
                   $p = parse_url($redir, PHP_URL_PATH);
                   echo h(substr((string)$p, 0, -strlen('/api/google_oauth.php')));
                 ?>',</code>
+                <br><br>
+                <b>② 이 사이트가 정말 http 로만 열린다면</b><br>
+                <b>구글 드라이브 연동은 쓸 수 없습니다.</b> 먼저 사이트에 HTTPS 를
+                붙여야 합니다. 이 경우 <code>base_url</code> 에 https 를 적어도 소용없습니다 —
+                동의 뒤 브라우저가 열리지 않는 주소로 되돌아올 뿐입니다.
+                <br>
+                그동안은 <b>피그마 연동</b>(아래)과 <b>파일 업로드 · 엑셀 붙여넣기</b>는
+                그대로 쓰실 수 있습니다. 그쪽은 https 가 필요 없습니다.
               </div>
             <?php endif; ?></li>
         <li>발급된 <b>클라이언트 ID</b> 와 <b>시크릿</b> 을 아래에 넣고 저장한 뒤 <b>[구글 연결]</b> 을 누릅니다.</li>
