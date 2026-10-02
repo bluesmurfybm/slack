@@ -90,6 +90,18 @@ body {
 .ba-spacer { flex: 1; }
 
 /* ---- 버튼 ----------------------------------------------------------- */
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ hidden 은 무조건 숨긴다                                           │
+   │                                                                  │
+   │ 브라우저 기본 규칙 `[hidden] { display: none }` 은 **클래스보다   │
+   │ 약하다.** .ba-btn 처럼 display 를 지정한 클래스가 있으면 hidden   │
+   │ 을 붙여도 그대로 보인다.                                          │
+   │                                                                  │
+   │ 실제로 [되돌리기]·[멈추기] 가 늘 보이고 있었다. 화면만 보고는     │
+   │ 알아채기 어려운 종류라 한 곳에서 못 박는다.                       │
+   └──────────────────────────────────────────────────────────────────┘ */
+[hidden] { display: none !important; }
+
 .ba-btn {
   appearance: none; display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid var(--ba-line); background: var(--ba-paper); color: var(--ba-ink);
