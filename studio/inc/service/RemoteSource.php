@@ -97,7 +97,19 @@ final class RemoteSource
         if ($host === 'www.figma.com' || $host === 'figma.com') {
             // /file/<KEY>/… · /design/<KEY>/… · /board/<KEY>/… (FigJam)
             if (preg_match('#/(?:file|design|board|proto)/([A-Za-z0-9]{10,})#', $url, $m)) {
-                return ['provider' => Integration::FIGMA, 'id' => $m[1]];
+                // 주소에 node-id 가 있으면 **그 페이지만** 읽는다. 사람이
+                // 특정 페이지를 짚어 붙여 넣었는데 파일 전체를 읽으면,
+                // 보라고 한 곳이 수백 줄 속에 묻힌다.
+                parse_str((string)parse_url($url, PHP_URL_QUERY), $q);
+                $node = isset($q['node-id']) ? trim((string)$q['node-id']) : '';
+                // 새 주소는 40006486-417499, 옛 주소는 40006486:417499 다.
+                // API 는 콜론 쪽을 확실히 받으므로 맞춰 준다.
+                if ($node !== '' && preg_match('#^\d+[-:]\d+$#', $node)) {
+                    $node = str_replace('-', ':', $node);
+                } else {
+                    $node = '';
+                }
+                return ['provider' => Integration::FIGMA, 'id' => $m[1], 'node' => $node];
             }
             return null;
         }
@@ -144,7 +156,7 @@ final class RemoteSource
         try {
             $out = $provider === Integration::GOOGLE
                 ? $this->fetchGoogle($hit['id'])
-                : $this->fetchFigma($hit['id']);
+                : $this->fetchFigma($hit['id'], (string)($hit['node'] ?? ''));
             $this->store->markOk($provider);
             return $out;
         } catch (RemoteSourceError $e) {
@@ -257,54 +269,105 @@ final class RemoteSource
      * 구조인 경우가 많다. 그래서 **이름을 들여쓰기로** 적는다 — WBS 도출이
      * 들여쓰기를 보고 대/중/소를 가르므로 바로 쓸 수 있다.
      */
-    private function fetchFigma(string $fileKey): array
+    private function fetchFigma(string $fileKey, string $nodeId = ''): array
     {
-        $raw = $this->http(
-            'GET',
-            'https://api.figma.com/v1/files/' . rawurlencode($fileKey) . '?depth=4',
-            ['X-Figma-Token: ' . $this->store->secret(Integration::FIGMA)]
-        );
-        $j = json_decode($raw, true);
-        if (!is_array($j) || !isset($j['document'])) {
+        // 페이지를 짚었으면 그 가지만 받는다 — 응답이 훨씬 작고, 사람이
+        // 보라고 한 곳이 그대로 글자가 된다.
+        $url = $nodeId !== ''
+            ? 'https://api.figma.com/v1/files/' . rawurlencode($fileKey)
+              . '/nodes?ids=' . rawurlencode($nodeId)
+            : 'https://api.figma.com/v1/files/' . rawurlencode($fileKey);
+
+        // **깊이를 걸지 않는다.** 전에는 depth=4 로 잘랐는데, 실제 글자는
+        // 프레임 안쪽 깊은 곳에 있어 이름만 긁고 내용을 통째로 놓쳤다.
+        $raw = $this->http('GET', $url, ['X-Figma-Token: ' . $this->store->secret(Integration::FIGMA)]);
+        $j   = json_decode($raw, true);
+        if (!is_array($j)) {
             throw new RemoteSourceError('피그마가 뜻 모를 응답을 돌려줬습니다.');
         }
 
         $name  = (string)($j['name'] ?? $fileKey);
+        $roots = [];
+        if ($nodeId !== '') {
+            foreach (($j['nodes'] ?? []) as $n) {
+                if (is_array($n) && isset($n['document'])) {
+                    $roots[] = $n['document'];
+                }
+            }
+            if ($roots === []) {
+                throw new RemoteSourceError(
+                    '주소가 가리키는 페이지를 찾지 못했습니다. 지워졌거나 주소가 낡았을 수 있습니다.'
+                );
+            }
+        } elseif (isset($j['document'])) {
+            $roots[] = $j['document'];
+        } else {
+            throw new RemoteSourceError('피그마 응답에 문서가 없습니다.');
+        }
+
         $lines = [];
-        $this->walkFigma($j['document'], 0, $lines);
+        foreach ($roots as $root) {
+            $this->walkFigma($root, 0, $lines);
+        }
 
         if ($lines === []) {
-            throw new RemoteSourceError('피그마 파일에서 읽을 이름이 없습니다.');
+            throw new RemoteSourceError(
+                '읽을 글자가 없습니다. 화면이 전부 이미지(캡처)로 되어 있으면 '
+                . '피그마에도 글자가 없어 뽑을 것이 없습니다.'
+            );
         }
-        $text = implode("\n", $lines);
+        $text = implode("
+", $lines);
         if (mb_strlen($text) > OfficeDocumentParser::MAX_CHARS) {
             $text = mb_substr($text, 0, OfficeDocumentParser::MAX_CHARS);
         }
         return ['kind' => 'figma', 'file' => null, 'text' => $text, 'name' => $name];
     }
 
-    /** 트리를 훑어 이름을 들여쓰기로 쌓는다. */
+    /**
+     * 피그마가 자동으로 붙이는 이름. WBS 에 들어가면 쓰레기가 된다.
+     *
+     * `Frame 12` `Group 5` `Rectangle` `IMG_5203` 같은 것들이다. 사람이
+     * 지은 이름(`출석부 - 목록`)만 남겨야 태스크로 쓸 수 있다.
+     */
+    private static function isNoiseName(string $name): bool
+    {
+        return (bool)preg_match(
+            '#^(frame|group|rectangle|ellipse|vector|line|polygon|star|slice|'
+            . 'image|img|component|instance|union|subtract|mask|arrow|shape)'
+            . '[\s_-]*\d*$#iu',
+            $name
+        );
+    }
+
+    /**
+     * 트리를 훑어 글자를 들여쓰기로 쌓는다.
+     *
+     * 글자 노드는 **실제 글자**를, 그 밖의 노드는 **사람이 지은 이름**을 쓴다.
+     * 자동 생성 이름은 버린다 — 남겨 두면 WBS 초안이 `Frame 12` 로 가득 찬다.
+     */
     private function walkFigma(array $node, int $depth, array &$lines): void
     {
-        // 최상위 DOCUMENT 자체는 이름이 파일명이라 줄로 적지 않는다.
         $type = (string)($node['type'] ?? '');
         $name = trim((string)($node['name'] ?? ''));
 
-        if ($depth > 0 && $name !== '') {
-            // 글자 노드는 이름 대신 실제 글자가 내용이다.
-            $body = $type === 'TEXT' && isset($node['characters'])
-                ? trim((string)$node['characters'])
-                : $name;
+        if ($depth > 0) {
+            $body = '';
+            if ($type === 'TEXT' && isset($node['characters'])) {
+                $body = trim((string)$node['characters']);
+            } elseif ($name !== '' && !self::isNoiseName($name)) {
+                $body = $name;
+            }
             if ($body !== '') {
-                // 한 줄짜리 설계 메모가 통째로 들어오는 수가 있어 잘라 둔다.
+                // 설계 메모가 통째로 들어오는 수가 있어 잘라 둔다.
                 $body = mb_substr(preg_replace('/\s+/u', ' ', $body) ?? '', 0, 200);
                 $lines[] = str_repeat('  ', max(0, $depth - 1)) . $body;
             }
         }
 
-        // 깊이는 API 에 depth=4 로 이미 걸어 뒀다. 여기서도 한 번 더 막는다 —
-        // 응답이 그보다 깊게 와도 끝없이 내려가지 않게.
-        if ($depth >= 5) {
+        // 깊이는 넉넉히 두되 끝은 있다. 피그마 문서는 중첩이 깊은 편이라
+        // 얕게 끊으면 정작 글자가 안 나온다 — 전에 그래서 이름만 긁었다.
+        if ($depth >= 20) {
             return;
         }
         foreach (($node['children'] ?? []) as $kid) {

@@ -2103,6 +2103,30 @@ foreach ([
        RemoteSource::identify($bad) === null, json_encode(RemoteSource::identify($bad)));
 }
 
+// 피그마 주소에 node-id 가 있으면 그 페이지만 읽는다. 사람이 특정 페이지를
+// 짚어 붙여 넣었는데 파일 전체를 읽으면 보라고 한 곳이 묻힌다.
+foreach ([
+    ['https://www.figma.com/design/AbCdEf123456/x?node-id=40006486-417499', '40006486:417499'],
+    ['https://www.figma.com/design/AbCdEf123456/x?node-id=4000%3A417',       '4000:417'],
+    ['https://www.figma.com/design/AbCdEf123456/x',                          ''],
+    ['https://www.figma.com/design/AbCdEf123456/x?node-id=abc',              ''],
+] as [$u, $want]) {
+    $hit = RemoteSource::identify($u);
+    ok('node-id 를 집어낸다: ' . ($want === '' ? '(없음)' : $want),
+       (string)($hit['node'] ?? '!') === $want, json_encode($hit));
+}
+
+// 피그마가 자동으로 붙이는 이름은 버린다. 남겨 두면 WBS 초안이
+// 'Frame 12' 로 가득 차 쓸 수 없게 된다.
+$noiseFn = new ReflectionMethod('RemoteSource', 'isNoiseName');
+$noiseFn->setAccessible(true);
+$drop = ['Frame 12', 'Group 5', 'Rectangle 3', 'IMG_5203', 'Vector 2', 'Instance', 'Ellipse 1'];
+$keep = ['출석부 - 목록', '01.Wireframe', 'COURSEMOS LXP Plan', '로그인 화면', 'Frame 작업 정의'];
+$bad = [];
+foreach ($drop as $n) { if (!$noiseFn->invoke(null, $n)) { $bad[] = "못 버림:$n"; } }
+foreach ($keep as $n) { if ($noiseFn->invoke(null, $n))  { $bad[] = "잘못 버림:$n"; } }
+ok('자동 생성 이름만 골라 버린다', $bad === [], implode(' · ', $bad));
+
 // ---- 권한 ----
 $r = $anon->req('/studio/api/integration.php?act=status');
 ok('미로그인은 상태를 못 본다', $r['status'] === 401, '상태 ' . $r['status']);
