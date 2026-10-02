@@ -1837,6 +1837,61 @@ ok('대시보드 응답에 역량 점수가 없다',
    !str_contains($r['body'], 'cap_score') && !str_contains($r['body'], 'breadth_score'),
    '점수 칸이 샜다');
 
+// ---------------------------------------------------------------------
+section('[T] 구성원 목록 화면');
+
+// 이 화면은 서버에서 직접 그린다(API 가 없다). 그래서 HTML 을 받아 본다.
+$r = $anon->req('/studio/member_list.php');
+ok('미로그인은 못 본다', $r['status'] === 302, '상태 ' . $r['status']);
+
+$r = $admin->req('/studio/member_list.php');
+ok('관리자가 연다', $r['status'] === 200, '상태 ' . $r['status']);
+
+// 뼈대가 남아 있으면 바로 여기서 걸린다. 이 화면은 P3~P4 내내 자리만
+// 잡아 둔 채였고, 그 사실이 배포 전 점검에서 드러났다.
+ok('자리표시(placeholder)가 아니다',
+   !str_contains($r['body'], 'ba-placeholder'), '아직 뼈대다');
+ok('표를 그린다', str_contains($r['body'], '주로 해 온 분야'));
+ok('구성원 이름이 나온다', str_contains($r['body'], '시험사용자') || str_contains($r['body'], '시험관리자'),
+   '이름이 하나도 없다');
+ok('본인 프로파일 입구가 있다', str_contains($r['body'], 'member_profile.php"'),
+   '내 프로파일 링크가 없다');
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ CLAUDE.md — "구성원 간 종합점수 전체 랭킹 화면을 만들지 않는다"   │
+// │ 점수 열이나 점수 정렬이 생기면 여기서 막는다.                     │
+// └──────────────────────────────────────────────────────────────────┘
+ok('종합점수가 화면에 없다',
+   !str_contains($r['body'], 'cap_score') && !str_contains($r['body'], 'breadth_score'),
+   '점수 칸이 샜다');
+ok('점수로 정렬하는 길이 없다',
+   !str_contains($r['body'], 'sort=score') && !str_contains($r['body'], 'order=cap'),
+   '점수 정렬이 생겼다');
+
+// 가용도는 합산 숫자만 보여 주면 안 된다 (P10-2).
+ok('가용도를 분해해 적는다',
+   str_contains($r['body'], '프로젝트 ') && str_contains($r['body'], '추정 '),
+   '합산만 보여 준다');
+
+// 거르개가 실제로 걸러야 한다. 없는 팀을 주면 아무도 안 나온다.
+$r2 = $admin->req('/studio/member_list.php?team=' . rawurlencode('없는팀__' . mt_rand()));
+ok('조건이 맞지 않으면 빈 목록', str_contains($r2['body'], '조건에 맞는 구성원이 없습니다'));
+
+// 키워드에 LIKE 메타문자를 넣어도 전체 조회가 되지 않아야 한다.
+$all  = substr_count($r['body'], 'member_profile.php?member_id=');
+$pcts = $admin->req('/studio/member_list.php?keyword=%25');
+$some = substr_count($pcts['body'], 'member_profile.php?member_id=');
+ok('키워드의 % 가 와일드카드로 새지 않는다', $some < $all || $all === 0,
+   "전체 $all / '%' 조회 $some");
+
+// 일반 사용자도 목록은 본다. 다만 남의 프로파일 링크는 안 걸린다.
+$r3 = $guest->req('/studio/member_list.php');
+ok('일반 사용자도 목록은 본다', $r3['status'] === 200, '상태 ' . $r3['status']);
+ok('일반 사용자에게 남의 프로파일 링크가 적다',
+   substr_count($r3['body'], 'member_profile.php?member_id=')
+     < substr_count($r['body'], 'member_profile.php?member_id='),
+   '남의 프로파일 링크가 그대로 보인다');
+
 array_map('unlink', glob("$tmp/*") ?: []);
 @rmdir($tmp);
 $admin->req('/studio/api/project.php?act=delete',

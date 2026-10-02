@@ -303,6 +303,57 @@ printf("  %-44s %3d 회\n\n", '합계', $total);
 $overviewTotal = $total;
 
 // ---------------------------------------------------------------------
+// 구성원 목록 (member_list.php)
+//
+// 이 화면은 API 가 없다 — 서버가 직접 그린다. 그래서 act 가 아니라 화면이
+// 부르는 메서드를 그대로 모사한다.
+//
+// **인원수에 비례하면 안 된다.** 사람마다 forMember()·skills()·metric() 을
+// 부르면 13명이면 40회, 50명이면 150회가 된다. 아래 세 메서드는 전부
+// 일괄 조회다. 그 성질을 사람 수를 바꿔 가며 확인한다.
+// ---------------------------------------------------------------------
+$memberListQueries = function () use ($pdo, $members, $avail) {
+    $oh2   = overhead($pdo);
+    $total = 0;
+    $rows  = [];
+    $total += measure($pdo, $oh2, 'MemberRepo::search (목록)',
+        function () use ($members, &$rows) { $rows = $members->search(['is_assignable' => 1]); });
+    $ids = array_map(static fn($r) => (int)$r['id'], $rows);
+    $total += measure($pdo, $oh2, 'AvailabilityCalculator::forMembers (가용도)',
+        function () use ($avail, $ids) { $avail->forMembers($ids, '2026-01-01', '2026-12-31'); });
+    $total += measure($pdo, $oh2, 'MemberRepo::primaryDomains (주요 분야)',
+        function () use ($members, $ids) { $members->primaryDomains($ids); });
+    $total += measure($pdo, $oh2, 'MemberRepo::sampleStatusFor (표본 여부)',
+        function () use ($members, $ids) { $members->sampleStatusFor($ids); });
+    $total += measure($pdo, $oh2, 'MemberRepo::filterOptions (거르개 값)',
+        function () use ($members) { $members->filterOptions(); });
+    $total += measure($pdo, $oh2, 'MemberRepo::findByUserId (내 줄 표시)',
+        function () use ($members) { $members->findByUserId('m1@x.kr'); });
+    return [$total, count($rows)];
+};
+
+echo "── 구성원 목록 (member_list.php) ──────────────────────\n";
+[$memberTotal, $memberCount] = $memberListQueries();
+echo "  " . str_repeat('-', 44) . " ---\n";
+printf("  %-44s %3d 회  (구성원 %d명)\n\n", '합계', $memberTotal, $memberCount);
+
+// 사람을 세 배로 늘려 같은 수가 나오는지 본다.
+$mk2 = $pdo->prepare(
+    'INSERT INTO bs_member (user_id, emp_name, role_label, career_months, base_capacity,
+                            is_assignable, is_evaluable)
+     VALUES (?,?,?,?,1.00,1,1)'
+);
+for ($i = 11; $i <= 40; $i++) {
+    $mk2->execute(["m$i@x.kr", "구성원$i", '설계·개발', 24]);
+}
+echo "── 같은 화면, 구성원을 늘려서 ─────────────────────────\n";
+[$memberTotal2, $memberCount2] = $memberListQueries();
+echo "  " . str_repeat('-', 44) . " ---\n";
+printf("  %-44s %3d 회  (구성원 %d명)\n", '합계', $memberTotal2, $memberCount2);
+printf("  %-44s %s\n\n", '인원수와 무관한가',
+    $memberTotal === $memberTotal2 ? '그렇다' : '!! 아니다 — N+1 이 생겼다');
+
+// ---------------------------------------------------------------------
 // 태스크 수를 바꿔도 같은지
 // ---------------------------------------------------------------------
 echo str_repeat('=', 62) . "\n";
@@ -310,6 +361,8 @@ printf("태스크 %d건 기준 — projects %d회 · board %d회 · mine %d회\n
     count($leaf), $projectsTotal, $boardTotal, $mineTotal);
 printf("                 overview %d회 (P11)
 ", $overviewTotal);
+printf("구성원 수와 무관 — member_list %d회 (10명/40명 동일)
+", $memberTotal);
 echo "\n태스크 수와 무관해야 맞습니다. 확인하려면 건수를 바꿔 다시 재 보세요:\n";
 echo "  php studio/dev/query_count.php 50\n";
 echo "  php studio/dev/query_count.php 500\n\n";

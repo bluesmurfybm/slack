@@ -60,7 +60,7 @@ $sizeLabel = static function (int $bytes): string {
 bs_layout_head(
     $user,
     $projectId ? '프로젝트 수정' : '프로젝트 등록',
-    '업무 배정',
+    '과업 편성/현황',
     '프로젝트 정보와 개발 범위를 등록합니다. 저장한 뒤 출처 문서를 올릴 수 있습니다.',
     'project'
 );

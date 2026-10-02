@@ -21,7 +21,7 @@ $repo     = new MemberRepo(bs_db());
 $target = $memberId > 0 ? $repo->find($memberId) : $repo->findByUserId($user['id']);
 
 if (!$target) {
-    bs_layout_head($user, '프로파일', '업무 배정', '', 'member');
+    bs_layout_head($user, '프로파일', '과업 편성/현황', '', 'member');
     echo '<div class="ba-alert">'
        . ($memberId > 0 ? '구성원을 찾을 수 없습니다.'
                         : '구성원으로 등록되어 있지 않아 프로파일이 없습니다.')
@@ -42,7 +42,7 @@ $canAdjust = bs_can(BS_CAP_EVAL_RUN);
 bs_layout_head(
     $user,
     $isSelf ? '내 프로파일' : '구성원 프로파일',
-    '업무 배정',
+    '과업 편성/현황',
     '분야별 처리량과 그 근거를 확인하고, 사실과 다르면 이의를 제기할 수 있습니다.',
     'member'
 );

@@ -24,7 +24,7 @@ if (!$rnd) {
 bs_layout_head(
     $user,
     $rnd['name'],
-    '업무 배정',
+    '과업 편성/현황',
     '',
     'project'
 );

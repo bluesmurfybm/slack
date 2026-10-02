@@ -35,10 +35,150 @@ final class MemberRepo
     }
 
     /** @param array $filter role_label, team, keyword, is_assignable */
+    /**
+     * 구성원 목록 조회.
+     *
+     * `ix_bs_member_assignable (is_assignable, role_label)` 를 타도록
+     * is_assignable 을 맨 앞 조건으로 둔다.
+     *
+     * **정렬은 이름 순으로 고정이다.** 점수로 줄 세우는 길을 열어 두면
+     * 그것이 곧 전사 랭킹이 된다 (CLAUDE.md 가 금지한 것). 이 메서드는
+     * 점수 표를 아예 조인하지 않는다.
+     *
+     * @param array{role_label?:string,team?:string,keyword?:string,is_assignable?:int|string|null} $filter
+     *        is_assignable 에 null 이나 '' 을 주면 배정 제외자까지 모두 돌려준다.
+     */
     public function search(array $filter): array
     {
-        // TODO(P4): ix_bs_member_assignable (is_assignable, role_label) 를 탄다.
-        return [];
+        $where  = [];
+        $params = [];
+
+        $assignable = $filter['is_assignable'] ?? 1;
+        if ($assignable !== null && $assignable !== '') {
+            $where[]  = 'is_assignable = ?';
+            $params[] = (int)$assignable === 0 ? 0 : 1;
+        }
+        if (($filter['role_label'] ?? '') !== '') {
+            $where[]  = 'role_label = ?';
+            $params[] = (string)$filter['role_label'];
+        }
+        if (($filter['team'] ?? '') !== '') {
+            $where[]  = 'team = ?';
+            $params[] = (string)$filter['team'];
+        }
+
+        $kw = trim((string)($filter['keyword'] ?? ''));
+        if ($kw !== '') {
+            // LIKE 메타문자를 막는다. 안 막으면 '%' 한 글자가 전체 조회가 된다.
+            $like = '%' . addcslashes($kw, '%_') . '%';
+            $where[] = '(emp_name LIKE ? OR team LIKE ? OR role_label LIKE ? OR slack_handle LIKE ?)';
+            array_push($params, $like, $like, $like, $like);
+        }
+
+        $sql = 'SELECT id, user_id, emp_name, role_label, team, base_capacity,
+                       career_months, join_date, slack_handle, is_assignable,
+                       is_evaluable, eval_exclude_reason
+                  FROM bs_member';
+        if ($where !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY emp_name, id';
+
+        $st = $this->pdo->prepare($sql);
+        $st->execute($params);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** 목록 화면의 거르개에 채울 값. 있는 것만 보여 준다. */
+    public function filterOptions(): array
+    {
+        $q = static function (PDO $pdo, string $col): array {
+            $st = $pdo->query(
+                "SELECT DISTINCT `$col` AS v FROM bs_member
+                  WHERE `$col` IS NOT NULL AND `$col` <> '' ORDER BY v"
+            );
+            return array_column($st->fetchAll(PDO::FETCH_ASSOC), 'v');
+        };
+        // $col 은 아래 두 리터럴뿐이다. 바깥에서 들어오는 값이 아니다.
+        return ['role' => $q($this->pdo, 'role_label'), 'team' => $q($this->pdo, 'team')];
+    }
+
+    /**
+     * 여러 사람의 주요 분야를 **한 번에** 가져온다.
+     *
+     * 목록에서 skills() 를 사람마다 부르면 인원수 비례 질의가 된다
+     * (CLAUDE.md 가 금지한 N+1). 한 질의로 받아 PHP 에서 자른다.
+     *
+     * 점수가 아니라 **건수**로 고른다. bs_member_skill.score 는 설계상 늘
+     * NULL 이다 — 점수는 계열 단위로만 낸다.
+     *
+     * @return array<int, list<array{name:string,case_count:int}>> member_id => 분야들
+     */
+    public function primaryDomains(array $memberIds, ?int $evalVer = null, int $perMember = 3): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $memberIds)));
+        if ($ids === []) {
+            return [];
+        }
+        $evalVer = $evalVer ?? $this->latestEvalVer();
+        if ($evalVer === null) {
+            return [];
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $st = $this->pdo->prepare(
+            "SELECT s.member_id, d.name, s.case_count
+               FROM bs_member_skill s
+               JOIN bs_domain d ON d.id = s.domain_id
+              WHERE s.eval_ver = ? AND s.member_id IN ($ph)
+              ORDER BY s.member_id, s.case_count DESC, d.sort_no"
+        );
+        $st->execute(array_merge([$evalVer], $ids));
+
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $mid = (int)$r['member_id'];
+            if (count($out[$mid] ?? []) >= $perMember) {
+                continue;
+            }
+            $out[$mid][] = ['name' => (string)$r['name'], 'case_count' => (int)$r['case_count']];
+        }
+        return $out;
+    }
+
+    /**
+     * 여러 사람의 표본 충분 여부를 한 번에.
+     *
+     * **점수는 돌려주지 않는다.** 목록 화면이 쓰는 것은 "표본이 찼는가" 뿐이고,
+     * cap_score 를 같이 내려보내면 그 열을 만들고 싶어진다.
+     *
+     * @return array<int, array{insufficient:bool,total_cases:int}>
+     */
+    public function sampleStatusFor(array $memberIds, ?int $evalVer = null): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $memberIds)));
+        if ($ids === []) {
+            return [];
+        }
+        $evalVer = $evalVer ?? $this->latestEvalVer();
+        if ($evalVer === null) {
+            return [];
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $st = $this->pdo->prepare(
+            "SELECT member_id, total_cases, insufficient_data
+               FROM bs_member_metric
+              WHERE eval_ver = ? AND member_id IN ($ph)"
+        );
+        $st->execute(array_merge([$evalVer], $ids));
+
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $out[(int)$r['member_id']] = [
+                'insufficient' => (int)$r['insufficient_data'] === 1,
+                'total_cases'  => (int)$r['total_cases'],
+            ];
+        }
+        return $out;
     }
 
     /**

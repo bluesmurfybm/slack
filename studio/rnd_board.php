@@ -17,7 +17,7 @@ $err        = bs_param_str('err');
 bs_layout_head(
     $user,
     'R&D 과제',
-    '업무 배정',
+    '과업 편성/현황',
     '구성원이 발의한 R&D 과제를 보고, 모집 중인 과제를 찾습니다.',
     'project'
 );

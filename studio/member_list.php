@@ -1,46 +1,242 @@
 <?php
-/** 구성원 목록 — 배정 후보가 되는 구성원과 역할·가용도를 훑는 화면. */
+/** 구성원 목록 — 역할·팀·가용도와 주로 해 온 분야를 훑는다. 점수 랭킹은 없다. */
 
 declare(strict_types=1);
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
+require_once __DIR__ . '/inc/repo/MemberRepo.php';
+require_once __DIR__ . '/inc/service/AvailabilityCalculator.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $user = bs_require_login();
 
 // ┌──────────────────────────────────────────────────────────────────┐
-// │ CLAUDE.md 가 금지한 것 — 이 화면을 만들 때 반드시 지킬 것           │
+// │ CLAUDE.md 가 금지한 것 — 이 화면을 고칠 때 반드시 지킬 것          │
 // │                                                                  │
 // │ "구성원 간 종합점수 전체 랭킹 화면을 만들지 않는다."                │
 // │                                                                  │
-// │ 즉 이 목록에 cap_score 같은 종합점수를 열로 넣고 정렬시키면 안 된다.│
-// │ 보여줄 수 있는 것은 역할·팀·가용도·주요 분야까지다. 점수는 특정     │
-// │ 과업을 기준으로 한 적합도(api/candidate.php) 에서만 나온다.        │
+// │ 그래서 이 표에는 cap_score 열이 없고 정렬은 이름 순으로 고정이다.  │
+// │ 점수는 특정 과업을 기준으로 한 적합도(api/candidate.php)에서만     │
+// │ 나온다. "누가 제일 잘하나" 를 묻는 화면을 여기서 만들지 마라.      │
+// │                                                                  │
+// │ 보여 주는 것은 역할·팀·가용도·주로 해 온 분야까지다.               │
 // └──────────────────────────────────────────────────────────────────┘
 
-// TODO(P4): MemberRepo::search() — is_assignable, role_label, team 으로 거른다.
-$filter = [
-    'role_label'    => bs_param_str('role'),
-    'team'          => bs_param_str('team'),
-    'keyword'       => bs_param_str('keyword'),
-    'is_assignable' => bs_param_int('assignable', 1),
-];
-$rows = [];
+$repo  = new MemberRepo(bs_db());
+$avail = new AvailabilityCalculator(bs_db());
+
+// 다른 화면에서 권한 문제로 튕겨 왔을 때 이유를 알려 준다.
+$err = bs_param_str('err');
+
+// ---------------------------------------------------------------------
+// 조회 조건
+// ---------------------------------------------------------------------
+$fRole    = bs_param_str('role');
+$fTeam    = bs_param_str('team');
+$fKeyword = bs_param_str('keyword');
+// 'all' 이면 배정 제외자(휴직·퇴사 등)까지 본다. 기본은 배정 가능한 사람만.
+$fScope   = bs_param_str('scope') === 'all' ? 'all' : 'assignable';
+
+$rows = $repo->search([
+    'role_label'    => $fRole,
+    'team'          => $fTeam,
+    'keyword'       => $fKeyword,
+    'is_assignable' => $fScope === 'all' ? null : 1,
+]);
+
+// ---------------------------------------------------------------------
+// 가용도 기간
+//
+// 가용도는 기간이 있어야 나오는 숫자다. 목록에는 기간이 없으므로 기본값을
+// 둔다 — 오늘부터 3개월. 지금 짜고 있는 배정이 보통 그 안에 든다.
+// ---------------------------------------------------------------------
+$from = bs_param_str('from') ?: date('Y-m-d');
+$to   = bs_param_str('to')   ?: date('Y-m-d', strtotime('+3 months'));
+if ($from > $to) {
+    [$from, $to] = [$to, $from];
+}
+
+// ---------------------------------------------------------------------
+// 곁들이 데이터 — 전부 **한 번씩만** 묻는다
+//
+// 사람마다 forMember()·skills()·metric() 을 부르면 인원수 비례 질의가 된다
+// (CLAUDE.md 가 금지한 N+1). 셋 다 일괄 조회를 쓴다.
+// ---------------------------------------------------------------------
+$ids       = array_map(static fn($r) => (int)$r['id'], $rows);
+$availRows = $ids ? $avail->forMembers($ids, $from, $to) : [];
+$domains   = $repo->primaryDomains($ids);
+$sample    = $repo->sampleStatusFor($ids);
+$options   = $repo->filterOptions();
+
+$me = $repo->findByUserId($user['id']);
+$myId = $me ? (int)$me['id'] : 0;
 
 bs_layout_head(
     $user,
     '구성원',
-    '업무 배정',
-    '배정 후보 구성원과 역할·가용도를 확인합니다.',
+    '과업 편성/현황',
+    '구성원의 역할·팀·가용도와 주로 해 온 분야를 확인합니다.',
     'member'
 );
+?>
 
-bs_placeholder('구성원 목록', 'P3~P4', [
-    '열: 이름 · 역할(role_label) · 팀 · 기본 가용 M/M · 주요 분야 · 배정 가능 여부',
-    '종합점수 열과 전체 정렬은 넣지 않는다 (CLAUDE.md)',
-    '표본 부족(insufficient_data=1)인 사람은 점수 자리에 "표본 부족" 으로 표시',
-    '이름 클릭 → member_profile.php?member_id= (본인 또는 PM/관리자만 열람)',
-]);
+<?php if ($err !== ''): ?>
+<div class="ba-alert">
+  <?= h(match ($err) {
+      'denied'   => '다른 구성원의 프로파일은 PM 또는 관리자만 볼 수 있습니다. 본인 것은 언제든 볼 수 있습니다.',
+      'notfound' => '구성원을 찾을 수 없습니다.',
+      default    => '요청을 처리하지 못했습니다.',
+  }) ?>
+</div>
+<?php endif; ?>
 
-bs_layout_foot();
+<div class="ba-list">
+
+  <!-- ============ 실행 줄 ============ -->
+  <div class="ba-filters" style="justify-content:flex-start">
+    <a class="ba-btn ba-btn--primary" href="member_profile.php">내 프로파일</a>
+    <span class="ba-head__sub">
+      본인 프로파일은 언제든 볼 수 있습니다. 다른 구성원의 것은 PM·관리자만 열립니다.
+    </span>
+  </div>
+
+  <!-- ============ 조회 조건 ============ -->
+  <form class="ba-filters" method="get" action="member_list.php">
+    <label class="ba-field">
+      <span>역할</span>
+      <select name="role">
+        <option value="">전체</option>
+        <?php foreach ($options['role'] as $v): ?>
+          <option value="<?= h($v) ?>" <?= $fRole === $v ? 'selected' : '' ?>><?= h($v) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </label>
+
+    <label class="ba-field">
+      <span>팀</span>
+      <select name="team">
+        <option value="">전체</option>
+        <?php foreach ($options['team'] as $v): ?>
+          <option value="<?= h($v) ?>" <?= $fTeam === $v ? 'selected' : '' ?>><?= h($v) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </label>
+
+    <label class="ba-field" style="flex:1 1 200px;max-width:360px">
+      <span>검색</span>
+      <input type="search" name="keyword" value="<?= h($fKeyword) ?>"
+             placeholder="이름, 팀, 역할, 슬랙 계정">
+    </label>
+
+    <!-- 가용도는 기간이 있어야 나오는 숫자다. 기본은 오늘부터 3개월. -->
+    <label class="ba-field">
+      <span>가용도 기간</span>
+      <input type="date" name="from" value="<?= h($from) ?>" aria-label="기간 시작">
+    </label>
+    <label class="ba-field">
+      <span>~</span>
+      <input type="date" name="to" value="<?= h($to) ?>" aria-label="기간 끝">
+    </label>
+
+    <label class="ba-check" for="ba-m-scope">
+      <input type="checkbox" id="ba-m-scope" name="scope" value="all"
+             <?= $fScope === 'all' ? 'checked' : '' ?>>
+      <span>배정 제외자 포함</span>
+    </label>
+
+    <span class="ba-spacer"></span>
+    <button type="submit" class="ba-btn ba-btn--primary">조회</button>
+    <a class="ba-btn" href="member_list.php">조건 초기화</a>
+  </form>
+
+  <!-- ============ 목록 ============ -->
+  <div class="ba-table-wrap">
+    <table class="ba-table">
+      <thead>
+        <tr>
+          <th style="width:130px">이름</th>
+          <th style="width:110px">역할</th>
+          <th style="width:110px">팀</th>
+          <th style="width:88px" title="기본 가용 M/M. 0.50 이면 하프">기본 가용</th>
+          <th style="width:260px">가용도 (<?= h($from) ?> ~ <?= h($to) ?>)</th>
+          <th>주로 해 온 분야</th>
+          <th style="width:92px">배정</th>
+        </tr>
+      </thead>
+      <tbody>
+      <?php if ($rows === []): ?>
+        <tr>
+          <td colspan="7" class="ba-cell-none">
+            <?php if ($fRole !== '' || $fTeam !== '' || $fKeyword !== ''): ?>
+              조건에 맞는 구성원이 없습니다.
+            <?php else: ?>
+              구성원이 없습니다. 포털 사용자에서 가져오려면 관리자가
+              <code>MemberRepo::syncFromPortalUsers()</code> 를 돌려야 합니다.
+            <?php endif; ?>
+          </td>
+        </tr>
+      <?php else: ?>
+        <?php foreach ($rows as $r):
+            $mid  = (int)$r['id'];
+            $av   = $availRows[$mid] ?? null;
+            if ($av !== null) {
+                // 반일 근무자 표기용. 계산값이 아니라 그 사람의 기준 근무량이다.
+                $av['base_capacity'] = (float)$r['base_capacity'];
+            }
+            $isSelf = $mid === $myId;
+            // 본인은 항상, 남의 것은 PM/관리자만 (CLAUDE.md).
+            $canOpen = bs_can_view_profile((string)$r['user_id']);
+        ?>
+        <tr<?= $isSelf ? ' class="ba-row--me"' : '' ?>>
+          <td>
+            <?php if ($canOpen): ?>
+              <a href="member_profile.php?member_id=<?= $mid ?>"><?= h($r['emp_name']) ?></a>
+            <?php else: ?>
+              <?= h($r['emp_name']) ?>
+            <?php endif; ?>
+            <?= $isSelf ? '<span class="ba-badge">나</span>' : '' ?>
+          </td>
+          <td><?= $r['role_label'] !== null && $r['role_label'] !== ''
+                    ? h($r['role_label']) : '<span class="ba-cell-none">—</span>' ?></td>
+          <td><?= $r['team'] !== null && $r['team'] !== ''
+                    ? h($r['team']) : '<span class="ba-cell-none">—</span>' ?></td>
+          <td><?= h(number_format((float)$r['base_capacity'], 2)) ?></td>
+          <td><?= bs_avail_html($av) ?></td>
+          <td>
+            <?php
+            // "데이터가 모자랍니다" 와 "평가 대상이 아닙니다" 는 다른 말이다
+            // (CLAUDE.md). 둘을 같은 문구로 뭉개지 않는다.
+            $mine = $domains[$mid] ?? [];
+            if ($mine !== []):
+                foreach ($mine as $d): ?>
+                  <span class="ba-chip-s" title="<?= (int)$d['case_count'] ?>건"><?= h($d['name']) ?></span>
+                <?php endforeach;
+            elseif ((int)$r['is_evaluable'] === 0): ?>
+              <span class="ba-cell-none" title="<?= h((string)($r['eval_exclude_reason'] ?? '')) ?>">평가 제외</span>
+            <?php elseif (($sample[$mid]['insufficient'] ?? true)): ?>
+              <span class="ba-cell-none">표본 부족</span>
+            <?php else: ?>
+              <span class="ba-cell-none">—</span>
+            <?php endif; ?>
+          </td>
+          <td>
+            <?= (int)$r['is_assignable'] === 1
+                  ? '<span class="ba-badge ba-badge--ok">가능</span>'
+                  : '<span class="ba-badge">제외</span>' ?>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="ba-head__sub" style="margin-top:10px">
+    <?= count($rows) ?>명.
+    이름 순으로만 정렬합니다 — <b>구성원을 점수로 줄 세우는 화면은 두지 않습니다.</b>
+    적합도는 특정 과업을 정한 뒤 배정 화면에서 나옵니다.
+  </p>
+</div>
+
+<?php bs_layout_foot(); ?>

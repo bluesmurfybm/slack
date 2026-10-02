@@ -1,5 +1,5 @@
 <?php
-/** BlueStudio 화면 공통 레이아웃 — 포털 상단바·모듈 머리말·꼬리말. 6개 화면이 모두 이걸 쓴다. */
+/** BlueStudio 화면 공통 레이아웃 — 포털 상단바·모듈 머리말·꼬리말. 모든 화면이 이걸 쓴다. */
 
 declare(strict_types=1);
 
@@ -20,7 +20,7 @@ declare(strict_types=1);
 function bs_layout_head(
     array $user,
     string $title,
-    string $eyebrow = '업무 배정',
+    string $eyebrow = '과업 편성/현황',
     string $desc = '',
     string $nav = ''
 ): void {
@@ -155,8 +155,55 @@ function baLogout() {
 }
 
 /**
+ * 가용도 한 칸. `assets/assign.js` 의 `availCell()` 과 **같은 마크업**이다.
+ *
+ * 두 벌로 두는 것은 좋지 않지만, 한쪽은 서버에서 그리고 한쪽은 API 응답으로
+ * 그린다. 합치려면 목록 화면을 API 로 돌려야 하는데 구성원 목록은 13명짜리
+ * 표라 그만한 값이 없다. **클래스 이름과 조각 구성은 반드시 맞춰 둔다** —
+ * 어긋나면 같은 숫자가 두 화면에서 다르게 보인다.
+ *
+ * 합산 숫자만 보여 주는 자리를 만들지 않는다 (명세서 P10-2). 프로젝트·R&D·
+ * 추정을 각각 적고, R&D 가 0 이면 그 조각은 쓰지 않는다 — 참여가 없는 사람
+ * 화면에 쓸데없는 0% 가 늘어서는 안 된다.
+ */
+function bs_avail_html(?array $a): string
+{
+    if ($a === null) {
+        return '<span class="ba-dim">—</span>';
+    }
+    $proj     = (int)($a['project_pct'] ?? $a['confirmed_pct'] ?? 0);
+    $rnd      = (int)($a['rnd_pct'] ?? 0);
+    $inferred = (int)($a['inferred_pct'] ?? 0);
+    $avail    = (int)($a['available_pct'] ?? 0);
+    $hasRnd   = $rnd > 0;
+
+    $parts = ['프로젝트 ' . $proj . '%'];
+    if ($hasRnd) {
+        $parts[] = 'R&amp;D ' . $rnd . '%';
+    }
+    $parts[] = '추정 ' . $inferred . '%';
+
+    // 반일 근무자는 기준이 100 이 아니다. 안 적으면 남는 칸이 무엇인지 알 수
+    // 없다 — 점유가 아니라 애초의 근무량이다.
+    $capPct = (int)round(((float)($a['base_capacity'] ?? 1.0)) * 100);
+    $note   = $capPct < 100 ? ', 기준 근무 ' . $capPct . '%' : '';
+
+    return '<div class="ba-av">'
+         . '<div class="ba-av__bar">'
+         . '<i class="ba-av__c" style="width:' . $proj . '%"></i>'
+         . ($hasRnd ? '<i class="ba-av__r" style="width:' . $rnd . '%"></i>' : '')
+         . '<i class="ba-av__i" style="width:' . $inferred . '%"></i>'
+         . '</div>'
+         . '<div class="ba-av__txt"><b>가용 ' . $avail . '%</b> '
+         . '<span class="ba-dim">(' . implode(' + ', $parts) . ' 점유' . $note . ')</span>'
+         . '</div></div>';
+}
+
+/**
  * 아직 만들지 않은 화면 자리를 채우는 표시.
- * P1~P6 에서 이 호출을 실제 본문으로 바꿔 나간다.
+ *
+ * **지금 쓰는 화면은 없다.** 마지막 사용처였던 member_list.php 를 채우면서
+ * 비었다. 다음 화면을 스캐폴딩할 때 쓰라고 남겨 둔다.
  */
 function bs_placeholder(string $heading, string $phase, array $todo = []): void
 {

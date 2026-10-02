@@ -35,7 +35,7 @@ $v     = static fn(string $k, string $d = '') => h((string)($rnd[$k] ?? $d));
 bs_layout_head(
     $user,
     $isNew ? '과제 발의' : '과제 수정',
-    '업무 배정',
+    '과업 편성/현황',
     $isNew
         ? '하고 싶은 R&D 과제를 올립니다. 승인되면 보드에 공개됩니다.'
         : '승인 전까지 고칠 수 있습니다.',

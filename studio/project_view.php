@@ -57,7 +57,7 @@ $domains = array_values(array_filter(
                      && !in_array($d['category'], BS_CATEGORY_NOT_SCORED, true)
 ));
 
-bs_layout_head($user, $project['name'], '업무 배정', '', 'project');
+bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 ?>
 
 <div class="ba-pv" id="ba-pv"
