@@ -59,8 +59,13 @@ if (bs_param_str('start') !== '') {
         'scope'         => 'https://www.googleapis.com/auth/drive.readonly email',
         // offline + consent 라야 **갱신 토큰**을 준다. 이게 없으면 한 시간
         // 뒤에 끊기고, 두 번째 동의부터는 조용히 안 주기 때문에 매번 묻는다.
+        //
+        // select_account 를 함께 준다. 브라우저에 구글 계정이 여럿 로그인돼
+        // 있으면 구글이 **기본 계정**을 말없이 집는데, 그 계정이 문서를 볼 수
+        // 없는 계정이면 엉뚱한 권한으로 연결되거나 org_internal 로 막힌다.
+        // 어느 계정으로 연결하는지는 사람이 골라야 한다.
+        'prompt'        => 'consent select_account',
         'access_type'   => 'offline',
-        'prompt'        => 'consent',
         'state'         => $state,
     ]);
     header('Location: https://accounts.google.com/o/oauth2/v2/auth?' . $q);
