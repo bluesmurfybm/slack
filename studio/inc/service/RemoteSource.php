@@ -28,6 +28,10 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Integration.php';
+// 글자 수 상한(MAX_CHARS)을 파서와 같은 값으로 쓴다. 여기서 직접 읽지
+// 않으면, 파서를 안 싣고 들어오는 경로(api/integration.php 의 '읽어 보기')
+// 에서 Class not found 로 터진다.
+require_once __DIR__ . '/OfficeDocumentParser.php';
 
 /** 읽어 오지 못했다. 메시지는 사람이 읽을 것이라 그대로 화면에 쓴다. */
 class RemoteSourceError extends RuntimeException {}

@@ -2043,6 +2043,33 @@ ok('일반 사용자에게 남의 프로파일 링크가 적다',
 // ---------------------------------------------------------------------
 section('[U] 외부 연동 — 구글 드라이브 · 피그마');
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ RemoteSource 는 **혼자서도 실려야 한다.**                         │
+// │                                                                  │
+// │ 설정 화면의 '읽어 보기'(api/integration.php)는 파서를 싣지 않고   │
+// │ 들어온다. 그런데 RemoteSource 가 OfficeDocumentParser::MAX_CHARS  │
+// │ 를 쓰면서 그 파일을 읽지 않아, 운영에서 피그마를 읽는 순간        │
+// │ Class not found 로 터졌다. 화면에는 "처리 중 오류" 만 떴다.       │
+// │                                                                  │
+// │ 자기가 쓰는 것은 자기가 읽어야 한다. 그걸 여기서 막는다 —         │
+// │ 부트스트랩 말고는 아무것도 안 실은 채로 불러 본다.                │
+// └──────────────────────────────────────────────────────────────────┘
+$probe = sys_get_temp_dir() . '/bs_remote_probe_' . getmypid() . '.php';
+file_put_contents($probe, "<?php
+"
+    . 'require ' . var_export(dirname(__DIR__) . '/inc/bootstrap.php', true) . ";
+"
+    . 'require ' . var_export(dirname(__DIR__) . '/inc/service/RemoteSource.php', true) . ";
+"
+    . 'echo RemoteSource::identify("https://www.figma.com/design/AbCdEf123456/x")["id"];' . "
+"
+    . 'echo "|", OfficeDocumentParser::MAX_CHARS;' . "
+");
+$sub = shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($probe) . ' 2>&1');
+@unlink($probe);
+ok('RemoteSource 는 혼자서도 실린다 (의존 파일을 스스로 읽는다)',
+   str_contains((string)$sub, 'AbCdEf123456|'), trim((string)$sub));
+
 // 주소 알아보기는 네트워크를 타지 않는 순수 함수다. 여기서 촘촘히 막는다.
 require_once dirname(__DIR__) . '/inc/service/RemoteSource.php';
 $idCases = [

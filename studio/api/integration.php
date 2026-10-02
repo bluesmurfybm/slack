@@ -146,6 +146,21 @@ bs_route(bs_param_str('act', 'status'), [
             ]);
         } catch (RemoteSourceError $e) {
             bs_json_error('FETCH_FAILED', $e->getMessage(), 400);
+        } catch (Throwable $e) {
+            // ┌──────────────────────────────────────────────────────┐
+            // │ 여기서는 진짜 이유를 보여 준다                         │
+            // │                                                      │
+            // │ 이 자리는 **관리자가 설정을 맞추려고 누르는 단추**다. │
+            // │ 공통 처리기에 맡기면 "처리 중 오류가 발생했습니다" 만 │
+            // │ 뜨고, 그걸 본 사람은 토큰을 의심하며 헤맨다 — 실제로  │
+            // │ 그렇게 한 번 헤맸다(클래스를 못 읽어 터진 것이었다).  │
+            // │                                                      │
+            // │ 관리자에게만 열리는 진단 도구라 내부 사정을 적어도    │
+            // │ 된다. 다른 act 는 그대로 공통 처리기에 맡긴다.        │
+            // └──────────────────────────────────────────────────────┘
+            error_log('[BlueStudio] integration test: ' . $e);
+            bs_json_error('INTERNAL_ERROR',
+                '설정을 읽는 중 서버 오류가 났습니다 — ' . $e->getMessage(), 500);
         } finally {
             if ($tmp !== null && is_file($tmp)) {
                 @unlink($tmp);
