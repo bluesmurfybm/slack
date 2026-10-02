@@ -161,9 +161,18 @@ final class SourceUploader
     /**
      * 링크 등록(피그마·드라이브 등).
      *
-     * 링크는 내려받아 파싱하지 않는다. parse_status 를 'skip' 으로 둔다.
-     * 피그마를 API 로 읽을지는 spec §11-7 에서 아직 안 정했다 — 정해지면
-     * 그때 'pending' 으로 바꿔 파서가 집어 가게 한다.
+     * 읽을 수 있는 링크면 'pending' 으로 둔다 — [문서 분석] 이 집어 간다.
+     * 읽을 수 있다는 것은 **둘 다** 참일 때다.
+     *
+     *   1. 주소에서 문서 id 를 뽑을 수 있다 (구글 드라이브 · 피그마)
+     *   2. 그 연동의 자격 정보가 등록돼 있다
+     *
+     * 아니면 'skip' — 노션 링크나 회의록 주소처럼 읽을 수 없는 것이 대부분
+     * 이고, 그것을 매번 'fail' 로 빨갛게 보여 주면 멀쩡한 화면이 고장 난
+     * 것처럼 보인다.
+     *
+     * 등록한 뒤에 관리자가 연결해도 괜찮다. [문서 분석] 은 'skip' 도 다시
+     * 보므로(parseSource 가 kind 로 가른다) 그때 읽힌다.
      */
     public function storeLink(int $projectId, string $url, string $title, array $actor): array
     {
@@ -178,6 +187,8 @@ final class SourceUploader
         }
 
         $kind  = $this->linkKind($safe);
+        // 읽을 수 있으면 파서가 집어 가게 'pending' 으로 둔다.
+        $status = $this->linkParseStatus($safe);
         $title = trim($title);
         if ($title === '') {
             $title = $this->titleFromUrl($safe);
@@ -187,7 +198,7 @@ final class SourceUploader
             'kind'         => $kind,
             'title'        => mb_substr($title, 0, 200),
             'url'          => $safe,
-            'parse_status' => 'skip',
+            'parse_status' => $status,
         ], $actor);
 
         return [
@@ -195,7 +206,7 @@ final class SourceUploader
             'kind'         => $kind,
             'title'        => mb_substr($title, 0, 200),
             'url'          => $safe,
-            'parse_status' => 'skip',
+            'parse_status' => $status,
         ];
     }
 
@@ -380,6 +391,25 @@ final class SourceUploader
     }
 
     /** 주소를 보고 피그마인지 일반 링크인지 가른다. */
+    /**
+     * 이 링크를 분석 대기로 둘 것인가.
+     *
+     * 자격 정보가 없으면 'skip' 이다. 넣기 전에는 읽을 수 없으니
+     * '분석 대기' 라고 적어 두면 영영 오지 않을 것을 기다리게 된다.
+     */
+    private function linkParseStatus(string $url): string
+    {
+        require_once __DIR__ . '/RemoteSource.php';
+        try {
+            return (new RemoteSource(bs_db()))->canFetch($url) ? 'pending' : 'skip';
+        } catch (Throwable $e) {
+            // 표가 아직 없는 등 어떤 이유로든 판단을 못 하면 예전대로 둔다.
+            // 링크 등록 자체가 실패하면 안 된다.
+            error_log('[BlueStudio] linkParseStatus: ' . $e->getMessage());
+            return 'skip';
+        }
+    }
+
     private function linkKind(string $url): string
     {
         $host = strtolower((string)parse_url($url, PHP_URL_HOST));

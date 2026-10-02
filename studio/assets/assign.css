@@ -1478,3 +1478,23 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 }
 /* 자기 줄. 목록에서 자기를 바로 찾게 한다 — 프로파일 입구이기도 하다. */
 .ba-row--me > td { background: #f3f8f5; }
+
+/* ================= 외부 연동 설정 (settings.php) ===================== */
+.ba-ig { border: 1px solid var(--ba-line); border-radius: var(--ba-r); padding: 16px 18px; margin-bottom: 14px; background: var(--ba-paper); }
+.ba-ig__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ba-ig__head h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--ba-ink); }
+.ba-ig__how { margin: 10px 0; font-size: 13px; color: var(--ba-ink-soft); }
+.ba-ig__how summary { cursor: pointer; font-weight: 600; color: var(--ba-brand); }
+.ba-ig__how ol { margin: 10px 0 6px; padding-left: 20px; line-height: 1.75; }
+.ba-ig__how li + li { margin-top: 4px; }
+/* 리디렉션 주소는 한 글자만 달라도 거부된다. 줄바꿈 없이 통째로 보여 준다. */
+.ba-ig__uri { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.ba-ig__uri code { flex: 1; overflow-x: auto; white-space: nowrap; font-size: 12.5px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 8px; padding: 7px 10px; }
+.ba-ig__form { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.ba-ig__btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.ba-ig__out { margin: 12px 0 0; padding: 12px 14px; max-height: 260px; overflow: auto;
+  font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 10px; }
+/* 성공 알림. .ba-alert 는 빨간 쪽이라 색만 바꿔 쓴다. */
+.ba-alert--ok { background: #e9f6ee; color: #23653e; border-color: #c6e6d3; }

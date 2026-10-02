@@ -2040,6 +2040,144 @@ ok('일반 사용자에게 남의 프로파일 링크가 적다',
      < substr_count($r['body'], 'member_profile.php?member_id='),
    '남의 프로파일 링크가 그대로 보인다');
 
+// ---------------------------------------------------------------------
+section('[U] 외부 연동 — 구글 드라이브 · 피그마');
+
+// 주소 알아보기는 네트워크를 타지 않는 순수 함수다. 여기서 촘촘히 막는다.
+require_once dirname(__DIR__) . '/inc/service/RemoteSource.php';
+$idCases = [
+    ['https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOp/edit#gid=0', 'google', '1AbCdEfGhIjKlMnOp'],
+    ['https://docs.google.com/document/d/1AbCdEfGhIjKlMnOp/edit',           'google', '1AbCdEfGhIjKlMnOp'],
+    ['https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view?usp=drive_link','google', '1AbCdEfGhIjKlMnOp'],
+    ['https://drive.google.com/open?id=1AbCdEfGhIjKlMnOp',                  'google', '1AbCdEfGhIjKlMnOp'],
+    ['https://www.figma.com/design/AbCdEf123456/LXP',                       'figma',  'AbCdEf123456'],
+    ['https://www.figma.com/file/AbCdEf123456/X?node-id=1',                 'figma',  'AbCdEf123456'],
+];
+foreach ($idCases as [$u, $p, $id]) {
+    $hit = RemoteSource::identify($u);
+    ok('주소에서 id 를 뽑는다: ' . parse_url($u, PHP_URL_HOST) . substr(parse_url($u, PHP_URL_PATH), 0, 14),
+       $hit !== null && $hit['provider'] === $p && $hit['id'] === $id, json_encode($hit));
+}
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 사용자가 준 주소로 서버가 그대로 나가면 사내 망이 사정권이 된다.  │
+// │ 주소에서 **문서 id 만** 뽑아 정해진 API 로만 나가므로, 아래는     │
+// │ 전부 "못 알아봄" 이어야 한다.                                     │
+// └──────────────────────────────────────────────────────────────────┘
+foreach ([
+    'http://127.0.0.1:8099/api/login.php',
+    'http://169.254.169.254/latest/meta-data/',
+    'https://evil.example.com/docs.google.com/d/1AbCdEfGhIjKlMnOp',
+    'file:///etc/passwd',
+    'https://docs.google.com/',
+    'https://notion.so/1AbCdEfGhIjKlMnOp',
+] as $bad) {
+    ok('사내·엉뚱한 주소를 집지 않는다: ' . mb_strimwidth($bad, 0, 44, '…'),
+       RemoteSource::identify($bad) === null, json_encode(RemoteSource::identify($bad)));
+}
+
+// ---- 권한 ----
+$r = $anon->req('/studio/api/integration.php?act=status');
+ok('미로그인은 상태를 못 본다', $r['status'] === 401, '상태 ' . $r['status']);
+$r = $guest->req('/studio/api/integration.php?act=status');
+ok('일반 사용자는 상태를 못 본다', $r['status'] === 403, '상태 ' . $r['status']);
+$r = $guest->req('/studio/api/integration.php?act=save_figma',
+    ['csrf' => true, 'json' => ['token' => 'figd_x']]);
+ok('일반 사용자는 저장도 못 한다', $r['status'] === 403, '상태 ' . $r['status']);
+$r = $guest->req('/studio/settings.php');
+ok('일반 사용자는 설정 화면에서 튕긴다', $r['status'] === 302, '상태 ' . $r['status']);
+
+$r = $admin->req('/studio/api/integration.php?act=status');
+ok('관리자는 상태를 본다', $r['status'] === 200, $r['body']);
+$ig = $r['json']['data'] ?? [];
+ok('리디렉션 주소를 만들어 준다',
+   str_ends_with((string)($ig['redirect_uri'] ?? ''), '/studio/api/google_oauth.php'),
+   (string)($ig['redirect_uri'] ?? ''));
+
+// ---- 저장 ----
+$r = $admin->req('/studio/api/integration.php?act=save_google',
+    ['csrf' => true, 'json' => ['client_id' => '', 'client_secret' => '']]);
+ok('클라이언트 ID 없이는 저장 못 한다', $r['status'] === 400, '상태 ' . $r['status']);
+
+$r = $admin->req('/studio/api/integration.php?act=save_figma',
+    ['csrf' => true, 'json' => ['token' => 'figd_SECRET_TOKEN_FOR_TEST']]);
+ok('피그마 토큰을 저장한다', $r['status'] === 200, $r['body']);
+ok('저장하면 바로 연결됨', ($r['json']['data']['figma']['connected'] ?? false) === true);
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 넣을 수는 있어도 꺼내 볼 수는 없다. 어떤 경로로도 비밀이 나오면   │
+// │ 안 된다 — 응답에도, 화면 HTML 에도, DB 평문으로도.                │
+// └──────────────────────────────────────────────────────────────────┘
+ok('상태 응답에 토큰이 없다',
+   !str_contains($admin->req('/studio/api/integration.php?act=status')['body'], 'figd_SECRET'));
+ok('설정 화면 HTML 에 토큰이 없다',
+   !str_contains($admin->req('/studio/settings.php')['body'], 'figd_SECRET'));
+$plain = (int)$pdoR->query(
+    "SELECT COUNT(*) FROM bs_integration WHERE secret_enc LIKE '%figd_SECRET%'"
+)->fetchColumn();
+ok('DB 에 평문으로 남지 않는다', $plain === 0, "$plain 건");
+
+// ---- 확인 버튼 ----
+$r = $admin->req('/studio/api/integration.php?act=test',
+    ['csrf' => true, 'json' => ['url' => 'https://notion.so/abc']]);
+ok('모르는 주소는 확인을 거절한다', $r['status'] === 400, '상태 ' . $r['status']);
+$r = $admin->req('/studio/api/integration.php?act=test',
+    ['csrf' => true, 'json' => ['url' => 'http://127.0.0.1:8099/api/login.php']]);
+ok('사내 주소로는 나가지 않는다', $r['status'] === 400, '상태 ' . $r['status']);
+
+// 구글은 동의 전이라 나가 보지도 않고 거절해야 한다.
+$r = $admin->req('/studio/api/integration.php?act=test',
+    ['csrf' => true, 'json' => ['url' => 'https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOp/edit']]);
+ok('연결 전 구글은 나가기 전에 막는다',
+   $r['status'] === 400 && str_contains((string)($r['json']['error']['message'] ?? ''), '연결되지'),
+   $r['body']);
+
+// ---- 연결 끊기 ----
+$r = $admin->req('/studio/api/integration.php?act=disconnect',
+    ['csrf' => true, 'json' => ['provider' => 'figma']]);
+ok('연결을 끊는다', $r['status'] === 200 && ($r['json']['data']['figma']['connected'] ?? true) === false,
+   $r['body']);
+ok('끊어도 줄은 남는다 — 누가 언제 껐는지가 남아야 한다',
+   (int)$pdoR->query("SELECT COUNT(*) FROM bs_integration WHERE provider='figma'")->fetchColumn() === 1);
+
+$r = $admin->req('/studio/api/integration.php?act=disconnect',
+    ['csrf' => true, 'json' => ['provider' => 'nope']]);
+ok('모르는 연동은 거절', $r['status'] === 400, '상태 ' . $r['status']);
+
+// ---- 링크 등록이 자격 정보에 따라 달라진다 ----
+// 연결 전이면 '분석 안 함'(skip) 이다. '분석 대기' 로 두면 영영 오지 않을
+// 것을 기다리게 된다.
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'link',
+    'url' => 'https://www.figma.com/design/ZzTestKey9999/link-test',
+    'title' => '연동 시험 링크',
+]]);
+$linkRow = $r['json']['data']['saved'][0] ?? [];
+ok('연결 전 링크는 분석 안 함', ($linkRow['parse_status'] ?? '') === 'skip',
+   $r['status'] . ' ' . json_encode($linkRow, JSON_UNESCAPED_UNICODE));
+
+// 자격 정보를 넣으면 같은 주소가 '분석 대기' 로 들어온다.
+$admin->req('/studio/api/integration.php?act=save_figma',
+    ['csrf' => true, 'json' => ['token' => 'figd_SECRET_TOKEN_FOR_TEST']]);
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'link',
+    'url' => 'https://www.figma.com/design/ZzTestKey9999/link-test-2',
+    'title' => '연동 시험 링크 2',
+]]);
+$linkRow2 = $r['json']['data']['saved'][0] ?? [];
+ok('연결 뒤 링크는 분석 대기', ($linkRow2['parse_status'] ?? '') === 'pending',
+   $r['status'] . ' ' . json_encode($linkRow2, JSON_UNESCAPED_UNICODE));
+
+// 읽을 수 없는 서비스는 연결 여부와 상관없이 분석 안 함이다.
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'link',
+    'url' => 'https://notion.so/ZzTestKey9999', 'title' => '노션 링크',
+]]);
+ok('모르는 서비스 링크는 그대로 분석 안 함',
+   ($r['json']['data']['saved'][0]['parse_status'] ?? '') === 'skip', $r['body']);
+
+$pdoR->exec("DELETE FROM bs_integration");
+
 array_map('unlink', glob("$tmp/*") ?: []);
 @rmdir($tmp);
 $admin->req('/studio/api/project.php?act=delete',

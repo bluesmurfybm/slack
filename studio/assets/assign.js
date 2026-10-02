@@ -2941,6 +2941,84 @@
   // 포털 사용자 가져오기. 구성원 표가 비면 후보·배정·역량이 전부 멈추는데,
   // 그 표를 채우는 길이 코드 안에만 있고 화면에는 없었다.
   // ===================================================================
+  // ===================================================================
+  // 외부 연동 설정 (관리자)
+  //
+  // 비밀은 **올려보내기만** 한다. 서버가 어떤 값도 내려주지 않으므로
+  // 입력칸은 늘 비어 있고, 비우고 저장하면 '그대로 두라' 는 뜻이다.
+  // ===================================================================
+  function initSettings() {
+    var root = $('#ba-settings');
+    if (!root) return;
+
+    // 리디렉션 주소는 한 글자만 달라도 구글이 거부한다. 손으로 옮겨 적지
+    // 않게 복사 단추를 둔다.
+    var copy = $('#ba-ig-copy');
+    if (copy) {
+      copy.addEventListener('click', function () {
+        var t = ($('#ba-ig-redir') || {}).textContent || '';
+        (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject())
+          .then(function () { toast('복사했습니다'); })
+          .catch(function () { toast('복사하지 못했습니다. 직접 긁어 복사하세요.', true); });
+      });
+    }
+
+    function send(url, body, okMsg) {
+      return api(url, { method: 'POST', body: body }).then(function (d) {
+        toast(d.message || okMsg);
+        location.reload();          // 상태 뱃지와 단추가 통째로 달라진다
+      }).catch(function (e) { toast(e.message, true); });
+    }
+
+    var gsave = $('#ba-ig-gsave');
+    if (gsave) {
+      gsave.addEventListener('click', function () {
+        send('api/integration.php?act=save_google', {
+          client_id:     ($('#ba-ig-gid') || {}).value || '',
+          client_secret: ($('#ba-ig-gsecret') || {}).value || ''
+        }, '저장했습니다');
+      });
+    }
+
+    var fsave = $('#ba-ig-fsave');
+    if (fsave) {
+      fsave.addEventListener('click', function () {
+        send('api/integration.php?act=save_figma',
+             { token: ($('#ba-ig-ftoken') || {}).value || '' }, '저장했습니다');
+      });
+    }
+
+    $$('[data-ig-off]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var who = b.dataset.igOff === 'google' ? '구글 드라이브' : '피그마';
+        if (!confirm([who + ' 연결을 끊습니다.', '',
+                      '· 저장해 둔 토큰이 지워집니다',
+                      '· 이미 읽어 둔 글자는 그대로 남습니다',
+                      "· 링크는 다시 '분석 안 함' 이 됩니다",
+                      '', '진행할까요?'].join('\n'))) return;
+        send('api/integration.php?act=disconnect', { provider: b.dataset.igOff }, '연결을 끊었습니다');
+      });
+    });
+
+    var tb = $('#ba-ig-testbtn');
+    if (tb) {
+      tb.addEventListener('click', function () {
+        var url = ($('#ba-ig-test') || {}).value || '';
+        var out = $('#ba-ig-out');
+        out.hidden = false;
+        out.textContent = '읽는 중…';
+        tb.disabled = true;
+        api('api/integration.php?act=test', { method: 'POST', body: { url: url } })
+          .then(function (d) {
+            out.textContent = d.message
+              + (d.preview ? '\n\n--- 앞부분 ---\n' + d.preview : '');
+          })
+          .catch(function (e) { out.textContent = '읽지 못했습니다 — ' + e.message; })
+          .then(function () { tb.disabled = false; });
+      });
+    }
+  }
+
   function initMemberList() {
     // 관리자에게만 그리는 것이 둘이다. 서로 매이지 않게 각자 확인한다.
     var btn = $('#ba-m-sync');
@@ -4010,6 +4088,7 @@
     case 'project':   initProjectList(); initProjectForm(); initProjectView(); initWbs(); initAllocation();
                       initRndBoard(); initRndForm(); initRndView(); break;
     case 'member':    initMemberList(); initMemberProfile(); break;
+    case 'settings': initSettings(); break;
   }
 
   window.BA = { api: api, upload: upload, qs: qs, toast: toast, esc: esc, $: $, $$: $$,

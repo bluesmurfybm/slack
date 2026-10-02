@@ -232,6 +232,45 @@ function bs_safe_url(?string $url): ?string
  *
  * 값을 바꾸려면 코드가 아니라 bs_setting 표를 고친다.
  */
+/**
+ * 구글 OAuth 가 돌아올 주소.
+ *
+ * 구글 콘솔의 '승인된 리디렉션 URI' 와 **글자 하나까지 같아야** 한다.
+ * 다르면 redirect_uri_mismatch 로 거부된다. 손으로 적다 틀리는 일이 잦아
+ * 서버가 만들어 설정 화면에 띄우고, 거기서 복사해 붙이게 한다.
+ *
+ * 질의 문자열은 붙이지 않는다 — 구글이 받아 주기는 하지만, 붙여 둔 값이
+ * 조금이라도 달라지면 바로 거부라 변수를 줄이는 편이 낫다.
+ */
+function bs_oauth_redirect_uri(): string
+{
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+             || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https')
+             || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
+    $host  = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+
+    // 모듈의 웹 경로를 찾는다.
+    //
+    // 부르는 자리가 둘이라(<모듈>/settings.php 와 <모듈>/api/*.php) 단순히
+    // 디렉터리를 몇 번 되짚는 식으로는 맞출 수 없다. 대신 **모듈 폴더 이름**을
+    // 경로에서 찾아 거기까지 자른다. 폴더 이름은 BS_ROOT 가 알고 있다.
+    $script = (string)($_SERVER['SCRIPT_NAME'] ?? '');
+    $dir    = basename(BS_ROOT);                     // 예: studio
+    $base   = '';
+    $at     = strpos($script, '/' . $dir . '/');
+    if ($at !== false) {
+        $base = substr($script, 0, $at) . '/' . $dir;
+    } elseif ($script !== '') {
+        // 못 찾으면(드문 배치) 스크립트가 놓인 디렉터리로 둔다.
+        $base = rtrim(str_replace(DIRECTORY_SEPARATOR, '/', dirname($script)), '/');
+        if ($base === '.') {
+            $base = '';
+        }
+    }
+
+    return ($https ? 'https://' : 'http://') . $host . $base . '/api/google_oauth.php';
+}
+
 function bs_setting_default(string $k): mixed
 {
     return match ($k) {

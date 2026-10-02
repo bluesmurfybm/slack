@@ -36,6 +36,9 @@ final class WbsExtractor
         private TaskRepo $tasks,
         private ?DocumentParser $parser = null,
         private ?LlmClient $llm = null,
+        // 링크(구글·피그마)를 읽을 때만 쓴다. 안 주면 모듈 연결을 집는다 —
+        // 시험은 자기 DB 를 넘겨 격리한다.
+        private ?PDO $pdo = null,
     ) {
         $this->parser ??= new OfficeDocumentParser(
             defined('BS_PDFTOTEXT') && BS_PDFTOTEXT ? BS_PDFTOTEXT : null
@@ -64,9 +67,18 @@ final class WbsExtractor
 
         $kind = (string)$src['kind'];
 
-        // 파일이 아닌 것(링크·직접 입력)은 파싱 대상이 아니다.
-        // 'skip' 은 실패가 아니다 — 화면에서 빨갛게 보이면 안 된다.
-        if (in_array($kind, ['text', 'url', 'figma'], true)) {
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 링크 — 읽을 수 있으면 읽는다                                  │
+        // │                                                              │
+        // │ 구글 드라이브·피그마는 자격 정보가 등록돼 있으면 서버가 직접  │
+        // │ 읽어 온다(RemoteSource). 등록 전이거나 모르는 주소면 예전처럼 │
+        // │ 'skip' 이다 — 'skip' 은 실패가 아니라 "원래 안 한다" 는 뜻이라│
+        // │ 화면에서 빨갛게 보이면 안 된다.                               │
+        // └──────────────────────────────────────────────────────────────┘
+        if (in_array($kind, ['url', 'figma'], true)) {
+            return $this->parseRemote($sourceId, $src);
+        }
+        if ($kind === 'text') {
             $this->projects->updateSourceParse(
                 $sourceId, 'skip', $src['parsed_text'] ?: null, null);
             return $this->parseResult('skip', 0, 0, null);
@@ -102,6 +114,73 @@ final class WbsExtractor
             $this->projects->updateSourceParse(
                 $sourceId, 'fail', null, '파싱 중 오류가 발생했습니다.');
             return $this->parseResult('fail', 0, 0, '파싱 중 오류가 발생했습니다.');
+        }
+    }
+
+    /**
+     * 구글 드라이브·피그마 링크를 읽어 글자를 채운다.
+     *
+     * 자격 정보가 없거나 모르는 주소면 'skip' — 지금까지와 같다.
+     * 읽기에 실패하면 'fail' 로 두고 **왜 안 됐는지를 남긴다.** 조용히
+     * skip 으로 돌리면 "왜 분석이 안 되지" 를 사람이 알 길이 없다.
+     */
+    private function parseRemote(int $sourceId, array $src): array
+    {
+        $url = trim((string)($src['url'] ?? ''));
+        if ($url === '') {
+            $this->projects->updateSourceParse($sourceId, 'skip', null, null);
+            return $this->parseResult('skip', 0, 0, null);
+        }
+
+        require_once __DIR__ . '/RemoteSource.php';
+        $remote = new RemoteSource($this->pdo ?? bs_db());
+
+        if (!$remote->canFetch($url)) {
+            // 주소를 알아보지 못했거나(지원 안 하는 서비스) 아직 연결 전이다.
+            // 둘을 가려 적어 준다 — 할 일이 다르다.
+            $known = RemoteSource::identify($url) !== null;
+            $this->projects->updateSourceParse($sourceId, 'skip', null, null);
+            return $this->parseResult('skip', 0, 0, null, $known
+                ? ['연결되지 않은 서비스입니다. 관리자가 설정 화면에서 연결하면 읽을 수 있습니다.']
+                : []);
+        }
+
+        $tmp = null;
+        try {
+            $got = $remote->fetch($url);
+            $tmp = $got['file'];
+
+            if ($got['text'] !== null) {                 // 피그마 — 이미 글자다
+                $text = $got['text'];
+                $blocks = substr_count($text, "\n") + 1;
+            } else {                                      // 구글 — 파일로 받아 기존 파서로
+                $doc    = $this->parser->parse((string)$tmp, $got['kind']);
+                $text   = $doc->text();
+                $blocks = count($doc->blocks);
+            }
+            if (mb_strlen($text) > OfficeDocumentParser::MAX_CHARS) {
+                $text = mb_substr($text, 0, OfficeDocumentParser::MAX_CHARS);
+            }
+            $this->projects->updateSourceParse($sourceId, 'ok', $text, null);
+            return $this->parseResult('ok', mb_strlen($text), $blocks, null);
+
+        } catch (RemoteSourceError $e) {
+            $this->projects->updateSourceParse($sourceId, 'fail', null, $e->getMessage());
+            return $this->parseResult('fail', 0, 0, $e->getMessage());
+        } catch (DocumentParseError $e) {
+            $this->projects->updateSourceParse($sourceId, 'fail', null, $e->getMessage());
+            return $this->parseResult('fail', 0, 0, $e->getMessage());
+        } catch (Throwable $e) {
+            error_log('[BlueStudio] parseRemote#' . $sourceId . ': ' . $e->getMessage());
+            $this->projects->updateSourceParse(
+                $sourceId, 'fail', null, '링크를 읽는 중 오류가 발생했습니다.');
+            return $this->parseResult('fail', 0, 0, '링크를 읽는 중 오류가 발생했습니다.');
+        } finally {
+            // 임시 파일은 어떤 길로 끝나든 지운다. 안 지우면 서버에 사업
+            // 문서가 /tmp 에 쌓인다.
+            if ($tmp !== null && is_file($tmp)) {
+                @unlink($tmp);
+            }
         }
     }
 

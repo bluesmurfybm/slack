@@ -95,6 +95,7 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 012_migration_rnd_domain.sql        R&D 분야 태그
 013_migration_domain_group.sql      분야 묶음(코스모스 LXP / 일반) + 일반 분야 6개
 014_migration_project_track.sql     사업 유형 — LXP 학내형/개방형
+015_migration_integration.sql       외부 연동 자격 정보(구글·피그마)
 ```
 
 ### 적용 뒤 확인
@@ -112,6 +113,7 @@ mysql <db> -e "SELECT * FROM bs_setting"           # 4행인가
 | 002 · 005 · 006 · 007 · 010 · 011 · 012 | 안전 (`IF NOT EXISTS` / `ON DUPLICATE KEY`) |
 | 013 | **안전하지 않음** — 맨 `ALTER` 라 두 번째에 죽습니다 (INSERT 쪽은 안전) |
 | 014 | 안전 (`UPDATE` + `MODIFY COLUMN`. 둘 다 다시 돌려도 같은 결과) |
+| 015 | 안전 (`CREATE TABLE IF NOT EXISTS`) |
 | 001 | 안전하지 않음 (`CREATE TABLE`) |
 | 008 · 009 | **안전하지 않음** — 맨 `ALTER` 라 두 번째에 죽습니다 |
 
@@ -121,7 +123,7 @@ mysql <db> -e "SELECT * FROM bs_setting"           # 4행인가
 
 ## 2. 되돌리기
 
-되돌리기 스크립트는 `010`~`014` 에만 있습니다.
+되돌리기 스크립트는 `010`~`015` 에만 있습니다.
 **`001`~`009` 에는 없습니다.** 그 구간을 되돌리는 방법은 덤프 복원 하나뿐입니다.
 그래서 `apply.sh` 전에 `dump.sh` 를 먼저 돌려야 합니다.
 
@@ -141,6 +143,7 @@ sh studio/sql/dump.sh --drop-sql <db> | mysql <db>
 gunzip -c <db>_bs_<시각>.sql.gz | mysql --default-character-set=utf8mb4 <db>
 
 # 010~012 만 되돌리기 (R&D 기능만 물리고 싶을 때)
+mysql --default-character-set=utf8mb4 <db> < studio/sql/015_rollback_integration.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/014_rollback_project_track.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/013_rollback_domain_group.sql
 mysql --default-character-set=utf8mb4 <db> < studio/sql/012_rollback_rnd_domain.sql
@@ -214,6 +217,26 @@ chmod 600       studio/collector/config.prod.ini
 ```
 
 SSH 터널(`127.0.0.1:13306`)이 떠 있어야 동작합니다.
+
+### 구글 드라이브 · 피그마 연동
+
+출처 문서로 올린 **구글 드라이브·피그마 링크**를 서버가 직접 읽어 WBS 도출에
+쓰려면 자격 정보가 필요합니다. 설정은 **BlueStudio → 연동**(관리자 전용)에서
+화면으로 합니다 — 서버 파일을 고치지 않습니다.
+
+| | 넣는 것 | 어디서 |
+|---|---|---|
+| 구글 드라이브 | OAuth 클라이언트 ID·시크릿 → 동의 | 구글 클라우드 콘솔 |
+| 피그마 | 개인 접근 토큰 | 피그마 Settings → Security |
+
+구글 콘솔의 **승인된 리디렉션 URI** 는 설정 화면이 만들어 보여 줍니다.
+한 글자라도 다르면 `redirect_uri_mismatch` 로 거부됩니다.
+
+저장한 비밀은 포털 `config.php` 의 `key` 로 암호화해 `bs_integration` 에
+담습니다. **그 열쇠를 잃으면 토큰도 잃습니다** — 다시 연결하면 됩니다.
+
+안 해도 됩니다. 연동 전에는 링크가 지금처럼 '분석 안 함' 으로 남고,
+파일을 직접 올리거나 엑셀에서 붙여 넣는 길은 그대로입니다.
 
 ### 슬랙 채널
 
