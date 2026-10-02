@@ -1362,9 +1362,13 @@
         '</div></div>';
     }
 
-    function scoreCell(v, insuf) {
+    // "데이터가 모자랍니다" 와 "평가 대상이 아닙니다" 는 다른 말이다
+    // (CLAUDE.md). 평가 제외자는 표본이 **영영** 차지 않으므로 '표본 부족'
+    // 이라 적으면 기다리면 채워진다는 거짓말이 된다.
+    function scoreCell(v, insuf, evaluable) {
       if (v === null || v === undefined) {
-        return '<span class="ba-cell-none">' + (insuf ? '표본 부족' : '—') + '</span>';
+        var why = evaluable === false ? '평가 제외' : (insuf ? '표본 부족' : '—');
+        return '<span class="ba-cell-none">' + why + '</span>';
       }
       return '<b>' + Number(v).toFixed(0) + '</b>';
     }
@@ -1424,11 +1428,11 @@
             r.member_id + '">' + esc(r.emp_name) + '</button></td>' +
           '<td>' + esc(r.role_label || '—') + '</td>' +
           '<td>' + availCell(r.availability, r.member_id) + '</td>' +
-          '<td>' + scoreCell(r.domain_fit, r.insufficient_data) + '</td>' +
-          '<td>' + scoreCell(r.capability, r.insufficient_data) + '</td>' +
-          '<td>' + scoreCell(r.breadth, r.insufficient_data) + '</td>' +
+          '<td>' + scoreCell(r.domain_fit, r.insufficient_data, r.evaluable) + '</td>' +
+          '<td>' + scoreCell(r.capability, r.insufficient_data, r.evaluable) + '</td>' +
+          '<td>' + scoreCell(r.breadth, r.insufficient_data, r.evaluable) + '</td>' +
           '<td class="ba-num">' + (r.active_items || 0) + '</td>' +
-          '<td>' + scoreCell(r.fit_score, r.insufficient_data) +
+          '<td>' + scoreCell(r.fit_score, r.insufficient_data, r.evaluable) +
             (r.filter_reason ? '<br><span class="ba-cell-none">' +
               esc(r.filter_reason) + '</span>' : '') + '</td>' +
           '</tr>';
@@ -2938,9 +2942,39 @@
   // 그 표를 채우는 길이 코드 안에만 있고 화면에는 없었다.
   // ===================================================================
   function initMemberList() {
+    // 관리자에게만 그리는 것이 둘이다. 서로 매이지 않게 각자 확인한다.
     var btn = $('#ba-m-sync');
-    if (!btn) return;          // 관리자가 아니면 단추를 안 그린다
+    // 배정 제외 토글. 개발 사업과 무관한 직무(경영지원 등)와 휴직자를
+    // 후보 목록에서 뺀다. 행을 지우지 않으므로 과거 배정 기록은 남는다.
+    $$('.ba-assign-t').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var on   = b.dataset.on === '1';
+        var name = b.dataset.name || '이 구성원';
+        var msg  = on
+          ? [name + ' 님을 배정 후보에서 뺍니다.', '',
+             '· 후보 리스트와 배정안 도출에서 빠집니다',
+             '· 과거 배정 기록은 그대로 남습니다',
+             '· 역량 점수는 이 설정과 무관하게 계속 산출됩니다',
+             '', '진행할까요?'].join('\n')
+          : name + ' 님을 배정 후보에 되돌립니다. 진행할까요?';
+        if (!confirm(msg)) return;
 
+        b.disabled = true;
+        api('api/member.php?act=set_assignable', {
+          method: 'POST',
+          body: { member_id: parseInt(b.dataset.mid, 10), assignable: on ? 0 : 1 }
+        }).then(function (d) {
+          toast(d.message);
+          location.reload();
+        }).catch(function (e) {
+          toast(e.message, true);
+          b.disabled = false;
+        });
+      });
+    });
+
+
+    if (!btn) return;   // 관리자가 아니면 단추를 안 그린다
     btn.addEventListener('click', function () {
       // 배정 후보 전체가 바뀌는 일이다. 한 번 묻는다.
       if (!confirm('포털 사용자 목록을 읽어 구성원 표에 넣습니다.\n\n'

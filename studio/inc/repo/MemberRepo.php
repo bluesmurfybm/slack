@@ -89,6 +89,25 @@ final class MemberRepo
         return $st->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * 배정 후보로 올릴지 말지를 바꾼다.
+     *
+     * 개발 사업과 무관한 직무(경영지원 등)나 휴직·퇴사자를 후보 목록에서
+     * 뺀다. **행을 지우지 않는다** — 과거 배정 기록의 주인이기 때문이다.
+     *
+     * `is_evaluable` 과 섞지 말 것. 여기서 빼도 역량 점수는 그대로 나고,
+     * 평가에서 빼도 배정 후보에는 남는다. 기획 담당자가 뒤쪽 경우다 —
+     * 슬랙 취합 데이터가 없어 점수를 못 내지만 기획 과업에는 배정된다.
+     */
+    public function setAssignable(int $memberId, bool $assignable): bool
+    {
+        $st = $this->pdo->prepare(
+            'UPDATE bs_member SET is_assignable = ? WHERE id = ?'
+        );
+        $st->execute([$assignable ? 1 : 0, $memberId]);
+        return $st->rowCount() > 0;
+    }
+
     /** 목록 화면의 거르개에 채울 값. 있는 것만 보여 준다. */
     public function filterOptions(): array
     {

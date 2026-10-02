@@ -1947,6 +1947,86 @@ $nowKeep = $pdoR->query(
 ok('is_evaluable 을 건드리지 않는다', $nowKeep == $keep,
    json_encode([$keep, $nowKeep], JSON_UNESCAPED_UNICODE));
 
+// ---------------------------------------------------------------------
+// 배정 제외
+//
+// 개발 사업과 무관한 직무(경영지원 등)를 후보에서 뺀다. 스키마는 처음부터
+// is_assignable 로 그 길을 열어 뒀지만 사람이 바꿀 수단이 없었다.
+// ---------------------------------------------------------------------
+// 시험 계정은 둘 다 is_assignable=0 이다 — 시험사용자는 처음부터 그렇고
+// (배정 유령 방지), 시험관리자는 [S] 앞의 뒷정리가 내려 둔다.
+// 여기서는 **빼고 넣는 것**을 재야 하므로 한 명을 올려 두고 시작한다.
+// 끝나면 뒷정리가 의도한 상태(0)로 되돌린다.
+$exMid = (int)$pdoR->query(
+    "SELECT id FROM bs_member WHERE user_id = 'batest-admin@bluesoft.co.kr'"
+)->fetchColumn();
+$pdoR->exec("UPDATE bs_member SET is_assignable = 1 WHERE id = $exMid");
+ok('대상을 배정 가능으로 세웠다',
+   (int)$pdoR->query("SELECT is_assignable FROM bs_member WHERE id = $exMid")->fetchColumn() === 1);
+
+$r6 = $guest->req('/studio/api/member.php?act=set_assignable',
+    ['csrf' => true, 'json' => ['member_id' => $exMid, 'assignable' => 0]]);
+ok('일반 사용자는 배정 대상을 못 바꾼다', $r6['status'] === 403, '상태 ' . $r6['status']);
+
+$r6 = $admin->req('/studio/api/member.php?act=set_assignable',
+    ['csrf' => true, 'json' => ['member_id' => 0, 'assignable' => 0]]);
+ok('구성원을 안 주면 거절', $r6['status'] === 400, '상태 ' . $r6['status']);
+
+$r6 = $admin->req('/studio/api/member.php?act=set_assignable',
+    ['csrf' => true, 'json' => ['member_id' => $exMid, 'assignable' => 7]]);
+ok('0/1 아닌 값은 거절', $r6['status'] === 400, '상태 ' . $r6['status']);
+
+// 빼기 전 후보 수를 센다.
+$candBefore = count($admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid)
+                     ['json']['data']['rows'] ?? []);
+
+$r6 = $admin->req('/studio/api/member.php?act=set_assignable',
+    ['csrf' => true, 'json' => ['member_id' => $exMid, 'assignable' => 0]]);
+ok('관리자가 배정에서 뺀다', $r6['status'] === 200, $r6['body']);
+ok('무엇이 바뀌는지 알려 준다',
+   str_contains($r6['json']['data']['message'] ?? '', '역량 점수는'), $r6['body']);
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 뺀 사람이 **후보 리스트에서 실제로 빠져야** 한다.                 │
+// │ 전에는 후보 쿼리가 is_evaluable 로 걸러서, 배정에서 빼 둔 사람이  │
+// │ 그대로 나오고 점수만 못 내는 기획 담당자가 사라졌다.              │
+// └──────────────────────────────────────────────────────────────────┘
+$cand = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid)
+          ['json']['data']['rows'] ?? [];
+$ids  = array_column($cand, 'member_id');
+ok('뺀 사람이 후보에서 사라진다', !in_array($exMid, $ids, true),
+   '여전히 후보에 있다');
+ok('나머지는 그대로 남는다', count($cand) === $candBefore - 1,
+   "$candBefore → " . count($cand));
+
+// 행을 지우지 않는다 — 과거 배정 기록의 주인이다.
+$still = (int)$pdoR->query("SELECT COUNT(*) FROM bs_member WHERE id = $exMid")->fetchColumn();
+ok('행을 지우지 않는다', $still === 1);
+
+// 되돌리면 다시 나온다.
+$r6 = $admin->req('/studio/api/member.php?act=set_assignable',
+    ['csrf' => true, 'json' => ['member_id' => $exMid, 'assignable' => 1]]);
+ok('되돌릴 수 있다', $r6['status'] === 200, $r6['body']);
+$cand = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid)
+          ['json']['data']['rows'] ?? [];
+ok('되돌리면 후보에 다시 나온다',
+   in_array($exMid, array_column($cand, 'member_id'), true));
+
+// 평가 제외는 **다른 축**이다. 점수를 못 내도 배정 후보에는 남아야 한다
+// (기획 담당자 — 001_schema.sql 의 is_evaluable 주석).
+$pdoR->exec("UPDATE bs_member SET is_evaluable = 0 WHERE id = $exMid");
+$cand = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid)
+          ['json']['data']['rows'] ?? [];
+$row  = null;
+foreach ($cand as $c) { if ((int)$c['member_id'] === $exMid) { $row = $c; break; } }
+ok('평가 제외자도 후보에는 남는다', $row !== null, '후보에서 사라졌다');
+ok('평가 제외를 표본 부족과 구분해 내려준다',
+   $row !== null && ($row['evaluable'] ?? true) === false, json_encode($row));
+$pdoR->exec("UPDATE bs_member SET is_evaluable = 1 WHERE id = $exMid");
+// 뒷정리가 의도한 상태로 되돌린다 — 시험 계정이 다음 회차의 후보 표에
+// 유령으로 섞이면 안 된다.
+$pdoR->exec("UPDATE bs_member SET is_assignable = 0 WHERE user_id LIKE 'batest-%'");
+
 // 돌린 뒤에는 목록에 사람이 보여야 한다.
 $r5 = $admin->req('/studio/member_list.php');
 ok('가져온 뒤 목록이 비어 있지 않다',

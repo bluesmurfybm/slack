@@ -231,9 +231,19 @@ bs_layout_head(
             <?php endif; ?>
           </td>
           <td>
-            <?= (int)$r['is_assignable'] === 1
-                  ? '<span class="ba-badge ba-badge--ok">가능</span>'
-                  : '<span class="ba-badge">제외</span>' ?>
+            <?php $on = (int)$r['is_assignable'] === 1; ?>
+            <?php if (bs_is_admin()): ?>
+              <!-- 개발 사업과 무관한 직무(경영지원 등)를 후보에서 뺀다.
+                   역량 평가와는 다른 축이다 — 프로파일 화면이 그쪽을 맡는다. -->
+              <button type="button"
+                      class="ba-badge <?= $on ? 'ba-badge--ok' : '' ?> ba-assign-t"
+                      data-mid="<?= $mid ?>" data-on="<?= $on ? '1' : '0' ?>"
+                      data-name="<?= h($r['emp_name']) ?>"
+                      title="눌러서 바꿉니다. 행을 지우지 않고 후보 목록에서만 빼거나 되돌립니다."
+                      style="cursor:pointer"><?= $on ? '가능' : '제외' ?></button>
+            <?php else: ?>
+              <span class="ba-badge <?= $on ? 'ba-badge--ok' : '' ?>"><?= $on ? '가능' : '제외' ?></span>
+            <?php endif; ?>
           </td>
         </tr>
         <?php endforeach; ?>

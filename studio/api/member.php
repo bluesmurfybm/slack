@@ -71,4 +71,51 @@ bs_route(bs_param_str('act', ''), [
 
         bs_json_ok($r + ['message' => implode(' ', $lines)]);
     },
+
+    /**
+     * 배정 후보에서 빼거나 되돌린다. **관리자만.**
+     *
+     * 개발 사업과 무관한 직무(경영지원 등)와 휴직·퇴사자를 후보 목록에서
+     * 뺀다. 행은 지우지 않는다 — 과거 배정 기록의 주인이다.
+     *
+     * 역량 평가(`is_evaluable`)와는 다른 축이다. 그쪽은 프로파일 화면의
+     * `api/profile.php?act=set_evaluable` 이 맡는다. 둘을 한 단추로 묶지
+     * 않는다 — "배정은 하지만 점수는 못 낸다"(기획 담당자)와 "점수는 나지만
+     * 배정은 안 한다"가 둘 다 실제로 있다.
+     */
+    'set_assignable' => function () use ($members): void {
+        bs_begin_write();
+        if (!bs_is_admin()) {
+            bs_json_error('FORBIDDEN', '관리자만 배정 대상을 바꿀 수 있습니다.', 403);
+        }
+
+        $memberId = bs_param_int('member_id', 0) ?? 0;
+        if ($memberId <= 0) {
+            bs_json_error('BAD_REQUEST', '구성원을 지정하세요.');
+        }
+        $target = $members->find($memberId);
+        if (!$target) {
+            bs_json_error('NOT_FOUND', '구성원을 찾을 수 없습니다.', 404);
+        }
+
+        $to = bs_param_int('assignable', -1);
+        if ($to !== 0 && $to !== 1) {
+            bs_json_error('BAD_REQUEST', 'assignable 은 0 또는 1 이어야 합니다.');
+        }
+
+        $members->setAssignable($memberId, $to === 1);
+
+        bs_json_ok([
+            'member_id'     => $memberId,
+            'emp_name'      => $target['emp_name'],
+            'is_assignable' => $to === 1,
+            'message'       => $to === 1
+                ? sprintf('%s 님을 배정 후보에 되돌렸습니다.', $target['emp_name'])
+                : sprintf(
+                    '%s 님을 배정 후보에서 뺐습니다. 과거 배정 기록은 그대로 남습니다. '
+                    . '역량 점수는 이 설정과 무관하게 계속 산출됩니다.',
+                    $target['emp_name']
+                  ),
+        ]);
+    },
 ]);

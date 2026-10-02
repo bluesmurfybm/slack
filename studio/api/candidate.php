@@ -111,7 +111,9 @@ bs_route(bs_param_str('act', 'list'), [
                 'active_items' => $a['active_items'] ?? 0,
 
                 // 표본 부족은 '낮은 점수' 가 아니다. 화면이 구분해 그려야 한다.
+                // 평가 제외는 또 다른 상태다 — 표본이 영영 차지 않는다.
                 'insufficient_data' => $r['insufficient_data'],
+                'evaluable'         => $r['evaluable'],
                 'matched_categories' => $r['matched'],
 
                 'fit_score' => $fit,
@@ -268,11 +270,27 @@ function bs_categories_of(PDO $pdo, array $domainIds): array
  */
 function bs_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
 {
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 거르는 칸은 `is_assignable` 이다. `is_evaluable` 이 아니다.   │
+    // │                                                              │
+    // │   is_assignable = 0   배정 후보로 올리지 않는다 (휴직·퇴사,   │
+    // │                       개발 사업과 무관한 직무)                │
+    // │   is_evaluable  = 0   역량 점수를 내지 않는다 (이 데이터로    │
+    // │                       평가할 수 없는 직무)                    │
+    // │                                                              │
+    // │ 전에는 `is_evaluable = 1` 로 걸렀다. 둘을 맞바꿔 쓴 것이라    │
+    // │ 반대로 돌았다 — 배정에서 빼 둔 사람이 후보에 그대로 나오고,  │
+    // │ 점수만 못 내는 기획 담당자가 후보에서 사라졌다. 스키마 주석이 │
+    // │ "기획 과업에는 배정되어야 한다" 고 적어 둔 바로 그 경우다.    │
+    // │                                                              │
+    // │ 점수가 없는 사람도 후보에는 올린다. 점수가 '없는' 것이지      │
+    // │ '낮은' 것이 아니므로 화면이 구분해 그린다.                    │
+    // └──────────────────────────────────────────────────────────────┘
     if ($evalVer === null) {
         // 판정 전이라도 명단은 보여 준다 — 점수 없이.
         $st = $pdo->prepare(
-            'SELECT id AS member_id, emp_name, role_label, team
-               FROM bs_member WHERE is_evaluable = 1 ORDER BY emp_name'
+            'SELECT id AS member_id, emp_name, role_label, team, is_evaluable
+               FROM bs_member WHERE is_assignable = 1 ORDER BY emp_name'
         );
         $st->execute();
         return array_map(static function (array $r): array {
@@ -282,11 +300,11 @@ function bs_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
     }
 
     $st = $pdo->prepare(
-        'SELECT m.id AS member_id, m.emp_name, m.role_label, m.team,
+        'SELECT m.id AS member_id, m.emp_name, m.role_label, m.team, m.is_evaluable,
                 t.cap_score, t.breadth_score, t.career_score, t.insufficient_data
            FROM bs_member m
       LEFT JOIN bs_member_metric t ON t.member_id = m.id AND t.eval_ver = ?
-          WHERE m.is_evaluable = 1
+          WHERE m.is_assignable = 1
           ORDER BY m.emp_name'
     );
     $st->execute([$evalVer]);
@@ -319,6 +337,11 @@ function bs_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
         $r['breadth_score'] = $r['breadth_score'] !== null ? (float)$r['breadth_score'] : null;
         $r['career_score']  = $r['career_score'] !== null ? (float)$r['career_score'] : null;
         $r['insufficient_data'] = (int)($r['insufficient_data'] ?? 1) === 1;
+        // "데이터가 모자랍니다" 와 "평가 대상이 아닙니다" 는 다른 말이다
+        // (CLAUDE.md). 평가 제외자는 표본이 영영 안 차므로 '표본 부족' 으로
+        // 적으면 거짓말이 된다. 화면이 가려 쓰도록 칸을 따로 내려보낸다.
+        $r['evaluable'] = (int)($r['is_evaluable'] ?? 1) === 1;
+        unset($r['is_evaluable']);
 
         $matched = [];
         $sum = 0.0; $n = 0;
