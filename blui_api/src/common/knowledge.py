@@ -79,8 +79,8 @@ def format_entries(entries: list[KnowledgeEntry]) -> str:
     ]
     handoff = sorted((entry for entry in entries if entry.handoff), key=lambda e: e.id)
     if handoff:
-        questions = "\n".join(_format_handoff_entry(entry) for entry in handoff)
-        parts.append(f"<handoff>\n{questions}\n</handoff>")
+        body = "\n".join(_format_entry(entry) for entry in handoff)
+        parts.append(f"<handoff>\n{body}\n</handoff>")
     return "<knowledge>\n" + "\n".join(parts) + "\n</knowledge>"
 
 
@@ -124,14 +124,6 @@ def _by_domain(entries: list[KnowledgeEntry]) -> dict[str, list[KnowledgeEntry]]
     return grouped
 
 
-def _format_handoff_entry(entry: KnowledgeEntry) -> str:
-    aliases = f"<aliases>{escape(' / '.join(entry.aliases))}</aliases>" if entry.aliases else ""
-    return (
-        f'<entry id="{escape(entry.id)}"><question>{escape(entry.question)}</question>'
-        f"{aliases}</entry>"
-    )
-
-
 def _format_entry(entry: KnowledgeEntry) -> str:
     lines = [
         f'<entry id="{escape(entry.id)}">',
@@ -139,7 +131,8 @@ def _format_entry(entry: KnowledgeEntry) -> str:
     ]
     if entry.aliases:
         lines.append(f"<aliases>{escape(' / '.join(entry.aliases))}</aliases>")
-    lines.append(f"<answer>{escape(entry.answer)}</answer>")
+    if entry.answer:
+        lines.append(f"<answer>{escape(entry.answer)}</answer>")
     lines.append("</entry>")
     return "\n".join(lines)
 

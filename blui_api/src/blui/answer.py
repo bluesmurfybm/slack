@@ -12,12 +12,10 @@ from common.messages import Message
 from common.repositories.conversation import ConversationMessage
 
 OUT_OF_SCOPE = "블루소프트 서비스 안내만 도와드릴 수 있어요."
-FALLBACK = (
-    "지금은 답변을 드리기 어렵습니다. 견적 문의는 {inquiry_url}, 상담 요청은 {request_url}에서"
-    " 남겨 주시면 담당자가 연락드리겠습니다."
-)
+FALLBACK = "지금은 답변을 드리기 어렵습니다."
 INQUIRY_GUIDE = "견적문의는 {inquiry_url}에서 남겨 주시면 담당자가 연락드리겠습니다."
 REQUEST_GUIDE = "상담 요청은 {request_url}에서 남겨 주시면 담당자가 연락드리겠습니다."
+UNKNOWN = "죄송합니다. 문의하신 내용은 현재 안내가 어렵습니다."
 
 
 class LLMOutput(BaseModel):
@@ -50,7 +48,7 @@ def answer(
     handoff: HandoffTool,
     messages: list[ConversationMessage],
 ) -> Answer:
-    """상담 범위 안의 질문에 지식을 근거로 답하고, 담당자에게 이관하거나 근거가 잘못되면 정해진 문구를 반환합니다."""
+    """상담 범위 안의 질문에 지식을 근거로 답하고, 담당자에게 이관하거나 근거가 없거나 잘못되면 정해진 문구를 반환합니다."""
     llm_messages = _to_llm_messages(messages)
     if guard.is_forbidden_message(llm_messages):
         return Answer(content=OUT_OF_SCOPE, matched_ids=[])
@@ -77,6 +75,8 @@ def answer(
             return Answer(content=result.reply or fallback.content, matched_ids=[])
         request_guide = REQUEST_GUIDE.format(request_url=request_url)
         return Answer(content=f"{output.content}\n\n{request_guide}", matched_ids=[])
+    if not output.matched_ids:
+        return Answer(content=UNKNOWN, matched_ids=[])
     if not output.content.strip():
         return fallback
     if not set(output.matched_ids) <= {entry.id for entry in answerable(entries)}:
