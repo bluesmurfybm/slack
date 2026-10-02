@@ -98,6 +98,45 @@ body.tile-dragging, body.tile-dragging *{cursor:move}
 body.tile-dragging .tile.soon{cursor:move}
 /* 끄는 중에는 다른 카드가 hover 로 들썩이지 않게 한다. */
 .grid.reordering .tile:hover{transform:none;box-shadow:none;border-color:var(--line)}
+
+
+/* ================= 카드 묶음 =================================================
+   묶음이 없으면 #tiles 가 그냥 .grid 라 예전과 똑같이 그려진다. 묶음이 생기면
+   .tilegroups 로 바뀌고 그 안에 묶음마다 제목 + 격자가 선다.
+   끌어 놓기는 **묶음 안에서만** 된다 — 다른 묶음으로 옮기는 것은 전사 배치라
+   관리 화면에서 관리자만 한다. */
+.tilegroups{display:flex;flex-direction:column;gap:18px;margin-top:6px}
+.tg-head{display:flex;align-items:center;gap:8px;width:100%;padding:4px 2px;margin:0 0 2px;
+  background:none;border:0;cursor:pointer;font-family:inherit;text-align:left}
+.tg-caret{color:var(--muted);font-size:12px;transition:transform .15s ease}
+.tg.collapsed .tg-caret{transform:rotate(-90deg)}
+.tg-name{font-size:14px;font-weight:700;color:var(--navy)}
+.tg-count{font-size:11.5px;font-weight:700;color:var(--muted);
+  background:rgba(16,35,90,.06);border-radius:999px;padding:1px 8px}
+.tg-head:hover .tg-name{color:var(--blue)}
+.tg.collapsed .tg-grid{display:none}
+.tg-grid{margin-top:0}
+.tg-tail{margin-top:0;opacity:.85}
+
+/* ---- 관리 화면: 묶음과 소속 ---- */
+.tgm{display:flex;flex-direction:column;gap:12px}
+.tgm-g{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.tgm-g--rest{background:#FBFCFF;border-style:dashed}
+.tgm-ghead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.tgm-grip{cursor:grab;color:var(--muted);font-size:15px;letter-spacing:-2px;user-select:none}
+.tgm-name{flex:1;font-family:var(--sans);font-size:14px;font-weight:700;color:var(--navy);
+  padding:7px 10px;border:1.5px solid transparent;border-radius:9px;background:transparent}
+.tgm-name:focus{border-color:var(--blue-soft);background:#FBFCFF;outline:none}
+.tgm-name.as-text{font-weight:600;color:var(--muted)}
+.tgm-drop{display:flex;flex-wrap:wrap;gap:7px;min-height:44px;padding:8px;
+  border:1px dashed var(--line);border-radius:12px;background:#FBFCFF}
+.tgm-drop.over{border-color:var(--blue-soft);background:rgba(76,141,255,.07)}
+.tgm-empty{font-size:12.5px;color:var(--muted);padding:6px 4px}
+.tgm-chip{display:inline-flex;align-items:center;gap:7px;cursor:grab;
+  background:var(--card);border:1px solid var(--line);border-radius:999px;
+  padding:6px 12px 6px 8px;font-size:13px;font-weight:600;color:var(--navy)}
+.tgm-chip:active{cursor:grabbing}
+.tgm-chip i{width:14px;height:14px;border-radius:5px;display:inline-block}
 .grid.reordering{touch-action:none}
 
 .tile.soon{cursor:default;border-style:dashed;background:transparent;box-shadow:none}

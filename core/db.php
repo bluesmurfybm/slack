@@ -162,6 +162,51 @@ function portal_db() {
         ADD COLUMN `cheer_early` TINYINT(1) NOT NULL DEFAULT 1
         COMMENT '주말·공휴일이면 그 앞 평일에 미리 쏠지' AFTER `cheer_on`");
 
+    // -----------------------------------------------------------------
+    // 업무 시스템 카드 묶음
+    //
+    // 카드가 열 개를 넘기면서 한 판에 늘어놓는 것만으로는 찾기 어려워졌다.
+    // 관리자가 묶음을 만들어 카드를 나눠 담고, 묶음의 위아래 순서를 정한다.
+    //
+    // **카드 목록 자체의 원본은 여전히 worksystems.json 이다.** 여기에는
+    // "어느 묶음에 속하는가" 만 둔다. json 에 없는 key 가 남아 있어도
+    // 화면이 그 줄을 그냥 무시하므로 지우는 손질이 따로 필요 없다.
+    //
+    // 묶음은 전사 공통이고, **묶음 안에서의 카드 순서는 사람마다 다르다**
+    // (portal_users.tile_order). 둘을 한 표에 섞지 않는다.
+    // -----------------------------------------------------------------
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_tile_group` (
+            `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `name`       VARCHAR(40)  NOT NULL COMMENT '화면에 보일 묶음 이름',
+            `sort_no`    INT          NOT NULL DEFAULT 0 COMMENT '위에서 아래로. 작을수록 위',
+            `created_at` DATETIME     NOT NULL,
+            `updated_at` DATETIME     NULL,
+            PRIMARY KEY (`id`),
+            KEY `ix_tgroup_sort` (`sort_no`, `id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='업무 시스템 카드 묶음. 전사 공통이며 관리자만 고친다'
+    ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_tile_group_item` (
+            `sys_key`    VARCHAR(40)  NOT NULL COMMENT 'worksystems.json 의 key',
+            `group_id`   INT UNSIGNED NOT NULL,
+            `updated_at` DATETIME     NOT NULL,
+            PRIMARY KEY (`sys_key`),
+            KEY `ix_tgitem_group` (`group_id`),
+            CONSTRAINT `fk_tgitem_group` FOREIGN KEY (`group_id`)
+                REFERENCES `portal_tile_group` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='카드가 어느 묶음에 속하는가. sys_key 가 기본키라 한 카드는 한 묶음에만 든다'
+    ");
+
+    // 묶음을 접어 둔 상태. 묶음이 늘면 아래쪽 카드가 멀어지므로 접을 수 있게 한다.
+    // 전사 설정이 아니라 **사람마다** 다른 값이라 계정에 남긴다.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users`
+        ADD COLUMN `tile_collapsed` VARCHAR(255) NULL
+        COMMENT '접어 둔 카드 묶음 id(콤마로 이음). 비면 모두 펼침' AFTER `tile_order`");
+
     // 사내 인원 13명 + book 모듈에서 쓰던 개인별 고유색을 이어받되, 아바타처럼 큰 면적을 단색으로
     // 채우면 book의 원래 뱃지(연한 배경 위 작은 글자)보다 훨씬 쨍하게 보여서 채도를 낮추고
     // 명도를 살짝 올렸다(색상은 원래 값에서 파생 — 사람 구분은 그대로 유지됨).

@@ -14,7 +14,11 @@
  * api/notice_file.php (로그인 검사 + Content-Disposition 판정)를 거친다.
  */
 
-require_once __DIR__ . '/auth.php';   // 세션 + current_portal_user() + portal_db()
+require_once __DIR__ . '/auth.php';         // 세션 + current_portal_user() + portal_db()
+// 카드 묶음이 work_systems() 로 "실제로 있는 카드인가" 를 가린다. 이 파일만
+// 읽고 쓰는 곳(api/*.php)이 있어 여기서 직접 건다 — index.php 가 먼저 읽어
+// 줄 것이라 기대하면 그 경로에서만 돌고 API 에서는 함수가 없다.
+require_once __DIR__ . '/worksystems.php';  // work_systems()
 
 // 명단이 어떻게 되든 이 사람들은 항상 관리자다.
 const OWNER_ADMINS = ['kimhy@bluesoft.co.kr'];
@@ -92,6 +96,168 @@ function board_sort_tiles(array $systems, $saved = null)
     }
     ksort($kept);
     return array_merge(array_values($kept), $rest);
+}
+
+// =====================================================================
+// 업무 시스템 카드 묶음
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 두 축을 섞지 않는다                                               │
+// │                                                                  │
+// │   묶음과 묶음 순서, 카드가 어느 묶음에 드는가 → **전사 공통**     │
+// │                                        관리자만 고친다            │
+// │   묶음 안에서 카드를 늘어놓는 순서     → **사람마다**             │
+// │                                        portal_users.tile_order    │
+// │                                                                  │
+// │ 그래서 사용자가 카드를 끌어도 남의 화면은 바뀌지 않고, 관리자가   │
+// │ 묶음을 바꿔도 각자 정해 둔 카드 순서는 그대로 남는다.             │
+// └──────────────────────────────────────────────────────────────────┘
+
+/** 묶음 목록. 위에서 아래 순. */
+function board_tile_groups()
+{
+    return portal_db()
+        ->query("SELECT id, name, sort_no FROM portal_tile_group ORDER BY sort_no, id")
+        ->fetchAll();
+}
+
+/** [sys_key => group_id]. 묶음에 안 든 카드는 아예 줄이 없다. */
+function board_tile_assignments()
+{
+    $out = [];
+    foreach (portal_db()->query("SELECT sys_key, group_id FROM portal_tile_group_item") as $r) {
+        $out[$r['sys_key']] = (int)$r['group_id'];
+    }
+    return $out;
+}
+
+/** 새 묶음에 제안할 이름. 같은 이름이 있으면 뒤에 숫자를 붙인다. */
+function board_tile_group_default_name()
+{
+    $used = array_column(board_tile_groups(), 'name');
+    $base = '새 묶음';
+    if (!in_array($base, $used, true)) {
+        return $base;
+    }
+    for ($i = 2; $i < 100; $i++) {
+        if (!in_array("$base $i", $used, true)) {
+            return "$base $i";
+        }
+    }
+    return $base;
+}
+
+/** 이름 다듬기. 비면 기본값, 길면 자른다. */
+function board_clean_group_name($name)
+{
+    $name = trim(preg_replace('/\s+/u', ' ', (string)$name));
+    if ($name === '') {
+        return board_tile_group_default_name();
+    }
+    return mb_substr($name, 0, 40);
+}
+
+function board_create_tile_group($name)
+{
+    $name = board_clean_group_name($name);
+    // 맨 아래에 붙인다. 새로 만든 것이 위로 끼어들면 쓰던 배치가 흐트러진다.
+    $max = (int)portal_db()->query("SELECT COALESCE(MAX(sort_no), 0) FROM portal_tile_group")
+                           ->fetchColumn();
+    $st = portal_db()->prepare(
+        "INSERT INTO portal_tile_group (name, sort_no, created_at) VALUES (?, ?, NOW())"
+    );
+    $st->execute([$name, $max + 10]);
+    return (int)portal_db()->lastInsertId();
+}
+
+function board_rename_tile_group($id, $name)
+{
+    $id = (int)$id;
+    if ($id <= 0) {
+        throw new BoardError('묶음을 지정하세요.', 400);
+    }
+    $st = portal_db()->prepare(
+        "UPDATE portal_tile_group SET name = ?, updated_at = NOW() WHERE id = ?"
+    );
+    $st->execute([board_clean_group_name($name), $id]);
+}
+
+/**
+ * 묶음을 지운다. **카드는 지우지 않는다** — 묶음에서 빠져 '기타' 로 간다.
+ * portal_tile_group_item 의 FK 가 ON DELETE CASCADE 라 소속만 사라진다.
+ */
+function board_delete_tile_group($id)
+{
+    $id = (int)$id;
+    if ($id <= 0) {
+        throw new BoardError('묶음을 지정하세요.', 400);
+    }
+    portal_db()->prepare("DELETE FROM portal_tile_group WHERE id = ?")->execute([$id]);
+}
+
+/** 묶음 순서. 받은 id 차례대로 10, 20, 30 … 을 매긴다. */
+function board_reorder_tile_groups(array $ids)
+{
+    $valid = array_map('intval', array_column(board_tile_groups(), 'id'));
+    $st    = portal_db()->prepare(
+        "UPDATE portal_tile_group SET sort_no = ?, updated_at = NOW() WHERE id = ?"
+    );
+    $n = 0;
+    foreach ($ids as $id) {
+        $id = (int)$id;
+        if (!in_array($id, $valid, true)) {
+            continue;                      // 사라진 묶음은 조용히 넘긴다
+        }
+        $st->execute([($n += 10), $id]);
+    }
+}
+
+/**
+ * 카드를 묶음에 넣거나(또는 $groupId 가 null 이면) 뺀다.
+ *
+ * worksystems.json 에 없는 key 는 받지 않는다 — 받아 두면 화면에 나오지도
+ * 않는 줄이 표에 쌓인다.
+ */
+function board_assign_tile($sysKey, $groupId)
+{
+    $sysKey = trim((string)$sysKey);
+    $valid  = array_column(work_systems(), 'key');
+    if (!in_array($sysKey, $valid, true)) {
+        throw new BoardError('그런 카드가 없습니다.', 400);
+    }
+
+    if ($groupId === null || $groupId === '' || (int)$groupId <= 0) {
+        portal_db()->prepare("DELETE FROM portal_tile_group_item WHERE sys_key = ?")
+                   ->execute([$sysKey]);
+        return;
+    }
+
+    $groupId = (int)$groupId;
+    $exists  = portal_db()->prepare("SELECT 1 FROM portal_tile_group WHERE id = ?");
+    $exists->execute([$groupId]);
+    if (!$exists->fetchColumn()) {
+        throw new BoardError('그런 묶음이 없습니다.', 400);
+    }
+
+    portal_db()->prepare(
+        "INSERT INTO portal_tile_group_item (sys_key, group_id, updated_at)
+              VALUES (?, ?, NOW())
+         ON DUPLICATE KEY UPDATE group_id = VALUES(group_id), updated_at = NOW()"
+    )->execute([$sysKey, $groupId]);
+}
+
+/** 접어 둔 묶음 id 목록. 지금 없는 묶음은 버린다. */
+function board_clean_collapsed(array $ids)
+{
+    $valid = array_map('intval', array_column(board_tile_groups(), 'id'));
+    $out   = [];
+    foreach ($ids as $id) {
+        $id = (int)$id;
+        if (in_array($id, $valid, true) && !in_array($id, $out, true)) {
+            $out[] = $id;
+        }
+    }
+    return $out;
 }
 
 /** 저장 전 검증. 실제로 있는 key 만, 중복 없이 남긴다. */

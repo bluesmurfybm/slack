@@ -40,6 +40,22 @@ $__bgPref  = board_bg_pref($__u);
 // 타일도 이 목록에서 그린다 — 이제 json 만 고치면 양쪽이 같이 늘어난다.
 // 카드 순서는 사람마다 다르다. 끌어 놓은 순서가 있으면 그대로, 없으면 제목순.
 $__systems = board_sort_tiles(work_systems(), $__u['tile_order'] ?? null);
+// 카드가 열 개를 넘기면서 한 판에 늘어놓는 것만으로 찾기 어려워졌다. 관리자가
+// 묶음을 만들어 나눠 담는다. 묶음과 소속은 전사 공통, 묶음 **안의** 순서는
+// 위에서 정한 사람별 순서를 그대로 따른다.
+// 묶음이 하나도 없으면 빈 배열이고, 화면은 지금까지처럼 한 판에 그린다.
+//
+// 카드를 묶음별로 **가르는 일은 화면이 한다.** 서버는 묶음 목록과 소속만
+// 준다 — 순서의 원본을 $__systems 하나로 두기 위해서다. 서버에서 미리
+// 갈라 보내면 '기본 순서로' 를 눌렀을 때 화면이 다시 가르는 규칙을 따로
+// 가져야 하고, 그 둘이 어긋나면 새로고침해야 제자리를 찾는다.
+$__tileGroups = $__u ? board_tile_groups() : [];
+$__tileAssign = $__u ? board_tile_assignments() : [];
+// 접어 둔 묶음도 사람마다 다르다.
+$__collapsed = array_values(array_filter(array_map(
+    'intval',
+    explode(',', (string)($__u['tile_collapsed'] ?? ''))
+)));
 // 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
 $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
@@ -224,6 +240,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     <div class="tabs" role="tablist">
       <button role="tab" data-mtab="events"   aria-selected="true"  onclick="showManage('events')">중요 일정</button>
       <button role="tab" data-mtab="notices"  aria-selected="false" onclick="showManage('notices')">공지</button>
+      <button role="tab" data-mtab="tiles"    aria-selected="false" onclick="showManage('tiles')">카드 묶음</button>
       <button role="tab" data-mtab="admins"   aria-selected="false" onclick="showManage('admins')">관리자</button>
     </div>
     <div id="mg-body"></div>
@@ -478,6 +495,13 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 const SYSTEMS = <?= json_encode($__systems, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 // 카드 순서를 직접 정해 둔 사람인지. '기본 순서로' 단추를 그 사람에게만 보인다.
 let TILE_ORDERED = <?= json_encode(!empty($__u['tile_order'])) ?>;
+// 카드 묶음 [{id, name, sort_no}, …]. 위에서 아래 순.
+// **빈 배열이면 묶음을 안 쓴다는 뜻**이라 화면은 지금까지처럼 한 판에 그린다.
+let TILE_GROUPS = <?= json_encode($__tileGroups, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+// { 카드key: 묶음id }. 여기 없는 카드는 '기타' 로 간다.
+let TILE_ASSIGN = <?= json_encode($__tileAssign ?: new stdClass(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+// 접어 둔 묶음 id. 사람마다 다르다.
+let TILE_COLLAPSED = <?= json_encode($__collapsed) ?>;
 
 /* 모듈에서 미로그인으로 튕겨 온 경우에만 채워진다(?need_login=<key>) */
 const NOTICE = <?= json_encode($__notice, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
@@ -656,43 +680,112 @@ function showProfile(alertMsg, forceEdit){
 }
 
 const arrow=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>`;
-function renderTiles(){
-  const bookIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
-  const slackIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-  const dtiIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
-  const learnIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg>`;
-  const accessIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.1-8.1M17 6l2.5 2.5M14.5 8.5 17 11"/></svg>`;
-  const moodleIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.3 6.1-6.1 2.3 2.3-6.1z"/></svg>`;
-  const studioIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11M15 9v11"/></svg>`;
-  const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
-  const cartIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.2l2.3 12.2a1.6 1.6 0 0 0 1.6 1.3h9.1a1.6 1.6 0 0 0 1.6-1.3L21 7H5.3"/></svg>`;
-  const aiIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 2h6"/><circle cx="9" cy="14" r="1.1"/><circle cx="15" cy="14" r="1.1"/><path d="M2 13v3M22 13v3"/></svg>`;
+const bookIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
+const slackIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+const dtiIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
+const learnIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg>`;
+const accessIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.1-8.1M17 6l2.5 2.5M14.5 8.5 17 11"/></svg>`;
+const moodleIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.3 6.1-6.1 2.3 2.3-6.1z"/></svg>`;
+const studioIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11M15 9v11"/></svg>`;
+const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+const cartIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.2l2.3 12.2a1.6 1.6 0 0 0 1.6 1.3h9.1a1.6 1.6 0 0 0 1.6-1.3L21 7H5.3"/></svg>`;
+const aiIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 2h6"/><circle cx="9" cy="14" r="1.1"/><circle cx="15" cy="14" r="1.1"/><path d="M2 13v3M22 13v3"/></svg>`;
 
-  // key → 아이콘. 그림은 코드에 두고 이름·설명·색은 worksystems.json 에 둔다.
-  // 모르는 key 가 오면 plusIcon 으로 그려 타일이 통째로 사라지지는 않게 한다.
-  const ICONS = { book:bookIcon, slack:slackIcon, slackai:aiIcon, dti:dtiIcon, learn:learnIcon,
-                  access:accessIcon, moodle:moodleIcon, bluecart:cartIcon,
-                  studio:studioIcon };
 
-  // 타일은 SYSTEMS(=worksystems.json) 를 그대로 따라간다. 시스템을 더하려면
-  // json 에 한 줄 적고 여기 ICONS 에 아이콘만 얹으면 된다.
-  // 순서는 서버가 이미 정해서 준다(끌어 놓은 순서, 없으면 제목순).
-  const box = document.getElementById("tiles");
-  box.innerHTML =
-    SYSTEMS.map(s => `
+// key → 아이콘. 그림은 코드에 두고 이름·설명·색은 worksystems.json 에 둔다.
+// 모르는 key 가 오면 plusIcon 으로 그려 타일이 통째로 사라지지는 않게 한다.
+const ICONS = { book:bookIcon, slack:slackIcon, slackai:aiIcon, dti:dtiIcon, learn:learnIcon,
+                access:accessIcon, moodle:moodleIcon, bluecart:cartIcon,
+                studio:studioIcon };
+
+/* 카드 한 장. 대시보드와 관리 화면이 같은 모양을 써야 해서 따로 뺐다. */
+function tileHTML(s){
+  return `
     <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener"
        draggable="false" data-key="${esc(s.key)}">
       <span class="go">${arrow}</span>
       <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}</span>
       <div><h3>${esc(s.label)}</h3><p>${esc(s.desc || "")}</p></div>
-    </a>`).join("") + `
+    </a>`;
+}
+
+const soonHTML = `
     <div class="tile soon">
       <span class="badge-soon">준비중</span>
       <span class="ic">${plusIcon}</span>
       <div><h3>추가 예정</h3><p>새로운 사내 시스템이 이 자리에 추가됩니다.</p></div>
     </div>`;
-  enableTileReorder(box);
+
+/*
+ * 카드를 묶음별로 가른다.
+ *
+ * **순서의 원본은 SYSTEMS 하나다.** 여기서는 그 상대 순서를 건드리지 않고
+ * 나누기만 한다 — 각자 정해 둔 순서가 묶음 안에서 그대로 보인다.
+ * 어느 묶음에도 안 든 카드는 맨 끝 '기타' 로 모은다. 없애면 관리자가
+ * 새 카드를 넣어 주기 전까지 그 카드로 갈 길이 사라진다.
+ */
+function groupedTiles(){
+  const buckets = TILE_GROUPS.map(g => ({ id:g.id, name:g.name, items:[] }));
+  const byId = {};
+  buckets.forEach(b => byId[b.id] = b);
+  const rest = [];
+  SYSTEMS.forEach(s => {
+    const b = byId[TILE_ASSIGN[s.key]];
+    (b ? b.items : rest).push(s);
+  });
+  if(rest.length) buckets.push({ id:null, name:"기타", items:rest });
+  return buckets;
+}
+
+function renderTiles(){
+  const box = document.getElementById("tiles");
+
+  // 묶음을 쓰지 않으면 지금까지처럼 한 판에 늘어놓는다. 안 쓰는 기능이
+  // 화면을 바꾸지 않게 — 묶음을 만들기 전에는 예전과 글자 하나 다르지 않다.
+  if(!TILE_GROUPS.length){
+    box.className = "grid";
+    box.innerHTML = SYSTEMS.map(tileHTML).join("") + soonHTML;
+    enableTileReorder(box);
+    document.getElementById("tileResetBtn").hidden = !TILE_ORDERED;
+    return;
+  }
+
+  box.className = "tilegroups";
+  box.innerHTML = groupedTiles().map(g => {
+    const gid = g.id === null ? "" : String(g.id);
+    const off = g.id !== null && TILE_COLLAPSED.indexOf(g.id) >= 0;
+    return `
+    <section class="tg${off ? " collapsed" : ""}" data-gid="${esc(gid)}">
+      <button type="button" class="tg-head" onclick="toggleTileGroup(this)"
+              aria-expanded="${off ? "false" : "true"}">
+        <span class="tg-caret">&#9662;</span>
+        <span class="tg-name">${esc(g.name)}</span>
+        <span class="tg-count">${g.items.length}</span>
+      </button>
+      <div class="grid tg-grid">${g.items.map(tileHTML).join("")}</div>
+    </section>`;
+  }).join("") + `<div class="grid tg-tail">${soonHTML}</div>`;
+
+  // 끌어 놓기는 **묶음 안에서만** 된다. 상자마다 따로 걸면 그 상자 밖으로는
+  // 자리표시가 넘어가지 않는다(enableTileReorder 가 box 안만 본다).
+  // 다른 묶음으로 옮기는 것은 전사 배치라 관리 화면에서 관리자만 한다.
+  box.querySelectorAll(".tg-grid").forEach(enableTileReorder);
   document.getElementById("tileResetBtn").hidden = !TILE_ORDERED;
+}
+
+/* 묶음 접기. 사람마다 다른 값이라 계정에 남긴다. */
+function toggleTileGroup(btn){
+  const sec = btn.closest(".tg");
+  const gid = sec.dataset.gid ? parseInt(sec.dataset.gid, 10) : null;
+  const off = sec.classList.toggle("collapsed");
+  btn.setAttribute("aria-expanded", off ? "false" : "true");
+  if(gid === null) return;                       // '기타' 는 기억하지 않는다
+  TILE_COLLAPSED = off
+    ? TILE_COLLAPSED.concat([gid])
+    : TILE_COLLAPSED.filter(x => x !== gid);
+  // 접는 것은 되돌리기 쉬운 일이라 실패해도 조용히 둔다. 화면은 이미 접혔다.
+  bapi("api/me.php", {method:"PUT", body:JSON.stringify({tile_collapsed:TILE_COLLAPSED})})
+    .catch(() => {});
 }
 
 // ---- 카드 순서 바꾸기 --------------------------------------------------
@@ -1602,6 +1695,7 @@ function showManage(tab){
   box.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
   if(tab==="events")  return renderManageEvents(box);
   if(tab==="notices") return renderManageNotices(box);
+  if(tab==="tiles")   return renderManageTiles(box);
   return renderManageAdmins(box);
 }
 
@@ -1654,6 +1748,176 @@ async function renderManageNotices(box){
         </div>`).join("")+`</div>`
       :`<div class="list-card"><div class="panel-empty">등록된 공지가 없습니다.</div></div>`);
   }catch(e){ box.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
+}
+
+/* ===================================================================
+ * 카드 묶음 관리 (관리자)
+ *
+ * 여기서 바꾸는 것은 **전사 공통**이다 — 묶음, 묶음 순서, 카드 소속.
+ * 묶음 안에서 카드를 늘어놓는 순서는 사람마다 다르고 대시보드에서 정한다.
+ * 두 축을 한 화면에 섞지 않는다. 섞으면 관리자가 자기 순서를 고치려다
+ * 전 직원의 배치를 바꾼다.
+ *
+ * 끌어 놓기는 여기서는 HTML5 draggable 을 쓴다. 대시보드 카드가 <a> 라
+ * 포인터 이벤트로 직접 다뤄야 했던 것과 달리, 여기 줄은 그냥 <div> 라
+ * 브라우저가 해 주는 것을 그대로 쓰는 편이 코드가 훨씬 적다.
+ * =================================================================== */
+let TG = null;      // { groups, assign, systems, default_name }
+
+async function renderManageTiles(box){
+  try{
+    TG = await bapi("api/tile_groups.php");
+  }catch(e){ box.innerHTML = `<div class="panel-empty">${esc(e.message)}</div>`; return; }
+  drawManageTiles(box);
+}
+
+function drawManageTiles(box){
+  const byKey = {};
+  TG.systems.forEach(s => byKey[s.key] = s);
+
+  const chip = k => {
+    const s = byKey[k];
+    if(!s) return "";
+    return `<div class="tgm-chip" draggable="true" data-key="${esc(k)}">
+              <i style="background:${esc(s.color || "#5A667F")}"></i>${esc(s.label)}
+            </div>`;
+  };
+
+  const inGroup = gid => TG.systems.filter(s => (TG.assign[s.key] || null) === gid).map(s => s.key);
+  const ungrouped = TG.systems.filter(s => !TG.assign[s.key]).map(s => s.key);
+
+  box.innerHTML =
+    `<div class="hintline" style="margin-bottom:14px">
+       여기서 바꾼 묶음은 <b>모든 사람의 첫 화면</b>에 그대로 보입니다.
+       묶음 안에서 카드를 늘어놓는 순서는 사람마다 달라서, 각자 대시보드에서 끌어 정합니다.
+     </div>
+     <div class="tgm" id="tgm">` +
+    TG.groups.map(g => `
+      <section class="tgm-g" data-gid="${g.id}" draggable="true">
+        <div class="tgm-ghead">
+          <span class="tgm-grip" title="끌어서 묶음 순서를 바꿉니다">⠿</span>
+          <input class="tgm-name" value="${esc(g.name)}" maxlength="40"
+                 onchange="renameTileGroup(${g.id}, this.value)"
+                 title="이름을 고치고 Enter 또는 다른 곳을 누르면 저장됩니다">
+          <button class="btn-sm danger" onclick="deleteTileGroup(${g.id})">묶음 지우기</button>
+        </div>
+        <div class="tgm-drop" data-gid="${g.id}">${inGroup(g.id).map(chip).join("")
+          || `<span class="tgm-empty">여기로 카드를 끌어다 놓으세요</span>`}</div>
+      </section>`).join("") +
+    `<section class="tgm-g tgm-g--rest">
+       <div class="tgm-ghead"><span class="tgm-name as-text">기타 — 아직 묶지 않은 카드</span></div>
+       <div class="tgm-drop" data-gid="">${ungrouped.map(chip).join("")
+         || `<span class="tgm-empty">모든 카드가 묶음에 들어 있습니다</span>`}</div>
+     </section>
+     </div>
+     <div style="margin-top:14px">
+       <button class="btn-sm" onclick="createTileGroup()">묶음 만들기</button>
+       <span class="hintline" style="margin-left:8px">기본 이름은 <b>${esc(TG.default_name)}</b> 이고 만든 뒤 고칠 수 있습니다.</span>
+     </div>`;
+
+  wireTileGroupDnd(box);
+}
+
+/* 끌어 놓기 둘 — 묶음끼리 자리 바꾸기, 카드를 묶음에 떨구기. */
+function wireTileGroupDnd(box){
+  const wrap = box.querySelector("#tgm");
+  let dragChip = null, dragSec = null;
+
+  wrap.addEventListener("dragstart", e => {
+    const c = e.target.closest(".tgm-chip");
+    if(c){ dragChip = c; dragSec = null; e.dataTransfer.effectAllowed = "move"; 
+           // 끌 때 묶음까지 같이 끌리지 않게 한다.
+           e.stopPropagation(); return; }
+    const g = e.target.closest(".tgm-g");
+    if(g && !g.classList.contains("tgm-g--rest")){ dragSec = g; dragChip = null; }
+  });
+
+  wrap.addEventListener("dragover", e => {
+    if(dragChip){
+      const d = e.target.closest(".tgm-drop");
+      if(!d) return;
+      e.preventDefault();
+      wrap.querySelectorAll(".tgm-drop.over").forEach(x => x.classList.remove("over"));
+      d.classList.add("over");
+      return;
+    }
+    if(dragSec){
+      const over = e.target.closest(".tgm-g");
+      if(!over || over === dragSec || over.classList.contains("tgm-g--rest")) return;
+      e.preventDefault();
+      const r = over.getBoundingClientRect();
+      wrap.insertBefore(dragSec, (e.clientY - r.top) > r.height/2 ? over.nextSibling : over);
+    }
+  });
+
+  wrap.addEventListener("drop", async e => {
+    e.preventDefault();
+    wrap.querySelectorAll(".tgm-drop.over").forEach(x => x.classList.remove("over"));
+
+    if(dragChip){
+      const d = e.target.closest(".tgm-drop");
+      const key = dragChip.dataset.key;
+      dragChip = null;
+      if(!d) return;
+      const gid = d.dataset.gid === "" ? null : parseInt(d.dataset.gid, 10);
+      if((TG.assign[key] || null) === gid) return;    // 제자리면 아무 일도 안 한다
+      await tgPut({ sys_key:key, group_id:gid });
+      return;
+    }
+    if(dragSec){
+      dragSec = null;
+      const order = [...wrap.querySelectorAll(".tgm-g[data-gid]")]
+                      .map(x => parseInt(x.dataset.gid, 10))
+                      .filter(x => !isNaN(x));
+      await tgPut({ order });
+    }
+  });
+
+  wrap.addEventListener("dragend", () => {
+    dragChip = null; dragSec = null;
+    wrap.querySelectorAll(".tgm-drop.over").forEach(x => x.classList.remove("over"));
+  });
+}
+
+/* 서버가 바뀐 전체를 돌려주므로 받은 것으로 다시 그린다 — 화면과 DB 가 어긋나지 않는다. */
+async function tgPut(body){
+  try{
+    TG = await bapi("api/tile_groups.php", {method:"PUT", body:JSON.stringify(body)});
+    drawManageTiles(document.getElementById("mg-body"));
+    toast("저장했습니다");
+  }catch(e){
+    toast(e.message || "저장하지 못했습니다");
+    renderManageTiles(document.getElementById("mg-body"));   // 서버 쪽 진짜 상태로 되돌린다
+  }
+}
+
+async function createTileGroup(){
+  const name = prompt("묶음 이름", TG ? TG.default_name : "새 묶음");
+  if(name === null) return;
+  try{
+    TG = await bapi("api/tile_groups.php", {method:"POST", body:JSON.stringify({name})});
+    drawManageTiles(document.getElementById("mg-body"));
+  }catch(e){ toast(e.message || "만들지 못했습니다"); }
+}
+
+async function renameTileGroup(id, name){
+  await tgPut({ id, name });
+}
+
+async function deleteTileGroup(id){
+  const g = TG.groups.find(x => x.id === id);
+  const n = TG.systems.filter(s => TG.assign[s.key] === id).length;
+  if(!confirm(`'${g ? g.name : id}' 묶음을 지울까요?
+
+`
+            + `· 카드는 지워지지 않습니다. ${n}장이 '기타' 로 갑니다
+`
+            + `· 모든 사람의 첫 화면이 바뀝니다`)) return;
+  try{
+    TG = await bapi("api/tile_groups.php?id=" + id, {method:"DELETE"});
+    drawManageTiles(document.getElementById("mg-body"));
+    toast("묶음을 지웠습니다");
+  }catch(e){ toast(e.message || "지우지 못했습니다"); }
 }
 
 async function renderManageAdmins(box){

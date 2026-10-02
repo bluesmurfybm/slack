@@ -73,6 +73,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         $fields[] = 'tile_order=?';
         $vals[]   = $order ? implode(',', $order) : null;
     }
+    // 접어 둔 카드 묶음. 묶음이 늘면 아래쪽 카드가 멀어지므로 접을 수 있게 했다.
+    // **사람마다 다른 값이다** — 묶음 자체(전사 공통)는 api/tile_groups.php 가 맡는다.
+    if (isset($body['tile_collapsed']) && is_array($body['tile_collapsed'])) {
+        require_once __DIR__ . '/../core/board.php';
+        $ids = board_clean_collapsed($body['tile_collapsed']);
+        $fields[] = 'tile_collapsed=?';
+        $vals[]   = $ids ? implode(',', $ids) : null;
+    }
     if (!empty($body['color'])) {
         $color = trim((string)$body['color']);
         if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
