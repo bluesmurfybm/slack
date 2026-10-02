@@ -388,9 +388,18 @@ function render() {
     matches(r, q));
 
   $("count").textContent = list.length + "건";
-  destroyEditors();          // 다시 그리기 전에 상세 패널의 에디터를 정리한다
+  // 목록을 통째로 다시 그리면 그 안의 에디터가 포커스를 가져가 검색창에서 커서가 빠진다.
+  // 검색 중이었다면 자리를 기억했다가 되돌려 놓는다.
+  const sEl = $("search");
+  const keepFocus = document.activeElement === sEl;
+  const caret = keepFocus ? sEl.selectionStart : 0;
+  destroyEditors("d:");      // 다시 그리기 전에 상세 패널의 에디터만 정리한다
   const box = $("list");
-  if (!list.length) { box.innerHTML = '<div class="empty">데이터가 없습니다.</div>'; return; }
+  if (!list.length) {
+    box.innerHTML = '<div class="empty">데이터가 없습니다.</div>';
+    if (keepFocus) { sEl.focus(); try { sEl.setSelectionRange(caret, caret); } catch (e) {} }
+    return;
+  }
 
   box.innerHTML = view === "card"
     ? `<div class="cards">` +
@@ -410,6 +419,10 @@ function render() {
         (openKey === rowKey(r) ? `<tr class="d"><td colspan="7">${detailBody(r)}</td></tr>` : "")).join("") +
       `</tbody></table>`;
   bind(box);
+  if (keepFocus && document.activeElement !== sEl) {
+    sEl.focus();
+    try { sEl.setSelectionRange(caret, caret); } catch (e) {}
+  }
 }
 
 /* 한 행이 쓰는 조각들 — 표와 카드가 같은 값을 쓰도록 한 곳에서 만든다 */
@@ -577,10 +590,8 @@ function bindDetail(box) {
     });
   });
 
-  box.querySelectorAll("input.dedit, textarea.dedit").forEach(el => {
-    el.addEventListener("input", () => markDirty(el.closest(".dcell")));
-    el.addEventListener("click", e => e.stopPropagation());
-  });
+  box.querySelectorAll("input.dedit, textarea.dedit").forEach(el =>
+    el.addEventListener("input", () => markDirty(el.closest(".dcell"))));
 
   box.querySelectorAll(".dsave").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); saveCell(b.closest(".dcell"), r); }));
@@ -660,7 +671,6 @@ function bind(box) {
     }));
   box.querySelectorAll(".del").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); delAccess(b.dataset.key); }));
-  box.querySelectorAll("tr.d, .dwide").forEach(el => el.addEventListener("click", e => e.stopPropagation()));
   bindDetail(box);
 }
 
@@ -765,6 +775,22 @@ document.addEventListener("selectionchange", () => {
   const el = n.nodeType === 1 ? n : n.parentElement;
   if (el && el.closest && el.closest(".ejholder")) ejRange = sel.getRangeAt(0).cloneRange();
 });
+
+/* 글자를 선택하면 뜨는 인라인 툴바는 Editor.js 가 document 의 selectionchange 를 보고
+   닫는다(selectionChanged → InlineToolbar.close). 그런데 일반 input/textarea 를 클릭하면
+   그 요소가 자기 선택을 따로 갖기 때문에 문서 선택은 에디터 안에 그대로 남아 있고,
+   신호가 안 생겨서 툴바가 계속 떠 있다 — ESC 말고는 닫을 방법이 없었다.
+   에디터 바깥을 누르면 문서 선택을 비워 그 신호를 대신 만들어 준다.
+   (에디터 안쪽 클릭은 건드리지 않는다. 툴바·색 목록도 홀더 안이라 그대로 동작한다.) */
+document.addEventListener("mousedown", e => {
+  const t = e.target;
+  if (!t || !t.closest || t.closest(".ejholder")) return;
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return;
+  let n = sel.anchorNode;
+  n = (n && n.nodeType === 1) ? n : (n && n.parentElement);
+  if (n && n.closest && n.closest(".ejholder")) sel.removeAllRanges();
+}, true);
 
 const ICON_COLOR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16 12 4l6 12"/><path d="M8.5 12h7"/><path d="M4 20h16"/></svg>`;
 
@@ -886,7 +912,7 @@ function mountEditors(r) {
   const tools = ejTools();
   $("eGrid").querySelectorAll(".ejholder").forEach(el => {
     const k = el.dataset.ej;
-    EDITORS[k] = new EditorJS({
+    EDITORS["m:" + k] = new EditorJS({
       holder: el,
       minHeight: 24,
       placeholder: "",
@@ -897,16 +923,22 @@ function mountEditors(r) {
   });
 }
 
-function destroyEditors() {
-  Object.values(EDITORS).forEach(i => { try { i.destroy(); } catch (e) {} });
-  EDITORS = {};
+/* 접두사로 범위를 정해 정리한다 — "m:" 모달, "d:" 상세 패널 */
+function destroyEditors(prefix) {
+  Object.keys(EDITORS).forEach(k => {
+    if (prefix && k.indexOf(prefix) !== 0) return;
+    try { EDITORS[k].destroy(); } catch (e) {}
+    delete EDITORS[k];
+  });
 }
 
 /* 각 에디터의 현재 내용을 저장용 문자열로. 빈 내용은 "" 로 둬서 '값 없음' 판정이 유지된다. */
 async function collectEditors(body) {
-  for (const k of Object.keys(EDITORS)) {
+  for (const key of Object.keys(EDITORS)) {
+    if (key.indexOf("m:") !== 0) continue;       // 모달 것만
+    const k = key.slice(2);
     let out = null;
-    try { out = await EDITORS[k].save(); } catch (e) { out = null; }
+    try { out = await EDITORS[key].save(); } catch (e) { out = null; }
     const blocks = (out && out.blocks) ? out.blocks.filter(b => {
       const d = b.data || {};
       return (d.text && stripTags(d.text).trim()) || (d.items && d.items.length);
@@ -984,13 +1016,18 @@ async function doImport() {
 /* ── 모달 ──────────────────────────────────────────────────── */
 function openModal(id) { $(id).hidden = false; }
 function closeModal() {
-  destroyEditors();
+  destroyEditors("m:");      // 상세 패널 에디터는 건드리지 않는다
   document.querySelectorAll(".modal").forEach(m => m.hidden = true);
 }
 document.querySelectorAll(".modal").forEach(m => {
   m.addEventListener("click", e => { if (e.target === m || e.target.hasAttribute("data-close")) closeModal(); });
 });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  // 모달이 떠 있을 때만 닫는다. 아니면 Editor.js 가 알아서 자기 툴바를 닫게 둔다.
+  const opened = Array.prototype.some.call(document.querySelectorAll(".modal"), m => !m.hidden);
+  if (opened) closeModal();
+});
 
 function setView(v) {
   view = v;

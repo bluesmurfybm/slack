@@ -125,10 +125,6 @@ function access_db() {
         access_backfill_account($pdo);
     }
 
-    // 비밀번호는 DB에 평문으로 두지 않는다. 값만 바뀌는 일이라 컬럼 존재로 가늠할 수 없어서
-    // '아직 평문인 행'을 조건으로 걸러 그것만 옮긴다(여러 번 돌려도 안전).
-    access_encrypt_secrets($pdo);
-
     // repo 칸의 "git : https://…" 라벨 제거. 스키마 변경이 아니라 값 정리라서 컬럼 존재로
     // 가늠할 수 없다 — 대신 남은 게 있을 때만 손대고, 없으면 조회 한 번으로 끝난다.
     access_clean_repo_labels($pdo);
@@ -160,6 +156,12 @@ function access_db() {
         }
         $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `ops_web`");
     }
+
+    // 접속 정보는 DB에 평문으로 두지 않는다.
+    // ※ 반드시 맨 마지막이다. 위의 통합·판정 작업들(비고로 합치기, VPN 자동판정 등)은
+    //   평문을 읽고 글자를 덧붙이므로, 먼저 암호화해 버리면 암호문에 이어 붙여 깨진다.
+    //   값만 바뀌는 일이라 컬럼 존재로는 가늠할 수 없어서 '아직 평문인 행'만 골라 옮긴다.
+    access_encrypt_secrets($pdo);
 
     return $pdo;
 }
@@ -321,7 +323,9 @@ function access_detect_vpn(array $row) {
  * 아직 안 옮긴 평문으로 보고 그대로 돌려준다 — 마이그레이션이 멱등해진다.
  */
 function access_secret_cols() {
-    return ['login_ops', 'login_dev'];
+    // 비밀번호뿐 아니라 서버·DB 접속 정보가 통째로 들어가는 칸까지 모두 암호화한다.
+    // 화면에 뿌릴 때 API 가 풀어서 내려보내므로 쓰는 쪽은 달라지는 게 없다.
+    return ['login_ops', 'login_dev', 'dev_db', 'ops_db', 'haksa_db', 'note', 'deploy'];
 }
 
 function access_key() {
