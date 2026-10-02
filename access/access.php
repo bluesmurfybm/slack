@@ -776,15 +776,39 @@ document.addEventListener("selectionchange", () => {
   if (el && el.closest && el.closest(".ejholder")) ejRange = sel.getRangeAt(0).cloneRange();
 });
 
-/* 글자를 선택하면 뜨는 인라인 툴바는 Editor.js 가 document 의 selectionchange 를 보고
-   닫는다(selectionChanged → InlineToolbar.close). 그런데 일반 input/textarea 를 클릭하면
-   그 요소가 자기 선택을 따로 갖기 때문에 문서 선택은 에디터 안에 그대로 남아 있고,
-   신호가 안 생겨서 툴바가 계속 떠 있다 — ESC 말고는 닫을 방법이 없었다.
-   에디터 바깥을 누르면 문서 선택을 비워 그 신호를 대신 만들어 준다.
-   (에디터 안쪽 클릭은 건드리지 않는다. 툴바·색 목록도 홀더 안이라 그대로 동작한다.) */
+/* 글자를 선택하면 뜨는 인라인 툴바를 바깥 클릭으로 닫는다.
+   Editor.js 는 document 의 selectionchange 를 보고 닫는데, 일반 input/textarea 를 누르면
+   그 요소가 자기 선택을 따로 갖기 때문에 문서 선택이 에디터 안에 그대로 남는다. 그래서
+   신호가 안 생기고 ESC 말고는 닫을 방법이 없었다.
+
+   ※ 순서가 중요하다. InlineToolbar.close() 안에
+        this.opened && (this.opened = false, isAtEditor || this.selection.restore(), …)
+     가 있어서, 선택을 먼저 비우면 isAtEditor 가 false 가 되어 close() 가 선택을 도로
+     복원해 버린다(그래서 툴바가 다시 열린다). 선택이 아직 에디터 안일 때 닫고, 그 다음에
+     비운다. */
+const EJ_APIS = new Set();   // 각 에디터의 api — 툴 생성자에서 모은다
+
+function ejCloseToolbars() {
+  EJ_APIS.forEach(api => {
+    try { api.inlineToolbar.close(); } catch (err) { EJ_APIS.delete(api); }
+  });
+}
+
 document.addEventListener("mousedown", e => {
   const t = e.target;
-  if (!t || !t.closest || t.closest(".ejholder")) return;
+  if (!t || !t.closest) return;
+  // 툴바·팝오버 자체를 누른 것(굵게, 색 목록 열기 등)은 그대로 둔다
+  if (t.closest(".ce-inline-toolbar, .ce-popover, .ce-toolbar")) return;
+
+  // 같은 에디터 안을 눌러도 닫아야 한다. Editor.js 의 selectionChanged 는 선택이 자기
+  // 에디터 안에 있으면 close() 가 아니라 tryToShow() 로 가기 때문에, 글자를 선택해 둔 채
+  // 같은 칸의 다른 곳을 눌러도 툴바가 그대로 남는다.
+  // 드래그로 새로 선택하는 경우에도 문제없다 — 누를 때 닫히고, 놓을 때 새로 열린다.
+  ejCloseToolbars();
+
+  // 에디터 바깥을 눌렀다면 문서 선택도 비운다. input/textarea 는 자기 선택을 따로 갖기
+  // 때문에 문서 선택이 에디터에 남아 있고, 그러면 Editor.js 가 곧바로 다시 열어 버린다.
+  if (t.closest(".ejholder")) return;
   const sel = window.getSelection();
   if (!sel || !sel.rangeCount) return;
   let n = sel.anchorNode;
@@ -800,7 +824,7 @@ class ColorTool {
   // Editor.js 가 저장할 때 남길 태그. 플러그인과 같은 규칙(style 유지).
   static get sanitize() { return { font: { style: true } }; }
 
-  constructor({ api }) { this.api = api; }
+  constructor({ api }) { this.api = api; EJ_APIS.add(api); }
 
   render() {
     return {
@@ -930,6 +954,7 @@ function destroyEditors(prefix) {
     try { EDITORS[k].destroy(); } catch (e) {}
     delete EDITORS[k];
   });
+  if (!Object.keys(EDITORS).length) EJ_APIS.clear();   // 남은 에디터가 없으면 api 도 비운다
 }
 
 /* 각 에디터의 현재 내용을 저장용 문자열로. 빈 내용은 "" 로 둬서 '값 없음' 판정이 유지된다. */
