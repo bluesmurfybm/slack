@@ -454,6 +454,61 @@ final class TaskRepo
         $this->assertPlanPeriod($this->find($id) ?? []);
     }
 
+    // =================================================================
+    // 난이도 판정 — 자동으로 매기는 좁은 길
+    // =================================================================
+
+    /**
+     * 아직 난이도가 없는 태스크. 자동 판정이 이걸 돌린다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 사람이 매긴 것은 건드리지 않는다                               │
+     * │                                                              │
+     * │ difficulty_by='human' 은 누가 보고 고친 값이다. 자동 판정이   │
+     * │ 그걸 덮으면, 고쳐 놓은 것이 다음 실행에서 말없이 되돌아간다.  │
+     * │ 한 번이라도 그러면 아무도 고치지 않는다.                      │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * 잎(자식 없는 태스크)만 본다. 상위 묶음은 일이 아니라 분류라서
+     * 난이도를 매겨 봐야 쓸 데가 없고, 모델 호출만 늘린다.
+     *
+     * @param bool $redo 참이면 **이미 매긴 것도 다시** 매긴다(사람 것만 빼고)
+     */
+    public function pendingDifficulty(int $projectId, bool $redo = false): array
+    {
+        $sql = 'SELECT t.id, t.title, t.description, t.difficulty, t.difficulty_by
+                  FROM bs_task t
+                 WHERE t.project_id = ?
+                   AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)
+                   AND COALESCE(t.difficulty_by, "") <> "human"';
+        $sql .= $redo ? '' : ' AND t.difficulty IS NULL';
+        $sql .= ' ORDER BY t.seq, t.id';
+
+        $st = $this->pdo->prepare($sql);
+        $st->execute([$projectId]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * 자동 판정 결과를 적는다. **근거를 반드시 함께 적는다.**
+     *
+     * update() 를 쓰지 않고 따로 둔 이유: update() 는 사람이 화면에서 고치는
+     * 길이라 difficulty_by 를 다루지 않는다. 거기에 끼워 넣으면 화면 수정이
+     * 판정 출처를 'ai' 로 덮어쓸 수 있다.
+     */
+    public function setDifficulty(int $id, int $level, string $by, string $note): void
+    {
+        $this->pdo->prepare(
+            'UPDATE bs_task SET difficulty = ?, difficulty_by = ?, difficulty_note = ?
+              WHERE id = ?'
+        )->execute([
+            max(1, min(5, $level)),
+            in_array($by, ['human', 'rule', 'ai'], true) ? $by : 'rule',
+            mb_substr($note, 0, 500),
+            $id,
+        ]);
+    }
+
     /**
      * 사람이 검토해 확정. 또는 확정 해제.
      *

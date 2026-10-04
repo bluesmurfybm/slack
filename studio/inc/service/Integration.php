@@ -26,6 +26,35 @@ final class Integration
     public const GOOGLE = 'google';
     public const FIGMA  = 'figma';
 
+    /**
+     * Claude(Anthropic) API 키.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 왜 설정 파일이 아니라 여기인가                                 │
+     * │                                                              │
+     * │ 키를 파일에 두면 화면에서 못 고치고, 무엇보다 **켜고 끄기·    │
+     * │ 쉬는 시각·하루 상한·사용량 그래프를 다시 만들어야 한다.**     │
+     * │ 그 넷은 피그마 사고(11.2-X) 때 이미 만들어 뒀고, 쓰임이       │
+     * │ 똑같다 — AI 도 호출 제한이 있고 비용이 들고 끄고 싶을 때가    │
+     * │ 있다. 같은 표에 넣으면 그대로 돈다.                           │
+     * │                                                              │
+     * │ 피그마와 마찬가지로 secret_enc 하나만 쓴다.                   │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    public const CLAUDE = 'claude';
+
+    /** 사람에게 보여 줄 이름. 오류 글에 'claude' 라고 적으면 아무도 못 읽는다. */
+    public const LABEL = [
+        self::GOOGLE => '구글 드라이브',
+        self::FIGMA  => '피그마',
+        self::CLAUDE => 'Claude',
+    ];
+
+    public static function label(string $provider): string
+    {
+        return self::LABEL[$provider] ?? $provider;
+    }
+
     public function __construct(private PDO $pdo) {}
 
     /** 날것 한 줄. 비밀이 들어 있으니 화면으로 내보내지 말 것. */
@@ -131,12 +160,14 @@ final class Integration
                                 int $left, int $cap, int $used,
                                 string $reason, ?string $until): ?string
     {
-        $who = $provider === self::GOOGLE ? '구글 드라이브' : ($provider === self::FIGMA ? '피그마' : $provider);
+        $who = self::label($provider);
 
         if (!$connected) {
-            return $provider === self::GOOGLE
-                ? '구글 드라이브가 아직 연결되지 않았습니다. 관리자가 설정 화면에서 연결해야 합니다.'
-                : '피그마 토큰이 아직 등록되지 않았습니다. 관리자가 설정 화면에서 넣어야 합니다.';
+            return match ($provider) {
+                self::GOOGLE => '구글 드라이브가 아직 연결되지 않았습니다. 관리자가 설정 화면에서 연결해야 합니다.',
+                self::CLAUDE => 'Claude API 키가 아직 등록되지 않았습니다. 관리자가 설정 화면에서 넣어야 합니다.',
+                default      => '피그마 토큰이 아직 등록되지 않았습니다. 관리자가 설정 화면에서 넣어야 합니다.',
+            };
         }
         if (!$enabled) {
             return "관리자가 {$who} 연동을 꺼 두었습니다. 설정 화면에서 다시 켤 수 있습니다.";

@@ -300,6 +300,11 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <button type="button" class="ba-btn" id="ba-lk-retry" hidden
                 title="실패한 것만 다시 읽습니다. 성공한 것은 다시 읽지 않습니다">실패한 것만 다시</button>
         <button type="button" class="ba-btn ba-btn--danger" id="ba-lk-cancel" hidden>멈추기</button>
+        <span class="ba-sep"></span>
+        <button type="button" class="ba-btn" id="ba-lk-score"
+                title="읽어 둔 기획 내용을 근거로 태스크 난이도(1~5)를 매깁니다">난이도 매기기</button>
+        <button type="button" class="ba-btn" id="ba-lk-rescore"
+                title="이미 매긴 것도 다시 매깁니다. 사람이 고친 값은 건드리지 않습니다">다시 매기기</button>
         <span class="ba-spacer"></span>
         <span class="ba-dim" id="ba-lk-msg"></span>
       </div>

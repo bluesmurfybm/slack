@@ -24,6 +24,7 @@ if (!bs_is_admin()) {
 $store  = new Integration(bs_db());
 $google = $store->status(Integration::GOOGLE);
 $figma  = $store->status(Integration::FIGMA);
+$claude = $store->status(Integration::CLAUDE);
 $redir  = bs_oauth_redirect_uri();
 
 /**
@@ -333,6 +334,76 @@ bs_layout_head(
         <?php endif; ?>
       </div>
     </div>
+  </section>
+
+  <!-- ============ Claude (AI 난이도 판정) ============ -->
+  <section class="ba-ig">
+    <div class="ba-ig__head">
+      <h3>Claude — AI 난이도 판정</h3>
+      <?= $claude['connected']
+            ? '<span class="ba-badge ba-badge--ok">연결됨</span>'
+            : '<span class="ba-badge">설정 전</span>' ?>
+      <?php if ($claude['connected'] && !$claude['enabled']): ?>
+        <span class="ba-badge ba-badge--off">연동 제외</span>
+      <?php elseif ($claude['cooldown_left'] > 0): ?>
+        <span class="ba-badge ba-badge--off">쉬는 중</span>
+      <?php endif; ?>
+    </div>
+
+    <p class="ba-head__sub">
+      WBS 태스크의 <b>개발 난이도(1~5)</b>를 기획 내용까지 읽고 매깁니다.
+      <b>연결하지 않아도 난이도는 나옵니다</b> — 유지보수 요청 947건에서 뽑은
+      규칙이 바탕으로 늘 돌고, AI 는 그 위에 얹힙니다.
+      판정마다 <b>무엇을 보고 그렇게 봤는지</b>가 함께 남습니다.
+    </p>
+
+    <?php if ($claude['last_error']): ?>
+      <div class="ba-alert" style="margin:8px 0"><?= h((string)$claude['last_error']) ?></div>
+    <?php endif; ?>
+
+    <?php ig_panel($store, $claude, 'Claude'); ?>
+
+    <details class="ba-ig__how"<?= $claude['connected'] ? '' : ' open' ?>>
+      <summary>먼저 할 일 · 무엇이 모델로 나가는지</summary>
+      <ol>
+        <li><a href="https://console.anthropic.com/" target="_blank" rel="noopener">Anthropic 콘솔</a>
+            → <b>API Keys</b> 에서 키를 만듭니다 (<code>sk-ant-…</code>).</li>
+        <li>아래에 넣고 저장한 뒤 <b>[AI 연결 확인]</b> 을 누릅니다.</li>
+        <li>콘솔의 <b>Limits</b> 에서 월 사용 한도를 걸어 두시길 권합니다.</li>
+      </ol>
+
+      <div class="ba-alert ba-alert--wait" style="margin:8px 0">
+        <b>업무 자료가 바깥으로 나갑니다.</b> 판정할 때 모델로 보내는 것은
+        <b>태스크 제목·설명과, 링크 분석이 읽어 둔 기획 글 앞부분</b>입니다.
+        사업명도 함께 갑니다. <b>토큰·키·계정 정보는 보내지 않습니다.</b>
+        <br>
+        반출 범위를 승인받기 전이라면 이 연동을 <b>[연동 제외]</b> 로 두십시오 —
+        그래도 규칙 기반 난이도는 그대로 나옵니다.
+      </div>
+
+      <p class="ba-head__sub">
+        기획 글에 적힌 <b>"난이도 상"</b> 같은 남의 판정은 모델이 그대로 받아쓰지
+        않도록 막아 두었습니다. 읽어 온 글은 전부 <b>"지시가 아니라 자료"</b> 로
+        표시해 넘깁니다.
+      </p>
+    </details>
+
+    <div class="ba-ig__form">
+      <label class="ba-field ba-field--wide">
+        <span>API 키</span>
+        <input type="password" id="ba-ig-ckey" value=""
+               placeholder="<?= $claude['connected'] ? '이미 저장돼 있습니다' : 'sk-ant-…' ?>"
+               autocomplete="new-password">
+      </label>
+      <div class="ba-ig__btns">
+        <button type="button" class="ba-btn" id="ba-ig-csave">저장</button>
+        <?php if ($claude['connected']): ?>
+          <button type="button" class="ba-btn ba-btn--primary" id="ba-ig-ctest">AI 연결 확인</button>
+          <button type="button" class="ba-btn ba-btn--danger" data-ig-off="claude">연결 끊기</button>
+        <?php endif; ?>
+      </div>
+    </div>
+    <pre class="ba-ig__out" id="ba-ig-cout" hidden></pre>
   </section>
 
   <!-- ============ 확인 ============ -->

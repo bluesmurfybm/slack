@@ -1,12 +1,17 @@
 <?php
 /**
- * 외부 연동 설정 — 구글 드라이브 · 피그마.
+ * 외부 연동 설정 — 구글 드라이브 · 피그마 · Claude.
  *
- *   GET  api/integration.php?act=status                 상태 (관리자)
+ *   GET  api/integration.php?act=status                 상태 + 사용량 (관리자)
  *   POST api/integration.php?act=save_google            client_id / client_secret
  *   POST api/integration.php?act=save_figma             개인 접근 토큰
+ *   POST api/integration.php?act=save_claude            Claude API 키
+ *   POST api/integration.php?act=set_enabled            연동 켜고 끄기 { provider, enabled }
+ *   POST api/integration.php?act=set_cap                하루 호출 상한 { provider, cap }
+ *   POST api/integration.php?act=clear_cooldown         쉬는 시각 지우기 { provider }
  *   POST api/integration.php?act=disconnect             연결 끊기 { provider }
  *   POST api/integration.php?act=test                   실제로 읽어 보기 { url }
+ *   POST api/integration.php?act=test_claude            AI 를 한 번 불러 보기
  *
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ 넣을 수는 있어도 꺼내 볼 수는 없다                                │
@@ -28,6 +33,13 @@ require_once BS_ROOT . '/inc/service/RemoteSource.php';
 $pdo   = bs_db();
 $store = new Integration($pdo);
 
+/** 다룰 수 있는 연동인가. 한 군데서만 정의해 둬야 하나를 늘릴 때 빠뜨리지 않는다. */
+function ig_known(string $provider): bool
+{
+    return in_array($provider,
+        [Integration::GOOGLE, Integration::FIGMA, Integration::CLAUDE], true);
+}
+
 /** 관리자만. 자격 정보는 전사 설정이라 아무나 바꾸면 안 된다. */
 function ig_admin(): array
 {
@@ -48,9 +60,11 @@ bs_route(bs_param_str('act', 'status'), [
         bs_json_ok([
             'google' => $store->status(Integration::GOOGLE),
             'figma'  => $store->status(Integration::FIGMA),
+            'claude' => $store->status(Integration::CLAUDE),
             'usage'  => [
                 'google' => $store->usageSeries(Integration::GOOGLE, 14),
                 'figma'  => $store->usageSeries(Integration::FIGMA, 14),
+                'claude' => $store->usageSeries(Integration::CLAUDE, 14),
             ],
             // 구글 콘솔에 그대로 넣어야 하는 값이다. 손으로 적다가 틀리는
             // 일이 잦아 화면이 복사할 수 있게 서버가 만들어 준다.
@@ -75,18 +89,18 @@ bs_route(bs_param_str('act', 'status'), [
     'set_enabled' => function () use ($store): void {
         $me       = ig_admin();
         $provider = bs_param_str('provider');
-        if (!in_array($provider, [Integration::GOOGLE, Integration::FIGMA], true)) {
+        if (!ig_known($provider)) {
             bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
         }
         $on = bs_param_str('enabled') === '1';
         $store->setEnabled($provider, $on, $me);
 
-        $who = $provider === Integration::GOOGLE ? '구글 드라이브' : '피그마';
+        $who = Integration::label($provider);
         bs_json_ok([
             'status'  => $store->status($provider),
             'message' => $on
-                ? "{$who} 연동을 켰습니다. 대기 중인 링크부터 이어서 읽습니다."
-                : "{$who} 연동을 제외했습니다. 토큰은 그대로 두고 호출만 하지 않습니다.",
+                ? "{$who} 연동을 켰습니다. 대기 중인 일부터 이어서 처리합니다."
+                : "{$who} 연동을 제외했습니다. 자격 정보는 그대로 두고 호출만 하지 않습니다.",
         ]);
     },
 
@@ -94,7 +108,7 @@ bs_route(bs_param_str('act', 'status'), [
     'set_cap' => function () use ($store): void {
         $me       = ig_admin();
         $provider = bs_param_str('provider');
-        if (!in_array($provider, [Integration::GOOGLE, Integration::FIGMA], true)) {
+        if (!ig_known($provider)) {
             bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
         }
         $cap = max(0, (int)(bs_param_int('cap', 0) ?? 0));
@@ -117,7 +131,7 @@ bs_route(bs_param_str('act', 'status'), [
     'clear_cooldown' => function () use ($store): void {
         ig_admin();
         $provider = bs_param_str('provider');
-        if (!in_array($provider, [Integration::GOOGLE, Integration::FIGMA], true)) {
+        if (!ig_known($provider)) {
             bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
         }
         $store->clearCooldown($provider);
@@ -168,17 +182,81 @@ bs_route(bs_param_str('act', 'status'), [
                     'message' => '저장했습니다. 아래에서 실제 링크로 확인해 보세요.']);
     },
 
+    /**
+     * Claude API 키.
+     *
+     * 피그마와 같다 — 키 하나뿐이고 넣는 순간 쓸 수 있다. 설정 파일이 아니라
+     * 여기 두는 이유는 Integration 클래스 주석에 적어 두었다: 켜고 끄기·쉬는
+     * 시각·하루 상한·사용량 그래프를 그대로 물려받는다.
+     */
+    'save_claude' => function () use ($store): void {
+        $me  = ig_admin();
+        $key = trim(bs_param_str('api_key'));
+        if ($key === '') {
+            bs_json_error('BAD_REQUEST', 'Claude API 키를 넣으세요.');
+        }
+        // 흔한 실수를 미리 잡는다. 키가 아닌 것을 넣고 "왜 안 되지" 하는
+        // 시간이 아깝다 — 피그마 토큰을 여기 넣는 일이 실제로 있을 법하다.
+        if (!str_starts_with($key, 'sk-ant-')) {
+            bs_json_error('BAD_REQUEST',
+                'Claude API 키는 sk-ant- 로 시작합니다. 넣으신 값을 다시 확인하세요.');
+        }
+        $store->save(Integration::CLAUDE, ['secret' => $key, 'last_error' => ''], $me);
+        bs_json_ok(['claude' => $store->status(Integration::CLAUDE),
+                    'message' => '저장했습니다. 아래 [AI 연결 확인] 으로 실제 호출을 해 보세요.']);
+    },
+
+    /**
+     * AI 를 실제로 한 번 불러 본다.
+     *
+     * 키가 맞는지 확인할 길이 없으면, 관리자는 난이도 판정을 통째로 돌려
+     * 봐야 안다. **가장 싼 모델로 아주 짧게** 묻는다 — 확인 한 번이 비싸면
+     * 아무도 확인하지 않는다.
+     */
+    'test_claude' => function () use ($pdo): void {
+        ig_admin();
+        require_once BS_ROOT . '/inc/service/AnthropicLlmClient.php';
+        // 설정 화면에 넣어 둔 키로 **실제로** 부른다. bs_llm_client() 를
+        // 쓰면 llm.config.php 가 고정 응답을 돌려주도록 돼 있을 때 "연결됐다"
+        // 는 거짓말을 하게 된다 — 이 단추는 진짜 왕복을 확인하는 자리다.
+        $llm = new AnthropicLlmClient(null, AnthropicLlmClient::MODEL_FAST, $pdo);
+        try {
+            $got = $llm->generate(
+                '너는 연결 확인용 응답기다. 묻는 말에 그대로 답한다.',
+                'connected 라는 낱말 하나를 ok 에 넣어 돌려줘.',
+                ['type' => 'object',
+                 'properties' => ['ok' => ['type' => 'string']],
+                 'required' => ['ok'], 'additionalProperties' => false],
+                ['max_tokens' => 256, 'act' => 'connect_test']
+            );
+            bs_json_ok([
+                'claude'  => (new Integration($pdo))->status(Integration::CLAUDE),
+                'message' => sprintf('연결됐습니다 — %s · 토큰 %d/%d · 약 $%.4f',
+                    $got->model, $got->tokensIn, $got->tokensOut, $got->costUsd),
+            ]);
+        } catch (LlmError $e) {
+            bs_json_error('LLM_FAILED', $e->getMessage(), 400);
+        } catch (Throwable $e) {
+            // 설정을 맞추려고 누르는 단추다. 진짜 이유를 보여 준다 —
+            // "처리 중 오류" 만 뜨면 키를 의심하며 헤매게 된다.
+            error_log('[BlueStudio] claude test: ' . $e);
+            bs_json_error('INTERNAL_ERROR',
+                'AI 를 부르는 중 서버 오류가 났습니다 — ' . $e->getMessage(), 500);
+        }
+    },
+
     'disconnect' => function () use ($store): void {
         $me       = ig_admin();
         $provider = bs_param_str('provider');
-        if (!in_array($provider, [Integration::GOOGLE, Integration::FIGMA], true)) {
+        if (!ig_known($provider)) {
             bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
         }
         $store->disconnect($provider, $me);
         bs_json_ok([
             'google'  => $store->status(Integration::GOOGLE),
             'figma'   => $store->status(Integration::FIGMA),
-            'message' => '연결을 끊었습니다. 이미 읽어 둔 글자는 그대로 남습니다.',
+            'claude'  => $store->status(Integration::CLAUDE),
+            'message' => '연결을 끊었습니다. 이미 읽어 둔 글자와 판정 결과는 그대로 남습니다.',
         ]);
     },
 

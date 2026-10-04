@@ -181,6 +181,88 @@ try {
         exit(0);
     }
 
+    // =====================================================================
+    // 난이도 판정
+    //
+    // ┌──────────────────────────────────────────────────────────────────┐
+    // │ 링크 읽기와 같은 틀을 쓴다                                        │
+    // │                                                                  │
+    // │ 태스크가 100개면 모델을 100번 부른다. 웹 요청 안에서는 못 한다.   │
+    // │ 호출 제한·크레딧·비용도 피그마와 똑같이 다뤄야 한다 — 그래서     │
+    // │ 같은 큐, 같은 물러남 규칙, 같은 사용량 기록을 쓴다.               │
+    // │                                                                  │
+    // │ 다만 **AI 가 막혀도 멈추지 않는다.** 규칙 판정이 바탕으로 늘     │
+    // │ 돌기 때문에 난이도는 어떻든 채워진다. 물러나는 것은 '기다리면    │
+    // │ 될 일' 일 때뿐이다.                                               │
+    // └──────────────────────────────────────────────────────────────────┘
+    // =====================================================================
+    if ($job['kind'] === 'difficulty') {
+        require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
+        require_once BS_ROOT . '/inc/repo/TaskRepo.php';
+        require_once BS_ROOT . '/inc/service/DifficultyScorer.php';
+
+        $tasks   = new TaskRepo($pdo);
+        $an      = new LinkAnalyzer($pdo);
+        $scorer  = new DifficultyScorer();
+        $project = (new ProjectRepo($pdo))->find($projectId);
+        $pname   = (string)($project['name'] ?? '');
+
+        // 다시 매기기로 넣은 작업인지는 message 에 적어 두었다.
+        $redo = str_contains((string)($job['message'] ?? ''), 'redo');
+        $todo = $tasks->pendingDifficulty($projectId, $redo);
+
+        if ($todo === []) {
+            $jobs->finish($jobId, 'done', '매길 태스크가 없습니다.');
+            $log("작업 #$jobId 끝 — 대상 없음");
+            exit(0);
+        }
+
+        $ok = $aiCount = 0;
+        foreach ($todo as $t) {
+            if (time() >= $until) {
+                $jobs->finish($jobId, 'queued', '이어서 진행합니다.');
+                $log("작업 #$jobId 시간 종료 — 다음 회차에 이어 감");
+                exit(0);
+            }
+            $now = $jobs->find($jobId);
+            if ($now === null || $now['status'] === 'canceled') {
+                $log("작업 #$jobId 멈춤");
+                exit(0);
+            }
+
+            $ctx = $an->contextFor($projectId, (string)$t['title']);
+            $r   = $scorer->score($t, $ctx['text'] ?? '', $pname);
+
+            $note = $r['note'];
+            if ($ctx !== null) {
+                // 어느 기획 글을 보고 매겼는지 남긴다. 어림짐작으로 고른
+                // 것이라, 틀렸을 때 사람이 바로 알아볼 수 있어야 한다.
+                $note = mb_substr($note . ' / 참고: ' . ($ctx['title'] ?: $ctx['url']), 0, 500);
+            }
+            $tasks->setDifficulty((int)$t['id'], (int)$r['difficulty'], $r['by'], $note);
+
+            $ok++;
+            if ($r['by'] === 'ai') {
+                $aiCount++;
+            }
+            $jobs->progress($jobId, true);
+            $log(sprintf('  난이도 ★%d (%s) %s',
+                 $r['difficulty'], $r['by'], mb_substr((string)$t['title'], 0, 50)));
+
+            // AI 를 실제로 쓴 회차만 쉰다. 규칙으로 떨어진 건은 네트워크를
+            // 타지 않으므로 쉴 이유가 없다 — 쉬면 괜히 느려진다.
+            if ($r['by'] === 'ai') {
+                usleep(PACE_MS * 1000);
+            }
+        }
+
+        $jobs->finish($jobId, 'done', sprintf('%d건 — AI %d · 규칙 %d', $ok, $aiCount, $ok - $aiCount));
+        $log("작업 #$jobId 끝 — $ok 건 (AI $aiCount)");
+        $store = new Integration($pdo);
+        $store->pruneUsage();
+        exit(0);
+    }
+
     $jobs->finish($jobId, 'failed', '모르는 작업 종류입니다: ' . (string)$job['kind']);
     $log("작업 #$jobId 모르는 종류");
     exit(1);

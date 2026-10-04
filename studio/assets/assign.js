@@ -1686,8 +1686,10 @@
         .catch(function (e) { toast(e.message, true); });
     }
 
-    function post(act, okMsg) {
-      return api('api/analysis.php?act=' + act, { method: 'POST', body: { project_id: pid } })
+    function post(act, okMsg, extra) {
+      var body = { project_id: pid };
+      if (extra) { Object.keys(extra).forEach(function (k) { body[k] = extra[k]; }); }
+      return api('api/analysis.php?act=' + act, { method: 'POST', body: body })
         .then(function (d) {
           if (d.message) { $('#ba-lk-msg').textContent = d.message; }
           draw(d);
@@ -1699,6 +1701,18 @@
     $('#ba-lk-scan').addEventListener('click', function () { post('scan'); });
     $('#ba-lk-start').addEventListener('click', function () { post('start'); });
     $('#ba-lk-retry').addEventListener('click', function () { post('retry'); });
+
+    // 난이도. 빈 것만 매기는 쪽이 기본이다 — 이미 매긴 값을 말없이
+    // 갈아엎지 않는다.
+    $('#ba-lk-score').addEventListener('click', function () { post('score'); });
+    $('#ba-lk-rescore').addEventListener('click', function () {
+      if (!confirm(['이미 매긴 난이도까지 **다시** 매깁니다.', '',
+                    '· 사람이 고친 값은 건드리지 않습니다',
+                    '· AI 가 꺼져 있으면 규칙으로만 매깁니다',
+                    '· 태스크 수만큼 모델을 부르므로 비용이 듭니다',
+                    '', '진행할까요?'].join('\n'))) return;
+      post('score', null, { redo: '1' });
+    });
     $('#ba-lk-cancel').addEventListener('click', function () {
       if (!confirm('분석을 멈춥니다. 읽던 한 건은 끝내고 멈춥니다.')) return;
       post('cancel');
@@ -3101,14 +3115,47 @@
       });
     }
 
+    var csave = $('#ba-ig-csave');
+    if (csave) {
+      csave.addEventListener('click', function () {
+        send('api/integration.php?act=save_claude',
+             { api_key: ($('#ba-ig-ckey') || {}).value || '' }, '저장했습니다');
+      });
+    }
+
+    // 실제로 한 번 불러 본다. 가장 싼 모델로 아주 짧게 — 확인이 비싸면
+    // 아무도 확인하지 않는다.
+    var ctest = $('#ba-ig-ctest');
+    if (ctest) {
+      ctest.addEventListener('click', function () {
+        var out = $('#ba-ig-cout');
+        out.hidden = false;
+        out.textContent = '부르는 중…';
+        ctest.disabled = true;
+        api('api/integration.php?act=test_claude', { method: 'POST', body: {} })
+          .then(function (d) { out.textContent = d.message; })
+          .catch(function (e) { out.textContent = '부르지 못했습니다 — ' + e.message; })
+          .then(function () { ctest.disabled = false; });
+      });
+    }
+
+    var IG_NAME = { google: '구글 드라이브', figma: '피그마', claude: 'Claude' };
+
     $$('[data-ig-off]').forEach(function (b) {
       b.addEventListener('click', function () {
-        var who = b.dataset.igOff === 'google' ? '구글 드라이브' : '피그마';
-        if (!confirm([who + ' 연결을 끊습니다.', '',
-                      '· 저장해 둔 토큰이 지워집니다',
-                      '· 이미 읽어 둔 글자는 그대로 남습니다',
-                      "· 링크는 다시 '분석 안 함' 이 됩니다",
-                      '', '진행할까요?'].join('\n'))) return;
+        var who = IG_NAME[b.dataset.igOff] || '이 연동';
+        // Claude 는 링크를 읽지 않는다. 안 맞는 설명을 보여 주면 사람이
+        // "링크가 어떻게 되는 거지" 하고 망설인다.
+        var lines = b.dataset.igOff === 'claude'
+          ? ['· 저장해 둔 API 키가 지워집니다',
+             '· 이미 매긴 난이도와 근거는 그대로 남습니다',
+             '· 앞으로는 규칙 기반으로만 난이도를 매깁니다']
+          : ['· 저장해 둔 토큰이 지워집니다',
+             '· 이미 읽어 둔 글자는 그대로 남습니다',
+             "· 링크는 다시 '분석 안 함' 이 됩니다"];
+        if (!confirm([who + ' 연결을 끊습니다.', ''].concat(lines)
+                     .concat(['', '끄기만 하려면 [연동 제외] 를 쓰세요. 그쪽은 키가 남습니다.',
+                              '', '진행할까요?']).join('\n'))) return;
         send('api/integration.php?act=disconnect', { provider: b.dataset.igOff }, '연결을 끊었습니다');
       });
     });

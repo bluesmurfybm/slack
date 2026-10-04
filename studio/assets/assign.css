@@ -1541,6 +1541,8 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 
 /* ================= 기획 링크 분석 (project_view 3단계) ================ */
 .ba-links { margin-bottom: 14px; }
+/* 단추 묶음을 가르는 세로줄. 링크 읽기와 난이도 매기기는 다른 일이다. */
+.ba-sep { width: 1px; align-self: stretch; margin: 0 4px; background: var(--ba-line); }
 /* 진행률. 크론이 집어 갈 때까지 1분쯤 걸리므로 '대기 중' 도 보여 준다. */
 .ba-lk-prog { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
 .ba-lk-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--ba-surface);

@@ -415,6 +415,81 @@ final class LinkAnalyzer
         return $st->rowCount();
     }
 
+    /**
+     * 이 태스크와 가장 관련 있어 보이는 기획 글.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 어림짐작이다. 그렇게 다뤄야 한다                               │
+     * │                                                              │
+     * │ IA 시트에서 주소가 있던 **줄 전체**(context)를 담아 두었다.   │
+     * │ 그 줄에 태스크 제목의 낱말이 많이 겹치면 같은 항목일 가능성이 │
+     * │ 높다. WBS 가 그 시트에서 나왔으니 말이 겹치는 것이 자연스럽다.│
+     * │                                                              │
+     * │ 하지만 **틀릴 수 있다.** 그래서                               │
+     * │   · 겹치는 낱말이 너무 적으면 아무것도 안 준다. 엉뚱한 기획   │
+     * │     글을 붙이면 판정이 그쪽으로 끌려간다 — 없는 편이 낫다    │
+     * │   · 어느 링크를 골랐는지 호출자가 알 수 있게 돌려준다         │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * @return array{text:string, title:string, url:string}|null
+     */
+    public function contextFor(int $projectId, string $taskTitle): ?array
+    {
+        $want = self::tokens($taskTitle);
+        if ($want === []) {
+            return null;
+        }
+
+        $st = $this->pdo->prepare(
+            'SELECT url, title, context, parsed_text FROM bs_source_link
+              WHERE project_id = ? AND status = "ok" AND parsed_text IS NOT NULL
+                AND parsed_text <> ""'
+        );
+        $st->execute([$projectId]);
+
+        $best = null;
+        $bestScore = 0;
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            // 그 줄과 문서 이름 둘 다 본다. 시트 줄이 비어 있어도 문서
+            // 이름이 화면 이름인 경우가 많다.
+            $have  = self::tokens((string)$r['context'] . ' ' . (string)$r['title']);
+            $score = count(array_intersect($want, $have));
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $best      = $r;
+            }
+        }
+
+        // 낱말 둘은 우연히 겹친다("화면", "관리" 같은 말). 셋부터 본다.
+        if ($best === null || $bestScore < 3) {
+            return null;
+        }
+        return [
+            'text'  => (string)$best['parsed_text'],
+            'title' => (string)($best['title'] ?? ''),
+            'url'   => (string)$best['url'],
+        ];
+    }
+
+    /**
+     * 비교할 낱말로 쪼갠다.
+     *
+     * 한 글자는 버린다 — 조사와 기호가 섞여 아무 데나 겹친다.
+     *
+     * @return list<string>
+     */
+    private static function tokens(string $s): array
+    {
+        $s    = mb_strtolower(preg_replace('/[^\p{L}\p{N}]+/u', ' ', $s) ?? '');
+        $out  = [];
+        foreach (explode(' ', $s) as $w) {
+            if (mb_strlen($w) >= 2) {
+                $out[$w] = true;
+            }
+        }
+        return array_keys($out);
+    }
+
     /** 화면에 보여 줄 목록. parsed_text 는 길어서 빼고 길이만 준다. */
     public function links(int $projectId): array
     {

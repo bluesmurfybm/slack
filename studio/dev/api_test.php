@@ -2457,6 +2457,78 @@ $admin->req('/studio/api/analysis.php?act=cancel', ['csrf' => true, 'json' => ['
 $pdoR->exec("DELETE FROM bs_api_usage");
 $pdoR->exec("DELETE FROM bs_integration");
 
+// ---------------------------------------------------------------------
+// 난이도 판정 — 큐 → 워커 → bs_task
+//
+// AI 는 연결돼 있지 않다. **그래도 난이도가 채워져야 한다** — 규칙이
+// 바탕으로 늘 돌기 때문이다. 이것이 'ⓐ+AI' 방침의 핵심이고, AI 가
+// 막혔다고 WBS 가 난이도 없이 남으면 배정 엔진이 그 태스크를 못 다룬다.
+// ---------------------------------------------------------------------
+$pdoR->prepare('UPDATE bs_task SET difficulty = NULL, difficulty_by = NULL WHERE project_id = ?')
+     ->execute([$pid]);
+
+$r = $guest->req('/studio/api/analysis.php?act=score',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('난이도 판정은 권한이 있어야', $r['status'] === 403, '상태 ' . $r['status']);
+
+$r = $admin->req('/studio/api/analysis.php?act=score',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('난이도 판정을 큐에 넣는다', $r['status'] === 200, $r['body']);
+ok('★ AI 가 꺼져 있으면 그 사실을 미리 말한다',
+   str_contains((string)($r['json']['data']['message'] ?? ''), 'AI 가 꺼져 있어'),
+   (string)($r['json']['data']['message'] ?? ''));
+
+$worker = shell_exec(escapeshellarg(PHP_BINARY) . ' '
+        . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
+ok('워커가 난이도를 매긴다', str_contains((string)$worker, '난이도 ★'), trim((string)$worker));
+
+$rows = $pdoR->query("SELECT difficulty, difficulty_by, difficulty_note
+                        FROM bs_task WHERE project_id = $pid
+                         AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = bs_task.id)")
+             ->fetchAll(PDO::FETCH_ASSOC);
+$filled = array_filter($rows, fn($x) => $x['difficulty'] !== null);
+ok('★ AI 없이도 난이도가 전부 채워진다', count($filled) === count($rows) && $rows !== [],
+   count($filled) . '/' . count($rows));
+ok('규칙으로 매겼다고 남는다',
+   count(array_filter($rows, fn($x) => $x['difficulty_by'] === 'rule')) === count($rows),
+   json_encode(array_column($rows, 'difficulty_by')));
+// ★ 근거 없는 숫자는 배정 근거로 못 쓴다.
+ok('★ 왜 그 난이도인지 근거가 남는다',
+   count(array_filter($rows, fn($x) => trim((string)$x['difficulty_note']) !== '')) === count($rows),
+   json_encode(array_column($rows, 'difficulty_note'), JSON_UNESCAPED_UNICODE));
+ok('1~5 를 벗어나지 않는다',
+   count(array_filter($rows, fn($x) => (int)$x['difficulty'] >= 1 && (int)$x['difficulty'] <= 5))
+   === count($rows));
+
+$r = $admin->req('/studio/api/analysis.php?act=score',
+    ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('빈 것이 없으면 거절하고 길을 알려 준다',
+   $r['status'] === 400 && str_contains((string)($r['json']['error']['message'] ?? ''), '다시 매기기'),
+   $r['body']);
+
+// ★ 사람이 고친 값은 자동 판정이 건드리지 않는다. 한 번이라도 덮어쓰면
+//   아무도 고치지 않는다.
+$one = (int)$pdoR->query("SELECT id FROM bs_task WHERE project_id = $pid
+                           AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = bs_task.id)
+                           ORDER BY id LIMIT 1")->fetchColumn();
+$pdoR->exec("UPDATE bs_task SET difficulty = 5, difficulty_by = 'human',
+                                difficulty_note = '내가 봤다' WHERE id = $one");
+
+$r = $admin->req('/studio/api/analysis.php?act=score',
+    ['csrf' => true, 'json' => ['project_id' => $pid, 'redo' => '1']]);
+ok('다시 매기기는 받아 준다', $r['status'] === 200, $r['body']);
+shell_exec(escapeshellarg(PHP_BINARY) . ' '
+         . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
+
+$kept = $pdoR->query("SELECT difficulty, difficulty_by, difficulty_note FROM bs_task WHERE id = $one")
+             ->fetch(PDO::FETCH_ASSOC);
+ok('★ 사람이 매긴 값은 다시 매기기에도 그대로다',
+   (int)$kept['difficulty'] === 5 && $kept['difficulty_by'] === 'human'
+   && $kept['difficulty_note'] === '내가 봤다',
+   json_encode($kept, JSON_UNESCAPED_UNICODE));
+
+$pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);
+
 // ---- 멈추기 ----
 $admin->req('/studio/api/analysis.php?act=start', ['csrf' => true, 'json' => ['project_id' => $pid]]);
 $r = $admin->req('/studio/api/analysis.php?act=cancel',

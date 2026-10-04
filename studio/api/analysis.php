@@ -29,6 +29,7 @@ require_once BS_ROOT . '/inc/service/DocumentParser.php';
 require_once BS_ROOT . '/inc/service/OfficeDocumentParser.php';
 require_once BS_ROOT . '/inc/service/Integration.php';
 require_once BS_ROOT . '/inc/service/LinkAnalyzer.php';
+require_once BS_ROOT . '/inc/service/LlmClient.php';
 
 $pdo      = bs_db();
 $projects = new ProjectRepo($pdo);
@@ -174,6 +175,44 @@ bs_route(bs_param_str('act', 'status'), [
         }
 
         bs_json_ok($out + ['message' => $msg]);
+    },
+
+    /**
+     * 난이도 판정을 큐에 넣는다. **여기서 모델을 부르지 않는다.**
+     *
+     * 태스크가 100개면 모델을 100번 부른다 — 링크 읽기와 같은 이유로 크론에
+     * 맡긴다. AI 가 꺼져 있어도 넣는다: 규칙 판정이 바탕으로 늘 돌기 때문에
+     * 난이도는 어떻든 채워지고, 나중에 AI 를 켜고 [다시 매기기] 하면 된다.
+     */
+    'score' => function () use ($projects, $an, $jobs, $pdo): void {
+        $pid  = an_project($projects);
+        $redo = bs_param_str('redo') === '1';
+
+        require_once BS_ROOT . '/inc/repo/TaskRepo.php';
+        $todo = (new TaskRepo($pdo))->pendingDifficulty($pid, $redo);
+        if ($todo === []) {
+            bs_json_error('NOTHING_TODO', $redo
+                ? '매길 태스크가 없습니다. 먼저 WBS 를 만드세요.'
+                : '난이도가 빈 태스크가 없습니다. 다시 매기려면 [다시 매기기] 를 쓰세요.', 400);
+        }
+
+        $me = ['id' => bs_current_user()['id'] ?? '', 'name' => bs_current_user()['name'] ?? ''];
+        $r  = $jobs->enqueue($pid, 'difficulty', count($todo), $me);
+        if ($r['created'] && $redo) {
+            // 워커가 '다시 매기기' 인지 알아야 이미 매긴 것까지 집는다.
+            $jobs->finish((int)$r['job']['id'], 'queued', 'redo');
+        }
+
+        $llm  = bs_llm_client();
+        $note = $llm->available()
+            ? ''
+            : ' AI 가 꺼져 있어 규칙으로 매깁니다 — 설정 화면에서 Claude 를 연결하면 더 정확해집니다.';
+
+        bs_json_ok(an_payload($an, $jobs, $pid) + [
+            'message' => ($r['created']
+                ? sprintf('태스크 %d건의 난이도를 매기도록 넣었습니다.', count($todo))
+                : '이미 진행 중입니다.') . $note,
+        ]);
     },
 
     'cancel' => function () use ($projects, $an, $jobs): void {
