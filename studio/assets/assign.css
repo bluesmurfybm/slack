@@ -1510,6 +1510,34 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 10px; }
 /* 성공 알림. .ba-alert 는 빨간 쪽이라 색만 바꿔 쓴다. */
 .ba-alert--ok { background: #e9f6ee; color: #23653e; border-color: #c6e6d3; }
+/* '기다리면 될 일'. 빨강은 사람이 뭔가 고쳐야 한다는 뜻이라 따로 둔다 —
+   호출 제한은 고칠 것이 없고 기다리면 풀린다. */
+.ba-alert--wait { background: #fff8e6; color: #7a5a12; border-color: #f0dfae; }
+/* 꺼져 있거나 쉬는 중. 오류가 아니므로 빨강을 쓰지 않는다. */
+.ba-badge--off { background: #f4f1e8; color: #7a6a3e; border-color: #e3dcc6; }
+
+/* ---- 지금 상태 판: 켜고 끄기 · 쉬는 시각 · 사용량 ---- */
+.ba-ig__state { margin: 10px 0 2px; }
+.ba-ig__sw { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.ba-ig__hint { font-size: 12px; color: var(--ba-ink-soft); line-height: 1.6; }
+.ba-ig__state .ba-alert { margin: 8px 0; }
+.ba-ig__state .ba-alert .ba-btn { margin-top: 8px; }
+
+/* 사용량 그래프. 의존 라이브러리 없이 인라인 SVG 로 그린다. */
+.ba-spark { margin-top: 10px; padding: 10px 12px; background: var(--ba-surface);
+  border: 1px solid var(--ba-line); border-radius: 10px; }
+.ba-spark__num { font-size: 12.5px; color: var(--ba-ink-soft); margin-bottom: 6px; }
+.ba-spark__num b { color: var(--ba-ink); }
+.ba-spark__svg { display: block; width: 100%; max-width: 320px; height: 48px; }
+.ba-spark__bar { fill: var(--ba-brand); opacity: .75; }
+.ba-spark__bad { fill: #c0392b; }
+.ba-spark__axis { stroke: var(--ba-line); stroke-width: 1; }
+.ba-spark__ends { display: flex; justify-content: space-between; max-width: 320px;
+  font-size: 11px; color: var(--ba-ink-soft); margin-top: 2px; }
+.ba-spark__cap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; font-size: 12.5px; color: var(--ba-ink-soft); }
+.ba-spark__cap input { width: 90px; padding: 5px 8px; font-size: 13px;
+  border: 1px solid var(--ba-line); border-radius: 8px; background: var(--ba-paper); }
 
 /* ================= 기획 링크 분석 (project_view 3단계) ================ */
 .ba-links { margin-bottom: 14px; }

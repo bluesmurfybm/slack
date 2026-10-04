@@ -131,7 +131,14 @@ final class RemoteSource
         return null;
     }
 
-    /** 이 주소를 지금 읽을 수 있는가 — 주소를 알아보고, 연결까지 돼 있는가. */
+    /**
+     * 이 주소를 읽을 수 있는 **자격**이 되는가.
+     *
+     * 일부러 enabled·cooldown 을 보지 않는다. 이 값은 링크를 'pending' 으로
+     * 받을지 'skip' 으로 받을지 가르는 데 쓰는데, 관리자가 잠깐 꺼 두었다고
+     * 'skip' 으로 박아 두면 다시 켰을 때 그 링크들이 영영 안 읽힌다.
+     * "지금 불러도 되는가" 는 Integration::blockedReason() 이 답한다.
+     */
     public function canFetch(string $url): bool
     {
         $hit = self::identify($url);
@@ -159,12 +166,20 @@ final class RemoteSource
             throw new RemoteSourceError('읽을 수 있는 주소가 아닙니다.');
         }
         $provider = $hit['provider'];
-        if (!$this->store->isReady($provider)) {
-            throw new RemoteSourceError(
-                $provider === Integration::GOOGLE
-                    ? '구글 드라이브가 아직 연결되지 않았습니다. 관리자가 설정 화면에서 연결해야 합니다.'
-                    : '피그마 토큰이 아직 등록되지 않았습니다. 관리자가 설정 화면에서 넣어야 합니다.'
-            );
+
+        // ┌──────────────────────────────────────────────────────────┐
+        // │ 부르기 전에 묻는다                                        │
+        // │                                                          │
+        // │ 연결이 안 됐거나, 관리자가 껐거나, 상대가 "쉬어라" 했거나, │
+        // │ 오늘 한도를 다 썼으면 **호출을 만들지조차 않는다.**        │
+        // │                                                          │
+        // │ 셋 다 '기다리면 될 일'(retryable)이다. 실패로 못 박으면    │
+        // │ 나중에 사람이 전부 손으로 되돌려야 한다. 단, 연결 자체가   │
+        // │ 안 된 것은 기다려도 안 풀리므로 실패로 둔다.               │
+        // └──────────────────────────────────────────────────────────┘
+        $blocked = $this->store->blockedReason($provider);
+        if ($blocked !== null) {
+            throw new RemoteSourceError($blocked, retryable: $this->store->isReady($provider));
         }
 
         try {
@@ -195,7 +210,7 @@ final class RemoteSource
             'GET',
             'https://www.googleapis.com/drive/v3/files/' . rawurlencode($fileId)
             . '?fields=id,name,mimeType,size&supportsAllDrives=true',
-            $hdr
+            $hdr, null, Integration::GOOGLE, 'drive_meta'
         );
         $meta = json_decode($metaRaw, true);
         if (!is_array($meta) || !isset($meta['mimeType'])) {
@@ -227,7 +242,7 @@ final class RemoteSource
             );
         }
 
-        $bytes = $this->http('GET', $url, $hdr);
+        $bytes = $this->http('GET', $url, $hdr, null, Integration::GOOGLE, 'drive_read');
         if (strlen($bytes) > BS_UPLOAD_MAX_BYTES) {
             throw new RemoteSourceError(sprintf(
                 '내려받은 내용이 너무 큽니다. %dMB 까지 읽습니다.',
@@ -257,7 +272,8 @@ final class RemoteSource
                 'client_secret' => $this->store->secret(Integration::GOOGLE),
                 'refresh_token' => $this->store->token(Integration::GOOGLE),
                 'grant_type'    => 'refresh_token',
-            ])
+            ]),
+            Integration::GOOGLE, 'google_token'
         );
         $j = json_decode($raw, true);
         if (!is_array($j) || empty($j['access_token'])) {
@@ -283,6 +299,77 @@ final class RemoteSource
      * 구조인 경우가 많다. 그래서 **이름을 들여쓰기로** 적는다 — WBS 도출이
      * 들여쓰기를 보고 대/중/소를 가르므로 바로 쓸 수 있다.
      */
+    /**
+     * 노드 여러 개를 **한 번에** 받는다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 이것이 이 기능이 성립하는 유일한 길이다                        │
+     * │                                                              │
+     * │ 링크 하나에 호출 하나면, IA 시트 117건은 호출 117번이다.      │
+     * │ 피그마의 제한은 분당 호출 수가 아니라 **며칠 단위 비용        │
+     * │ 예산**이라(x-figma-rate-limit-type), 117번을 한 번 돌리면     │
+     * │ 예산이 바닥난다. 실제로 2026-10-04 에 그렇게 2일 14시간짜리   │
+     * │ 정지를 받았다.                                                │
+     * │                                                              │
+     * │ /nodes?ids=a,b,c,… 는 id 를 쉼표로 여러 개 받는다. 117건이    │
+     * │ 호출 3번이 된다. 응답 크기도 필요한 가지만큼이라 파일 전체를   │
+     * │ 받는 것보다 싸다.                                             │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * 못 찾은 id 는 **조용히 빠진다.** 부른 쪽이 "돌려받지 못한 id" 를 보고
+     * 그 건만 실패로 적는다 — 하나가 없다고 묶음 전체를 버리면 안 된다.
+     *
+     * @param  list<string> $nodeIds
+     * @return array{file:string, nodes:array<string, array{name:string, text:string}>}
+     * @throws RemoteSourceError
+     */
+    public function figmaNodes(string $fileKey, array $nodeIds): array
+    {
+        $this->guard(Integration::FIGMA);
+
+        $ids = array_values(array_unique(array_filter($nodeIds, static fn($v) => trim((string)$v) !== '')));
+        if ($ids === []) {
+            return ['file' => $fileKey, 'nodes' => []];
+        }
+
+        $raw = $this->http(
+            'GET',
+            'https://api.figma.com/v1/files/' . rawurlencode($fileKey)
+            . '/nodes?ids=' . rawurlencode(implode(',', $ids)),
+            ['X-Figma-Token: ' . $this->store->secret(Integration::FIGMA)],
+            null,
+            Integration::FIGMA,
+            'figma_nodes',
+            count($ids)
+        );
+        $j = json_decode($raw, true);
+        if (!is_array($j)) {
+            throw new RemoteSourceError('피그마가 뜻 모를 응답을 돌려줬습니다.', retryable: true);
+        }
+
+        $out = [];
+        foreach (($j['nodes'] ?? []) as $id => $n) {
+            // 값이 null 인 id 가 섞여 온다 = 그 노드가 그 파일에 없다.
+            if (!is_array($n) || !isset($n['document']) || !is_array($n['document'])) {
+                continue;
+            }
+            $doc  = $n['document'];
+            $text = $this->renderFigma($doc, 1);
+            if ($text === '') {
+                continue;
+            }
+            $out[(string)$id] = [
+                // 가지의 이름이 곧 그 화면의 이름이다. 파일명보다 쓸모 있다.
+                'name' => trim((string)($doc['name'] ?? '')) !== ''
+                          ? (string)$doc['name'] : (string)($j['name'] ?? $fileKey),
+                'text' => $text,
+            ];
+        }
+
+        $this->store->markOk(Integration::FIGMA);
+        return ['file' => (string)($j['name'] ?? $fileKey), 'nodes' => $out];
+    }
+
     private function fetchFigma(string $fileKey, string $nodeId = ''): array
     {
         // ┌──────────────────────────────────────────────────────────┐
@@ -301,63 +388,72 @@ final class RemoteSource
         // │ 그쪽은 사람이 보고 알 수 있지만, 수십 건이 같은 글을       │
         // │ 돌려주는 것은 알아채기 어렵다.                             │
         // └──────────────────────────────────────────────────────────┘
-        $scoped = $nodeId !== '';
-        $url = $scoped
-            // 가지 하나는 응답이 작아 호출 제한에도 훨씬 덜 걸린다.
-            ? 'https://api.figma.com/v1/files/' . rawurlencode($fileKey)
-              . '/nodes?ids=' . rawurlencode($nodeId)
-            // 파일 전체는 깊이를 건다. 제한 없이 받으면 429 에 걸린다 —
-            // 피그마의 제한은 돌려주는 노드 수에 비례한다.
-            : 'https://api.figma.com/v1/files/' . rawurlencode($fileKey) . '?depth=6';
-
-        $raw = $this->http('GET', $url, ['X-Figma-Token: ' . $this->store->secret(Integration::FIGMA)]);
-        $j   = json_decode($raw, true);
-        if (!is_array($j)) {
-            throw new RemoteSourceError('피그마가 뜻 모를 응답을 돌려줬습니다.');
-        }
-
-        $name  = (string)($j['name'] ?? $fileKey);
-        $roots = [];
-        if ($scoped) {
-            foreach (($j['nodes'] ?? []) as $n) {
-                if (is_array($n) && isset($n['document'])) {
-                    $roots[] = $n['document'];
-                    // 가지의 이름이 곧 그 화면의 이름이다. 파일명보다 쓸모 있다.
-                    if (!empty($n['document']['name'])) {
-                        $name = (string)$n['document']['name'];
-                    }
-                }
-            }
-            if ($roots === []) {
+        // 가지 하나는 묶어 받기와 같은 길로 간다. 길이 둘이면 한쪽만 고치는
+        // 일이 생긴다 — 실제로 node-id 처리를 한 번 되돌렸다 다시 넣었다.
+        if ($nodeId !== '') {
+            $got = $this->figmaNodes($fileKey, [$nodeId]);
+            $one = $got['nodes'][$nodeId] ?? null;
+            if ($one === null) {
                 throw new RemoteSourceError(
-                    '주소가 가리키는 화면을 찾지 못했습니다. 지워졌거나 주소가 낡았을 수 있습니다.'
+                    '주소가 가리키는 화면을 찾지 못했습니다. 지워졌거나, 다른 가지(브랜치)의 '
+                    . '주소거나, 연결된 계정이 그 파일을 볼 수 없을 수 있습니다.'
                 );
             }
-        } elseif (isset($j['document'])) {
-            $roots[] = $j['document'];
-        } else {
-            throw new RemoteSourceError('피그마 응답에 문서가 없습니다.');
+            return ['kind' => 'figma', 'file' => null,
+                    'text' => $one['text'], 'name' => $one['name']];
         }
 
-        $lines = [];
-        foreach ($roots as $root) {
-            // 가지 하나를 읽을 때는 **그 가지의 이름부터** 적는다. 그것이
-            // 화면 이름이라 가장 쓸모 있는 한 줄이다.
-            $this->walkFigma($root, $scoped ? 1 : 0, $lines);
+        // 파일 전체는 깊이를 건다. 제한 없이 받으면 429 에 걸린다 —
+        // 피그마의 제한은 돌려주는 노드 수에 비례한다.
+        $this->guard(Integration::FIGMA);
+        $raw = $this->http(
+            'GET',
+            'https://api.figma.com/v1/files/' . rawurlencode($fileKey) . '?depth=6',
+            ['X-Figma-Token: ' . $this->store->secret(Integration::FIGMA)],
+            null, Integration::FIGMA, 'figma_file', 1
+        );
+        $j = json_decode($raw, true);
+        if (!is_array($j) || !isset($j['document']) || !is_array($j['document'])) {
+            throw new RemoteSourceError('피그마 응답에 문서가 없습니다.', retryable: true);
         }
 
-        if ($lines === []) {
+        $text = $this->renderFigma($j['document'], 0);
+        if ($text === '') {
             throw new RemoteSourceError(
                 '읽을 글자가 없습니다. 화면이 전부 이미지(캡처)로 되어 있으면 '
                 . '피그마에도 글자가 없어 뽑을 것이 없습니다.'
             );
         }
-        $text = implode("
-", $lines);
-        if (mb_strlen($text) > OfficeDocumentParser::MAX_CHARS) {
-            $text = mb_substr($text, 0, OfficeDocumentParser::MAX_CHARS);
+        return ['kind' => 'figma', 'file' => null, 'text' => $text,
+                'name' => (string)($j['name'] ?? $fileKey)];
+    }
+
+    /**
+     * 노드 하나를 글자로 편다. 글자가 하나도 없으면 빈 문자열.
+     *
+     * 가지 하나를 읽을 때는 depth 1 로 시작해 **그 가지의 이름부터** 적는다.
+     * 그것이 화면 이름이라 가장 쓸모 있는 한 줄이다.
+     */
+    private function renderFigma(array $root, int $startDepth): string
+    {
+        $lines = [];
+        $this->walkFigma($root, $startDepth, $lines);
+        if ($lines === []) {
+            return '';
         }
-        return ['kind' => 'figma', 'file' => null, 'text' => $text, 'name' => $name];
+        $text = implode("\n", $lines);
+        return mb_strlen($text) > OfficeDocumentParser::MAX_CHARS
+             ? mb_substr($text, 0, OfficeDocumentParser::MAX_CHARS)
+             : $text;
+    }
+
+    /** 지금 이 연동을 부를 수 있는가. 못 부르면 그 이유를 그대로 던진다. */
+    private function guard(string $provider): void
+    {
+        $blocked = $this->store->blockedReason($provider);
+        if ($blocked !== null) {
+            throw new RemoteSourceError($blocked, retryable: $this->store->isReady($provider));
+        }
     }
 
     /**
@@ -418,14 +514,26 @@ final class RemoteSource
     // -----------------------------------------------------------------
 
     /**
+     * 바깥으로 나가는 유일한 자리. **나간 호출은 한 줄도 빠짐없이 기록한다.**
+     *
+     * `$provider` 를 주면 두 가지를 더 한다.
+     *   · bs_api_usage 에 기록한다 — 성공·실패 가리지 않고. 실패도 상대의
+     *     예산을 쓴다.
+     *   · 429 를 받으면 **Retry-After 를 읽어 쉬는 시각을 박아 둔다.**
+     *
      * @param list<string> $headers
      * @throws RemoteSourceError
      */
-    private function http(string $method, string $url, array $headers = [], ?string $body = null): string
+    private function http(string $method, string $url, array $headers = [], ?string $body = null,
+                          string $provider = '', string $act = '', int $items = 1): string
     {
         if (!function_exists('curl_init')) {
             throw new RemoteSourceError('서버에 curl 확장이 없습니다.');
         }
+
+        $began = microtime(true);
+        $resp  = [];                      // 응답 헤더. Retry-After 를 읽는다
+
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
@@ -437,6 +545,13 @@ final class RemoteSource
             // 따라가게 두면 사내 주소로 끌려갈 길이 생긴다.
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
+            CURLOPT_HEADERFUNCTION => static function ($c, $line) use (&$resp) {
+                $p = strpos($line, ':');
+                if ($p > 0) {
+                    $resp[strtolower(trim(substr($line, 0, $p)))] = trim(substr($line, $p + 1));
+                }
+                return strlen($line);
+            },
         ]);
         if ($body !== null) {
             curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
@@ -446,7 +561,15 @@ final class RemoteSource
         $err  = curl_error($ch);
         curl_close($ch);
 
+        $ms  = (int)round((microtime(true) - $began) * 1000);
+        $log = function (bool $ok, string $note) use ($provider, $act, $code, $ms, $items): void {
+            if ($provider !== '') {
+                $this->store->logCall($provider, $act, $ok, $code, $ms, $items, $note);
+            }
+        };
+
         if ($res === false) {
+            $log(false, mb_substr($err, 0, 200));
             // 인증서 검증은 **끄지 않는다.** 끄면 중간에서 가로채도 모른다.
             // 대신 무엇이 문제인지 또렷이 적는다 — 윈도우 PHP 는 CA 묶음이
             // 없어 이 오류가 나고, php.ini 에 curl.cainfo 를 지정하면 된다.
@@ -456,14 +579,65 @@ final class RemoteSource
                     . '지정돼 있는지 보세요(php.ini 의 curl.cainfo). 원문: ' . $err
                 );
             }
-            throw new RemoteSourceError('바깥으로 나가지 못했습니다: ' . $err);
+            throw new RemoteSourceError('바깥으로 나가지 못했습니다: ' . $err, retryable: true);
         }
+
+        if ($code === 429 && $provider !== '') {
+            // ┌──────────────────────────────────────────────────────┐
+            // │ 상대가 말해 준 시간을 그대로 지킨다                    │
+            // │                                                      │
+            // │ 피그마는 `retry-after: 224862`(2일 14시간) 를 보낸다. │
+            // │ 이 헤더를 안 읽고 우리 마음대로 5분 뒤에 다시 부르면  │
+            // │ 또 맞고, 맞을수록 벌칙이 길어진다. 실제로 그래서       │
+            // │ 하룻밤에 며칠치 예산을 태웠다.                         │
+            // │                                                      │
+            // │ 헤더가 없으면 **길게 잡는다**(1시간). 짧게 잡아 또    │
+            // │ 맞는 쪽이 늦게 푸는 쪽보다 훨씬 비싸다.               │
+            // └──────────────────────────────────────────────────────┘
+            $after = $this->retryAfterSeconds($resp);
+            $this->store->startCooldown($provider, $after, sprintf(
+                '%s 가 %s 뒤에 다시 오라고 했습니다.',
+                $provider === Integration::FIGMA ? '피그마' : '상대 서버',
+                Integration::humanSpan($after)
+            ));
+            $log(false, 'rate limited, retry-after=' . $after);
+            throw new RemoteSourceError(sprintf(
+                '%s 호출 제한에 걸렸습니다(429). %s 동안 쉬었다가 저절로 다시 시도합니다.',
+                $provider === Integration::FIGMA ? '피그마' : '상대 서버',
+                Integration::humanSpan($after)
+            ), retryable: true);
+        }
+
         if ($code >= 400) {
-            // 429(호출 제한)와 5xx(상대 서버)는 기다리면 될 일이다.
+            $log(false, 'HTTP ' . $code);
+            // 5xx(상대 서버)는 기다리면 될 일이다.
             throw new RemoteSourceError($this->explain($code, (string)$res),
-                                        retryable: $code === 429 || $code >= 500);
+                                        retryable: $code >= 500);
         }
+
+        $log(true, '');
         return (string)$res;
+    }
+
+    /**
+     * 429 응답에서 "몇 초 쉬어라" 를 읽는다.
+     *
+     * Retry-After 는 초일 수도, HTTP 날짜일 수도 있다(RFC 9110). 둘 다 받는다.
+     * 못 읽으면 1시간 — 모를 때는 길게 쉬는 쪽이 싸다.
+     *
+     * @param array<string,string> $headers 소문자 키
+     */
+    private function retryAfterSeconds(array $headers): int
+    {
+        $v = trim($headers['retry-after'] ?? $headers['x-ratelimit-reset'] ?? '');
+        if ($v === '') {
+            return 3600;
+        }
+        if (ctype_digit($v)) {
+            return max(60, (int)$v);
+        }
+        $ts = strtotime($v);
+        return $ts === false ? 3600 : max(60, $ts - time());
     }
 
     /** 남의 오류 응답을 사람이 읽을 말로 바꾼다. 그대로 보여 주면 아무도 못 읽는다. */

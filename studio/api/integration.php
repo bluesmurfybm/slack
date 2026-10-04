@@ -48,9 +48,82 @@ bs_route(bs_param_str('act', 'status'), [
         bs_json_ok([
             'google' => $store->status(Integration::GOOGLE),
             'figma'  => $store->status(Integration::FIGMA),
+            'usage'  => [
+                'google' => $store->usageSeries(Integration::GOOGLE, 14),
+                'figma'  => $store->usageSeries(Integration::FIGMA, 14),
+            ],
             // 구글 콘솔에 그대로 넣어야 하는 값이다. 손으로 적다가 틀리는
             // 일이 잦아 화면이 복사할 수 있게 서버가 만들어 준다.
             'redirect_uri' => bs_oauth_redirect_uri(),
+        ]);
+    },
+
+    /**
+     * 연동을 켜고 끈다. **토큰은 건드리지 않는다.**
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 왜 '연결 끊기' 와 따로 두는가                                 │
+     * │                                                              │
+     * │ 피그마가 며칠짜리 호출 제한에 걸렸을 때, 그동안 호출을 아예   │
+     * │ 막고 싶다. 연결을 끊으면 토큰이 지워져 관리자가 피그마에 가서 │
+     * │ 다시 발급받아야 한다 — 그건 너무 무거운 조치다.               │
+     * │                                                              │
+     * │ 끄면 그 연동의 링크는 '대기' 로 남아 있다가, 다시 켜는 순간   │
+     * │ 이어서 읽힌다. 아무것도 잃지 않는다.                          │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    'set_enabled' => function () use ($store): void {
+        $me       = ig_admin();
+        $provider = bs_param_str('provider');
+        if (!in_array($provider, [Integration::GOOGLE, Integration::FIGMA], true)) {
+            bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
+        }
+        $on = bs_param_str('enabled') === '1';
+        $store->setEnabled($provider, $on, $me);
+
+        $who = $provider === Integration::GOOGLE ? '구글 드라이브' : '피그마';
+        bs_json_ok([
+            'status'  => $store->status($provider),
+            'message' => $on
+                ? "{$who} 연동을 켰습니다. 대기 중인 링크부터 이어서 읽습니다."
+                : "{$who} 연동을 제외했습니다. 토큰은 그대로 두고 호출만 하지 않습니다.",
+        ]);
+    },
+
+    /** 하루 호출 상한. 상대가 막기 전에 우리가 먼저 멈추려는 것이다. 0=제한 없음. */
+    'set_cap' => function () use ($store): void {
+        $me       = ig_admin();
+        $provider = bs_param_str('provider');
+        if (!in_array($provider, [Integration::GOOGLE, Integration::FIGMA], true)) {
+            bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
+        }
+        $cap = max(0, (int)(bs_param_int('cap', 0) ?? 0));
+        $store->setDailyCap($provider, $cap, $me);
+        bs_json_ok([
+            'status'  => $store->status($provider),
+            'message' => $cap > 0
+                ? sprintf('하루 %d회로 제한했습니다.', $cap)
+                : '하루 상한을 없앴습니다.',
+        ]);
+    },
+
+    /**
+     * 쉬는 시각을 지운다. "지금 다시 해 보겠다" 는 뜻이다.
+     *
+     * 상대가 아직 안 풀어 줬다면 **또 429 를 맞고 다시 걸린다.** 그래도
+     * 둔다 — 상대가 먼저 풀어 줬는데 우리 기록만 남아 몇 시간을 더 기다리는
+     * 일이 생길 수 있고, 그때 사람이 손쓸 길이 있어야 한다.
+     */
+    'clear_cooldown' => function () use ($store): void {
+        ig_admin();
+        $provider = bs_param_str('provider');
+        if (!in_array($provider, [Integration::GOOGLE, Integration::FIGMA], true)) {
+            bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
+        }
+        $store->clearCooldown($provider);
+        bs_json_ok([
+            'status'  => $store->status($provider),
+            'message' => '쉬는 시각을 지웠습니다. 아직 안 풀렸다면 다음 호출에서 다시 걸립니다.',
         ]);
     },
 

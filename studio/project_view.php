@@ -304,6 +304,15 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <span class="ba-dim" id="ba-lk-msg"></span>
       </div>
 
+      <!-- ┌──────────────────────────────────────────────────────────┐
+           │ 왜 아무 일도 안 일어나는지 여기에 적는다                   │
+           │                                                          │
+           │ 2026-10-04 에 피그마가 며칠짜리 호출 제한을 걸었는데,     │
+           │ 화면은 그냥 '대기' 만 보여 줬다. 원인을 찾는 데 하루가     │
+           │ 걸렸다. 관리자가 연동을 꺼 둔 경우도 마찬가지다.          │
+           └──────────────────────────────────────────────────────────┘ -->
+      <div class="ba-alert ba-alert--wait" id="ba-lk-block" hidden></div>
+
       <div class="ba-lk-prog" id="ba-lk-prog" hidden>
         <div class="ba-lk-bar"><i id="ba-lk-fill"></i></div>
         <span class="ba-dim" id="ba-lk-progtxt"></span>

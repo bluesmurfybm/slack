@@ -97,6 +97,7 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 014_migration_project_track.sql     사업 유형 — LXP 학내형/개방형
 015_migration_integration.sql       외부 연동 자격 정보(구글·피그마)
 016_migration_analysis.sql          링크 분석 — 찾은 링크·작업 큐
+017_migration_api_budget.sql        바깥 호출 예산 — 켜고 끄기·쉬는 시각·사용량 기록
 ```
 
 ### 적용 뒤 확인
@@ -116,6 +117,7 @@ mysql <db> -e "SELECT * FROM bs_setting"           # 4행인가
 | 014 | 안전 (`UPDATE` + `MODIFY COLUMN`. 둘 다 다시 돌려도 같은 결과) |
 | 015 | 안전 (`CREATE TABLE IF NOT EXISTS`) |
 | 016 | **안전하지 않음** — bs_task 에 맨 `ALTER` 가 있어 두 번째에 죽습니다 |
+| 017 | **안전하지 않음** — bs_integration 에 맨 `ALTER` 가 있어 두 번째에 죽습니다 |
 | 001 | 안전하지 않음 (`CREATE TABLE`) |
 | 008 · 009 | **안전하지 않음** — 맨 `ALTER` 라 두 번째에 죽습니다 |
 

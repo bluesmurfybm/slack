@@ -1627,14 +1627,30 @@
       $('#ba-lk-start').disabled = !!job || !(c.pending > 0);
       $('#ba-lk-retry').hidden = !(c.fail > 0) || !!job;
 
+      // 막힌 연동을 먼저 알린다. "왜 안 되지?" 로 하루를 날린 적이 있다.
+      var blk = $('#ba-lk-block');
+      var bs  = d.blocked || [];
+      blk.hidden = bs.length === 0;
+      if (bs.length) {
+        blk.innerHTML = bs.map(function (b) {
+          return '<div><b>' + esc(b.who) + ' 대기 ' + b.pending + '건</b> — ' +
+                 esc(b.reason) + '</div>';
+        }).join('') +
+        '<div class="ba-dim" style="margin-top:6px">' +
+        '제한이 풀리면 저절로 이어서 읽습니다. 설정은 [외부 연동] 화면에서 봅니다.</div>';
+      }
+
       var prog = $('#ba-lk-prog');
       if (job) {
         prog.hidden = false;
         var pct = job.total ? Math.round(job.done / job.total * 100) : 0;
         $('#ba-lk-fill').style.width = pct + '%';
+        // 서버가 적어 둔 사유가 있으면 **그것을 보여 준다.** 전에는 여기서
+        // '대기 중입니다' 로 덮어써서, 피그마가 "2일 쉬어라" 한 사실이
+        // 화면 어디에도 안 보였다.
         $('#ba-lk-progtxt').textContent =
           job.status === 'queued'
-            ? '대기 중입니다. 크론이 집어 갈 때까지 1분쯤 걸립니다.'
+            ? (job.message || '대기 중입니다. 크론이 집어 갈 때까지 1분쯤 걸립니다.')
             : job.done + ' / ' + job.total + ' 건'
               + (job.failed ? ' (실패 ' + job.failed + ')' : '');
       } else {
@@ -3094,6 +3110,54 @@
                       "· 링크는 다시 '분석 안 함' 이 됩니다",
                       '', '진행할까요?'].join('\n'))) return;
         send('api/integration.php?act=disconnect', { provider: b.dataset.igOff }, '연결을 끊었습니다');
+      });
+    });
+
+    // ─────────────────────────────────────────────────────────────
+    // 연동 켜고 끄기
+    //
+    // '연결 끊기' 와 다르다. 토큰은 그대로 두고 호출만 멈춘다 —
+    // 피그마가 며칠짜리 호출 제한에 걸렸을 때 쓰라고 둔 것이다.
+    // ─────────────────────────────────────────────────────────────
+    $$('[data-ig-toggle]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var on  = b.dataset.on === '1';
+        var who = b.dataset.who || '이 연동';
+        var msg = on
+          ? [who + ' 연동을 제외합니다.', '',
+             '· 저장해 둔 토큰은 그대로 남습니다',
+             '· 그 서비스로는 호출하지 않습니다',
+             "· 링크는 '대기' 로 남아 있다가 다시 켜면 이어서 읽힙니다",
+             '', '진행할까요?'].join('\n')
+          : who + ' 연동을 다시 켭니다. 대기 중인 링크부터 이어서 읽습니다. 진행할까요?';
+        if (!confirm(msg)) return;
+        send('api/integration.php?act=set_enabled',
+             { provider: b.dataset.igToggle, enabled: on ? '0' : '1' }, '바꿨습니다');
+      });
+    });
+
+    // 상대가 먼저 풀어 줬는데 우리 기록만 남아 기다리는 일이 있을 수 있다.
+    // 아직 안 풀렸다면 다음 호출에서 다시 걸릴 뿐이라 손해가 없다.
+    $$('[data-ig-clear]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (!confirm(['쉬는 시각을 지우고 지금 다시 시도합니다.', '',
+                      '상대가 아직 제한을 안 풀었다면 다시 걸립니다.',
+                      '그때는 더 긴 시간을 기다려야 할 수 있습니다.',
+                      '', '진행할까요?'].join('\n'))) return;
+        send('api/integration.php?act=clear_cooldown',
+             { provider: b.dataset.igClear }, '지웠습니다');
+      });
+    });
+
+    // 하루 상한. 칸을 벗어날 때만 보낸다 — 한 글자 칠 때마다 저장하면
+    // 20 을 치려다 2 로 저장된다.
+    $$('[data-ig-cap]').forEach(function (inp) {
+      var was = inp.value;
+      inp.addEventListener('change', function () {
+        if (inp.value === was) return;
+        was = inp.value;
+        send('api/integration.php?act=set_cap',
+             { provider: inp.dataset.igCap, cap: inp.value || '0' }, '저장했습니다');
       });
     });
 

@@ -29,10 +29,28 @@ require_once __DIR__ . '/../inc/bootstrap.php';
 require_once BS_ROOT . '/inc/repo/JobRepo.php';
 require_once BS_ROOT . '/inc/service/DocumentParser.php';
 require_once BS_ROOT . '/inc/service/OfficeDocumentParser.php';
+require_once BS_ROOT . '/inc/service/Integration.php';
+require_once BS_ROOT . '/inc/service/RemoteSource.php';
 require_once BS_ROOT . '/inc/service/LinkAnalyzer.php';
 
 /** 한 번 돌 때 최대로 머무는 시간(초). 다음 크론과 겹치지 않게 넉넉히 짧게. */
 const RUN_SECONDS = 50;
+
+/**
+ * 바깥 호출 사이에 쉬는 시간(밀리초).
+ *
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ 전에는 이게 없었다                                                │
+ * │                                                                  │
+ * │ 2026-10-04 로그에 `미룸` 이 **같은 1초 안에** 수십 줄 찍혔다.     │
+ * │ 429 를 받고도 쉬지 않고 다음 링크를 두드린 것이다. 그렇게 상대의  │
+ * │ 제한을 계속 때리면 벌칙이 길어지기만 한다.                        │
+ * │                                                                  │
+ * │ 묶어 받기 덕에 호출 수 자체가 수십 분의 일로 줄었으니, 한 번에    │
+ * │ 1초씩 쉬어도 전체 시간은 오히려 짧다.                             │
+ * └──────────────────────────────────────────────────────────────────┘
+ */
+const PACE_MS = 1000;
 
 $pdo  = bs_db();
 $jobs = new JobRepo($pdo);
@@ -53,7 +71,22 @@ $until = time() + RUN_SECONDS;
 
 try {
     if ($job['kind'] === 'links') {
-        $an = new LinkAnalyzer($pdo);
+        $an    = new LinkAnalyzer($pdo);
+        $store = new Integration($pdo);
+
+        /**
+         * 이 회차를 여기서 끝내고 큐로 되돌린다.
+         *
+         * **호출 제한을 만나면 다음 링크로 넘어가지 않는다.** 전에는 넘어
+         * 갔고, 그래서 429 하나가 수십 번의 추가 429 를 불렀다.
+         */
+        $standDown = static function (string $why) use ($jobs, $jobId, $log): never {
+            $jobs->finish($jobId, 'queued', $why);
+            $log("작업 #$jobId 물러남 — $why");
+            exit(0);
+        };
+        $pace = static function (): void { usleep(PACE_MS * 1000); };
+
         while (time() < $until) {
             // 사람이 멈췄는지 매번 본다. 멈춤이 바로 먹혀야 한다.
             $now = $jobs->find($jobId);
@@ -62,35 +95,85 @@ try {
                 exit(0);
             }
 
-            $link = $an->nextPending($projectId);
+            // ┌──────────────────────────────────────────────────────┐
+            // │ 기다리면 될 일만 미룬다                                │
+            // │                                                      │
+            // │ 쉬는 중·꺼 둠·하루 상한은 **기다리면 풀린다.** 그런    │
+            // │ 연동의 링크는 건드리지 않고 대기로 둔다. 피그마가 2일 │
+            // │ 쉬는 중이어도 구글은 멀쩡하므로 한쪽만 미룬다.        │
+            // │                                                      │
+            // │ 반면 **연결이 아예 안 된 것은 기다려도 안 풀린다.**   │
+            // │ 사람이 토큰을 넣어야 한다. 그런 링크는 집어서 '실패'  │
+            // │ 로 못 박아야 관리자가 목록에서 사유를 보고 고친다 —   │
+            // │ 대기로 두면 영영 오지 않을 것을 기다리게 된다.        │
+            // └──────────────────────────────────────────────────────┘
+            $skip      = [];
+            $blockedBy = [];
+            foreach ([Integration::FIGMA, Integration::GOOGLE] as $p) {
+                $why = $store->blockedReason($p);
+                if ($why !== null && $store->isReady($p)) {
+                    $skip[]      = $p;
+                    $blockedBy[] = $why;
+                }
+            }
+
+            // ---------------------------------------------------------
+            // 1) 피그마는 **묶어서** 받는다. 호출 한 번에 수십 건.
+            // ---------------------------------------------------------
+            if (!in_array(Integration::FIGMA, $skip, true)) {
+                try {
+                    $b = $an->figmaBatchOnce($projectId);
+                    if ($b !== null) {
+                        $jobs->progressBy($jobId, $b['ok'], $b['fail']);
+                        $log(sprintf('  묶음  %s — %d개 물어 읽음 %d · 실패 %d',
+                                     $b['file'], $b['asked'], $b['ok'], $b['fail']));
+                        $pace();
+                        continue;
+                    }
+                } catch (RemoteSourceError $e) {
+                    if ($e->retryable) {
+                        // 호출 제한·상대 서버 오류. 쉬는 시각은 이미 DB 에 박혔다.
+                        // **다음 묶음으로 넘어가지 않는다.** 이 회차는 여기서 끝.
+                        $standDown($e->getMessage());
+                    }
+                    // 설정 문제는 묶음으로 풀리지 않는다. 아래 한 건씩 경로가
+                    // 링크마다 사유를 적게 둔다.
+                    $log('  묶음 실패 — ' . $e->getMessage());
+                }
+            }
+
+            // ---------------------------------------------------------
+            // 2) 나머지(구글, node-id 없는 피그마)는 한 건씩.
+            // ---------------------------------------------------------
+            $link = $an->nextPending($projectId, $skip);
             if ($link === null) {
-                // 대기는 남았는데 집을 것이 없다 = 전부 쉬는 중(호출 제한).
-                // 끝났다고 하면 안 된다 — 큐로 되돌려 다음 회차에 이어 간다.
-                if ($an->pendingCount($projectId) > 0) {
-                    $jobs->finish($jobId, 'queued', sprintf(
-                        '호출 제한으로 쉬는 중입니다. %d분 뒤 다시 시도합니다.',
-                        LinkAnalyzer::RETRY_AFTER_MINUTES
-                    ));
-                    $log("작업 #$jobId 대기 — 호출 제한");
-                    exit(0);
+                $left = $an->pendingCount($projectId);
+                if ($left > 0) {
+                    // 대기는 남았는데 집을 것이 없다 = 전부 쉬는 중이거나
+                    // 꺼져 있다. 끝났다고 하면 안 된다 — 큐로 되돌린다.
+                    $standDown($blockedBy !== []
+                        ? sprintf('%d건 대기 — %s', $left, implode(' / ', $blockedBy))
+                        : sprintf('%d건이 남았습니다. 쉬었다가 이어서 진행합니다.', $left));
                 }
                 $jobs->finish($jobId, 'done', sprintf(
                     '%d건 중 %d건 실패', (int)$now['done'], (int)$now['failed']
                 ));
                 $log("작업 #$jobId 끝");
+                $store->pruneUsage();        // 오래된 호출 기록을 가끔 턴다
                 exit(0);
             }
 
             $r = $an->fetchOne($link);
             if ($r === 'retry') {
-                // 아직 안 끝났다. 진행률을 올리면 되시도할 때 두 번 세어
-                // done 이 total 을 넘는다. 살아 있다는 신호만 보낸다.
-                $jobs->beat($jobId);
-                $log('  미룸  ' . mb_substr((string)$link['url'], 0, 80));
-                continue;
+                // 기다리면 될 일이다. **다음 링크로 넘어가지 않는다** —
+                // 넘어가 봐야 같은 벽에 부딪히고 상대의 제한만 길어진다.
+                $standDown($an->lastMessage() !== ''
+                    ? $an->lastMessage()
+                    : '잠시 쉬었다가 이어서 진행합니다.');
             }
             $jobs->progress($jobId, $r === 'ok');
             $log(($r === 'ok' ? '  읽음  ' : '  실패  ') . mb_substr((string)$link['url'], 0, 80));
+            $pace();
         }
         // 시간이 다 됐다. 대기로 돌려 다음 크론이 이어 가게 한다.
         $jobs->finish($jobId, 'queued', '이어서 진행합니다.');

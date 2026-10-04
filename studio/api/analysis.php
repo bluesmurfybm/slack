@@ -27,6 +27,7 @@ require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
 require_once BS_ROOT . '/inc/repo/JobRepo.php';
 require_once BS_ROOT . '/inc/service/DocumentParser.php';
 require_once BS_ROOT . '/inc/service/OfficeDocumentParser.php';
+require_once BS_ROOT . '/inc/service/Integration.php';
 require_once BS_ROOT . '/inc/service/LinkAnalyzer.php';
 
 $pdo      = bs_db();
@@ -62,11 +63,35 @@ function an_payload(LinkAnalyzer $an, JobRepo $jobs, int $projectId): array
         $count[$k] = ($count[$k] ?? 0) + 1;
     }
 
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 막힌 연동을 화면에 알린다                                      │
+    // │                                                              │
+    // │ 대기 중인 링크가 있는데 그 연동이 쉬는 중이거나 꺼져 있으면,  │
+    // │ 사람은 "왜 안 되지?" 만 하게 된다. 실제로 그렇게 하루를       │
+    // │ 날렸다. **대기 건이 있는 연동만** 말한다 — 쓰지도 않는        │
+    // │ 연동의 사정까지 늘어놓으면 읽지 않는다.                       │
+    // └──────────────────────────────────────────────────────────────┘
+    $store   = new Integration(bs_db());
+    $blocked = [];
+    foreach ([Integration::FIGMA => '피그마', Integration::GOOGLE => '구글 드라이브'] as $p => $who) {
+        $waiting = 0;
+        foreach ($links as $l) {
+            if ((string)$l['provider'] === $p && (string)$l['status'] === 'pending') {
+                $waiting++;
+            }
+        }
+        $why = $waiting > 0 ? $store->blockedReason($p) : null;
+        if ($why !== null) {
+            $blocked[] = ['provider' => $p, 'who' => $who, 'pending' => $waiting, 'reason' => $why];
+        }
+    }
+
     $job = $jobs->liveOf($projectId);
     return [
         'links'   => $links,
         'count'   => $count,
         'total'   => count($links),
+        'blocked' => $blocked,
         // 도는 중인 작업이 있으면 진행률. 없으면 null — 화면이 단추를 되살린다.
         'job'     => $job === null ? null : [
             'id'      => (int)$job['id'],
@@ -137,11 +162,18 @@ bs_route(bs_param_str('act', 'status'), [
         $me  = ['id' => bs_current_user()['id'] ?? '', 'name' => bs_current_user()['name'] ?? ''];
         $r   = $jobs->enqueue($pid, 'links', $pending, $me);
 
-        bs_json_ok(an_payload($an, $jobs, $pid) + [
-            'message' => $r['created']
-                ? sprintf('%d개를 읽도록 넣었습니다. 잠시 뒤부터 진행률이 올라갑니다.', $pending)
-                : '이미 진행 중입니다.',
-        ]);
+        $out = an_payload($an, $jobs, $pid);
+        $msg = $r['created']
+            ? sprintf('%d개를 읽도록 넣었습니다. 잠시 뒤부터 진행률이 올라갑니다.', $pending)
+            : '이미 진행 중입니다.';
+        // 막힌 연동이 있으면 **넣되 미리 말해 준다.** 거절하지 않는 것은,
+        // 제한이 풀리는 순간 저절로 이어지게 두는 편이 낫기 때문이다.
+        if (($out['blocked'] ?? []) !== []) {
+            $msg .= ' 다만 ' . implode(' ', array_map(
+                static fn($b) => (string)$b['reason'], $out['blocked']));
+        }
+
+        bs_json_ok($out + ['message' => $msg]);
     },
 
     'cancel' => function () use ($projects, $an, $jobs): void {

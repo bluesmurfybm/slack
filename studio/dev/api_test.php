@@ -2233,6 +2233,87 @@ $r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, '
 ok('모르는 서비스 링크는 그대로 분석 안 함',
    ($r['json']['data']['saved'][0]['parse_status'] ?? '') === 'skip', $r['body']);
 
+// ---------------------------------------------------------------------
+// 연동 켜고 끄기 · 쉬는 시각 · 사용량
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 2026-10-04 에 이것이 없어서 하루를 날렸다                         │
+// │                                                                  │
+// │ 피그마가 며칠짜리 호출 제한을 걸었는데 화면 어디에도 그 말이      │
+// │ 없었다. 끄는 길도 없어서, 막힌 줄 모르고 크론이 밤새 두드렸다.    │
+// └──────────────────────────────────────────────────────────────────┘
+// ---------------------------------------------------------------------
+$r = $guest->req('/studio/api/integration.php?act=set_enabled',
+    ['csrf' => true, 'json' => ['provider' => 'figma', 'enabled' => '0']]);
+ok('연동 켜고 끄기는 관리자만', $r['status'] === 403, '상태 ' . $r['status']);
+
+$r = $admin->req('/studio/api/integration.php?act=set_enabled',
+    ['csrf' => true, 'json' => ['provider' => 'figma', 'enabled' => '0']]);
+ok('관리자는 연동을 끌 수 있다',
+   $r['status'] === 200 && ($r['json']['data']['status']['enabled'] ?? true) === false, $r['body']);
+// ★ 끄는 것과 끊는 것은 다르다. 끊으면 토큰이 날아가 피그마에서 다시
+//   발급받아야 한다 — 그러면 아무도 끄지 않는다.
+ok('★ 꺼도 토큰은 남는다',
+   (int)$pdoR->query("SELECT COUNT(*) FROM bs_integration
+                       WHERE provider='figma' AND secret_enc IS NOT NULL")->fetchColumn() === 1);
+ok('꺼도 연결됨은 유지된다',
+   ($r['json']['data']['status']['connected'] ?? false) === true, $r['body']);
+ok('usable 만 거짓이 된다',
+   ($r['json']['data']['status']['usable'] ?? true) === false, $r['body']);
+
+$r = $admin->req('/studio/api/integration.php?act=test',
+    ['csrf' => true, 'json' => ['url' => 'https://www.figma.com/design/ZzTestKey9999/x?node-id=1-2']]);
+ok('★ 꺼 두면 바깥으로 나가지 않는다',
+   $r['status'] === 400 && str_contains((string)($r['json']['error']['message'] ?? ''), '꺼 두었'),
+   $r['body']);
+
+$r = $admin->req('/studio/api/integration.php?act=set_enabled',
+    ['csrf' => true, 'json' => ['provider' => 'figma', 'enabled' => '1']]);
+ok('다시 켤 수 있다',
+   ($r['json']['data']['status']['enabled'] ?? false) === true, $r['body']);
+
+// ---- 쉬는 시각: 상대가 말한 시각까지는 호출을 만들지 않는다 ----
+$pdoR->prepare("UPDATE bs_integration
+                   SET cooldown_until = DATE_ADD(NOW(), INTERVAL 224862 SECOND),
+                       cooldown_reason = '피그마가 2일 14시간 뒤에 다시 오라고 했습니다.'
+                 WHERE provider = 'figma'")->execute();
+
+$r = $admin->req('/studio/api/integration.php?act=test',
+    ['csrf' => true, 'json' => ['url' => 'https://www.figma.com/design/ZzTestKey9999/x?node-id=1-2']]);
+ok('★ 쉬는 중에는 바깥으로 나가지 않는다',
+   $r['status'] === 400 && str_contains((string)($r['json']['error']['message'] ?? ''), '쉽니다'),
+   $r['body']);
+ok('남은 시간을 사람 말로 알려 준다',
+   str_contains((string)($r['json']['error']['message'] ?? ''), '2일'), $r['body']);
+
+$r = $admin->req('/studio/api/integration.php?act=status');
+$fg = $r['json']['data']['figma'] ?? [];
+ok('status 가 쉬는 시각을 알려 준다', (int)($fg['cooldown_left'] ?? 0) > 224000,
+   json_encode($fg, JSON_UNESCAPED_UNICODE));
+ok('사용량 묶음이 14칸이다', count($r['json']['data']['usage']['figma'] ?? []) === 14);
+
+// ★ 설정 화면이 그 사실을 **눈에 보이게** 적어야 한다. API 에만 있고
+//   화면에 없으면, 관리자는 또 서버 로그를 뒤지게 된다.
+$page = $admin->req('/studio/settings.php')['body'];
+ok('★ 설정 화면에 쉬는 중이라고 쓴다', str_contains($page, '쉬는 중'), '화면에 안 보임');
+ok('설정 화면에 사용량 그래프가 뜬다', str_contains($page, 'ba-spark'), '그래프 없음');
+ok('설정 화면에 켜고 끄는 단추가 있다', str_contains($page, 'data-ig-toggle'), '단추 없음');
+ok('★ 설정 화면에도 토큰은 안 나온다', !str_contains($page, 'figd_SECRET'));
+
+$r = $admin->req('/studio/api/integration.php?act=clear_cooldown',
+    ['csrf' => true, 'json' => ['provider' => 'figma']]);
+ok('쉬는 시각을 지울 수 있다',
+   $r['status'] === 200 && (int)($r['json']['data']['status']['cooldown_left'] ?? 1) === 0, $r['body']);
+
+// ---- 하루 상한 ----
+$r = $admin->req('/studio/api/integration.php?act=set_cap',
+    ['csrf' => true, 'json' => ['provider' => 'figma', 'cap' => '5']]);
+ok('하루 상한을 건다', (int)($r['json']['data']['status']['daily_cap'] ?? 0) === 5, $r['body']);
+$r = $admin->req('/studio/api/integration.php?act=set_cap',
+    ['csrf' => true, 'json' => ['provider' => 'figma', 'cap' => '0']]);
+ok('상한을 없앤다', (int)($r['json']['data']['status']['daily_cap'] ?? 1) === 0, $r['body']);
+
+$pdoR->exec("DELETE FROM bs_api_usage");
 $pdoR->exec("DELETE FROM bs_integration");
 
 // ---------------------------------------------------------------------
@@ -2329,6 +2410,52 @@ $r = $admin->req('/studio/api/analysis.php?act=retry',
 ok('실패한 것만 되돌린다',
    ($r['json']['data']['count']['pending'] ?? 0) === 2
    && ($r['json']['data']['count']['skip'] ?? 0) === 1, $r['body']);
+
+// ---------------------------------------------------------------------
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 쉬는 중인 것과 연결이 안 된 것은 **다르게 다뤄야 한다**           │
+// │                                                                  │
+// │  · 쉬는 중·꺼 둠 → 기다리면 풀린다. 대기로 **남겨 둔다**          │
+// │  · 연결 안 됨    → 기다려도 안 풀린다. 실패로 **못 박는다**       │
+// │                                                                  │
+// │ 둘을 같게 다루면 한쪽이 반드시 망가진다. 쉬는 중을 실패로 박으면  │
+// │ 제한이 풀린 뒤 사람이 수백 건을 손으로 되돌려야 하고, 연결 안 됨을│
+// │ 대기로 두면 영영 오지 않을 것을 기다리게 된다.                    │
+// └──────────────────────────────────────────────────────────────────┘
+// ---------------------------------------------------------------------
+$admin->req('/studio/api/integration.php?act=save_figma',
+    ['csrf' => true, 'json' => ['token' => 'figd_SECRET_TOKEN_FOR_TEST']]);
+$pdoR->exec("UPDATE bs_integration
+                SET cooldown_until = DATE_ADD(NOW(), INTERVAL 224862 SECOND),
+                    cooldown_reason = '시험용 쉼'
+              WHERE provider = 'figma'");
+
+$admin->req('/studio/api/analysis.php?act=start', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$worker = shell_exec(escapeshellarg(PHP_BINARY) . ' '
+        . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
+ok('★ 쉬는 중이면 워커가 물러난다', str_contains((string)$worker, '물러남'), trim((string)$worker));
+
+$d = $admin->req('/studio/api/analysis.php?act=status&project_id=' . $pid)['json']['data'] ?? [];
+// ★ 피그마는 쉬는 중이라 대기로 남고, 구글은 연결이 안 돼 실패로 박힌다.
+//   한 회차 안에서 둘이 서로 다르게 다뤄져야 한다.
+$byStatus = [];
+foreach (($d['links'] ?? []) as $l) { $byStatus[(string)$l['provider']] = (string)$l['status']; }
+ok('★ 쉬는 중인 피그마 링크는 대기로 남는다 (실패로 박지 않는다)',
+   ($byStatus['figma'] ?? '') === 'pending', json_encode($byStatus));
+ok('★ 연결 안 된 구글 링크는 실패로 박힌다 (영영 기다리게 두지 않는다)',
+   ($byStatus['google'] ?? '') === 'fail', json_encode($byStatus));
+ok('★ 화면에 왜 멈췄는지 적힌다',
+   str_contains((string)($d['job']['message'] ?? ''), '쉽니다'),
+   (string)($d['job']['message'] ?? ''));
+// 쓰지도 않을 연동의 사정까지 늘어놓으면 읽지 않는다 — **대기 건이 있는
+// 연동만** 말한다. 구글은 실패로 끝났으므로 여기 안 나온다.
+ok('막힌 연동만 화면에 알린다',
+   count($d['blocked'] ?? []) === 1 && ($d['blocked'][0]['provider'] ?? '') === 'figma',
+   json_encode($d['blocked'] ?? [], JSON_UNESCAPED_UNICODE));
+
+$admin->req('/studio/api/analysis.php?act=cancel', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$pdoR->exec("DELETE FROM bs_api_usage");
+$pdoR->exec("DELETE FROM bs_integration");
 
 // ---- 멈추기 ----
 $admin->req('/studio/api/analysis.php?act=start', ['csrf' => true, 'json' => ['project_id' => $pid]]);

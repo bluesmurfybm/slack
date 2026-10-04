@@ -123,11 +123,25 @@ final class JobRepo
     /** 한 건 끝낼 때마다 진행률과 생존 신호를 함께 올린다. */
     public function progress(int $jobId, bool $ok): void
     {
+        $this->progressBy($jobId, $ok ? 1 : 0, $ok ? 0 : 1);
+    }
+
+    /**
+     * 여러 건을 한꺼번에 올린다. 피그마 묶어 받기가 쓴다 — 호출 한 번에
+     * 수십 건이 끝나므로 한 건씩 올리면 진행률이 뭉텅이로 튄다.
+     */
+    public function progressBy(int $jobId, int $ok, int $failed): void
+    {
+        $n = max(0, $ok) + max(0, $failed);
+        if ($n === 0) {
+            $this->beat($jobId);
+            return;
+        }
         $this->pdo->prepare(
             'UPDATE bs_analysis_job
-                SET done = done + 1, failed = failed + ?, heartbeat_at = NOW()
+                SET done = done + ?, failed = failed + ?, heartbeat_at = NOW()
               WHERE id = ?'
-        )->execute([$ok ? 0 : 1, $jobId]);
+        )->execute([$n, max(0, $failed), $jobId]);
     }
 
     public function beat(int $jobId): void

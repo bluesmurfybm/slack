@@ -23,8 +23,34 @@ require_once __DIR__ . '/RemoteSource.php';
 
 final class LinkAnalyzer
 {
-    /** 한 프로젝트에서 한 번에 다룰 링크 수. 넘으면 앞에서부터 자른다. */
+    /**
+     * 한 프로젝트에서 **읽을 수 있는** 링크를 몇 개까지 담을지.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 읽을 수 없는 주소는 이 수에 안 넣는다                          │
+     * │                                                              │
+     * │ 전에는 모든 주소를 한데 세어 300 에서 끊었다. 실제 IA 시트를  │
+     * │ 돌려 보니 300 중 183 이 `https://csms45.moodler.kr/` 같은     │
+     * │ **사이트 주소**였다. 읽을 수 없는 주소가 상한의 61% 를 먹고,  │
+     * │ 정작 읽어야 할 피그마 링크가 잘려 나갔다.                     │
+     * │                                                              │
+     * │ 그래서 두 수를 나눈다. 읽을 수 있는 것만 MAX_LINKS 로 세고,   │
+     * │ 못 읽는 것은 기록용이라 따로 넉넉히 받는다.                    │
+     * └──────────────────────────────────────────────────────────────┘
+     */
     public const MAX_LINKS = 300;
+
+    /** 읽을 수 없는 주소(노션·사내 위키·사이트)를 몇 개까지 기록해 둘지. */
+    public const MAX_SKIP_LINKS = 500;
+
+    /**
+     * 피그마에 한 번에 몇 개를 묶어 물을지.
+     *
+     * 피그마의 비용은 **돌려주는 노드 수**에 비례하므로 무한정 키울 수 없다.
+     * 40개면 링크 117건이 호출 3번이 된다 — 117번과 3번의 차이가 이 기능이
+     * 되느냐 마느냐를 가른다.
+     */
+    public const FIGMA_BATCH = 40;
 
     /**
      * 되시도까지 쉬는 시간(분).
@@ -37,9 +63,17 @@ final class LinkAnalyzer
 
     private RemoteSource $remote;
 
+    /** 마지막 실패·보류 사유. 워커가 "왜 멈췄는지" 를 화면에 적는 데 쓴다. */
+    private string $lastMessage = '';
+
     public function __construct(private PDO $pdo)
     {
         $this->remote = new RemoteSource($pdo);
+    }
+
+    public function lastMessage(): string
+    {
+        return $this->lastMessage;
     }
 
     // =================================================================
@@ -68,6 +102,7 @@ final class LinkAnalyzer
 
         $seen  = [];
         $found = $added = $skipped = 0;
+        $readable = $unreadable = 0;     // 상한을 따로 센다
 
         $ins = $this->pdo->prepare(
             'INSERT INTO bs_source_link (project_id, source_id, url, provider, context, status)
@@ -85,16 +120,23 @@ final class LinkAnalyzer
                     }
                     $seen[$url] = true;
                     $found++;
-                    if (count($seen) > self::MAX_LINKS) {
-                        $skipped++;
-                        continue;
-                    }
 
                     $hit      = RemoteSource::identify($url);
                     $provider = $hit['provider'] ?? 'other';
                     // 읽을 수 없는 서비스(노션·사내 위키)는 담되 'skip' 으로
                     // 둔다. 찾았다는 사실 자체가 정보다 — 사람이 보고 판단한다.
                     $status   = $hit === null ? 'skip' : 'pending';
+
+                    // 상한은 **각자 센다.** 못 읽는 주소가 읽을 주소의 자리를
+                    // 빼앗으면 안 된다.
+                    if ($status === 'pending') {
+                        if (++$readable > self::MAX_LINKS) {
+                            $skipped++;
+                            continue;
+                        }
+                    } elseif (++$unreadable > self::MAX_SKIP_LINKS) {
+                        continue;       // 기록용이라 넘쳐도 알리지 않는다
+                    }
 
                     $ins->execute([
                         $projectId, (int)$src['id'], mb_substr($url, 0, 500), $provider,
@@ -154,15 +196,22 @@ final class LinkAnalyzer
      * 없는 상태**가 생길 수 있는데, 그때는 워커가 작업을 큐로 되돌려
      * 다음 회차에 이어 간다.
      */
-    public function nextPending(int $projectId): ?array
+    public function nextPending(int $projectId, array $skipProviders = []): ?array
     {
-        $st = $this->pdo->prepare(
-            'SELECT * FROM bs_source_link
-              WHERE project_id = ? AND status = "pending"
-                AND (fetched_at IS NULL OR fetched_at < DATE_SUB(NOW(), INTERVAL ? MINUTE))
-              ORDER BY id LIMIT 1'
-        );
-        $st->execute([$projectId, self::RETRY_AFTER_MINUTES]);
+        // 쉬는 중인 연동은 아예 집지 않는다. 피그마가 막혔다고 구글까지
+        // 멈추면 안 되고, 막힌 쪽을 집어 봐야 또 같은 벽에 부딪힌다.
+        $sql = 'SELECT * FROM bs_source_link
+                 WHERE project_id = ? AND status = "pending"
+                   AND (fetched_at IS NULL OR fetched_at < DATE_SUB(NOW(), INTERVAL ? MINUTE))';
+        $arg = [$projectId, self::RETRY_AFTER_MINUTES];
+        foreach ($skipProviders as $p) {
+            $sql  .= ' AND provider <> ?';
+            $arg[] = (string)$p;
+        }
+        $sql .= ' ORDER BY id LIMIT 1';
+
+        $st = $this->pdo->prepare($sql);
+        $st->execute($arg);
         $r = $st->fetch(PDO::FETCH_ASSOC);
         return $r === false ? null : $r;
     }
@@ -217,6 +266,7 @@ final class LinkAnalyzer
             // 않는다.** 대기로 두고 사유만 적어 둔다 — 사람이 토큰을
             // 의심하며 헤매지 않게. fetched_at 을 찍어 두면 그만큼 쉰다.
             $retry = $e instanceof RemoteSourceError && $e->retryable;
+            $this->lastMessage = $msg;
             $this->save($id, $retry ? 'pending' : 'fail', null, null, $msg);
             return $retry ? 'retry' : 'fail';
 
@@ -237,11 +287,128 @@ final class LinkAnalyzer
         )->execute([$status, $title, $text, $err === null ? null : mb_substr($err, 0, 300), $id]);
     }
 
-    /** 실패한 것을 다시 읽을 수 있게 되돌린다. 설정을 고친 뒤 쓴다. */
+    // =================================================================
+    // 피그마 묶어 받기
+    //
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 이 기능이 성립하는 유일한 길                                   │
+    // │                                                              │
+    // │ 링크 하나에 호출 하나면 IA 시트 117건은 호출 117번이다.       │
+    // │ 피그마의 제한은 분당 호출 수가 아니라 **며칠 단위 비용        │
+    // │ 예산**이어서, 117번을 한 번 돌리면 예산이 바닥난다. 실제로    │
+    // │ 2026-10-04 에 그렇게 2일 14시간짜리 정지를 받았다.            │
+    // │                                                              │
+    // │ 같은 파일을 가리키는 링크들의 node-id 를 모아 한 번에 묻는다. │
+    // │ 117건이 호출 3번이 된다.                                      │
+    // └──────────────────────────────────────────────────────────────┘
+    // =================================================================
+
+    /**
+     * 묶음 하나를 받아 담는다. 더 받을 것이 없으면 null.
+     *
+     * **한 번에 한 묶음만** 한다. 호출 사이에 쉬고, 제한에 걸리면 즉시
+     * 멈추는 판단은 워커가 한다 — 여기서 다 돌려 버리면 그 둘을 못 한다.
+     *
+     * 호출 제한에 걸리면 RemoteSourceError 를 **그대로 던진다.** 워커가
+     * 받아서 그 회차를 끝낸다.
+     *
+     * @return array{file:string, asked:int, ok:int, fail:int}|null
+     * @throws RemoteSourceError
+     */
+    public function figmaBatchOnce(int $projectId): ?array
+    {
+        $group = $this->nextFigmaGroup($projectId);
+        if ($group === null) {
+            return null;
+        }
+        [$fileKey, $byNode] = $group;
+
+        $got = $this->remote->figmaNodes($fileKey, array_keys($byNode));
+
+        $ok = $fail = 0;
+        foreach ($byNode as $nodeId => $linkIds) {
+            $hit = $got['nodes'][$nodeId] ?? null;
+            foreach ($linkIds as $linkId) {
+                if ($hit === null) {
+                    // 돌려받지 못한 id = 그 파일에 그 노드가 없다. 기다려도
+                    // 안 풀리므로 실패로 못 박는다. 사유를 구체적으로 적어
+                    // 사람이 어디를 볼지 알게 한다.
+                    $this->save($linkId, 'fail', null, null,
+                        '그 화면을 찾지 못했습니다. 지워졌거나, 다른 가지(브랜치)의 '
+                        . '주소거나, 연결된 계정이 이 파일을 볼 수 없을 수 있습니다.');
+                    $fail++;
+                } else {
+                    $this->save($linkId, 'ok', mb_substr($hit['name'], 0, 200), $hit['text'], null);
+                    $ok++;
+                }
+            }
+        }
+
+        return ['file' => $got['file'], 'asked' => count($byNode), 'ok' => $ok, 'fail' => $fail];
+    }
+
+    /** 아직 안 읽은 피그마 링크가 몇 건인가. 묶음 몇 번이면 되는지 가늠한다. */
+    public function figmaPendingCount(int $projectId): int
+    {
+        $st = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM bs_source_link
+              WHERE project_id = ? AND status = "pending" AND provider = ?'
+        );
+        $st->execute([$projectId, Integration::FIGMA]);
+        return (int)$st->fetchColumn();
+    }
+
+    /**
+     * 다음에 물을 묶음. 같은 파일끼리 모아 node-id 를 최대 FIGMA_BATCH 개.
+     *
+     * 서로 다른 링크가 같은 node-id 를 가리키는 일이 있다(IA 시트에서 한
+     * 화면을 여러 항목이 참조한다). 그래서 node-id 하나에 링크 여럿을 단다
+     * — 한 번 받은 글을 그 링크 전부에 나눠 담는다.
+     *
+     * @return array{0:string, 1:array<string, list<int>>}|null
+     */
+    private function nextFigmaGroup(int $projectId): ?array
+    {
+        $st = $this->pdo->prepare(
+            'SELECT id, url FROM bs_source_link
+              WHERE project_id = ? AND status = "pending" AND provider = ?
+              ORDER BY id'
+        );
+        $st->execute([$projectId, Integration::FIGMA]);
+
+        $byFile = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $hit = RemoteSource::identify((string)$r['url']);
+            // node-id 가 없는 주소는 파일 전체를 읽어야 해서 묶을 수 없다.
+            // 그쪽은 기존 한 건씩 경로(fetchOne)가 맡는다.
+            if ($hit === null || (string)($hit['node'] ?? '') === '') {
+                continue;
+            }
+            $byFile[(string)$hit['id']][(string)$hit['node']][] = (int)$r['id'];
+        }
+        if ($byFile === []) {
+            return null;
+        }
+
+        // 가장 많이 쌓인 파일부터 턴다. 묶음 효율이 가장 좋은 쪽이다.
+        uasort($byFile, static fn($a, $b) => count($b) <=> count($a));
+        $fileKey = (string)array_key_first($byFile);
+
+        return [$fileKey, array_slice($byFile[$fileKey], 0, self::FIGMA_BATCH, true)];
+    }
+
+    /**
+     * 실패한 것을 다시 읽을 수 있게 되돌린다. 설정을 고친 뒤 쓴다.
+     *
+     * **fetched_at 도 지운다.** 안 지우면 nextPending() 의 되시도 간격
+     * (RETRY_AFTER_MINUTES)에 걸려, 사람이 단추를 눌러도 몇 분간 아무 일도
+     * 일어나지 않는다. 그 간격은 호출 제한에 걸린 것을 스스로 미루려고 둔
+     * 장치지, 사람이 "지금 다시 하라" 고 한 것까지 미루라는 뜻이 아니다.
+     */
     public function retryFailed(int $projectId): int
     {
         $st = $this->pdo->prepare(
-            'UPDATE bs_source_link SET status = "pending", error = NULL
+            'UPDATE bs_source_link SET status = "pending", error = NULL, fetched_at = NULL
               WHERE project_id = ? AND status = "fail"'
         );
         $st->execute([$projectId]);

@@ -25,6 +25,120 @@ $store  = new Integration(bs_db());
 $google = $store->status(Integration::GOOGLE);
 $figma  = $store->status(Integration::FIGMA);
 $redir  = bs_oauth_redirect_uri();
+
+/**
+ * 연동 하나의 '지금 상태' 판 — 켜고 끄기 · 쉬는 시각 · 사용량.
+ *
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ 왜 이 판이 필요한가                                               │
+ * │                                                                  │
+ * │ 2026-10-04 에 피그마 분석이 하룻밤 돌고도 3건밖에 못 읽었다.      │
+ * │ 원인을 찾는 데 하루가 걸렸는데, 그동안 화면은 아무 말도 하지      │
+ * │ 않았다. 피그마는 응답 헤더로 "2일 14시간 쉬어라" 고 또렷이        │
+ * │ 말하고 있었는데 그 사실이 **어디에도 보이지 않았다.**             │
+ * │                                                                  │
+ * │ 그래서 세 가지를 한눈에 둔다.                                     │
+ * │   · 지금 쓸 수 있는가, 못 쓴다면 왜                               │
+ * │   · 얼마나 쓰고 있는가 (최근 14일)                                │
+ * │   · 끌 수 있는가                                                  │
+ * └──────────────────────────────────────────────────────────────────┘
+ */
+function ig_panel(Integration $store, array $st, string $who): void
+{
+    $p      = (string)$st['provider'];
+    $series = $store->usageSeries($p, 14);
+    $max    = 1;
+    $sum    = 0;
+    foreach ($series as $d) {
+        $max = max($max, (int)$d['calls']);
+        $sum += (int)$d['calls'];
+    }
+    ?>
+  <div class="ba-ig__state">
+    <div class="ba-ig__sw">
+      <?php if ($st['connected']): ?>
+        <button type="button"
+                class="ba-btn ba-btn--sm<?= $st['enabled'] ? ' ba-btn--primary' : '' ?>"
+                data-ig-toggle="<?= h($p) ?>" data-on="<?= $st['enabled'] ? '1' : '0' ?>"
+                data-who="<?= h($who) ?>">
+          <?= $st['enabled'] ? '연동 사용 중' : '연동 제외됨' ?>
+        </button>
+        <span class="ba-ig__hint">
+          <?= $st['enabled']
+              ? '끄면 토큰은 그대로 두고 호출만 하지 않습니다.'
+              : '토큰은 남아 있습니다. 켜면 대기 중인 링크부터 이어서 읽습니다.' ?>
+        </span>
+      <?php endif; ?>
+    </div>
+
+    <?php if ($st['cooldown_left'] > 0): ?>
+      <div class="ba-alert ba-alert--wait">
+        <b>호출 제한으로 쉬는 중입니다.</b>
+        <?= h(bs_date((string)$st['cooldown_until'], 'n월 j일 H:i')) ?> 까지 —
+        남은 시간 <b><?= h(Integration::humanSpan((int)$st['cooldown_left'])) ?></b>
+        <?php if ($st['cooldown_reason']): ?><br><?= h((string)$st['cooldown_reason']) ?><?php endif; ?>
+        <br>
+        <span class="ba-ig__hint">
+          상대가 응답 헤더로 알려 준 시각입니다. 그때까지는 호출을 만들지 않습니다 —
+          두드릴수록 제한이 길어지기 때문입니다.
+        </span>
+        <button type="button" class="ba-btn ba-btn--sm" data-ig-clear="<?= h($p) ?>">
+          지금 다시 시도</button>
+      </div>
+    <?php elseif ($st['connected'] && !$st['usable'] && $st['blocked']): ?>
+      <div class="ba-alert ba-alert--wait"><?= h((string)$st['blocked']) ?></div>
+    <?php endif; ?>
+
+    <?php if ($st['connected']): ?>
+      <div class="ba-spark">
+        <div class="ba-spark__num">
+          오늘 <b><?= (int)$st['used_today'] ?></b>회
+          <?php if ((int)$st['daily_cap'] > 0): ?>
+            / 한도 <?= (int)$st['daily_cap'] ?>회
+          <?php endif; ?>
+          · 14일 합계 <b><?= $sum ?></b>회
+        </div>
+        <?php if ($sum === 0): ?>
+          <p class="ba-ig__hint">아직 호출 기록이 없습니다.</p>
+        <?php else: ?>
+          <!-- 막대 하나가 하루. 붉은 부분이 실패다. 의존 라이브러리 없이
+               인라인 SVG 로 그린다 — 역량 레이더와 같은 방식이다. -->
+          <svg class="ba-spark__svg" viewBox="0 0 294 44" role="img"
+               aria-label="최근 14일 호출 수">
+            <?php foreach ($series as $i => $d):
+              $c = (int)$d['calls']; $f = (int)$d['fail'];
+              $hAll = $c > 0 ? max(2, (int)round($c / $max * 36)) : 0;
+              $hBad = $f > 0 ? max(1, (int)round($f / $max * 36)) : 0;
+              $x    = $i * 21 + 2;
+              $ttl  = sprintf('%s · %d회 (실패 %d · 처리 %d건)',
+                              (string)$d['d'], $c, $f, (int)$d['items']);
+            ?>
+              <rect x="<?= $x ?>" y="<?= 40 - $hAll ?>" width="16" height="<?= $hAll ?>"
+                    rx="2" class="ba-spark__bar"><title><?= h($ttl) ?></title></rect>
+              <?php if ($hBad > 0): ?>
+                <rect x="<?= $x ?>" y="<?= 40 - $hBad ?>" width="16" height="<?= $hBad ?>"
+                      rx="2" class="ba-spark__bad"><title><?= h($ttl) ?></title></rect>
+              <?php endif; ?>
+            <?php endforeach; ?>
+            <line x1="0" y1="41" x2="294" y2="41" class="ba-spark__axis"/>
+          </svg>
+          <div class="ba-spark__ends">
+            <span><?= h(bs_date((string)$series[0]['d'], 'n/j')) ?></span>
+            <span>오늘</span>
+          </div>
+        <?php endif; ?>
+
+        <label class="ba-spark__cap">
+          <span>하루 호출 상한</span>
+          <input type="number" min="0" step="10" value="<?= (int)$st['daily_cap'] ?>"
+                 data-ig-cap="<?= h($p) ?>">
+          <span class="ba-ig__hint">0 이면 제한 없음. 상대가 막기 전에 우리가 먼저 멈춥니다.</span>
+        </label>
+      </div>
+    <?php endif; ?>
+  </div>
+    <?php
+}
 // localhost 는 구글이 http 를 받아 준다. 로컬 개발에서는 경고하지 않는다.
 $__h    = (string)($_SERVER['HTTP_HOST'] ?? '');
 $isLocal = str_starts_with($__h, 'localhost') || str_starts_with($__h, '127.0.0.1');
@@ -70,6 +184,11 @@ bs_layout_head(
       <?php else: ?>
         <span class="ba-badge">설정 전</span>
       <?php endif; ?>
+      <?php if ($google['connected'] && !$google['enabled']): ?>
+        <span class="ba-badge ba-badge--off">연동 제외</span>
+      <?php elseif ($google['cooldown_left'] > 0): ?>
+        <span class="ba-badge ba-badge--off">쉬는 중</span>
+      <?php endif; ?>
     </div>
 
     <?php if ($google['connected']): ?>
@@ -85,6 +204,8 @@ bs_layout_head(
     <?php if ($google['last_error']): ?>
       <div class="ba-alert" style="margin:8px 0"><?= h((string)$google['last_error']) ?></div>
     <?php endif; ?>
+
+    <?php ig_panel($store, $google, '구글 드라이브'); ?>
 
     <details class="ba-ig__how"<?= $google['connected'] ? '' : ' open' ?>>
       <summary>구글 콘솔에서 먼저 할 일</summary>
@@ -161,6 +282,11 @@ bs_layout_head(
       <?= $figma['connected']
             ? '<span class="ba-badge ba-badge--ok">연결됨</span>'
             : '<span class="ba-badge">설정 전</span>' ?>
+      <?php if ($figma['connected'] && !$figma['enabled']): ?>
+        <span class="ba-badge ba-badge--off">연동 제외</span>
+      <?php elseif ($figma['cooldown_left'] > 0): ?>
+        <span class="ba-badge ba-badge--off">쉬는 중</span>
+      <?php endif; ?>
     </div>
 
     <?php if ($figma['last_error']): ?>
@@ -170,6 +296,8 @@ bs_layout_head(
       <p class="ba-head__sub">마지막으로 읽은 때 <?= h(bs_date((string)$figma['last_ok_at'])) ?></p>
     <?php endif; ?>
 
+    <?php ig_panel($store, $figma, '피그마'); ?>
+
     <details class="ba-ig__how"<?= $figma['connected'] ? '' : ' open' ?>>
       <summary>피그마에서 먼저 할 일</summary>
       <ol>
@@ -178,9 +306,17 @@ bs_layout_head(
         <li>만든 토큰을 아래에 넣습니다. <b>그 토큰을 만든 사람이 볼 수 있는 파일만</b> 읽힙니다.</li>
       </ol>
       <p class="ba-head__sub">
-        토큰은 만료되지 않지만 만든 사람이 퇴사하면 끊깁니다.
+        토큰에는 <b>만료일이 있습니다(보통 3개월)</b>. 지나면 분석이 조용히 멈추므로
+        달력에 미리 적어 두십시오. 만든 사람이 퇴사해도 끊기니
         <b>개인 계정보다 공용 계정에서 만드는 편이 낫습니다.</b>
       </p>
+      <div class="ba-alert ba-alert--wait" style="margin:8px 0">
+        <b>피그마의 호출 제한은 '분당 몇 번' 이 아니라 며칠 단위 예산입니다.</b>
+        2026-10-04 에 링크를 하나씩 읽다가 <b>2일 14시간</b> 정지를 받았습니다.
+        지금은 같은 파일의 화면들을 <b>한 번에 묶어</b> 묻고, 제한에 걸리면
+        상대가 알려 준 시각까지 <b>호출을 아예 만들지 않습니다</b>.
+        그래도 분석 전에 위 사용량을 한 번 보시는 편이 안전합니다.
+      </div>
     </details>
 
     <div class="ba-ig__form">
