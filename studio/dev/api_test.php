@@ -1145,6 +1145,69 @@ if (!is_file("$fixDir/sample.xlsx")) {
                      ['csrf' => true, 'json' => ['project_id' => 99999999]]);
     ok('없는 프로젝트 404', $r['status'] === 404);
 
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ AI 도출은 큐로 간다 (2026-10-06)                              │
+    // │                                                              │
+    // │ 웹 요청 안에서 모델을 부르다 100초가 넘어 두 번 끊겼다.       │
+    // │ 화면에는 "서버 응답을 읽지 못했습니다" 만 떴다.               │
+    // │                                                              │
+    // │ 여기서는 AI 가 연결돼 있지 않아 **규칙 경로로 즉시 끝나야**    │
+    // │ 한다. 멀쩡한 길을 큐로 보내 1분 기다리게 하면 안 된다.        │
+    // └──────────────────────────────────────────────────────────────┘
+    $r = $admin->req('/studio/api/task.php?act=extract',
+                     ['csrf' => true, 'json' => ['project_id' => $pid, 'use_llm' => 1]]);
+    ok('★ AI 가 없으면 규칙으로 즉시 끝낸다',
+       $r['status'] === 200 && !isset($r['json']['data']['queued'])
+       && isset($r['json']['data']['tree']), substr($r['body'], 0, 160));
+    ok('왜 규칙으로 갔는지 알려 준다',
+       str_contains((string)($r['json']['data']['meta']['fallback_reason'] ?? ''), 'LLM'),
+       json_encode($r['json']['data']['meta'] ?? [], JSON_UNESCAPED_UNICODE));
+
+    $r = $admin->req('/studio/api/task.php?act=extract',
+                     ['csrf' => true, 'json' => ['project_id' => $pid, 'use_llm' => 0]]);
+    ok('규칙만 쓰라고 해도 즉시 끝낸다',
+       $r['status'] === 200 && isset($r['json']['data']['tree']), substr($r['body'], 0, 120));
+
+    // 큐에 넣은 적이 없으면 'none'. 화면이 괜히 되묻지 않게 한다.
+    $r = $admin->req('/studio/api/task.php?act=extract_status&project_id=' . $pid);
+    ok('도출 작업이 없으면 none', ($r['json']['data']['status'] ?? '') === 'none', $r['body']);
+
+    $r = $guest->req('/studio/api/task.php?act=extract_status&project_id=' . $pid);
+    ok('도출 상태도 권한이 있어야', $r['status'] === 403, '상태 ' . $r['status']);
+
+    // ---- 큐 배관을 끝까지 돌린다 ----
+    // AI 가 없으니 워커 안에서도 규칙으로 떨어지지만, **작업을 집어
+    // 결과를 담고 화면이 받아 가는 길**은 그대로 돈다. 거기가 새로 만든
+    // 부분이고, 끊기면 초안이 영영 안 올라온다.
+    // 앞선 시험이 이미 저장해 둔 태스크가 있다. 도출 때문에 늘었는지만
+    // 보려면 **전후를 비교**해야 한다.
+    $before = (int)$pdoX->query("SELECT COUNT(*) FROM bs_task WHERE project_id = $pid")
+                        ->fetchColumn();
+
+    $pdoX->prepare('INSERT INTO bs_analysis_job (project_id, kind, status, total, created_by)
+                    VALUES (?, "wbs", "queued", 1, "batest-admin@bluesoft.co.kr")')
+         ->execute([$pid]);
+
+    $w = shell_exec(escapeshellarg(PHP_BINARY) . ' '
+       . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
+    ok('워커가 도출 작업을 집어 간다', str_contains((string)$w, '초안'), trim((string)$w));
+
+    $r = $admin->req('/studio/api/task.php?act=extract_status&project_id=' . $pid);
+    $d = $r['json']['data'] ?? [];
+    ok('★ 끝나면 상태가 done', ($d['status'] ?? '') === 'done', json_encode($d['status'] ?? null));
+    // ★ 초안을 돌려줄 뿐 저장하지 않는다. 저장하면 "도출이 곧 저장" 이
+    //   되어 검토 단계가 형식만 남는다.
+    ok('★ 초안 트리를 돌려준다', isset($d['tree']) && is_array($d['tree']) && $d['tree'] !== [],
+       substr($r['body'], 0, 160));
+    $after = (int)$pdoX->query("SELECT COUNT(*) FROM bs_task WHERE project_id = $pid")
+                       ->fetchColumn();
+    ok('★ 돌려줄 뿐 저장하지는 않는다', $after === $before,
+       "태스크가 $before → $after 로 늘었다");
+    ok('사람이 할 일을 적어 준다',
+       str_contains((string)($d['notice'] ?? ''), '검토'), (string)($d['notice'] ?? ''));
+
+    $pdoX->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);
+
     // 뒷정리 — 뒤의 삭제 시험이 쓰도록 비워 둔다
     $revX = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid)
                   ['json']['data']['revision'];

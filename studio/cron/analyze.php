@@ -263,6 +263,60 @@ try {
         exit(0);
     }
 
+    // =====================================================================
+    // WBS 도출
+    //
+    // ┌──────────────────────────────────────────────────────────────────┐
+    // │ 웹 요청 안에서 하다가 두 번 끊겼다                                │
+    // │                                                                  │
+    // │ 문서 48,800 토큰을 넣고 8,000 토큰을 받는 데 50초가 걸렸고,      │
+    // │ 형식이 깨져 한 번 더 물으니 103초가 됐다. PHP 가 끊었고 화면에는 │
+    // │ "서버 응답을 읽지 못했습니다" 만 떴다. 시트 하나로 줄여도 또     │
+    // │ 끊겼다 — 출력 토큰을 만드는 시간은 입력을 줄여도 안 줄어든다.    │
+    // │                                                                  │
+    // │ 링크 읽기·난이도 판정과 같은 틀로 옮긴다. 다른 점은 **결과물이  │
+    // │ 초안**이라는 것 하나다. bs_task 에 바로 쓰지 않고 작업에 담아    │
+    // │ 두고, 사람이 보고 고친 뒤 [저장] 할 때 들어간다.                 │
+    // └──────────────────────────────────────────────────────────────────┘
+    // =====================================================================
+    if ($job['kind'] === 'wbs') {
+        require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
+        require_once BS_ROOT . '/inc/repo/TaskRepo.php';
+        require_once BS_ROOT . '/inc/service/WbsExtractor.php';
+
+        $ex = new WbsExtractor(new ProjectRepo($pdo), new TaskRepo($pdo), null, null, $pdo);
+
+        try {
+            $r = $ex->extractForProject($projectId, true);
+            $jobs->saveResult($jobId, $r);
+            $n = count($r['tree'] ?? []);
+            $jobs->finish($jobId, 'done', sprintf(
+                '초안 %d건을 만들었습니다. 화면에서 검토한 뒤 저장하세요.',
+                (int)($r['meta']['task_count'] ?? $n)
+            ));
+            $log("작업 #$jobId 끝 — 초안 " . ($r['meta']['task_count'] ?? $n) . '건');
+            exit(0);
+
+        } catch (LlmError $e) {
+            // 기다리면 될 일이면 큐로 되돌린다. 모델이 잠깐 막힌 것 때문에
+            // 사람이 단추를 다시 눌러야 하면 안 된다.
+            if ($e->retryable) {
+                $jobs->finish($jobId, 'queued', $e->getMessage());
+                $log("작업 #$jobId 물러남 — " . $e->getMessage());
+                exit(0);
+            }
+            $jobs->finish($jobId, 'failed', $e->getMessage());
+            $log("작업 #$jobId 실패 — " . $e->getMessage());
+            exit(1);
+
+        } catch (DomainException $e) {
+            // "읽어 들인 문서가 없습니다" 같은 것. 사람이 할 일이 있다.
+            $jobs->finish($jobId, 'failed', $e->getMessage());
+            $log("작업 #$jobId 실패 — " . $e->getMessage());
+            exit(1);
+        }
+    }
+
     $jobs->finish($jobId, 'failed', '모르는 작업 종류입니다: ' . (string)$job['kind']);
     $log("작업 #$jobId 모르는 종류");
     exit(1);

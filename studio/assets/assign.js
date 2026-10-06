@@ -2574,29 +2574,18 @@
       api('api/task.php?act=extract', {
         method: 'POST', body: { project_id: PID, use_llm: useLlm === false ? 0 : 1 }
       }).then(function (d) {
-        var draft = fromServer(d.tree);
-        var n = countNodes(draft);
-        if (!n) {
-          showError('#ba-pv-error', '문서에서 뽑아낼 업무를 찾지 못했습니다.');
-          return;
+        // ┌──────────────────────────────────────────────────────────┐
+        // │ AI 도출은 크론이 한다                                     │
+        // │                                                          │
+        // │ 웹 요청 안에서 부르면 100초가 넘어 PHP 가 끊는다(실제로   │
+        // │ 두 번 끊겼다). 큐에 넣고 끝날 때까지 되물으며 기다린다.   │
+        // └──────────────────────────────────────────────────────────┘
+        if (d.queued) {
+          toast(d.message);
+          btn.textContent = 'AI 도출 대기 중…';
+          return waitForExtract(btn);
         }
-
-        var how = '문서에서 ' + n + '건을 뽑았습니다.\n\n' +
-                  '[확인] 지금 목록 아래에 이어 붙입니다\n' +
-                  '[취소] 아무것도 하지 않습니다';
-        if (MODEL.length && !confirm(how)) return;
-
-        MODEL = MODEL.concat(draft);
-        render();
-
-        var m = d.meta || {};
-        var msg = [];
-        if (m.fallback_reason) msg.push(m.fallback_reason);
-        if (m.quality_note)    msg.push(m.quality_note);
-        msg.push('초안 ' + n + '건을 넣었습니다. 검토해 고친 뒤 [저장] 하세요. ' +
-                 '저장해도 확정 전에는 배정 대상이 아닙니다.');
-        noteDraft(msg.join(' '), m);
-        toast('초안 ' + n + '건을 넣었습니다.');
+        applyDraft(d);
       }).catch(function (e) {
         // 문서를 아직 안 읽었으면 그것부터 하라고 말한다.
         // 띠는 화면 맨 위에 뜬다. 아래쪽 단추를 누른 사람이 놓치지 않게
@@ -2606,6 +2595,68 @@
       }).then(function () {
         btn.disabled = false;
         btn.textContent = was;
+      });
+    }
+
+    /** 도출 결과를 목록에 이어 붙인다. 규칙 경로와 AI 경로가 같이 쓴다. */
+    function applyDraft(d) {
+      var draft = fromServer(d.tree);
+      var n = countNodes(draft);
+      if (!n) {
+        showError('#ba-pv-error', '문서에서 뽑아낼 업무를 찾지 못했습니다.');
+        return;
+      }
+
+      var how = '문서에서 ' + n + '건을 뽑았습니다.\n\n' +
+                '[확인] 지금 목록 아래에 이어 붙입니다\n' +
+                '[취소] 아무것도 하지 않습니다';
+      if (MODEL.length && !confirm(how)) return;
+
+      MODEL = MODEL.concat(draft);
+      render();
+
+      var m = d.meta || {};
+      var msg = [];
+      if (m.fallback_reason) msg.push(m.fallback_reason);
+      if (m.quality_note)    msg.push(m.quality_note);
+      msg.push('초안 ' + n + '건을 넣었습니다. 검토해 고친 뒤 [저장] 하세요. ' +
+               '저장해도 확정 전에는 배정 대상이 아닙니다.');
+      noteDraft(msg.join(' '), m);
+      toast('초안 ' + n + '건을 넣었습니다.');
+    }
+
+    /**
+     * 크론이 끝낼 때까지 되묻는다.
+     *
+     * 크론은 1분마다 돌고 모델은 1~2분 걸리므로 넉넉히 기다린다. 다만
+     * **끝은 둔다** — 워커가 죽었는데 영원히 도는 화면을 남기면 안 된다.
+     */
+    function waitForExtract(btn) {
+      var EVERY = 4000, LIMIT = 75;          // 4초 × 75 = 5분
+      var tries = 0;
+
+      return new Promise(function (done, fail) {
+        (function poll() {
+          api('api/task.php?act=extract_status&project_id=' + PID)
+            .then(function (s) {
+              if (s.status === 'done') {
+                applyDraft(s);
+                return done();
+              }
+              if (s.status === 'failed' || s.status === 'canceled') {
+                return fail(new Error(s.message || 'AI 도출이 끝나지 못했습니다.'));
+              }
+              if (++tries > LIMIT) {
+                return fail(new Error(
+                  'AI 도출이 5분 안에 끝나지 않았습니다. 크론이 도는지 확인하거나 ' +
+                  '[규칙으로만 도출] 을 쓰세요.'));
+              }
+              // 큐에서 기다리는 동안 서버가 적어 둔 말을 그대로 보여 준다.
+              if (s.message) { btn.textContent = '대기 중… ' + s.message.slice(0, 20); }
+              setTimeout(poll, EVERY);
+            })
+            .catch(fail);
+        })();
       });
     }
 

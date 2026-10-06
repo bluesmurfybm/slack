@@ -144,6 +144,50 @@ final class JobRepo
         )->execute([$n, max(0, $failed), $jobId]);
     }
 
+    /**
+     * 작업이 만든 결과물을 담는다. WBS 도출의 초안 트리가 여기 들어온다.
+     *
+     * **bs_task 에 바로 쓰지 않는 이유**는 초안이기 때문이다. 검토 전에
+     * 저장하면 "도출이 곧 저장" 이 되어 검토 단계가 형식만 남는다.
+     */
+    public function saveResult(int $jobId, array $data): void
+    {
+        $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            throw new RuntimeException('결과를 JSON 으로 바꾸지 못했습니다.');
+        }
+        $this->pdo->prepare('UPDATE bs_analysis_job SET result_json = ? WHERE id = ?')
+                  ->execute([$json, $jobId]);
+    }
+
+    /** 담아 둔 결과물. 없으면 null. */
+    public function result(int $jobId): ?array
+    {
+        $st = $this->pdo->prepare('SELECT result_json FROM bs_analysis_job WHERE id = ?');
+        $st->execute([$jobId]);
+        $raw = $st->fetchColumn();
+        if (!is_string($raw) || $raw === '') {
+            return null;
+        }
+        $d = json_decode($raw, true);
+        return is_array($d) ? $d : null;
+    }
+
+    /**
+     * 그 종류의 마지막 작업. 끝난 것까지 본다 — 화면이 결과를 가지러 올 때
+     * 작업은 이미 끝나 있다.
+     */
+    public function lastOf(int $projectId, string $kind): ?array
+    {
+        $st = $this->pdo->prepare(
+            'SELECT * FROM bs_analysis_job WHERE project_id = ? AND kind = ?
+              ORDER BY id DESC LIMIT 1'
+        );
+        $st->execute([$projectId, $kind]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r === false ? null : $r;
+    }
+
     public function beat(int $jobId): void
     {
         $this->pdo->prepare('UPDATE bs_analysis_job SET heartbeat_at = NOW() WHERE id = ?')

@@ -130,12 +130,36 @@ bs_route(bs_param_str('act', 'tree'), [
         $projectId = bs_task_project_param($projects);
         bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $projectId);
 
-        $ex = new WbsExtractor($projects, $tasks);
-
         // use_llm=0 이면 규칙만 쓴다. 사외 반출이 걸리는 동안에도
         // 이 경로로는 쓸 수 있다.
         $useLlm = bs_param_int('use_llm', 1) === 1;
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 모델을 부르는 쪽만 큐로 보낸다                                │
+        // │                                                              │
+        // │ 규칙 도출은 네트워크를 안 타서 즉시 끝난다. 그걸 큐로 보내면  │
+        // │ 1분을 기다려야 한다 — 멀쩡한 길을 느리게 만드는 일이다.       │
+        // │                                                              │
+        // │ 모델 쪽은 100초가 넘어 웹 요청 안에서 두 번 끊겼다(2026-10-06).│
+        // │ 출력 토큰을 만드는 시간은 입력을 줄여도 안 줄어든다.          │
+        // └──────────────────────────────────────────────────────────────┘
+        $llm = bs_llm_client();
+        if ($useLlm && $llm->available()) {
+            require_once BS_ROOT . '/inc/repo/JobRepo.php';
+            $jobs = new JobRepo(bs_db());
+            $me   = ['id' => bs_current_user()['id'] ?? '', 'name' => bs_current_user()['name'] ?? ''];
+            $r    = $jobs->enqueue($projectId, 'wbs', 1, $me);
+
+            bs_json_ok([
+                'queued'  => true,
+                'job'     => ['id' => (int)$r['job']['id'], 'status' => $r['job']['status']],
+                'message' => $r['created']
+                    ? 'AI 도출을 넣었습니다. 1~2분쯤 걸립니다 — 끝나면 초안이 저절로 올라옵니다.'
+                    : '이미 도출이 진행 중입니다.',
+            ]);
+        }
+
+        $ex = new WbsExtractor($projects, $tasks);
         try {
             $r = $ex->extractForProject($projectId, $useLlm);
         } catch (LlmError $e) {
@@ -146,6 +170,41 @@ bs_route(bs_param_str('act', 'tree'), [
             'origin' => 'auto',
             'notice' => '도출된 초안입니다. 검토해 저장하고 확정해야 배정 대상이 됩니다.',
         ]);
+    },
+
+    /**
+     * 큐에 넣은 AI 도출의 진행 상황과 결과.
+     *
+     * 끝났으면 초안 트리를 돌려준다. **돌려줄 뿐 저장하지 않는다** —
+     * 사람이 보고 고친 뒤 [저장] 해야 bs_task 에 들어간다.
+     */
+    'extract_status' => function () use ($projects): void {
+        bs_require_login_api();
+        $projectId = bs_task_project_param($projects);
+        bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $projectId);
+
+        require_once BS_ROOT . '/inc/repo/JobRepo.php';
+        $jobs = new JobRepo(bs_db());
+        $job  = $jobs->lastOf($projectId, 'wbs');
+
+        if ($job === null) {
+            bs_json_ok(['status' => 'none']);
+        }
+
+        $out = [
+            'status'  => (string)$job['status'],
+            'message' => $job['message'],
+        ];
+        if ($job['status'] === 'done') {
+            $r = $jobs->result((int)$job['id']);
+            if ($r !== null) {
+                $out += $r + [
+                    'origin' => 'auto',
+                    'notice' => '도출된 초안입니다. 검토해 저장하고 확정해야 배정 대상이 됩니다.',
+                ];
+            }
+        }
+        bs_json_ok($out);
     },
 
     'save_tree' => function () use ($projects, $tasks): void {
