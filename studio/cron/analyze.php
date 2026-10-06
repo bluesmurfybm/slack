@@ -217,6 +217,9 @@ try {
             exit(0);
         }
 
+        // 환산표는 한 번만 뽑는다. 태스크마다 물으면 같은 질의를 100번 한다.
+        $effort = $tasks->effortTable();
+
         $ok = $aiCount = 0;
         foreach ($todo as $t) {
             if (time() >= $until) {
@@ -231,7 +234,7 @@ try {
             }
 
             $ctx = $an->contextFor($projectId, (string)$t['title']);
-            $r   = $scorer->score($t, $ctx['text'] ?? '', $pname);
+            $r   = $scorer->score($t, $ctx['text'] ?? '', $pname, $effort);
 
             $note = $r['note'];
             if ($ctx !== null) {
@@ -239,15 +242,27 @@ try {
                 // 것이라, 틀렸을 때 사람이 바로 알아볼 수 있어야 한다.
                 $note = mb_substr($note . ' / 참고: ' . ($ctx['title'] ?: $ctx['url']), 0, 500);
             }
-            $tasks->setDifficulty((int)$t['id'], (int)$r['difficulty'], $r['by'], $note);
+
+            // ★ 칸마다 따로 본다. 사람이 난이도만 고쳐 둔 태스크의 공수는
+            //   여전히 채워야 하고, 사람이 넣은 값은 어느 칸이든 안 덮는다.
+            if (($t['difficulty_by'] ?? '') !== 'human'
+                && ($redo || $t['difficulty'] === null)) {
+                $tasks->setDifficulty((int)$t['id'], (int)$r['difficulty'], $r['by'], $note);
+            }
+            if (($t['est_md_by'] ?? '') !== 'human'
+                && ($redo || $t['est_md'] === null) && $r['est_md'] > 0) {
+                $tasks->setEstimate((int)$t['id'], (float)$r['est_md'],
+                                    (string)$r['est_by'], (string)$r['est_note']);
+            }
 
             $ok++;
             if ($r['by'] === 'ai') {
                 $aiCount++;
             }
             $jobs->progress($jobId, true);
-            $log(sprintf('  난이도 ★%d (%s) %s',
-                 $r['difficulty'], $r['by'], mb_substr((string)$t['title'], 0, 50)));
+            $log(sprintf('  ★%d (%s) · %s M/D (%s) · %s',
+                 $r['difficulty'], $r['by'], $r['est_md'], $r['est_by'],
+                 mb_substr((string)$t['title'], 0, 44)));
 
             // AI 를 실제로 쓴 회차만 쉰다. 규칙으로 떨어진 건은 네트워크를
             // 타지 않으므로 쉴 이유가 없다 — 쉬면 괜히 느려진다.

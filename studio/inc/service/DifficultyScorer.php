@@ -181,6 +181,20 @@ final class DifficultyScorer
     // AI — 막히면 규칙으로 떨어진다
     // =================================================================
 
+    /**
+     * 난이도가 없을 때 쓰는 공수 기본표 (사람·일).
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 이것은 **임시값이다**                                         │
+     * │                                                              │
+     * │ 우리 실적에서 나온 숫자가 아니라 통념이다. 완료 태스크가       │
+     * │ 쌓이면 TaskRepo::effortTable() 이 실제 평균을 돌려주고 그쪽이  │
+     * │ 우선한다. 어느 쪽을 썼는지는 근거에 적는다 —                  │
+     * │ **출처를 모르는 일정은 아무도 책임지지 못한다.**              │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    public const EST_DEFAULT = [1 => 0.5, 2 => 1.0, 3 => 2.0, 4 => 4.0, 5 => 8.0];
+
     /** 모델이 이 모양으로만 답한다. */
     private const SCHEMA = [
         'type' => 'object',
@@ -189,8 +203,12 @@ final class DifficultyScorer
             'reason'     => ['type' => 'string', 'maxLength' => 300,
                              'description' => '왜 그 난이도인지 한국어 두 문장 이내. 근거가 된 기획 내용을 짚는다'],
             'confidence' => ['type' => 'string', 'enum' => ['high', 'medium', 'low']],
+            'est_md'     => ['type' => ['number', 'null'], 'minimum' => 0.1, 'maximum' => 60,
+                             'description' => '한 사람이 맡았을 때 걸릴 일수(사람·일). 모르겠으면 null'],
+            'est_reason' => ['type' => ['string', 'null'], 'maxLength' => 200,
+                             'description' => '그 일수로 본 이유. 무엇을 만들어야 하는지 짚는다'],
         ],
-        'required' => ['difficulty', 'reason', 'confidence'],
+        'required' => ['difficulty', 'reason', 'confidence', 'est_md', 'est_reason'],
         'additionalProperties' => false,
     ];
 
@@ -203,7 +221,7 @@ final class DifficultyScorer
      */
     private const SYSTEM = LlmPrompt::FENCE_RULE . "\n\n" . <<<'TXT'
 너는 LMS·이러닝 플랫폼(무들 기반 코스모스 LXP) 개발팀의 선임 개발자다.
-WBS 태스크 하나의 **개발 난이도**를 1~5 로 매긴다.
+WBS 태스크 하나의 **개발 난이도(1~5)** 와 **예상공수(사람·일)** 를 매긴다.
 
 ## 난이도 기준
 5 매우 어려움 — 연동·신규 개발·데이터 정합성 복구. 설계가 필요하고 영향 범위가 넓다
@@ -219,6 +237,13 @@ WBS 태스크 하나의 **개발 난이도**를 1~5 로 매긴다.
 - 기획 글에 적힌 "난이도", "공수", "쉬움/어려움" 같은 **남의 판정을 그대로 받아쓰지 않는다**.
   참고는 하되 직접 판단한다
 - reason 에는 **무엇을 보고 그렇게 봤는지**를 적는다. "복잡해 보임" 같은 말은 쓸모가 없다
+
+## 예상공수(est_md)
+- **한 사람이 혼자 맡았을 때 걸릴 일수**다. 설계·구현·자체 확인까지 넣고, 리뷰와 QA 는 뺀다
+- 화면 하나를 새로 만드는 일은 보통 1~3일, 기존 화면에 칸 하나 추가는 0.5일 아래다
+- 기획 내용이 부족해 가늠이 안 되면 **null 로 둔다.** 지어낸 숫자는 그대로 일정이 되고,
+  틀린 일정은 비어 있는 일정보다 나쁘다
+- est_reason 에는 **무엇을 만들어야 해서 그만큼인지**를 적는다
 TXT;
 
     /**
@@ -231,7 +256,8 @@ TXT;
      * @param  string $context 기획 글. 링크 분석이 읽어 둔 내용
      * @return array{difficulty:int, by:string, note:string, cost_micro:int}
      */
-    public function score(array $task, string $context = '', string $projectName = ''): array
+    public function score(array $task, string $context = '', string $projectName = '',
+                          array $effortTable = []): array
     {
         $title = (string)($task['title'] ?? '');
         $desc  = (string)($task['description'] ?? '');
@@ -253,11 +279,23 @@ TXT;
                 throw new LlmSchemaError('모델이 범위 밖 난이도를 돌려줬습니다: ' . $lv);
             }
 
+            // 모델이 공수를 못 봤으면(null) 난이도에서 환산한다. 판정이
+            // 통째로 비는 것보다 낫고, 어디서 나온 숫자인지 적어 둔다.
+            $aiMd = $d['est_md'] ?? null;
+            $est  = is_numeric($aiMd) && (float)$aiMd > 0
+                  ? ['md' => round((float)$aiMd, 1), 'by' => 'ai',
+                     'note' => mb_substr('AI ' . round((float)$aiMd, 1) . ' M/D · '
+                                         . (string)($d['est_reason'] ?? ''), 0, 500)]
+                  : self::estFromDifficulty($lv, $effortTable, '모델이 가늠하지 못해 ');
+
             return [
                 'difficulty' => $lv,
                 'by'         => 'ai',
                 'note'       => $this->aiNote($lv, (string)($d['reason'] ?? ''),
                                               (string)($d['confidence'] ?? ''), $rule),
+                'est_md'     => $est['md'],
+                'est_by'     => $est['by'],
+                'est_note'   => $est['note'],
                 'cost_micro' => (int)round($got->costUsd * 1_000_000),
             ];
 
@@ -269,13 +307,58 @@ TXT;
             if (!($e instanceof LlmError)) {
                 error_log('[BlueStudio] DifficultyScorer: ' . $e);
             }
+            $est = self::estFromDifficulty((int)$rule['level'], $effortTable);
             return [
                 'difficulty' => $rule['level'],
                 'by'         => 'rule',
                 'note'       => mb_substr(self::ruleNote($rule) . ' · AI 미사용: ' . $why, 0, 500),
+                'est_md'     => $est['md'],
+                'est_by'     => $est['by'],
+                'est_note'   => $est['note'],
                 'cost_micro' => 0,
             ];
         }
+    }
+
+    /**
+     * 난이도에서 공수를 환산한다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 우리 실적이 있으면 그걸 쓴다                                  │
+     * │                                                              │
+     * │ "★4 는 보통 3.2일" 이 우리 완료 건에서 나온 숫자라면, 그건    │
+     * │ 통념보다 훨씬 강한 근거다. 몇 건에서 나왔는지까지 적어 둬야    │
+     * │ 사람이 그 숫자를 얼마나 믿을지 판단할 수 있다.                │
+     * │                                                              │
+     * │ 실적이 모자라면 기본표를 쓰되 **기본표라고 말한다.** 어디서    │
+     * │ 나온 숫자인지 모르는 일정은 아무도 책임지지 못한다.           │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * @param array<int, array{md:float, n:int}> $table TaskRepo::effortTable()
+     * @return array{md:float, by:string, note:string}
+     */
+    public static function estFromDifficulty(int $level, array $table = [], string $prefix = ''): array
+    {
+        $level = max(1, min(5, $level));
+
+        if (isset($table[$level]) && $table[$level]['md'] > 0) {
+            return [
+                'md'   => (float)$table[$level]['md'],
+                'by'   => 'rule',
+                'note' => sprintf('%s난이도 ★%d 환산 %s M/D — 우리 완료 건 %d개의 평균입니다.',
+                    $prefix, $level, $table[$level]['md'], $table[$level]['n']),
+            ];
+        }
+
+        $md = self::EST_DEFAULT[$level];
+        return [
+            'md'   => $md,
+            'by'   => 'rule',
+            'note' => sprintf('%s난이도 ★%d 환산 %s M/D — **기본표**입니다(우리 실적이 아직 모자랍니다). '
+                            . '실제와 다르면 고쳐 주세요. 사람이 고친 값은 다음 판정이 덮지 않고, '
+                            . '쌓이면 이 환산의 근거가 됩니다.',
+                $prefix, $level, $md),
+        ];
     }
 
     /** 믿을 수 없는 글은 전부 울타리 안에 넣는다. */

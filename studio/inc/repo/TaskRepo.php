@@ -476,17 +476,82 @@ final class TaskRepo
      */
     public function pendingDifficulty(int $projectId, bool $redo = false): array
     {
-        $sql = 'SELECT t.id, t.title, t.description, t.difficulty, t.difficulty_by
+        // ┌──────────────────────────────────────────────────────────┐
+        // │ 난이도와 공수를 **따로** 본다                              │
+        // │                                                          │
+        // │ 한 태스크에서 난이도는 사람이 고쳤는데 공수는 비어 있을    │
+        // │ 수 있다. 행 단위로 "사람이 손댔나" 를 보면 그 공수가 영영  │
+        // │ 안 채워진다. 칸마다 따로 판정한다.                        │
+        // └──────────────────────────────────────────────────────────┘
+        $needDiff = $redo ? '1' : 't.difficulty IS NULL';
+        $needEst  = $redo ? '1' : 't.est_md IS NULL';
+
+        $sql = 'SELECT t.id, t.title, t.description, t.difficulty, t.difficulty_by,
+                       t.est_md, t.est_md_by
                   FROM bs_task t
                  WHERE t.project_id = ?
                    AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)
-                   AND COALESCE(t.difficulty_by, "") <> "human"';
-        $sql .= $redo ? '' : ' AND t.difficulty IS NULL';
-        $sql .= ' ORDER BY t.seq, t.id';
+                   AND ( (COALESCE(t.difficulty_by, "") <> "human" AND ' . $needDiff . ')
+                      OR (COALESCE(t.est_md_by, "")    <> "human" AND ' . $needEst . ') )
+                 ORDER BY t.seq, t.id';
 
         $st = $this->pdo->prepare($sql);
         $st->execute([$projectId]);
         return $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * 난이도별 실제 공수. 예상공수를 환산할 때 쓴다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 사람이 세운 숫자만 센다                                       │
+     * │                                                              │
+     * │ 자동 판정이 넣은 공수까지 평균에 넣으면, 기본표에서 나온 값이  │
+     * │ 다시 기본표를 떠받치는 **자기 참조**가 된다. 그러면 표가       │
+     * │ 영원히 처음 값에 묶인다.                                      │
+     * │                                                              │
+     * │ est_md_by 가 NULL 인 줄은 019 이전에 들어온 것이라 사람이      │
+     * │ 넣은 것으로 본다 — 그때는 자동 판정이 없었다.                 │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * @param int $minSamples 이보다 적으면 그 난이도는 돌려주지 않는다
+     * @return array<int, array{md:float, n:int}>
+     */
+    public function effortTable(int $minSamples = 5): array
+    {
+        try {
+            $st = $this->pdo->query(
+                'SELECT difficulty, COUNT(*) n, AVG(est_md) md
+                   FROM bs_task
+                  WHERE est_md IS NOT NULL AND est_md > 0 AND difficulty IS NOT NULL
+                    AND COALESCE(est_md_by, "human") = "human"
+                  GROUP BY difficulty'
+            );
+            $out = [];
+            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                if ((int)$r['n'] >= $minSamples) {
+                    $out[(int)$r['difficulty']] = ['md' => round((float)$r['md'], 1),
+                                                   'n'  => (int)$r['n']];
+                }
+            }
+            return $out;
+        } catch (Throwable $e) {
+            // 019 를 아직 안 올린 서버에서도 판정은 돌아야 한다.
+            return [];
+        }
+    }
+
+    /** 자동 판정이 매긴 예상공수를 적는다. **근거를 반드시 함께 적는다.** */
+    public function setEstimate(int $id, float $md, string $by, string $note): void
+    {
+        $this->pdo->prepare(
+            'UPDATE bs_task SET est_md = ?, est_md_by = ?, est_md_note = ? WHERE id = ?'
+        )->execute([
+            max(0.1, min((float)BS_TASK_MAX_EST_MD, $md)),
+            in_array($by, ['human', 'rule', 'ai'], true) ? $by : 'rule',
+            mb_substr($note, 0, 500),
+            $id,
+        ]);
     }
 
     /**

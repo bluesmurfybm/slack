@@ -218,6 +218,55 @@ ok('기획 글이 없으면 없다고 알린다',
    str_contains($spy3->users[0], '제목만 보고 판단'), mb_substr($spy3->users[0], 0, 200));
 
 // =====================================================================
+echo "\n[E2] 예상공수 — 어디서 나온 숫자인지 반드시 밝힌다\n";
+//
+// 공수는 난이도보다 더 조심해야 한다. 난이도는 틀려도 토론거리지만
+// **공수는 그대로 일정이 된다.** 출처를 모르는 일정은 아무도 책임지지
+// 못한다.
+// =====================================================================
+$spy = new SpyLlmClient([['difficulty' => 4, 'reason' => 'ok', 'confidence' => 'high',
+                          'est_md' => 3.5, 'est_reason' => '목록·상세·검증 세 화면이 필요하다']]);
+$r = (new DifficultyScorer($spy))->score(['title' => '수강 신청']);
+ok('AI 가 본 공수를 쓴다', $r['est_md'] === 3.5 && $r['est_by'] === 'ai',
+   json_encode($r, JSON_UNESCAPED_UNICODE));
+ok('그 이유가 근거에 담긴다', str_contains($r['est_note'], '세 화면'), $r['est_note']);
+ok('프롬프트가 공수를 묻는다', str_contains($spy->systems[0], '예상공수'));
+// ★ 지어낸 숫자가 그대로 일정이 된다. 모르면 비우라고 시킨다.
+ok('★ 모르면 비우라고 시킨다', str_contains($spy->systems[0], 'null 로 둔다'));
+
+// 모델이 못 가늠하면(null) 난이도에서 환산한다 — 판정이 통째로 비는 것보다 낫다
+$spy2 = new SpyLlmClient([['difficulty' => 4, 'reason' => 'ok', 'confidence' => 'low',
+                           'est_md' => null, 'est_reason' => null]]);
+$r = (new DifficultyScorer($spy2))->score(['title' => '수강 신청']);
+ok('★ 모델이 못 보면 난이도에서 환산한다',
+   $r['est_md'] === DifficultyScorer::EST_DEFAULT[4] && $r['est_by'] === 'rule',
+   json_encode($r, JSON_UNESCAPED_UNICODE));
+ok('환산이라고 밝힌다', str_contains($r['est_note'], '환산'), $r['est_note']);
+ok('★ 기본표라고 못 박는다', str_contains($r['est_note'], '기본표'), $r['est_note']);
+
+// 우리 실적이 있으면 그쪽이 이긴다. 통념보다 훨씬 강한 근거다.
+$ours = DifficultyScorer::estFromDifficulty(4, [4 => ['md' => 3.2, 'n' => 17]]);
+ok('★ 우리 실적이 기본표를 이긴다', $ours['md'] === 3.2, json_encode($ours, JSON_UNESCAPED_UNICODE));
+// ★ 몇 건에서 나왔는지 알아야 그 숫자를 얼마나 믿을지 판단할 수 있다.
+ok('★ 몇 건에서 나온 평균인지 적는다',
+   str_contains($ours['note'], '17개'), $ours['note']);
+ok('기본표라고 하지 않는다', !str_contains($ours['note'], '기본표'), $ours['note']);
+
+// AI 가 통째로 막혀도 공수는 나온다
+$r = (new DifficultyScorer(new NullLlmClient()))->score(['title' => '문구 수정']);
+ok('★ AI 없이도 공수가 나온다', $r['est_md'] > 0 && $r['est_by'] === 'rule',
+   json_encode($r, JSON_UNESCAPED_UNICODE));
+
+// 범위를 벗어난 값은 믿지 않는다
+foreach ([0, -3, 'abc'] as $bad) {
+    $sp = new SpyLlmClient([['difficulty' => 3, 'reason' => 'ok', 'confidence' => 'low',
+                             'est_md' => $bad, 'est_reason' => 'x']]);
+    $rr = (new DifficultyScorer($sp))->score(['title' => 'x']);
+    ok('이상한 공수(' . json_encode($bad) . ')는 환산으로 대체', $rr['est_by'] === 'rule',
+       json_encode($rr, JSON_UNESCAPED_UNICODE));
+}
+
+// =====================================================================
 echo "\n[F] 구조화 출력 스키마 — 안 받는 제약은 떼되 말로 남긴다\n";
 //
 // 2026-10-06 운영에서: WBS 도출 스키마의 maxItems 때문에 매번 400 이 났다.

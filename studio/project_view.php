@@ -302,7 +302,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <button type="button" class="ba-btn ba-btn--danger" id="ba-lk-cancel" hidden>멈추기</button>
         <span class="ba-sep"></span>
         <button type="button" class="ba-btn" id="ba-lk-score"
-                title="읽어 둔 기획 내용을 근거로 태스크 난이도(1~5)를 매깁니다">난이도 매기기</button>
+                title="읽어 둔 기획 내용을 근거로 난이도(1~5)와 예상공수(M/D)를 매깁니다&#10;비어 있는 칸만 채웁니다. 사람이 넣은 값은 건드리지 않습니다">난이도·공수 매기기</button>
         <button type="button" class="ba-btn" id="ba-lk-rescore"
                 title="이미 매긴 것도 다시 매깁니다. 사람이 고친 값은 건드리지 않습니다">다시 매기기</button>
         <span class="ba-spacer"></span>
@@ -385,7 +385,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
               <th style="width:46px" title="확정한 태스크만 배정 대상이 됩니다">확정</th>
               <th style="width:64px">번호</th>
               <th>태스크</th>
-              <th style="width:76px">공수<span class="ba-th-unit">M/D</span></th>
+              <th style="width:76px">예상공수<span class="ba-th-unit">M/D</span></th>
               <th style="width:72px">난이도</th>
               <th style="width:196px">계획 기간</th>
               <th style="width:120px">분야</th>
@@ -456,7 +456,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
             <tr>
               <th style="width:64px">번호</th>
               <th>태스크</th>
-              <th style="width:64px">공수</th>
+              <th style="width:64px">예상공수</th>
               <th style="width:56px">난이도</th>
               <th style="width:150px">담당자</th>
               <th style="width:86px">역할</th>
@@ -559,7 +559,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       </p>
       <p class="ba-panel__hint">
         줄 앞 탭을 뺀 나머지 칸은 순서대로
-        <b>제목 · 공수(M/D) · 난이도(1~5) · 시작일 · 종료일</b> 로 읽습니다.
+        <b>제목 · 예상공수(M/D) · 난이도(1~5) · 시작일 · 종료일</b> 로 읽습니다.
         뒤쪽 칸은 비워 둬도 됩니다.
       </p>
       <p class="ba-panel__hint">

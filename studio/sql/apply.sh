@@ -106,6 +106,7 @@ FILES="
 016_migration_analysis.sql
 017_migration_api_budget.sql
 018_migration_job_result.sql
+019_migration_est_source.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

@@ -2602,7 +2602,11 @@ ok('★ AI 가 꺼져 있으면 그 사실을 미리 말한다',
 
 $worker = shell_exec(escapeshellarg(PHP_BINARY) . ' '
         . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
-ok('워커가 난이도를 매긴다', str_contains((string)$worker, '난이도 ★'), trim((string)$worker));
+// 로그 한 줄에 난이도·공수와 **각각 누가 매겼는지**가 같이 찍힌다.
+//   ★4 (ai) · 3.5 M/D (ai) · 수강 신청
+ok('워커가 난이도와 공수를 매긴다',
+   str_contains((string)$worker, '★') && str_contains((string)$worker, 'M/D'),
+   trim((string)$worker));
 
 $rows = $pdoR->query("SELECT difficulty, difficulty_by, difficulty_note
                         FROM bs_task WHERE project_id = $pid
@@ -2642,12 +2646,40 @@ ok('다시 매기기는 받아 준다', $r['status'] === 200, $r['body']);
 shell_exec(escapeshellarg(PHP_BINARY) . ' '
          . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
 
-$kept = $pdoR->query("SELECT difficulty, difficulty_by, difficulty_note FROM bs_task WHERE id = $one")
-             ->fetch(PDO::FETCH_ASSOC);
+$kept = $pdoR->query("SELECT difficulty, difficulty_by, difficulty_note, est_md, est_md_by
+                        FROM bs_task WHERE id = $one")->fetch(PDO::FETCH_ASSOC);
 ok('★ 사람이 매긴 값은 다시 매기기에도 그대로다',
    (int)$kept['difficulty'] === 5 && $kept['difficulty_by'] === 'human'
    && $kept['difficulty_note'] === '내가 봤다',
    json_encode($kept, JSON_UNESCAPED_UNICODE));
+// ★ 난이도만 사람이 고쳐 둔 태스크라도 **공수는 채워져야 한다.** 행 단위로
+//   "사람이 손댔나" 를 보면 그 공수가 영영 안 채워진다.
+ok('★ 난이도를 사람이 고쳐도 공수는 채운다',
+   $kept['est_md'] !== null && $kept['est_md_by'] === 'rule',
+   json_encode($kept, JSON_UNESCAPED_UNICODE));
+
+// 거꾸로 — 사람이 넣은 공수는 자동 판정이 덮지 않는다
+$pdoR->exec("UPDATE bs_task SET est_md = 12.5, est_md_by = 'human',
+                                est_md_note = '내가 넣었다' WHERE id = $one");
+$admin->req('/studio/api/analysis.php?act=score',
+    ['csrf' => true, 'json' => ['project_id' => $pid, 'redo' => '1']]);
+shell_exec(escapeshellarg(PHP_BINARY) . ' '
+         . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
+$kept2 = $pdoR->query("SELECT est_md, est_md_by, est_md_note FROM bs_task WHERE id = $one")
+              ->fetch(PDO::FETCH_ASSOC);
+ok('★ 사람이 넣은 공수도 그대로다',
+   (float)$kept2['est_md'] === 12.5 && $kept2['est_md_by'] === 'human'
+   && $kept2['est_md_note'] === '내가 넣었다',
+   json_encode($kept2, JSON_UNESCAPED_UNICODE));
+
+// 근거 없는 숫자는 일정 근거로 못 쓴다
+$ests = $pdoR->query("SELECT est_md, est_md_by, est_md_note FROM bs_task
+                       WHERE project_id = $pid AND est_md_by IS NOT NULL
+                         AND est_md_by <> 'human'")->fetchAll(PDO::FETCH_ASSOC);
+ok('★ 자동으로 매긴 공수에는 근거가 늘 있다',
+   $ests !== [] && count(array_filter($ests, fn($x) => trim((string)$x['est_md_note']) !== ''))
+   === count($ests),
+   json_encode(array_column($ests, 'est_md_note'), JSON_UNESCAPED_UNICODE));
 
 // ---------------------------------------------------------------------
 // ┌──────────────────────────────────────────────────────────────────┐

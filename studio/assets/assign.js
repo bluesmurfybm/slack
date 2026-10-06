@@ -2140,9 +2140,9 @@
         }
       });
 
-      var s = '전체 ' + rows.length + '건 · 확정 ' + conf + '건 · 총 공수 ' +
+      var s = '전체 ' + rows.length + '건 · 확정 ' + conf + '건 · 총 예상공수 ' +
               (est ? est.toFixed(2).replace(/\.?0+$/, '') : 0) + ' M/D';
-      if (leafNoEst) s += ' · 공수 미입력 ' + leafNoEst + '건';
+      if (leafNoEst) s += ' · 예상공수 미입력 ' + leafNoEst + '건';
       $('#ba-w-sum').textContent = s;
 
       var dirty = $('#ba-w-dirty');
@@ -2544,7 +2544,7 @@
       if (c.unconfirmed) h += ' (미확정 ' + c.unconfirmed + '건은 빠집니다)';
       h += '. 배정안 생성은 다음 단계입니다.';
       if (c.leaf_no_est) {
-        h += '<br>공수가 비어 있는 말단 태스크가 <b>' + c.leaf_no_est +
+        h += '<br>예상공수가 비어 있는 말단 태스크가 <b>' + c.leaf_no_est +
              '건</b> 있습니다. 그만큼 배정 공수가 비어 계산됩니다.';
       }
       el.innerHTML = h;
