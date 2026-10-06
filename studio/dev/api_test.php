@@ -2743,6 +2743,14 @@ ok('늘어놓기는 안쪽 div 가 한다',
 ok('★ 행 높이를 고정해 줄을 맞춘다',
    (bool)preg_match('/\.ba-wbs td\s*\{[^}]*height:/', $css), '행 높이 고정이 사라졌다');
 
+// 가중치는 "올리면 무엇이 달라지는가" 를 한 줄로 알려 줘야 한다. 숫자만
+// 다섯 개 늘어놓으면 무엇을 올릴지 판단할 근거가 없다.
+ok('★ 가중치 다섯 가지에 설명이 다 붙어 있다',
+   (bool)preg_match('/W_HINT\s*=\s*\{(.+?)\};/s', $js, $m)
+   && count(array_filter(['domain', 'cap', 'avail', 'career', 'growth'],
+            fn($k) => str_contains($m[1], $k . ':'))) === 5,
+   '빠진 항목이 있다');
+
 $pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);
 
 // ---- 멈추기 ----

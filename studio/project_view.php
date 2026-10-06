@@ -431,9 +431,12 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       <!-- 가중치 패널 — 명세서 §6.1 표 -->
       <div class="ba-wpanel" id="ba-al-wpanel" hidden>
         <div class="ba-sliders" id="ba-al-wsliders"></div>
+        <!-- 항목별 설명은 슬라이더마다 한 줄씩 붙는다(assign.js 의 W_HINT).
+             여기는 **여러 항목에 걸친 규칙** 하나만 남긴다 — 설명이 두
+             군데로 갈리면 둘 다 안 읽힌다. -->
         <p class="ba-panel__hint">
-          합이 1 이 아니어도 됩니다 — <b>실제로 쓴 가중치의 합으로 나눠</b> 계산합니다.
-          그래서 쓰지 않는 항목을 0 으로 둬도 다른 항목이 손해 보지 않습니다.
+          합이 1 이 아니어도 됩니다 — <b>실제로 쓴 가중치의 합으로 나눠</b> 계산하므로,
+          안 쓰는 항목을 0 으로 둬도 다른 항목이 손해 보지 않습니다.
         </p>
         <div class="ba-formbar">
           <span class="ba-dim" id="ba-al-wnote"></span>
