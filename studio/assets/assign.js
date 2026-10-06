@@ -1692,10 +1692,33 @@
       if (bs.length) {
         blk.innerHTML = bs.map(function (b) {
           return '<div><b>' + esc(b.who) + ' 대기 ' + b.pending + '건</b> — ' +
-                 esc(b.reason) + '</div>';
+                 esc(b.reason) + '</div>' +
+                 // 안 쓰기로 한 연동이면 대기로 두는 것이 거짓이 된다.
+                 // 영영 안 읽을 것을 '기다림' 으로 두면 큐도 화면도 지저분하다.
+                 '<button type="button" class="ba-btn ba-btn--sm" style="margin-top:8px"' +
+                 ' data-lk-skip="' + esc(b.provider) + '" data-who="' + esc(b.who) + '"' +
+                 ' data-n="' + b.pending + '">대기 ' + b.pending + '건을 건너뜀으로 정리</button>';
         }).join('') +
         '<div class="ba-dim" style="margin-top:6px">' +
         '제한이 풀리면 저절로 이어서 읽습니다. 설정은 [외부 연동] 화면에서 봅니다.</div>';
+      }
+
+      // 거꾸로 — 쓸 수 있게 됐는데 전에 건너뛰기로 해 둔 것이 있으면
+      // 되살릴 길을 보여 준다. 안 그러면 다시 켜도 아무 일이 없다.
+      var rev = $('#ba-lk-revive');
+      var byp = d.by_provider || {};
+      var backs = Object.keys(byp).filter(function (p) {
+        var blockedNow = bs.some(function (b) { return b.provider === p; });
+        return !blockedNow && byp[p].skip > 0;
+      });
+      rev.hidden = backs.length === 0;
+      if (backs.length) {
+        rev.innerHTML = backs.map(function (p) {
+          var who = p === 'figma' ? '피그마' : '구글 드라이브';
+          return '<span>' + esc(who) + ' 링크 <b>' + byp[p].skip + '건</b>을 전에 건너뛰기로 해 두었습니다.</span>' +
+                 ' <button type="button" class="ba-btn ba-btn--sm" data-lk-revive="' + esc(p) +
+                 '" data-who="' + esc(who) + '">다시 읽기</button>';
+        }).join('');
       }
 
       var prog = $('#ba-lk-prog');
@@ -1743,6 +1766,24 @@
         })
         .catch(function (e) { toast(e.message, true); });
     }
+
+    // 안 쓰기로 한 연동의 대기 건을 정리 / 되살리기
+    $('#ba-lk-block').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-lk-skip]');
+      if (!b) return;
+      if (!confirm([b.dataset.who + ' 대기 ' + b.dataset.n + '건을 건너뜀으로 정리합니다.', '',
+                    '· 실패가 아니라 "읽지 않음" 으로 남습니다',
+                    '· 찾았다는 기록은 그대로 있습니다',
+                    '· 나중에 연동을 다시 켜면 [다시 읽기] 로 되돌립니다',
+                    '', '진행할까요?'].join('\n'))) return;
+      post('skip_provider', null, { provider: b.dataset.lkSkip });
+    });
+    $('#ba-lk-revive').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-lk-revive]');
+      if (!b) return;
+      if (!confirm(b.dataset.who + ' 링크를 다시 읽도록 되돌립니다. 진행할까요?')) return;
+      post('revive_provider', null, { provider: b.dataset.lkRevive });
+    });
 
     // 상태 단추 → 그 상태만 걸러 드로어를 연다
     $('#ba-lk-chips').addEventListener('click', function (e) {

@@ -93,6 +93,8 @@ function an_payload(LinkAnalyzer $an, JobRepo $jobs, int $projectId): array
         'count'   => $count,
         'total'   => count($links),
         'blocked' => $blocked,
+        // 쓰지 않기로 한 연동의 링크를 정리하거나 되살리는 단추를 가른다.
+        'by_provider' => $an->byProvider($projectId),
         // 도는 중인 작업이 있으면 진행률. 없으면 null — 화면이 단추를 되살린다.
         'job'     => $job === null ? null : [
             'id'      => (int)$job['id'],
@@ -217,6 +219,46 @@ bs_route(bs_param_str('act', 'status'), [
                           count($todo))
                 : sprintf('이미 넣어 두었습니다 (%d/%d건). 크론이 집어 가면 이어서 진행합니다.',
                           (int)($r['job']['done'] ?? 0), (int)($r['job']['total'] ?? 0))) . $note,
+        ]);
+    },
+
+    /**
+     * 쓰지 않기로 한 연동의 대기 링크를 '건너뜀' 으로 정리한다.
+     *
+     * **실패로 박지 않는다.** 고장난 것이 아니라 안 읽기로 한 것이고,
+     * 실패로 보이면 누군가 고치려 든다. 되돌릴 수 있게 둔다.
+     */
+    'skip_provider' => function () use ($projects, $an, $jobs): void {
+        $pid      = an_project($projects);
+        $provider = bs_param_str('provider');
+        if (!in_array($provider, [Integration::FIGMA, Integration::GOOGLE], true)) {
+            bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
+        }
+        $who = Integration::label($provider);
+        $n   = $an->skipPending($pid, $provider,
+            sprintf('%s 를 쓰지 않기로 해 읽지 않습니다. 설정에서 다시 켜고 [다시 읽기] 하면 됩니다.', $who));
+
+        bs_json_ok(an_payload($an, $jobs, $pid) + [
+            'message' => $n > 0
+                ? sprintf('%s 대기 %d건을 건너뜀으로 정리했습니다. 기록은 그대로 남습니다.', $who, $n)
+                : '정리할 대기 건이 없습니다.',
+        ]);
+    },
+
+    /** 건너뛰기로 했던 것을 다시 읽도록 되돌린다. 연동을 다시 켤 때 쓴다. */
+    'revive_provider' => function () use ($projects, $an, $jobs): void {
+        $pid      = an_project($projects);
+        $provider = bs_param_str('provider');
+        if (!in_array($provider, [Integration::FIGMA, Integration::GOOGLE], true)) {
+            bs_json_error('BAD_REQUEST', '어느 연동인지 알 수 없습니다.');
+        }
+        $who = Integration::label($provider);
+        $n   = $an->revivePending($pid, $provider);
+
+        bs_json_ok(an_payload($an, $jobs, $pid) + [
+            'message' => $n > 0
+                ? sprintf('%s 링크 %d건을 다시 읽도록 되돌렸습니다 — [링크 분석 시작] 을 누르세요.', $who, $n)
+                : '되돌릴 건이 없습니다.',
         ]);
     },
 

@@ -492,6 +492,76 @@ final class LinkAnalyzer
         return array_keys($out);
     }
 
+    // =================================================================
+    // 쓰지 않기로 한 연동의 링크 정리
+    //
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 왜 '실패' 가 아니라 '건너뜀' 인가                              │
+    // │                                                              │
+    // │ 피그마를 안 쓰기로 했을 때, 대기 중인 89건을 그대로 두면 큐를 │
+    // │ 매분 돌며 자리를 차지하고 화면에도 띠가 계속 뜬다.            │
+    // │                                                              │
+    // │ 그렇다고 '실패' 로 박으면 거짓이 된다 — 고장난 것이 아니라    │
+    // │ **안 읽기로 한 것**이다. 실패로 보이면 누군가 고치려 든다.    │
+    // │                                                              │
+    // │ 노션·사내 위키 주소를 다루는 방식과 같게 'skip' 으로 둔다.    │
+    // │ 찾았다는 기록은 남고, 읽지 않을 뿐이다. 나중에 마음이 바뀌면  │
+    // │ revivePending() 으로 그대로 되살린다 — 아무것도 잃지 않는다.  │
+    // └──────────────────────────────────────────────────────────────┘
+    // =================================================================
+
+    /** 그 연동의 대기 링크를 '건너뜀' 으로 돌린다. 왜 그랬는지 함께 적는다. */
+    public function skipPending(int $projectId, string $provider, string $why): int
+    {
+        $st = $this->pdo->prepare(
+            'UPDATE bs_source_link SET status = "skip", error = ?
+              WHERE project_id = ? AND provider = ? AND status = "pending"'
+        );
+        $st->execute([mb_substr($why, 0, 300), $projectId, $provider]);
+        return $st->rowCount();
+    }
+
+    /** 건너뛰기로 했던 것을 다시 읽도록 되돌린다. 연동을 다시 켤 때 쓴다. */
+    public function revivePending(int $projectId, string $provider): int
+    {
+        // fetched_at 도 지운다. 안 지우면 되시도 간격에 걸려 몇 분간
+        // 아무 일도 안 일어난다(retryFailed 와 같은 이유).
+        $st = $this->pdo->prepare(
+            'UPDATE bs_source_link SET status = "pending", error = NULL, fetched_at = NULL
+              WHERE project_id = ? AND provider = ? AND status = "skip"'
+        );
+        $st->execute([$projectId, $provider]);
+        return $st->rowCount();
+    }
+
+    /**
+     * 연동별로 대기·건너뜀이 몇 건인가.
+     *
+     * 화면이 "정리할까요" 와 "되살릴까요" 중 무엇을 보여 줄지 가른다.
+     * 읽을 수 없는 주소(provider='other')는 사람이 손댈 것이 아니라 뺀다.
+     *
+     * @return array<string, array{pending:int, skip:int}>
+     */
+    public function byProvider(int $projectId): array
+    {
+        $st = $this->pdo->prepare(
+            'SELECT provider, status, COUNT(*) n FROM bs_source_link
+              WHERE project_id = ? AND provider <> "other"
+              GROUP BY provider, status'
+        );
+        $st->execute([$projectId]);
+
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $p = (string)$r['provider'];
+            $out[$p] ??= ['pending' => 0, 'skip' => 0];
+            if (isset($out[$p][(string)$r['status']])) {
+                $out[$p][(string)$r['status']] = (int)$r['n'];
+            }
+        }
+        return $out;
+    }
+
     /** 화면에 보여 줄 목록. parsed_text 는 길어서 빼고 길이만 준다. */
     public function links(int $projectId): array
     {

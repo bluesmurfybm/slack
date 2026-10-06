@@ -2516,6 +2516,65 @@ ok('막힌 연동만 화면에 알린다',
    count($d['blocked'] ?? []) === 1 && ($d['blocked'][0]['provider'] ?? '') === 'figma',
    json_encode($d['blocked'] ?? [], JSON_UNESCAPED_UNICODE));
 
+// ---------------------------------------------------------------------
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 안 쓰기로 한 연동의 대기 건 정리                                  │
+// │                                                                  │
+// │ 피그마를 안 쓰기로 했는데 대기 89건이 그대로 남아 큐를 매분 돌고  │
+// │ 화면에도 띠가 계속 떴다. 그렇다고 '실패' 로 박으면 거짓이 된다 —  │
+// │ 고장난 것이 아니라 **안 읽기로 한 것**이고, 실패로 보이면 누군가  │
+// │ 고치려 든다.                                                      │
+// └──────────────────────────────────────────────────────────────────┘
+// ---------------------------------------------------------------------
+$r = $guest->req('/studio/api/analysis.php?act=skip_provider',
+    ['csrf' => true, 'json' => ['project_id' => $pid, 'provider' => 'figma']]);
+ok('정리는 권한이 있어야', $r['status'] === 403, '상태 ' . $r['status']);
+
+$r = $admin->req('/studio/api/analysis.php?act=skip_provider',
+    ['csrf' => true, 'json' => ['project_id' => $pid, 'provider' => 'nope']]);
+ok('모르는 연동은 거절', $r['status'] === 400, '상태 ' . $r['status']);
+
+$was = $pdoR->query("SELECT provider, status FROM bs_source_link WHERE project_id = $pid")
+            ->fetchAll(PDO::FETCH_ASSOC);
+$figPending = count(array_filter($was,
+    fn($x) => $x['provider'] === 'figma' && $x['status'] === 'pending'));
+$gooBefore  = count(array_filter($was, fn($x) => $x['provider'] === 'google'));
+
+$r = $admin->req('/studio/api/analysis.php?act=skip_provider',
+    ['csrf' => true, 'json' => ['project_id' => $pid, 'provider' => 'figma']]);
+ok('피그마 대기를 건너뜀으로 정리한다', $r['status'] === 200, $r['body']);
+
+$now = $pdoR->query("SELECT provider, status, error FROM bs_source_link WHERE project_id = $pid")
+            ->fetchAll(PDO::FETCH_ASSOC);
+$figSkip = array_values(array_filter($now,
+    fn($x) => $x['provider'] === 'figma' && $x['status'] === 'skip'));
+ok('★ 실패가 아니라 건너뜀이다', count($figSkip) === $figPending && $figPending > 0,
+   count($figSkip) . ' / ' . $figPending);
+ok('★ 왜 안 읽는지 적어 둔다',
+   str_contains((string)($figSkip[0]['error'] ?? ''), '쓰지 않기로'),
+   (string)($figSkip[0]['error'] ?? ''));
+// ★ 다른 연동을 건드리면 멀쩡한 링크가 조용히 사라진 것처럼 보인다.
+ok('★ 다른 연동은 안 건드린다',
+   count(array_filter($now, fn($x) => $x['provider'] === 'google')) === $gooBefore);
+
+$d = $admin->req('/studio/api/analysis.php?act=status&project_id=' . $pid)['json']['data'] ?? [];
+ok('정리하면 막힘 띠가 사라진다', ($d['blocked'] ?? []) === [],
+   json_encode($d['blocked'] ?? [], JSON_UNESCAPED_UNICODE));
+ok('되살릴 수 있다고 알려 준다',
+   (int)($d['by_provider']['figma']['skip'] ?? 0) === $figPending,
+   json_encode($d['by_provider'] ?? []));
+
+// ---- 되돌리기 ----
+$r = $admin->req('/studio/api/analysis.php?act=revive_provider',
+    ['csrf' => true, 'json' => ['project_id' => $pid, 'provider' => 'figma']]);
+ok('★ 되돌릴 수 있다 — 아무것도 잃지 않는다',
+   (int)($r['json']['data']['by_provider']['figma']['pending'] ?? 0) === $figPending,
+   json_encode($r['json']['data']['by_provider'] ?? []));
+ok('되돌린 뒤 사유는 지워진다',
+   (int)$pdoR->query("SELECT COUNT(*) FROM bs_source_link
+                       WHERE project_id = $pid AND provider='figma' AND error IS NOT NULL")
+             ->fetchColumn() === 0);
+
 $admin->req('/studio/api/analysis.php?act=cancel', ['csrf' => true, 'json' => ['project_id' => $pid]]);
 $pdoR->exec("DELETE FROM bs_api_usage");
 $pdoR->exec("DELETE FROM bs_integration");

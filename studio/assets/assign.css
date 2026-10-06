@@ -1557,6 +1557,8 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-chip-b:hover { border-color: var(--ba-brand); }
 .ba-chip-b.is-on { background: var(--ba-brand); border-color: var(--ba-brand); color: #fff; }
 .ba-chip-b.is-on b { color: #fff; }
+/* 건너뛰기로 해 둔 것을 되살리는 줄. 연동을 다시 켰을 때만 보인다. */
+.ba-lk-revive { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 0; }
 /* 진행률. 크론이 집어 갈 때까지 1분쯤 걸리므로 '대기 중' 도 보여 준다. */
 .ba-lk-prog { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
 .ba-lk-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--ba-surface);

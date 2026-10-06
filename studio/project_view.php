@@ -317,6 +317,9 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
            │ 걸렸다. 관리자가 연동을 꺼 둔 경우도 마찬가지다.          │
            └──────────────────────────────────────────────────────────┘ -->
       <div class="ba-alert ba-alert--wait" id="ba-lk-block" hidden></div>
+      <!-- 거꾸로 — 쓸 수 있게 됐는데 전에 건너뛰기로 해 둔 것이 있을 때.
+           이 줄이 없으면 연동을 다시 켜도 아무 일이 안 일어난다. -->
+      <div class="ba-note ba-lk-revive" id="ba-lk-revive" hidden></div>
 
       <div class="ba-lk-prog" id="ba-lk-prog" hidden>
         <div class="ba-lk-bar"><i id="ba-lk-fill"></i></div>
