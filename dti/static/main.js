@@ -35,7 +35,10 @@ function renderListPage() {
     applyListQuery();
     buildMyTeam();
   }
-  if (APP.view.mode === "user") renderStats();
+  if (APP.view.mode === "user") {
+    renderStats();
+    renderSchedule();
+  }
   render();
   if (LIST_READY) {
     refreshDrawer();

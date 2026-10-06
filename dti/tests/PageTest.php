@@ -53,6 +53,8 @@ final class PageTest extends TestCase
         $this->assertContains('drawer', dti_page('list')['scripts']);
         $this->assertNotContains('form', dti_page('list')['scripts']);
         $this->assertContains('form', dti_page('archive')['scripts']);
+        $this->assertContains('schedule', dti_page('list')['scripts']);
+        $this->assertNotContains('schedule', dti_page('articles')['scripts']);
     }
 
     public function test_자산_주소에_수정시각이_붙는다(): void

@@ -419,6 +419,92 @@ li.empty .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bo
 .mystrip .m span{font-size:11.5px;font-weight:600;color:#cfe0ff}
 .mystrip .divider{width:1px;height:32px;background:rgba(255,255,255,.24)}
 
+/* ---------- 일정판 ----------
+   포털 알림판(styles/board.css)의 판 모양을 그대로 옮긴다 — 머리말 띠가 얹힌 판은 "읽는 칸" 이다.
+   목록은 줄이 길어 넓게, 달력은 7칸이면 되므로 붙박이 너비 */
+.sch-board{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;margin-top:18px;align-items:stretch}
+.sch-panel{background:var(--bg-card);border:1px solid var(--bo-secondary);border-radius:var(--r16);
+  display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.sch-head{display:flex;align-items:center;gap:9px;padding:12px 16px 11px;
+  background:#F4F7FD;border-bottom:1px solid var(--bo-secondary)}
+.sch-head h2{font-family:'Space Grotesk',var(--sans);font-size:14px;font-weight:600;margin:0;
+  color:#0f2a55;letter-spacing:.01em}
+.sch-head .cnt{font-size:12px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
+.sch-seg{display:inline-flex;margin-left:auto;background:#e9eef7;border-radius:var(--r8);padding:2px}
+.sch-seg button{border:0;background:none;font-family:var(--sans);font-size:12px;font-weight:600;
+  color:var(--tx-quaternary);padding:3px 10px;border-radius:var(--r6);cursor:pointer}
+.sch-seg button.on{background:var(--bg-card);color:#0f2a55;box-shadow:var(--shadow-sm)}
+
+.sch-list{position:relative;max-height:372px;overflow-y:auto;padding:6px 8px 8px;scrollbar-width:thin}
+.sch-day{border-radius:var(--r12);padding:4px 0}
+.sch-day + .sch-day{border-top:1px solid var(--bo-primary)}
+.sch-day.flash{animation:sch-flash 1.2s ease}
+@keyframes sch-flash{from{background:var(--cos95)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.sch-day.flash{animation:none;background:var(--cos95)}}
+.sch-day-head{display:flex;align-items:baseline;gap:8px;padding:8px 10px 4px}
+.sch-day-head .d{font-family:'Space Grotesk',var(--sans);font-weight:600;font-size:15px;color:#0f2a55;
+  font-variant-numeric:tabular-nums}
+.sch-day-head .w{font-size:12.5px;font-weight:600;color:var(--tx-tertiary)}
+.sch-dday{margin-left:auto;font-size:11px;font-weight:700;border-radius:999px;padding:1px 8px;
+  background:var(--cos95);color:var(--cos40);font-variant-numeric:tabular-nums}
+.sch-dday.soon{background:var(--cos50);color:#fff}
+.sch-dday.past{background:var(--gray94);color:var(--tx-quaternary)}
+.sch-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;
+  padding:7px 10px;border-radius:var(--r10);cursor:pointer;font-family:var(--sans);color:var(--tx-primary)}
+.sch-row:hover{background:#E6EDF9}
+.sch-row .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.sch-row .who{font-size:12.5px;color:var(--tx-tertiary);white-space:nowrap}
+.sch-row.mine .tt{font-weight:700;color:#0f2a55}
+.sch-mag,.sch-done{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:5px;
+  font-size:11px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.sch-mag{background:var(--gray95);color:var(--tx-tertiary)}
+.sch-done{background:var(--posi95);color:var(--posi40)}
+.sch-me{font-size:10px;font-weight:700;background:var(--cos50);color:#fff;border-radius:999px;padding:1px 6px;flex-shrink:0}
+.sch-empty{padding:26px 14px;text-align:center;color:var(--tx-quaternary);font-size:13px}
+.sch-undated{margin:6px 2px 0;padding:10px;border-radius:var(--r10);background:var(--gray98);
+  border:1px dashed var(--bo-tertiary);font-size:13px;color:var(--tx-tertiary)}
+.sch-undated b{color:var(--tx-secondary)}
+
+.sch-cal{padding:10px 14px 14px}
+.sch-nav{display:flex;align-items:center;gap:4px;margin-bottom:8px}
+.sch-nav .ym{font-family:'Space Grotesk',var(--sans);font-weight:600;font-size:16px;color:#0f2a55;
+  margin-right:auto;font-variant-numeric:tabular-nums}
+.sch-icon{width:28px;height:28px;border:0;border-radius:var(--r8);background:none;color:var(--tx-quaternary);
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.sch-icon:hover{background:#E6EDF9;color:var(--cos50)}
+.sch-icon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.sch-today{border:1px solid var(--bo-tertiary);background:var(--bg-card);border-radius:var(--r8);font-family:var(--sans);
+  font-size:12px;font-weight:600;color:var(--tx-tertiary);padding:3px 9px;cursor:pointer;margin-left:4px}
+.sch-today:hover{border-color:var(--cos50);color:var(--cos50)}
+.sch-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.sch-dow{text-align:center;font-size:11.5px;font-weight:600;color:var(--tx-quinary);padding:4px 0}
+.sch-dow.sun,.sch-cell.sun{color:var(--nega40)}
+.sch-dow.sat,.sch-cell.sat{color:var(--cos45)}
+.sch-cell{position:relative;aspect-ratio:1/1.02;border:0;border-radius:var(--r10);background:none;
+  display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0 0;
+  font-family:var(--sans);font-size:13px;color:var(--tx-secondary);font-variant-numeric:tabular-nums}
+.sch-cell.out,.sch-cell.out.sun,.sch-cell.out.sat{color:var(--gray80)}
+.sch-cell .n{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.sch-cell.today .n{background:#0f2a55;color:#fff;font-weight:700}
+.sch-cell.has{cursor:pointer;background:var(--cos95)}
+.sch-cell.has:hover{background:var(--cos93)}
+.sch-cell.has.past{background:var(--gray95)}
+.sch-cell.has.past:hover{background:var(--gray94)}
+.sch-cell.picked{box-shadow:inset 0 0 0 2px var(--cos50)}
+.sch-cell .k{font-size:10.5px;font-weight:700;color:var(--cos40);line-height:1}
+.sch-cell.past .k{color:var(--tx-quaternary)}
+.sch-cell .mine-dot{position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--cos50)}
+.sch-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--bo-primary);
+  font-size:11.5px;color:var(--tx-quaternary)}
+.sch-legend span{display:inline-flex;align-items:center;gap:5px}
+.sch-legend i{width:12px;height:12px;border-radius:4px;display:inline-block}
+.sch-legend i.planned{background:var(--cos95)}
+.sch-legend i.done{background:var(--gray95);border:1px solid var(--bo-secondary)}
+.sch-legend i.mine{width:7px;height:7px;border-radius:50%;background:var(--cos50)}
+
+@media (max-width:900px){.sch-board{grid-template-columns:1fr}}
+@media (max-width:560px){.sch-row .who{display:none}}
+
 /* ---------- 진행 단계 레일 ---------- */
 .railwrap{
   display:inline-flex;align-items:center;gap:7px;

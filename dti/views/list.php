@@ -6,6 +6,42 @@ if (!isset($page)) {
 ?>
   <div class="wrap">
     <?php if ($page['admin']): include __DIR__ . '/tabs.php'; else: ?>
+      <div class="sch-board">
+        <section class="sch-panel" aria-labelledby="sch-list-title">
+          <div class="sch-head">
+            <h2 id="sch-list-title">Schedule</h2>
+            <span class="cnt" id="schCount"></span>
+            <div class="sch-seg" role="tablist" aria-label="일정 범위">
+              <button type="button" id="schUp" class="on" role="tab" aria-selected="true" onclick="setScheduleScope('up')">다가오는 발표</button>
+              <button type="button" id="schPast" role="tab" aria-selected="false" onclick="setScheduleScope('past')">지난 발표</button>
+            </div>
+          </div>
+          <div class="sch-list" id="schList"></div>
+        </section>
+        <section class="sch-panel" aria-labelledby="sch-cal-title">
+          <div class="sch-head"><h2 id="sch-cal-title">Calendar</h2></div>
+          <div class="sch-cal">
+            <div class="sch-nav">
+              <span class="ym" id="schMonth"></span>
+              <button type="button" class="sch-icon" title="이전 달" aria-label="이전 달" onclick="moveScheduleMonth(-1)">
+                <svg viewBox="0 0 24 24"><path d="m15 6-6 6 6 6" /></svg>
+              </button>
+              <button type="button" class="sch-icon" title="다음 달" aria-label="다음 달" onclick="moveScheduleMonth(1)">
+                <svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>
+              </button>
+              <button type="button" class="sch-today" onclick="moveScheduleMonth(0)">오늘</button>
+            </div>
+            <div class="sch-grid" id="schDays"></div>
+            <div class="sch-grid" id="schCells"></div>
+            <div class="sch-legend">
+              <span><i class="planned"></i>다가오는 발표</span>
+              <span><i class="done"></i>지난 발표</span>
+              <span><i class="mine"></i>내 발표</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
       <section class="mystrip" id="mystrip">
         <div class="m"><b id="statDone">0회</b><span>내 발표</span></div>
         <div class="divider"></div>
