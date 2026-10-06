@@ -150,6 +150,19 @@ final class WbsExtractor
             $got = $remote->fetch($url);
             $tmp = $got['file'];
 
+            // ┌──────────────────────────────────────────────────────┐
+            // │ 메모를 버리지 않는다                                   │
+            // │                                                      │
+            // │ 전에는 $doc->notes 를 그냥 흘렸다. 그래서 "시트 하나만 │
+            // │ 읽었다" 도 "25개를 전부 읽었다" 도 화면에 안 떴고,     │
+            // │ 154,480자가 들어와도 '읽음' 한 마디뿐이었다. 무엇을    │
+            // │ 읽었는지 모르면 결과가 이상해도 원인을 못 찾는다.      │
+            // └──────────────────────────────────────────────────────┘
+            $notes = [];
+            if (!empty($got['sheet_note'])) {
+                $notes[] = (string)$got['sheet_note'];
+            }
+
             if ($got['text'] !== null) {                 // 피그마 — 이미 글자다
                 $text = $got['text'];
                 $blocks = substr_count($text, "\n") + 1;
@@ -159,12 +172,13 @@ final class WbsExtractor
                                                $got['sheet'] ?? null);
                 $text   = $doc->text();
                 $blocks = count($doc->blocks);
+                $notes  = array_merge($notes, $doc->notes);
             }
             if (mb_strlen($text) > OfficeDocumentParser::MAX_CHARS) {
                 $text = mb_substr($text, 0, OfficeDocumentParser::MAX_CHARS);
             }
             $this->projects->updateSourceParse($sourceId, 'ok', $text, null);
-            return $this->parseResult('ok', mb_strlen($text), $blocks, null);
+            return $this->parseResult('ok', mb_strlen($text), $blocks, null, $notes);
 
         } catch (RemoteSourceError $e) {
             $this->projects->updateSourceParse($sourceId, 'fail', null, $e->getMessage());

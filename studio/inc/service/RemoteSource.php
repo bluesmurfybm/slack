@@ -167,7 +167,12 @@ final class RemoteSource
      * 기존 파서에 그대로 넘기고 **반드시 지워야 한다**.
      * 글자로 받는 것(피그마)은 text 를 채워 돌려준다.
      *
-     * @return array{kind:string, file:?string, text:?string, name:string}
+     * `sheet` 는 구글 시트 주소가 gid 로 **탭 하나**를 가리켰을 때 그 시트
+     * 이름이다. 파서에 그대로 넘기면 그 시트만 읽는다. `sheet_note` 는
+     * 그 과정에서 사람에게 할 말이 있을 때만 찬다(시트를 못 찾았다 등).
+     *
+     * @return array{kind:string, file:?string, text:?string, name:string,
+     *               sheet:?string, sheet_note:?string}
      * @throws RemoteSourceError
      */
     public function fetch(string $url): array
@@ -264,19 +269,33 @@ final class RemoteSource
         // 시트 하나를 가리킨 주소면 **그 시트 이름**을 알아 둔다. 파서가
         // 그 시트만 읽는다. 구글은 통합문서를 통째로만 내보내므로, 고르는
         // 일은 우리 쪽에서 한다.
-        $sheet = $gid !== '' && $kind === 'xlsx'
-               ? $this->googleSheetTitle($fileId, $gid, $access)
-               : null;
+        $sheet = null;
+        $note  = null;
+        if ($gid !== '' && $kind === 'xlsx') {
+            [$sheet, $note] = $this->googleSheetTitle($fileId, $gid, $access);
+        }
 
         return ['kind' => $kind, 'file' => $this->spill($bytes, $kind),
-                'text' => null, 'name' => $name, 'sheet' => $sheet];
+                'text' => null, 'name' => $name, 'sheet' => $sheet, 'sheet_note' => $note];
     }
 
     /**
-     * gid(시트 id)를 시트 이름으로 바꾼다. 못 알아내면 null — 그때는
-     * 통합문서 전체를 읽는다. **여기서 실패했다고 읽기를 포기하지 않는다.**
+     * gid(시트 id)를 시트 이름으로 바꾼다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 실패해도 읽기를 포기하지 않는다. 대신 **크게 말한다**          │
+     * │                                                              │
+     * │ 2026-10-06: 이 조회가 조용히 실패하고 통합문서 25개 시트를    │
+     * │ 전부 읽었다. 화면에는 '읽음 154,480자' 뿐이라, 왜 WBS 가      │
+     * │ 목차 탭으로 채워졌는지 알 길이 없었다.                        │
+     * │                                                              │
+     * │ 가장 흔한 원인은 **GCP 에서 Google Sheets API 를 안 켠 것**   │
+     * │ 이다(403). 설정 안내가 Drive API 만 켜라고 했다.              │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * @return array{0:?string, 1:?string} 시트 이름, 사람에게 보여 줄 메모
      */
-    private function googleSheetTitle(string $fileId, string $gid, string $access): ?string
+    private function googleSheetTitle(string $fileId, string $gid, string $access): array
     {
         try {
             $raw = $this->http(
@@ -286,18 +305,31 @@ final class RemoteSource
                 ['Authorization: Bearer ' . $access],
                 null, Integration::GOOGLE, 'sheet_meta'
             );
-            $j = json_decode($raw, true);
+            $j     = json_decode($raw, true);
+            $names = [];
             foreach (($j['sheets'] ?? []) as $s) {
-                $p = $s['properties'] ?? [];
+                $p       = $s['properties'] ?? [];
+                $names[] = (string)($p['title'] ?? '');
                 if ((string)($p['sheetId'] ?? '') === $gid) {
                     $t = trim((string)($p['title'] ?? ''));
-                    return $t === '' ? null : $t;
+                    if ($t !== '') {
+                        return [$t, null];     // 성공. 메모는 파서가 남긴다
+                    }
                 }
             }
+            return [null, sprintf(
+                '주소가 가리키는 시트(gid=%s)를 통합문서에서 찾지 못해 전체(%d개)를 읽었습니다.',
+                $gid, count($names)
+            )];
+
         } catch (Throwable $e) {
             error_log('[BlueStudio] googleSheetTitle: ' . $e->getMessage());
+            $why = $e instanceof RemoteSourceError ? $e->getMessage() : '알 수 없는 오류';
+            return [null,
+                '주소가 특정 시트를 가리키는데 시트 목록을 받지 못해 통합문서 전체를 읽었습니다. '
+                . 'GCP 콘솔에서 **Google Sheets API** 를 켰는지 확인하세요(Drive API 만으로는 안 됩니다). '
+                . '— ' . $why];
         }
-        return null;
     }
 
     /**
@@ -446,7 +478,7 @@ final class RemoteSource
                     . '주소거나, 연결된 계정이 그 파일을 볼 수 없을 수 있습니다.'
                 );
             }
-            return ['kind' => 'figma', 'file' => null, 'sheet' => null,
+            return ['kind' => 'figma', 'file' => null, 'sheet' => null, 'sheet_note' => null,
                     'text' => $one['text'], 'name' => $one['name']];
         }
 
@@ -471,7 +503,7 @@ final class RemoteSource
                 . '피그마에도 글자가 없어 뽑을 것이 없습니다.'
             );
         }
-        return ['kind' => 'figma', 'file' => null, 'text' => $text, 'sheet' => null,
+        return ['kind' => 'figma', 'file' => null, 'text' => $text, 'sheet' => null, 'sheet_note' => null,
                 'name' => (string)($j['name'] ?? $fileKey)];
     }
 
