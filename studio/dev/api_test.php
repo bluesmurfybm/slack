@@ -2590,6 +2590,40 @@ ok('★ 사람이 매긴 값은 다시 매기기에도 그대로다',
    && $kept['difficulty_note'] === '내가 봤다',
    json_encode($kept, JSON_UNESCAPED_UNICODE));
 
+// ---------------------------------------------------------------------
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 막힌 작업이 뒤를 굶기면 안 된다 (2026-10-06)                      │
+// │                                                                  │
+// │ 피그마가 꺼진 링크 작업이 매분 집혔다가 즉시 물러나는데 id 는     │
+// │ 그대로라 늘 큐 맨 앞이었다. 뒤에 넣은 난이도 작업은 영영 차례가   │
+// │ 오지 않았고, 화면에는 '이미 진행 중입니다' 만 떴다.               │
+// └──────────────────────────────────────────────────────────────────┘
+// ---------------------------------------------------------------------
+$pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);
+
+// 먼저 들어왔지만 **방금 물러난** 작업 (피그마가 꺼져 영영 못 도는 것)
+$pdoR->prepare(
+    'INSERT INTO bs_analysis_job (project_id, kind, status, total, created_at, finished_at, message)
+     VALUES (?, "links", "queued", 9, DATE_SUB(NOW(), INTERVAL 1 HOUR), NOW(), "막혀서 물러남")'
+)->execute([$pid]);
+$stuck = (int)$pdoR->lastInsertId();
+
+// 나중에 들어왔고 **한 번도 안 돈** 작업
+$pdoR->prepare(
+    'INSERT INTO bs_analysis_job (project_id, kind, status, total, created_at)
+     VALUES (?, "difficulty", "queued", 1, DATE_SUB(NOW(), INTERVAL 10 MINUTE))'
+)->execute([$pid]);
+$fresh = (int)$pdoR->lastInsertId();
+
+$w = shell_exec(escapeshellarg(PHP_BINARY) . ' '
+   . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
+ok('★ 방금 물러난 작업을 또 집지 않는다',
+   !str_contains((string)$w, '작업 #' . $stuck . ' 시작'), trim((string)$w));
+ok('★ 한 번도 안 돈 작업이 차례를 받는다',
+   str_contains((string)$w, '작업 #' . $fresh . ' 시작'), trim((string)$w));
+
+$pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);
+
 // 링크 목록은 드로어로 뺐다. 300건짜리 표가 늘 펼쳐져 있으면 바로 아래
 // WBS 칸까지 내려가는 데만 한참 걸린다.
 $page = $admin->req('/studio/project_view.php?id=' . $pid)['body'];

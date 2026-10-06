@@ -59,7 +59,9 @@ final class JobRepo
             $sql .= ' AND kind = ?';
             $arg[] = $kind;
         }
-        $sql .= ' ORDER BY id LIMIT 1';
+        // 실제로 돌고 있는 것을 먼저 보여 준다. 막혀서 대기만 하는 작업이
+        // 화면을 차지하면, 사람은 방금 누른 일이 안 돌아가는 줄 안다.
+        $sql .= ' ORDER BY (status = "running") DESC, id LIMIT 1';
 
         $st = $this->pdo->prepare($sql);
         $st->execute($arg);
@@ -99,12 +101,25 @@ final class JobRepo
     {
         $this->reviveStale();
 
+        // ┌──────────────────────────────────────────────────────────┐
+        // │ 막힌 작업이 뒤를 굶기면 안 된다                            │
+        // │                                                          │
+        // │ 전에는 `ORDER BY id` 였다. 피그마가 꺼진 링크 작업이      │
+        // │ 매분 집혔다가 즉시 물러나는데 id 는 그대로라 **늘 맨      │
+        // │ 앞**이었다. 뒤에 넣은 난이도 작업은 영영 차례가 오지      │
+        // │ 않았고, 화면에는 '이미 진행 중입니다' 만 떴다.            │
+        // │                                                          │
+        // │ **방금 돌아 본 것은 뒤로 보낸다.** 물러날 때 finish() 가  │
+        // │ finished_at 을 찍으므로 그 값이 늦을수록 뒤로 간다. 한    │
+        // │ 번도 안 돈 작업은 finished_at 이 없어 created_at 으로     │
+        // │ 줄을 서니 먼저 간다.                                      │
+        // └──────────────────────────────────────────────────────────┘
         $st = $this->pdo->prepare(
             'UPDATE bs_analysis_job
                 SET status = "running", started_at = COALESCE(started_at, NOW()),
                     heartbeat_at = NOW()
               WHERE status = "queued"
-              ORDER BY id LIMIT 1'
+              ORDER BY COALESCE(finished_at, created_at), id LIMIT 1'
         );
         $st->execute();
         if ($st->rowCount() === 0) {

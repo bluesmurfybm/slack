@@ -209,9 +209,14 @@ bs_route(bs_param_str('act', 'status'), [
             : ' AI 가 꺼져 있어 규칙으로 매깁니다 — 설정 화면에서 Claude 를 연결하면 더 정확해집니다.';
 
         bs_json_ok(an_payload($an, $jobs, $pid) + [
+            // "이미 진행 중입니다" 만 뜨면 사람은 **아무 일도 안 일어난다**
+            // 고 읽는다. 실제로 그래서 단추를 다시 눌렀다. 지금 어디쯤인지
+            // 숫자로 말해 준다.
             'message' => ($r['created']
-                ? sprintf('태스크 %d건의 난이도를 매기도록 넣었습니다.', count($todo))
-                : '이미 진행 중입니다.') . $note,
+                ? sprintf('태스크 %d건의 난이도를 매기도록 넣었습니다. 1분쯤 뒤부터 진행률이 올라갑니다.',
+                          count($todo))
+                : sprintf('이미 넣어 두었습니다 (%d/%d건). 크론이 집어 가면 이어서 진행합니다.',
+                          (int)($r['job']['done'] ?? 0), (int)($r['job']['total'] ?? 0))) . $note,
         ]);
     },
 
