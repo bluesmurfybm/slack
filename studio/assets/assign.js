@@ -2069,14 +2069,21 @@
       h += '<td class="ba-wr__no"><span>' + esc(n._no) + '</span>' +
            '<em class="ba-wr__dl">' + DEPTH_LABEL[r.depth] + '</em></td>';
 
-      h += '<td class="ba-wr__title" style="--ind:' + (r.depth - 1) + '">' +
+      // ┌──────────────────────────────────────────────────────────┐
+      // │ 늘어놓는 것은 <td> 가 아니라 안쪽 <div> 다                │
+      // │                                                          │
+      // │ 전에는 td 에 바로 display:flex 를 줬다. 그러면 그 칸이     │
+      // │ 표 레이아웃에서 빠져 **행 높이가 따로 놀고** 가로줄이      │
+      // │ 어긋난다. 실제로 화면이 두 줄로 갈라져 보였다.            │
+      // └──────────────────────────────────────────────────────────┘
+      h += '<td class="ba-wr__title" style="--ind:' + (r.depth - 1) + '"><div class="ba-wr__tin">' +
            '<input class="ba-input ba-wr__t" value="' + esc(n.title) + '"' + ro +
            ' placeholder="' + DEPTH_LABEL[r.depth] + ' 제목" data-f="title">' +
            (n.origin === 'auto' ? '<span class="ba-tag-auto" title="문서에서 자동으로 뽑은 초안입니다. 검토가 필요합니다.">자동</span>' : '') +
            (n.source_ref ? '<span class="ba-wr__src" title="출처: ' + esc(srcLabel(n)) + '">' +
                            esc(shortRef(n.source_ref)) + '</span>' : '') +
            (n.description ? '<span class="ba-wr__memo" title="상세 설명이 있습니다">설명</span>' : '') +
-           '</td>';
+           '</div></td>';
 
       // 상위 행은 자기 공수를 받지 않는다. 하위 합계가 곧 그 행의 공수다.
       // 둘 다 입력받으면 어느 쪽이 진짜인지 화면에서 알 수 없다.
@@ -2094,11 +2101,11 @@
       }
       h += '</select></td>';
 
-      h += '<td class="ba-wr__pd">' +
+      h += '<td class="ba-wr__pd"><div class="ba-wr__pdin">' +
            '<input type="date" class="ba-input ba-wr__d" value="' + esc(n.plan_start) + '"' + ro + ' data-f="plan_start">' +
            '<span>~</span>' +
            '<input type="date" class="ba-input ba-wr__d" value="' + esc(n.plan_end) + '"' + ro + ' data-f="plan_end">' +
-           '</td>';
+           '</div></td>';
 
       h += '<td class="ba-wr__dm">' + (n.domains.length
             ? '<span class="ba-wr__dmtag" title="' + esc(n.domains.map(function (x) { return x.name; }).join(', ')) + '">' +
@@ -2330,7 +2337,8 @@
       if (ta) {
         ta.addEventListener('input', function () {
           n.description = ta.value;
-          var cell = tbody.querySelector('tr[data-k="' + key + '"] .ba-wr__title');
+          // 안쪽 div 로 바뀌었다. 뱃지는 그 안에 붙어야 줄이 안 어긋난다.
+          var cell = tbody.querySelector('tr[data-k="' + key + '"] .ba-wr__tin');
           if (cell) {
             var memo = cell.querySelector('.ba-wr__memo');
             if (n.description && !memo) {

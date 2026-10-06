@@ -2726,6 +2726,23 @@ ok('★ 표가 본문에 펼쳐져 있지 않다',
    strpos($page, 'id="ba-lk-table"') > strpos($page, 'id="ba-lk-drawer"'),
    '표가 드로어 바깥에 있다');
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ <td> 에 display:flex 를 주면 표가 깨진다 (2026-10-06)             │
+// │                                                                  │
+// │ 그 칸이 표 레이아웃에서 빠져 행 높이가 따로 놀고, 가로줄이 두     │
+// │ 겹으로 갈라져 보였다. 늘어놓는 일은 안쪽 div 가 해야 한다.        │
+// └──────────────────────────────────────────────────────────────────┘
+$css = (string)@file_get_contents(dirname(__DIR__) . '/assets/assign.css');
+$js  = (string)@file_get_contents(dirname(__DIR__) . '/assets/assign.js');
+ok('★ WBS 표의 td 에 flex 를 주지 않는다',
+   !preg_match('/td\.ba-wr__(title|pd)\s*\{[^}]*display:\s*flex/', $css),
+   'td 에 flex 가 다시 들어왔다');
+ok('늘어놓기는 안쪽 div 가 한다',
+   str_contains($css, '.ba-wr__tin') && str_contains($css, '.ba-wr__pdin')
+   && str_contains($js, 'ba-wr__tin') && str_contains($js, 'ba-wr__pdin'));
+ok('★ 행 높이를 고정해 줄을 맞춘다',
+   (bool)preg_match('/\.ba-wbs td\s*\{[^}]*height:/', $css), '행 높이 고정이 사라졌다');
+
 $pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);
 
 // ---- 멈추기 ----

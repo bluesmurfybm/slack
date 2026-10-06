@@ -664,7 +664,15 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
    depth 는 제목 칸의 들여쓰기로만 드러낸다. 행 전체를 밀면 다른 칸까지
    어긋나서 공수·난이도를 세로로 훑어볼 수 없게 된다.
    ---------------------------------------------------------------------- */
-.ba-wbs td { padding: 5px 8px; vertical-align: middle; }
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 행 높이를 고정한다                                                │
+   │                                                                  │
+   │ 잎 행은 <input>(34px), 상위 행은 합계 <span>(20px) 을 담는다.    │
+   │ 그대로 두면 행마다 높이가 달라 가로줄이 들쭉날쭉해지고, 공수·     │
+   │ 난이도를 세로로 훑어볼 수 없게 된다. 표에서 height 는 최소        │
+   │ 높이로 동작하므로 이 한 줄이면 줄이 맞는다.                       │
+   └──────────────────────────────────────────────────────────────────┘ */
+.ba-wbs td { padding: 5px 8px; vertical-align: middle; height: 42px; }
 .ba-wbs th { white-space: nowrap; }
 .ba-wbs tbody tr:hover { background: transparent; }   /* 편집 중이라 행 강조는 방해된다 */
 
@@ -681,12 +689,19 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-wr__no span { color: var(--ba-ink-soft); }
 .ba-wr__dl { display: block; font-style: normal; font-size: 10px; color: var(--ba-ink-soft); opacity: .7; }
 
-/* .ba-wbs td 의 padding 을 이겨야 해서 선택자를 한 단계 더 붙였다. */
-.ba-wbs td.ba-wr__title {
-  display: flex; align-items: center; gap: 6px;
-  padding-left: calc(8px + var(--ind, 0) * 22px);
-}
-.ba-wr__t { min-width: 120px; }
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ td 에 display:flex 를 주지 않는다                                 │
+   │                                                                  │
+   │ 전에는 td.ba-wr__title 에 바로 flex 를 줬다. 그러면 그 칸이 표    │
+   │ 레이아웃에서 빠져 **행 높이가 따로 놀고** 가로줄이 두 겹으로      │
+   │ 갈라져 보인다. 늘어놓는 일은 안쪽 div 가 한다.                    │
+   │                                                                  │
+   │ 들여쓰기(--ind)는 td 가 맡는다. 안쪽에서 하면 가로 스크롤이       │
+   │ 생겼을 때 들여쓰기가 같이 밀려 깊이를 못 읽는다.                  │
+   └──────────────────────────────────────────────────────────────────┘ */
+.ba-wbs td.ba-wr__title { padding-left: calc(8px + var(--ind, 0) * 22px); }
+.ba-wr__tin { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ba-wr__t { min-width: 120px; flex: 1 1 auto; }
 .ba-wr__memo, .ba-tag-auto {
   flex: 0 0 auto; font-size: 10.5px; font-weight: 600; border-radius: 4px;
   padding: 1px 5px; border: 1px solid var(--ba-line); color: var(--ba-ink-soft);
@@ -695,12 +710,19 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 
 .ba-wr__md { text-align: right; }
 .ba-wr__n { text-align: right; font-variant-numeric: tabular-nums; }
-.ba-wr__roll { font-variant-numeric: tabular-nums; color: var(--ba-ink-soft); font-weight: 600; }
+/* 상위 행의 합계는 입력칸이 아니지만 **같은 자리에 찍혀야** 세로로
+   훑어볼 수 있다. .ba-input 과 같은 가로 여백(9px + 테두리 1px)을 준다. */
+.ba-wr__roll {
+  display: block; padding-right: 10px;
+  font-variant-numeric: tabular-nums; color: var(--ba-ink-soft); font-weight: 600;
+}
 .ba-wr__warn { display: block; font-style: normal; font-size: 10px; color: var(--ba-warn); }
 
-.ba-wr__pd { display: flex; align-items: center; gap: 4px; }
-.ba-wr__d { padding: 5px 6px; font-size: 12px; }
-.ba-wr__pd > span { color: var(--ba-ink-soft); font-size: 11px; }
+/* 날짜 두 칸과 물결표가 **한 줄에** 들어가야 한다. 접히면 그 행만
+   두 줄이 되어 아래 행들과 줄이 어긋난다. */
+.ba-wr__pdin { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
+.ba-wr__d { padding: 5px 6px; font-size: 12px; min-width: 0; flex: 1 1 auto; }
+.ba-wr__pdin > span { flex: 0 0 auto; color: var(--ba-ink-soft); font-size: 11px; }
 
 .ba-wr__dmtag {
   display: inline-block; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
