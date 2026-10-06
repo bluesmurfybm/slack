@@ -115,6 +115,12 @@ final class AnthropicLlmClient implements LlmClient
             }
         }
 
+        // 구조화 출력이 안 받는 제약은 미리 떼고, 뗀 것은 글로 알려 준다.
+        [$clean, $dropped] = self::sanitizeSchema($schema);
+        if ($dropped !== []) {
+            $system .= "\n\n## 지켜야 할 한도\n" . implode("\n", $dropped);
+        }
+
         $body = [
             'model'      => $model,
             'max_tokens' => $maxTk,
@@ -125,7 +131,7 @@ final class AnthropicLlmClient implements LlmClient
                             : LlmPrompt::FENCE_RULE . "\n\n" . $system,
             'messages'   => [['role' => 'user', 'content' => $user]],
             // 구조화 출력. 모델이 스키마 밖으로 나가지 않는다.
-            'output_config' => ['format' => ['type' => 'json_schema', 'schema' => $schema]],
+            'output_config' => ['format' => ['type' => 'json_schema', 'schema' => $clean]],
         ];
 
         try {
@@ -179,6 +185,61 @@ final class AnthropicLlmClient implements LlmClient
             costUsd: self::costMicro($used, $tin, $tout) / 1_000_000,
             meta: ['stop_reason' => (string)($raw['stop_reason'] ?? '')],
         );
+    }
+
+    /**
+     * 구조화 출력이 안 받는 제약을 떼어 낸다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 2026-10-06 에 실제로 겪은 일                                  │
+     * │                                                              │
+     * │ WBS 도출 스키마에 `maxItems` 가 있었는데 구조화 출력이        │
+     * │ 거부했다.                                                     │
+     * │                                                              │
+     * │   HTTP 400 output_config.format.schema:                      │
+     * │   For 'array' type, property 'maxItems' is not supported     │
+     * │                                                              │
+     * │ 되돌아가는 길(스키마를 글로 적어 묻기)이 있어 결과는 나왔지만, │
+     * │ **호출마다 400 을 한 번씩 버리고** 그 길은 50초가 걸렸다.      │
+     * │                                                              │
+     * │ 그래서 보내기 전에 뗀다. **다만 조용히 버리지 않는다** —      │
+     * │ `maxItems: 300` 은 "300개까지만" 이라는 뜻이고, 그 말을 잃으면 │
+     * │ 모델이 끝없이 뽑는다. 뗀 제약은 글로 적어 시스템에 붙인다.     │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * @return array{0:array, 1:list<string>} 깨끗한 스키마, 사람 말로 적은 제약
+     */
+    public static function sanitizeSchema(array $schema, string $path = ''): array
+    {
+        $dropped = [];
+        $out     = [];
+
+        foreach ($schema as $k => $v) {
+            // 배열 길이 제약만 걸린다. 숫자(minimum/maximum)와 글자 길이
+            // (maxLength)는 받으므로 건드리지 않는다 — 필요 이상으로 떼면
+            // 모델이 벗어날 자리가 늘어난다.
+            if ($k === 'maxItems' || $k === 'minItems') {
+                $where     = $path === '' ? '목록' : $path;
+                $dropped[] = $k === 'maxItems'
+                    ? "- {$where} 는 최대 {$v} 개까지만 넣는다."
+                    : "- {$where} 는 최소 {$v} 개는 넣는다.";
+                continue;
+            }
+
+            if (is_array($v)) {
+                // 어디에 걸린 제약인지 알 수 있게 이름을 이어 붙인다.
+                $next = match (true) {
+                    $k === 'properties' || $k === 'items' => $path,
+                    is_string($k)                         => ($path === '' ? '' : $path . '.') . $k,
+                    default                               => $path,
+                };
+                [$v, $sub] = self::sanitizeSchema($v, $next);
+                $dropped   = array_merge($dropped, $sub);
+            }
+            $out[$k] = $v;
+        }
+
+        return [$out, $dropped];
     }
 
     /** 토큰 수 → 백만분의 1 달러. 모르는 모델은 0 — 그래프가 0 이면 단가표를 고치라는 뜻이다. */

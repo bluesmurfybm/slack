@@ -2559,13 +2559,20 @@
     }
 
     // ---- 문서에서 WBS 도출 --------------------------------------------------
-    function extract() {
-      var btn = $('#ba-w-extract');
+    // useLlm=false 면 모델을 안 부른다. 들여쓰기·번호 규칙만 보므로 즉시
+    // 끝나고 비용도 없다. AI 가 꺼져 있거나 막혔을 때, 그리고 문서가 이미
+    // 잘 정리돼 있을 때는 이쪽이 낫다.
+    function extract(useLlm) {
+      var btn = $(useLlm === false ? '#ba-w-extract-rule' : '#ba-w-extract');
+      var was = btn.textContent;
       btn.disabled = true;
+      // AI 경로는 문서 크기에 따라 1분 넘게 걸린다. 아무 표시가 없으면
+      // 사람은 "눌렸나?" 하며 다시 누른다 — 실제로 그렇게 두 번 돌았다.
+      btn.textContent = useLlm === false ? '뽑는 중…' : '도출 중… (1분 넘게 걸릴 수 있습니다)';
       clearError('#ba-pv-error');
 
       api('api/task.php?act=extract', {
-        method: 'POST', body: { project_id: PID }
+        method: 'POST', body: { project_id: PID, use_llm: useLlm === false ? 0 : 1 }
       }).then(function (d) {
         var draft = fromServer(d.tree);
         var n = countNodes(draft);
@@ -2592,9 +2599,13 @@
         toast('초안 ' + n + '건을 넣었습니다.');
       }).catch(function (e) {
         // 문서를 아직 안 읽었으면 그것부터 하라고 말한다.
+        // 띠는 화면 맨 위에 뜬다. 아래쪽 단추를 누른 사람이 놓치지 않게
+        // 토스트도 함께 띄운다.
         showError('#ba-pv-error', e.message);
+        toast(e.message, true);
       }).then(function () {
         btn.disabled = false;
+        btn.textContent = was;
       });
     }
 
@@ -2617,7 +2628,13 @@
     // ---- 붙이기 -----------------------------------------------------------
     if (CAN_EDIT) {
       $('#ba-w-parse').addEventListener('click', function () { parseDocs(false); });
-      $('#ba-w-extract').addEventListener('click', extract);
+      // addEventListener 가 이벤트 객체를 넘기므로 감싸서 넘긴다.
+      // 그냥 extract 를 걸면 useLlm 자리에 MouseEvent 가 들어온다.
+      $('#ba-w-extract').addEventListener('click', function () { extract(true); });
+      var exRule = $('#ba-w-extract-rule');
+      if (exRule) {
+        exRule.addEventListener('click', function () { extract(false); });
+      }
       $('#ba-w-add').addEventListener('click', addRoot);
       $('#ba-w-save').addEventListener('click', save);
       $('#ba-w-revert').addEventListener('click', function () {

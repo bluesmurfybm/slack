@@ -217,6 +217,55 @@ $spy3 = new SpyLlmClient([['difficulty' => 2, 'reason' => 'ok', 'confidence' => 
 ok('기획 글이 없으면 없다고 알린다',
    str_contains($spy3->users[0], '제목만 보고 판단'), mb_substr($spy3->users[0], 0, 200));
 
+// =====================================================================
+echo "\n[F] 구조화 출력 스키마 — 안 받는 제약은 떼되 말로 남긴다\n";
+//
+// 2026-10-06 운영에서: WBS 도출 스키마의 maxItems 때문에 매번 400 이 났다.
+//   HTTP 400 output_config.format.schema:
+//   For 'array' type, property 'maxItems' is not supported
+// 되돌아가는 길이 있어 결과는 나왔지만 호출마다 400 을 버렸고, 그 길은
+// 한 번에 50초가 걸렸다.
+// =====================================================================
+$schema = [
+    'type' => 'object',
+    'properties' => [
+        'tasks' => [
+            'type' => 'array', 'maxItems' => 300, 'minItems' => 1,
+            'items' => ['type' => 'object', 'properties' => [
+                'title'        => ['type' => 'string', 'minLength' => 1, 'maxLength' => 300],
+                'difficulty'   => ['type' => 'integer', 'minimum' => 1, 'maximum' => 5],
+                'domain_codes' => ['type' => 'array', 'maxItems' => 3,
+                                   'items' => ['type' => 'string']],
+            ]],
+        ],
+    ],
+];
+[$clean, $dropped] = AnthropicLlmClient::sanitizeSchema($schema);
+$json = json_encode($clean);
+
+ok('★ maxItems 가 사라진다',  !str_contains($json, 'maxItems'), $json);
+ok('★ minItems 도 사라진다',  !str_contains($json, 'minItems'));
+// ★ 필요 이상으로 떼면 모델이 벗어날 자리가 늘어난다. 숫자·글자 제약은
+//   구조화 출력이 받으므로 그대로 둔다.
+ok('★ maxLength 는 그대로 둔다', str_contains($json, 'maxLength'));
+ok('★ minimum/maximum 도 그대로', str_contains($json, 'minimum')
+                                 && str_contains($json, 'maximum'));
+ok('나머지 구조는 안 건드린다',
+   ($clean['properties']['tasks']['items']['properties']['title']['type'] ?? '') === 'string');
+
+// ★ 조용히 버리면 안 된다. maxItems:300 은 "300개까지" 라는 뜻이고,
+//   그 말을 잃으면 모델이 끝없이 뽑는다.
+ok('★ 뗀 제약을 사람 말로 남긴다', count($dropped) === 3, json_encode($dropped, JSON_UNESCAPED_UNICODE));
+ok('어디에 걸린 제약인지 알려 준다',
+   str_contains(implode(' ', $dropped), 'tasks.domain_codes'),
+   json_encode($dropped, JSON_UNESCAPED_UNICODE));
+ok('상한 숫자가 담긴다', str_contains(implode(' ', $dropped), '300'));
+
+// 뗄 것이 없으면 아무 말도 안 한다. 쓸데없는 줄이 프롬프트에 붙으면 안 된다.
+[, $none] = AnthropicLlmClient::sanitizeSchema(
+    ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]);
+ok('뗄 것이 없으면 조용하다', $none === []);
+
 echo "\n" . str_repeat('=', 56) . "\n";
 echo "통과 $pass · 실패 $fail\n";
 exit($fail === 0 ? 0 : 1);
