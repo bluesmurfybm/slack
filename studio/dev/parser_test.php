@@ -70,6 +70,31 @@ ok('첫 블록 ref = 요구사항!A1:F6', $b?->ref === '요구사항!A1:F6', (st
 ok('머리글 줄이 들어 있다', str_contains((string)$b?->text, "구분\t요구사항"));
 ok('두 번째 시트도 있다', blockByRef($d, '일정') !== null);
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 시트 하나만 읽기 (2026-10-06)                                     │
+// │                                                                  │
+// │ 구글 시트 주소의 gid 는 **탭 하나**를 가리킨다. 사람이 "이 시트를 │
+// │ 보라" 고 줬는데 통합문서를 통째로 읽어, WBS 초안이 `목차` 탭의    │
+// │ `목차`·`코드`·`M1` 같은 항목 300건으로 채워졌다.                  │
+// └──────────────────────────────────────────────────────────────────┘
+$one = $p->parse(fixture('sample.xlsx'), 'xlsx', '일정');
+ok('★ 지정한 시트만 읽는다', count($one->blocks) === 1
+   && blockByRef($one, '일정') !== null,
+   implode(' / ', array_map(fn($b) => $b->ref, $one->blocks)));
+ok('★ 다른 시트는 안 들어온다', blockByRef($one, '요구사항') === null);
+ok('어느 시트만 읽었는지 알려 준다',
+   str_contains(implode(' ', $one->notes), '일정'), implode(' | ', $one->notes));
+
+// ★ 조용히 빈 결과를 주면 "문서가 비었다" 로 읽히고 사람이 엉뚱한 곳을 본다.
+$miss = $p->parse(fixture('sample.xlsx'), 'xlsx', '없는시트');
+ok('★ 없는 시트를 가리키면 전체를 읽는다', count($miss->blocks) === 2,
+   implode(' / ', array_map(fn($b) => $b->ref, $miss->blocks)));
+ok('그 사실을 적어 둔다',
+   str_contains(implode(' ', $miss->notes), '찾지 못해'), implode(' | ', $miss->notes));
+
+$all = $p->parse(fixture('sample.xlsx'), 'xlsx', null);
+ok('안 가리키면 전부 읽는다(기존 그대로)', count($all->blocks) === 2);
+
 // 이 줄이 이 파서의 핵심이다. 빈 칸을 건너뛰면 5 가 공수인지 난이도인지
 // 알 수 없게 된다 — 처음에 그렇게 짰다가 고쳤다.
 $lines = explode("\n", (string)$b?->text);

@@ -154,7 +154,9 @@ final class WbsExtractor
                 $text = $got['text'];
                 $blocks = substr_count($text, "\n") + 1;
             } else {                                      // 구글 — 파일로 받아 기존 파서로
-                $doc    = $this->parser->parse((string)$tmp, $got['kind']);
+                // 주소가 시트 하나를 가리켰으면(gid) 그 시트만 읽는다.
+                $doc    = $this->parser->parse((string)$tmp, $got['kind'],
+                                               $got['sheet'] ?? null);
                 $text   = $doc->text();
                 $blocks = count($doc->blocks);
             }

@@ -245,7 +245,9 @@ final class LinkAnalyzer
                 $parser = new OfficeDocumentParser(
                     defined('BS_PDFTOTEXT') && BS_PDFTOTEXT ? BS_PDFTOTEXT : null
                 );
-                $text = $parser->parse((string)$tmp, $got['kind'])->text();
+                // 주소가 시트 하나를 가리켰으면(gid) 그 시트만 읽는다.
+                $text = $parser->parse((string)$tmp, $got['kind'],
+                                       $got['sheet'] ?? null)->text();
             }
             if (mb_strlen($text) > OfficeDocumentParser::MAX_CHARS) {
                 $text = mb_substr($text, 0, OfficeDocumentParser::MAX_CHARS);

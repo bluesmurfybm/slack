@@ -98,7 +98,18 @@ final class RemoteSource
             || $host === 'sheets.google.com') {
             // /spreadsheets/d/<ID>/edit · /document/d/<ID> · /file/d/<ID>/view
             if (preg_match('#/d/([A-Za-z0-9_-]{10,})#', $url, $m)) {
-                return ['provider' => Integration::GOOGLE, 'id' => $m[1]];
+                // ┌──────────────────────────────────────────────────┐
+                // │ gid 는 **시트(탭) 하나**를 가리킨다               │
+                // │                                                  │
+                // │ 사람이 "이 시트를 보라" 고 주소를 주는데 통합문서 │
+                // │ 전체를 읽으면 엉뚱한 탭이 섞인다. 실제로 그래서  │
+                // │ WBS 초안이 `목차`·`코드`·`M1` 같은 목차 탭 내용  │
+                // │ 300건으로 채워졌다(2026-10-06).                  │
+                // │                                                  │
+                // │ gid 는 #gid=… 에도 ?gid=… 에도 온다. 둘 다 본다. │
+                // └──────────────────────────────────────────────────┘
+                $gid = preg_match('#[?&\#]gid=(\d+)#', $url, $g) ? $g[1] : '';
+                return ['provider' => Integration::GOOGLE, 'id' => $m[1], 'gid' => $gid];
             }
             // /open?id=<ID> · /uc?id=<ID>
             parse_str((string)parse_url($url, PHP_URL_QUERY), $q);
@@ -184,7 +195,7 @@ final class RemoteSource
 
         try {
             $out = $provider === Integration::GOOGLE
-                ? $this->fetchGoogle($hit['id'])
+                ? $this->fetchGoogle($hit['id'], (string)($hit['gid'] ?? ''))
                 : $this->fetchFigma($hit['id'], (string)($hit['node'] ?? ''));
             $this->store->markOk($provider);
             return $out;
@@ -199,7 +210,7 @@ final class RemoteSource
     // 구글 드라이브
     // -----------------------------------------------------------------
 
-    private function fetchGoogle(string $fileId): array
+    private function fetchGoogle(string $fileId, string $gid = ''): array
     {
         $access = $this->googleAccessToken();
         $hdr    = ['Authorization: Bearer ' . $access];
@@ -250,7 +261,43 @@ final class RemoteSource
             ));
         }
 
-        return ['kind' => $kind, 'file' => $this->spill($bytes, $kind), 'text' => null, 'name' => $name];
+        // 시트 하나를 가리킨 주소면 **그 시트 이름**을 알아 둔다. 파서가
+        // 그 시트만 읽는다. 구글은 통합문서를 통째로만 내보내므로, 고르는
+        // 일은 우리 쪽에서 한다.
+        $sheet = $gid !== '' && $kind === 'xlsx'
+               ? $this->googleSheetTitle($fileId, $gid, $access)
+               : null;
+
+        return ['kind' => $kind, 'file' => $this->spill($bytes, $kind),
+                'text' => null, 'name' => $name, 'sheet' => $sheet];
+    }
+
+    /**
+     * gid(시트 id)를 시트 이름으로 바꾼다. 못 알아내면 null — 그때는
+     * 통합문서 전체를 읽는다. **여기서 실패했다고 읽기를 포기하지 않는다.**
+     */
+    private function googleSheetTitle(string $fileId, string $gid, string $access): ?string
+    {
+        try {
+            $raw = $this->http(
+                'GET',
+                'https://sheets.googleapis.com/v4/spreadsheets/' . rawurlencode($fileId)
+                . '?fields=' . rawurlencode('sheets(properties(sheetId,title))'),
+                ['Authorization: Bearer ' . $access],
+                null, Integration::GOOGLE, 'sheet_meta'
+            );
+            $j = json_decode($raw, true);
+            foreach (($j['sheets'] ?? []) as $s) {
+                $p = $s['properties'] ?? [];
+                if ((string)($p['sheetId'] ?? '') === $gid) {
+                    $t = trim((string)($p['title'] ?? ''));
+                    return $t === '' ? null : $t;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('[BlueStudio] googleSheetTitle: ' . $e->getMessage());
+        }
+        return null;
     }
 
     /**
@@ -399,7 +446,7 @@ final class RemoteSource
                     . '주소거나, 연결된 계정이 그 파일을 볼 수 없을 수 있습니다.'
                 );
             }
-            return ['kind' => 'figma', 'file' => null,
+            return ['kind' => 'figma', 'file' => null, 'sheet' => null,
                     'text' => $one['text'], 'name' => $one['name']];
         }
 
@@ -424,7 +471,7 @@ final class RemoteSource
                 . '피그마에도 글자가 없어 뽑을 것이 없습니다.'
             );
         }
-        return ['kind' => 'figma', 'file' => null, 'text' => $text,
+        return ['kind' => 'figma', 'file' => null, 'text' => $text, 'sheet' => null,
                 'name' => (string)($j['name'] ?? $fileKey)];
     }
 

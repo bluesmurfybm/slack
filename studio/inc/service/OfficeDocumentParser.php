@@ -48,13 +48,19 @@ final class OfficeDocumentParser implements DocumentParser
         return in_array($kind, ['xlsx', 'pptx', 'docx', 'pdf'], true);
     }
 
-    public function parse(string $filePath, string $kind): ParsedDoc
+    /**
+     * @param ?string $onlySheet 엑셀에서 **이 시트만** 읽는다. null 이면 전부.
+     *                           구글 시트 주소의 gid 가 탭 하나를 가리킬 때 쓴다 —
+     *                           사람이 "이 시트를 보라" 고 줬는데 통합문서를
+     *                           통째로 읽으면 엉뚱한 탭이 섞인다.
+     */
+    public function parse(string $filePath, string $kind, ?string $onlySheet = null): ParsedDoc
     {
         if (!is_file($filePath) || !is_readable($filePath)) {
             throw new DocumentParseError('파일을 찾을 수 없거나 읽을 수 없습니다.');
         }
         return match ($kind) {
-            'xlsx' => $this->parseXlsx($filePath),
+            'xlsx' => $this->parseXlsx($filePath, $onlySheet),
             'pptx' => $this->parsePptx($filePath),
             'docx' => $this->parseDocx($filePath),
             'pdf'  => $this->parsePdf($filePath),
@@ -70,7 +76,7 @@ final class OfficeDocumentParser implements DocumentParser
      * 시트마다 한 블록. ref 는 `시트명!A1:D25` — 실제로 글자가 있는 범위다.
      * 빈 시트는 건너뛴다(빈 블록을 LLM 에 넘겨 봐야 토큰만 쓴다).
      */
-    private function parseXlsx(string $path): ParsedDoc
+    private function parseXlsx(string $path, ?string $onlySheet = null): ParsedDoc
     {
         $zip    = $this->openZip($path);
         $notes  = [];
@@ -82,6 +88,21 @@ final class OfficeDocumentParser implements DocumentParser
 
             if (!$sheets) {
                 throw new DocumentParseError('시트를 찾지 못했습니다. xlsx 가 맞습니까?');
+            }
+
+            // 시트 하나만 보라고 했으면 거기만 남긴다. **이름이 없으면
+            // 전부 읽는다** — 조용히 빈 결과를 주면 "문서가 비었다" 로
+            // 읽히고, 사람은 엉뚱한 곳을 보게 된다.
+            if ($onlySheet !== null && $onlySheet !== '') {
+                $pick = array_values(array_filter($sheets,
+                    static fn($s) => (string)$s['name'] === $onlySheet));
+                if ($pick) {
+                    $sheets  = $pick;
+                    $notes[] = '시트 "' . $onlySheet . '" 만 읽었습니다(주소가 그 시트를 가리킵니다).';
+                } else {
+                    $notes[] = '주소가 가리키는 시트 "' . $onlySheet
+                             . '" 를 찾지 못해 전체를 읽었습니다.';
+                }
             }
 
             $total = 0;
