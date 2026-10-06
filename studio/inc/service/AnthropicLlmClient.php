@@ -163,13 +163,24 @@ final class AnthropicLlmClient implements LlmClient
 
         $data = self::jsonBlock($text);
         if ($data === null) {
-            // 형식이 깨진 것은 다시 물으면 고쳐지는 일이 많다 — LlmSchemaError
-            // 가 retryable: true 다.
-            throw new LlmSchemaError(
-                ($raw['stop_reason'] ?? '') === 'max_tokens'
-                    ? '답이 길어 중간에 끊겼습니다. 글을 줄여 다시 시도하세요.'
-                    : '모델이 읽을 수 없는 모양으로 답했습니다.'
-            );
+            // ┌──────────────────────────────────────────────────────┐
+            // │ 길이에 잘린 것은 **다시 물어도 똑같이 잘린다**         │
+            // │                                                      │
+            // │ 형식이 깨진 것(모델이 엉뚱하게 답함)은 다시 물으면    │
+            // │ 고쳐지는 일이 많아 retryable 이다. 하지만 max_tokens  │
+            // │ 에 걸린 것은 같은 입력에 같은 상한이면 같은 결과다 —  │
+            // │ 50초짜리 호출을 한 번 더 버리고 비용도 두 배가 된다.  │
+            // │ 실제로 2026-10-06 에 그렇게 2회 시도하고 실패했다.    │
+            // └──────────────────────────────────────────────────────┘
+            if (($raw['stop_reason'] ?? '') === 'max_tokens') {
+                throw new LlmError(sprintf(
+                    '답이 길어 중간에 끊겼습니다(출력 상한 %s 토큰). '
+                    . '읽는 문서를 줄이거나 나눠서 다시 시도하세요.',
+                    number_format($maxTk)
+                ), retryable: false);
+            }
+            // 형식이 깨진 것은 다시 물으면 고쳐지는 일이 많다.
+            throw new LlmSchemaError('모델이 읽을 수 없는 모양으로 답했습니다.');
         }
 
         $u    = $raw['usage'] ?? [];

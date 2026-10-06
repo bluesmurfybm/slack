@@ -377,6 +377,38 @@ throws('재시도 불가 오류는 바로 포기',
        LlmError::class);
 ok('한 번만 부른다', $fx4->callCount() === 1, (string)$fx4->callCount());
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 출력 상한 (2026-10-06)                                            │
+// │                                                                  │
+// │ 8,000 토큰으로는 IA 시트 한 장도 다 못 담았다. 중간에 잘려 JSON 이│
+// │ 깨지고, 다시 물어도 똑같이 잘려 50초짜리 호출을 두 번 버렸다.     │
+// │ 길이에 잘린 것은 **다시 물어도 같다** — 그래서 재시도하지 않는다. │
+// └──────────────────────────────────────────────────────────────────┘
+$optSpy = new class implements LlmClient {
+    public array $opts = [];
+    public function name(): string { return 'optspy'; }
+    public function available(): bool { return true; }
+    public function generate(string $s, string $u, array $sc, array $opt = []): LlmResult
+    {
+        $this->opts[] = $opt;
+        return new LlmResult(data: ['tasks' => [['title' => 'x', 'depth' => 1]]]);
+    }
+};
+(new WbsExtractor($projects, $repo, null, $optSpy))->extractByLlm($proj, $srcs, $dt);
+ok('★ 출력 상한을 넉넉히 준다',
+   ($optSpy->opts[0]['max_tokens'] ?? 0) === WbsExtractor::MAX_OUTPUT_TOKENS
+   && WbsExtractor::MAX_OUTPUT_TOKENS >= 16000,
+   json_encode($optSpy->opts[0] ?? []));
+
+// ★ 길이에 잘린 것은 재시도 대상이 아니다. LlmSchemaError 로 던지면
+//   같은 입력으로 한 번 더 불러 또 잘린다.
+$cut = new FixtureLlmClient([new LlmError('답이 길어 중간에 끊겼습니다(출력 상한 32,000 토큰).',
+                                          retryable: false)]);
+throws('잘린 응답은 한 번에 포기',
+       fn() => (new WbsExtractor($projects, $repo, null, $cut))->extractByLlm($proj, $srcs, $dt),
+       LlmError::class);
+ok('★ 두 번 부르지 않는다', $cut->callCount() === 1, (string)$cut->callCount());
+
 throws('LLM 이 없으면 extractByLlm 은 거절',
        fn() => (new WbsExtractor($projects, $repo, null, new NullLlmClient()))
                    ->extractByLlm($proj, $srcs, $dt),

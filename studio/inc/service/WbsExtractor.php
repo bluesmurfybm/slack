@@ -29,6 +29,23 @@ final class WbsExtractor
     /** 한 번에 받을 태스크 수 상한. 모델이 폭주하는 것을 막는다. */
     public const MAX_TASKS = 300;
 
+    /**
+     * 모델이 쓸 수 있는 출력 토큰 상한.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 8,000 으로는 모자랐다 (2026-10-06)                            │
+     * │                                                              │
+     * │ IA 시트 한 장에서 태스크가 100건 넘게 나오는데, 한 건마다      │
+     * │ 제목·설명·공수·난이도·분야·출처를 담으니 JSON 이 8,000 토큰을 │
+     * │ 넘겼다. 중간에 잘려 JSON 이 깨지고, 다시 물어도 똑같이 잘렸다.│
+     * │                                                              │
+     * │ 크론에서 도니 시간은 문제가 아니다. **넉넉히 준다.** 어차피   │
+     * │ MAX_TASKS 가 폭주를 막고, 쓴 만큼만 비용이 든다 —            │
+     * │ 상한을 올린다고 매번 그만큼 쓰지 않는다.                      │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    public const MAX_OUTPUT_TOKENS = 32000;
+
     private ?array $domainCache = null;
 
     public function __construct(
@@ -564,7 +581,7 @@ final class WbsExtractor
             $attempt++;
             try {
                 $res  = $this->llm->generate($system, $user . $repair, $schema,
-                                             ['max_tokens' => 8000]);
+                                             ['max_tokens' => self::MAX_OUTPUT_TOKENS]);
                 $ok   = $this->validate($res->data, $domains);
                 return [$ok, [
                     'method'     => 'llm',
