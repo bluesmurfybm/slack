@@ -2493,8 +2493,10 @@
     // 도출과 나눠 둔다. 무엇이 읽혔고 무엇이 실패했는지 사람이 먼저 보고
     // 나서 도출을 눌러야, 결과가 부실할 때 원인을 짚을 수 있다.
     function parseDocs(all) {
-      var btn = $('#ba-w-parse');
+      var btn = $(all ? '#ba-w-reparse-all' : '#ba-w-parse');
+      var was = btn.textContent;
       btn.disabled = true;
+      btn.textContent = '읽는 중…';
       clearError('#ba-pv-error');
 
       return api('api/task.php?act=parse', {
@@ -2509,9 +2511,11 @@
         throw e;
       }).then(function (x) {
         btn.disabled = false;
+        btn.textContent = was;
         return x;
       }, function (e) {
         btn.disabled = false;
+        btn.textContent = was;
         throw e;
       });
     }
@@ -2548,14 +2552,10 @@
       h += '</div>';
       h += '<p class="ba-panel__hint">' +
            '\'해당 없음\'은 링크나 직접 입력이라 글자를 뽑을 것이 없다는 뜻입니다. ' +
-           '실패가 아닙니다. 이미 읽은 문서를 다시 읽으려면 ' +
-           '<button type="button" class="ba-linkish" id="ba-w-reparse">전체 다시 분석</button>' +
-           ' 하세요.</p>';
+           '실패가 아닙니다. 이미 읽은 문서를 다시 읽으려면 위의 ' +
+           '<b>[전부 다시 분석]</b> 을 누르세요.</p>';
       box.hidden = false;
       box.innerHTML = h;
-
-      var rp = $('#ba-w-reparse');
-      if (rp) rp.addEventListener('click', function () { parseDocs(true); });
     }
 
     // ---- 문서에서 WBS 도출 --------------------------------------------------
@@ -2628,6 +2628,19 @@
     // ---- 붙이기 -----------------------------------------------------------
     if (CAN_EDIT) {
       $('#ba-w-parse').addEventListener('click', function () { parseDocs(false); });
+      // 주소나 설정을 고친 뒤 다시 읽는 길. 전에는 설명문 안의 글자
+      // 링크여서 아무도 못 찾았다.
+      var rpAll = $('#ba-w-reparse-all');
+      if (rpAll) {
+        rpAll.addEventListener('click', function () {
+          if (!confirm(['이미 읽은 문서까지 **전부 다시** 읽습니다.', '',
+                        '· 주소나 연동 설정을 고친 뒤에 쓰세요',
+                        '· 읽어 둔 글자는 새로 읽은 것으로 바뀝니다',
+                        '· 이미 만들어 둔 WBS 는 그대로입니다',
+                        '', '진행할까요?'].join('\n'))) return;
+          parseDocs(true);
+        });
+      }
       // addEventListener 가 이벤트 객체를 넘기므로 감싸서 넘긴다.
       // 그냥 extract 를 걸면 useLlm 자리에 MouseEvent 가 들어온다.
       $('#ba-w-extract').addEventListener('click', function () { extract(true); });

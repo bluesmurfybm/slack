@@ -353,7 +353,17 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <button type="button" class="ba-btn" id="ba-w-paste">엑셀에서 붙여넣기</button>
         <span class="ba-wbsbar__sep"></span>
         <button type="button" class="ba-btn" id="ba-w-parse"
-                title="업로드한 문서에서 글자를 뽑습니다">문서 분석</button>
+                title="아직 안 읽은 문서만 읽습니다. 이미 읽은 것은 건드리지 않습니다">새 문서만 분석</button>
+        <!-- ┌──────────────────────────────────────────────────────────┐
+             │ 설명문 안의 글자 링크였다                                 │
+             │                                                          │
+             │ 자주 쓰는 동작인데 문단 한가운데 숨어 있어 아무도 못       │
+             │ 찾았다. 게다가 옆의 [문서 분석] 은 눌러도 이미 읽은 것을  │
+             │ 다시 읽지 않아, "눌렀는데 그대로" 가 반복됐다.            │
+             │ 실제로 gid 수정 뒤 다시 읽어야 할 때 이것 때문에 막혔다.  │
+             └──────────────────────────────────────────────────────────┘ -->
+        <button type="button" class="ba-btn" id="ba-w-reparse-all"
+                title="이미 읽은 문서까지 전부 다시 읽습니다. 주소나 설정을 고친 뒤에 쓰세요">전부 다시 분석</button>
         <button type="button" class="ba-btn" id="ba-w-extract"
                 title="분석된 문서에서 WBS 초안을 만듭니다. AI 가 연결돼 있으면 AI 가 읽습니다&#10;문서가 크면 1분 넘게 걸립니다">문서에서 WBS 도출</button>
         <!-- 모델을 안 부른다. 들여쓰기·번호 규칙만 보므로 즉시 끝나고 비용도

@@ -50,6 +50,7 @@ final class OfficeDocumentParser implements DocumentParser
 
     /**
      * @param ?string $onlySheet 엑셀에서 **이 시트만** 읽는다. null 이면 전부.
+     *                           (파서 안에서만 쓰는 값이 아니라 호출자가 정한다)
      *                           구글 시트 주소의 gid 가 탭 하나를 가리킬 때 쓴다 —
      *                           사람이 "이 시트를 보라" 고 줬는데 통합문서를
      *                           통째로 읽으면 엉뚱한 탭이 섞인다.
