@@ -1611,6 +1611,64 @@
     var timer = null;
 
     var LK_LABEL = { pending: '대기', ok: '읽음', fail: '실패', skip: '건너뜀' };
+    var LK_ORDER = ['fail', 'pending', 'ok', 'skip'];   // 봐야 할 것부터
+    var LINKS    = [];
+    var LK_FILT  = 'fail';            // 열면 실패부터. 그게 손댈 거리다
+
+    /**
+     * 상태별 수를 단추로. 누르면 그 상태만 걸러 드로어가 열린다.
+     *
+     * 0 건인 상태는 안 그린다 — 늘 네 개가 보이면 어느 것이 볼 거리인지
+     * 눈에 안 들어온다.
+     */
+    function drawChips(c) {
+      var box = $('#ba-lk-chips');
+      if (!box) return;
+      var any = LK_ORDER.filter(function (k) { return (c[k] || 0) > 0; });
+      if (!any.length) {
+        box.innerHTML = '<span class="ba-dim">[링크 찾기] 를 눌러 출처 문서에서 주소를 찾으세요.</span>';
+        return;
+      }
+      box.innerHTML = any.map(function (k) {
+        return '<button type="button" class="ba-chip-b ba-lk--' + esc(k) + '" data-lk-open="' + k + '">' +
+               esc(LK_LABEL[k]) + ' <b>' + (c[k] || 0) + '</b></button>';
+      }).join('') +
+      '<button type="button" class="ba-chip-b" data-lk-open="all">전체 보기</button>';
+    }
+
+    /** 드로어 안의 표. 거른 것만 그린다. */
+    function drawLinkRows() {
+      var rows = LK_FILT === 'all'
+        ? LINKS
+        : LINKS.filter(function (l) { return l.status === LK_FILT; });
+
+      $('#ba-lk-filter').innerHTML = ['all'].concat(LK_ORDER).map(function (k) {
+        var n = k === 'all' ? LINKS.length
+                            : LINKS.filter(function (l) { return l.status === k; }).length;
+        if (k !== 'all' && !n) return '';
+        return '<button type="button" class="ba-chip-b' + (LK_FILT === k ? ' is-on' : '') +
+               '" data-lk-filt="' + k + '">' +
+               (k === 'all' ? '전체' : esc(LK_LABEL[k])) + ' <b>' + n + '</b></button>';
+      }).join('');
+
+      $('#ba-lk-shown').textContent = rows.length + '건';
+      $('#ba-lk-table tbody').innerHTML = rows.length
+        ? rows.map(function (l) {
+            return '<tr>' +
+              '<td><span class="ba-badge ba-lk--' + esc(l.status) + '">' +
+                esc(LK_LABEL[l.status] || l.status) + '</span></td>' +
+              // 어느 항목의 링크인지. 이게 없으면 읽어 온 글이 어느
+              // 태스크 것인지 알 수 없다.
+              '<td>' + esc(l.context || '') +
+                '<div class="ba-dim ba-lk-url">' + esc(l.url) + '</div>' +
+                (l.error ? '<div class="ba-lk-err">' + esc(l.error) + '</div>' : '') +
+              '</td>' +
+              '<td>' + esc(l.title || '—') + '</td>' +
+              '<td>' + (l.chars > 0 ? Number(l.chars).toLocaleString() : '—') + '</td>' +
+            '</tr>';
+          }).join('')
+        : '<tr><td colspan="4" class="ba-cell-none">그 상태인 링크가 없습니다.</td></tr>';
+    }
 
     function draw(d) {
       root.hidden = false;
@@ -1657,23 +1715,11 @@
         prog.hidden = true;
       }
 
-      var tb = $('#ba-lk-table tbody');
-      tb.innerHTML = (d.links || []).length
-        ? d.links.map(function (l) {
-            return '<tr>' +
-              '<td><span class="ba-badge ba-lk--' + esc(l.status) + '">' +
-                esc(LK_LABEL[l.status] || l.status) + '</span></td>' +
-              // 어느 항목의 링크인지. 이게 없으면 읽어 온 글이 어느
-              // 태스크 것인지 알 수 없다.
-              '<td>' + esc(l.context || '') +
-                '<div class="ba-dim ba-lk-url">' + esc(l.url) + '</div>' +
-                (l.error ? '<div class="ba-lk-err">' + esc(l.error) + '</div>' : '') +
-              '</td>' +
-              '<td>' + esc(l.title || '—') + '</td>' +
-              '<td>' + (l.chars > 0 ? Number(l.chars).toLocaleString() : '—') + '</td>' +
-            '</tr>';
-          }).join('')
-        : '<tr><td colspan="4" class="ba-cell-none">[링크 찾기] 를 눌러 출처 문서에서 주소를 찾으세요.</td></tr>';
+      // 목록은 드로어에서 본다. 여기서는 상태별 수만 단추로 보여 주고,
+      // 누르면 그 상태만 걸러 연다 — 보통 보고 싶은 건 '실패' 뿐이다.
+      LINKS = d.links || [];
+      drawChips(c);
+      if (!$('#ba-lk-drawer').hidden) { drawLinkRows(); }
 
       // 도는 중일 때만 되묻는다. 끝났는데 계속 물으면 서버가 공연히 바쁘다.
       if (job && !timer) { timer = setInterval(load, 3000); }
@@ -1697,6 +1743,21 @@
         })
         .catch(function (e) { toast(e.message, true); });
     }
+
+    // 상태 단추 → 그 상태만 걸러 드로어를 연다
+    $('#ba-lk-chips').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-lk-open]');
+      if (!b) return;
+      LK_FILT = b.dataset.lkOpen;
+      drawLinkRows();
+      openDrawer('ba-lk-drawer');
+    });
+    $('#ba-lk-filter').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-lk-filt]');
+      if (!b) return;
+      LK_FILT = b.dataset.lkFilt;
+      drawLinkRows();
+    });
 
     $('#ba-lk-scan').addEventListener('click', function () { post('scan'); });
     $('#ba-lk-start').addEventListener('click', function () { post('start'); });

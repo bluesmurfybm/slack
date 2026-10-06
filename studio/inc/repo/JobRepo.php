@@ -156,8 +156,25 @@ final class JobRepo
         if ($json === false) {
             throw new RuntimeException('결과를 JSON 으로 바꾸지 못했습니다.');
         }
-        $this->pdo->prepare('UPDATE bs_analysis_job SET result_json = ? WHERE id = ?')
-                  ->execute([$json, $jobId]);
+        try {
+            $this->pdo->prepare('UPDATE bs_analysis_job SET result_json = ? WHERE id = ?')
+                      ->execute([$json, $jobId]);
+        } catch (PDOException $e) {
+            // ┌──────────────────────────────────────────────────────┐
+            // │ 마이그레이션을 안 올린 서버에서 날것으로 터졌다        │
+            // │                                                      │
+            // │ 화면에 "SQLSTATE[42S22]: Unknown column 'result_json'"│
+            // │ 이 그대로 떴다(2026-10-06). 그걸 본 사람이 무엇을      │
+            // │ 해야 하는지 알 길이 없다. 할 일을 적어 준다.          │
+            // └──────────────────────────────────────────────────────┘
+            if (str_contains($e->getMessage(), 'result_json')) {
+                throw new RuntimeException(
+                    '결과를 담을 칸이 없습니다. 운영 서버에 마이그레이션을 올리세요 — '
+                    . 'mysql <db> < studio/sql/018_migration_job_result.sql'
+                );
+            }
+            throw $e;
+        }
     }
 
     /** 담아 둔 결과물. 없으면 null. */

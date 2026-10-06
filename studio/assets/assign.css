@@ -1543,6 +1543,20 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-links { margin-bottom: 14px; }
 /* 단추 묶음을 가르는 세로줄. 링크 읽기와 난이도 매기기는 다른 일이다. */
 .ba-sep { width: 1px; align-self: stretch; margin: 0 4px; background: var(--ba-line); }
+
+/* 상태별 수 단추. 누르면 그 상태만 걸러 드로어가 열린다.
+   300건짜리 표를 늘 펼쳐 두면 아래 WBS 칸까지 가는 데만 한참 걸린다. */
+.ba-lk-chips, .ba-lk-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 2px; }
+.ba-lk-filter { margin-bottom: 12px; }
+.ba-chip-b {
+  appearance: none; cursor: pointer; font: inherit; font-size: 12.5px;
+  padding: 5px 11px; border-radius: 999px;
+  border: 1px solid var(--ba-line); background: var(--ba-paper); color: var(--ba-ink-soft);
+}
+.ba-chip-b b { font-variant-numeric: tabular-nums; color: var(--ba-ink); }
+.ba-chip-b:hover { border-color: var(--ba-brand); }
+.ba-chip-b.is-on { background: var(--ba-brand); border-color: var(--ba-brand); color: #fff; }
+.ba-chip-b.is-on b { color: #fff; }
 /* 진행률. 크론이 집어 갈 때까지 1분쯤 걸리므로 '대기 중' 도 보여 준다. */
 .ba-lk-prog { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
 .ba-lk-bar { flex: 1; height: 8px; border-radius: 999px; background: var(--ba-surface);

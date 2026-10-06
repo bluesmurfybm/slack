@@ -2590,6 +2590,17 @@ ok('★ 사람이 매긴 값은 다시 매기기에도 그대로다',
    && $kept['difficulty_note'] === '내가 봤다',
    json_encode($kept, JSON_UNESCAPED_UNICODE));
 
+// 링크 목록은 드로어로 뺐다. 300건짜리 표가 늘 펼쳐져 있으면 바로 아래
+// WBS 칸까지 내려가는 데만 한참 걸린다.
+$page = $admin->req('/studio/project_view.php?id=' . $pid)['body'];
+ok('★ 링크 목록이 드로어 안에 있다',
+   str_contains($page, 'id="ba-lk-drawer"') && str_contains($page, 'id="ba-lk-table"'));
+ok('상태별 단추 자리가 있다', str_contains($page, 'id="ba-lk-chips"'));
+ok('드로어 안에 거르는 자리가 있다', str_contains($page, 'id="ba-lk-filter"'));
+ok('★ 표가 본문에 펼쳐져 있지 않다',
+   strpos($page, 'id="ba-lk-table"') > strpos($page, 'id="ba-lk-drawer"'),
+   '표가 드로어 바깥에 있다');
+
 $pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);
 
 // ---- 멈추기 ----

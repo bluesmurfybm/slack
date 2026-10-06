@@ -323,19 +323,14 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <span class="ba-dim" id="ba-lk-progtxt"></span>
       </div>
 
-      <div class="ba-table-wrap">
-        <table class="ba-table" id="ba-lk-table">
-          <thead>
-            <tr>
-              <th style="width:86px">상태</th>
-              <th>어느 항목</th>
-              <th style="width:230px">읽어 온 문서</th>
-              <th style="width:74px">글자</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <!-- ┌──────────────────────────────────────────────────────────┐
+           │ 목록은 드로어로 뺐다                                      │
+           │                                                          │
+           │ 링크가 300건을 넘으면 표가 화면을 통째로 먹어, 바로 아래  │
+           │ WBS 칸까지 내려가는 데만 한참 걸렸다. 평소에 볼 것은      │
+           │ 숫자 몇 개뿐이고, 줄 하나하나는 뭔가 이상할 때만 본다.    │
+           └──────────────────────────────────────────────────────────┘ -->
+      <div class="ba-lk-chips" id="ba-lk-chips"></div>
     </div>
     <?php endif; ?>
 
@@ -495,6 +490,37 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     </div>
     <div class="ba-drawer__body" id="ba-ar-body"></div>
     <div class="ba-drawer__foot">
+      <span class="ba-spacer"></span>
+      <button type="button" class="ba-btn" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 기획 링크 목록 드로어. 상태로 걸러 본다 -->
+<div class="ba-drawer" id="ba-lk-drawer" hidden>
+  <div class="ba-drawer__box" role="dialog" aria-modal="true" aria-labelledby="ba-lkd-title">
+    <div class="ba-drawer__head">
+      <h2 id="ba-lkd-title">기획 링크</h2>
+      <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
+    </div>
+    <div class="ba-drawer__body">
+      <div class="ba-lk-filter" id="ba-lk-filter"></div>
+      <div class="ba-table-wrap">
+        <table class="ba-table" id="ba-lk-table">
+          <thead>
+            <tr>
+              <th style="width:76px">상태</th>
+              <th>어느 항목</th>
+              <th style="width:170px">읽어 온 문서</th>
+              <th style="width:64px">글자</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="ba-drawer__foot">
+      <span class="ba-dim" id="ba-lk-shown"></span>
       <span class="ba-spacer"></span>
       <button type="button" class="ba-btn" data-close>닫기</button>
     </div>
