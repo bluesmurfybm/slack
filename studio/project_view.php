@@ -430,8 +430,10 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
           <span>버전</span>
           <select id="ba-al-ver" class="ba-input"></select>
         </label>
-        <button type="button" class="ba-btn" id="ba-al-propose">배정안 산출</button>
-        <button type="button" class="ba-btn" id="ba-al-weights">가중치 조정</button>
+        <button type="button" class="ba-btn" id="ba-al-propose"
+                title="가중치·방식·단위를 모두 기본값으로 산출합니다. 이전 안에서 손댄 항목도 가져오지 않습니다">배정안 산출 (기본값)</button>
+        <button type="button" class="ba-btn" id="ba-al-weights"
+                title="가중치와 배정 방식·단위를 펼칩니다. 이 단추로는 산출되지 않습니다">가중치·방식 조정</button>
         <span class="ba-spacer"></span>
         <button type="button" class="ba-btn ba-btn--primary" id="ba-al-confirm">최종 배정 완료</button>
       </div>
@@ -493,7 +495,8 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                    title="같은 씨앗을 넣으면 같은 배정이 다시 나옵니다">
           </label>
           <button type="button" class="ba-btn" id="ba-al-wreset">기본값</button>
-          <button type="button" class="ba-btn ba-btn--primary" id="ba-al-wapply">이 방식으로 재산출</button>
+          <button type="button" class="ba-btn ba-btn--primary" id="ba-al-wapply"
+                  title="위에 보이는 값 그대로 산출합니다. 이전 안에서 손댄 항목은 유지합니다">조정한 값으로 재산출</button>
         </div>
       </div>
       <?php endif; ?>

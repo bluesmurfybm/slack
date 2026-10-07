@@ -3396,17 +3396,29 @@
       if (weights) body.weights = weights;
       if (keepManual && CUR) body.keep_manual_from = CUR.id;
 
-      // 무작위면 가중치를 보내도 쓰이지 않는다. 그래도 그대로 보낸다 —
-      // 그때 어떤 가중치를 띄워 두고 있었는지가 params_json 에 남아,
-      // 나중에 "가중치로 돌렸으면 어땠을까" 를 같은 조건으로 비교할 수 있다.
-      var m = currentMethod();
-      if (m !== 'weighted') {
-        body.method = m;
-        var sd = ($('#ba-al-seed') || {}).value || '';
-        if (sd.trim() !== '') body.seed = sd.trim();
+      // ┌──────────────────────────────────────────────────────────┐
+      // │ 이름이 곧 동작이어야 한다                                  │
+      // │                                                          │
+      // │ 전에는 [배정안 산출] 이 가중치는 무시하면서 방식·단위만    │
+      // │ 패널 값을 썼다. 같은 패널인데 어떤 칸은 먹고 어떤 칸은     │
+      // │ 안 먹으니 결과를 예측할 수 없었다.                        │
+      // │                                                          │
+      // │ 이제 **패널을 보느냐 마느냐**로 딱 갈린다.                 │
+      // │   [배정안 산출 (기본값)]  → 패널을 아예 안 본다           │
+      // │   [조정한 값으로 재산출]  → 패널 값을 전부 쓴다           │
+      // │                                                          │
+      // │ weights 를 주느냐가 그 신호다 — 재산출만 넘긴다.          │
+      // └──────────────────────────────────────────────────────────┘
+      if (weights) {
+        var m = currentMethod();
+        if (m !== 'weighted') {
+          body.method = m;
+          var sd = ($('#ba-al-seed') || {}).value || '';
+          if (sd.trim() !== '') body.seed = sd.trim();
+        }
+        var lv = currentLevel();
+        if (lv !== 'leaf') body.level = lv;
       }
-      var lv = currentLevel();
-      if (lv !== 'leaf') body.level = lv;
 
       api('api/allocate.php?act=propose', { method: 'POST', body: body })
         .then(function (d) {
@@ -3544,11 +3556,17 @@
       });
       $('#ba-al-wapply').addEventListener('click', function () {
         var w = currentWeights();
-        // 무작위는 가중치를 안 쓰므로 합이 0 이어도 막을 이유가 없다.
-        if (currentMethod() === 'weighted') {
-          var sum = 0;
-          Object.keys(w).forEach(function (k) { sum += w[k]; });
-          if (sum <= 0) { showError('#ba-al-error', '가중치가 전부 0 입니다.'); return; }
+        var sum = 0;
+        Object.keys(w).forEach(function (k) { sum += w[k]; });
+        // 무작위도 가중치가 필요하다. 뽑는 데 쓰지 않을 뿐, **적합도는
+        // 그대로 계산해 보여 주기** 때문이다 — 그 숫자가 "가중치 배정이
+        // 무작위보다 나은가" 를 재는 대조 자료다. 전부 0 이면 적합도가
+        // 아예 안 나와 비교할 것이 사라진다.
+        if (sum <= 0) {
+          showError('#ba-al-error',
+            '가중치가 전부 0 입니다. 무작위로 뽑더라도 적합도는 계산해 보여 주므로 ' +
+            '하나 이상은 0 보다 커야 합니다.');
+          return;
         }
         propose(w, true);
       });

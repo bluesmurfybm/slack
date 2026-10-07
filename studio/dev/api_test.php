@@ -2880,6 +2880,21 @@ ok('★ 배정 방식 고르는 자리가 있다',
    str_contains($page, 'name="ba-al-method"') && str_contains($page, 'value="random_even"')
    && str_contains($page, 'value="random_pure"'));
 ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 이름이 곧 동작이어야 한다 (2026-10-07)                            │
+// │                                                                  │
+// │ [배정안 산출] 이 가중치는 무시하면서 방식·단위만 패널 값을 써서   │
+// │ 결과를 예측할 수 없었다. 이제 **패널을 보느냐 마느냐**로 갈린다.  │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 두 단추의 이름이 동작을 드러낸다',
+   str_contains($page, '배정안 산출 (기본값)') && str_contains($page, '조정한 값으로 재산출'),
+   '단추 이름이 그대로다');
+ok('패널 토글은 산출 단추가 아니라고 드러낸다',
+   str_contains($page, '가중치·방식 조정'), '토글 이름이 그대로다');
+ok('★ 기본값 단추는 패널을 안 본다',
+   (bool)preg_match('/if \(weights\) \{\s*\n\s*var m = currentMethod\(\)/', $js),
+   '패널 값이 기본값 산출에도 섞인다');
+
 ok('★ 배정 단위 고르는 자리가 있다',
    str_contains($page, 'name="ba-al-level"') && str_contains($page, 'value="d1"')
    && str_contains($page, 'value="d2"') && str_contains($page, 'value="auto"'));
