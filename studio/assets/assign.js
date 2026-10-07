@@ -2199,7 +2199,36 @@
       }
 
       tbody.innerHTML = rows.map(function (r) { return rowHtml(r); }).join('');
+      syncConfirmBoxes();
       syncSummary();
+    }
+
+    /**
+     * 반만 확정된 묶음은 **반만 켜진 모양**으로 그린다.
+     *
+     * 켜짐/꺼짐 둘뿐이면 "하위 7건 중 3건만 확정" 이 꺼짐으로 보여, 눌렀을
+     * 때 나머지 4건이 켜지는지 3건이 꺼지는지 알 수 없다. indeterminate 는
+     * HTML 속성이 아니라 자바스크립트로만 켤 수 있어 그릴 때마다 맞춘다.
+     */
+    function syncConfirmBoxes() {
+      flat(MODEL, 1, null, []).forEach(function (r) {
+        var box = tbody.querySelector('tr[data-k="' + r.node.key + '"] .ba-wr__confirm');
+        if (!box || !r.node.children.length) { return; }
+        var kids = subtreeNodes(r.node).filter(function (x) { return x.id; });
+        var on   = kids.filter(function (x) { return x.confirmed; }).length;
+        box.checked       = kids.length > 0 && on === kids.length;
+        box.indeterminate = on > 0 && on < kids.length;
+      });
+
+      var all = $('#ba-w-cfall');
+      if (all) {
+        var every = flat(MODEL, 1, null, []).map(function (r) { return r.node; })
+                        .filter(function (n) { return n.id; });
+        var done  = every.filter(function (n) { return n.confirmed; }).length;
+        all.checked       = every.length > 0 && done === every.length;
+        all.indeterminate = done > 0 && done < every.length;
+        all.disabled      = !CAN_CONFIRM || every.length === 0;
+      }
     }
 
     function rowHtml(r) {
@@ -2210,9 +2239,14 @@
 
       // 확정은 저장된 태스크에만 걸 수 있다. 아직 서버에 없는 줄은
       // 확정할 대상 자체가 없다 — 켜 두면 눌렀을 때 조용히 아무 일도 안 난다.
-      var cbTitle = !n.id ? '저장한 뒤에 확정할 수 있습니다'
-                  : (!CAN_CONFIRM ? '확정 권한이 없습니다' : '배정 대상으로 확정');
-      var cbOff = (!n.id || !CAN_CONFIRM) ? ' disabled' : '';
+      //
+      // 다만 상위 줄은 **하위 중 하나라도 저장돼 있으면** 켠다. 상위 자신이
+      // 새 줄이어도 그 아래 저장된 것들을 함께 확정할 수 있어야 한다.
+      var anySaved = subtreeIds(n).length > 0;
+      var cbTitle = !anySaved ? '저장한 뒤에 확정할 수 있습니다'
+                  : (!CAN_CONFIRM ? '확정 권한이 없습니다'
+                  : (isLeaf ? '배정 대상으로 확정' : '하위까지 함께 확정'));
+      var cbOff = (!anySaved || !CAN_CONFIRM) ? ' disabled' : '';
 
       // 초안(origin=auto)은 배경으로 구분한다. 사람이 쓴 줄과 모델이 뽑은
       // 줄이 같아 보이면 검토가 형식만 남는다.
@@ -2412,28 +2446,86 @@
     // ---- 확정 -------------------------------------------------------------
     //
     // 저장과 따로 간다. 서버도 save_tree 에서 confirmed 를 받지 않는다.
-    function onConfirmToggle(cb) {
-      var tr = cb.closest('tr');
-      var p  = locate(tr.dataset.k);
-      if (!p || !p.node.id) { cb.checked = false; return; }
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 확정은 묶음으로 건다                                          │
+    // │                                                              │
+    // │ 105줄을 하나씩 누르는 것은 일이 아니라 벌이다. 서버는 이미    │
+    // │ task_ids 배열을 받고 한 번의 UPDATE 로 끝낸다 —              │
+    // │ **해제는 전부 되거나 전부 안 되거나**이고, 배정안에 들어간    │
+    // │ 태스크가 섞이면 어느 것인지 이름까지 알려 준다.               │
+    // │                                                              │
+    // │ 고르는 일은 **MODEL 에서** 한다. 화면에서 긁으면 접어 둔      │
+    // │ 하위가 빠져 "전체 선택" 이 거짓말이 된다.                     │
+    // └──────────────────────────────────────────────────────────────┘
 
-      var on = cb.checked;
-      cb.disabled = true;
-      api('api/task.php?act=' + (on ? 'confirm' : 'unconfirm'), {
-        method: 'POST',
-        body: { task_ids: [p.node.id] }
-      }).then(function (d) {
-        p.node.confirmed = on;
-        tr.classList.toggle('is-confirmed', on);
-        REV = d.revision || REV;
-        toast(d.message);
-        syncSummary();
-      }).catch(function (err) {
-        cb.checked = !on;                 // 서버가 거절했으면 화면도 되돌린다
-        showError('#ba-pv-error', err.message);
-      }).then(function () {
-        cb.disabled = false;
+    /** 이 노드와 모든 하위. 저장 전 줄(id 없음)은 확정할 대상이 없으므로 뺀다. */
+    function subtreeIds(node) {
+      var out = [];
+      (function walk(n) {
+        if (n.id) { out.push(n.id); }
+        n.children.forEach(walk);
+      })(node);
+      return out;
+    }
+
+    function subtreeNodes(node) {
+      var out = [];
+      (function walk(n) { out.push(n); n.children.forEach(walk); })(node);
+      return out;
+    }
+
+    /**
+     * 확정 상태를 한 번에 바꾼다.
+     *
+     * @param nodes 다룰 노드들(각자의 하위까지 함께 간다)
+     * @param on    확정할지 풀지
+     * @param cb    되돌릴 체크박스. 서버가 거절하면 화면도 되돌린다
+     */
+    function setConfirm(nodes, on, cb) {
+      var ids = [], touched = [], unsaved = 0;
+      nodes.forEach(function (n) {
+        subtreeNodes(n).forEach(function (x) {
+          if (!x.id) { unsaved++; return; }
+          // 이미 그 상태면 보내지 않는다. 서버가 세는 '바뀐 건수' 가
+          // 부풀면 "50건 확정" 이라고 해 놓고 실제로는 3건인 일이 생긴다.
+          if (!!x.confirmed === on) { return; }
+          ids.push(x.id);
+          touched.push(x);
+        });
       });
+
+      if (!ids.length) {
+        if (unsaved) {
+          showError('#ba-pv-error',
+            '저장하지 않은 줄은 확정할 수 없습니다. 먼저 [저장] 하세요.');
+        }
+        render();                       // 체크 모양만 되돌린다
+        return;
+      }
+
+      if (cb) { cb.disabled = true; }
+      api('api/task.php?act=' + (on ? 'confirm' : 'unconfirm'), {
+        method: 'POST', body: { task_ids: ids }
+      }).then(function (d) {
+        touched.forEach(function (x) { x.confirmed = on; });
+        REV = d.revision || REV;
+        toast(d.message + (unsaved ? ' 저장 안 한 ' + unsaved + '줄은 뺐습니다.' : ''));
+        render();
+      }).catch(function (err) {
+        // 전부 되거나 전부 안 되거나다. 반만 바뀐 것처럼 보이면 안 된다.
+        showError('#ba-pv-error', err.message);
+        render();
+      }).then(function () {
+        if (cb) { cb.disabled = false; }
+      });
+    }
+
+    function onConfirmToggle(cb) {
+      var p = locate(cb.closest('tr').dataset.k);
+      if (!p) { return; }
+      // 상위를 누르면 하위가 따라간다. 눈에 보이는 체크 하나가 그 묶음
+      // 전체를 뜻한다는 것이 이 표의 읽는 방식이다.
+      setConfirm([p.node], cb.checked, cb);
     }
 
     // ---- 상세 드로어 ------------------------------------------------------
@@ -2979,6 +3071,22 @@
           parseDocs(true);
         });
       }
+      // 전체 확정/해제. 접어 둔 하위까지 포함한다 — MODEL 을 보기 때문이다.
+      var cfAll = $('#ba-w-cfall');
+      if (cfAll) {
+        cfAll.addEventListener('change', function () {
+          var on = cfAll.checked;
+          if (!on && !confirm(['WBS 전체의 확정을 풉니다.', '',
+                               '· 배정안에 들어간 태스크가 있으면 거절됩니다',
+                               '· 그 경우 아무것도 바뀌지 않습니다',
+                               '', '진행할까요?'].join('\n'))) {
+            syncConfirmBoxes();
+            return;
+          }
+          setConfirm(MODEL, on, cfAll);
+        });
+      }
+
       $('#ba-w-fold').addEventListener('click', function () { foldAll(true); });
       $('#ba-w-unfold').addEventListener('click', function () { foldAll(false); });
 

@@ -389,7 +389,13 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <table class="ba-table ba-wbs" id="ba-w-table">
           <thead>
             <tr>
-              <th style="width:46px" title="확정한 태스크만 배정 대상이 됩니다">확정</th>
+              <!-- 머리의 체크는 **보이는 줄 전체**가 아니라 WBS 전체를 다룬다.
+                   접어 둔 하위가 빠지면 "전체 선택" 이 거짓말이 된다. -->
+              <th style="width:52px" title="확정한 태스크만 배정 대상이 됩니다">
+                <input type="checkbox" class="ba-wr__confirm" id="ba-w-cfall"
+                       title="전체 확정 / 해제" aria-label="전체 확정">
+                <span class="ba-th-unit">확정</span>
+              </th>
               <th style="width:64px">번호</th>
               <th>태스크</th>
               <th style="width:76px">예상공수<span class="ba-th-unit">M/D</span></th>

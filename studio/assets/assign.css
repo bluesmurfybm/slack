@@ -682,6 +682,9 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-wr.is-confirmed .ba-wr__no span { color: var(--ba-brand); font-weight: 700; }
 
 .ba-wr__cb { text-align: center; }
+/* 머리의 전체 확정 체크. 글자와 세로로 쌓아 칸을 안 넓힌다. */
+.ba-wbs th .ba-wr__confirm { display: block; margin: 0 auto 2px; }
+.ba-wbs th .ba-th-unit { display: block; font-weight: 600; }
 .ba-wr__confirm { width: 16px; height: 16px; accent-color: var(--ba-brand); }
 .ba-wr__confirm[disabled] { opacity: .35; }
 

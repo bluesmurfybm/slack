@@ -874,6 +874,31 @@ ok('배정 가능 3건이 됨', ($r['json']['data']['counts']['assignable'] ?? 0
    json_encode($r['json']['data']['counts'] ?? null));
 $rev = $r['json']['data']['revision'];
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 묶음 확정 — 105줄을 하나씩 누르는 것은 일이 아니라 벌이다         │
+// │                                                                  │
+// │ 서버는 처음부터 task_ids 배열을 받았다. 화면에만 길이 없었다.     │
+// │ 여기서는 **여러 건이 한 번에, 그리고 전부 아니면 전무**인지 본다. │
+// └──────────────────────────────────────────────────────────────────┘
+$r = $admin->req('/studio/api/task.php?act=unconfirm',
+                 ['csrf' => true, 'json' => ['task_ids' => $taskIds]]);
+ok('여러 건을 한 번에 푼다', $r['status'] === 200
+   && ($r['json']['data']['changed'] ?? 0) === 3,
+   json_encode($r['json']['data']['changed'] ?? null));
+
+$r = $admin->req('/studio/api/task.php?act=confirm',
+                 ['csrf' => true, 'json' => ['task_ids' => $taskIds]]);
+ok('여러 건을 한 번에 건다', ($r['json']['data']['changed'] ?? 0) === 3,
+   json_encode($r['json']['data']['changed'] ?? null));
+
+// ★ 이미 그 상태인 것은 세지 않는다. 부풀면 "50건 확정" 이라고 해 놓고
+//   실제로는 3건인 일이 생긴다.
+$r = $admin->req('/studio/api/task.php?act=confirm',
+                 ['csrf' => true, 'json' => ['task_ids' => $taskIds]]);
+ok('★ 이미 확정된 것은 세지 않는다', ($r['json']['data']['changed'] ?? -1) === 0,
+   json_encode($r['json']['data']['changed'] ?? null));
+$rev = $r['json']['data']['revision'];
+
 // 이 화면의 핵심 규칙 — 트리 저장으로 확정이 딸려 바뀌면 안 된다.
 $strip = function (array $ns) use (&$strip): array {
     return array_map(static fn($n) => [
@@ -2886,6 +2911,15 @@ ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
 // │ [배정안 산출] 이 가중치는 무시하면서 방식·단위만 패널 값을 써서   │
 // │ 결과를 예측할 수 없었다. 이제 **패널을 보느냐 마느냐**로 갈린다.  │
 // └──────────────────────────────────────────────────────────────────┘
+// 확정을 묶음으로 거는 자리. 고르는 일은 MODEL 에서 해야 접어 둔 하위가
+// 빠지지 않는다 — 화면에서 긁으면 "전체 선택" 이 거짓말이 된다.
+ok('★ 전체 확정 체크가 있다', str_contains($page, 'id="ba-w-cfall"'));
+ok('★ 고르기는 MODEL 에서 한다',
+   str_contains($js, 'setConfirm(MODEL,') && str_contains($js, 'function subtreeNodes'),
+   '화면에서 긁으면 접어 둔 하위가 빠진다');
+ok('반만 확정된 묶음을 반만 켜진 모양으로 그린다',
+   str_contains($js, 'indeterminate'), '켜짐/꺼짐 둘뿐이면 상태를 알 수 없다');
+
 ok('★ 두 단추의 이름이 동작을 드러낸다',
    str_contains($page, '배정안 산출 (기본값)') && str_contains($page, '조정한 값으로 재산출'),
    '단추 이름이 그대로다');
