@@ -44,7 +44,8 @@ function pool() {
   if (v.mode === "admin") {
     return APP.topics.filter(t => (v.tab === "archive" ? t.archived : !t.archived));
   }
-  return APP.topics.filter(t => t.active && !t.archived);
+  // 보관한 것도 자기가 발표한 것은 본인에게 보인다
+  return APP.topics.filter(t => t.active && (!t.archived || t.presenter_email === APP.me.email));
 }
 
 function visible() {

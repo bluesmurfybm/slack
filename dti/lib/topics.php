@@ -89,11 +89,11 @@ function dti_topic_all(PDO $pdo): array {
 
 /**
  * 목록. 날짜(발표일 > 예정일) 없는 것이 먼저, 그다음 날짜 최신순, 마지막으로 등록 역순이다.
- * 아티클과 발표를 짝지어 돌려준다.
+ * 아티클과 발표를 짝지어 돌려준다. 보관한 것이라도 자기가 발표한 것은 $viewer 에게 보인다.
  */
-function dti_topic_list_with_presentations(PDO $pdo, bool $includeHidden): array {
+function dti_topic_list_with_presentations(PDO $pdo, bool $includeHidden, string $viewer): array {
     $on = "COALESCE(NULLIF(p.done_date, ''), NULLIF(p.planned_date, ''))";
-    $where = $includeHidden ? '' : 'WHERE t.active = 1 AND t.archived = 0';
+    $where = $includeHidden ? '' : "WHERE t.active = 1 AND (t.archived = 0 OR (p.presenter_email <> '' AND p.presenter_email = ?))";
 
     $sql = "SELECT t.*, p.id AS p_id, p.topic_id AS p_topic_id, p.presenter AS p_presenter,
                    p.presenter_email AS p_presenter_email, p.planned_date AS p_planned_date,
@@ -105,8 +105,11 @@ function dti_topic_list_with_presentations(PDO $pdo, bool $includeHidden): array
             {$where}
             ORDER BY ({$on} IS NULL) DESC, {$on} DESC, t.id DESC";
 
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($includeHidden ? [] : [$viewer]);
+
     $out = [];
-    foreach ($pdo->query($sql)->fetchAll() as $row) {
+    foreach ($stmt->fetchAll() as $row) {
         $pres = null;
         if ($row['p_id'] !== null) {
             $presRow = [];

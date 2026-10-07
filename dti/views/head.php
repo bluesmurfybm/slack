@@ -15,7 +15,7 @@ $admin = $page['admin'];
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><?= dti_h($admin ? "{$page['label']} · DTI 운영 관리" : 'DTI 발표 아티클') ?></title>
+  <title><?= dti_h($admin ? "{$page['label']} · BlueMagazine" : 'BlueMagazine') ?></title>
   <link rel="icon" href="<?= dti_asset($page, 'styles/favicon.ico') ?>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,12 +31,6 @@ $admin = $page['admin'];
     <div class="topbar-in">
       <a class="logo" href="<?= dti_h($page['portal']) ?>" style="text-decoration:none"><b>blue</b><span
           class="dash">-</span>iWorks</a>
-      <?php if ($page['is_admin']): ?>
-      <nav class="seg-mode" aria-label="화면 전환">
-        <a href="<?= dti_page_href($page, 'list') ?>"<?= $admin ? '' : ' class="on"' ?>>구성원 화면</a>
-        <a href="<?= dti_page_href($page, 'articles') ?>"<?= $admin ? ' class="on"' : '' ?>>관리자 화면</a>
-      </nav>
-      <?php endif; ?>
       <div class="top-right">
         <div class="user-menu" id="hdrUserMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
@@ -58,18 +52,24 @@ $admin = $page['admin'];
   <header class="site">
     <div class="site-inner">
       <div class="brand">
-        <span class="eyebrow">BlueUP-DTI</span>
-        <h1><?= $admin ? 'DTI 운영 관리' : 'DTI 발표' ?></h1>
+        <span class="eyebrow"><?= $admin ? '운영 관리' : 'BlueUP-DTI' ?></span>
+        <h1>BlueMagazine</h1>
         <?php if ($admin): ?><p class="lede">아티클 등록 · 노출 관리 · 발표자 지정 · 보관</p><?php endif; ?>
       </div>
-      <?php if ($page['key'] === 'articles'): ?>
+      <?php if ($page['is_admin']): ?>
       <div class="site-act">
+        <?php if ($page['key'] === 'articles'): ?>
         <button class="btn-new" onclick="openForm()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M5 12h14" />
           </svg>
           아티클 등록
         </button>
+        <?php endif; ?>
+        <nav class="mode-nav" aria-label="화면 전환">
+          <a href="<?= dti_page_href($page, 'list') ?>"<?= $admin ? '' : ' class="on" aria-current="page"' ?>>구성원 화면</a>
+          <a href="<?= dti_page_href($page, 'articles') ?>"<?= $admin ? ' class="on" aria-current="page"' : '' ?>>관리자 화면</a>
+        </nav>
       </div>
       <?php endif; ?>
     </div>

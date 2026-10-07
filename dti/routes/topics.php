@@ -31,8 +31,8 @@ function dti_topic_index(array $ctx): array {
     $pdo = $ctx['pdo'];
     $email = $ctx['identity']['email'];
 
-    // 숨김·보관은 관리자 화면에만 있어야 한다. 목록에서 빼는 판정은 서버가 한다
-    $rows = dti_topic_list_with_presentations($pdo, dti_is_admin($ctx['config'], $email));
+    // 숨김·보관은 관리자 화면에만 있어야 한다(보관은 본인 발표만 예외). 목록에서 빼는 판정은 서버가 한다
+    $rows = dti_topic_list_with_presentations($pdo, dti_is_admin($ctx['config'], $email), $email);
     [$counts, $mine] = dti_emotion_summary($pdo, $email);
     $materials = dti_material_grouped($pdo);
 

@@ -80,6 +80,20 @@ final class TopicReadTest extends TestCase
         $this->assertCount(3, $this->get(['topics'], $this->admin())['data']);
     }
 
+    public function test_본인이_발표한_보관_아티클은_본인에게_보인다(): void
+    {
+        $me = $this->user();
+        $own = $this->makeTopic(['title' => '내 보관', 'archived' => 1]);
+        $this->makePresentation($own, ['presenter' => $me['name'], 'presenter_email' => $me['email']]);
+        $other = $this->makeTopic(['title' => '남의 보관', 'archived' => 1]);
+        $this->makePresentation($other, ['presenter' => '김지안', 'presenter_email' => 'jian@bluesoft.co.kr']);
+        $hidden = $this->makeTopic(['title' => '내 숨김', 'active' => 0]);
+        $this->makePresentation($hidden, ['presenter' => $me['name'], 'presenter_email' => $me['email']]);
+
+        $mine = array_column($this->get(['topics'], $me)['data'], 'title');
+        $this->assertSame(['내 보관'], $mine);
+    }
+
     public function test_목록은_날짜_없는_것부터_그다음_최신순(): void
     {
         $a = $this->makeTopic(['title' => '날짜없음1']);

@@ -47,9 +47,8 @@ body{
 }
 .wrap{max-width:1240px;margin:0 auto;padding:0 22px 80px}
 
-/* topbar 는 /shared-styles/topbar.css(포털 원본)에서 온다 — 본문과 줄을 맞추는 아래 두 줄만 예외 */
+/* topbar 는 /shared-styles/topbar.css(포털 원본)에서 온다 — 본문과 줄을 맞추는 아래 한 줄만 예외 */
 .topbar-in{max-width:1240px}
-.topbar-in .seg-mode{margin-right:auto}
 
 /* ---------- 페이지 헤더 ---------- */
 header.site{background:var(--bg-page)}
@@ -62,7 +61,7 @@ header.site{background:var(--bg-page)}
   font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--cos50);
   text-transform:none;
 }
-.brand h1{font-size:26px;font-weight:700;margin:0;letter-spacing:-.03em;color:var(--tx-primary)}
+.brand h1{font-family:'Space Grotesk',var(--sans);font-size:26px;font-weight:700;margin:0;letter-spacing:-.02em;color:var(--tx-primary)}
 
 /* ---------- 버튼 ---------- */
 .btn-new{
@@ -398,15 +397,12 @@ li.empty .big{font-size:15px;font-weight:600;color:var(--tx-secondary);margin-bo
 .brand .lede{font-size:13px;color:var(--tx-quaternary);margin:6px 0 0}
 .site-act{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 
-.seg-mode{
-  display:inline-flex;background:var(--gray95);border-radius:var(--r8);padding:3px;gap:2px;
-}
-.seg-mode a{text-decoration:none;
-  font-family:var(--sans);font-size:13px;font-weight:600;padding:7px 14px;
-  border:none;border-radius:var(--r6);background:transparent;color:var(--tx-quinary);cursor:pointer;
-  transition:background .15s ease,color .15s ease;
-}
-.seg-mode a.on{background:var(--bg-card);color:var(--tx-primary);box-shadow:var(--shadow-sm)}
+/* 구성원·관리자 화면 전환 — studio 머리말의 화면 이동 탭(.ba-nav)과 같은 모양 */
+.mode-nav{display:flex;gap:4px}
+.mode-nav a{display:block;padding:7px 14px;border-radius:var(--r8);text-decoration:none;
+  font-size:13.5px;font-weight:600;color:var(--tx-tertiary);transition:background .15s ease,color .15s ease}
+.mode-nav a:hover{background:var(--gray94);color:var(--tx-primary)}
+.mode-nav a.on{background:var(--cos50);color:#fff}
 
 /* ---------- 내 활동 스트립 ---------- */
 .mystrip{
