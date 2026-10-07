@@ -232,9 +232,24 @@ final class AllocationRepo
                 AND t.confirmed = 1
                 AND t.status NOT IN ($ph)
                 AND NOT EXISTS (SELECT 1 FROM bs_task c WHERE c.parent_id = t.id)
+                /* ┌────────────────────────────────────────────────────┐
+                   │ 상위가 맡고 있으면 그 하위도 임자가 있는 것이다      │
+                   │                                                    │
+                   │ 배정 단위를 대분류·중분류로 고르면 항목이 **상위     │
+                   │ 노드**를 가리킨다. 그런데 이 질의가 말단만 보던      │
+                   │ 탓에, 멀쩡히 묶여 배정된 하위 62건이 임자 없는 것   │
+                   │ 처럼 떴다(2026-10-07).                             │
+                   │                                                    │
+                   │ 깊이는 3 까지라 부모·조부모만 보면 된다.            │
+                   │ parent_id 가 NULL 이면 IN 에서 그냥 안 맞는다.      │
+                   └────────────────────────────────────────────────────┘ */
                 AND NOT EXISTS (
                     SELECT 1 FROM bs_allocation_item i
-                     WHERE i.allocation_id = ? AND i.task_id = t.id AND i.role = 'owner')
+                     WHERE i.allocation_id = ? AND i.role = 'owner'
+                       AND i.task_id IN (
+                             t.id,
+                             t.parent_id,
+                             (SELECT p.parent_id FROM bs_task p WHERE p.id = t.parent_id)))
               ORDER BY t.wbs_no"
         );
         $st->execute(array_merge(
@@ -484,9 +499,29 @@ final class AllocationRepo
      */
     public function loadByMember(int $allocationId): array
     {
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 묶어 배정한 줄의 공수는 하위를 더해야 한다                     │
+        // │                                                              │
+        // │ 전에는 "하위가 있으면 0" 이었다. 상위는 하위의 묶음이라 자기   │
+        // │ 공수를 안 받기 때문이고, 말단만 배정하던 시절에는 맞았다.      │
+        // │                                                              │
+        // │ 배정 단위를 대분류로 고르면 항목이 상위를 가리키므로, 그 규칙  │
+        // │ 그대로면 **27건을 맡고도 공수 0 으로 잡힌다**(2026-10-07).     │
+        // │                                                              │
+        // │ 그래서 말단이면 자기 값, 아니면 **확정된 말단 하위의 합**을    │
+        // │ 쓴다. 깊이가 3 까지라 자식·손자만 보면 된다.                  │
+        // └──────────────────────────────────────────────────────────────┘
         $st = $this->pdo->prepare(
             'SELECT i.member_id,
-                    SUM(CASE WHEN c.n = 0 THEN COALESCE(t.est_md, 0) * i.alloc_ratio ELSE 0 END) AS md,
+                    SUM(COALESCE(
+                      CASE WHEN c.n = 0 THEN t.est_md
+                           ELSE (SELECT SUM(l.est_md) FROM bs_task l
+                                  WHERE l.confirmed = 1
+                                    AND NOT EXISTS (SELECT 1 FROM bs_task g WHERE g.parent_id = l.id)
+                                    AND (l.parent_id = t.id
+                                         OR l.parent_id IN (SELECT m.id FROM bs_task m
+                                                             WHERE m.parent_id = t.id)))
+                      END, 0) * i.alloc_ratio) AS md,
                     COUNT(*) AS items,
                     SUM(i.role = "owner") AS owner_n
                FROM bs_allocation_item i

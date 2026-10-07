@@ -1381,6 +1381,29 @@ $spL = json_decode((string)$pdoX->query("SELECT params_json FROM bs_allocation W
      . (int)$lvd['allocation_id'])->fetchColumn(), true);
 ok('★ 단위가 배정안에 저장된다', ($spL['level'] ?? '') === 'd1', json_encode($spL['level'] ?? null));
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 묶어 배정하면 항목이 **상위 노드**를 가리킨다 (2026-10-07)        │
+// │                                                                  │
+// │ 임자 찾기와 공수 집계가 말단만 보던 탓에, 멀쩡히 묶여 배정된      │
+// │ 하위가 "담당자 없음" 으로 뜨고 맡은 사람 공수가 0 으로 잡혔다.    │
+// └──────────────────────────────────────────────────────────────────┘
+$det = $admin->req('/studio/api/allocate.php?act=detail&allocation_id='
+                 . (int)$lvd['allocation_id'])['json']['data'];
+ok('★ 상위가 맡으면 하위는 임자 없는 것이 아니다',
+   count($det['unassigned'] ?? []) === 0,
+   json_encode(array_column($det['unassigned'] ?? [], 'wbs_no')));
+$md = 0.0;
+foreach ($det['load'] ?? [] as $l) { $md += (float)$l['assigned_md']; }
+ok('★ 묶어 배정해도 공수가 0 으로 잡히지 않는다', $md > 0, (string)$md);
+
+// 말단까지로 돌린 안과 총 공수가 같아야 한다. 다르면 어느 한쪽이 틀렸다.
+$detLeaf = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . (int)$aid)
+                 ['json']['data'];
+$mdLeaf = 0.0;
+foreach ($detLeaf['load'] ?? [] as $l) { $mdLeaf += (float)$l['assigned_md']; }
+ok('★ 묶어도 총 공수가 말단까지와 같다', abs($md - $mdLeaf) < 0.01,
+   $md . ' / ' . $mdLeaf);
+
 $lvAuto = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'level' => 'auto']]);
 ok('자동으로도 산출된다', $lvAuto['status'] === 200, substr($lvAuto['body'], 0, 160));
