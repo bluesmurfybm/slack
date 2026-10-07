@@ -484,6 +484,26 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 
         <div class="ba-almode__hint" id="ba-al-mhint" hidden></div>
 
+        <!-- ┌────────────────────────────────────────────────────────────┐
+             │ 고른 사람은 받는다                                          │
+             │                                                            │
+             │ 후보로 골라 놓고 가중치 조합 때문에 한 건도 못 받으면,      │
+             │ 애초에 고르지 않은 것과 결과가 같다. 그럴 거면 후보에서     │
+             │ 빼는 것이 맞다 — 고르는 행위가 뜻을 가지려면 보장이 있어야  │
+             │ 한다. 점수는 손대지 않고 **배정이 끝난 뒤 제약으로** 고친다.│
+             └────────────────────────────────────────────────────────────┘ -->
+        <div class="ba-almode ba-almode--one">
+          <span class="ba-almode__l">최소 보장</span>
+          <label><input type="checkbox" id="ba-al-minone" checked>
+            고른 후보는 적어도 1건 받게 한다</label>
+        </div>
+        <div class="ba-almode__hint">
+          배정이 끝난 뒤, 0건인 후보에게 <b>적합도 손실이 가장 작은 한 건</b>을 넘깁니다.
+          점수를 주무르지 않으므로 화면의 적합도는 그대로 실제 값입니다.
+          난이도 ★4 이상은 그 분야 상위자에게만 가는 규칙을 깨지 않으며,
+          못 넘긴 경우에는 <b>왜 못 넘겼는지</b> 적습니다.
+        </div>
+
         <div class="ba-sliders" id="ba-al-wsliders"></div>
         <!-- 항목별 설명은 슬라이더마다 한 줄씩 붙는다(assign.js 의 W_HINT).
              여기는 **여러 항목에 걸친 규칙** 하나만 남긴다 — 설명이 두
@@ -512,6 +532,9 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       <div class="ba-alert" id="ba-al-error" hidden></div>
       <!-- 자동이 왜 그렇게 나눴는지. 답할 수 없는 자동은 아무도 안 쓴다. -->
       <div class="ba-note ba-al-splits" id="ba-al-splits" hidden></div>
+      <!-- 최소 보장이 무엇을 옮겼고 무엇을 못 옮겼는지. 보장은 **못 지킨
+           자리**가 더 중요하다 — 조용히 넘어가면 지켰다고 믿는다. -->
+      <div class="ba-note ba-al-splits" id="ba-al-minone-note" hidden></div>
 
       <!-- 인원별 부하 -->
       <div id="ba-al-load"></div>

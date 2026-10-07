@@ -3186,6 +3186,17 @@
       clearError('#ba-al-error');
       renderBadge();
       renderLoad(d.load || []);
+      // ┌──────────────────────────────────────────────────────────┐
+      // │ 산출할 때만 받는 값은 **갈아 끼울 때 비운다**              │
+      // │                                                          │
+      // │ 쪼갠 이유와 최소 보장 기록은 meta 로만 오고 배정안에 저장  │
+      // │ 되지 않는다. 안 비우면 13차의 기록이 12차 화면에 그대로    │
+      // │ 남아 **다른 차수의 이야기를 그 차수의 근거처럼** 읽게 된다.│
+      // │ (renderSplits 주석이 원래 그렇게 적혀 있었는데 비우는 쪽이 │
+      // │ 빠져 있었다. 2026-10-07)                                  │
+      // └──────────────────────────────────────────────────────────┘
+      renderSplits([]);
+      renderMinOne(null);
       renderTable(d.unassigned || []);
       syncVersionSelect();
     }
@@ -3232,6 +3243,38 @@
         }).join('');
     }
 
+    /**
+     * 최소 보장이 한 일.
+     *
+     * **못 지킨 자리를 먼저 적는다.** 보장은 지켰을 때보다 못 지켰을 때가
+     * 중요하다 — 조용히 넘어가면 사람은 지켜졌다고 믿고 넘어간다.
+     */
+    function renderMinOne(r) {
+      var box = $('#ba-al-minone-note');
+      if (!box) return;
+      var moved  = (r && r.moved)  || [];
+      var failed = (r && r.failed) || [];
+      if (!r || !r.enabled || (!moved.length && !failed.length)) {
+        box.hidden = true; box.innerHTML = ''; return;
+      }
+      var h = '<b>고른 후보에게 최소 1건</b>';
+      failed.forEach(function (f) {
+        h += '<div class="is-bad">· <b>' + esc(f.emp_name) + '</b> — 한 건도 주지 못했습니다. ' +
+             esc(f.reason) + '</div>';
+      });
+      moved.forEach(function (m) {
+        // 점수를 못 낸 채 준 것을 "손실 0" 으로 쓰면 잘 맞는 배정처럼 읽힌다.
+        var tail = m.blind || m.fit_loss === null
+          ? '적합도를 낼 수 없어 공수가 가장 작은 건으로'
+          : '적합도 ' + (m.fit_loss > 0 ? '−' + m.fit_loss : '+' + Math.abs(m.fit_loss));
+        h += '<div>· <b>' + esc(m.to_name) + '</b> ← ' + esc(m.from_name) + ' 의 ' +
+             esc(m.wbs_no || '') + ' ' + esc(m.title) +
+             ' <span class="ba-dim">(' + tail + ')</span></div>';
+      });
+      box.hidden = false;
+      box.innerHTML = h;
+    }
+
     function renderBadge() {
       var el = $('#ba-al-badge');
       if (!CUR) { el.textContent = ''; return; }
@@ -3265,14 +3308,28 @@
       if (!load.length) { box.innerHTML = ''; return; }
 
       var maxCap = 0;
-      load.forEach(function (l) { maxCap = Math.max(maxCap, l.capacity_md, l.assigned_md); });
+      var maxCnt = 0;
+      load.forEach(function (l) {
+        maxCap = Math.max(maxCap, l.capacity_md, l.assigned_md);
+        maxCnt = Math.max(maxCnt, l.task_count);
+      });
       if (maxCap <= 0) maxCap = 1;
+      if (maxCnt <= 0) maxCnt = 1;
 
       box.innerHTML = '<div class="ba-loads">' + load.map(function (l) {
         var pctOfMax = Math.min(100, l.assigned_md / maxCap * 100);
         var capMark  = Math.min(100, l.capacity_md / maxCap * 100);
-        return '<div class="ba-loadrow' + (l.over ? ' is-over' : '') + '">' +
+        // 건수 막대는 **공수 막대와 색을 달리한다.** 같은 색이면 두 막대가
+        // 한 축처럼 읽혀서 "4건인데 왜 막대가 짧지" 가 된다 — 건수와 공수는
+        // 다른 자다. 한 건이 대분류 통째일 수도 있다.
+        var cntPct = Math.min(100, l.task_count / maxCnt * 100);
+        return '<div class="ba-loadrow' + (l.over ? ' is-over' : '') +
+                 (l.task_count === 0 ? ' is-zero' : '') + '">' +
           '<span class="ba-loadrow__n">' + esc(l.emp_name) + '</span>' +
+          '<span class="ba-loadrow__c" title="배정 건수">' +
+            '<i class="ba-loadrow__cb"><b style="width:' + cntPct + '%"></b></i>' +
+            '<em>' + l.task_count + '건</em>' +
+          '</span>' +
           '<span class="ba-loadrow__bar">' +
             '<i style="width:' + pctOfMax + '%"></i>' +
             '<u style="left:' + capMark + '%" title="가용 공수 ' + l.capacity_md + ' M/D"></u>' +
@@ -3281,7 +3338,6 @@
           '<span class="ba-loadrow__p">' +
             (l.load_pct === null ? '-' : l.load_pct + '%') +
             (l.over ? ' <b>초과</b>' : '') + '</span>' +
-          '<span class="ba-loadrow__c">' + l.task_count + '건</span>' +
         '</div>';
       }).join('') + '</div>';
     }
@@ -3607,6 +3663,10 @@
         }
         var lv = currentLevel();
         if (lv !== 'leaf') body.level = lv;
+        // 체크를 풀어 끌 수 있어야 한다. 안 보내면 엔진이 정하는데,
+        // 엔진 기본은 "후보를 골랐으면 켬" 이라 끄는 길이 없어진다.
+        var mo = $('#ba-al-minone');
+        if (mo) body.min_one = mo.checked ? 1 : 0;
       }
 
       api('api/allocate.php?act=propose', { method: 'POST', body: body })
@@ -3625,14 +3685,21 @@
               '★4 이상 ' + off + '건이 그 분야 상위자가 아닌 사람에게 갔습니다. ' +
               '무작위라 "어려운 것은 상위자에게" 규칙을 건너뛰었습니다.');
           }
-          // 자동이 **왜** 나눴는지. 답할 수 없는 자동은 아무도 안 쓴다.
-          renderSplits((d.meta && d.meta.split_reasons) || []);
           return api('api/allocate.php?' + qs({ act: 'versions', project_id: PID }))
             .then(function (v) {
               renderVersions(v.rows || [], v.confirmed_version);
               return api('api/allocate.php?' + qs({ act: 'detail', allocation_id: d.allocation_id }));
             })
-            .then(function (det) { apply(det); toast(d.message); });
+            .then(function (det) {
+              apply(det);
+              // apply 가 비운 뒤에 그린다. 순서가 뒤집히면 방금 산출한
+              // 기록을 apply 가 지워 버린다.
+              //
+              // 자동이 **왜** 나눴는지. 답할 수 없는 자동은 아무도 안 쓴다.
+              renderSplits((d.meta && d.meta.split_reasons) || []);
+              renderMinOne((d.meta && d.meta.min_one) || null);
+              toast(d.message);
+            });
         })
         .catch(function (e) { showError('#ba-al-error', e.message); })
         .then(function () { btn.disabled = false; });

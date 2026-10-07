@@ -632,6 +632,145 @@ ok('어느 배정안 때문인지 남는다',
                       WHERE ref_type='allocation' AND ref_id=$aid2")->fetchColumn() === 3);
 
 // =====================================================================
+echo "\n[4-O] 최소 1건 보장 — 고르는 행위가 뜻을 가지려면\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 정규화로 풀면 안 된다 (2026-10-07)                                │
+// │                                                                  │
+// │ "고른 후보는 가중치를 어떻게 맞춰도 한 건은 받게 하라" 는 요구를  │
+// │ 점수 정규화로 풀려는 유혹이 있다. 안 된다 —                        │
+// │                                                                  │
+// │ · 모든 태스크에 같은 변환을 걸면 사람 사이 **순위가 그대로**라    │
+// │   그리디가 똑같은 답을 낸다. 결과가 한 글자도 안 바뀐다.           │
+// │ · 사람마다 다른 변환(z-score 류)을 걸면 순위는 바뀌지만, 그때부터 │
+// │   화면의 "적합도 44" 가 실제 44 가 아니다. 근거 추적이 깨진다.     │
+// │                                                                  │
+// │ 그래서 **점수는 손대지 않고 배정 뒤에 제약으로** 고친다. 아래      │
+// │ 시험이 그 둘을 같이 지킨다 — 전원이 받는가, 점수가 그대로인가.     │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$pickAll = [$MEM['가개발'], $MEM['나개발'], $MEM['다개발'], $MEM['라개발']];
+// 처리량 하나에 몰아 준다. 가장 쏠리기 쉬운 조합이고, 처리량 점수가 없는
+// 라개발은 **적합도 자체가 null** 이 되는 조합이기도 하다.
+$wCap = ['domain' => 0, 'cap' => 1, 'avail' => 0, 'career' => 0, 'growth' => 0];
+
+$moOff = $engine->propose($pid, ['member_ids' => $pickAll, 'weights' => $wCap,
+                                 'min_one' => false]);
+$moOn  = $engine->propose($pid, ['member_ids' => $pickAll, 'weights' => $wCap]);
+
+$countBy = function (array $res): array {
+    $c = [];
+    foreach ($res['items'] as $it) { $c[$it['member_id']] = ($c[$it['member_id']] ?? 0) + 1; }
+    return $c;
+};
+$offC = $countBy($moOff);
+$onC  = $countBy($moOn);
+
+// 이 전제가 깨지면 아래 시험들이 전부 공허해진다. 보장이 할 일이 없는
+// 상태에서 "전원이 받았다" 를 확인해 봐야 아무것도 안 지킨다.
+ok('★ 보장을 끄면 0건인 후보가 생긴다(시험 전제)',
+   count($offC) < count($pickAll), json_encode($offC));
+
+$missing = [];
+foreach ($pickAll as $m) { if (($onC[$m] ?? 0) === 0) { $missing[] = $m; } }
+ok('★ 고른 후보는 모두 1건 이상 받는다', !$missing,
+   '못 받은 사람 ' . json_encode($missing) . ' / ' . json_encode($onC));
+
+// 옮기기지 늘리기가 아니다. 건수가 늘면 태스크를 두 번 배정한 것이다.
+ok('★ 총 배정 건수는 그대로다', count($moOn['items']) === count($moOff['items']),
+   count($moOn['items']) . ' vs ' . count($moOff['items']));
+$moIds = array_column($moOn['items'], 'task_id');
+ok('같은 태스크가 두 번 배정되지 않는다', count($moIds) === count(array_unique($moIds)));
+
+// ★ 점수를 주무르지 않았다는 증거. 저장된 적합도가 **그 사람의 실제
+//   적합도**여야 한다. 정규화로 풀었다면 여기서 갈린다.
+$byTask = [];
+foreach ($moOn['items'] as $it) { $byTask[$it['task_id']] = $it; }
+$scoreOk = true; $badMv = null;
+foreach ($moOn['meta']['min_one']['moved'] as $mv) {
+    $it = $byTask[$mv['task_id']] ?? null;
+    if ($it === null || $it['member_id'] !== $mv['to_id']) { $scoreOk = false; $badMv = $mv; break; }
+    // blind 로 준 건은 적합도가 null 인 것이 맞다 — 낼 수 없어서 준 것이다.
+    if ($mv['blind'] && $it['fit_score'] !== null) { $scoreOk = false; $badMv = $mv; break; }
+}
+ok('★ 옮긴 뒤에도 적합도는 실제 값 그대로다(정규화하지 않는다)', $scoreOk,
+   json_encode($badMv, JSON_UNESCAPED_UNICODE));
+
+// 기본값 — 후보를 고르면 켜지고, 안 고르면 꺼진다.
+ok('★ 후보를 고르면 기본으로 켜진다', $moOn['meta']['min_one']['enabled'] === true);
+$moNone = $engine->propose($pid, []);
+ok('★ 전원 대상이면 기본으로 꺼진다', $moNone['meta']['min_one']['enabled'] === false,
+   '전원 대상에서 20명에게 10건을 나누면 반은 반드시 0건이다');
+ok('끌 수 있다', $moOff['meta']['min_one']['enabled'] === false);
+ok('고른 후보를 meta 에 남긴다',
+   count($moOn['meta']['picked']) === count($pickAll), json_encode($moOn['meta']['picked']));
+
+// 점수가 없어 그냥 준 건은 **그렇다고 적는다.** 숨기면 화면이 "손실 0" 으로
+// 읽어 잘 맞는 배정처럼 보인다.
+$blindMv = array_values(array_filter($moOn['meta']['min_one']['moved'], fn($m) => $m['blind']));
+ok('★ 점수를 못 낸 채 준 건은 그렇다고 적는다', (bool)$blindMv,
+   json_encode($moOn['meta']['min_one']['moved'], JSON_UNESCAPED_UNICODE));
+$lossNull = true;
+foreach ($blindMv as $mv) { if ($mv['fit_loss'] !== null) { $lossNull = false; } }
+ok('그 건의 손실은 0 이 아니라 null 이다', $lossNull);
+
+// 돌려막기 금지 — 1건뿐인 사람에게서 뺏으면 그 사람이 0건이 된다.
+foreach ($moOn['meta']['min_one']['moved'] as $mv) {
+    ok('★ 1건뿐인 사람에게서 뺏지 않는다 (' . $mv['from_name'] . ')',
+       ($onC[$mv['from_id']] ?? 0) >= 1, json_encode($onC));
+}
+
+// 사람이 고정한 항목은 보장보다 세다. 손으로 정한 것을 기계가 되돌리면
+// 다음부터 아무도 고정을 안 쓴다.
+$pinT  = $leaf['출석부 화면'];
+$moPin = $engine->propose($pid, [
+    'member_ids' => $pickAll, 'weights' => $wCap,
+    'pinned' => [$pinT => $MEM['가개발']],
+]);
+$pinKept = null;
+foreach ($moPin['items'] as $it) { if ($it['task_id'] === $pinT) { $pinKept = $it['member_id']; } }
+ok('★ 고정한 항목은 보장이 빼앗지 못한다', $pinKept === $MEM['가개발'], json_encode($pinKept));
+
+// 결정론 — 같은 입력이면 같은 답. 보장이 순서에 기대면 여기서 깨진다.
+$moTwice = $engine->propose($pid, ['member_ids' => $pickAll, 'weights' => $wCap]);
+ok('★ 같은 입력이면 보장 결과도 같다',
+   json_encode($countBy($moTwice)) === json_encode($onC),
+   json_encode($countBy($moTwice)) . ' vs ' . json_encode($onC));
+
+// 태스크보다 후보가 많으면 못 준다. 그때는 **왜 못 줬는지** 적어야 한다 —
+// 답할 수 없는 보장은 아무도 안 믿는다.
+// 대분류로 묶으면 배정 줄이 사람 수보다 적어진다. 억지로 만든 상황이
+// 아니라 **배정 단위를 올리면 실제로 벌어지는 일**이다.
+$moMany = $engine->propose($pid, ['member_ids' => $pickAll, 'weights' => $wCap,
+                                  'level' => 'd1']);
+$manyC  = $countBy($moMany);
+$zeroN  = count($moMany['meta']['picked']) - count($manyC);
+ok('후보가 태스크보다 많으면 누군가는 0건이다', $zeroN > 0, (string)$zeroN);
+ok('★ 못 준 사람마다 이유를 적는다',
+   count($moMany['meta']['min_one']['failed']) === $zeroN,
+   json_encode($moMany['meta']['min_one']['failed'], JSON_UNESCAPED_UNICODE));
+foreach ($moMany['meta']['min_one']['failed'] as $f) {
+    ok('이유가 빈 말이 아니다 (' . $f['emp_name'] . ')', mb_strlen($f['reason']) > 10, $f['reason']);
+}
+
+// 보장은 **난이도 상위자 규칙(§6.2)보다 약하다.** 한 건 채우자고 ★5 를
+// 못 하는 사람에게 떠넘기면 보장이 해가 된다. 라개발은 activity 표본이
+// 없어 상위자가 아니므로 '성능 개선'(★5 activity)을 받으면 안 된다.
+$moHard = $engine->propose($pid, [
+    'member_ids' => [$MEM['가개발'], $MEM['라개발']], 'weights' => $wCap]);
+$hardBad = [];
+foreach ($moHard['items'] as $it) {
+    if ($it['member_id'] !== $MEM['라개발']) { continue; }
+    $t = $tasks->find($it['task_id']);
+    if ((int)($t['difficulty'] ?? 0) >= 4) { $hardBad[] = $t['title']; }
+}
+ok('★ 보장이 난이도 상위자 규칙을 깨지 않는다', !$hardBad,
+   json_encode($hardBad, JSON_UNESCAPED_UNICODE));
+$gotSome = 0;
+foreach ($moHard['items'] as $it) { if ($it['member_id'] === $MEM['라개발']) { $gotSome++; } }
+ok('그래도 한 건은 받는다', $gotSome >= 1, (string)$gotSome);
+
+// =====================================================================
 echo "\n[13] 제약 — 과배정과 쏠림\n";
 // 한 사람만 후보로 두면 그 사람에게 다 몰린다. 감점이 붙는지 본다.
 $rOne = $engine->propose($pid, ['member_ids' => [$MEM['다개발']]]);

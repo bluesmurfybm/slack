@@ -912,6 +912,11 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 /* 자동이 쪼갠 이유. 줄마다 하나씩 — 문단으로 뭉치면 어느 항목 얘기인지 흐려진다. */
 .ba-al-splits { margin: 10px 0; line-height: 1.75; }
 .ba-al-splits > div { margin-top: 3px; }
+/* 못 지킨 보장. 지킨 줄과 같은 색이면 섞여서 안 읽힌다. */
+.ba-al-splits > div.is-bad { color: var(--ba-danger); font-weight: 600; }
+
+/* 최소 보장 체크 — 방식·단위와 같은 줄 모양을 쓴다 */
+.ba-almode--one { margin-top: 2px; }
 
 /* ---- 인원별 부하 막대 --------------------------------------------------
    가용 공수 위치를 세로선으로 찍는다. 막대 길이만 보면 "많이 맡았다" 는
@@ -919,7 +924,7 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
    ---------------------------------------------------------------------- */
 .ba-loads { display: grid; gap: 4px; margin: 14px 0 18px; }
 .ba-loadrow {
-  display: grid; grid-template-columns: 76px 1fr 120px 72px 48px;
+  display: grid; grid-template-columns: 76px 86px 1fr 120px 72px;
   align-items: center; gap: 10px; font-size: 12.5px;
 }
 .ba-loadrow__n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -940,9 +945,21 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 }
 .ba-loadrow__v { text-align: right; }
 .ba-loadrow__p { text-align: right; }
-.ba-loadrow__c { text-align: right; }
+
+/* 건수 막대 — 공수 막대와 **색을 달리한다.** 같은 색이면 두 막대가 한 축처럼
+   읽힌다. 건수와 공수는 다른 자다(한 건이 대분류 통째일 수 있다). */
+.ba-loadrow__c  { display: flex; align-items: center; gap: 6px; }
+.ba-loadrow__cb {
+  flex: 1; height: 8px; border-radius: 4px; overflow: hidden;
+  background: var(--ba-surface); border: 1px solid var(--ba-line);
+}
+.ba-loadrow__cb b { display: block; height: 100%; background: var(--ba-ink-soft); opacity: .45; }
+.ba-loadrow__c em { font-style: normal; white-space: nowrap; }
 .ba-loadrow.is-over .ba-loadrow__bar i { background: var(--ba-danger); opacity: .75; }
 .ba-loadrow.is-over .ba-loadrow__p b { color: var(--ba-danger); }
+/* 0건인 후보. 숨기지 않고 **눈에 띄게** 둔다 — 고르고도 못 받은 자리다. */
+.ba-loadrow.is-zero .ba-loadrow__n { color: var(--ba-warn); }
+.ba-loadrow.is-zero .ba-loadrow__c em { color: var(--ba-warn); font-weight: 600; }
 
 /* ---- 배정 표 ---------------------------------------------------------- */
 .ba-altable td { vertical-align: middle; padding: 6px 8px; }
@@ -997,8 +1014,8 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-ev__m { display: block; font-size: 11px; color: var(--ba-ink-soft); margin-top: 2px; }
 
 @media (max-width: 1100px) {
-  .ba-loadrow { grid-template-columns: 64px 1fr 100px 56px; }
-  .ba-loadrow__c { display: none; }
+  .ba-loadrow { grid-template-columns: 64px 64px 1fr 100px 56px; }
+  .ba-loadrow__cb { display: none; }
   .ba-altable th:nth-child(4), .ba-altable td:nth-child(4) { display: none; }
 }
 

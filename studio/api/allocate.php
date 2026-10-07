@@ -230,6 +230,12 @@ bs_route(bs_param_str('act', 'versions'), [
             'level'       => bs_param_str('level'),
         ];
 
+        // 고른 후보에게 최소 1건. 안 보내면 엔진이 정한다 —
+        // **후보를 골랐을 때만 기본으로 켜진다.**
+        if (bs_has_param('min_one')) {
+            $params['min_one'] = (bool)bs_param_int('min_one', 0);
+        }
+
         // 이전 안에서 사람이 손댄 항목을 그대로 가져올지.
         $keepId = bs_param_int('keep_manual_from', 0);
         if ($keepId) {
@@ -265,6 +271,9 @@ bs_route(bs_param_str('act', 'versions'), [
             'seed'        => $r['meta']['seed'],
             // 어느 단위로 묶었는지. 같은 WBS 라도 단위가 다르면 다른 안이다.
             'level'       => $r['meta']['level'],
+            // 최소 보장을 걸었는지. 안 적어 두면 같은 가중치로 다시 돌렸을
+            // 때 왜 결과가 다른지 설명할 수 없다.
+            'min_one'     => (bool)($r['meta']['min_one']['enabled'] ?? false),
         ], $user);
 
         $allocs->saveItems($allocationId, $r['items']);
@@ -288,6 +297,14 @@ bs_route(bs_param_str('act', 'versions'), [
                 . ($r['meta']['method'] !== AllocationEngine::M_WEIGHTED
                     ? ' ' . AllocationEngine::METHOD_LABEL[$r['meta']['method']]
                       . ' 로 뽑았습니다(씨앗 ' . $r['meta']['seed'] . ').'
+                    : '')
+                . ($r['meta']['min_one']['moved'] ?? []
+                    ? ' 0건이던 후보 ' . count($r['meta']['min_one']['moved'])
+                      . '명에게 한 건씩 넘겼습니다.'
+                    : '')
+                . ($r['meta']['min_one']['failed'] ?? []
+                    ? ' 후보 ' . count($r['meta']['min_one']['failed'])
+                      . '명은 한 건도 주지 못했습니다.'
                     : '')
                 . ($r['unassigned']
                     ? ' 담당자를 못 정한 태스크가 ' . count($r['unassigned']) . '건 있습니다.'
@@ -560,6 +577,23 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
                        array $allocation, array $items): array
 {
     $byMember = $allocs->loadByMember((int)$allocation['id']);
+
+    // ┌──────────────────────────────────────────────────────────────────┐
+    // │ 0건인 후보도 줄을 받는다 (2026-10-07)                             │
+    // │                                                                  │
+    // │ 전에는 배정 항목이 있는 사람만 그렸다. 그래서 **고른 후보가 한    │
+    // │ 건도 못 받으면 막대에서 아예 사라졌다** — 쏠렸다는 사실을 보려면  │
+    // │ 후보 화면으로 돌아가 사람 수를 세어야 했다. 최소 1건 보장이       │
+    // │ 실패한 자리가 바로 여기라 반드시 보여야 한다.                     │
+    // └──────────────────────────────────────────────────────────────────┘
+    $p = $allocation['params'] ?? (isset($allocation['params_json'])
+         ? json_decode((string)$allocation['params_json'], true) : null);
+    foreach ((array)($p['member_ids'] ?? []) as $mid) {
+        $mid = (int)$mid;
+        if ($mid && !isset($byMember[$mid])) {
+            $byMember[$mid] = ['md' => 0.0, 'items' => 0, 'owner' => 0];
+        }
+    }
     if (!$byMember) {
         return [];
     }

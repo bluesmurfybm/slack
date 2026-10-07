@@ -418,6 +418,13 @@ final class AllocationEngine
             $passes = 0;
         }
 
+        // --- 2.5) 고른 후보에게 최소 1건 -----------------------------------
+        //
+        // 반드시 지역 탐색 **뒤**다. 앞에 두면 적합도 합을 올리려고 그 한
+        // 건을 도로 가져간다. 무작위 배정에도 똑같이 건다 — 태스크가 사람
+        // 수보다 적으면 무작위에서도 0건이 나온다.
+        [$assign, $minOne] = $this->ensureEveryPicked($assign, $ctx);
+
         // --- 3) 결과 만들기 ------------------------------------------------
         $items      = [];
         $unassigned = [];
@@ -472,6 +479,10 @@ final class AllocationEngine
                 //   건너뛴다. 의도한 동작이지만 **말해 줘야 한다.**
                 'hard_off_top'  => $method === self::M_WEIGHTED
                                  ? 0 : $this->hardOffTop($assign, $ctx),
+                // 고른 후보에게 한 건씩 채워 준 기록. 옮긴 것과 **못 옮긴
+                // 이유**를 함께 남긴다 — 보장은 못 지킨 자리가 더 중요하다.
+                'min_one'       => $minOne,
+                'picked'        => $ctx['picked'],
             ],
         ];
     }
@@ -1046,6 +1057,178 @@ final class AllocationEngine
         return [$assign, $passes];
     }
 
+    // =================================================================
+    // 최소 1건 보장
+    //
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 이것은 점수 문제가 아니라 제약 문제다                          │
+    // │                                                              │
+    // │ "고른 후보는 가중치를 어떻게 맞춰도 한 건은 받게 하라" 는 요구 │
+    // │ 를 **정규화로 풀려고 하면 안 된다.** 정규화는 축의 눈금만      │
+    // │ 바꾼다. 모든 태스크에 같은 변환을 걸면 사람 사이의 순위가 그대 │
+    // │ 로라 그리디는 똑같은 답을 낸다. 사람마다 다른 변환(z-score 류) │
+    // │ 을 걸면 순위는 바뀌지만, 그때부터 화면의 "적합도 44" 가 실제   │
+    // │ 44 가 아니게 된다 — 근거 추적이 통째로 깨진다.                 │
+    // │                                                              │
+    // │ 그래서 점수는 손대지 않고, 배정이 끝난 **뒤에** 제약으로 고친다.│
+    // │ 0건인 후보에게 손실이 가장 작은 한 건을 옮겨 준다. 옮긴 사실과 │
+    // │ 못 옮긴 이유를 둘 다 남긴다.                                   │
+    // │                                                              │
+    // │ 반드시 localSearch **뒤에** 돈다. 앞에 두면 지역 탐색이 적합도 │
+    // │ 합을 올리려고 그 한 건을 도로 가져간다.                        │
+    // └──────────────────────────────────────────────────────────────┘
+    // =================================================================
+
+    /**
+     * 고른 후보 가운데 0건인 사람에게 한 건씩 넘긴다.
+     *
+     * @return array{0:array<int,int>, 1:array} [배정, 기록]
+     */
+    private function ensureEveryPicked(array $assign, array $ctx): array
+    {
+        $report = ['enabled' => true, 'moved' => [], 'failed' => []];
+        if (empty($ctx['min_one'])) {
+            return [$assign, ['enabled' => false, 'moved' => [], 'failed' => []]];
+        }
+
+        // 대상은 고른 후보. 안 골랐으면 배정 대상 전원이 후보다.
+        $targets = $ctx['picked'] ?: $ctx['member_order'];
+
+        $counts = array_fill_keys(array_keys($ctx['members']), 0);
+        foreach ($assign as $mid) { $counts[$mid] = ($counts[$mid] ?? 0) + 1; }
+
+        // 0건인 사람을 **구성원 번호 순**으로 돈다. 결정론의 뿌리다 —
+        // 순서를 안 정하면 같은 입력에 다른 답이 나온다.
+        $zero = [];
+        foreach ($ctx['member_order'] as $mid) {
+            if (in_array($mid, $targets, true) && ($counts[$mid] ?? 0) === 0) { $zero[] = $mid; }
+        }
+
+        foreach ($zero as $mid) {
+            $take = $this->cheapestDonation($mid, $assign, $counts, $ctx);
+            if ($take === null) {
+                $report['failed'][] = [
+                    'member_id' => $mid,
+                    'emp_name'  => $ctx['members'][$mid]['emp_name'],
+                    'reason'    => $this->whyNoDonation($mid, $assign, $counts, $ctx),
+                ];
+                continue;
+            }
+            [$taskId, $from, $loss] = $take;   // $loss 가 null 이면 점수 없이 준 것
+            $assign[$taskId] = $mid;
+            $counts[$from]--;
+            $counts[$mid]++;
+            $report['moved'][] = [
+                'task_id'   => $taskId,
+                'wbs_no'    => $ctx['tasks'][$taskId]['wbs_no'],
+                'title'     => $ctx['tasks'][$taskId]['title'],
+                'from_id'   => $from,
+                'from_name' => $ctx['members'][$from]['emp_name'],
+                'to_id'     => $mid,
+                'to_name'   => $ctx['members'][$mid]['emp_name'],
+                // null 이면 **적합도를 못 낸 채** 준 것이다. 숨기면 화면이
+                // "손실 0" 으로 읽어 잘 맞는 배정처럼 보인다.
+                'fit_loss'  => $loss === null ? null : round($loss, 2),
+                'blind'     => $loss === null,
+            ];
+        }
+        return [$assign, $report];
+    }
+
+    /**
+     * 이 사람에게 넘길 수 있는 태스크 중 **적합도 손실이 가장 작은** 것.
+     *
+     * 손실이 음수일 수도 있다(원래 사람보다 더 맞는 경우). 그러면 더 좋다 —
+     * 그리디가 먼저 집어간 탓에 놓쳤던 짝이다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 점수를 낼 수 없는 사람도 받는다 — 다만 맨 나중에               │
+     * │                                                              │
+     * │ 가중치를 한 항목에 몰면(예: 처리량 1, 나머지 0) 그 점수가 없는│
+     * │ 사람은 **적합도가 아예 null** 이 된다. 그런 사람을 건너뛰면    │
+     * │ "어떤 조정값 조합에서도 고른 사람은 받는다" 는 약속이 바로 그  │
+     * │ 조합에서 깨진다.                                              │
+     * │                                                              │
+     * │ 그래서 두 단계로 본다. ① 점수가 나오는 짝 중 손실 최소        │
+     * │ ② 하나도 없으면 공수가 가장 작은 것. ②로 간 사실은 기록에     │
+     * │ 남는다 — 신호가 없어서 그냥 준 것이지 맞아서 준 것이 아니다.  │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * @return array{0:int,1:int,2:?float}|null [태스크, 내주는 사람, 손실]
+     */
+    private function cheapestDonation(int $mid, array $assign, array $counts, array $ctx): ?array
+    {
+        $best = null; $blind = null;
+        foreach ($ctx['order'] as $taskId) {
+            $from = $assign[$taskId] ?? null;
+            if ($from === null || $from === $mid) { continue; }
+            // 내주고 나면 그 사람이 0건이 된다. 돌려막기가 된다.
+            if (($counts[$from] ?? 0) <= 1)        { continue; }
+            // 사람이 손으로 고정한 것은 건드리지 않는다.
+            if (isset($ctx['pinned'][$taskId]))    { continue; }
+            if (!$this->canTake($taskId, $mid, $ctx)) { continue; }
+
+            $md   = $ctx['tasks'][$taskId]['est_md'];
+            $snap = $this->snapshot($ctx, $assign, [$taskId]);
+            $new  = $this->fitScore($ctx['tasks'][$taskId], $ctx['members'][$mid], $snap);
+            if ($new['fit_score'] === null) {
+                // ② 점수가 없는 짝. 공수가 가장 작은 것만 들고 간다.
+                $k = [$md, $taskId];
+                if ($blind === null || $k < $blind[0]) { $blind = [$k, $taskId, $from]; }
+                continue;
+            }
+            $old  = $this->fitScore($ctx['tasks'][$taskId], $ctx['members'][$from], $snap);
+            $loss = (float)($old['fit_score'] ?? 0) - (float)$new['fit_score'];
+
+            // 동점이면 **공수가 작은 것**을 옮긴다. 큰 덩어리를 옮기면 한
+            // 건 주려다 양쪽 부하가 통째로 뒤집힌다.
+            $key = [$loss, $md, $taskId];
+            if ($best === null || $key < $best[0]) { $best = [$key, $taskId, $from, $loss]; }
+        }
+        if ($best !== null) {
+            return [$best[1], $best[2], $best[3]];
+        }
+        return $blind === null ? null : [$blind[1], $blind[2], null];
+    }
+
+    /** 난이도 상위자 규칙(§6.2)을 깨지 않는 선에서 받을 수 있는가. */
+    private function canTake(int $taskId, int $mid, array $ctx): bool
+    {
+        $task = $ctx['tasks'][$taskId];
+        $hard = (int)($ctx['constraints']['hard_difficulty'] ?? 4);
+        if ((int)($task['difficulty'] ?? 0) < $hard) {
+            return true;
+        }
+        // ★4~5 를 그 분야 상위자가 아닌 사람에게 떠넘기지 않는다. 한 건
+        // 채우자고 어려운 일을 못 하는 사람에게 주면 보장이 해가 된다.
+        return $this->isTopInDomain($task, $ctx['members'][$mid], $ctx);
+    }
+
+    /** 왜 한 건도 못 줬는지. 답할 수 없는 보장은 아무도 안 믿는다. */
+    private function whyNoDonation(int $mid, array $assign, array $counts, array $ctx): string
+    {
+        $others = 0;
+        foreach ($counts as $k => $n) { if ($k !== $mid && $n > 1) { $others++; } }
+        if (count($assign) < count($ctx['member_order'])) {
+            return '태스크(' . count($assign) . '건)가 후보 수보다 적습니다.';
+        }
+        if ($others === 0) {
+            return '다른 사람도 모두 1건뿐이라 내줄 사람이 없습니다.';
+        }
+        $scored = false;
+        foreach ($ctx['order'] as $taskId) {
+            $snap = $this->snapshot($ctx, $assign, [$taskId]);
+            $f = $this->fitScore($ctx['tasks'][$taskId], $ctx['members'][$mid], $snap);
+            if ($f['fit_score'] !== null) { $scored = true; break; }
+        }
+        if (!$scored) {
+            return '적합도를 낼 수 없습니다 — 역량 판정 표본이 없습니다.';
+        }
+        return '남은 태스크가 모두 난이도 ' .
+               (int)($ctx['constraints']['hard_difficulty'] ?? 4) .
+               ' 이상이라 해당 분야 상위자에게만 갈 수 있습니다.';
+    }
+
     /** 두 (태스크, 사람) 짝의 적합도 합. swap 이 이득인지 보는 데만 쓴다. */
     private function pairScore(int $t1, int $m1, int $t2, int $m2, array $assign, array $ctx): float
     {
@@ -1302,6 +1485,16 @@ final class AllocationEngine
         $evalVer = $this->members->latestEvalVer();
         $members = $this->loadMembers($params['member_ids'] ?? [], $evalVer);
 
+        // 고른 후보 가운데 **실제로 배정 대상이 된** 사람. 배정 제외자나
+        // 없는 번호를 골랐어도 여기서 걸러진다 — 못 지킬 약속을 만들지 않는다.
+        $picked = [];
+        foreach (($params['member_ids'] ?? []) as $mid) {
+            if (isset($members[(int)$mid])) { $picked[] = (int)$mid; }
+        }
+        // 기본값은 **후보를 고른 경우에만 켜짐**. 명시로 주면 그대로 따른다.
+        $minOne = array_key_exists('min_one', $params)
+                ? (bool)$params['min_one'] : (bool)$picked;
+
         // --- 기간과 가용도 ---
         [$from, $to] = $this->projectWindow($projectId);
         $avail = ($from !== null && $members)
@@ -1389,6 +1582,11 @@ final class AllocationEngine
             'workdays'         => $workdays,
             'pinned'           => $pinned,
             'level'            => $level,
+            // 명시적으로 고른 후보. 안 골랐으면 빈 배열이다 — '전원 대상'
+            // 과 '이 사람들로 하자' 는 다른 말이고, 최소 보장은 **뒤쪽에만**
+            // 건다. 전원 대상에서 20명 중 10건을 나누면 반은 반드시 0건이다.
+            'picked'           => $picked,
+            'min_one'          => $minOne,
             // 자동이 왜 그렇게 나눴는지. 화면이 그대로 보여 준다.
             'split_reasons'    => $cut['reasons'],
             // 단위 하나에 말단이 몇 건 들었는지. 근거에 쓴다.
