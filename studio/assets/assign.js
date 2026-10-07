@@ -1127,6 +1127,9 @@
   // ===================================================================
   // 프로젝트 상세 — 개요 / Step2 후보 리스트
   // ===================================================================
+  /** 2단계에서 고른 후보를 담는 자리. **2·3단계가 같은 키를 봐야 한다.** */
+  var PICK_KEY = 'ba.picked.';
+
   function initProjectView() {
     var root = $('#ba-pv');
     if (!root) return;
@@ -1160,12 +1163,12 @@
     // 에 들어간다. 여기서 저장하면 확정 전 선택이 영구 기록으로 남는다.
     function loadPicked() {
       try {
-        return JSON.parse(sessionStorage.getItem('ba.picked.' + PID) || '[]');
+        return JSON.parse(sessionStorage.getItem(PICK_KEY + PID) || '[]');
       } catch (e) { return []; }
     }
     function savePicked() {
       try {
-        sessionStorage.setItem('ba.picked.' + PID, JSON.stringify(picked));
+        sessionStorage.setItem(PICK_KEY + PID, JSON.stringify(picked));
       } catch (e) { /* 사생활 보호 모드 등 — 그냥 둔다 */ }
     }
 
@@ -3503,6 +3506,24 @@
       var body = { project_id: PID };
       if (weights) body.weights = weights;
       if (keepManual && CUR) body.keep_manual_from = CUR.id;
+
+      // ┌──────────────────────────────────────────────────────────┐
+      // │ 2단계에서 고른 후보를 보낸다                               │
+      // │                                                          │
+      // │ 서버는 처음부터 member_ids 를 받았는데 **화면이 한 번도    │
+      // │ 보내지 않았다.** 그래서 후보를 7명 골라도 배정 가능한      │
+      // │ 사람 전원이 대상이 됐고, 고르지 않은 사람에게 가장 많은    │
+      // │ 일이 가는 일이 실제로 벌어졌다.                            │
+      // │                                                          │
+      // │ 아무도 안 골랐으면 안 보낸다 — 그때는 "전원"이 맞다.       │
+      // └──────────────────────────────────────────────────────────┘
+      // 2단계와 3단계는 다른 함수라 loadPicked() 를 못 부른다. 저장소에서
+      // 직접 읽는다 — 키는 그쪽과 **반드시 같아야** 하므로 상수로 둔다.
+      var pick = [];
+      try {
+        pick = JSON.parse(sessionStorage.getItem(PICK_KEY + PID) || '[]');
+      } catch (e) { pick = []; }
+      if (pick.length) { body.member_ids = pick; }
 
       // ┌──────────────────────────────────────────────────────────┐
       // │ 이름이 곧 동작이어야 한다                                  │

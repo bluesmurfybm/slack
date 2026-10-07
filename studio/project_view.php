@@ -363,11 +363,11 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <button type="button" class="ba-btn" id="ba-w-reparse-all"
                 title="이미 읽은 문서까지 전부 다시 읽습니다. 주소나 설정을 고친 뒤에 쓰세요">전부 다시 분석</button>
         <button type="button" class="ba-btn" id="ba-w-extract"
-                title="분석된 문서에서 WBS 초안을 만듭니다. AI 가 연결돼 있으면 AI 가 읽습니다&#10;문서가 크면 1분 넘게 걸립니다">문서에서 WBS 도출</button>
+                title="분석된 문서에서 WBS 초안을 만듭니다. AI 가 연결돼 있으면 AI 가 읽습니다&#10;문서가 크면 1분 넘게 걸립니다">AI 로 WBS 도출</button>
         <!-- 모델을 안 부른다. 들여쓰기·번호 규칙만 보므로 즉시 끝나고 비용도
              없다. 문서가 이미 잘 정리돼 있으면 이쪽이 결과도 더 예측 가능하다. -->
         <button type="button" class="ba-btn" id="ba-w-extract-rule"
-                title="AI 없이 들여쓰기·번호 규칙만으로 뽑습니다. 즉시 끝나고 비용이 없습니다">규칙으로만 도출</button>
+                title="AI 없이 들여쓰기·번호 규칙만으로 뽑습니다. 즉시 끝나고 비용이 없습니다">규칙으로 WBS 도출 (AI 미사용)</button>
         <span class="ba-sep"></span>
         <!-- 표가 길면 바로 밑 [배정안] 까지 내려가는 길을 막는다.
              대·중분류는 남기고 그 아래만 접는다 — 통째로 숨기면 구조가 안 보인다. -->
