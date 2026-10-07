@@ -847,6 +847,20 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   color: var(--ba-ink-soft); margin-top: 3px;
 }
 
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 항목별 설명과 전체 규칙을 갈라 놓는다                              │
+   │                                                                  │
+   │ 바로 위에 슬라이더마다 붙은 한 줄 설명이 있다. 둘 다 작은 회색    │
+   │ 글씨라 맞붙으면 **같은 종류의 말로 읽혀** 둘 다 안 읽힌다.        │
+   │ 이 문장은 '한 항목' 이 아니라 '항목들 사이의 규칙' 이라 줄을      │
+   │ 그어 성격이 다르다는 것을 보여 준다.                              │
+   └──────────────────────────────────────────────────────────────────┘ */
+.ba-wpanel__note {
+  margin-top: 20px; padding-top: 14px;
+  border-top: 1px solid var(--ba-line);
+  line-height: 1.7;
+}
+
 /* ---- 배정 방식 (가중치 / 무작위) ------------------------------------- */
 .ba-almode { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
 .ba-almode__l { font-size: 12.5px; font-weight: 700; color: var(--ba-ink); }

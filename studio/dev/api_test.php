@@ -2794,6 +2794,11 @@ ok('★ 배정 방식 고르는 자리가 있다',
    str_contains($page, 'name="ba-al-method"') && str_contains($page, 'value="random_even"')
    && str_contains($page, 'value="random_pure"'));
 ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
+// 슬라이더마다 붙은 한 줄 설명과 '전체 규칙' 문장이 맞붙으면 같은 종류의
+// 말로 읽혀 둘 다 안 읽힌다. 줄을 그어 성격이 다르다는 것을 보여 준다.
+ok('전체 규칙 문장을 항목 설명과 갈라 놓는다',
+   str_contains($page, 'ba-wpanel__note')
+   && (bool)preg_match('/\.ba-wpanel__note\s*\{[^}]*border-top/', $css));
 
 ok('★ 가중치 다섯 가지에 설명이 다 붙어 있다',
    (bool)preg_match('/W_HINT\s*=\s*\{(.+?)\};/s', $js, $m)
