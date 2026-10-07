@@ -35,14 +35,27 @@ $err = bs_param_str('err');
 $fRole    = bs_param_str('role');
 $fTeam    = bs_param_str('team');
 $fKeyword = bs_param_str('keyword');
-// 'all' 이면 배정 제외자(휴직·퇴사 등)까지 본다. 기본은 배정 가능한 사람만.
-$fScope   = bs_param_str('scope') === 'all' ? 'all' : 'assignable';
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 기본은 **전부 보여 준다**                                         │
+// │                                                                  │
+// │ 전에는 배정 가능한 사람만 보여 주고 [배정 제외자 포함] 을 켜야    │
+// │ 나머지가 나왔다. 그런데 배정 제외는 **이 화면에서 거는 설정**이라,│
+// │ 거는 순간 그 사람이 목록에서 사라져 되돌릴 길이 없었다.           │
+// │                                                                  │
+// │ 안 보여 주고 켜게 하는 것보다, 다 보여 주고 걸러 보게 하는 편이   │
+// │ 낫다. 없는 것은 찾을 수 없지만 많은 것은 거를 수 있다.            │
+// └──────────────────────────────────────────────────────────────────┘
+$fScope = bs_param_str('scope');
+if (!in_array($fScope, ['on', 'off'], true)) {
+    $fScope = '';                       // 전체
+}
 
 $rows = $repo->search([
     'role_label'    => $fRole,
     'team'          => $fTeam,
     'keyword'       => $fKeyword,
-    'is_assignable' => $fScope === 'all' ? null : 1,
+    // null 은 '가리지 말라' 는 뜻이다. 키를 빼면 '배정 가능만' 이 된다.
+    'is_assignable' => $fScope === 'on' ? 1 : ($fScope === 'off' ? 0 : null),
 ]);
 
 // ---------------------------------------------------------------------
@@ -146,10 +159,13 @@ bs_layout_head(
       <input type="date" name="to" value="<?= h($to) ?>" aria-label="기간 끝">
     </label>
 
-    <label class="ba-check" for="ba-m-scope">
-      <input type="checkbox" id="ba-m-scope" name="scope" value="all"
-             <?= $fScope === 'all' ? 'checked' : '' ?>>
-      <span>배정 제외자 포함</span>
+    <label class="ba-field">
+      <span>배정</span>
+      <select name="scope">
+        <option value=""<?= $fScope === ''    ? ' selected' : '' ?>>전체</option>
+        <option value="on"<?= $fScope === 'on'  ? ' selected' : '' ?>>배정 가능만</option>
+        <option value="off"<?= $fScope === 'off' ? ' selected' : '' ?>>배정 제외만</option>
+      </select>
     </label>
 
     <span class="ba-spacer"></span>
@@ -253,7 +269,12 @@ bs_layout_head(
   </div>
 
   <p class="ba-head__sub" style="margin-top:10px">
-    <?= count($rows) ?>명.
+    <?= count($rows) ?>명<?php
+      // 배정 제외가 몇 명인지는 늘 보이는 편이 낫다. 목록을 걸러 보지 않아도
+      // "제외해 둔 사람이 있다" 는 사실을 알아야 한다.
+      $off = count(array_filter($rows, static fn($m) => (int)$m['is_assignable'] === 0));
+      if ($off > 0) { echo ' (배정 제외 ' . $off . '명 포함)'; }
+    ?>.
     이름 순으로만 정렬합니다 — <b>구성원을 점수로 줄 세우는 화면은 두지 않습니다.</b>
     적합도는 특정 과업을 정한 뒤 배정 화면에서 나옵니다.
   </p>

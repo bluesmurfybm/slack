@@ -53,7 +53,23 @@ final class MemberRepo
         $where  = [];
         $params = [];
 
-        $assignable = $filter['is_assignable'] ?? 1;
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ ?? 가 null 을 삼켜 '전체 보기' 가 동작하지 않았다              │
+        // │                                                              │
+        // │ 전에는 `$filter['is_assignable'] ?? 1` 이었다. ?? 는 **null 을│
+        // │ '안 준 것'으로 보므로**, "가리지 말라" 는 뜻으로 null 을      │
+        // │ 넘겨도 1 로 바뀌어 배정 가능한 사람만 나왔다. [배정 제외자    │
+        // │ 포함] 을 켜도 그대로였다(2026-10-07).                         │
+        // │                                                              │
+        // │ "안 줬다" 와 "null 을 줬다" 는 다르다. array_key_exists 로    │
+        // │ 가른다 — bs_has_param() 이 같은 이유로 있는 것과 같다.        │
+        // │                                                              │
+        // │   키 없음 — 배정 가능만(기본)                                 │
+        // │   null    — 가리지 않는다(전체)                               │
+        // │   0       — 배정 제외만                                       │
+        // │   그 밖    — 배정 가능만                                      │
+        // └──────────────────────────────────────────────────────────────┘
+        $assignable = array_key_exists('is_assignable', $filter) ? $filter['is_assignable'] : 1;
         if ($assignable !== null && $assignable !== '') {
             $where[]  = 'is_assignable = ?';
             $params[] = (int)$assignable === 0 ? 0 : 1;
