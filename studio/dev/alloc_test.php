@@ -632,6 +632,101 @@ ok('어느 배정안 때문인지 남는다',
                       WHERE ref_type='allocation' AND ref_id=$aid2")->fetchColumn() === 3);
 
 // =====================================================================
+echo "\n[4-M] 달별 점유 — 기간 평균은 \"언제\" 를 지운다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 실제로 나온 혼동 (2026-10-07)                                     │
+// │                                                                  │
+// │ 10월 115% · 11~12월 80% · 1~2월 0% 인 사람의 기간 평균은 59% 다.  │
+// │ 화면이 "가용 41%, 41.45 M/D" 라고만 말해서, 보는 사람은 넉넉한    │
+// │ 줄 알았다. 실제로는 **10월에 한 건도 못 받는다** — 남은 공수가    │
+// │ 전부 1~2월에 몰려 있기 때문이다.                                  │
+// │                                                                  │
+// │ 아래는 그 사례를 그대로 재현한다. 숫자가 바뀌면 바로 걸린다.      │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$mkWl = $pdo->prepare(
+    'INSERT INTO bs_workload (member_id, kind, label, start_date, end_date,
+                              load_ratio, confidence, source)
+     VALUES (?, "manual", ?, ?, ?, ?, 1.0, "manual")');
+$mTgt = $MEM['가개발'];
+$pdo->prepare('DELETE FROM bs_workload WHERE member_id = ?')->execute([$mTgt]);
+// 앞 구간에 몰아 넣는다. 뒤 구간은 통째로 비어 있다.
+$mkWl->execute([$mTgt, '경영 업무',   '2026-02-01', '2026-04-30', 0.30]);
+$mkWl->execute([$mTgt, 'AI 전략',     '2026-02-01', '2026-04-30', 0.20]);
+$mkWl->execute([$mTgt, 'PoC',         '2026-02-01', '2026-04-30', 0.30]);
+$mkWl->execute([$mTgt, '마이그레이션', '2026-03-02', '2026-03-31', 0.35]);
+
+$mw = $avail->forMembers([$mTgt], '2026-03-02', '2026-05-29')[$mTgt];
+
+ok('★ 달별로 쪼개 준다', count($mw['months']) === 3,
+   json_encode(array_column($mw['months'], 'label'), JSON_UNESCAPED_UNICODE));
+
+$byM = [];
+foreach ($mw['months'] as $m) { $byM[$m['month']] = $m; }
+
+// 3월은 네 건이 전부 걸린다 — 30+20+30+35 = 115%.
+ok('★ 꽉 찬 달을 자르지 않고 그대로 준다', $byM['2026-03']['confirmed_pct'] === 115,
+   (string)$byM['2026-03']['confirmed_pct']);
+ok('★ 넘친 달을 초과로 표시한다', $byM['2026-03']['over'] === true
+   && $byM['2026-03']['over_pct'] === 15, json_encode($byM['2026-03']));
+ok('넘친 달의 남은 공수는 0 이다', $byM['2026-03']['available_md'] === 0.0,
+   (string)$byM['2026-03']['available_md']);
+
+// 4월은 세 건(80%), 5월은 아무것도 없다.
+ok('덜 찬 달은 그만큼만', $byM['2026-04']['confirmed_pct'] === 80,
+   (string)$byM['2026-04']['confirmed_pct']);
+ok('★ 빈 달은 100% 비어 있다', $byM['2026-05']['confirmed_pct'] === 0
+   && $byM['2026-05']['available_pct'] === 100, json_encode($byM['2026-05']));
+
+ok('★ 넘친 달만 골라 따로 준다', count($mw['over_months']) === 1
+   && $mw['over_months'][0]['month'] === '2026-03',
+   json_encode($mw['over_months'], JSON_UNESCAPED_UNICODE));
+ok('가장 꽉 찬 달의 비율을 준다', $mw['peak_pct'] === 115, (string)$mw['peak_pct']);
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 이것이 혼동의 핵심이다                                            │
+// │                                                                  │
+// │ 기간 평균으로 낸 가용 공수는 **달별 여유의 합과 다르다.** 3월의   │
+// │ −15% 가 평균에는 섞여 들어가지만 달별로는 0 에서 멈추기 때문이다. │
+// │ 두 값이 같다면 초과한 달이 없다는 뜻이고, 다르면 **어느 달엔가    │
+// │ 이미 넘쳤다**는 뜻이다. 숫자 하나로는 그 사실을 알 수 없다.       │
+// └──────────────────────────────────────────────────────────────────┘
+$periodMd = round((float)$mw['available'] * (int)$mw['workdays'], 2);
+$monthMd  = 0.0;
+foreach ($mw['months'] as $m) { $monthMd += $m['available_md']; }
+ok('★ 달별 여유의 합이 기간 평균보다 크다(넘친 달이 있으므로)',
+   $monthMd > $periodMd + 0.01,
+   '달별 ' . round($monthMd, 2) . ' vs 기간 ' . $periodMd);
+
+// 넘친 달이 없으면 두 값이 맞아떨어져야 한다. 안 맞으면 달 나누기가
+// 영업일을 흘리고 있다는 뜻이다 — 조용히 틀린 일정의 씨앗이다.
+$pdo->prepare('DELETE FROM bs_workload WHERE member_id = ?')->execute([$mTgt]);
+$mkWl->execute([$mTgt, '보통 점유', '2026-02-01', '2026-06-30', 0.40]);
+$mw2 = $avail->forMembers([$mTgt], '2026-03-02', '2026-05-29')[$mTgt];
+$pMd = round((float)$mw2['available'] * (int)$mw2['workdays'], 2);
+$sMd = 0.0;
+foreach ($mw2['months'] as $m) { $sMd += $m['available_md']; }
+ok('★ 넘친 달이 없으면 달별 합과 기간 값이 같다', abs($sMd - $pMd) < 0.05,
+   '달별 ' . round($sMd, 2) . ' vs 기간 ' . $pMd);
+ok('넘친 달이 없으면 경고도 없다', !$mw2['over_months'] && $mw2['peak_pct'] === 40,
+   json_encode([$mw2['over_months'], $mw2['peak_pct']]));
+
+// 달 조각은 **프로젝트 기간 안쪽만** 남아야 한다. 3월 2일에 시작하면
+// 3월 조각은 1~2일이 빠진 길이다 — 안 그러면 그 달 비율이 희석된다.
+$sp = $avail->monthSpans('2026-03-02', '2026-05-29');
+ok('★ 첫 달 조각은 시작일부터다', $sp['2026-03']['from'] === '2026-03-02',
+   json_encode($sp['2026-03']));
+ok('★ 끝 달 조각은 종료일까지다', $sp['2026-05']['to'] === '2026-05-29',
+   json_encode($sp['2026-05']));
+$spSum = 0;
+foreach ($sp as $x) { $spSum += $x['workdays']; }
+ok('★ 달 조각의 영업일 합이 전체와 같다(하루도 흘리지 않는다)',
+   $spSum === $mw2['workdays'], $spSum . ' vs ' . $mw2['workdays']);
+
+$pdo->prepare('DELETE FROM bs_workload WHERE member_id = ?')->execute([$mTgt]);
+
+// =====================================================================
 echo "\n[4-O] 최소 1건 보장 — 고르는 행위가 뜻을 가지려면\n";
 //
 // ┌──────────────────────────────────────────────────────────────────┐

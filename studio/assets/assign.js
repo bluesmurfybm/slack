@@ -1415,6 +1415,27 @@
       });
     }
 
+    /**
+     * 어느 달이 꽉 찼는지 한 줄로.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 기간 평균은 **언제** 를 지운다                                │
+     * │                                                              │
+     * │ 10월 115% · 11~12월 80% · 1~2월 0% 인 사람의 평균은 59% 다.   │
+     * │ 숫자만 보면 넉넉하지만 10월에는 한 건도 못 받는다 — 남은 공수 │
+     * │ 가 전부 1~2월에 몰려 있기 때문이다. 평균 옆에 이 줄이 없으면  │
+     * │ 불가능한 일정을 "74% 니까 괜찮다" 로 읽는다.                  │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    function overMonths(a) {
+      var over = (a && a.over_months) || [];
+      if (!over.length) return '';
+      var txt = over.map(function (m) { return m.label + ' ' + m.used_pct + '%'; }).join(', ');
+      return '<span class="ba-mover" title="그 달에는 가용량을 이미 넘겼습니다. ' +
+             '기간 평균이 여유로워도 그 달에는 일을 받을 수 없습니다">' +
+             '⚠ ' + esc(txt) + ' 초과</span>';
+    }
+
     // ---- 가용도 막대 -----------------------------------------------------
     //
     // **확정과 추정을 한 숫자로 합치지 않는다.** 막대도 무늬를 달리해
@@ -1452,6 +1473,7 @@
             (a.capacity_pct !== undefined && a.capacity_pct < 100
                ? ', 기준 근무 ' + a.capacity_pct + '%' : '') +
             ')</span>' +
+          overMonths(a) +
         '</div></div>';
     }
 
@@ -1574,6 +1596,38 @@
       openCandidateDetail(parseInt(b.dataset.detail, 10), b.textContent);
     });
 
+    /**
+     * 달별 점유 띠.
+     *
+     * 합계 막대 하나로는 "총량은 되는데 그 달에는 안 되는" 상태가 안 보인다.
+     * 달마다 한 줄씩 그려 **언제 비어 있는지**를 바로 읽게 한다.
+     */
+    function monthBand(a) {
+      var ms = (a && a.months) || [];
+      if (!ms.length) return '';
+      return '<div class="ba-mb">' +
+        '<div class="ba-mb__h">달별 점유 <span class="ba-dim">' +
+          '— 기간 평균(가용 ' + a.available_pct + '%)이 지우는 것</span></div>' +
+        ms.map(function (m) {
+          var used = m.confirmed_pct + m.inferred_pct;
+          // 100% 를 넘는 칸은 **잘라서 그리되 숫자는 그대로** 적는다.
+          // 막대를 늘리면 다른 달과 눈금이 어긋나 비교가 안 된다.
+          var cw = Math.min(100, m.confirmed_pct);
+          var iw = Math.min(100 - cw, m.inferred_pct);
+          return '<div class="ba-mb__r' + (m.over ? ' is-over' : '') + '">' +
+            '<span class="ba-mb__l">' + esc(m.label) + '</span>' +
+            '<span class="ba-mb__b"><i style="width:' + cw + '%"></i>' +
+              // 추정은 확정 **뒤에** 빗금으로 붙인다. 겹쳐 그리면 확정이
+              // 가려져 둘을 가르는 뜻이 사라진다.
+              '<u style="left:' + cw + '%;width:' + iw + '%"></u></span>' +
+            '<span class="ba-mb__v">' + used + '%</span>' +
+            '<span class="ba-mb__m">' + (m.over ? '초과' : m.available_md + ' M/D') +
+            '</span></div>';
+        }).join('') +
+        '<p class="ba-cd__note">추정 점유는 끝나는 날이 없어 <b>모든 달에 고르게</b> 얹습니다. ' +
+        '오른쪽은 그 달에 더 받을 수 있는 공수입니다.</p></div>';
+    }
+
     function openCandidateDetail(mid, name) {
       var box = $('#ba-cd-body');
       WL_MEMBER = mid;
@@ -1591,7 +1645,11 @@
                availCell(a, mid) +
                '<p class="ba-cd__note">기간 ' + esc(d.period.from) + ' ~ ' + esc(d.period.to) +
                ' · 영업일 ' + d.period.workdays + '일 · 기본 가용 ' +
-               (a.base_capacity * 100).toFixed(0) + '%</p></div>';
+               (a.base_capacity * 100).toFixed(0) + '%' +
+               // 두 화면을 잇는 숫자. 근거는 % 로만, 배정은 M/D 로만 말해서
+               // 같은 사람의 두 숫자가 이어지는지 알 수가 없었다.
+               ' · <b>배정 가능 ' + (a.available * a.workdays).toFixed(2) + ' M/D</b></p>' +
+               monthBand(a) + '</div>';
 
           // 확정 점유
           //
@@ -3338,6 +3396,9 @@
           '<span class="ba-loadrow__p">' +
             (l.load_pct === null ? '-' : l.load_pct + '%') +
             (l.over ? ' <b>초과</b>' : '') + '</span>' +
+          // 기간 합계로는 74% 라도 그 공수가 특정 달에 몰려 있으면 그 달에는
+          // 못 받는다. 배정하는 자리에서 말해 줘야 늦지 않는다.
+          overMonths(l) +
         '</div>';
       }).join('') + '</div>';
     }

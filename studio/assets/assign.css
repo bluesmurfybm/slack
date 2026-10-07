@@ -955,6 +955,9 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 }
 .ba-loadrow__cb b { display: block; height: 100%; background: var(--ba-ink-soft); opacity: .45; }
 .ba-loadrow__c em { font-style: normal; white-space: nowrap; }
+/* 달 초과 경고는 **다음 줄 전체**를 쓴다. 칸으로 끼워 넣으면 격자가 밀려
+   다른 줄과 눈금이 어긋난다 — 막대를 견주려고 만든 격자다. */
+.ba-loadrow .ba-mover { grid-column: 1 / -1; margin: 1px 0 3px 86px; }
 .ba-loadrow.is-over .ba-loadrow__bar i { background: var(--ba-danger); opacity: .75; }
 .ba-loadrow.is-over .ba-loadrow__p b { color: var(--ba-danger); }
 /* 0건인 후보. 숨기지 않고 **눈에 띄게** 둔다 — 고르고도 못 받은 자리다. */
@@ -1695,3 +1698,35 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-cmp--cur > * { background: var(--ba-surface); font-weight: 600; }
 .ba-cmp--warn { color: var(--ba-warn); }
 .ba-cmp--bad  { color: var(--ba-danger); font-weight: 600; }
+
+/* ── 달별 점유 ──────────────────────────────────────────────────────
+   기간 평균 하나로는 "총량은 되는데 그 달에는 안 되는" 상태가 안 보인다.
+   10월 115% · 1~2월 0% 인 사람의 평균은 59% 다 — 숫자만 보면 넉넉하다.
+   ------------------------------------------------------------------- */
+.ba-mover {
+  display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 600;
+  color: var(--ba-danger); white-space: nowrap;
+}
+.ba-mb { margin: 10px 0 0; }
+.ba-mb__h { font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+.ba-mb__r {
+  display: grid; grid-template-columns: 38px 1fr 42px 64px;
+  align-items: center; gap: 8px; font-size: 11.5px; margin-bottom: 3px;
+}
+.ba-mb__l { color: var(--ba-ink-soft); }
+.ba-mb__b {
+  position: relative; display: block; height: 10px; border-radius: 5px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); overflow: hidden;
+}
+.ba-mb__b i { position: absolute; inset: 0 auto 0 0; background: var(--ba-brand); opacity: .7; }
+/* 추정 몫은 확정 위에 빗금으로 겹쳐 둔다 — 합치지 않는 규칙은 여기서도 같다 */
+.ba-mb__b u {
+  position: absolute; top: 0; bottom: 0; opacity: .8;
+  background: repeating-linear-gradient(45deg,
+    var(--ba-warn) 0 3px, transparent 3px 6px);
+}
+.ba-mb__v, .ba-mb__m { font-variant-numeric: tabular-nums; text-align: right; }
+.ba-mb__m { color: var(--ba-ink-soft); font-size: 11px; }
+.ba-mb__r.is-over .ba-mb__b i { background: var(--ba-danger); opacity: .8; }
+.ba-mb__r.is-over .ba-mb__v,
+.ba-mb__r.is-over .ba-mb__m { color: var(--ba-danger); font-weight: 600; }

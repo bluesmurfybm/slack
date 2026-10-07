@@ -102,6 +102,11 @@ bs_route(bs_param_str('act', 'list'), [
                     'workdays'      => $a['workdays'],
                     'base_capacity' => $a['base_capacity'],
                     'capacity_pct'  => $a['capacity_pct'],
+                    // 기간 평균이 여유로워도 **특정 달에 꽉 찬** 사람이 있다.
+                    // 목록에서 바로 경고할 수 있게 넘긴다. 달별 띠 전체는
+                    // 무거우니 근거 드로어(detail)에서만 준다.
+                    'over_months'   => $a['over_months'],
+                    'peak_pct'      => $a['peak_pct'],
                 ] : null,
 
                 'domain_fit'   => $r['domain_fit'],       // 고른 계열 평균. 없으면 null
@@ -213,6 +218,14 @@ bs_route(bs_param_str('act', 'list'), [
                 'confidence'    => $a['confidence'],
                 'base_capacity' => $a['base_capacity'],
                 'capacity_pct'  => $a['capacity_pct'],
+                // 배정 화면은 M/D 로만 말하고 이 화면은 % 로만 말해서, 같은
+                // 사람의 두 숫자가 이어지는지 알 수가 없었다. 여기서 잇는다.
+                'available'     => $a['available'],
+                'workdays'      => $a['workdays'],
+                // 달별 띠. 평균이 지우는 것을 되살린다.
+                'months'        => $a['months'],
+                'over_months'   => $a['over_months'],
+                'peak_pct'      => $a['peak_pct'],
             ],
             // 확정 내역과 추정 내역을 따로 담는다. 화면이 섞지 못하게.
             'confirmed_breakdown' => $a['breakdown'],

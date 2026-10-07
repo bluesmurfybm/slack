@@ -2982,6 +2982,31 @@ ok('★ 버전을 갈아 끼우면 산출 기록을 비운다',
 
 // 건수를 맨 앞에 막대와 함께 둔다. 숫자만 끝에 있으면 쏠림이 안 보인다.
 ok('★ 부하 줄이 건수 막대를 그린다', str_contains($js, 'ba-loadrow__cb'));
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 기간 평균은 "언제" 를 지운다 (2026-10-07)                         │
+// │                                                                  │
+// │ 10월 115% · 1~2월 0% 인 사람의 평균은 59% 다. 화면이 평균만       │
+// │ 말하면 **그 달에는 불가능한 일정**을 "74% 니까 괜찮다" 로 읽는다. │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 달별 띠를 그리는 자리가 있다', str_contains($js, 'function monthBand'));
+ok('★ 넘친 달을 경고로 띄운다', str_contains($js, 'function overMonths')
+   && str_contains($js, 'ba-mover'));
+ok('후보 표와 배정 막대 **둘 다** 경고한다',
+   substr_count($js, 'overMonths(') >= 3, '한 군데만 경고하면 다른 화면에서 놓친다');
+ok('꽉 찬 달은 자르지 않고 그대로 적는다',
+   str_contains($js, 'Math.min(100, m.confirmed_pct)')
+   && str_contains($js, "+ used + '%</span>'"),
+   '막대만 자르고 숫자는 실제 값이어야 한다');
+// 두 화면을 잇는 숫자. 근거는 % 로만, 배정은 M/D 로만 말해서 같은 사람의
+// 두 숫자가 이어지는지 알 수가 없었다.
+ok('★ 근거 화면이 M/D 로도 말한다', str_contains($js, '배정 가능 '));
+ok('달별 막대 모양이 있다', str_contains($css, '.ba-mb__b') && str_contains($css, '.ba-mover'));
+// 격자에 칸을 하나 더 끼우면 줄마다 눈금이 어긋나 막대를 견줄 수 없다.
+ok('★ 경고는 부하 격자를 밀지 않는다',
+   (bool)preg_match('/\.ba-loadrow \.ba-mover \{[^}]*grid-column:\s*1\s*\/\s*-1/', $css),
+   '경고가 칸으로 끼어들면 막대 눈금이 어긋난다');
+
 ok('건수 막대는 공수 막대와 색이 다르다',
    str_contains($css, '.ba-loadrow__cb b') && str_contains($css, '.ba-loadrow__cb'));
 ok('★ 0건인 후보도 줄을 받는다', str_contains($js, "l.task_count === 0 ? ' is-zero'"));

@@ -75,6 +75,38 @@ final class AvailabilityCalculator
         return round($part * ($capped / $raw), 4);
     }
 
+    /**
+     * 기간을 달로 자른다. 각 조각은 **프로젝트 기간 안쪽만** 남는다.
+     *
+     * 첫 달과 끝 달은 보통 잘린다 — 10월 1일에 시작하면 9월은 아예 없고,
+     * 2월 22일에 끝나면 2월은 15영업일짜리다. 그 조각의 영업일로 나눠야
+     * "그 달에 몇 % 차 있나" 가 맞는다.
+     *
+     * @return array<string, array{from:string,to:string,workdays:int}> 'YYYY-MM' => 조각
+     */
+    public function monthSpans(string $from, string $to): array
+    {
+        if ($from > $to) {
+            return [];
+        }
+        $out = [];
+        $cur = new DateTimeImmutable(substr($from, 0, 8) . '01');
+        $end = new DateTimeImmutable($to);
+        $guard = 0;
+        while ($cur <= $end && $guard++ < 60) {   // 5년이면 충분하다
+            $ms = max($from, $cur->format('Y-m-01'));
+            $me = min($to,   $cur->format('Y-m-t'));
+            if ($ms <= $me) {
+                $wd = $this->workdays($ms, $me);
+                if ($wd > 0) {
+                    $out[$cur->format('Y-m')] = ['from' => $ms, 'to' => $me, 'workdays' => $wd];
+                }
+            }
+            $cur = $cur->modify('first day of next month');
+        }
+        return $out;
+    }
+
     /** 기간 안의 영업일 수 (양끝 포함). */
     public function workdays(string $from, string $to): int
     {
@@ -172,6 +204,22 @@ final class AvailabilityCalculator
         $breakdown = array_fill_keys($memberIds, []);
 
         // ┌──────────────────────────────────────────────────────────────┐
+        // │ 평균은 **언제** 를 지운다 (2026-10-07)                        │
+        // │                                                              │
+        // │ 10월 115% · 11~12월 80% · 1~2월 0% 인 사람의 기간 평균은      │
+        // │ 59% 다. 숫자만 보면 넉넉해 보이지만 **10월에는 한 건도 못     │
+        // │ 받는다.** 남은 41 M/D 가 전부 1~2월에 몰려 있기 때문이다.     │
+        // │                                                              │
+        // │ 그래서 달별로도 쌓는다. 계산식은 그대로다 — 분모가 '기간      │
+        // │ 전체 영업일' 에서 '그 달 조각의 영업일' 로 바뀔 뿐이다.       │
+        // │                                                              │
+        // │ 달별은 **자르지 않는다.** 115% 를 100% 로 자르면 초과가       │
+        // │ 보이지 않는다. 자르는 것은 합계 쪽 일이다.                     │
+        // └──────────────────────────────────────────────────────────────┘
+        $spans   = $this->monthSpans($from, $to);
+        $byMonth = array_fill_keys($memberIds, array_fill_keys(array_keys($spans), 0.0));
+
+        // ┌──────────────────────────────────────────────────────────────┐
         // │ 분해는 **더하기만** 한다 (P10-2)                              │
         // │                                                              │
         // │ confirmed_load 와 available 을 내는 식은 한 글자도 바꾸지     │
@@ -200,6 +248,13 @@ final class AvailabilityCalculator
                 $byRnd[$mid] += $eff;
             } else {
                 $byProject[$mid] += $eff;
+            }
+            foreach ($spans as $ym => $sp) {
+                $mo = $this->overlapWorkdays($sp['from'], $sp['to'],
+                                             $w['start_date'], $w['end_date']);
+                if ($mo > 0) {
+                    $byMonth[$mid][$ym] += (float)$w['load_ratio'] * ($mo / $sp['workdays']);
+                }
             }
             $breakdown[$mid][] = [
                 'source'        => 'confirmed',
@@ -285,9 +340,60 @@ final class AvailabilityCalculator
                 'confidence'     => $conf,
                 'breakdown'      => $breakdown[$mid],
                 'inferred_items' => $inf[$mid]['items'] ?? [],
-            ];
+            ] + $this->monthView($byMonth[$mid], $spans, $base, $i);
         }
         return $out;
+    }
+
+    /**
+     * 달별 점유를 화면이 바로 쓸 모양으로.
+     *
+     * 추정 점유는 **모든 달에 똑같이** 얹는다. 열려 있는 슬랙 건에는 끝나는
+     * 날이 없어서 어느 달에 걸리는지 알 수 없다 — 앞으로의 가용량을 고르게
+     * 먹는다고 본다. 확정과 갈라 두므로 사람이 가려 읽을 수 있다.
+     *
+     * @param array<string,float> $load  'YYYY-MM' => 확정 점유 비율
+     * @param array<string,array> $spans monthSpans() 결과
+     */
+    private function monthView(array $load, array $spans, float $base, float $inferred): array
+    {
+        $months = [];
+        $over   = [];
+        $peak   = 0;
+        foreach ($spans as $ym => $sp) {
+            $c    = round((float)($load[$ym] ?? 0), 4);
+            $used = $c + $inferred;
+            $row  = [
+                'month'         => $ym,
+                // '2026-10' 은 눈에 안 들어온다. 화면은 '10월' 로 읽는다.
+                'label'         => (int)substr($ym, 5, 2) . '월',
+                'from'          => $sp['from'],
+                'to'            => $sp['to'],
+                'workdays'      => $sp['workdays'],
+                // 자르지 않는다. 115% 가 115% 로 보여야 초과를 안다.
+                'confirmed_pct' => (int)round($c * 100),
+                'inferred_pct'  => (int)round($inferred * 100),
+                'available_pct' => (int)round(max(0.0, $base - $used) * 100),
+                'capacity_pct'  => (int)round($base * 100),
+                'available_md'  => round(max(0.0, $base - $used) * $sp['workdays'], 2),
+                'over'          => $used > $base + 0.0001,
+                'over_pct'      => (int)round(max(0.0, $used - $base) * 100),
+            ];
+            $peak = max($peak, (int)round($used * 100));
+            if ($row['over']) {
+                $over[] = ['month' => $ym, 'label' => $row['label'],
+                           'over_pct' => $row['over_pct'],
+                           'used_pct' => (int)round($used * 100)];
+            }
+            $months[] = $row;
+        }
+        return [
+            'months' => $months,
+            // 한 달이라도 넘치면 **기간 평균이 아무리 여유로워도** 그 달에는
+            // 일을 못 받는다. 화면이 바로 경고할 수 있게 따로 뽑아 둔다.
+            'over_months' => $over,
+            'peak_pct'    => $peak,
+        ];
     }
 
     /**
@@ -405,6 +511,8 @@ final class AvailabilityCalculator
             'project_pct' => 0, 'rnd_pct' => 0,
             'active_items' => 0, 'confidence' => 1.0,
             'breakdown' => [], 'inferred_items' => [],
+            // 모양이 다르면 화면이 undefined 를 만난다.
+            'months' => [], 'over_months' => [], 'peak_pct' => 0,
         ];
     }
 }

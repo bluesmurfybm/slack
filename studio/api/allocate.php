@@ -606,10 +606,15 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
     $pdo = bs_db();
     [$from, $to] = bs_alloc_window((int)$allocation['project_id']);
 
+    $peak = [];
     if ($from !== null && $to !== null && $from <= $to) {
         $calc = new AvailabilityCalculator($pdo);
         foreach ($calc->forMembers($ids, $from, $to) as $mid => $a) {
             $cap[$mid] = round((float)$a['available'] * (int)$a['workdays'], 2);
+            // 가용 공수가 넉넉해도 그 공수가 **특정 달에 몰려 있을 수** 있다.
+            // 10월에 115% 찬 사람에게 10월 일을 주면 막대는 74% 라고 하지만
+            // 실제로는 불가능한 일정이다.
+            $peak[$mid] = ['over_months' => $a['over_months'], 'peak_pct' => $a['peak_pct']];
         }
     }
 
@@ -628,6 +633,8 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
             'task_count'  => $byMember[$mid]['items'],
             'owner_count' => $byMember[$mid]['owner'],
             'over'        => $c > 0 && $md > $c,
+            'over_months' => $peak[$mid]['over_months'] ?? [],
+            'peak_pct'    => $peak[$mid]['peak_pct'] ?? 0,
         ];
     }
     usort($out, static fn($a, $b) => ($b['assigned_md'] <=> $a['assigned_md'])
