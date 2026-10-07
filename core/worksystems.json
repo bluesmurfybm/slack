@@ -5,7 +5,7 @@
     "desc": "유지보수 요청 현황을 확인하고 관리합니다.", "color": "#1F9D76" },
   { "key": "slackai", "emoji": "🤖", "label": "WorkHub AI (test)", "path": "slackai/lists.php",
     "desc": "WorkHub 에 AI 처리를 얹은 시험판입니다.", "color": "#5A667F" },
-  { "key": "dti", "emoji": "📰", "label": "DTI 발표", "path": "dti/index.php",
+  { "key": "dti", "emoji": "📰", "label": "BlueMagazine", "path": "dti/index.php",
     "desc": "매거진을 읽고 지식을 공유합니다.", "color": "#7B5CF0" },
   { "key": "learn", "emoji": "🎓", "label": "BlueLearn", "path": "learn/index.php",
     "desc": "역량 강화를 위한 강의를 신청하고 수강료를 지원받습니다.", "color": "#F2711C" },

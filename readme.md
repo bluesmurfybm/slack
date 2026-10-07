@@ -1,6 +1,6 @@
 # blue-iWorks — 사내 업무 포털
 
-Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **DTI 발표(dti)**,
+Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **BlueMagazine(dti, DTI 발표)**,
 **BlueLearn(learn)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
@@ -65,7 +65,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── similar/                 similar_lib.php(TF-IDF, 웹 API 와 CLI 공유) · similar_cli.php
 │   └── worker/                  Python 워커: ai_jobs 폴링, Slack Socket Mode 수신, claude/codex/svn/git 실행. .env 는 gitignore
 │
-├── dti/                         DTI 발표 — PHP, 포털 세션·DB 공유
+├── dti/                         BlueMagazine(DTI 발표) — PHP, 포털 세션·DB 공유
 │   ├── index.php                구성원 화면(아티클 목록)
 │   ├── admin/                   관리자 탭마다 한 장 — index(아티클 관리)·archive·rounds·fields·stats·score
 │   ├── views/                   레이아웃 조각 — head·tabs·foot, 목록 3장이 쓰는 list·topic_modals
@@ -843,7 +843,7 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
 
 ---
 
-## dti (DTI 발표)
+## dti (BlueMagazine · DTI 발표)
 
 매거진(DI, MIT TR) 아티클 발표 주제를 관리한다. 원래 xlsx 로 돌리던 걸 파이썬(FastAPI/SQLite)
 으로 옮겼다가, 다시 포털과 같은 PHP 앱 안으로 들여왔다(`learning/` → `learn/` 과 같은 이유 —
