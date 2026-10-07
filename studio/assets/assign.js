@@ -1205,6 +1205,7 @@
     var WL_MEMBER  = null;   // 지금 드로어가 보고 있는 사람
     var WL_NAME    = '';
     var WL_PERIOD  = null;
+    var WL_ROWS    = [];     // 지금 그려 둔 확정 점유. 고치기 폼이 원값을 꺼낸다
 
     function wlRow(w) {
       var manual = w.kind === 'manual';
@@ -1218,18 +1219,91 @@
           }
         }
         if (w.created_by_name) meta += ' · ' + esc(w.created_by_name) + ' 등록';
+        // 고친 사람은 등록한 사람과 **다른 정보**다. 둘 다 있어야 이 숫자가
+        // 어떻게 지금 모습이 됐는지 알 수 있다.
+        if (w.updated_by_name) meta += ' · ' + esc(w.updated_by_name) + ' 수정';
       }
 
-      return '<div class="ba-wl ba-wl--c' + (manual ? ' ba-wl--m' : '') + '">' +
+      return '<div class="ba-wl ba-wl--c' + (manual ? ' ba-wl--m' : '') + '"' +
+          (manual ? ' data-wl-row="' + w.id + '"' : '') + '>' +
         '<span class="ba-wl__k">' + esc(w.kind_label || '확정') + '</span>' +
         '<span class="ba-wl__t">' + esc(w.label) +
           (manual && w.note ? '<em class="ba-wl__note">' + esc(w.note) + '</em>' : '') +
         '</span>' +
         '<span class="ba-wl__d">' + meta + '</span>' +
         '<span class="ba-wl__r">' + (w.load_ratio * 100).toFixed(0) + '%' +
-          (manual ? '<button type="button" class="ba-mini ba-mini--x" ' +
+          // 자동 수집(슬랙·메일)은 원천이 다시 덮어쓰므로 고쳐도 소용없다.
+          // 그래서 직접 등록한 줄에만 단추를 단다.
+          (manual ? '<button type="button" class="ba-mini" ' +
+                    'data-wl-edit="' + w.id + '" title="고치기">고치기</button>' +
+                    '<button type="button" class="ba-mini ba-mini--x" ' +
                     'data-wl-del="' + w.id + '" title="지우기">&times;</button>' : '') +
         '</span></div>';
+    }
+
+    /**
+     * 점유 입력 칸. **등록과 수정이 같은 함수를 쓴다.**
+     *
+     * 따로 만들면 한쪽만 고치는 일이 생긴다 — 항목이 같은데 화면이 둘로
+     * 갈리면, 등록에는 있고 수정에는 없는 칸이 언젠가 생긴다.
+     *
+     * @param pre 채워 둘 값(수정). 없으면 등록용 빈 칸.
+     * @param id  입력칸 id 앞가지. 등록과 수정이 한 화면에 같이 떠도
+     *            id 가 겹치지 않아야 한다.
+     */
+    function wlFields(pre, id) {
+      var v = pre || {};
+      var pct = v.load_ratio !== undefined ? Math.round(v.load_ratio * 100) : 50;
+      return '<div class="ba-wlform">' +
+        '<label class="ba-field ba-wlform__wide"><span>무슨 업무인가</span>' +
+          '<input type="text" class="ba-input" id="' + id + '-label" value="' +
+          esc(v.label || '') + '" placeholder="예: B대 상주 지원"></label>' +
+        '<label class="ba-field"><span>시작</span>' +
+          '<input type="date" class="ba-input" id="' + id + '-from" value="' +
+          esc(v.start_date || '') + '"></label>' +
+        '<label class="ba-field"><span>종료</span>' +
+          '<input type="date" class="ba-input" id="' + id + '-to" value="' +
+          esc(v.end_date || '') + '"></label>' +
+        '<label class="ba-field"><span>점유율 <b id="' + id + '-pct-v">' + pct + '%</b></span>' +
+          '<input type="range" id="' + id + '-pct" min="5" max="100" step="5" value="' + pct + '"></label>' +
+        '<label class="ba-field"><span>어디서 알게 됐나</span>' +
+          '<select class="ba-input" id="' + id + '-source">' +
+            '<option value="">선택 안 함</option>' +
+            Object.keys(WL_SOURCES).map(function (k) {
+              return '<option value="' + k + '"' + (v.origin === k ? ' selected' : '') +
+                     '>' + esc(WL_SOURCES[k]) + '</option>';
+            }).join('') +
+          '</select></label>' +
+        '<label class="ba-field ba-wlform__wide"><span>근거 링크 <span class="ba-dim">있으면</span></span>' +
+          '<input type="url" class="ba-input" id="' + id + '-url" value="' +
+          esc(v.origin_url || '') + '" placeholder="https:// 로 시작하는 슬랙·메일 주소"></label>' +
+        '<label class="ba-field ba-wlform__wide"><span>사유 <span class="ba-dim">필수</span></span>' +
+          '<textarea class="ba-input" id="' + id + '-note" rows="2" ' +
+          'placeholder="왜 이만큼 점유하는지. 나중에 이 줄을 근거로 따지게 됩니다.">' +
+          esc(v.note || '') + '</textarea></label>' +
+      '</div>';
+    }
+
+    /** 입력칸에서 값을 걷는다. 등록과 수정이 같이 쓴다. */
+    function wlRead(id) {
+      return {
+        label:      $('#' + id + '-label').value,
+        note:       $('#' + id + '-note').value,
+        source:     $('#' + id + '-source').value,
+        source_url: $('#' + id + '-url').value,
+        start_date: $('#' + id + '-from').value,
+        end_date:   $('#' + id + '-to').value,
+        load_pct:   $('#' + id + '-pct').value
+      };
+    }
+
+    /** 점유율 슬라이더의 숫자를 따라 움직이게 한다. */
+    function wlBindPct(id) {
+      var el = $('#' + id + '-pct');
+      if (!el) return;
+      el.addEventListener('input', function () {
+        $('#' + id + '-pct-v').textContent = el.value + '%';
+      });
     }
 
     /** 등록 폼. 권한이 없으면 아예 그리지 않는다. */
@@ -1242,32 +1316,8 @@
       return '<details class="ba-wladd"><summary>슬랙·메일에 없는 다른 업무 등록</summary>' +
         '<p class="ba-cd__note">여기 넣은 값은 <b>이 사람의 가용도를 그대로 깎습니다.</b> ' +
         '모든 프로젝트에 함께 반영되고, 누가 넣었는지 본인에게도 보입니다.</p>' +
-        '<div class="ba-wlform">' +
-          '<label class="ba-field ba-wlform__wide"><span>무슨 업무인가</span>' +
-            '<input type="text" class="ba-input" id="ba-wl-label" ' +
-            'placeholder="예: B대 상주 지원"></label>' +
-          '<label class="ba-field"><span>시작</span>' +
-            '<input type="date" class="ba-input" id="ba-wl-from" value="' +
-            esc(p.from || '') + '"></label>' +
-          '<label class="ba-field"><span>종료</span>' +
-            '<input type="date" class="ba-input" id="ba-wl-to" value="' +
-            esc(p.to || '') + '"></label>' +
-          '<label class="ba-field"><span>점유율 <b id="ba-wl-pct-v">50%</b></span>' +
-            '<input type="range" id="ba-wl-pct" min="5" max="100" step="5" value="50"></label>' +
-          '<label class="ba-field"><span>어디서 알게 됐나</span>' +
-            '<select class="ba-input" id="ba-wl-source">' +
-              '<option value="">선택 안 함</option>' +
-              Object.keys(WL_SOURCES).map(function (k) {
-                return '<option value="' + k + '">' + esc(WL_SOURCES[k]) + '</option>';
-              }).join('') +
-            '</select></label>' +
-          '<label class="ba-field ba-wlform__wide"><span>근거 링크 <span class="ba-dim">있으면</span></span>' +
-            '<input type="url" class="ba-input" id="ba-wl-url" ' +
-            'placeholder="https:// 로 시작하는 슬랙·메일 주소"></label>' +
-          '<label class="ba-field ba-wlform__wide"><span>사유 <span class="ba-dim">필수</span></span>' +
-            '<textarea class="ba-input" id="ba-wl-note" rows="2" ' +
-            'placeholder="왜 이만큼 점유하는지. 나중에 이 줄을 근거로 따지게 됩니다."></textarea></label>' +
-        '</div>' +
+        // 기본 기간은 이 프로젝트 기간이다. 대개 그 안의 일을 적는다.
+        wlFields({ start_date: p.from || '', end_date: p.to || '' }, 'ba-wl') +
         '<div class="ba-formbar"><span class="ba-dim" id="ba-wl-msg"></span>' +
           '<span class="ba-spacer"></span>' +
           '<button type="button" class="ba-btn ba-btn--primary" id="ba-wl-save">등록</button>' +
@@ -1275,25 +1325,13 @@
     }
 
     function wlBind() {
-      var pct = $('#ba-wl-pct');
-      if (pct) {
-        pct.addEventListener('input', function () {
-          $('#ba-wl-pct-v').textContent = pct.value + '%';
-        });
-      }
+      wlBindPct('ba-wl');
+
       var save = $('#ba-wl-save');
       if (save) {
         save.addEventListener('click', function () {
-          var body = {
-            member_id:  WL_MEMBER,
-            label:      $('#ba-wl-label').value,
-            note:       $('#ba-wl-note').value,
-            source:     $('#ba-wl-source').value,
-            source_url: $('#ba-wl-url').value,
-            start_date: $('#ba-wl-from').value,
-            end_date:   $('#ba-wl-to').value,
-            load_pct:   $('#ba-wl-pct').value
-          };
+          var body = wlRead('ba-wl');
+          body.member_id = WL_MEMBER;
           if (WL_PERIOD) { body.from = WL_PERIOD.from; body.to = WL_PERIOD.to; }
 
           save.disabled = true;
@@ -1308,6 +1346,58 @@
             .then(function () { save.disabled = false; });
         });
       }
+
+      // ---- 고치기 ----
+      //
+      // 지우고 다시 넣으면 created_by·created_at 이 새로 찍혀 **누가 언제
+      // 처음 넣었는지가 사라진다.** 기록을 지키려고 둔 칸을 고치기 위해
+      // 버리는 셈이라, 그 줄 자리에서 바로 고치게 한다.
+      $$('[data-wl-edit]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id  = parseInt(btn.dataset.wlEdit, 10);
+          var row = btn.closest('[data-wl-row]');
+          if (!row) return;
+
+          // 이미 열려 있으면 닫는다. 여러 줄을 동시에 열면 어느 것을
+          // 고치는 중인지 헷갈린다.
+          var open = row.nextElementSibling;
+          if (open && open.classList.contains('ba-wledit')) { open.remove(); return; }
+          $$('.ba-wledit').forEach(function (x) { x.remove(); });
+
+          var w = (WL_ROWS || []).filter(function (x) { return x.id === id; })[0];
+          if (!w) return;
+
+          var box = document.createElement('div');
+          box.className = 'ba-wledit';
+          box.innerHTML = wlFields(w, 'ba-wle') +
+            '<div class="ba-formbar"><span class="ba-dim" id="ba-wle-msg"></span>' +
+              '<span class="ba-spacer"></span>' +
+              '<button type="button" class="ba-btn" id="ba-wle-cancel">취소</button>' +
+              '<button type="button" class="ba-btn ba-btn--primary" id="ba-wle-save">저장</button>' +
+            '</div>';
+          row.insertAdjacentElement('afterend', box);
+          wlBindPct('ba-wle');
+
+          $('#ba-wle-cancel').addEventListener('click', function () { box.remove(); });
+          $('#ba-wle-save').addEventListener('click', function () {
+            var body = wlRead('ba-wle');
+            body.id = id;
+            if (WL_PERIOD) { body.from = WL_PERIOD.from; body.to = WL_PERIOD.to; }
+
+            var sv = $('#ba-wle-save');
+            sv.disabled = true;
+            $('#ba-wle-msg').textContent = '';
+            api('api/workload.php?act=update', { method: 'POST', body: body })
+              .then(function (r) {
+                toast(r.message);
+                openCandidateDetail(WL_MEMBER, WL_NAME);
+                load();
+              })
+              .catch(function (e) { $('#ba-wle-msg').textContent = e.message; })
+              .then(function () { sv.disabled = false; });
+          });
+        });
+      });
 
       $$('[data-wl-del]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -1510,6 +1600,9 @@
           if (!d.confirmed_breakdown.length) {
             h += '<p class="ba-empty-inline">확정된 점유가 없습니다.</p>';
           } else {
+            // 고치기 폼이 원래 값을 채우려면 줄 자료가 필요하다. 화면에서
+            // 다시 긁어내면 형식(날짜·퍼센트)이 어긋난다.
+            WL_ROWS = d.confirmed_breakdown;
             h += d.confirmed_breakdown.map(wlRow).join('');
           }
           h += wlAddForm(d);

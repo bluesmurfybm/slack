@@ -1260,6 +1260,14 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-wlform__wide { grid-column: 1 / -1; }
 .ba-wlform .ba-input { max-width: 100%; }
 
+/* 고치는 줄 바로 아래에 펼쳐진다. 어느 줄을 고치는 중인지 눈으로 분명해야
+   한다 — 폼이 목록 끝에 뜨면 위아래를 오가며 맞춰 봐야 한다. */
+.ba-wledit {
+  margin: -4px 0 10px; padding: 12px;
+  border: 1px solid var(--ba-brand); border-top: 0;
+  border-radius: 0 0 10px 10px; background: var(--ba-surface);
+}
+
 /* 슬라이더는 글상자가 아니다.
    .ba-field input 규칙이 테두리 1px + 안쪽여백 10px 을 얹는데 box-sizing 이
    content-box 라, width:100% 가 칸보다 22px 넓어졌다 — 285px 칸에 307px.

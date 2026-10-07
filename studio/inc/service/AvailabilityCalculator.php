@@ -159,6 +159,7 @@ final class AvailabilityCalculator
         $st = $this->pdo->prepare(
             "SELECT id, member_id, kind, label, ref_type, ref_id,
                     source, source_url, note, created_by, created_by_name,
+                    updated_by_name,
                     start_date, end_date, load_ratio, confidence
                FROM bs_workload
               WHERE member_id IN ($ph)
@@ -215,6 +216,9 @@ final class AvailabilityCalculator
                 'origin_url'    => $w['source_url'] ?? null,
                 'created_by'      => $w['created_by'] ?? null,
                 'created_by_name' => $w['created_by_name'] ?? null,
+                // 고친 사람도 보여 준다. 가용도를 깎는 값이라 등록만큼이나
+                // 고친 것도 근거가 남아야 한다.
+                'updated_by_name' => $w['updated_by_name'] ?? null,
                 'start_date'    => $w['start_date'],
                 'end_date'      => $w['end_date'],
                 'load_ratio'    => (float)$w['load_ratio'],

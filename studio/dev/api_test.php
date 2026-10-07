@@ -1821,6 +1821,61 @@ ok('출처도 함께', !empty($manual['origin_label']));
 ok('등록 단추를 그릴지 알려 준다',
    ($r['json']['data']['can_add_workload'] ?? null) === true);
 
+// ---------------------------------------------------------------------
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 고치기 — 기록을 지키려고 둔 칸을 고치려고 버리면 안 된다          │
+// │                                                                  │
+// │ 전에는 화면에 고치기가 없어 오타 하나도 지우고 다시 넣어야 했다. │
+// │ 그러면 created_by·created_at 이 새로 찍혀 **누가 언제 처음        │
+// │ 넣었는지가 사라진다.**                                            │
+// └──────────────────────────────────────────────────────────────────┘
+// ---------------------------------------------------------------------
+$r = $guest->req('/studio/api/workload.php?act=update',
+                 ['csrf' => true, 'json' => ['id' => $wlId, 'label' => '남의 것']]);
+ok('남의 점유는 못 고친다', $r['status'] === 403, '상태 ' . $r['status']);
+
+$r = $admin->req('/studio/api/workload.php?act=update', ['csrf' => true, 'json' =>
+    ['id' => $wlId, 'label' => '고친 업무', 'note' => '사유도 고침', 'load_pct' => 45,
+     'start_date' => '2026-03-09', 'end_date' => '2026-06-15']]);
+ok('고치면 200', $r['status'] === 200, substr($r['body'], 0, 140));
+
+$w = null;
+foreach ($admin->req('/studio/api/workload.php?act=list&member_id=' . $otherMid)
+                ['json']['data']['rows'] as $x) {
+    if ((int)$x['id'] === (int)$wlId) { $w = $x; }
+}
+ok('값이 바뀐다', ($w['label'] ?? '') === '고친 업무' && ($w['note'] ?? '') === '사유도 고침',
+   json_encode($w, JSON_UNESCAPED_UNICODE));
+ok('점유율도 바뀐다', abs((float)($w['load_ratio'] ?? 0) - 0.45) < 0.001,
+   json_encode($w['load_ratio'] ?? null));
+ok('기간도 바뀐다', ($w['start_date'] ?? '') === '2026-03-09');
+
+// ★ 이것이 이 기능의 전부다. 고쳐도 **처음 넣은 사람은 그대로**여야 한다.
+ok('★ 고쳐도 등록한 사람은 그대로다',
+   ($w['created_by'] ?? '') === 'batest-admin@bluesoft.co.kr',
+   json_encode($w['created_by'] ?? null));
+ok('★ 고친 사람이 따로 남는다',
+   ($w['updated_by'] ?? '') === 'batest-admin@bluesoft.co.kr' && !empty($w['updated_by_name']),
+   json_encode([$w['updated_by'] ?? null, $w['updated_by_name'] ?? null]));
+
+// 사유는 넣을 때 필수였다. 고칠 때 풀면 사유 없는 기록이 우회로로 생긴다.
+$r = $admin->req('/studio/api/workload.php?act=update',
+                 ['csrf' => true, 'json' => ['id' => $wlId, 'note' => '']]);
+ok('★ 고칠 때도 사유를 비울 수 없다', $r['status'] === 400, substr($r['body'], 0, 120));
+
+$r = $admin->req('/studio/api/workload.php?act=update', ['csrf' => true, 'json' =>
+    ['id' => $wlId, 'start_date' => '2026-07-01', 'end_date' => '2026-06-01']]);
+ok('시작이 종료보다 늦으면 거절', $r['status'] === 400, substr($r['body'], 0, 120));
+
+// 드로어가 고친 사람을 보여 줄 수 있어야 한다.
+$dr = $admin->req('/studio/api/candidate.php?act=detail&project_id=1&member_id=' . $otherMid);
+$mn = null;
+foreach ($dr['json']['data']['confirmed_breakdown'] as $x) {
+    if (($x['kind'] ?? '') === 'manual') { $mn = $x; }
+}
+ok('드로어에도 고친 사람이 온다', !empty($mn['updated_by_name']),
+   json_encode($mn['updated_by_name'] ?? null));
+
 // --- 배정이 만든 점유는 못 건드린다 ---------------------------------------
 $asgnId = (int)$pdoR->query("SELECT id FROM bs_workload WHERE kind='assigned' LIMIT 1")
                     ->fetchColumn();

@@ -657,7 +657,12 @@ final class AllocationRepo
      * **배정이 만든 기록(assigned)은 못 고친다.** 그것은 배정안에서 나온
      * 파생 데이터라, 여기서 고쳐도 다음 확정 때 도로 덮인다.
      */
-    public function updateWorkload(int $workloadId, array $data): void
+    /**
+     * @param array $actor 고친 사람. **등록한 사람은 건드리지 않는다** —
+     *                     둘은 다른 정보이고, 둘 다 있어야 "이 숫자가 어떻게
+     *                     지금 모습이 됐나" 에 답할 수 있다.
+     */
+    public function updateWorkload(int $workloadId, array $data, array $actor = []): void
     {
         $cur = $this->findWorkload($workloadId);
         if (!$cur) {
@@ -691,6 +696,15 @@ final class AllocationRepo
         }
         if (!$set) {
             return;
+        }
+
+        // 고친 사람을 함께 적는다. 가용도를 깎는 값이라 등록만큼이나
+        // 고친 것도 근거가 남아야 한다.
+        if (($actor['id'] ?? '') !== '') {
+            $set[] = '`updated_by` = ?';
+            $par[] = (string)$actor['id'];
+            $set[] = '`updated_by_name` = ?';
+            $par[] = (string)($actor['name'] ?? '');
         }
 
         $f = array_key_exists('start_date', $data)
@@ -755,7 +769,12 @@ final class AllocationRepo
             'load_pct'    => (int)round((float)$r['load_ratio'] * 100),
             'created_by'  => $r['created_by'] ?? null,
             'created_by_name' => $r['created_by_name'] ?? null,
+            // 등록한 사람과 고친 사람은 **다른 정보**다. 둘 다 있어야
+            // 이 숫자가 어떻게 지금 모습이 됐는지 알 수 있다.
+            'updated_by'      => $r['updated_by'] ?? null,
+            'updated_by_name' => $r['updated_by_name'] ?? null,
             'created_at'  => $r['created_at'],
+            'updated_at'  => $r['updated_at'] ?? null,
         ];
     }
 

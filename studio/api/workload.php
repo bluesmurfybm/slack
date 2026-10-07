@@ -113,7 +113,7 @@ bs_route(bs_param_str('act', 'list'), [
             bs_json_error('MISSING_PARAM', '바꿀 내용이 없습니다.', 400);
         }
 
-        $allocs->updateWorkload($id, $data);
+        $allocs->updateWorkload($id, $data, $me);
 
         bs_json_ok(bs_wl_after($allocs, $avail, (int)$cur['member_id'], [
             'id'      => $id,
