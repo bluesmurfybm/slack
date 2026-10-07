@@ -129,6 +129,59 @@ ok('빈 문단 뒤의 본문이 살아 있다', str_contains($t, '성적부'), $
 ok('표는 한 행을 한 줄로, 칸은 탭', str_contains($t, "항목\t비고"), $t);
 
 // =====================================================================
+echo "\n[2-H] 숨긴 시트 — 엑셀을 열어도 없는 내용이 나왔다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 실제로 겪은 일 (2026-10-07)                                       │
+// │                                                                  │
+// │ 10장짜리 관리대장에서 9장이 숨김이고 보이는 것은 1장뿐이었다.     │
+// │ 전부 읽으니 개정 이력·지난 화면 설계·다른 기관 건까지 WBS 로      │
+// │ 나왔다. 쓰는 사람은 **엑셀을 열어 봐도 그런 내용이 없으니** 어디  │
+// │ 서 온 글자인지 알 길이 없었다.                                    │
+// │                                                                  │
+// │ 숨겼다는 것은 "지금 보여 줄 것이 아니다" 라는 사람의 뜻이다.      │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$hid = $p->parse(fixture('hidden_sheets.xlsx'), 'xlsx');
+$hidText = $hid->text();
+
+ok('★ 숨긴 시트는 읽지 않는다', count($hid->blocks) === 1,
+   json_encode(array_column($hid->blocks, 'ref'), JSON_UNESCAPED_UNICODE));
+ok('보이는 시트는 그대로 읽는다', str_contains($hidText, '통합 출석부'));
+ok('★ hidden 시트의 글자가 섞이지 않는다', !str_contains($hidText, 'Revision History'),
+   '개정 이력이 WBS 로 나온다');
+ok('★ veryHidden 시트의 글자도 섞이지 않는다', !str_contains($hidText, 'LMS 홈'),
+   '지난 설계가 WBS 로 나온다');
+
+// 조용히 버리면 반대쪽 같은 문제가 된다 — "왜 이 시트가 안 나오지".
+$hidNote = implode(' | ', $hid->notes);
+ok('★ 몇 장을 건너뛰었는지 말한다', str_contains($hidNote, '숨긴 시트 2장'), $hidNote);
+ok('★ 건너뛴 시트의 이름을 적는다',
+   str_contains($hidNote, '개정이력') && str_contains($hidNote, '지난설계'), $hidNote);
+ok('되살리는 방법도 알려 준다', str_contains($hidNote, '숨김을 풀고'), $hidNote);
+
+// 이름을 집어 요청하면 숨김이어도 읽는다. 사람이 그 시트를 지목한 것이다.
+$pick = $p->parse(fixture('hidden_sheets.xlsx'), 'xlsx', '개정이력');
+ok('★ 이름을 집으면 숨긴 시트도 읽는다',
+   count($pick->blocks) === 1 && str_contains($pick->text(), 'Revision History'),
+   json_encode(array_column($pick->blocks, 'ref'), JSON_UNESCAPED_UNICODE));
+
+// 전부 숨김이면 거를 수 없다. 걸렀다가는 멀쩡한 문서를 "읽을 글자가
+// 없습니다" 로 되돌려보내게 된다.
+$allH = $p->parse(fixture('all_hidden.xlsx'), 'xlsx');
+ok('★ 전부 숨김이면 그대로 읽는다', count($allH->blocks) === 2,
+   (string)count($allH->blocks));
+ok('그 사실을 적는다', str_contains(implode(' ', $allH->notes), '모든 시트가 숨김'),
+   implode(' | ', $allH->notes));
+
+// 숨긴 시트가 하나도 없는 문서는 **아무 말도 하지 않아야** 한다.
+// 쓸데없는 메모가 쌓이면 진짜 메모를 안 읽는다.
+$plain = $p->parse(fixture('sample.xlsx'), 'xlsx');
+ok('숨긴 시트가 없으면 메모도 없다',
+   !str_contains(implode(' ', $plain->notes), '숨긴 시트'),
+   implode(' | ', $plain->notes));
+
+// =====================================================================
 echo "\n[5] 깨진 파일 — 던지되 알아볼 수 있게\n";
 throws('zip 이 아니면 거절', fn() => $p->parse(fixture('broken.xlsx'), 'xlsx'));
 throws('zip 이지만 office 가 아니면 거절', fn() => $p->parse(fixture('notoffice.xlsx'), 'xlsx'));

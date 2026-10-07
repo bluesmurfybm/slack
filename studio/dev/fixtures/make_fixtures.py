@@ -31,6 +31,56 @@ ws2.append(["개발", "2026-03-02", "2026-05-29"])
 wb.create_sheet("빈시트")        # 건너뛰어야 한다
 wb.save(os.path.join(OUT, "sample.xlsx"))
 
+# ---- 숨긴 시트가 섞인 xlsx -------------------------------------------
+#
+# 실무 관리대장은 10장 중 9장이 숨김인 일이 흔하다(2026-10-07, LXP 대장).
+# 전부 읽으면 **엑셀을 열어 봐도 없는 내용**이 WBS 로 나온다.
+hb = Workbook()
+hs = hb.active
+hs.title = "보이는시트"
+hs.append(["구분", "요구사항"])
+hs.append(["출석", "통합 출석부"])
+
+h1 = hb.create_sheet("개정이력")
+h1.append(["Revision History"])
+h1.append(["Date", "2026-01-01"])
+h1.sheet_state = "hidden"
+
+h2 = hb.create_sheet("지난설계")
+h2.append(["홈 메인 → LMS 홈"])
+h2.sheet_state = "veryHidden"
+
+hb.save(os.path.join(OUT, "hidden_sheets.xlsx"))
+
+# 전부 숨김인 문서. 거르면 "읽을 글자가 없습니다" 가 되어 멀쩡한 문서를
+# 못 쓴다고 말하게 된다 — 그때는 거르지 않는 것이 맞다.
+#
+# 엑셀도 openpyxl 도 **마지막 남은 보이는 시트는 못 숨긴다.** 다른 도구가
+# 만든 파일에서는 나오므로 workbook.xml 을 직접 손봐 그 꼴을 만든다.
+import re
+
+_tmp = os.path.join(OUT, "_tmp_allhidden.xlsx")
+ab = Workbook()
+a0 = ab.active
+a0.title = "숨김1"
+a0.append(["숨겨도 이것뿐"])
+a1 = ab.create_sheet("숨김2")
+a1.append(["이것도 숨김"])
+a1.sheet_state = "hidden"
+ab.save(_tmp)
+
+_dst = os.path.join(OUT, "all_hidden.xlsx")
+_zin = zipfile.ZipFile(_tmp)
+with zipfile.ZipFile(_dst, "w", zipfile.ZIP_DEFLATED) as _zout:
+    for _it in _zin.infolist():
+        _data = _zin.read(_it.filename)
+        if _it.filename == "xl/workbook.xml":
+            _data = re.sub(r'(sheetId="1"[^>]*?)state="visible"', r'\1state="hidden"',
+                           _data.decode("utf-8")).encode("utf-8")
+        _zout.writestr(_it, _data)
+_zin.close()
+os.remove(_tmp)
+
 # ---- pptx ------------------------------------------------------------
 from pptx import Presentation
 from pptx.util import Inches

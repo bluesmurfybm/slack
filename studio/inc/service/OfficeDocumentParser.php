@@ -106,6 +106,41 @@ final class OfficeDocumentParser implements DocumentParser
                 }
             }
 
+            // ┌──────────────────────────────────────────────────────────┐
+            // │ 숨긴 시트는 읽지 않는다 (2026-10-07)                      │
+            // │                                                          │
+            // │ 10장짜리 관리대장에서 9장이 숨김이고 보이는 것은 1장뿐인  │
+            // │ 일이 실제로 있었다. 전부 읽으니 **엑셀을 열어 봐도 없는   │
+            // │ 내용**이 WBS 로 나왔다 — 개정 이력, 지난 화면 설계, 다른  │
+            // │ 기관 건까지. 쓰는 사람은 그것이 어디서 왔는지 알 길이     │
+            // │ 없다.                                                    │
+            // │                                                          │
+            // │ 숨겼다는 것은 "지금 보여 줄 것이 아니다" 라는 사람의      │
+            // │ 뜻이다. 그 뜻을 따른다.                                   │
+            // │                                                          │
+            // │ 다만 **조용히 버리지 않는다.** 말없이 거르면 "왜 이 시트  │
+            // │ 가 안 나오지" 가 되어 반대쪽 같은 문제가 된다. 몇 장을    │
+            // │ 건너뛰었는지 이름까지 적는다.                             │
+            // │                                                          │
+            // │ 이름을 집어 요청한 경우(onlySheet)는 숨김이어도 읽는다 —  │
+            // │ 사람이 그 시트를 지목한 것이다. 위에서 이미 걸러졌다.     │
+            // └──────────────────────────────────────────────────────────┘
+            if ($onlySheet === null || $onlySheet === '') {
+                $shown = array_values(array_filter($sheets, static fn($s) => !$s['hidden']));
+                $hid   = array_values(array_filter($sheets, static fn($s) => $s['hidden']));
+                if ($hid && $shown) {
+                    $sheets  = $shown;
+                    $notes[] = '숨긴 시트 ' . count($hid) . '장은 읽지 않았습니다: '
+                             . implode(', ', array_column($hid, 'name'))
+                             . '. 필요하면 엑셀에서 숨김을 풀고 다시 올리세요.';
+                } elseif ($hid && !$shown) {
+                    // 전부 숨김이면 거를 수 없다. 걸렀다가는 "읽을 글자가
+                    // 없습니다" 가 되어 멀쩡한 문서를 못 쓴다고 말하게 된다.
+                    $notes[] = '모든 시트가 숨김 상태라 그대로 읽었습니다('
+                             . count($hid) . '장).';
+                }
+            }
+
             $total = 0;
             foreach ($sheets as $sheet) {
                 if ($total >= self::MAX_CHARS) {
@@ -187,7 +222,14 @@ final class OfficeDocumentParser implements DocumentParser
             $attrs = $sheet->attributes($ns['r'] ?? 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
             $rid   = (string)($attrs['id'] ?? '');
             $path  = $rels[$rid] ?? ('xl/worksheets/sheet' . ($i + 1) . '.xml');
-            $out[] = ['name' => (string)$sheet['name'], 'path' => $path];
+            // 숨긴 시트인지. 엑셀은 'hidden' 과 'veryHidden' 두 가지를 쓴다 —
+            // 뒤엣것은 엑셀 화면에서 되살릴 수조차 없다.
+            $out[] = [
+                'name'   => (string)$sheet['name'],
+                'path'   => $path,
+                'hidden' => in_array((string)($sheet['state'] ?? ''),
+                                     ['hidden', 'veryHidden'], true),
+            ];
         }
         return $out;
     }
