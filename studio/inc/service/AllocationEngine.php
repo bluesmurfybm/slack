@@ -410,6 +410,9 @@ final class AllocationEngine
                 'period'       => ['from' => $ctx['from'], 'to' => $ctx['to']],
                 'workdays'     => $ctx['workdays'],
                 'method'       => $method,
+                'level'        => $ctx['level'],
+                // 자동이 쪼갠 이유. 답할 수 없는 자동은 아무도 안 쓴다.
+                'split_reasons' => array_values($ctx['split_reasons']),
                 // 씨앗이 있으면 같은 결과를 다시 만들 수 있다. 가중치 배정은
                 // 난수를 안 쓰므로 씨앗 없이도 늘 같은 결과다.
                 'seed'          => $seed,
@@ -442,6 +445,297 @@ final class AllocationEngine
     // │   하므로, method 를 params_json 에 적어 둔다.                 │
     // └──────────────────────────────────────────────────────────────┘
     // =================================================================
+
+    // =================================================================
+    // 배정 단위 — 어느 깊이의 덩어리를 한 사람에게 줄 것인가
+    //
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 말단만 배정하면 일이 지나치게 쪼개진다                         │
+    // │                                                              │
+    // │ WBS 105건이면 최대 105명에게 갈 수 있다. 실무는 그렇지 않다 — │
+    // │ 「로그인/회원가입」 은 세션·토큰·화면이 한 덩어리라 쪼개면     │
+    // │ 서로를 기다린다. 같은 묶음 가산점이 모아 주긴 하지만 그건     │
+    // │ 권유일 뿐 보장이 아니다.                                      │
+    // │                                                              │
+    // │ ⚠ 가장 위험한 것은 **공수 이중 계산**이다. 상위와 하위를 같이 │
+    // │   배정하면 공수가 두 번 잡혀 가용도가 통째로 무너진다. 그래서 │
+    // │   말단 하나는 **반드시 단위 하나에만** 속한다 — 아래 매핑이   │
+    // │   leaf → unit 한 방향이라 구조적으로 겹칠 수 없다.            │
+    // └──────────────────────────────────────────────────────────────┘
+    // =================================================================
+
+    /** 말단까지. 지금까지의 동작이고 기본값이다 */
+    public const L_LEAF = 'leaf';
+    /** 대분류 하나를 한 사람에게 */
+    public const L_D1   = 'd1';
+    /** 중분류까지 내려가서 */
+    public const L_D2   = 'd2';
+    /** 항목마다 알아서. 왜 그렇게 나눴는지 적는다 */
+    public const L_AUTO = 'auto';
+
+    public const LEVEL_LABEL = [
+        self::L_LEAF => '말단까지',
+        self::L_D1   => '대분류 단위',
+        self::L_D2   => '중분류 단위',
+        self::L_AUTO => '자동',
+    ];
+
+    /** 주 분야가 이 비중에 못 미치면 한 덩어리로 보기 어렵다 */
+    private const AUTO_DOMAIN_SHARE = 0.6;
+    /** 난이도 편차가 이만큼 벌어지면 어려운 것이 쉬운 것에 묻힌다 */
+    private const AUTO_DIFF_SPREAD  = 3;
+
+    /** 모르는 값은 말단까지로 본다. 오타 하나로 배정 단위가 바뀌면 안 된다. */
+    public static function levelOf(string $v): string
+    {
+        return isset(self::LEVEL_LABEL[$v]) ? $v : self::L_LEAF;
+    }
+
+    /**
+     * 말단들을 배정 단위로 묶는다.
+     *
+     * 돌려주는 `units` 는 기존 `$tasks` 와 모양이 같아 **엔진의 나머지가
+     * 하나도 안 바뀐다.** 달라지는 것은 한 줄이 가리키는 범위뿐이다.
+     *
+     * @param  array $leaves   말단 태스크 (확정된 것만)
+     * @param  array $allRows  프로젝트의 전체 태스크 줄(부모·제목을 찾는다)
+     * @param  array $capacity member_id => 가용 공수. '자동' 이 쓴다
+     * @param  array $leafDoms 말단별 분야
+     * @return array{units:array, domains:array, members_of:array, reasons:array}
+     */
+    private function cutUnits(array $leaves, array $allRows, string $level,
+                              array $capacity, array $leafDoms): array
+    {
+        $row = [];
+        foreach ($allRows as $t) { $row[(int)$t['id']] = $t; }
+
+        // 말단 → 그 말단이 속할 단위. **한 방향 매핑이라 겹칠 수 없다.**
+        $unitOf  = [];
+        $reasons = [];
+
+        if ($level === self::L_LEAF) {
+            foreach ($leaves as $id => $_) { $unitOf[$id] = $id; }
+        } elseif ($level === self::L_AUTO) {
+            [$unitOf, $reasons] = $this->autoCut($leaves, $row, $capacity, $leafDoms);
+        } else {
+            $maxDepth = $level === self::L_D1 ? 1 : 2;
+            foreach ($leaves as $id => $leaf) {
+                $cur = $id;
+                // 정한 깊이보다 깊으면 올라간다. 이미 얕으면 자기 자신이다 —
+                // 하위 없는 대분류를 억지로 끌어올릴 곳은 없다.
+                for ($i = 0; $i < BS_TASK_MAX_DEPTH; $i++) {
+                    $d = (int)($row[$cur]['depth'] ?? 1);
+                    $p = $row[$cur]['parent_id'] ?? null;
+                    if ($d <= $maxDepth || $p === null) { break; }
+                    $cur = (int)$p;
+                }
+                $unitOf[$id] = $cur;
+            }
+        }
+
+        return $this->mergeUnits($leaves, $row, $unitOf, $leafDoms) + ['reasons' => $reasons];
+    }
+
+    /**
+     * 말단을 모아 단위 한 줄로 만든다.
+     *
+     * 합치는 규칙 셋 — 전부 **틀리면 조용히 잘못된 일정이 나오는** 자리다.
+     *   · 공수 = 확정된 말단의 **합**. 상위 자신의 est_md 는 무시한다
+     *     (화면이 '무시됨' 으로 보여 주는 그 값이다)
+     *   · 난이도 = **최대값**. 평균을 쓰면 ★5 하나가 ★1 열 개에 묻혀
+     *     "어려운 건 상위자에게" 규칙이 안 걸린다
+     *   · 분야 = 하위 분야를 **공수로 가중**해 합친다. 그냥 합치면 30분짜리
+     *     퍼블리싱이 5일짜리 SSO 와 같은 무게가 된다
+     *
+     * @return array{units:array, domains:array, members_of:array}
+     */
+    private function mergeUnits(array $leaves, array $row, array $unitOf, array $leafDoms): array
+    {
+        $units = [];
+        $doms  = [];
+        $of    = [];     // unit_id => [leaf_id, ...]  근거에 쓴다
+
+        foreach ($leaves as $leafId => $leaf) {
+            $uid = $unitOf[$leafId];
+            $of[$uid][] = $leafId;
+
+            if (!isset($units[$uid])) {
+                $r = $row[$uid] ?? $leaf;
+                $units[$uid] = [
+                    'id'         => $uid,
+                    'wbs_no'     => $r['wbs_no'] ?? $leaf['wbs_no'],
+                    'title'      => $r['title'] ?? $leaf['title'],
+                    'parent_id'  => isset($r['parent_id']) && $r['parent_id'] !== null
+                                  ? (int)$r['parent_id'] : null,
+                    'depth'      => (int)($r['depth'] ?? $leaf['depth']),
+                    'seq'        => (int)($r['seq'] ?? $leaf['seq']),
+                    'est_md'     => 0.0,
+                    'difficulty' => null,
+                    'plan_start' => null,
+                    'plan_end'   => null,
+                    'leaf_count' => 0,
+                    'hardest'    => null,
+                ];
+            }
+            $u =& $units[$uid];
+
+            $u['est_md']    += $leaf['est_md'];
+            $u['leaf_count']++;
+
+            // 가장 어려운 하위가 무엇인지 남긴다. 근거에 적어야 사람이
+            // "왜 ★5 지?" 에 답할 수 있다.
+            if ($leaf['difficulty'] !== null
+                && ($u['difficulty'] === null || $leaf['difficulty'] > $u['difficulty'])) {
+                $u['difficulty'] = $leaf['difficulty'];
+                $u['hardest']    = $leaf['title'];
+            }
+            // 기간은 가장 이른 시작 ~ 가장 늦은 종료
+            if ($leaf['plan_start'] !== null
+                && ($u['plan_start'] === null || $leaf['plan_start'] < $u['plan_start'])) {
+                $u['plan_start'] = $leaf['plan_start'];
+            }
+            if ($leaf['plan_end'] !== null
+                && ($u['plan_end'] === null || $leaf['plan_end'] > $u['plan_end'])) {
+                $u['plan_end'] = $leaf['plan_end'];
+            }
+            unset($u);
+
+            // 분야 — 공수로 가중. 공수가 0 이어도 사라지면 안 되므로 바닥을 둔다.
+            $mult = max(0.1, $leaf['est_md']);
+            foreach (($leafDoms[$leafId] ?? []) as $d) {
+                $key = (int)$d['domain_id'];
+                if (!isset($doms[$uid][$key])) {
+                    $doms[$uid][$key] = $d;
+                    $doms[$uid][$key]['weight'] = 0.0;
+                }
+                $doms[$uid][$key]['weight'] += (float)$d['weight'] * $mult;
+            }
+        }
+
+        // domainFit 이 받는 모양(번호 없는 목록)으로 되돌린다.
+        foreach ($doms as $uid => $list) { $doms[$uid] = array_values($list); }
+
+        return ['units' => $units, 'domains' => $doms, 'members_of' => $of];
+    }
+
+    /**
+     * 항목마다 알아서 나눈다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 왜 그렇게 나눴는지 반드시 적는다                               │
+     * │                                                              │
+     * │ 자동이 왜 이렇게 했는지 답할 수 없으면 아무도 안 쓴다. 쪼갠    │
+     * │ 이유를 사람 말로 남겨 화면에 그대로 보여 준다.                 │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * 대분류부터 보고, 셋 중 하나라도 걸리면 한 단계 내려간다.
+     *   ① 공수가 한 사람 가용량을 넘는다      → 혼자 못 한다
+     *   ② 분야가 갈린다                       → 한 사람이 다 잘하기 어렵다
+     *   ③ 난이도 편차가 크다                  → 어려운 것이 묻힌다
+     *
+     * @return array{0:array, 1:array} unitOf, reasons
+     */
+    private function autoCut(array $leaves, array $row, array $capacity, array $leafDoms): array
+    {
+        // 혼자 맡을 수 있는 최대치. 가용도를 모르면 이 조건은 안 본다.
+        $maxCap = $capacity ? max($capacity) : 0.0;
+
+        // 단위 후보(상위 노드) 아래 말단들을 미리 모아 둔다.
+        $under = [];
+        foreach ($leaves as $id => $_) {
+            $cur = $id;
+            for ($i = 0; $i < BS_TASK_MAX_DEPTH + 1; $i++) {
+                $under[$cur][] = $id;
+                $p = $row[$cur]['parent_id'] ?? null;
+                if ($p === null) { break; }
+                $cur = (int)$p;
+            }
+        }
+
+        $unitOf  = [];
+        $reasons = [];
+
+        // 깊이 1 부터 내려가며 "통째로 둘까, 쪼갤까" 를 정한다.
+        $decide = function (int $nodeId) use (&$decide, &$unitOf, &$reasons, $leaves,
+                                              $row, $under, $leafDoms, $maxCap): void {
+            $mine = $under[$nodeId] ?? [];
+            if (!$mine) { return; }
+
+            // 더 쪼갤 수 없으면(자기가 말단) 여기서 끝
+            if (count($mine) === 1 && $mine[0] === $nodeId) {
+                $unitOf[$nodeId] = $nodeId;
+                return;
+            }
+
+            $why = $this->splitReason($mine, $leaves, $leafDoms, $maxCap);
+            if ($why === null) {
+                foreach ($mine as $lid) { $unitOf[$lid] = $nodeId; }
+                return;
+            }
+            $reasons[$nodeId] = ['title' => (string)($row[$nodeId]['title'] ?? ''), 'why' => $why];
+
+            // 한 단계 아래 자식들로 내려간다.
+            $kids = [];
+            foreach ($mine as $lid) {
+                $cur = $lid;
+                while (($row[$cur]['parent_id'] ?? null) !== null
+                       && (int)$row[$cur]['parent_id'] !== $nodeId) {
+                    $cur = (int)$row[$cur]['parent_id'];
+                }
+                $kids[$cur] = true;
+            }
+            foreach (array_keys($kids) as $kid) { $decide((int)$kid); }
+        };
+
+        foreach ($leaves as $id => $_) {
+            $cur = $id;
+            while (($row[$cur]['parent_id'] ?? null) !== null) { $cur = (int)$row[$cur]['parent_id']; }
+            if (!isset($unitOf[$id])) { $decide($cur); }
+        }
+
+        // 어떤 길로도 안 잡힌 말단은 자기 자신이 단위다(혹시 모를 구멍 막기).
+        foreach ($leaves as $id => $_) {
+            if (!isset($unitOf[$id])) { $unitOf[$id] = $id; }
+        }
+        return [$unitOf, $reasons];
+    }
+
+    /** 이 말단 묶음을 한 사람에게 주기 어려운 이유. 괜찮으면 null. */
+    private function splitReason(array $leafIds, array $leaves, array $leafDoms, float $maxCap): ?string
+    {
+        $md = 0.0; $hi = null; $lo = null; $byCat = [];
+        foreach ($leafIds as $lid) {
+            $l = $leaves[$lid] ?? null;
+            if ($l === null) { continue; }
+            $md += $l['est_md'];
+            if ($l['difficulty'] !== null) {
+                $hi = $hi === null ? $l['difficulty'] : max($hi, $l['difficulty']);
+                $lo = $lo === null ? $l['difficulty'] : min($lo, $l['difficulty']);
+            }
+            $mult = max(0.1, $l['est_md']);
+            foreach (($leafDoms[$lid] ?? []) as $d) {
+                $c = (string)($d['category'] ?? '');
+                if ($c === '') { continue; }
+                $byCat[$c] = ($byCat[$c] ?? 0) + (float)$d['weight'] * $mult;
+            }
+        }
+
+        if ($maxCap > 0 && $md > $maxCap) {
+            return sprintf('공수 %s M/D 로 혼자 맡기 어려워 나눴습니다(가용 최대 %s M/D).',
+                           $this->num($md), $this->num($maxCap));
+        }
+        if ($hi !== null && $lo !== null && ($hi - $lo) >= self::AUTO_DIFF_SPREAD) {
+            return sprintf('난이도가 ★%d~★%d 로 벌어져 나눴습니다 — 어려운 쪽이 묻힙니다.', $lo, $hi);
+        }
+        $sum = array_sum($byCat);
+        if ($sum > 0) {
+            $share = max($byCat) / $sum;
+            if ($share < self::AUTO_DOMAIN_SHARE) {
+                return sprintf('분야가 갈려 나눴습니다(주 분야 비중 %d%%).', (int)round($share * 100));
+            }
+        }
+        return null;
+    }
 
     public const M_WEIGHTED = 'weighted';
     /** 건수를 고르게. 사람 순서를 섞고 차례대로 돌린다 */
@@ -775,6 +1069,20 @@ final class AllocationEngine
         // 사람이 알아야 할 단서를 말로 덧붙인다. 깃발만 두면 화면마다
         // 해석이 갈린다.
         $notes = [];
+
+        // 여러 말단을 묶은 단위라면 **무엇을 묶었는지** 밝힌다. 안 적으면
+        // 「로그인/회원가입 · 18 M/D」 가 어디서 나온 숫자인지 알 수 없다.
+        $n = (int)($task['leaf_count'] ?? 1);
+        if ($n > 1) {
+            $notes[] = sprintf(
+                '하위 %d건을 묶어 한 사람에게 배정했습니다 — 공수 %s M/D 는 그 합계입니다.%s',
+                $n, $this->num($task['est_md']),
+                $task['hardest'] !== null && $task['difficulty'] !== null
+                    ? sprintf(' 난이도 ★%d 는 가장 어려운 하위「%s」 기준입니다.',
+                              $task['difficulty'], $task['hardest'])
+                    : ''
+            );
+        }
         foreach ($fit['flags'] as $f) {
             $n = $this->flagNote($f);
             if ($n !== null) { $notes[] = $n; }
@@ -900,13 +1208,14 @@ final class AllocationEngine
             }
         }
 
-        $tasks = [];
+        // 확정된 **말단**이 일의 최소 단위다. 여기까지는 늘 같다.
+        $leaves = [];
         foreach ($all as $t) {
             $id = (int)$t['id'];
             if (isset($hasChild[$id])) {
                 continue;
             }
-            $tasks[$id] = [
+            $leaves[$id] = [
                 'id'         => $id,
                 'wbs_no'     => $t['wbs_no'],
                 'title'      => $t['title'],
@@ -920,26 +1229,7 @@ final class AllocationEngine
             ];
         }
 
-        // 태스크를 도는 순서를 고정한다. 결정론의 뿌리다.
-        $order = array_keys($tasks);
-        usort($order, function (int $a, int $b) use ($tasks): int {
-            $ta = $tasks[$a]; $tb = $tasks[$b];
-            return (($tb['difficulty'] ?? 0) <=> ($ta['difficulty'] ?? 0))
-                ?: ($tb['est_md'] <=> $ta['est_md'])
-                ?: strnatcmp((string)$ta['wbs_no'], (string)$tb['wbs_no'])
-                ?: ($a <=> $b);
-        });
-
-        // --- 대분류(depth=1) 뿌리 ---
-        $rootOf = [];
-        foreach ($tasks as $id => $_) {
-            $cur = $id;
-            for ($i = 0; $i < BS_TASK_MAX_DEPTH && ($parentOf[$cur] ?? null) !== null; $i++) {
-                $cur = $parentOf[$cur];
-            }
-            $rootOf[$id] = $cur;
-        }
-
+        // 그 말단들을 어떤 덩어리로 묶어 배정할지 정한다.
         // --- 구성원 ---
         $evalVer = $this->members->latestEvalVer();
         $members = $this->loadMembers($params['member_ids'] ?? [], $evalVer);
@@ -965,8 +1255,37 @@ final class AllocationEngine
         [$catScores, $catMedians, $catCutoff] =
             $this->categoryTables($members, $evalVer, (float)($constraints['top_ratio'] ?? 0.5));
 
-        // --- 태스크 분야 ---
-        $taskDomains = $this->tasks->domainsFor(array_keys($tasks));
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 배정 단위를 정하는 자리                                       │
+        // │                                                              │
+        // │ 가용 공수를 알아야 '자동' 이 "혼자 맡기 버거운가" 를 판단할   │
+        // │ 수 있어, 구성원·가용도를 읽은 뒤에 온다.                      │
+        // └──────────────────────────────────────────────────────────────┘
+        $level = self::levelOf($params['level'] ?? '');
+        $cut   = $this->cutUnits($leaves, $allRows, $level, $capacity,
+                                 $this->tasks->domainsFor(array_keys($leaves)));
+        $tasks       = $cut['units'];
+        $taskDomains = $cut['domains'];
+
+        // 태스크를 도는 순서를 고정한다. 결정론의 뿌리다.
+        $order = array_keys($tasks);
+        usort($order, function (int $a, int $b) use ($tasks): int {
+            $ta = $tasks[$a]; $tb = $tasks[$b];
+            return (($tb['difficulty'] ?? 0) <=> ($ta['difficulty'] ?? 0))
+                ?: ($tb['est_md'] <=> $ta['est_md'])
+                ?: strnatcmp((string)$ta['wbs_no'], (string)$tb['wbs_no'])
+                ?: ($a <=> $b);
+        });
+
+        // --- 대분류(depth=1) 뿌리 ---
+        $rootOf = [];
+        foreach ($tasks as $id => $_) {
+            $cur = $id;
+            for ($i = 0; $i < BS_TASK_MAX_DEPTH && ($parentOf[$cur] ?? null) !== null; $i++) {
+                $cur = $parentOf[$cur];
+            }
+            $rootOf[$id] = $cur;
+        }
 
         $totalMd = 0.0;
         foreach ($tasks as $t) { $totalMd += $t['est_md']; }
@@ -1001,6 +1320,11 @@ final class AllocationEngine
             'to'               => $to,
             'workdays'         => $workdays,
             'pinned'           => $pinned,
+            'level'            => $level,
+            // 자동이 왜 그렇게 나눴는지. 화면이 그대로 보여 준다.
+            'split_reasons'    => $cut['reasons'],
+            // 단위 하나에 말단이 몇 건 들었는지. 근거에 쓴다.
+            'leaves_of'        => $cut['members_of'],
         ];
     }
 

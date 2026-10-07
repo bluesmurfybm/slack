@@ -3011,10 +3011,32 @@
       if (sel && CUR) sel.value = String(CUR.id);
     }
 
+    /**
+     * 자동이 쪼갠 이유. 비면 자리도 비운다.
+     *
+     * 산출할 때만 받는 값이라 버전을 갈아 끼우면 사라진다 — 그게 맞다.
+     * 다른 버전의 이유를 들고 있으면 거짓말이 된다.
+     */
+    function renderSplits(list) {
+      var box = $('#ba-al-splits');
+      if (!box) return;
+      box.hidden = !list.length;
+      if (!list.length) { box.innerHTML = ''; return; }
+      box.innerHTML = '<b>자동으로 이렇게 나눴습니다</b>' +
+        list.map(function (s) {
+          return '<div>· <b>' + esc(s.title) + '</b> — ' + esc(s.why) + '</div>';
+        }).join('');
+    }
+
     function renderBadge() {
       var el = $('#ba-al-badge');
       if (!CUR) { el.textContent = ''; return; }
       var s = CUR.version + '차 · ' + CUR.status_label;
+      // 단위가 다르면 같은 WBS 라도 다른 안이다. 안 보이면 공수 합계가
+      // 왜 다른지 알 수 없다.
+      if (CUR.params && CUR.params.level && CUR.params.level !== 'leaf') {
+        s += ' · ' + (L_LABEL[CUR.params.level] || CUR.params.level);
+      }
       // ★ 무작위로 뽑은 안을 가중치 안으로 오해하면 안 된다. 적합도 숫자가
       //   나란히 보이므로 **방식이 안 보이면 그 숫자가 근거처럼 읽힌다.**
       var p = CUR.params || {};
@@ -3201,9 +3223,32 @@
       random_pure: '태스크마다 따로 뽑습니다. 한 사람에게 몰릴 수 있습니다.'
     };
 
+    var L_LABEL = {
+      leaf: '말단까지', d1: '대분류 단위', d2: '중분류 단위', auto: '자동'
+    };
+    var L_HINT = {
+      d1:   '대분류 하나를 한 사람이 통째로 맡습니다. 공수는 그 아래 확정된 것의 합계입니다.',
+      d2:   '중분류까지 내려가 묶습니다.',
+      auto: '항목마다 알아서 나눕니다 — 공수가 혼자 맡기 버겁거나, 분야가 갈리거나, ' +
+            '난이도 편차가 크면 한 단계 내려갑니다. 왜 나눴는지 산출 뒤에 적습니다.'
+    };
+
     function currentMethod() {
       var el = $('input[name="ba-al-method"]:checked');
       return el ? el.value : 'weighted';
+    }
+
+    function currentLevel() {
+      var el = $('input[name="ba-al-level"]:checked');
+      return el ? el.value : 'leaf';
+    }
+
+    function syncLevel() {
+      var v = currentLevel();
+      var box = $('#ba-al-lhint');
+      if (!box) return;
+      box.hidden = !L_HINT[v];
+      box.textContent = L_HINT[v] || '';
     }
 
     /**
@@ -3267,6 +3312,8 @@
         var sd = ($('#ba-al-seed') || {}).value || '';
         if (sd.trim() !== '') body.seed = sd.trim();
       }
+      var lv = currentLevel();
+      if (lv !== 'leaf') body.level = lv;
 
       api('api/allocate.php?act=propose', { method: 'POST', body: body })
         .then(function (d) {
@@ -3284,6 +3331,8 @@
               '★4 이상 ' + off + '건이 그 분야 상위자가 아닌 사람에게 갔습니다. ' +
               '무작위라 "어려운 것은 상위자에게" 규칙을 건너뛰었습니다.');
           }
+          // 자동이 **왜** 나눴는지. 답할 수 없는 자동은 아무도 안 쓴다.
+          renderSplits((d.meta && d.meta.split_reasons) || []);
           return api('api/allocate.php?' + qs({ act: 'versions', project_id: PID }))
             .then(function (v) {
               renderVersions(v.rows || [], v.confirmed_version);
@@ -3415,6 +3464,10 @@
         el.addEventListener('change', syncMethod);
       });
       syncMethod();
+      $$('input[name="ba-al-level"]').forEach(function (el) {
+        el.addEventListener('change', syncLevel);
+      });
+      syncLevel();
 
       // 담당자 선택지 — 배정 가능한 사람만.
       api('api/allocate.php?' + qs({ act: 'members', project_id: PID }))

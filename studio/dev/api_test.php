@@ -1337,6 +1337,37 @@ ok('★ 무작위여도 적합도를 계산한다',
    $rd['items'][0]['fit_score'] !== null, json_encode($rd['items'][0]['fit_score'] ?? null));
 ok('무작위여도 근거가 남는다', !empty($rd['items'][0]['reason']['lines']));
 
+// ---- 배정 단위 (HTTP 경로) -------------------------------------------
+// 엔진 시험(alloc_test)이 묶는 규칙을 보고, 여기서는 **단위가 끝까지
+// 남는가**를 본다. params_json 에 안 남으면 같은 WBS 의 다른 안을
+// 나중에 구분할 수 없다 — 공수 합계가 왜 다른지도 알 수 없다.
+$lv = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'level' => 'd1']]);
+ok('대분류 단위로 산출된다', $lv['status'] === 200, substr($lv['body'], 0, 160));
+$lvd = $lv['json']['data'];
+ok('단위를 돌려준다', ($lvd['meta']['level'] ?? '') === 'd1',
+   json_encode($lvd['meta']['level'] ?? null));
+ok('★ 묶었다고 말해 준다', str_contains((string)($lvd['message'] ?? ''), '대분류 단위'),
+   (string)($lvd['message'] ?? ''));
+ok('★ 말단까지보다 배정 줄이 적다', count($lvd['items']) < count($al['items']),
+   count($lvd['items']) . ' < ' . count($al['items']));
+
+$spL = json_decode((string)$pdoX->query("SELECT params_json FROM bs_allocation WHERE id = "
+     . (int)$lvd['allocation_id'])->fetchColumn(), true);
+ok('★ 단위가 배정안에 저장된다', ($spL['level'] ?? '') === 'd1', json_encode($spL['level'] ?? null));
+
+$lvAuto = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'level' => 'auto']]);
+ok('자동으로도 산출된다', $lvAuto['status'] === 200, substr($lvAuto['body'], 0, 160));
+ok('자동은 쪼갠 이유를 함께 준다',
+   is_array($lvAuto['json']['data']['meta']['split_reasons'] ?? null));
+
+$lvBad = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'level' => '대분류']]);
+ok('★ 모르는 단위는 말단까지로 돌린다',
+   ($lvBad['json']['data']['meta']['level'] ?? '') === 'leaf',
+   json_encode($lvBad['json']['data']['meta']['level'] ?? null));
+
 // 모르는 방식은 가중치로. 오타 하나로 배정 방식이 바뀌면 안 된다.
 $rbad = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'method' => '아무거나']]);
@@ -2794,6 +2825,10 @@ ok('★ 배정 방식 고르는 자리가 있다',
    str_contains($page, 'name="ba-al-method"') && str_contains($page, 'value="random_even"')
    && str_contains($page, 'value="random_pure"'));
 ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
+ok('★ 배정 단위 고르는 자리가 있다',
+   str_contains($page, 'name="ba-al-level"') && str_contains($page, 'value="d1"')
+   && str_contains($page, 'value="d2"') && str_contains($page, 'value="auto"'));
+ok('자동이 쪼갠 이유를 적을 자리가 있다', str_contains($page, 'id="ba-al-splits"'));
 // 슬라이더마다 붙은 한 줄 설명과 '전체 규칙' 문장이 맞붙으면 같은 종류의
 // 말로 읽혀 둘 다 안 읽힌다. 줄을 그어 성격이 다르다는 것을 보여 준다.
 ok('전체 규칙 문장을 항목 설명과 갈라 놓는다',

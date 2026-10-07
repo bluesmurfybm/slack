@@ -156,6 +156,8 @@ bs_route(bs_param_str('act', 'versions'), [
             // 씨앗을 주면 같은 무작위 결과를 다시 만든다. 비우면 새로 뽑고,
             // 뽑은 값은 params_json 에 남아 나중에 재현할 수 있다.
             'seed'        => bs_param_str('seed'),
+            // 배정 단위. 말단까지(기본) / 대분류 / 중분류 / 자동.
+            'level'       => bs_param_str('level'),
         ];
 
         // 이전 안에서 사람이 손댄 항목을 그대로 가져올지.
@@ -191,6 +193,8 @@ bs_route(bs_param_str('act', 'versions'), [
             //   일이 역량 점수의 근거가 됐는지 알아볼 수 있어야 한다.
             'method'      => $r['meta']['method'],
             'seed'        => $r['meta']['seed'],
+            // 어느 단위로 묶었는지. 같은 WBS 라도 단위가 다르면 다른 안이다.
+            'level'       => $r['meta']['level'],
         ], $user);
 
         $allocs->saveItems($allocationId, $r['items']);
@@ -208,6 +212,9 @@ bs_route(bs_param_str('act', 'versions'), [
             'unassigned'    => $r['unassigned'],
             'meta'          => $r['meta'],
             'message'       => '배정안 ' . $a['version'] . '차를 만들었습니다. 검토 후 확정하세요.'
+                . ($r['meta']['level'] !== AllocationEngine::L_LEAF
+                    ? ' ' . AllocationEngine::LEVEL_LABEL[$r['meta']['level']] . ' 로 묶었습니다.'
+                    : '')
                 . ($r['meta']['method'] !== AllocationEngine::M_WEIGHTED
                     ? ' ' . AllocationEngine::METHOD_LABEL[$r['meta']['method']]
                       . ' 로 뽑았습니다(씨앗 ' . $r['meta']['seed'] . ').'

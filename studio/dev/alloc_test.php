@@ -300,6 +300,106 @@ ok('★ ★4 이상이 상위자를 비켜 간 건수를 센다',
 ok('가중치 배정은 그 수를 0 으로 둔다', $r['meta']['hard_off_top'] === 0);
 
 // =====================================================================
+echo "\n[4-L] 배정 단위 — 공수가 두 번 잡히면 가용도가 통째로 무너진다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 말단만 배정하면 일이 지나치게 쪼개진다                            │
+// │                                                                  │
+// │ WBS 105건이면 최대 105명에게 갈 수 있다. 실무는 그렇지 않다 —     │
+// │ 로그인 묶음은 세션·토큰·화면이 한 덩어리라 쪼개면 서로를 기다린다.│
+// │                                                                  │
+// │ 묶을 때 가장 위험한 것이 **공수 이중 계산**이다. 상위와 하위를    │
+// │ 같이 배정하면 공수가 두 번 잡혀 가용도가 전부 틀어진다.           │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$leafR = $engine->propose($pid, []);                     // 말단까지(기본)
+$d1R   = $engine->propose($pid, ['level' => 'd1']);
+$d2R   = $engine->propose($pid, ['level' => 'd2']);
+$autoR = $engine->propose($pid, ['level' => 'auto']);
+
+ok('단위를 돌려준다', $leafR['meta']['level'] === 'leaf'
+   && $d1R['meta']['level'] === 'd1' && $autoR['meta']['level'] === 'auto');
+
+// ★ 어떤 단위로 묶어도 **총 공수는 같아야 한다.** 다르면 이중 계산이거나
+//   빠뜨린 것이다 — 둘 다 조용히 잘못된 일정을 만든다.
+$totMd = function (array $res): string {
+    $s = 0.0;
+    foreach ($res['summary']['members'] ?? [] as $m) { $s += (float)$m['assigned_md']; }
+    return number_format($s, 2);
+};
+ok('★ 대분류로 묶어도 총 공수가 같다', $totMd($d1R) === $totMd($leafR),
+   $totMd($d1R) . ' / ' . $totMd($leafR));
+ok('★ 중분류로 묶어도 총 공수가 같다', $totMd($d2R) === $totMd($leafR),
+   $totMd($d2R) . ' / ' . $totMd($leafR));
+ok('★ 자동으로 묶어도 총 공수가 같다', $totMd($autoR) === $totMd($leafR),
+   $totMd($autoR) . ' / ' . $totMd($leafR));
+
+ok('대분류로 묶으면 배정 줄이 줄어든다',
+   count($d1R['items']) < count($leafR['items']),
+   count($d1R['items']) . ' < ' . count($leafR['items']));
+
+// ★ 상위와 하위가 같이 배정되면 안 된다. 한 말단은 단위 하나에만 속한다.
+$unitIds = array_column($d1R['items'], 'task_id');
+ok('★ 같은 태스크가 두 번 배정되지 않는다',
+   count($unitIds) === count(array_unique($unitIds)));
+
+ok('묶은 줄의 근거에 무엇을 묶었는지 적는다',
+   (bool)preg_match('/하위 \d+건을 묶어/u',
+       json_encode($d1R['items'], JSON_UNESCAPED_UNICODE)),
+   '근거에 안 적힌다');
+
+// 모르는 단위는 말단까지로. 오타 하나로 배정 단위가 바뀌면 안 된다.
+ok('★ 모르는 단위는 말단까지로 돌린다',
+   $engine->propose($pid, ['level' => '대분류'])['meta']['level'] === 'leaf');
+
+ok('자동의 쪼갠 이유는 배열로 온다', is_array($autoR['meta']['split_reasons']));
+
+// ---- 자동의 판정 규칙 셋을 직접 겨냥한다 ----
+// 실제 프로젝트 자료로는 세 조건이 다 걸리지 않아 규칙이 안 돌아 본다.
+// 조건마다 최소한의 입력을 만들어 **각각이 실제로 걸리는지** 확인한다.
+$ruleM = new ReflectionMethod(AllocationEngine::class, 'splitReason');
+$ruleM->setAccessible(true);
+$mkLeaf = fn(int $id, float $md, ?int $dif) => [$id => [
+    'id' => $id, 'est_md' => $md, 'difficulty' => $dif, 'title' => 't' . $id]];
+$mkDom  = fn(int $id, string $cat) => [$id => [
+    ['domain_id' => 1, 'category' => $cat, 'weight' => 1.0]]];
+
+// ① 공수가 혼자 맡기 버겁다
+$L1 = $mkLeaf(1, 20, 3) + $mkLeaf(2, 15, 3);
+$D1 = $mkDom(1, 'backend') + $mkDom(2, 'backend');
+$why = $ruleM->invoke($engine, [1, 2], $L1, $D1, 10.0);
+ok('★ 자동 ① 공수가 가용량을 넘으면 나눈다',
+   $why !== null && str_contains($why, '공수'), (string)$why);
+ok('가용량을 안 넘으면 그 이유로는 안 나눈다',
+   $ruleM->invoke($engine, [1, 2], $L1, $D1, 999.0) === null);
+
+// ② 난이도 편차 — ★5 하나가 ★1 열 개에 묻히면 안 된다
+$why = $ruleM->invoke($engine, [1, 2],
+    $mkLeaf(1, 1, 5) + $mkLeaf(2, 1, 1),
+    $mkDom(1, 'backend') + $mkDom(2, 'backend'), 999.0);
+ok('★ 자동 ② 난이도 편차가 크면 나눈다',
+   $why !== null && str_contains($why, '난이도'), (string)$why);
+
+// ③ 분야가 갈린다 — 한 사람이 다 잘하기 어렵다
+$why = $ruleM->invoke($engine, [1, 2],
+    $mkLeaf(1, 5, 3) + $mkLeaf(2, 5, 3),
+    $mkDom(1, 'backend') + $mkDom(2, 'frontend'), 999.0);
+ok('★ 자동 ③ 분야가 갈리면 나눈다',
+   $why !== null && str_contains($why, '분야'), (string)$why);
+
+// 셋 다 아니면 통째로 둔다. 쪼개는 것이 기본이 되면 묶는 뜻이 사라진다.
+ok('★ 조건에 안 걸리면 통째로 둔다',
+   $ruleM->invoke($engine, [1, 2],
+       $mkLeaf(1, 2, 3) + $mkLeaf(2, 3, 3),
+       $mkDom(1, 'backend') + $mkDom(2, 'backend'), 999.0) === null);
+
+// 공수가 0 인 말단만 있어도 분야 판정이 사라지면 안 된다(가중치 바닥값).
+ok('공수가 0 이어도 분야 판정이 돈다',
+   $ruleM->invoke($engine, [1, 2],
+       $mkLeaf(1, 0, 2) + $mkLeaf(2, 0, 2),
+       $mkDom(1, 'backend') + $mkDom(2, 'frontend'), 999.0) !== null);
+
+// =====================================================================
 echo "\n[5] 가중치 다루기\n";
 throws('전부 0 이면 거절', fn() => $engine->propose($pid, ['weights' => [
     'domain' => 0, 'cap' => 0, 'avail' => 0, 'career' => 0, 'growth' => 0]]),

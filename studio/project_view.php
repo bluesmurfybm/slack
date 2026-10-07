@@ -418,8 +418,9 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     <div class="ba-panel" id="ba-al">
       <h2>배정안 <span class="ba-dim" id="ba-al-badge"></span></h2>
       <p class="ba-panel__hint">
-        확정된 태스크의 말단만 배정합니다. 상위 태스크는 하위의 묶음이라
-        같이 배정하면 공수가 두 번 잡힙니다.
+        확정된 태스크를 배정합니다. <b>[가중치 조정]</b> 에서 <b>배정 단위</b> 를
+        고르면 대분류·중분류로 묶어 한 사람에게 줄 수 있습니다 —
+        묶어도 <b>공수는 하위의 합계 그대로</b>이고 두 번 잡히지 않습니다.
         <b>확정하기 전에는 대시보드에 나오지 않습니다.</b>
       </p>
 
@@ -452,6 +453,25 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
           <label><input type="radio" name="ba-al-method" value="random_pure">
             무작위 — 완전 무작위</label>
         </div>
+        <!-- ┌──────────────────────────────────────────────────────────┐
+             │ 배정 단위 — 어느 덩어리를 한 사람에게 줄 것인가            │
+             │                                                          │
+             │ 말단까지 쪼개면 WBS 105건이 105명에게 갈 수 있다. 실무는  │
+             │ 그렇지 않다 — 로그인 묶음은 한 사람이 통째로 맡는 게 맞다.│
+             └──────────────────────────────────────────────────────────┘ -->
+        <div class="ba-almode">
+          <span class="ba-almode__l">배정 단위</span>
+          <label><input type="radio" name="ba-al-level" value="leaf" checked>
+            말단까지</label>
+          <label><input type="radio" name="ba-al-level" value="d1">
+            대분류 단위</label>
+          <label><input type="radio" name="ba-al-level" value="d2">
+            중분류 단위</label>
+          <label><input type="radio" name="ba-al-level" value="auto">
+            자동</label>
+        </div>
+        <div class="ba-almode__hint" id="ba-al-lhint" hidden></div>
+
         <div class="ba-almode__hint" id="ba-al-mhint" hidden></div>
 
         <div class="ba-sliders" id="ba-al-wsliders"></div>
@@ -479,6 +499,8 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       <?php endif; ?>
 
       <div class="ba-alert" id="ba-al-error" hidden></div>
+      <!-- 자동이 왜 그렇게 나눴는지. 답할 수 없는 자동은 아무도 안 쓴다. -->
+      <div class="ba-note ba-al-splits" id="ba-al-splits" hidden></div>
 
       <!-- 인원별 부하 -->
       <div id="ba-al-load"></div>
