@@ -433,6 +433,97 @@ ok('출처에 위치가 남는다', str_contains((string)$t[1]['source_ref'], '�
    (string)$t[1]['source_ref']);
 ok('품질 주의를 함께 준다', str_contains($m['quality_note'] ?? '', '규칙만으로'));
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 실무 IA 표를 그대로 흉내 낸다 (2026-10-07)                        │
+// │                                                                  │
+// │ 「LXP 프로덕트 관리대장」 에서 제목 열로 뽑힌 것이 **「요구사항   │
+// │ ID」** 였다. SFR-073, SFR-065… 11건이 전부 대분류로 올라오고      │
+// │ 109행짜리 화면 목록은 한 줄도 안 나왔다.                          │
+// │                                                                  │
+// │ 두 가지가 겹쳤다 —                                                │
+// │  ① 「1 Depth / 2 Depth / 3 Depth」 라는 계층 머리글을 몰랐다.     │
+// │  ② 「요구사항 ID」 가 '요구사항' 에 걸려 제목으로 뽑혔다.         │
+// │  ③ 말단(3 Depth)이 빈 줄을 통째로 버려 표의 대부분이 사라졌다.    │
+// └──────────────────────────────────────────────────────────────────┘
+$iaText = "[[M2-3_IA!A1:N9]]\n"
+  . "NEXT LXP-Open FRONT Information Architecture\n"
+  . "\t\t\t\t\t\t\t진행 상태: 0% 미완료\n"
+  . "No.\tScreen ID\tFO/AD\t1 Depth\t2 Depth\t3 Depth\t담당자\t설명\t요구사항 ID\t비고\n"
+  . "1\t\tFO\tGNB/Footer\t\t\t강태윤\t\t\n"
+  . "2\t\tFO\t로그인/회원가입\t로그인\t\t강태윤\t\tSFR-073\n"
+  . "3\t\tFO\t로그인/회원가입\t서비스 약관 동의\t\t강태윤\t\t\n"
+  . "4\t\tFO\t로그인/회원가입\t서비스 약관 동의\t회원 정보 입력(이메일)\t강태윤\t\tSFR-065\n"
+  . "5\t\tFO\t로그인/회원가입\t서비스 약관 동의\t관심 분야 설정\t강태윤\t\t\n"
+  . "6\t\tFO\t강좌\t목록\t\t강태윤\t\tSFR-060\n"
+  . "※ 참고 문서: 위키";
+$ia = [['id' => 9, 'kind' => 'xlsx', 'title' => 'IA', 'parsed_text' => $iaText]];
+[$ti] = $ex->extractByRule($ia, $dt);
+$tiT = array_column($ti, 'title');
+
+ok('★ 요구사항 ID 를 제목으로 쓰지 않는다',
+   !array_filter($tiT, fn($x) => str_starts_with((string)$x, 'SFR-')),
+   json_encode($tiT, JSON_UNESCAPED_UNICODE));
+ok('★ 1 Depth 가 대분류가 된다',
+   in_array('GNB/Footer', $tiT, true) && in_array('로그인/회원가입', $tiT, true)
+   && in_array('강좌', $tiT, true), json_encode($tiT, JSON_UNESCAPED_UNICODE));
+ok('★ 2 Depth 가 중분류가 된다',
+   in_array('로그인', $tiT, true) && in_array('서비스 약관 동의', $tiT, true)
+   && in_array('목록', $tiT, true), json_encode($tiT, JSON_UNESCAPED_UNICODE));
+ok('★ 3 Depth 가 소분류가 된다',
+   in_array('회원 정보 입력(이메일)', $tiT, true) && in_array('관심 분야 설정', $tiT, true),
+   json_encode($tiT, JSON_UNESCAPED_UNICODE));
+
+$depthOf = function (string $t) use ($ti): ?int {
+    foreach ($ti as $x) { if ($x['title'] === $t) { return (int)$x['depth']; } }
+    return null;
+};
+ok('깊이가 머리글 그대로다',
+   $depthOf('로그인/회원가입') === 1 && $depthOf('서비스 약관 동의') === 2
+   && $depthOf('회원 정보 입력(이메일)') === 3,
+   json_encode([$depthOf('로그인/회원가입'), $depthOf('서비스 약관 동의'),
+                $depthOf('회원 정보 입력(이메일)')]));
+
+// ★ 말단이 비어도 상위는 살아야 한다. 이것이 빠지면 109행 중 14행만 남는다.
+ok('★ 3 Depth 가 빈 줄도 상위를 낸다',
+   in_array('GNB/Footer', $tiT, true) && in_array('로그인', $tiT, true),
+   '말단 칸이 비면 줄을 통째로 버리고 있다');
+
+// 엑셀은 병합 대신 같은 값을 반복해 적는다. 그대로 믿으면 중복이 쌓인다.
+ok('같은 상위를 거듭 만들지 않는다',
+   count(array_filter($tiT, fn($x) => $x === '로그인/회원가입')) === 1,
+   json_encode($tiT, JSON_UNESCAPED_UNICODE));
+ok('표 밑 각주는 태스크가 아니다',
+   !array_filter($tiT, fn($x) => str_contains((string)$x, '참고 문서')),
+   json_encode($tiT, JSON_UNESCAPED_UNICODE));
+ok('머리글 자체도 태스크가 아니다',
+   !in_array('1 Depth', $tiT, true) && !in_array('담당자', $tiT, true),
+   json_encode($tiT, JSON_UNESCAPED_UNICODE));
+
+// 대분류/중분류/소분류 로 적은 표도 같은 길로 읽힌다. 전에는 '소분류' 가
+// '중분류' 자리에 겹쳐 들어가 제목 열을 못 찾고 줄 단위로 되돌아갔다.
+$koText = "[[계획!A1:C4]]\n"
+  . "대분류\t중분류\t소분류\n"
+  . "출석\t출석부\t온라인 출석\n"
+  . "출석\t출석부\t오프라인 출석\n"
+  . "성적\t성적부\t\n";
+[$tk] = $ex->extractByRule([['id' => 10, 'kind' => 'xlsx', 'title' => '계획',
+                             'parsed_text' => $koText]], $dt);
+$tkT = array_column($tk, 'title');
+ok('★ 대/중/소분류 머리글도 계층으로 읽는다',
+   in_array('출석', $tkT, true) && in_array('출석부', $tkT, true)
+   && in_array('온라인 출석', $tkT, true) && in_array('성적부', $tkT, true),
+   json_encode($tkT, JSON_UNESCAPED_UNICODE));
+
+// 'guide' 안의 id 까지 식별자로 보면 멀쩡한 제목 열을 버린다.
+$gText = "[[G!A1:B3]]\n"
+  . "구분\t업무 Guide\n"
+  . "출석\t통합 출석부 개발\n";
+[$tg] = $ex->extractByRule([['id' => 11, 'kind' => 'xlsx', 'title' => 'G',
+                             'parsed_text' => $gText]], $dt);
+ok('★ guide 를 식별자로 오해하지 않는다',
+   in_array('통합 출석부 개발', array_column($tg, 'title'), true),
+   json_encode(array_column($tg, 'title'), JSON_UNESCAPED_UNICODE));
+
 // 표로 읽을 수 없으면 줄 단위로 되돌아간다
 $plain = [['id' => 2, 'kind' => 'pptx', 'title' => '자료',
            'parsed_text' => "[[슬라이드 2]]\n범위\n1. 출석 통합\n2. 성적부 연동\n2026-03-02"]];

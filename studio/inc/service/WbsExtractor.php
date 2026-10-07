@@ -398,17 +398,46 @@ final class WbsExtractor
             }
             $cells = array_map('trim', explode("\t", $line));
             $m = ['title' => null, 'group' => null, 'sub' => null, 'est' => null, 'diff' => null];
+
+            // ┌──────────────────────────────────────────────────────────┐
+            // │ 계층 머리글이 가장 확실한 신호다 (2026-10-07)             │
+            // │                                                          │
+            // │ 「1 Depth / 2 Depth / 3 Depth」 는 **표가 스스로 자기     │
+            // │ 구조를 적어 둔 것**이다. 낱말 짐작보다 먼저 본다.         │
+            // │ 대분류/중분류/소분류, 1단계/2단계, Level 1 도 같다.       │
+            // │                                                          │
+            // │ 이 규칙이 없을 때 실무 IA 표(109행)에서 제목 열로 뽑힌    │
+            // │ 것은 「요구사항 ID」 였다 — SFR-073, SFR-065… 11건이      │
+            // │ 대분류로 올라왔다.                                        │
+            // └──────────────────────────────────────────────────────────┘
+            $levels = $this->levelColumns($cells);
+            if (count($levels) >= 2) {
+                $lc = array_values($levels);            // 얕은 → 깊은 순
+                $m['title'] = array_pop($lc);           // 가장 깊은 열이 말단
+                $m['group'] = $lc[0] ?? null;
+                $m['sub']   = $lc[1] ?? null;
+            }
+
             foreach ($cells as $c => $v) {
                 $lv = mb_strtolower($v);
-                if ($v === '') {
+                if ($v === '' || in_array($c, $levels, true)) {
                     continue;
                 }
                 if ($m['sub']   === null && $this->hasAny($lv, $subWords))   { $m['sub']   = $c; continue; }
                 if ($m['group'] === null && $this->hasAny($lv, $groupWords)) { $m['group'] = $c; continue; }
-                if ($m['title'] === null && $this->hasAny($lv, $titleWords)) { $m['title'] = $c; continue; }
+                // ★ 「요구사항 ID」 는 제목이 아니라 식별자다. 제목으로 쓰면
+                //   표 전체가 SFR-073 같은 코드 목록이 된다.
+                if ($m['title'] === null && !$this->looksIdentifier($lv)
+                    && $this->hasAny($lv, $titleWords))                      { $m['title'] = $c; continue; }
                 if ($m['est']   === null && $this->hasAny($lv, $estWords))   { $m['est']   = $c; continue; }
                 if ($m['diff']  === null && $this->hasAny($lv, $diffWords))  { $m['diff']  = $c; continue; }
             }
+
+            // 계층 열이 하나뿐이고 달리 제목을 못 찾았으면 그것을 쓴다.
+            if ($m['title'] === null && count($levels) === 1) {
+                $m['title'] = array_values($levels)[0];
+            }
+
             if ($m['title'] !== null) {
                 $map = $m;
                 $headerAt = $i;
@@ -428,10 +457,15 @@ final class WbsExtractor
                 continue;
             }
             $cells = array_map('trim', explode("\t", $line));
-            $title = $cells[$map['title']] ?? '';
-            if ($title === '' || mb_strlen($title) < 2) {
-                continue;
-            }
+
+            // ┌──────────────────────────────────────────────────────────┐
+            // │ 상위를 **먼저** 낸다                                      │
+            // │                                                          │
+            // │ 전에는 말단 칸이 비면 그 줄을 통째로 건너뛰었다. 실무 IA  │
+            // │ 표는 109행 중 대부분이 「1 Depth + 2 Depth」 까지만 차    │
+            // │ 있고 3 Depth 가 비어 있다 — 그 줄을 버리면 **표의 거의    │
+            // │ 전부가 사라진다.**                                        │
+            // └──────────────────────────────────────────────────────────┘
 
             // 구분 칸이 새 값이면 그것이 상위 태스크가 된다. 같은 값이
             // 이어지면 한 번만 만든다 — 엑셀은 병합 대신 반복해 적는다.
@@ -451,6 +485,11 @@ final class WbsExtractor
                               'est_md' => null, 'difficulty' => null, 'line' => $i];
                     $lastSub = $sv;
                 }
+            }
+
+            $title = $cells[$map['title']] ?? '';
+            if ($title === '' || mb_strlen($title) < 2) {
+                continue;   // 상위는 위에서 이미 냈다
             }
 
             $depth = 1;
@@ -474,6 +513,52 @@ final class WbsExtractor
         }
 
         return $out ?: null;
+    }
+
+    /**
+     * 「1 Depth」 「2단계」 「대분류」 처럼 **깊이를 적어 둔** 머리글.
+     *
+     * @return array<int,int> 깊이(1,2,3…) => 열 번호. 깊이 오름차순.
+     */
+    private function levelColumns(array $cells): array
+    {
+        $ko  = ['대분류' => 1, '중분류' => 2, '소분류' => 3];
+        $out = [];
+        foreach ($cells as $c => $v) {
+            $t = mb_strtolower(trim((string)$v));
+            if ($t === '') {
+                continue;
+            }
+            $n = null;
+            if (preg_match('/([1-9])\s*(?:depth|단계|레벨|level|차)\b/u', $t, $mm)) {
+                $n = (int)$mm[1];
+            } elseif (preg_match('/(?:depth|단계|레벨|level)\s*([1-9])/u', $t, $mm)) {
+                $n = (int)$mm[1];
+            } else {
+                foreach ($ko as $w => $k) {
+                    if (str_contains($t, $w)) { $n = $k; break; }
+                }
+            }
+            // 같은 깊이가 두 번 나오면 **앞엣것**만 쓴다. 뒤엣것은 보통
+            // 참고용 사본이다.
+            if ($n !== null && !isset($out[$n])) { $out[$n] = $c; }
+        }
+        ksort($out);
+        return $out;
+    }
+
+    /**
+     * 식별자 열인가. 「요구사항 ID」 「No.」 「코드」 는 제목이 될 수 없다.
+     *
+     * 'id' 는 **낱말 경계로** 본다. 'guide' 안의 id 까지 걸리면 멀쩡한
+     * 제목 열을 버리게 된다.
+     */
+    private function looksIdentifier(string $h): bool
+    {
+        if (preg_match('/(^|[\s_\-\(\[\.])(id|no|code|key|seq)([\s_\-\)\]\.]|$)/u', $h)) {
+            return true;
+        }
+        return $this->hasAny($h, ['번호', '코드', '아이디']);
     }
 
     private function hasAny(string $haystack, array $needles): bool
