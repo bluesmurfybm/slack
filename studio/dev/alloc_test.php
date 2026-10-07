@@ -213,6 +213,62 @@ ok('가중치를 바꾸면 결과가 달라진다', sig($rw) !== $s1);
 ok('그 결과도 결정론적', sig($engine->propose($pid, ['weights' => $w])) === sig($rw));
 
 // =====================================================================
+echo "\n[3-S] 쏠림 — 한가한 사람이 모든 태스크에서 계속 1등하면 안 된다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 가용도가 배정이 쌓여도 안 줄어들던 자리 (2026-10-07)              │
+// │                                                                  │
+// │ 참여 가능 점수를 DB 값 그대로 쓰면 한 건을 줘도 95% 그대로라,     │
+// │ 제일 한가한 사람이 **모든 태스크에서 계속 이긴다.** 실제로 후보   │
+// │ 8명 중 한 사람이 24건(81%)을 가져가고 3명은 0건이었다.            │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$avM = new ReflectionMethod(AllocationEngine::class, 'availAfter');
+$avM->setAccessible(true);
+$ovM = new ReflectionMethod(AllocationEngine::class, 'overloadPenalty');
+$ovM->setAccessible(true);
+$who = ['member_id' => 1];
+
+$ctx0 = ['capacity_md' => [1 => 100.0], 'assigned_md' => []];
+ok('아무것도 안 받았으면 가용도 그대로',
+   abs($avM->invoke($engine, $who, $ctx0, 95.0) - 95.0) < 0.01);
+
+// ★ 핵심. 절반을 받으면 참여 가능 점수도 절반이 돼야 다음엔 남이 이긴다.
+$ctx1 = ['capacity_md' => [1 => 100.0], 'assigned_md' => [1 => 50.0]];
+ok('★ 절반 받으면 참여 가능도 절반',
+   abs($avM->invoke($engine, $who, $ctx1, 95.0) - 47.5) < 0.01,
+   (string)$avM->invoke($engine, $who, $ctx1, 95.0));
+
+$ctx2 = ['capacity_md' => [1 => 100.0], 'assigned_md' => [1 => 100.0]];
+ok('★ 꽉 차면 0 이 된다', $avM->invoke($engine, $who, $ctx2, 95.0) < 0.01);
+
+// 가용 공수를 모르면 깎을 기준이 없다. 0 으로 치면 영영 배정되지 않는다.
+ok('★ 가용 공수를 모르면 원값을 둔다',
+   abs($avM->invoke($engine, $who, ['capacity_md' => [], 'assigned_md' => []], 80.0) - 80.0) < 0.01);
+
+// ---- 과부하 감점이 넘기기 전부터 든다 ----
+$t1 = ['est_md' => 1.0];
+ok('절반쯤에서는 감점 없음',
+   $ovM->invoke($engine, $t1, $who, ['capacity_md' => [1 => 100.0], 'assigned_md' => [1 => 40.0]]) === 0.0);
+$p80 = $ovM->invoke($engine, $t1, $who, ['capacity_md' => [1 => 100.0], 'assigned_md' => [1 => 79.0]]);
+$p95 = $ovM->invoke($engine, $t1, $who, ['capacity_md' => [1 => 100.0], 'assigned_md' => [1 => 94.0]]);
+ok('★ 꽉 차 가면 미리 깎기 시작한다', $p80 > 0 && $p95 > $p80,
+   $p80 . ' / ' . $p95);
+$pOver = $ovM->invoke($engine, $t1, $who, ['capacity_md' => [1 => 100.0], 'assigned_md' => [1 => 120.0]]);
+ok('넘기면 더 세게', $pOver > $p95, $pOver . ' / ' . $p95);
+ok('감점에 상한이 있다', $pOver <= 50.0, (string)$pOver);
+
+// ---- 실제 배정에서 퍼지는가 ----
+$spread = $engine->propose($pid, []);
+$cnt = [];
+foreach ($spread['items'] as $it) { $cnt[$it['member_id']] = ($cnt[$it['member_id']] ?? 0) + 1; }
+arsort($cnt);
+$top = $cnt ? reset($cnt) : 0;
+ok('★ 한 사람이 전부 가져가지 않는다',
+   count($spread['items']) <= 1 || $top < count($spread['items']),
+   json_encode($cnt) . ' / 전체 ' . count($spread['items']) . '건');
+
+// =====================================================================
 echo "\n[3-M] 구성원 목록 거르기 — 제외한 사람을 다시 찾을 수 있어야 한다\n";
 //
 // ┌──────────────────────────────────────────────────────────────────┐

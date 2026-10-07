@@ -91,9 +91,21 @@ final class AllocationEngine
         // 거기서는 사람이 두 축을 나란히 보고 고르기 때문이다.
         // 여기서는 기계가 고르므로 가용도가 들어가야 한다 — 안 그러면
         // 제일 잘하는 한 사람에게 전부 몰린다(명세서가 w_avail 을 둔 이유).
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 이번 배정에서 이미 준 몫을 빼고 본다                          │
+        // │                                                              │
+        // │ 전에는 DB 에서 읽은 값을 그대로 썼다. 그러면 배정이 쌓여도    │
+        // │ 가용도가 안 줄어, **제일 한가한 사람이 모든 태스크에서 계속   │
+        // │ 1등**을 한다. 실제로 후보 8명 중 한 사람이 24건(81%)을        │
+        // │ 가져가고 3명은 0건이었다(2026-10-07).                         │
+        // │                                                              │
+        // │ 감점이 아니라 **점수 자체가 줄어든다.** 감점은 한도를 넘어야  │
+        // │ 걸리지만, 이쪽은 한 건을 줄 때마다 즉시 반영돼 자연스럽게     │
+        // │ 퍼진다.                                                       │
+        // └──────────────────────────────────────────────────────────────┘
         $av = $context['availability'][$member['member_id']] ?? null;
         if ($av !== null) {
-            $parts['avail'] = (float)$av['available_pct'];
+            $parts['avail'] = $this->availAfter($member, $context, (float)$av['available_pct']);
         }
 
         // --- 경력 ---------------------------------------------------------
@@ -236,6 +248,37 @@ final class AllocationEngine
      * 때 아무도 못 받는 상태가 되면 배정안이 아예 안 나오기 때문이다.
      * 하드 제약은 assign() 쪽에서 따로 본다.
      */
+    /**
+     * 이번 배정을 반영한 참여 가능도(0~100).
+     *
+     * DB 의 가용률에서 **이 배정안에서 이미 준 공수만큼** 깎는다. 가용 공수를
+     * 모르면(기간 없음 등) 깎을 기준이 없으므로 원값을 그대로 둔다 —
+     * 모르는 것을 0 으로 치면 그 사람이 영영 배정되지 않는다.
+     */
+    private function availAfter(array $member, array $context, float $base): float
+    {
+        $mid = $member['member_id'];
+        $cap = (float)($context['capacity_md'][$mid] ?? 0);
+        if ($cap <= 0) {
+            return $base;
+        }
+        $used = (float)($context['assigned_md'][$mid] ?? 0);
+        $left = max(0.0, 1.0 - $used / $cap);
+        return max(0.0, min(100.0, $base * $left));
+    }
+
+    /**
+     * 가용 공수를 넘겨 배정한 만큼 감점.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 넘기기 **전부터** 조금씩 깎는다                                │
+     * │                                                              │
+     * │ 전에는 100% 를 넘겨야 걸렸다. 그래서 0% 든 90% 든 감점이 같아 │
+     * │ 한 사람이 가용량을 꽉 채울 때까지 계속 받았다. 가용도 쪽       │
+     * │ (availAfter)이 주로 퍼뜨리고, 이쪽은 **끝에서 넘치는 것을     │
+     * │ 막는 안전장치**다.                                            │
+     * └──────────────────────────────────────────────────────────────┘
+     */
     private function overloadPenalty(array $task, array $member, array $context): float
     {
         $mid = $member['member_id'];
@@ -245,11 +288,19 @@ final class AllocationEngine
         }
         $used  = (float)($context['assigned_md'][$mid] ?? 0);
         $after = $used + (float)($task['est_md'] ?? 0);
-        if ($after <= $cap) {
+
+        if ($after > $cap) {
+            $over = ($after - $cap) / $cap;     // 0.2 = 20% 초과
+            // 넘긴 뒤에는 세게 깎는다. 아래 경고 구간과 이어지도록 바닥을 둔다.
+            return min(50.0, self::SOFT_PENALTY + $over * 100.0);
+        }
+
+        // 아직 안 넘겼지만 꽉 차 가는 구간. 0 → SOFT_PENALTY 로 완만히 는다.
+        $ratio = $after / $cap;
+        if ($ratio <= self::SOFT_FROM) {
             return 0.0;
         }
-        $over = ($after - $cap) / $cap;         // 0.2 = 20% 초과
-        return min(50.0, $over * 100.0);
+        return self::SOFT_PENALTY * ($ratio - self::SOFT_FROM) / (1.0 - self::SOFT_FROM);
     }
 
     /** 한 사람에게 쏠린 만큼 감점. 명세서 §1.1 이 든 문제가 이것이다. */
@@ -463,6 +514,14 @@ final class AllocationEngine
     // │   leaf → unit 한 방향이라 구조적으로 겹칠 수 없다.            │
     // └──────────────────────────────────────────────────────────────┘
     // =================================================================
+
+    /**
+     * 가용 공수의 이 비율을 넘으면 과부하 감점이 **미리** 들기 시작한다.
+     * 넘긴 뒤에야 걸면 한 사람이 꽉 찰 때까지 계속 받는다.
+     */
+    private const SOFT_FROM = 0.70;
+    /** 가용량을 딱 채웠을 때의 감점. 여기서부터 초과분이 더해진다. */
+    private const SOFT_PENALTY = 12.0;
 
     /** 말단까지. 지금까지의 동작이고 기본값이다 */
     public const L_LEAF = 'leaf';
@@ -1044,11 +1103,20 @@ final class AllocationEngine
         // 2줄: 가용도
         $av = $ctx['availability'][$member['member_id']] ?? null;
         if ($av) {
+            // 적합도에 쓴 값은 **이번 배정을 반영한 뒤**의 참여 가능도다.
+            // 원래 가용률만 적으면 "가용 95% 인데 점수가 왜 28 이지" 가 된다.
+            $used  = $this->num($ctx['assigned_md'][$member['member_id']] ?? 0);
+            $capMd = $this->num($ctx['capacity_md'][$member['member_id']] ?? 0);
+            $after = $fit['parts']['avail'] ?? null;
+
             $lines[] = sprintf(
-                '기간 내 가용 %d%% (확정 %d%% + 추정 %d%% 점유), 배정 공수 %s / 가용 %s M/D.',
+                '기간 내 가용 %d%% (확정 %d%% + 추정 %d%% 점유), 배정 공수 %s / 가용 %s M/D.%s',
                 $av['available_pct'], $av['confirmed_pct'], $av['inferred_pct'],
-                $this->num($ctx['assigned_md'][$member['member_id']] ?? 0),
-                $this->num($ctx['capacity_md'][$member['member_id']] ?? 0)
+                $used, $capMd,
+                $after !== null && abs($after - (float)$av['available_pct']) >= 0.5
+                    ? sprintf(' 이번 배정을 반영한 참여 가능은 %s 로 보고 점수를 냈습니다.',
+                              $this->num($after))
+                    : ''
             );
         } else {
             $lines[] = '가용도를 계산하지 못했습니다(기간 정보 부족).';
