@@ -2798,7 +2798,8 @@ ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
 // 말로 읽혀 둘 다 안 읽힌다. 줄을 그어 성격이 다르다는 것을 보여 준다.
 ok('전체 규칙 문장을 항목 설명과 갈라 놓는다',
    str_contains($page, 'ba-wpanel__note')
-   && (bool)preg_match('/\.ba-wpanel__note\s*\{[^}]*border-top/', $css));
+   && (bool)preg_match('/\.ba-wpanel__note::before\s*\{[^}]*content/', $css),
+   '표식이 사라졌다');
 
 ok('★ 가중치 다섯 가지에 설명이 다 붙어 있다',
    (bool)preg_match('/W_HINT\s*=\s*\{(.+?)\};/s', $js, $m)
