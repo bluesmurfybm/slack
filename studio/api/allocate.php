@@ -39,6 +39,76 @@ $engine   = new AllocationEngine($tasks, $members, $allocs, $avail, $projects);
 
 bs_route(bs_param_str('act', 'versions'), [
 
+    /**
+     * 차수별 비교.
+     *
+     * 가중치를 바꿔 가며 몇 차례 돌려도 어느 쪽이 나은지 알려면 표를 하나씩
+     * 열어 세어 봐야 했다. 무작위 배정을 대조군으로 만든 뜻도 비교할 자리가
+     * 없으면 살지 않는다.
+     */
+    'compare' => function () use ($projects, $allocs, $members): void {
+        bs_require_login_api();
+        $projectId = bs_alloc_project_param($projects);
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        $vers  = $allocs->versions($projectId);
+        $stats = $allocs->versionStats($projectId);
+
+        // 가용 공수는 **차수와 무관**하다(프로젝트 기간 × 그 사람 가용도).
+        // 차수마다 다시 계산하면 같은 값을 열 번 구하게 된다.
+        $mids = [];
+        foreach ($stats as $s) {
+            foreach (array_keys($s['by_member']) as $mid) { $mids[$mid] = true; }
+        }
+        $cap = [];
+        [$from, $to] = bs_alloc_window($projectId);
+        if ($mids && $from !== null && $to !== null) {
+            $calc = new AvailabilityCalculator(bs_db());
+            foreach ($calc->forMembers(array_keys($mids), $from, $to) as $mid => $a) {
+                $cap[$mid] = round((float)$a['available'] * (int)$a['workdays'], 2);
+            }
+        }
+
+        $rows = [];
+        foreach ($vers as $v) {
+            $s  = $stats[(int)$v['id']] ?? null;
+            $p  = $v['params'] ?? [];
+            $md = $s['md'] ?? 0.0;
+
+            // 가용 공수를 넘긴 사람 수. 넘긴 채로 확정하는 것은 사람 판단이지만
+            // 어느 안이 더 무리인지는 숫자로 보여야 한다.
+            $over = 0;
+            foreach (($s['by_member'] ?? []) as $mid => $m) {
+                if (isset($cap[$mid]) && $cap[$mid] > 0 && $m > $cap[$mid]) { $over++; }
+            }
+
+            $rows[] = [
+                'id'        => (int)$v['id'],
+                'version'   => (int)$v['version'],
+                'status'    => $v['status'],
+                'status_label' => $v['status_label'] ?? $v['status'],
+                'created_at'=> $v['created_at'],
+                'method'    => $p['method'] ?? AllocationEngine::M_WEIGHTED,
+                'level'     => $p['level']  ?? AllocationEngine::L_LEAF,
+                'seed'      => $p['seed']   ?? null,
+                'weights'   => $p['weights'] ?? null,
+                // 고른 후보 수. 안 골랐으면 null — '전원 대상' 이었다는 뜻이다.
+                'picked'    => isset($p['member_ids']) && $p['member_ids']
+                               ? count($p['member_ids']) : null,
+                'items'     => $s['items']   ?? 0,
+                'members'   => $s['members'] ?? 0,
+                'avg_fit'   => $s['avg_fit'] ?? null,
+                'md'        => $md,
+                // 한 사람에게 몰린 비율. 이 화면에서 가장 먼저 보게 되는 숫자다.
+                'top_share' => $md > 0 ? (int)round(($s['top_md'] ?? 0) / $md * 100) : 0,
+                'over'      => $over,
+                'orphans'   => count($allocs->tasksWithoutOwner((int)$v['id'])),
+            ];
+        }
+
+        bs_json_ok(['rows' => $rows]);
+    },
+
     'versions' => function () use ($projects, $allocs): void {
         bs_require_login_api();
         $projectId = bs_alloc_project_param($projects);
@@ -466,6 +536,26 @@ function bs_alloc_assoc(string $key): array
  * 가용 공수는 **배정 당시 기준**이 아니라 지금 다시 계산한다. 그래야
  * 수동 조정 뒤에도 막대가 맞는다.
  */
+/**
+ * 가용도를 재는 기간. 배정안이 저장해 둔 것을 쓰지 않는다 — 프로젝트 기간이
+ * 바뀌면 막대도 따라 바뀌어야 한다.
+ *
+ * 부하 막대와 차수 비교가 **같은 기간**을 봐야 숫자가 어긋나지 않는다.
+ *
+ * @return array{0:?string, 1:?string}
+ */
+function bs_alloc_window(int $projectId): array
+{
+    $q = bs_db()->prepare('SELECT dev_start, dev_end, test_start, test_end, deploy_date
+                             FROM bs_project WHERE id = ?');
+    $q->execute([$projectId]);
+    $p = $q->fetch(PDO::FETCH_ASSOC) ?: [];
+    return [
+        $p['dev_start']   ?: ($p['test_start'] ?: null),
+        $p['deploy_date'] ?: ($p['test_end'] ?: ($p['dev_end'] ?: null)),
+    ];
+}
+
 function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $tasks,
                        array $allocation, array $items): array
 {
@@ -480,12 +570,7 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
     // 기간은 배정안이 저장해 둔 것을 쓰지 않는다 — 프로젝트 기간이 바뀌면
     // 막대도 따라 바뀌어야 한다.
     $pdo = bs_db();
-    $q = $pdo->prepare('SELECT dev_start, dev_end, test_start, test_end, deploy_date
-                          FROM bs_project WHERE id = ?');
-    $q->execute([(int)$allocation['project_id']]);
-    $p = $q->fetch(PDO::FETCH_ASSOC) ?: [];
-    $from = $p['dev_start'] ?: ($p['test_start'] ?: null);
-    $to   = $p['deploy_date'] ?: ($p['test_end'] ?: ($p['dev_end'] ?: null));
+    [$from, $to] = bs_alloc_window((int)$allocation['project_id']);
 
     if ($from !== null && $to !== null && $from <= $to) {
         $calc = new AvailabilityCalculator($pdo);

@@ -1531,6 +1531,41 @@ $confirmedN = count(array_filter($r['json']['data']['rows'],
                                  fn($x) => $x['status'] === 'confirmed'));
 ok('확정본은 언제나 하나', $confirmedN === 1, (string)$confirmedN);
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 차수 비교 (2026-10-07)                                            │
+// │                                                                  │
+// │ 쓸 만한 WBS 하나 만드는 데 며칠이 걸려 가중치를 바꿔 가며 돌려     │
+// │ 볼 수가 없었다. 한 차수씩 열어 눈으로 세는 수밖에 없었기 때문이다.│
+// │ 숫자를 한 표에 모으면 돌려 보는 일에 값이 생긴다.                 │
+// └──────────────────────────────────────────────────────────────────┘
+$r = $admin->req('/studio/api/allocate.php?act=compare&project_id=' . $pid);
+$cmp = $r['json']['data']['rows'] ?? [];
+ok('★ 차수 비교가 모든 차수를 준다',
+   count($cmp) === count($r2 = $admin->req(
+       '/studio/api/allocate.php?act=versions&project_id=' . $pid)['json']['data']['rows']),
+   count($cmp) . ' vs ' . count($r2));
+$c0 = $cmp[0] ?? [];
+foreach (['version', 'method', 'level', 'items', 'members', 'avg_fit',
+          'md', 'top_share', 'over', 'orphans'] as $k) {
+    ok("비교에 $k 가 있다", array_key_exists($k, $c0), json_encode(array_keys($c0)));
+}
+// 쏠림은 백분율이다. 합이 100 을 넘으면 공수를 두 벌로 세고 있다는 뜻 —
+// 묶음 배정이 들어오면서 실제로 터졌던 자리다.
+$bad = array_filter($cmp, fn($x) => $x['top_share'] < 0 || $x['top_share'] > 100);
+ok('★ 최다 쏠림이 0~100% 안에 있다', !$bad, json_encode(array_values($bad)));
+ok('받은 사람이 배정 건수를 넘지 않는다',
+   !array_filter($cmp, fn($x) => $x['items'] > 0 && $x['members'] > $x['items']));
+ok('적합도는 없거나 0~100', !array_filter($cmp, fn($x) =>
+   $x['avg_fit'] !== null && ($x['avg_fit'] < 0 || $x['avg_fit'] > 100)));
+// 비어 있는 차수도 0 으로 떨어져야 한다. null 이 섞이면 화면에서 NaN 이 뜬다.
+ok('빈 차수도 숫자로 떨어진다',
+   !array_filter($cmp, fn($x) => !is_int($x['over']) || !is_int($x['orphans'])));
+
+$r = $admin->req('/studio/api/allocate.php?act=compare');
+ok('프로젝트를 안 주면 400', $r['status'] === 400, $r['body']);
+$r = $guest->req('/studio/api/allocate.php?act=compare&project_id=' . $pid);
+ok('★ 비교도 산출 권한이 있어야 본다', $r['status'] === 403, (string)$r['status']);
+
 $r = $admin->req('/studio/api/allocate.php?act=nope&project_id=' . $pid);
 ok('모르는 act 400', $r['status'] === 400 && ($r['json']['error']['code'] ?? '') === 'UNKNOWN_ACT');
 
@@ -2928,6 +2963,16 @@ ok('★ 배정 방식 고르는 자리가 있다',
    str_contains($page, 'name="ba-al-method"') && str_contains($page, 'value="random_even"')
    && str_contains($page, 'value="random_pure"'));
 ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
+
+// 비교는 **드로어**여야 한다. 본문에 표를 하나 더 펼치면 배정 표가 또
+// 아래로 밀린다 — 링크 목록을 드로어로 뺀 것과 같은 이유다.
+ok('★ 차수 비교 단추와 드로어가 있다',
+   str_contains($page, 'id="ba-al-compare"') && str_contains($page, 'id="ba-al-cmp"'));
+ok('비교표가 드로어 안에 있다',
+   strpos($page, 'id="ba-cmp-table"') > strpos($page, 'id="ba-al-cmp"'));
+ok('비교를 불러오는 자리가 있다', str_contains($js, "act: 'compare'"));
+// 보고 고르는 화면이니 고르면 그 차수가 열려야 한다.
+ok('★ 비교표에서 그 차수를 연다', str_contains($js, 'data-cmp-id'));
 // ┌──────────────────────────────────────────────────────────────────┐
 // │ 이름이 곧 동작이어야 한다 (2026-10-07)                            │
 // │                                                                  │

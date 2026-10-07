@@ -3437,6 +3437,66 @@
             '난이도 편차가 크면 한 단계 내려갑니다. 왜 나눴는지 산출 뒤에 적습니다.'
     };
 
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 차수 비교                                                     │
+    // │                                                              │
+    // │ WBS 를 제대로 하나 만드는 데 며칠이 든다. 그래서 가중치를      │
+    // │ 바꿔 가며 "돌려 보기" 를 할 수가 없었다 — 한 차수씩 열어 눈으로│
+    // │ 세어 봐야 했으니까. 숫자를 한 표에 모아 두면 돌려 보는 값이    │
+    // │ 생긴다. 무작위 차수가 대조군 노릇을 하는 것도 여기서부터다.   │
+    // └──────────────────────────────────────────────────────────────┘
+
+    // 쏠림은 **클수록 나쁘다**. 색으로 먼저 걸러 읽게 한다.
+    function cmpShare(v) {
+      var c = v >= 60 ? ' ba-cmp--bad' : (v >= 40 ? ' ba-cmp--warn' : '');
+      return '<td class="ba-num' + c + '">' + v + '%</td>';
+    }
+
+    function cmpRow(r, curId) {
+      var how = (M_LABEL[r.method] || r.method) +
+                (r.level && r.level !== 'leaf'
+                   ? ' · ' + (L_LABEL[r.level] || r.level) : '');
+      // 고른 후보가 있으면 분모를 그 수로 둔다. '8명 중 5명' 이 문제였지
+      // '5명에게 갔다' 가 문제인 적은 없다.
+      var who = r.picked ? r.members + ' / ' + r.picked : String(r.members);
+      var cls = r.id === curId ? ' class="ba-cmp--cur"' : '';
+      return '<tr' + cls + ' data-cmp-id="' + r.id + '">' +
+        '<th scope="row">' + r.version + '차' +
+          (r.status === 'confirmed' ? ' <span class="ba-dim">✓</span>' : '') + '</th>' +
+        '<td>' + esc(how) + '</td>' +
+        '<td class="ba-num">' +
+          (r.avg_fit === null ? '—' : Number(r.avg_fit).toFixed(1)) + '</td>' +
+        '<td class="ba-num' + (r.picked && r.members < r.picked ? ' ba-cmp--warn' : '') +
+          '">' + who + '</td>' +
+        cmpShare(r.top_share) +
+        '<td class="ba-num' + (r.over ? ' ba-cmp--bad' : '') + '">' +
+          (r.over ? r.over + '명' : '—') + '</td>' +
+        '<td class="ba-num' + (r.orphans ? ' ba-cmp--warn' : '') + '">' +
+          (r.orphans ? r.orphans + '건' : '—') + '</td>' +
+      '</tr>';
+    }
+
+    function openCompare() {
+      var tb = $('#ba-cmp-table').querySelector('tbody');
+      tb.innerHTML = '<tr><td colspan="7" class="ba-loading">불러오는 중…</td></tr>';
+      openDrawer('ba-al-cmp');
+      api('api/allocate.php?' + qs({ act: 'compare', project_id: PID }))
+        .then(function (d) {
+          var rows = d.rows || [];
+          if (!rows.length) {
+            tb.innerHTML = '<tr><td colspan="7" class="ba-empty">' +
+              '아직 산출한 배정안이 없습니다.</td></tr>';
+            return;
+          }
+          var cur = CUR ? CUR.id : 0;
+          tb.innerHTML = rows.map(function (r) { return cmpRow(r, cur); }).join('');
+        })
+        .catch(function (e) {
+          tb.innerHTML = '<tr><td colspan="7" class="ba-empty">' +
+            esc(e.message) + '</td></tr>';
+        });
+    }
+
     function currentMethod() {
       var el = $('input[name="ba-al-method"]:checked');
       return el ? el.value : 'weighted';
@@ -3666,6 +3726,19 @@
 
       $('#ba-al-ver').addEventListener('change', function (e) {
         openVersion(parseInt(e.target.value, 10));
+      });
+
+      $('#ba-al-compare').addEventListener('click', openCompare);
+
+      // 표에서 바로 그 차수를 연다. 보고 고르는 화면이니 고르면 열려야 한다.
+      $('#ba-cmp-table').addEventListener('click', function (e) {
+        var tr = e.target.closest('[data-cmp-id]');
+        if (!tr) return;
+        closeDrawer('ba-al-cmp');
+        var id = parseInt(tr.dataset.cmpId, 10);
+        var sel = $('#ba-al-ver');
+        if (sel) sel.value = String(id);
+        openVersion(id);
       });
 
       $('#ba-al-weights').addEventListener('click', function () {

@@ -32,6 +32,30 @@ final class AllocationRepo
     }
 
     /** 프로젝트의 모든 배정안 버전. 최신 버전이 앞. */
+    /**
+     * 배정 항목 하나가 차지하는 공수(SQL 조각).
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 두 벌로 두면 반드시 갈린다                                     │
+     * │                                                              │
+     * │ 말단이면 자기 값, 묶어 배정한 상위면 **확정된 말단 하위의 합** │
+     * │ 이다. 이 규칙을 부하 막대와 비교 화면이 각자 적으면, 한쪽만    │
+     * │ 고쳐져 같은 배정안의 공수가 화면마다 달라진다. 실제로 묶어     │
+     * │ 배정한 줄의 공수가 0 으로 잡히던 것을 고친 자리다.             │
+     * │                                                              │
+     * │ `i`(항목) `t`(태스크) `c.n`(자식 수) 별칭을 쓰는 질의에만 넣는다.│
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    private const MD_EXPR = 'COALESCE(
+        CASE WHEN c.n = 0 THEN t.est_md
+             ELSE (SELECT SUM(l.est_md) FROM bs_task l
+                    WHERE l.confirmed = 1
+                      AND NOT EXISTS (SELECT 1 FROM bs_task g WHERE g.parent_id = l.id)
+                      AND (l.parent_id = t.id
+                           OR l.parent_id IN (SELECT m.id FROM bs_task m
+                                               WHERE m.parent_id = t.id)))
+        END, 0) * i.alloc_ratio';
+
     public function versions(int $projectId): array
     {
         // uk_bs_alloc_ver (project_id, version) 를 탄다.
@@ -46,6 +70,68 @@ final class AllocationRepo
         );
         $st->execute([$projectId]);
         return array_map([$this, 'present'], $st->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    /**
+     * 차수별 비교 자료.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ "좋아졌는지" 를 눈으로 가늠하지 않게 한다                      │
+     * │                                                              │
+     * │ 가중치를 바꿔 가며 몇 차례 돌려도, 어느 쪽이 나은지 알려면    │
+     * │ 표를 하나씩 열어 세어 봐야 했다. 무작위 배정을 대조군으로     │
+     * │ 만들어 둔 뜻도 비교할 자리가 없으면 살지 않는다.              │
+     * │                                                              │
+     * │ 사람마다의 공수는 한 질의로 긁고, 나머지 집계는 PHP 에서      │
+     * │ 한다 — 차수가 수십 개가 아니라 비용이 문제되지 않는다.        │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * @return array<int, array{items:int, members:int, avg_fit:?float,
+     *                          md:float, top_md:float, by_member:array}>
+     */
+    public function versionStats(int $projectId): array
+    {
+        $st = $this->pdo->prepare(
+            'SELECT i.allocation_id AS aid, i.member_id,
+                    SUM(' . self::MD_EXPR . ') AS md,
+                    COUNT(*) AS items,
+                    AVG(i.fit_score) AS avg_fit
+               FROM bs_allocation a
+               JOIN bs_allocation_item i ON i.allocation_id = a.id AND i.role = "owner"
+               JOIN bs_task t ON t.id = i.task_id
+               JOIN (SELECT p.id, (SELECT COUNT(*) FROM bs_task c2 WHERE c2.parent_id = p.id) AS n
+                       FROM bs_task p) c ON c.id = t.id
+              WHERE a.project_id = ?
+              GROUP BY i.allocation_id, i.member_id'
+        );
+        $st->execute([$projectId]);
+
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $aid = (int)$r['aid'];
+            $out[$aid] ??= ['items' => 0, 'members' => 0, 'avg_fit' => null,
+                            'md' => 0.0, 'top_md' => 0.0, 'by_member' => [],
+                            '_fitSum' => 0.0, '_fitN' => 0];
+            $md = (float)$r['md'];
+            $out[$aid]['items']  += (int)$r['items'];
+            $out[$aid]['members']++;
+            $out[$aid]['md']     += $md;
+            $out[$aid]['top_md']  = max($out[$aid]['top_md'], $md);
+            $out[$aid]['by_member'][(int)$r['member_id']] = round($md, 2);
+            if ($r['avg_fit'] !== null) {
+                // 사람별 평균을 건수로 되돌려 가중 평균을 낸다. 사람 수로
+                // 나누면 1건 받은 사람과 20건 받은 사람이 같은 무게가 된다.
+                $out[$aid]['_fitSum'] += (float)$r['avg_fit'] * (int)$r['items'];
+                $out[$aid]['_fitN']   += (int)$r['items'];
+            }
+        }
+        foreach ($out as $aid => $v) {
+            $out[$aid]['avg_fit'] = $v['_fitN'] > 0 ? round($v['_fitSum'] / $v['_fitN'], 1) : null;
+            $out[$aid]['md']      = round($v['md'], 2);
+            $out[$aid]['top_md']  = round($v['top_md'], 2);
+            unset($out[$aid]['_fitSum'], $out[$aid]['_fitN']);
+        }
+        return $out;
     }
 
     /** 가장 최근 버전(상태 무관). 다음 version 번호를 정할 때 쓴다. */
@@ -513,15 +599,7 @@ final class AllocationRepo
         // └──────────────────────────────────────────────────────────────┘
         $st = $this->pdo->prepare(
             'SELECT i.member_id,
-                    SUM(COALESCE(
-                      CASE WHEN c.n = 0 THEN t.est_md
-                           ELSE (SELECT SUM(l.est_md) FROM bs_task l
-                                  WHERE l.confirmed = 1
-                                    AND NOT EXISTS (SELECT 1 FROM bs_task g WHERE g.parent_id = l.id)
-                                    AND (l.parent_id = t.id
-                                         OR l.parent_id IN (SELECT m.id FROM bs_task m
-                                                             WHERE m.parent_id = t.id)))
-                      END, 0) * i.alloc_ratio) AS md,
+                    SUM(' . self::MD_EXPR . ') AS md,
                     COUNT(*) AS items,
                     SUM(i.role = "owner") AS owner_n
                FROM bs_allocation_item i

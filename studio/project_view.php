@@ -440,6 +440,8 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                 title="가중치·방식·단위를 모두 기본값으로 산출합니다. 이전 안에서 손댄 항목도 가져오지 않습니다">배정안 산출 (기본값)</button>
         <button type="button" class="ba-btn" id="ba-al-weights"
                 title="가중치와 배정 방식·단위를 펼칩니다. 이 단추로는 산출되지 않습니다">가중치·방식 조정</button>
+        <button type="button" class="ba-btn" id="ba-al-compare"
+                title="차수별 적합도·쏠림·초과를 한 표에서 견줍니다">차수 비교</button>
         <span class="ba-spacer"></span>
         <button type="button" class="ba-btn ba-btn--primary" id="ba-al-confirm">최종 배정 완료</button>
       </div>
@@ -557,6 +559,47 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
     </div>
     <div class="ba-drawer__body" id="ba-ar-body"></div>
+    <div class="ba-drawer__foot">
+      <span class="ba-spacer"></span>
+      <button type="button" class="ba-btn" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 차수 비교 드로어. "좋아졌는지" 를 눈으로 가늠하지 않게 한다 -->
+<div class="ba-drawer" id="ba-al-cmp" hidden>
+  <div class="ba-drawer__box" role="dialog" aria-modal="true" aria-labelledby="ba-cmp-title">
+    <div class="ba-drawer__head">
+      <h2 id="ba-cmp-title">배정안 차수 비교</h2>
+      <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
+    </div>
+    <div class="ba-drawer__body">
+      <p class="ba-panel__hint ba-wpanel__note">
+        같은 WBS 를 여러 방식으로 돌려 보고 숫자로 고르십시오.
+        <b>무작위</b> 차수를 하나 만들어 두면 대조군이 됩니다 —
+        가중치 배정이 그보다 나은지가 이 표에서 드러납니다.
+      </p>
+      <div class="ba-table-wrap">
+        <table class="ba-table" id="ba-cmp-table">
+          <thead>
+            <tr>
+              <th style="width:52px">차수</th>
+              <th>방식 · 단위</th>
+              <th style="width:70px" title="배정된 항목의 적합도 평균(건수로 가중)">평균 적합도</th>
+              <th style="width:78px" title="일을 받은 사람 / 고른 후보">받은 사람</th>
+              <th style="width:70px" title="한 사람에게 몰린 비율">최다 쏠림</th>
+              <th style="width:64px" title="가용 공수를 넘긴 사람">초과</th>
+              <th style="width:64px" title="담당자가 없는 태스크">임자 없음</th>
+            </tr>
+          </thead>
+          <tbody><tr><td colspan="7" class="ba-loading">불러오는 중…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="ba-panel__hint ba-wpanel__note">
+        적합도가 높다고 늘 좋은 안은 아닙니다. <b>쏠림이 크면 한 사람이 못 끝냅니다</b> —
+        세 숫자를 같이 보십시오.
+      </p>
+    </div>
     <div class="ba-drawer__foot">
       <span class="ba-spacer"></span>
       <button type="button" class="ba-btn" data-close>닫기</button>

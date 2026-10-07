@@ -1668,3 +1668,13 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-lk--fail    { background: #fdf0ee; color: #a3402f; border-color: #f3d2cb; }
 .ba-lk--pending { background: #fff4e5; color: #a5641a; border-color: #f6ddbc; }
 .ba-lk--skip    { background: var(--ba-surface); color: var(--ba-ink-soft); }
+
+/* ── 차수 비교 ──────────────────────────────────────────────────────
+   숫자만 늘어놓으면 어느 것이 나쁜지 세어 봐야 한다. 나쁜 쪽에만
+   색을 준다 — 좋은 쪽까지 칠하면 색이 색을 못 가린다. */
+#ba-cmp-table th[scope="row"] { text-align: left; white-space: nowrap; }
+#ba-cmp-table tbody tr { cursor: pointer; }
+#ba-cmp-table tbody tr:hover { background: var(--ba-surface); }
+.ba-cmp--cur > * { background: var(--ba-surface); font-weight: 600; }
+.ba-cmp--warn { color: var(--ba-warn); }
+.ba-cmp--bad  { color: var(--ba-danger); font-weight: 600; }
