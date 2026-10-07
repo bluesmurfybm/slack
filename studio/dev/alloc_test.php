@@ -213,6 +213,93 @@ ok('가중치를 바꾸면 결과가 달라진다', sig($rw) !== $s1);
 ok('그 결과도 결정론적', sig($engine->propose($pid, ['weights' => $w])) === sig($rw));
 
 // =====================================================================
+echo "\n[4-R] 무작위 배정 — 대조군이자, 재현 가능해야 한다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 재현이 이 기능의 전부다                                           │
+// │                                                                  │
+// │ 역량 점수가 배정에 쓸 만큼 정확한지 아직 검증 전이라(11.3-1),     │
+// │ 무작위를 대조군으로 쓴다. 그런데 **같은 결과를 다시 못 만들면**   │
+// │ "왜 이 사람이죠?" 에 답할 수 없고, 비교 자료로도 못 쓴다.         │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$rr1 = $engine->propose($pid, ['method' => 'random_even', 'seed' => 777]);
+$rr2 = $engine->propose($pid, ['method' => 'random_even', 'seed' => 777]);
+ok('★ 같은 씨앗이면 같은 결과', sig($rr1) === sig($rr2), sig($rr1) . ' / ' . sig($rr2));
+ok('씨앗을 돌려준다', (int)$rr1['meta']['seed'] === 777, json_encode($rr1['meta']['seed']));
+ok('방식을 돌려준다', $rr1['meta']['method'] === 'random_even');
+
+// 씨앗 둘을 콕 집어 "달라야 한다" 고 하면 안 된다. 인원이 N 명이면
+// '고르게' 의 결과는 순열 N! 가지뿐이라 **우연히 같을 수 있다**(3명이면
+// 6가지). 실제로 777 과 778 이 같은 결과를 냈다. 씨앗을 여럿 돌려
+// **두 가지 이상이 나오는가**를 본다 — 그게 진짜 성질이다.
+$seen = [];
+for ($s = 1; $s <= 12; $s++) {
+    $seen[sig($engine->propose($pid, ['method' => 'random_even', 'seed' => $s]))] = true;
+}
+ok('씨앗이 다르면 결과가 갈린다', count($seen) >= 2, count($seen) . '가지');
+
+$auto = $engine->propose($pid, ['method' => 'random_even']);
+ok('★ 씨앗을 안 줘도 반드시 남긴다', (int)$auto['meta']['seed'] > 0,
+   json_encode($auto['meta']['seed']));
+ok('그 씨앗으로 재현된다',
+   sig($engine->propose($pid, ['method' => 'random_even', 'seed' => $auto['meta']['seed']]))
+   === sig($auto));
+
+// ---- 고르게 vs 완전 무작위 ----
+$cnt = function (array $res): array {
+    $c = [];
+    foreach ($res['items'] as $it) { $c[$it['member_id']] = ($c[$it['member_id']] ?? 0) + 1; }
+    return $c;
+};
+$nTask   = count($rr1['items']);
+$nMember = (int)$rr1['meta']['member_count'];
+$even    = $cnt($rr1);
+ok('★ 고르게는 건수를 고르게 나눈다',
+   max($even) - min($even) <= 1 && count($even) === $nMember,
+   json_encode($even) . " (태스크 $nTask · 인원 $nMember)");
+
+// ---- 반드시 지켜야 할 선 ----
+$ok = true;
+foreach ($rr1['items'] as $it) {
+    if (!isset($name[$it['member_id']])) { $ok = false; }   // 후보 밖
+}
+ok('★ 배정 후보 안에서만 뽑는다', $ok);
+ok('적합도는 그대로 계산한다 — 초과 경고가 사라지면 안 된다',
+   $rr1['items'][0]['fit_score'] !== null, json_encode($rr1['items'][0]['fit_score']));
+ok('근거도 그대로 남는다', !empty($rr1['items'][0]['reason_json']));
+
+// 고정 항목은 무작위에서도 사람이 정한 대로
+$firstTask = (int)$rr1['items'][0]['task_id'];
+$pinTo     = $MEM['다개발'];
+$rp = $engine->propose($pid, ['method' => 'random_pure', 'seed' => 5,
+                              'pinned' => [$firstTask => $pinTo]]);
+$got = null;
+foreach ($rp['items'] as $it) { if ((int)$it['task_id'] === $firstTask) { $got = (int)$it['member_id']; } }
+ok('★ 고정한 항목은 무작위도 건드리지 않는다', $got === $pinTo, "$got / $pinTo");
+
+// ★ 배정 제외인 사람에게 고정을 걸어도 받아 주면 안 된다. 고정은 사람의
+//   뜻이지만, '이 사람은 배정 대상이 아니다' 는 그보다 앞선 규칙이다.
+//   (처음 이 시험을 쓸 때 실수로 마제외에게 고정을 걸었고, 엔진이 제대로
+//    걸러 내는 바람에 시험이 깨졌다. 그 동작을 아예 못 박아 둔다.)
+$rx2 = $engine->propose($pid, ['method' => 'random_pure', 'seed' => 5,
+                               'pinned' => [$firstTask => $MEM['마제외']]]);
+$got2 = null;
+foreach ($rx2['items'] as $it) { if ((int)$it['task_id'] === $firstTask) { $got2 = (int)$it['member_id']; } }
+ok('★ 배정 제외인 사람에게는 고정해도 안 간다', $got2 !== $MEM['마제외'] && $got2 !== null,
+   (string)$got2);
+
+// 모르는 방식은 가중치로. 오타 하나로 배정 방식이 바뀌면 안 된다.
+$rt = $engine->propose($pid, ['method' => '랜덤']);
+ok('★ 모르는 방식은 가중치로 돌린다', $rt['meta']['method'] === 'weighted'
+   && $rt['meta']['seed'] === null, json_encode($rt['meta']['method']));
+
+// 어려운 것이 상위자를 비켜 갔으면 센다 — 무작위의 대가를 말해 줘야 한다
+ok('★ ★4 이상이 상위자를 비켜 간 건수를 센다',
+   is_int($rr1['meta']['hard_off_top']), json_encode($rr1['meta']['hard_off_top'] ?? null));
+ok('가중치 배정은 그 수를 0 으로 둔다', $r['meta']['hard_off_top'] === 0);
+
+// =====================================================================
 echo "\n[5] 가중치 다루기\n";
 throws('전부 0 이면 거절', fn() => $engine->propose($pid, ['weights' => [
     'domain' => 0, 'cap' => 0, 'avail' => 0, 'career' => 0, 'growth' => 0]]),

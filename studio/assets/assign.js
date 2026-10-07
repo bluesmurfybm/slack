@@ -2928,10 +2928,18 @@
       var el = $('#ba-al-badge');
       if (!CUR) { el.textContent = ''; return; }
       var s = CUR.version + '차 · ' + CUR.status_label;
+      // ★ 무작위로 뽑은 안을 가중치 안으로 오해하면 안 된다. 적합도 숫자가
+      //   나란히 보이므로 **방식이 안 보이면 그 숫자가 근거처럼 읽힌다.**
+      var p = CUR.params || {};
+      if (p.method && p.method !== 'weighted') {
+        s += ' · ' + (M_LABEL[p.method] || p.method);
+        if (p.seed) s += '(씨앗 ' + p.seed + ')';
+      }
       if (CUR.eval_ver) s += ' · 처리량 판정 ' + CUR.eval_ver + '회차';
       if (CUR.engine_ver) s += ' · 엔진 ' + CUR.engine_ver;
       el.textContent = s;
-      el.className = 'ba-dim ba-al__badge ba-al__badge--' + CUR.status;
+      el.className = 'ba-dim ba-al__badge ba-al__badge--' + CUR.status
+                   + (p.method && p.method !== 'weighted' ? ' ba-al__badge--rand' : '');
     }
 
     /**
@@ -3098,6 +3106,42 @@
       syncWeightNote();
     }
 
+    var M_LABEL = {
+      weighted: '가중치', random_even: '무작위 — 고르게', random_pure: '무작위 — 완전 무작위'
+    };
+    var M_HINT = {
+      random_even: '건수를 비슷하게 나눕니다. 사람 순서는 매번 섞입니다.',
+      random_pure: '태스크마다 따로 뽑습니다. 한 사람에게 몰릴 수 있습니다.'
+    };
+
+    function currentMethod() {
+      var el = $('input[name="ba-al-method"]:checked');
+      return el ? el.value : 'weighted';
+    }
+
+    /**
+     * 무작위를 고르면 가중치가 의미를 잃는다. 그 사실을 **눈에 보이게**
+     * 한다 — 안 그러면 슬라이더를 움직이고도 왜 결과가 안 바뀌는지 모른다.
+     */
+    function syncMethod() {
+      var m    = currentMethod();
+      var rand = m !== 'weighted';
+      var box  = $('#ba-al-mhint');
+      var sl   = $('#ba-al-wsliders');
+
+      if (sl) sl.classList.toggle('is-off', rand);
+      var sb = $('#ba-al-seedbox');
+      if (sb) sb.hidden = !rand;
+      if (box) {
+        box.hidden = !rand;
+        box.innerHTML = rand
+          ? esc(M_HINT[m]) + ' <b>가중치는 쓰지 않습니다.</b> ' +
+            '어려운 태스크(★4 이상)를 상위자에게 주는 규칙도 건너뜁니다. ' +
+            '씨앗을 적어 두면 같은 결과를 다시 만들 수 있습니다.'
+          : '';
+      }
+    }
+
     function currentWeights() {
       var w = {};
       $$('#ba-al-wsliders input[data-w]').forEach(function (el) {
@@ -3127,9 +3171,32 @@
       if (weights) body.weights = weights;
       if (keepManual && CUR) body.keep_manual_from = CUR.id;
 
+      // 무작위면 가중치를 보내도 쓰이지 않는다. 그래도 그대로 보낸다 —
+      // 그때 어떤 가중치를 띄워 두고 있었는지가 params_json 에 남아,
+      // 나중에 "가중치로 돌렸으면 어땠을까" 를 같은 조건으로 비교할 수 있다.
+      var m = currentMethod();
+      if (m !== 'weighted') {
+        body.method = m;
+        var sd = ($('#ba-al-seed') || {}).value || '';
+        if (sd.trim() !== '') body.seed = sd.trim();
+      }
+
       api('api/allocate.php?act=propose', { method: 'POST', body: body })
         .then(function (d) {
           WEIGHTS = (d.meta && d.meta.weights) || WEIGHTS;
+          // 씨앗을 칸에 되돌려 놓는다. 비우고 돌렸을 때 **방금 뽑힌 값**을
+          // 알아야 같은 결과를 다시 만들 수 있다.
+          if (d.meta && d.meta.seed && $('#ba-al-seed')) {
+            $('#ba-al-seed').value = d.meta.seed;
+          }
+          // 어려운 태스크가 상위자를 비켜 갔으면 알린다. 무작위의 대가이고,
+          // 받아들일지는 사람이 정한다 — 모르고 넘기는 일만 없으면 된다.
+          var off = (d.meta && d.meta.hard_off_top) || 0;
+          if (off > 0) {
+            showError('#ba-al-error',
+              '★4 이상 ' + off + '건이 그 분야 상위자가 아닌 사람에게 갔습니다. ' +
+              '무작위라 "어려운 것은 상위자에게" 규칙을 건너뛰었습니다.');
+          }
           return api('api/allocate.php?' + qs({ act: 'versions', project_id: PID }))
             .then(function (v) {
               renderVersions(v.rows || [], v.confirmed_version);
@@ -3248,11 +3315,19 @@
       });
       $('#ba-al-wapply').addEventListener('click', function () {
         var w = currentWeights();
-        var sum = 0;
-        Object.keys(w).forEach(function (k) { sum += w[k]; });
-        if (sum <= 0) { showError('#ba-al-error', '가중치가 전부 0 입니다.'); return; }
+        // 무작위는 가중치를 안 쓰므로 합이 0 이어도 막을 이유가 없다.
+        if (currentMethod() === 'weighted') {
+          var sum = 0;
+          Object.keys(w).forEach(function (k) { sum += w[k]; });
+          if (sum <= 0) { showError('#ba-al-error', '가중치가 전부 0 입니다.'); return; }
+        }
         propose(w, true);
       });
+
+      $$('input[name="ba-al-method"]').forEach(function (el) {
+        el.addEventListener('change', syncMethod);
+      });
+      syncMethod();
 
       // 담당자 선택지 — 배정 가능한 사람만.
       api('api/allocate.php?' + qs({ act: 'members', project_id: PID }))

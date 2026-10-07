@@ -430,6 +430,23 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 
       <!-- 가중치 패널 — 명세서 §6.1 표 -->
       <div class="ba-wpanel" id="ba-al-wpanel" hidden>
+        <!-- ┌──────────────────────────────────────────────────────────┐
+             │ 방식과 가중치는 한자리에 둔다                              │
+             │                                                          │
+             │ 무작위를 고르면 가중치가 의미를 잃는다. 떨어뜨려 놓으면    │
+             │ 슬라이더를 움직이고도 왜 결과가 안 바뀌는지 모른다.       │
+             └──────────────────────────────────────────────────────────┘ -->
+        <div class="ba-almode">
+          <span class="ba-almode__l">배정 방식</span>
+          <label><input type="radio" name="ba-al-method" value="weighted" checked>
+            가중치</label>
+          <label><input type="radio" name="ba-al-method" value="random_even">
+            무작위 — 고르게</label>
+          <label><input type="radio" name="ba-al-method" value="random_pure">
+            무작위 — 완전 무작위</label>
+        </div>
+        <div class="ba-almode__hint" id="ba-al-mhint" hidden></div>
+
         <div class="ba-sliders" id="ba-al-wsliders"></div>
         <!-- 항목별 설명은 슬라이더마다 한 줄씩 붙는다(assign.js 의 W_HINT).
              여기는 **여러 항목에 걸친 규칙** 하나만 남긴다 — 설명이 두
@@ -441,8 +458,15 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <div class="ba-formbar">
           <span class="ba-dim" id="ba-al-wnote"></span>
           <span class="ba-spacer"></span>
+          <!-- 씨앗을 적으면 같은 무작위 결과를 다시 만든다. 재현되지 않는
+               배정안은 "왜 이 사람이죠?" 에 답할 수 없다. -->
+          <label class="ba-seed" id="ba-al-seedbox" hidden>
+            <span>씨앗</span>
+            <input type="text" id="ba-al-seed" inputmode="numeric" placeholder="비우면 새로"
+                   title="같은 씨앗을 넣으면 같은 배정이 다시 나옵니다">
+          </label>
           <button type="button" class="ba-btn" id="ba-al-wreset">기본값</button>
-          <button type="button" class="ba-btn ba-btn--primary" id="ba-al-wapply">이 가중치로 재산출</button>
+          <button type="button" class="ba-btn ba-btn--primary" id="ba-al-wapply">이 방식으로 재산출</button>
         </div>
       </div>
       <?php endif; ?>

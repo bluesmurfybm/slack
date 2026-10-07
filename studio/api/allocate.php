@@ -150,6 +150,12 @@ bs_route(bs_param_str('act', 'versions'), [
             'weights'     => bs_alloc_assoc('weights'),
             'constraints' => bs_alloc_assoc('constraints'),
             'member_ids'  => array_map('intval', bs_param_array('member_ids')),
+            // 배정 방식. 모르는 값은 엔진이 가중치로 돌린다 — 오타 하나로
+            // 배정 방식이 바뀌면 안 된다.
+            'method'      => bs_param_str('method'),
+            // 씨앗을 주면 같은 무작위 결과를 다시 만든다. 비우면 새로 뽑고,
+            // 뽑은 값은 params_json 에 남아 나중에 재현할 수 있다.
+            'seed'        => bs_param_str('seed'),
         ];
 
         // 이전 안에서 사람이 손댄 항목을 그대로 가져올지.
@@ -179,6 +185,12 @@ bs_route(bs_param_str('act', 'versions'), [
             'eval_ver'    => $r['meta']['eval_ver'],
             'engine_ver'  => $r['meta']['engine_ver'],
             'pinned_from' => $keepId ?: null,
+            // ★ 무작위로 뽑았다면 **씨앗이 있어야 재현된다.** 재현 안 되는
+            //   배정안은 "왜 이 사람이죠?" 에 답할 수 없다.
+            //   method 는 나중에 실적을 되짚을 때도 쓴다 — 무작위로 붙은
+            //   일이 역량 점수의 근거가 됐는지 알아볼 수 있어야 한다.
+            'method'      => $r['meta']['method'],
+            'seed'        => $r['meta']['seed'],
         ], $user);
 
         $allocs->saveItems($allocationId, $r['items']);
@@ -196,6 +208,10 @@ bs_route(bs_param_str('act', 'versions'), [
             'unassigned'    => $r['unassigned'],
             'meta'          => $r['meta'],
             'message'       => '배정안 ' . $a['version'] . '차를 만들었습니다. 검토 후 확정하세요.'
+                . ($r['meta']['method'] !== AllocationEngine::M_WEIGHTED
+                    ? ' ' . AllocationEngine::METHOD_LABEL[$r['meta']['method']]
+                      . ' 로 뽑았습니다(씨앗 ' . $r['meta']['seed'] . ').'
+                    : '')
                 . ($r['unassigned']
                     ? ' 담당자를 못 정한 태스크가 ' . count($r['unassigned']) . '건 있습니다.'
                     : ''),

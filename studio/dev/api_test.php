@@ -1304,6 +1304,46 @@ ok('다시 산출해도 같은 결과', $sigP($r2['json']['data']['items']) === 
 ok('버전은 올라간다', $r2['json']['data']['version'] === 2);
 $aid2 = $r2['json']['data']['allocation_id'];
 
+// ---- 무작위 배정 (HTTP 경로) -----------------------------------------
+// 엔진 시험(alloc_test)이 로직을 보고, 여기서는 **씨앗이 끝까지 남는가**를
+// 본다. params_json 에 안 남으면 재현도 못 하고, 나중에 "이 실적이 무작위
+// 배정에서 나온 것인가" 도 알 수 없다.
+$rnd = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'method' => 'random_even', 'seed' => 4242]]);
+ok('무작위로 산출된다', $rnd['status'] === 200, substr($rnd['body'], 0, 160));
+$rd = $rnd['json']['data'];
+ok('방식과 씨앗을 돌려준다',
+   ($rd['meta']['method'] ?? '') === 'random_even' && (int)($rd['meta']['seed'] ?? 0) === 4242,
+   json_encode($rd['meta']['method'] ?? null) . '/' . json_encode($rd['meta']['seed'] ?? null));
+ok('★ 무작위라고 말해 준다', str_contains((string)($rd['message'] ?? ''), '무작위'),
+   (string)($rd['message'] ?? ''));
+
+// ★ 재현이 이 기능의 전부다. 같은 씨앗으로 다시 부르면 같은 배정이어야 한다.
+$rnd2 = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'method' => 'random_even', 'seed' => 4242]]);
+ok('★ 같은 씨앗이면 같은 배정 (HTTP 로도)',
+   $sigP($rnd2['json']['data']['items']) === $sigP($rd['items']));
+
+// ★ 씨앗이 params_json 에 남아야 나중에 재현·추적이 된다.
+$saved = $pdoX->query("SELECT params_json FROM bs_allocation WHERE id = "
+                    . (int)$rd['allocation_id'])->fetchColumn();
+$sp = json_decode((string)$saved, true);
+ok('★ 방식과 씨앗이 배정안에 저장된다',
+   ($sp['method'] ?? '') === 'random_even' && (int)($sp['seed'] ?? 0) === 4242,
+   (string)$saved);
+
+// 적합도와 근거는 무작위여도 그대로 나와야 한다 — 초과 경고가 사라지면 안 된다.
+ok('★ 무작위여도 적합도를 계산한다',
+   $rd['items'][0]['fit_score'] !== null, json_encode($rd['items'][0]['fit_score'] ?? null));
+ok('무작위여도 근거가 남는다', !empty($rd['items'][0]['reason']['lines']));
+
+// 모르는 방식은 가중치로. 오타 하나로 배정 방식이 바뀌면 안 된다.
+$rbad = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'method' => '아무거나']]);
+ok('★ 모르는 방식은 가중치로 돌린다',
+   ($rbad['json']['data']['meta']['method'] ?? '') === 'weighted',
+   json_encode($rbad['json']['data']['meta']['method'] ?? null));
+
 // --- 확정 전 노출 차단 -------------------------------------------------
 $r = $admin->req('/studio/api/allocate.php?act=current&project_id=' . $pid);
 $d1 = $r['json']['data'];
@@ -1317,8 +1357,13 @@ ok('PM 아니면 초안을 못 연다', $r['status'] === 403, 'status=' . $r['st
 $r = $guest->req('/studio/api/allocate.php?act=versions&project_id=' . $pid);
 ok('목록에서도 초안이 빠진다', count($r['json']['data']['rows']) === 0,
    (string)count($r['json']['data']['rows']));
-ok('몇 개가 감춰졌는지는 알려 준다', ($r['json']['data']['hidden_drafts'] ?? 0) === 2,
-   (string)($r['json']['data']['hidden_drafts'] ?? -1));
+// 몇 차까지 만들었는지는 앞선 시험이 늘어나면 달라진다. 숫자를 박아 두면
+// 배정안을 하나 더 만드는 시험을 추가할 때마다 여기가 깨진다 — 관계로 본다.
+$adminVers = count($admin->req('/studio/api/allocate.php?act=versions&project_id=' . $pid)
+                         ['json']['data']['rows']);
+ok('몇 개가 감춰졌는지는 알려 준다',
+   ($r['json']['data']['hidden_drafts'] ?? 0) === $adminVers && $adminVers > 0,
+   ($r['json']['data']['hidden_drafts'] ?? -1) . ' / 관리자에게는 ' . $adminVers . '건');
 
 $r = $guest->req('/studio/api/allocate.php?act=members&project_id=' . $pid);
 ok('구성원 목록도 PM 전용', $r['status'] === 403);
@@ -2745,6 +2790,11 @@ ok('★ 행 높이를 고정해 줄을 맞춘다',
 
 // 가중치는 "올리면 무엇이 달라지는가" 를 한 줄로 알려 줘야 한다. 숫자만
 // 다섯 개 늘어놓으면 무엇을 올릴지 판단할 근거가 없다.
+ok('★ 배정 방식 고르는 자리가 있다',
+   str_contains($page, 'name="ba-al-method"') && str_contains($page, 'value="random_even"')
+   && str_contains($page, 'value="random_pure"'));
+ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
+
 ok('★ 가중치 다섯 가지에 설명이 다 붙어 있다',
    (bool)preg_match('/W_HINT\s*=\s*\{(.+?)\};/s', $js, $m)
    && count(array_filter(['domain', 'cap', 'avail', 'career', 'growth'],

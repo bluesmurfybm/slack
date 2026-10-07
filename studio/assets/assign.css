@@ -847,6 +847,28 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   color: var(--ba-ink-soft); margin-top: 3px;
 }
 
+/* ---- 배정 방식 (가중치 / 무작위) ------------------------------------- */
+.ba-almode { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+.ba-almode__l { font-size: 12.5px; font-weight: 700; color: var(--ba-ink); }
+.ba-almode label { display: flex; align-items: center; gap: 5px; font-size: 12.5px; cursor: pointer; }
+.ba-almode input { accent-color: var(--ba-brand); }
+.ba-almode__hint {
+  font-size: 12px; line-height: 1.7; color: #7a5a12;
+  background: #fff8e6; border: 1px solid #f0dfae; border-radius: 8px;
+  padding: 8px 11px; margin-bottom: 12px;
+}
+/* 무작위를 고르면 가중치가 의미를 잃는다. 흐려서 **쓰이지 않는다는 것을
+   눈으로** 알게 한다 — 안 그러면 슬라이더를 움직이고 왜 안 바뀌는지 모른다. */
+.ba-sliders.is-off { opacity: .4; pointer-events: none; }
+.ba-seed { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ba-ink-soft); }
+.ba-seed input {
+  width: 92px; padding: 5px 8px; font: inherit; font-size: 12.5px;
+  border: 1px solid var(--ba-line); border-radius: 7px; background: var(--ba-paper);
+}
+/* 무작위로 뽑은 안은 한눈에 달라 보여야 한다. 적합도 숫자가 나란히
+   보이므로, 방식이 안 보이면 그 숫자가 근거처럼 읽힌다. */
+.ba-al__badge--rand { color: #7a5a12; }
+
 /* ---- 인원별 부하 막대 --------------------------------------------------
    가용 공수 위치를 세로선으로 찍는다. 막대 길이만 보면 "많이 맡았다" 는
    알아도 "넘쳤다" 는 모른다.

@@ -338,11 +338,34 @@ final class AllocationEngine
                 . '구성원의 배정 가능 여부를 확인하세요.');
         }
 
-        // --- 1) 그리디 초기해 -------------------------------------------
-        $assign = $this->greedy($ctx);
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 뽑는 자리만 갈아끼운다                                        │
+        // │                                                              │
+        // │ 무작위든 가중치든 **그 뒤는 똑같이 흐른다** — 적합도를 매기고 │
+        // │ 근거를 적고 초과를 경고한다. 무작위라고 그걸 건너뛰면 "이     │
+        // │ 사람 과부하" 를 알려 줄 길이 사라진다.                        │
+        // │                                                              │
+        // │ 적합도는 **계산만 하고 고르는 데는 안 쓴다.** 그 숫자가       │
+        // │ 그대로 대조 자료가 된다 — 가중치 배정이 무작위보다 나은지를   │
+        // │ 숫자로 볼 수 있어야 한다(명세서 11.3-1).                      │
+        // └──────────────────────────────────────────────────────────────┘
+        $method = self::methodOf($params['method'] ?? '');
 
-        // --- 2) 지역 탐색(swap) 개선 --------------------------------------
-        [$assign, $passes] = $this->localSearch($assign, $ctx);
+        if ($method === self::M_WEIGHTED) {
+            // --- 1) 그리디 초기해 -------------------------------------------
+            $assign = $this->greedy($ctx);
+            // --- 2) 지역 탐색(swap) 개선 --------------------------------------
+            [$assign, $passes] = $this->localSearch($assign, $ctx);
+            $seed   = null;
+        } else {
+            // 씨앗을 안 주면 새로 뽑는다. **어느 쪽이든 반드시 남긴다** —
+            // 재현 안 되는 배정안은 "왜 이 사람이죠?" 에 답할 수 없다.
+            $seed   = isset($params['seed']) && $params['seed'] !== ''
+                    ? max(0, (int)$params['seed'])
+                    : random_int(1, 999999);
+            $assign = $this->randomAssign($ctx, $method, $seed);
+            $passes = 0;
+        }
 
         // --- 3) 결과 만들기 ------------------------------------------------
         $items      = [];
@@ -386,10 +409,137 @@ final class AllocationEngine
                 'passes'       => $passes,
                 'period'       => ['from' => $ctx['from'], 'to' => $ctx['to']],
                 'workdays'     => $ctx['workdays'],
-                // 난수를 쓰지 않으므로 씨앗이 없다. 같은 입력이면 같은 결과다.
+                'method'       => $method,
+                // 씨앗이 있으면 같은 결과를 다시 만들 수 있다. 가중치 배정은
+                // 난수를 안 쓰므로 씨앗 없이도 늘 같은 결과다.
+                'seed'          => $seed,
                 'deterministic' => true,
+                // ★4~5 를 그 분야 상위자에게 주는 규칙(§6.2)은 무작위에서
+                //   건너뛴다. 의도한 동작이지만 **말해 줘야 한다.**
+                'hard_off_top'  => $method === self::M_WEIGHTED
+                                 ? 0 : $this->hardOffTop($assign, $ctx),
             ],
         ];
+    }
+
+    // =================================================================
+    // 무작위 배정
+    //
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 왜 두는가 — 대조군이 필요하다                                 │
+    // │                                                              │
+    // │ 역량 점수가 배정에 쓸 만큼 정확한지 아직 사람이 검증하지       │
+    // │ 않았다(명세서 11.3-1). 무작위 배정이 있으면 **가중치가 제값을 │
+    // │ 하는지 숫자로 볼 수 있다** — 평균 적합도와 초과 인원을 나란히 │
+    // │ 놓으면 된다. 비슷하게 나오면 가중치가 일을 안 하는 것이다.    │
+    // │                                                              │
+    // │ 실무적으로도 단순 작업 구간에서는 고르게 나누는 쪽이 맞을 때가│
+    // │ 있다.                                                         │
+    // │                                                              │
+    // │ ⚠ 무작위로 붙인 배정도 확정·완료되면 **실적이 된다.** 역량    │
+    // │   점수와 공수 환산표의 근거로 들어간다. 꼭 틀린 것은 아니지만  │
+    // │   (실제로 해냈으니) 의도한 배정이 아니었다는 사실은 남아야     │
+    // │   하므로, method 를 params_json 에 적어 둔다.                 │
+    // └──────────────────────────────────────────────────────────────┘
+    // =================================================================
+
+    public const M_WEIGHTED = 'weighted';
+    /** 건수를 고르게. 사람 순서를 섞고 차례대로 돌린다 */
+    public const M_RANDOM_EVEN = 'random_even';
+    /** 태스크마다 따로 뽑는다. 한 사람에게 몰릴 수 있다 */
+    public const M_RANDOM_PURE = 'random_pure';
+
+    public const METHOD_LABEL = [
+        self::M_WEIGHTED    => '가중치',
+        self::M_RANDOM_EVEN => '무작위 — 고르게',
+        self::M_RANDOM_PURE => '무작위 — 완전 무작위',
+    ];
+
+    /** 모르는 값은 가중치로 본다. 오타 하나로 배정 방식이 바뀌면 안 된다. */
+    public static function methodOf(string $v): string
+    {
+        return isset(self::METHOD_LABEL[$v]) ? $v : self::M_WEIGHTED;
+    }
+
+    /**
+     * 적합도를 보지 않고 뽑는다.
+     *
+     * 지키는 것은 둘뿐이다.
+     *   · **배정 후보 안에서만** 뽑는다. ctx['members'] 가 이미 걸러져 있다
+     *   · **고정 항목은 건드리지 않는다**. 사람이 정한 것이 우선이다
+     *
+     * @return array<int,int> task_id => member_id
+     */
+    private function randomAssign(array $ctx, string $mode, int $seed): array
+    {
+        $assign = [];
+        foreach ($ctx['pinned'] as $taskId => $memberId) {
+            if (isset($ctx['members'][$memberId])) {
+                $assign[$taskId] = $memberId;
+            }
+        }
+
+        // mt_srand 로 씨앗을 고정한다. random_int 는 씨앗을 못 받아
+        // 재현이 안 된다 — 여기서는 암호학적 무작위가 필요 없고,
+        // **같은 씨앗이면 같은 결과**인 쪽이 훨씬 중요하다.
+        mt_srand($seed);
+
+        // 사람 순서를 섞는다. 이것이 "누가 먼저냐" 를 무작위로 만든다.
+        // 안 섞으면 늘 같은 사람이 1번을 받아 고르게가 아니라 '늘 그 순서'다.
+        $pool = $ctx['member_order'];
+        self::shuffleWithSeed($pool);
+
+        $i = 0;
+        foreach ($ctx['order'] as $taskId) {
+            if (isset($assign[$taskId])) {
+                continue;               // 고정 항목
+            }
+            $assign[$taskId] = $mode === self::M_RANDOM_PURE
+                ? $pool[mt_rand(0, count($pool) - 1)]
+                : $pool[$i++ % count($pool)];
+        }
+
+        mt_srand();                      // 씨앗을 풀어 둔다. 전역 상태다
+        return $assign;
+    }
+
+    /**
+     * mt_rand 만 써서 섞는다(피셔-예이츠).
+     *
+     * shuffle() 은 씨앗을 안 따르는 별도 난수를 쓰는 환경이 있어 재현이
+     * 깨진다. 재현이 이 기능의 전부라 직접 섞는다.
+     *
+     * @param list<int> $a
+     */
+    private static function shuffleWithSeed(array &$a): void
+    {
+        for ($i = count($a) - 1; $i > 0; $i--) {
+            $j = mt_rand(0, $i);
+            [$a[$i], $a[$j]] = [$a[$j], $a[$i]];
+        }
+    }
+
+    /**
+     * 어려운 태스크(★4~5)가 그 분야 상위자가 아닌 사람에게 간 건수.
+     *
+     * 무작위는 §6.2 의 "어려운 것은 상위자에게" 규칙을 건너뛴다. 의도한
+     * 동작이지만 **몇 건이 그렇게 됐는지는 말해 줘야** 사람이 판단한다.
+     */
+    private function hardOffTop(array $assign, array $ctx): int
+    {
+        $hard = (int)($ctx['constraints']['hard_difficulty'] ?? 4);
+        $n    = 0;
+        foreach ($assign as $taskId => $memberId) {
+            $t = $ctx['tasks'][$taskId] ?? null;
+            $m = $ctx['members'][$memberId] ?? null;
+            if ($t === null || $m === null || (int)($t['difficulty'] ?? 0) < $hard) {
+                continue;
+            }
+            if (!$this->isTopInDomain($t, $m, $ctx)) {
+                $n++;
+            }
+        }
+        return $n;
     }
 
     /**
