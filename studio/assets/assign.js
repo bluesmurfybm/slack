@@ -2029,9 +2029,73 @@
     }
 
     // ---- 그리기 ----------------------------------------------------------
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 접기 — 표가 길면 아래 칸으로 가는 길을 막는다                  │
+    // │                                                              │
+    // │ WBS 가 105줄이 되니 바로 밑의 [배정안] 까지 내려가는 데만      │
+    // │ 한참 걸렸다. 표를 통째로 숨기면 구조가 안 보이므로, **대·중   │
+    // │ 분류는 남기고 그 아래만** 접는다.                             │
+    // │                                                              │
+    // │ flat() 은 그대로 둔다. 저장·이동·검증이 전부 그 결과를 쓰므로 │
+    // │ 거기서 줄을 빼면 **접어 둔 태스크가 저장에서 사라진다.**       │
+    // │ 숨기는 일은 그리는 자리에서만 한다.                           │
+    // └──────────────────────────────────────────────────────────────┘
+    var COLLAPSED = {};              // node.key -> true
+
+    /** 접힌 조상 아래에 있는 줄을 덜어 낸다. 줄 순서가 문서 순서라 한 번에 훑는다. */
+    function visibleRows(rows) {
+      var out = [], hideBelow = 0;   // 0 이면 숨기는 중이 아니다
+      rows.forEach(function (r) {
+        if (hideBelow && r.depth > hideBelow) { return; }
+        hideBelow = 0;
+        out.push(r);
+        if (r.node.children.length && COLLAPSED[r.node.key]) { hideBelow = r.depth; }
+      });
+      return out;
+    }
+
+    /**
+     * 접은 상태를 브라우저에 남긴다. **태스크 id 로 적는다** — node.key 는
+     * 새로 읽을 때마다 다시 매겨져 다음 번에 못 알아본다.
+     *
+     * 못 읽거나 못 써도 그냥 넘어간다. 사생활 보호 모드나 저장소를 막아 둔
+     * 브라우저에서 표가 안 그려지면 안 된다.
+     */
+    function foldStore(write) {
+      var k = 'bs.wbs.fold.' + PID;
+      try {
+        if (write) {
+          var ids = [];
+          flat(MODEL, 1, null, []).forEach(function (r) {
+            if (r.node.id && COLLAPSED[r.node.key]) { ids.push(r.node.id); }
+          });
+          localStorage.setItem(k, JSON.stringify(ids));
+          return;
+        }
+        var saved = JSON.parse(localStorage.getItem(k) || '[]');
+        if (!saved.length) return;
+        var want = {};
+        saved.forEach(function (id) { want[id] = true; });
+        flat(MODEL, 1, null, []).forEach(function (r) {
+          if (r.node.id && want[r.node.id]) { COLLAPSED[r.node.key] = true; }
+        });
+      } catch (err) { /* 저장소를 못 써도 표는 그려져야 한다 */ }
+    }
+
+    function foldAll(on) {
+      COLLAPSED = {};
+      if (on) {
+        flat(MODEL, 1, null, []).forEach(function (r) {
+          if (r.node.children.length) { COLLAPSED[r.node.key] = true; }
+        });
+      }
+      foldStore(true);
+      render();
+    }
+
     function render() {
       numbering(MODEL, '');
-      var rows = flat(MODEL, 1, null, []);
+      var rows = visibleRows(flat(MODEL, 1, null, []));
 
       if (!rows.length) {
         tbody.innerHTML = '<tr><td colspan="8" class="ba-empty">' +
@@ -2066,7 +2130,19 @@
       h += '<td class="ba-wr__cb"><input type="checkbox" class="ba-wr__confirm"' +
            (n.confirmed ? ' checked' : '') + cbOff + ' title="' + esc(cbTitle) + '"></td>';
 
-      h += '<td class="ba-wr__no"><span>' + esc(n._no) + '</span>' +
+      // 하위가 있는 줄에만 접기 단추. 말단에 달면 눌러도 아무 일이 없어
+      // "고장났나" 가 된다.
+      var kids = n.children.length;
+      var fold = COLLAPSED[n.key];
+      h += '<td class="ba-wr__no">' +
+           (kids
+             ? '<button type="button" class="ba-fold" data-a="fold" aria-expanded="' +
+               (fold ? 'false' : 'true') + '" title="' +
+               (fold ? '펼치기 (하위 ' + kids + '건)' : '접기') + '">' +
+               (fold ? '▸' : '▾') + '</button>'
+             : '<span class="ba-fold ba-fold--none"></span>') +
+           '<span>' + esc(n._no) + '</span>' +
+           (fold ? '<em class="ba-wr__fold-n">+' + kids + '</em>' : '') +
            '<em class="ba-wr__dl">' + DEPTH_LABEL[r.depth] + '</em></td>';
 
       // ┌──────────────────────────────────────────────────────────┐
@@ -2233,6 +2309,11 @@
       if (btn.dataset.a === 'detail') openDetail(key);
       if (btn.dataset.a === 'child')  addChild(key);
       if (btn.dataset.a === 'del')    removeNode(key);
+      if (btn.dataset.a === 'fold') {
+        if (COLLAPSED[key]) { delete COLLAPSED[key]; } else { COLLAPSED[key] = true; }
+        foldStore(true);
+        render();
+      }
     });
 
     // ---- 확정 -------------------------------------------------------------
@@ -2541,6 +2622,9 @@
       REV   = d.revision || '';
       if (d.can_confirm !== undefined) CAN_CONFIRM = !!d.can_confirm;
       SAVED = snapshot();
+      // node.key 가 새로 매겨졌으므로 접은 상태를 태스크 id 로 다시 맞춘다.
+      COLLAPSED = {};
+      foldStore(false);
       render();
       showCounts(d.counts);
     }
@@ -2802,6 +2886,9 @@
           parseDocs(true);
         });
       }
+      $('#ba-w-fold').addEventListener('click', function () { foldAll(true); });
+      $('#ba-w-unfold').addEventListener('click', function () { foldAll(false); });
+
       // addEventListener 가 이벤트 객체를 넘기므로 감싸서 넘긴다.
       // 그냥 extract 를 걸면 useLlm 자리에 MouseEvent 가 들어온다.
       $('#ba-w-extract').addEventListener('click', function () { extract(true); });

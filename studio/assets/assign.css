@@ -686,6 +686,19 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-wr__confirm[disabled] { opacity: .35; }
 
 .ba-wr__no { font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+/* 접기 단추. 말단 줄에는 빈 자리만 둬 번호가 세로로 안 어긋나게 한다. */
+.ba-fold {
+  display: inline-block; width: 16px; margin-right: 2px; vertical-align: baseline;
+  appearance: none; border: 0; background: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 11px; line-height: 1; color: var(--ba-ink-soft);
+}
+.ba-fold:hover { color: var(--ba-brand); }
+.ba-fold--none { cursor: default; }
+/* 접힌 줄에 가려진 하위가 몇 건인지. 없으면 접은 걸 잊고 "왜 안 보이지" 가 된다. */
+.ba-wr__fold-n {
+  font-style: normal; font-size: 10px; margin-left: 4px;
+  color: var(--ba-brand); font-weight: 700;
+}
 .ba-wr__no span { color: var(--ba-ink-soft); }
 .ba-wr__dl { display: block; font-style: normal; font-size: 10px; color: var(--ba-ink-soft); opacity: .7; }
 

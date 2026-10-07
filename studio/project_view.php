@@ -368,6 +368,13 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
              없다. 문서가 이미 잘 정리돼 있으면 이쪽이 결과도 더 예측 가능하다. -->
         <button type="button" class="ba-btn" id="ba-w-extract-rule"
                 title="AI 없이 들여쓰기·번호 규칙만으로 뽑습니다. 즉시 끝나고 비용이 없습니다">규칙으로만 도출</button>
+        <span class="ba-sep"></span>
+        <!-- 표가 길면 바로 밑 [배정안] 까지 내려가는 길을 막는다.
+             대·중분류는 남기고 그 아래만 접는다 — 통째로 숨기면 구조가 안 보인다. -->
+        <button type="button" class="ba-btn ba-btn--sm" id="ba-w-fold"
+                title="하위를 모두 접습니다. 대분류만 남습니다">모두 접기</button>
+        <button type="button" class="ba-btn ba-btn--sm" id="ba-w-unfold"
+                title="접어 둔 것을 모두 펼칩니다">모두 펼치기</button>
         <span class="ba-spacer"></span>
         <span class="ba-dim" id="ba-w-dirty"></span>
         <button type="button" class="ba-btn" id="ba-w-revert" hidden>되돌리기</button>

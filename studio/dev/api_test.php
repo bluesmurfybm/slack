@@ -2801,6 +2801,25 @@ ok('전체 규칙 문장을 항목 설명과 갈라 놓는다',
    && (bool)preg_match('/\.ba-wpanel__note::before\s*\{[^}]*content/', $css),
    '표식이 사라졌다');
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ WBS 접기 — 숨기는 일은 **그리는 자리에서만** 한다                 │
+// │                                                                  │
+// │ flat() 결과를 저장(toPayload)·합계(syncSummary)·이동·검증이 전부  │
+// │ 쓴다. 거기서 줄을 빼면 **접어 둔 태스크가 저장에서 사라진다.**     │
+// │ 105줄짜리 WBS 를 접어 두고 저장했다가 날리는 일은 돌이킬 수 없다. │
+// └──────────────────────────────────────────────────────────────────┘
+ok('접기 단추가 있다',
+   str_contains($page, 'id="ba-w-fold"') && str_contains($page, 'id="ba-w-unfold"'));
+ok('★ 접기는 그리는 자리에서만 한다',
+   str_contains($js, 'visibleRows(flat(MODEL'), 'render 가 거르지 않는다');
+ok('★ 합계는 접어도 전체를 센다',
+   (bool)preg_match('/function syncSummary\(\)\s*\{\s*var rows = flat\(MODEL/', $js),
+   '합계가 보이는 줄만 센다');
+ok('★ 저장은 접어도 전체를 보낸다',
+   (bool)preg_match('/toPayload\(MODEL\)/', $js), '저장이 보이는 줄만 보낸다');
+ok('접은 상태는 태스크 id 로 기억한다 — key 는 다시 매겨진다',
+   str_contains($js, 'bs.wbs.fold.') && str_contains($js, 'r.node.id && COLLAPSED'));
+
 ok('★ 가중치 다섯 가지에 설명이 다 붙어 있다',
    (bool)preg_match('/W_HINT\s*=\s*\{(.+?)\};/s', $js, $m)
    && count(array_filter(['domain', 'cap', 'avail', 'career', 'growth'],
