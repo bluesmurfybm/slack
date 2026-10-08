@@ -327,7 +327,9 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     <div class="ba-panel ba-links" id="ba-links" data-project-id="<?= (int)$projectId ?>" hidden>
       <h2>기획 링크 <span class="ba-dim" id="ba-lk-sum"></span></h2>
       <p class="ba-panel__hint">
-        출처 문서에 걸린 <b>구글 드라이브·피그마</b> 주소를 따라가 내용을 읽어 둡니다.
+        <b>이 칸은 링크만 다룹니다.</b> 올린 파일은 아래 <b>업무 분해(WBS)</b> 칸의
+        <b>[새 문서만 분석]</b> 에서 읽습니다.
+        여기서는 출처 문서에 걸린 <b>구글 드라이브·피그마</b> 주소를 따라가 내용을 읽어 둡니다.
         읽어 둔 내용은 WBS 도출과 난이도 판정의 근거가 됩니다.
         <br>
         읽을 수 없는 주소(노션·사내 위키 등)는 <b>건너뜀</b>으로 남습니다 — 오류가 아닙니다.
@@ -341,11 +343,6 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <button type="button" class="ba-btn" id="ba-lk-retry" hidden
                 title="실패한 것만 다시 읽습니다. 성공한 것은 다시 읽지 않습니다">실패한 것만 다시</button>
         <button type="button" class="ba-btn ba-btn--danger" id="ba-lk-cancel" hidden>멈추기</button>
-        <span class="ba-sep"></span>
-        <button type="button" class="ba-btn" id="ba-lk-score"
-                title="읽어 둔 기획 내용을 근거로 난이도(1~5)와 예상공수(M/D)를 매깁니다&#10;비어 있는 칸만 채웁니다. 사람이 넣은 값은 건드리지 않습니다">난이도·공수 매기기</button>
-        <button type="button" class="ba-btn" id="ba-lk-rescore"
-                title="이미 매긴 것도 다시 매깁니다. 사람이 고친 값은 건드리지 않습니다">다시 매기기</button>
         <span class="ba-spacer"></span>
         <span class="ba-dim" id="ba-lk-msg"></span>
       </div>
@@ -409,13 +406,21 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
              없다. 문서가 이미 잘 정리돼 있으면 이쪽이 결과도 더 예측 가능하다. -->
         <button type="button" class="ba-btn" id="ba-w-extract-rule"
                 title="AI 없이 들여쓰기·번호 규칙만으로 뽑습니다. 즉시 끝나고 비용이 없습니다">규칙으로 WBS 도출 (AI 미사용)</button>
-        <span class="ba-sep"></span>
-        <!-- 표가 길면 바로 밑 [배정안] 까지 내려가는 길을 막는다.
-             대·중분류는 남기고 그 아래만 접는다 — 통째로 숨기면 구조가 안 보인다. -->
-        <button type="button" class="ba-btn ba-btn--sm" id="ba-w-fold"
-                title="하위를 모두 접습니다. 대분류만 남습니다">모두 접기</button>
-        <button type="button" class="ba-btn ba-btn--sm" id="ba-w-unfold"
-                title="접어 둔 것을 모두 펼칩니다">모두 펼치기</button>
+        <span class="ba-wbsbar__sep"></span>
+        <!-- ┌──────────────────────────────────────────────────────────┐
+             │ 링크 칸에 있던 단추다 (2026-10-08 — 쓰는 사람이 물었다)   │
+             │                                                          │
+             │ 난이도·공수는 **링크와 아무 상관이 없다.** 대상은 확정된  │
+             │ 태스크 전부다. 그런데 [링크 분석 시작] 바로 옆에 있어     │
+             │ "링크 전용 기능인가" 로 읽혔다.                           │
+             │                                                          │
+             │ 공수·난이도 칸을 보는 자리가 여기이므로 여기로 옮긴다.    │
+             └──────────────────────────────────────────────────────────┘ -->
+        <button type="button" class="ba-btn" id="ba-lk-score"
+                title="확정된 태스크에 난이도(1~5)와 예상공수(M/D)를 매깁니다&#10;올린 문서와 읽어 둔 링크에서 그 태스크 이야기를 찾아 근거로 씁니다&#10;비어 있는 칸만 채웁니다. 사람이 넣은 값은 건드리지 않습니다">난이도·공수 매기기</button>
+        <button type="button" class="ba-btn" id="ba-lk-rescore"
+                title="이미 매긴 것도 다시 매깁니다. 사람이 고친 값은 건드리지 않습니다">다시 매기기</button>
+        <span class="ba-dim" id="ba-lk-msg2"></span>
         <span class="ba-spacer"></span>
         <span class="ba-dim" id="ba-w-dirty"></span>
         <button type="button" class="ba-btn" id="ba-w-revert" hidden>되돌리기</button>
@@ -425,6 +430,24 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       <?php else: ?>
       <div class="ba-note">읽기 전용입니다. WBS 를 고치려면 이 프로젝트의 담당 PM 이어야 합니다.</div>
       <?php endif; ?>
+
+      <!-- ┌──────────────────────────────────────────────────────────────┐
+           │ 보기를 바꾸는 단추는 **표 위에** 따로 둔다 (2026-10-08)       │
+           │                                                              │
+           │ 위 줄의 단추들은 **자료를 바꾼다** — 분석하고, 도출하고,      │
+           │ 매기고, 저장한다. 접기·펼치기는 자료를 한 글자도 안 바꾸고    │
+           │ 보기만 바꾼다. 같은 줄에 섞여 있으면 눌러도 되는지 망설인다.  │
+           │                                                              │
+           │ 표 바로 위가 제자리다 — 영향이 미치는 곳 바로 옆.             │
+           └──────────────────────────────────────────────────────────────┘ -->
+      <div class="ba-viewbar">
+        <!-- 단추 하나가 두 일을 한다. 지금 상태의 **반대**를 적는다 —
+             "모두 접기" 가 보이면 지금은 펼쳐져 있다는 뜻이다. -->
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--ghost" id="ba-w-fold"
+                title="하위를 모두 접습니다. 대분류만 남습니다"
+                aria-pressed="false"><i class="ba-caret ba-caret--up"></i><span>모두 접기</span></button>
+        <span class="ba-spacer"></span>
+      </div>
 
       <div class="ba-table-wrap">
         <table class="ba-table ba-wbs" id="ba-w-table">

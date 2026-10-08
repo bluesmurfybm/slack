@@ -1977,7 +1977,14 @@
       if (extra) { Object.keys(extra).forEach(function (k) { body[k] = extra[k]; }); }
       return api('api/analysis.php?act=' + act, { method: 'POST', body: body })
         .then(function (d) {
-          if (d.message) { $('#ba-lk-msg').textContent = d.message; }
+          // 난이도 단추는 **다른 칸(WBS)으로 옮겼다.** 링크 칸이 접혀
+          // 있으면 거기 쓴 글이 안 보이므로 두 자리에 같이 적는다.
+          if (d.message) {
+            ['#ba-lk-msg', '#ba-lk-msg2'].forEach(function (sel) {
+              var el = $(sel);
+              if (el) el.textContent = d.message;
+            });
+          }
           draw(d);
           if (okMsg) toast(okMsg);
         })
@@ -2311,6 +2318,9 @@
     }
 
     function render() {
+      // 줄 하나를 접어도 단추 이름이 따라와야 한다. 그리는 자리에서 맞춘다 —
+      // 접는 길이 여럿이라(단추·줄의 세모·되살리기) 한 군데서 맞춰야 안 갈린다.
+      syncFoldBtn();
       numbering(MODEL, '');
       var rows = visibleRows(flat(MODEL, 1, null, []));
 
@@ -3179,6 +3189,46 @@
                      how + ' 문서 ' + (meta.source_count || 0) + '건 기준.</span>';
     }
 
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 접기는 **보기** 다 (2026-10-08)                               │
+    // │                                                              │
+    // │ 자료를 한 글자도 안 바꾸므로 읽기 전용으로 보는 사람도 써야    │
+    // │ 한다. 전에는 고칠 권한 블록 안에 묶여 있어, 표가 길면 읽기만   │
+    // │ 하는 사람은 밑으로 내려갈 길이 없었다.                         │
+    // │                                                              │
+    // │ 단추는 **하나**다. 접기와 펼치기는 서로의 반대라 둘을 나란히   │
+    // │ 두면 둘 중 하나는 늘 할 일이 없다. 지금 상태의 반대를 적는다 — │
+    // │ "모두 접기" 가 보이면 지금은 펼쳐져 있다는 뜻이다.             │
+    // └──────────────────────────────────────────────────────────────┘
+    var foldBtn = $('#ba-w-fold');
+
+    /** 접힌 것이 하나라도 있는가. 화면이 아니라 MODEL 에서 센다. */
+    function anyFolded() {
+      return Object.keys(COLLAPSED).some(function (k) { return COLLAPSED[k]; });
+    }
+
+    // render() 가 이 블록보다 **먼저** 돌 수 있다(var 는 끌어올려져도 값은
+    // 아직 없다). 그래서 단추를 여기서 다시 찾는다 — 못 찾으면 그냥 넘어간다.
+    function syncFoldBtn() {
+      var btn = $('#ba-w-fold');
+      if (!btn) { return; }
+      var folded = anyFolded();
+      var cap = btn.querySelector('span');
+      var ic  = btn.querySelector('.ba-caret');
+      if (cap) { cap.textContent = folded ? '모두 펼치기' : '모두 접기'; }
+      // 접혀 있으면 할 일은 '펼치기' 이므로 아래쪽 세모.
+      if (ic)  { ic.className = 'ba-caret ba-caret--' + (folded ? 'down' : 'up'); }
+      btn.setAttribute('aria-pressed', folded ? 'true' : 'false');
+      btn.title = folded ? '접어 둔 것을 모두 펼칩니다'
+                         : '하위를 모두 접습니다. 대분류만 남습니다';
+    }
+
+    if (foldBtn) {
+      foldBtn.addEventListener('click', function () {
+        foldAll(!anyFolded());
+      });
+    }
+
     // ---- 붙이기 -----------------------------------------------------------
     if (CAN_EDIT) {
       $('#ba-w-parse').addEventListener('click', function () { parseDocs(false); });
@@ -3210,9 +3260,6 @@
           setConfirm(MODEL, on, cfAll);
         });
       }
-
-      $('#ba-w-fold').addEventListener('click', function () { foldAll(true); });
-      $('#ba-w-unfold').addEventListener('click', function () { foldAll(false); });
 
       // addEventListener 가 이벤트 객체를 넘기므로 감싸서 넘긴다.
       // 그냥 extract 를 걸면 useLlm 자리에 MouseEvent 가 들어온다.
