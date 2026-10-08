@@ -54,20 +54,24 @@ bs_route(bs_param_str('act', 'versions'), [
         $vers  = $allocs->versions($projectId);
         $stats = $allocs->versionStats($projectId);
 
-        // 가용 공수는 **차수와 무관**하다(프로젝트 기간 × 그 사람 가용도).
-        // 차수마다 다시 계산하면 같은 값을 열 번 구하게 된다.
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 가용 공수는 **차수마다 다르다** (2026-10-08)                  │
+        // │                                                              │
+        // │ 전에는 "기간 × 가용도라 차수와 무관" 이라 보고 한 번만 구했다.│
+        // │ AIDD 계수와 참여 비중이 생기면서 그 말이 더는 참이 아니다 —   │
+        // │ 같은 사람이 차수마다 다른 그릇을 가진다.                      │
+        // │                                                              │
+        // │ 다만 무거운 쪽(가용도 계산)은 **AIDD 계수별로 한 번만** 한다. │
+        // │ 보통 한두 가지뿐이라 차수 수와 무관하게 끝난다.               │
+        // └──────────────────────────────────────────────────────────────┘
         $mids = [];
         foreach ($stats as $s) {
             foreach (array_keys($s['by_member']) as $mid) { $mids[$mid] = true; }
         }
-        $cap = [];
         [$from, $to] = bs_alloc_window($projectId);
-        if ($mids && $from !== null && $to !== null) {
-            $calc = new AvailabilityCalculator(bs_db());
-            foreach ($calc->forMembers(array_keys($mids), $from, $to) as $mid => $a) {
-                $cap[$mid] = round((float)$a['available'] * (int)$a['workdays'], 2);
-            }
-        }
+        $availBy = [];                      // aidd 계수 => forMembers() 결과
+        $calc    = ($mids && $from !== null && $to !== null)
+                 ? new AvailabilityCalculator(bs_db()) : null;
 
         $rows = [];
         foreach ($vers as $v) {
@@ -77,9 +81,20 @@ bs_route(bs_param_str('act', 'versions'), [
 
             // 가용 공수를 넘긴 사람 수. 넘긴 채로 확정하는 것은 사람 판단이지만
             // 어느 안이 더 무리인지는 숫자로 보여야 한다.
+            $load   = (float)($p['aidd']['load'] ?? 1.0);
+            $ratio  = (float)($p['constraints']['capacity_ratio'] ?? 1.0);
+            $shares = (array)($p['shares'] ?? []);
+            if ($calc !== null && !isset($availBy[(string)$load])) {
+                $availBy[(string)$load] = $calc->forMembers(array_keys($mids), $from, $to, $load);
+            }
+            $av = $availBy[(string)$load] ?? [];
+
             $over = 0;
             foreach (($s['by_member'] ?? []) as $mid => $m) {
-                if (isset($cap[$mid]) && $cap[$mid] > 0 && $m > $cap[$mid]) { $over++; }
+                if (!isset($av[$mid])) { continue; }
+                $c = AvailabilityCalculator::capacityMd(
+                    $av[$mid], $ratio, (float)($shares[$mid]['share'] ?? 1.0));
+                if ($c > 0 && $m > $c) { $over++; }
             }
 
             $rows[] = [
@@ -289,6 +304,9 @@ bs_route(bs_param_str('act', 'versions'), [
             // 계수까지 통째로 남긴다. 프로젝트 설정이 나중에 바뀌어도
             // 이 차수는 그때 값으로 설명된다.
             'aidd'        => $r['meta']['aidd'] ?? null,
+            // 막대의 분모도 **그때 비중**으로 그려야 한다. 오늘 비중을 바꿨다고
+            // 지난 차수의 막대가 흔들리면 그 차수를 설명할 수 없다.
+            'shares'      => $r['meta']['shares'] ?? [],
         ], $user);
 
         $allocs->saveItems($allocationId, $r['items']);
@@ -641,12 +659,17 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
           ? json_decode((string)$allocation['params_json'], true) : null);
     $aiddLoad = (float)($pa['aidd']['load'] ?? 1.0);
 
+    // ★ 엔진과 **같은 식**으로 센다. 전에는 비중도 capacity_ratio 도 빠져
+    //   있어, 비중 0.3 인 사람이 "9 / 35.78 (25%)" 로 여유로워 보였다.
+    $ratio  = (float)($pa['constraints']['capacity_ratio'] ?? 1.0);
+    $shares = (array)($pa['shares'] ?? []);
+
     $peak = [];
     if ($from !== null && $to !== null && $from <= $to) {
         $calc = new AvailabilityCalculator($pdo);
         foreach ($calc->forMembers($ids, $from, $to, $aiddLoad) as $mid => $a) {
-            $cap[$mid] = round((float)($a['available_aidd'] ?? $a['available'])
-                             * (int)$a['workdays'], 2);
+            $cap[$mid] = AvailabilityCalculator::capacityMd(
+                $a, $ratio, (float)($shares[$mid]['share'] ?? 1.0));
             // 가용 공수가 넉넉해도 그 공수가 **특정 달에 몰려 있을 수** 있다.
             // 10월에 115% 찬 사람에게 10월 일을 주면 막대는 74% 라고 하지만
             // 실제로는 불가능한 일정이다.
@@ -672,6 +695,10 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
             'over'        => $c > 0 && $md > $c,
             'over_months' => $peak[$mid]['over_months'] ?? [],
             'peak_pct'    => $peak[$mid]['peak_pct'] ?? 0,
+            // 0건인 사람이 왜 0건인지 말해 준다. 비중을 낮춘 사람은 최소
+            // 보장 대상이 아니라 조용히 0건으로 남는다.
+            'share'       => (float)($shares[$mid]['share'] ?? 1.0),
+            'share_reason'=> $shares[$mid]['reason'] ?? null,
             // 가용 공수에 AIDD 가 얼마나 보태졌는지. 막대가 왜 늘었는지
             // 말해 주지 않으면 사람은 숫자가 틀렸다고 생각한다.
             'aidd_on'     => !empty($peak[$mid]['aidd_on']),

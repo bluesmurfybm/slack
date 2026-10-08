@@ -1943,3 +1943,8 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   display: block; margin-top: 3px; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* 참여 비중을 낮춘 사람. 0건이어도 보장이 안 걸리므로 왜인지 보여야 한다 */
+.ba-share-tag {
+  font-size: 10.5px; font-weight: 700; color: var(--ba-warn); white-space: nowrap;
+}

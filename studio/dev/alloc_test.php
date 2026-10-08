@@ -828,6 +828,24 @@ $projects->setMemberShare($pid, $MEM['가개발'], 0.3, '', $actor);
 $shAfter  = $engine->propose($pid, []);
 $capAfter = $capOfM($shAfter, $MEM['가개발'])['capacity_md'];
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 식은 한 벌이어야 한다 (2026-10-08 — 운영에서 드러남)              │
+// │                                                                  │
+// │ 같은 식이 세 군데 있었다 — 배정 엔진, 부하 막대, 차수 비교.       │
+// │ 비중을 엔진에만 넣는 바람에 **배정은 맞게 됐는데 막대의 분모가    │
+// │ 틀렸다.** 비중 0.3 인 사람이 "9 / 35.78 (25%)" 로 떠서 아직       │
+// │ 여유로워 보였다. 실제로는 9 / 10.7 = 84% 였다.                    │
+// └──────────────────────────────────────────────────────────────────┘
+$capRow = ['available' => 0.5, 'available_aidd' => 0.6, 'workdays' => 100];
+ok('★ 가용 공수 식이 한 벌로 있다',
+   abs(AvailabilityCalculator::capacityMd($capRow) - 60.0) < 0.001,
+   (string)AvailabilityCalculator::capacityMd($capRow));
+ok('AIDD 보정분을 쓴다(없으면 원래 값)',
+   abs(AvailabilityCalculator::capacityMd(['available' => 0.5, 'workdays' => 100]) - 50.0) < 0.001);
+ok('★ 비중과 제약을 함께 곱한다',
+   abs(AvailabilityCalculator::capacityMd($capRow, 0.5, 0.3) - 9.0) < 0.001,
+   (string)AvailabilityCalculator::capacityMd($capRow, 0.5, 0.3));
+
 ok('★ 가용 공수가 비중만큼 줄어든다',
    abs($capAfter - $capBefore * 0.3) < 0.02,
    $capBefore . ' × 0.3 = ' . round($capBefore * 0.3, 2) . ' vs ' . $capAfter);

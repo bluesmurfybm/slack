@@ -3626,7 +3626,16 @@
         var cntPct = Math.min(100, l.task_count / maxCnt * 100);
         return '<div class="ba-loadrow' + (l.over ? ' is-over' : '') +
                  (l.task_count === 0 ? ' is-zero' : '') + '">' +
-          '<span class="ba-loadrow__n">' + esc(l.emp_name) + '</span>' +
+          '<span class="ba-loadrow__n">' + esc(l.emp_name) +
+            // 비중을 낮춘 사람은 **최소 보장 대상이 아니다.** 0건이어도
+            // 조용히 0건으로 남으므로, 왜 그런지 이름 옆에 적어 둔다.
+            (l.share != null && l.share < 0.9995
+              ? ' <span class="ba-share-tag" title="' +
+                esc('참여 비중 ' + Number(l.share).toFixed(1)
+                    + (l.share_reason ? ' — ' + l.share_reason : '')
+                    + '\n가용 공수를 그만큼 줄였습니다. 최소 1건 보장에서도 빠집니다.') +
+                '">×' + Number(l.share).toFixed(1) + '</span>' : '') +
+          '</span>' +
           '<span class="ba-loadrow__c" title="배정 건수">' +
             '<i class="ba-loadrow__cb"><b style="width:' + cntPct + '%"></b></i>' +
             '<em>' + l.task_count + '건</em>' +

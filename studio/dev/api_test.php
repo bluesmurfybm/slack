@@ -3039,6 +3039,66 @@ ok('★ 바닥 아래 값은 잘린다', abs(($r['json']['data']['share'] ?? 0) 
 $r = $admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'member_id' => $shMid, 'share' => '']]);
 ok('비우면 되돌아간다', abs(($r['json']['data']['share'] ?? 0) - 1.0) < 0.001, $r['body']);
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 막대의 분모가 엔진과 같아야 한다 (2026-10-08 — 운영에서 드러남)   │
+// │                                                                  │
+// │ 엔진은 비중을 반영해 배정했는데 막대는 안 반영한 분모로 그려,     │
+// │ 꽉 찬 사람이 여유로워 보였다. 사람은 그걸 보고 더 얹는다.         │
+// └──────────────────────────────────────────────────────────────────┘
+// 실제로 **배정을 받는** 사람이어야 막대에 줄이 생긴다.
+$r0 = $admin->req('/studio/api/allocate.php?act=propose',
+                  ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$shMid = (int)(($r0['json']['data']['load'][0]['member_id'] ?? 0));
+ok('배정을 받는 구성원을 찾았다', $shMid > 0, (string)$shMid);
+
+$admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.3', 'reason' => '다른 과제']]);
+$r = $admin->req('/studio/api/allocate.php?act=propose',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$shAid  = $r['json']['data']['allocation_id'] ?? 0;
+$shMeta = $r['json']['data']['meta'] ?? [];
+$shLoad = $r['json']['data']['load'] ?? [];
+
+$barCap = null; $barShare = null;
+foreach ($shLoad as $l) {
+    if ((int)$l['member_id'] === $shMid) { $barCap = $l['capacity_md']; $barShare = $l['share']; }
+}
+// 비중을 반영한 분모여야 한다. 안 반영하면 꽉 찬 사람이 여유로워 보인다.
+$cap0 = null;
+foreach (($r0['json']['data']['load'] ?? []) as $l) {
+    if ((int)$l['member_id'] === $shMid) { $cap0 = $l['capacity_md']; }
+}
+ok('★ 막대의 분모가 비중만큼 줄어든다',
+   $cap0 !== null && $barCap !== null && abs($barCap - $cap0 * 0.3) < 0.05,
+   json_encode([$cap0, $barCap, $cap0 === null ? null : round($cap0 * 0.3, 2)]));
+ok('★ 막대가 비중을 함께 내려 준다', abs(($barShare ?? 0) - 0.3) < 0.001,
+   json_encode($barShare));
+
+// 같은 배정안을 detail 로 다시 읽어도 같은 분모여야 한다. 두 길이 갈리면
+// 화면을 새로 고칠 때마다 숫자가 바뀐다.
+$d = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $shAid);
+$detCap = null;
+foreach (($d['json']['data']['load'] ?? []) as $l) {
+    if ((int)$l['member_id'] === $shMid) { $detCap = $l['capacity_md']; }
+}
+ok('★ 산출 직후와 다시 읽을 때가 같다', $barCap !== null && $detCap !== null
+   && abs($barCap - $detCap) < 0.01, json_encode([$barCap, $detCap]));
+
+// 차수에 비중을 박제해야 오늘 비중을 바꿔도 지난 차수가 안 흔들린다.
+ok('★ 차수에 비중을 박제한다',
+   abs((float)($shMeta['shares'][$shMid]['share'] ?? 0) - 0.3) < 0.001,
+   json_encode($shMeta['shares'] ?? null, JSON_UNESCAPED_UNICODE));
+$admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '1.0']]);
+$d2 = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $shAid);
+$afterCap = null;
+foreach (($d2['json']['data']['load'] ?? []) as $l) {
+    if ((int)$l['member_id'] === $shMid) { $afterCap = $l['capacity_md']; }
+}
+ok('★ 오늘 비중을 바꿔도 지난 차수의 막대는 그대로',
+   $afterCap !== null && abs($afterCap - $detCap) < 0.01,
+   json_encode([$detCap, $afterCap]) . ' — 그 차수는 그때 숫자로 만들어진 것이다');
 $r = $guest->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.5']]);
 ok('★ 배정 권한이 있어야 남의 몫을 줄인다', $r['status'] === 403, (string)$r['status']);

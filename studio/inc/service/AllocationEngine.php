@@ -1565,9 +1565,10 @@ final class AllocationEngine
             // AIDD 를 켜면 available_aidd(= available + 할인분)를 쓴다.
             // 계수가 1.00 이면 둘이 같아 **이 변경 전과 완전히 같은 값**이다.
             $capacity[$mid] = $a
-                ? round((float)($a['available_aidd'] ?? $a['available']) * $workdays
-                        * (float)($constraints['capacity_ratio'] ?? 1.0)
-                        * (float)($shares[$mid]['share'] ?? 1.0), 2)
+                ? AvailabilityCalculator::capacityMd(
+                      $a,
+                      (float)($constraints['capacity_ratio'] ?? 1.0),
+                      (float)($shares[$mid]['share'] ?? 1.0))
                 : 0.0;
         }
 
