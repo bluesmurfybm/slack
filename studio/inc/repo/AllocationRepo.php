@@ -349,6 +349,63 @@ final class AllocationRepo
     // 배정 항목 (bs_allocation_item)
     // =================================================================
 
+    /**
+     * 배정 항목의 **조상** 줄. 배정 대상이 아니라 **자리를 잡아 주는** 줄이다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 왜 필요한가 (2026-10-08 — 쓰는 사람이 잡아냄)                 │
+     * │                                                              │
+     * │ 배정 표가 말단만 보여 줘서 `1 · 2.1 · 2.2 · 3.1` 처럼 뛰었다. │
+     * │ 바로 위 WBS 표에는 `2 로그인/회원가입` 이 있는데 배정 표에는  │
+     * │ 없으니, **같은 번호를 두 표에서 눈으로 맞춰야** 했다.         │
+     * │                                                              │
+     * │ 묶음 배정(level=d1)이면 상위가 곧 항목이라 조상이 없다 —      │
+     * │ 그때는 빈 배열이 돌아온다. 그게 맞다.                          │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * 공수는 **확정된 말단의 합**이다. WBS 표와 같은 규칙이어야 두 표의
+     * 숫자가 갈리지 않는다(MD_EXPR 을 한 벌로 둔 것과 같은 이유다).
+     *
+     * @return array 번호 순으로 정렬된 줄들
+     */
+    public function groupRows(int $allocationId): array
+    {
+        $a = $this->find($allocationId);
+        if (!$a) {
+            return [];
+        }
+        $st = $this->pdo->prepare(
+            'SELECT t.id, t.wbs_no, t.title, t.depth, t.parent_id,
+                    (SELECT SUM(l.est_md) FROM bs_task l
+                      WHERE l.confirmed = 1
+                        AND NOT EXISTS (SELECT 1 FROM bs_task g WHERE g.parent_id = l.id)
+                        AND (l.parent_id = t.id
+                             OR l.parent_id IN (SELECT m.id FROM bs_task m
+                                                 WHERE m.parent_id = t.id))) AS est_md
+               FROM bs_task t
+              WHERE t.project_id = ?
+                AND EXISTS (SELECT 1
+                              FROM bs_allocation_item i
+                              JOIN bs_task c ON c.id = i.task_id
+                             WHERE i.allocation_id = ?
+                               AND (c.parent_id = t.id
+                                    OR c.parent_id IN (SELECT m2.id FROM bs_task m2
+                                                        WHERE m2.parent_id = t.id)))
+                AND NOT EXISTS (SELECT 1 FROM bs_allocation_item i2
+                                 WHERE i2.allocation_id = ? AND i2.task_id = t.id)'
+        );
+        $st->execute([(int)$a['project_id'], $allocationId, $allocationId]);
+
+        return bs_wbs_sort(array_map(static fn(array $r): array => [
+            'id'        => (int)$r['id'],
+            'wbs_no'    => $r['wbs_no'],
+            'title'     => $r['title'],
+            'depth'     => (int)$r['depth'],
+            'parent_id' => $r['parent_id'] !== null ? (int)$r['parent_id'] : null,
+            'est_md'    => $r['est_md'] !== null ? round((float)$r['est_md'], 2) : null,
+        ], $st->fetchAll(PDO::FETCH_ASSOC)));
+    }
+
     /** 한 배정안의 전체 항목. 태스크·구성원 정보까지 조인해서. */
     public function items(int $allocationId): array
     {

@@ -2979,6 +2979,18 @@ ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
 ok('★ 최소 1건 보장 체크가 있다', str_contains($page, 'id="ba-al-minone"'));
 // 가정이 결과를 얼마나 바꾸는지는 켠 안과 끈 안을 나란히 놓아야 보인다.
 ok('★ 차수별 AIDD 체크가 있다', str_contains($page, 'id="ba-al-aidd"'));
+
+// 배정 표가 말단만 보여 주면 번호가 뛴다. 바로 위 WBS 표와 같은 뼈대여야
+// 같은 번호를 두 표에서 눈으로 맞추지 않는다.
+ok('★ 분류 줄을 함께 내려 준다', str_contains($js, "GROUPS = d.groups || []"));
+ok('★ 분류 줄은 담당자 칸을 비운다',
+   str_contains($js, "'분류 — 배정 대상 아님'") || str_contains($js, '분류 — 배정 대상 아님'),
+   '선택 상자를 두면 배정할 수 있는 줄처럼 보인다');
+ok('★ 항목과 분류를 번호 순으로 섞는다',
+   str_contains($js, 'rows.sort(function (x, y) { return wbsCmp(x.wbs_no, y.wbs_no); })'));
+// 서버와 **같은 규칙**이어야 한다. 한쪽만 고치면 표가 서버 순서와 어긋나는데
+// 둘 다 '번호 순' 이라고 말하므로 알아채기 어렵다.
+ok('★ 화면도 자연 정렬을 쓴다', str_contains($js, 'function wbsCmp'));
 ok('★ 끌 때만 보낸다',
    str_contains($js, "if (ad && !ad.disabled && !ad.checked) { body.aidd = 0; }"),
    '차수가 프로젝트 설정을 되살리면 어느 쪽이 참인지 알 수 없다');

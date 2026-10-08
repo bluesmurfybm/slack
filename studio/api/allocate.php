@@ -154,6 +154,8 @@ bs_route(bs_param_str('act', 'versions'), [
             'allocation'  => $a,
             'items'       => $items,
             'load'        => bs_alloc_load($allocs, $members, $tasks, $a, $items),
+            // 배정 대상이 아닌 상위 분류. 표에서 **자리만** 잡아 준다.
+            'groups'      => $allocs->groupRows((int)$a['id']),
             'unassigned'  => $allocs->tasksWithoutOwner((int)$a['id']),
             'can_edit'    => $a['status'] !== 'confirmed' && $a['status'] !== 'archived'
                              && bs_can(BS_CAP_ALLOCATION_PROPOSE, (int)$a['project_id']),

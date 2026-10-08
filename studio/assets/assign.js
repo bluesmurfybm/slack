@@ -169,6 +169,28 @@
            '+AIDD ' + a.aidd_pct + '%</span>';
   }
 
+  /**
+   * WBS 번호 비교. `2.1` 은 `10` 보다 **앞**이다.
+   *
+   * 서버의 `bs_wbs_cmp()` 와 **같은 규칙**이어야 한다. 한쪽만 고치면 표가
+   * 서버 순서와 어긋나는데, 둘 다 '번호 순' 이라고 말하므로 알아채기 어렵다.
+   * 번호가 빈 줄은 뒤로 보낸다.
+   */
+  function wbsCmp(a, b) {
+    a = (a == null ? '' : String(a)).trim();
+    b = (b == null ? '' : String(b)).trim();
+    if (a === '' || b === '') { return (a === '' ? 1 : 0) - (b === '' ? 1 : 0); }
+    var xa = a.split('.'), xb = b.split('.');
+    for (var i = 0; i < Math.max(xa.length, xb.length); i++) {
+      var na = parseInt(xa[i], 10), nb = parseInt(xb[i], 10);
+      if (isNaN(na) && isNaN(nb)) { continue; }
+      if (isNaN(na)) { return -1; }
+      if (isNaN(nb)) { return 1; }
+      if (na !== nb) { return na - nb; }
+    }
+    return 0;
+  }
+
   function overMonths(a) {
     var over = (a && a.over_months) || [];
     if (!over.length) return '';
@@ -3234,6 +3256,7 @@
 
     var CUR      = null;   // 지금 보고 있는 배정안
     var ITEMS    = [];
+    var GROUPS   = [];     // 배정 대상이 아닌 상위 분류. 자리만 잡아 준다
     var MEMBERS  = [];     // 담당자 선택지
     var WEIGHTS  = null;
     var loaded   = false;
@@ -3279,8 +3302,9 @@
     }
 
     function apply(d) {
-      CUR   = d.allocation || CUR;
-      ITEMS = d.items || [];
+      CUR    = d.allocation || CUR;
+      ITEMS  = d.items || [];
+      GROUPS = d.groups || [];
       if (CUR && CUR.params && CUR.params.weights) WEIGHTS = CUR.params.weights;
       clearError('#ba-al-error');
       renderBadge();
@@ -3460,7 +3484,32 @@
 
       var canEdit = CAN_EDIT && CUR && CUR.status !== 'confirmed' && CUR.status !== 'archived';
 
-      var h = ITEMS.map(function (it) {
+      // ┌──────────────────────────────────────────────────────────┐
+      // │ 분류 줄을 **자리만** 잡아 준다 (2026-10-08)                │
+      // │                                                          │
+      // │ 말단만 보여 주면 `1 · 2.1 · 2.2 · 3.1` 처럼 뛰어서, 바로  │
+      // │ 위 WBS 표와 같은 번호를 눈으로 맞춰야 했다.               │
+      // │                                                          │
+      // │ 담당자·역할·적합도 칸은 **비운다.** 선택 상자를 두면       │
+      // │ 배정할 수 있는 줄처럼 보이고, 실제로 누르면 아무 일도      │
+      // │ 안 일어난다. 공수는 하위 합이라 **합계에 또 더하지 않게**  │
+      // │ 흐리게 적는다.                                            │
+      // └──────────────────────────────────────────────────────────┘
+      var rows = ITEMS.map(function (it) { return { k: 'item', wbs_no: it.wbs_no, v: it }; })
+        .concat(GROUPS.map(function (g) { return { k: 'group', wbs_no: g.wbs_no, v: g }; }));
+      rows.sort(function (x, y) { return wbsCmp(x.wbs_no, y.wbs_no); });
+
+      var h = rows.map(function (row) {
+        if (row.k === 'group') {
+          var g = row.v;
+          return '<tr class="ba-al__grp">' +
+            '<td class="ba-al__no">' + esc(g.wbs_no || '-') + '</td>' +
+            '<td class="ba-al__t">' + esc(g.title) + '</td>' +
+            '<td class="ba-al__md">' + (g.est_md === null ? '-' : g.est_md) + '</td>' +
+            '<td colspan="5" class="ba-cell-none">분류 — 배정 대상 아님</td>' +
+          '</tr>';
+        }
+        var it = row.v;
         return '<tr data-id="' + it.id + '"' + (it.is_manual ? ' class="is-manual"' : '') + '>' +
           '<td class="ba-al__no">' + esc(it.wbs_no || '-') + '</td>' +
           '<td class="ba-al__t">' + esc(it.task_title) + '</td>' +

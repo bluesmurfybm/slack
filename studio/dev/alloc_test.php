@@ -632,6 +632,64 @@ ok('어느 배정안 때문인지 남는다',
                       WHERE ref_type='allocation' AND ref_id=$aid2")->fetchColumn() === 3);
 
 // =====================================================================
+echo "\n[4-G] 분류 줄 — 배정 표가 WBS 표와 같은 뼈대를 보인다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 말단만 보여 주면 번호가 뛴다 (2026-10-08 — 쓰는 사람이 잡아냄)    │
+// │                                                                  │
+// │ 배정 표가 `1 · 2.1 · 2.2 · 3.1` 처럼 나왔다. 바로 위 WBS 표에는   │
+// │ `2 로그인/회원가입` 이 있는데 배정 표에는 없으니 **같은 번호를    │
+// │ 두 표에서 눈으로 맞춰야** 했다.                                   │
+// │                                                                  │
+// │ 분류 줄은 **자리만** 잡아 준다 — 배정 대상이 아니다.              │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$rGrp = $engine->propose($pid, []);
+$aGrp = $allocs->createVersion($pid, ['weights' => $rGrp['meta']['weights'],
+                                      'eval_ver' => $rGrp['meta']['eval_ver']], $actor);
+$allocs->saveItems($aGrp, $rGrp['items']);
+
+$grp  = $allocs->groupRows($aGrp);
+$gNo  = array_column($grp, 'wbs_no');
+$iNo  = array_column($allocs->items($aGrp), 'wbs_no');
+
+ok('★ 배정 항목의 상위가 분류 줄로 나온다', $gNo === ['1', '2', '3'],
+   implode(',', $gNo));
+ok('★ 분류 줄은 배정 항목과 겹치지 않는다', !array_intersect($gNo, $iNo),
+   implode(',', array_intersect($gNo, $iNo)));
+
+// 공수는 **확정된 말단의 합**이다. WBS 표와 같은 규칙이어야 두 표의 숫자가
+// 갈리지 않는다 — 출석(1) = 출석부 화면 8 + 출석 통계 5 = 13.
+$byNo = [];
+foreach ($grp as $g) { $byNo[$g['wbs_no']] = $g; }
+ok('★ 분류 줄의 공수는 하위 합이다', abs($byNo['1']['est_md'] - 13.0) < 0.001,
+   (string)$byNo['1']['est_md']);
+ok('하위가 하나면 그 값 그대로', abs($byNo['2']['est_md'] - 6.0) < 0.001,
+   (string)$byNo['2']['est_md']);
+
+$sumG = 0.0; $sumI = 0.0;
+foreach ($grp as $g) { $sumG += (float)$g['est_md']; }
+foreach ($allocs->items($aGrp) as $i) { $sumI += (float)$i['est_md']; }
+ok('★ 분류 합과 항목 합이 같다(공수를 두 번 세지 않는다)', abs($sumG - $sumI) < 0.001,
+   $sumG . ' vs ' . $sumI);
+
+ok('번호 순으로 나온다', $gNo === array_column(bs_wbs_sort($grp), 'wbs_no'),
+   implode(',', array_column(bs_wbs_sort($grp), 'wbs_no')));
+
+// ★ 묶어 배정하면 상위가 곧 항목이다. 분류 줄이 또 나오면 **같은 줄이 두 번**
+//   보이고, 공수가 두 번 잡힌 것처럼 읽힌다.
+$rD1 = $engine->propose($pid, ['level' => 'd1']);
+$aD1 = $allocs->createVersion($pid, ['weights' => $rD1['meta']['weights'],
+                                     'eval_ver' => $rD1['meta']['eval_ver'],
+                                     'level' => 'd1'], $actor);
+$allocs->saveItems($aD1, $rD1['items']);
+ok('★ 묶음 배정이면 분류 줄이 없다', $allocs->groupRows($aD1) === [],
+   json_encode(array_column($allocs->groupRows($aD1), 'wbs_no')));
+
+// 배정안이 없는 번호를 주면 조용히 빈 배열. 예외를 던지면 화면이 통째로 멈춘다.
+ok('없는 배정안이면 빈 배열', $allocs->groupRows(999999) === []);
+
+// =====================================================================
 echo "\n[4-N] WBS 번호 정렬 — 10 은 2 보다 뒤다\n";
 //
 // ┌──────────────────────────────────────────────────────────────────┐

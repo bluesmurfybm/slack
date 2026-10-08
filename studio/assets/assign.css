@@ -1758,3 +1758,14 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-period--aidd { font-size: 13px; }
 .ba-period--aidd .ba-dim { font-size: 12.5px; }
 .ba-aidd-on { color: var(--ba-brand-dk); }
+
+/* ── 배정 표의 분류 줄 ──────────────────────────────────────────────
+   배정 대상이 아니라 **자리만** 잡아 준다. 담당자 선택 상자를 두면
+   배정할 수 있는 줄처럼 보이고, 눌러도 아무 일이 안 일어난다. */
+.ba-al__grp > td { background: var(--ba-surface); }
+.ba-al__grp .ba-al__t { font-weight: 700; }
+.ba-al__grp .ba-al__no,
+.ba-al__grp .ba-al__md { color: var(--ba-ink-soft); }
+/* 공수는 하위의 합이다. 흐리게 적어 **또 더할 숫자가 아님**을 말한다 */
+.ba-al__grp .ba-al__md { opacity: .7; }
+.ba-al__grp .ba-cell-none { font-size: 11.5px; }
