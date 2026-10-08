@@ -725,6 +725,14 @@ ok('★ 차수별로 끌 수 있다', $rVerOff['meta']['aidd']['enabled'] === fa
    && abs($capOf($rVerOff, $MEM['가개발']) - $capOf($rOff, $MEM['가개발'])) < 0.01,
    json_encode([$capOf($rVerOff, $MEM['가개발']), $capOf($rOff, $MEM['가개발'])]));
 
+// 차수가 프로젝트 설정을 **되살릴 수는 없다.** 프로젝트가 안 쓰기로 한
+// 것을 차수가 켜면 어느 쪽이 참인지 알 수 없게 된다.
+$pdo->prepare('UPDATE bs_project SET aidd_enabled = 0 WHERE id = ?')->execute([$pid]);
+$rForce = $engine->propose($pid, ['aidd' => true]);
+ok('★ 차수가 프로젝트 설정을 켤 수는 없다',
+   $rForce['meta']['aidd']['enabled'] === false, json_encode($rForce['meta']['aidd']));
+$pdo->prepare('UPDATE bs_project SET aidd_enabled = 1 WHERE id = ?')->execute([$pid]);
+
 // ③ 난이도 게이트는 그대로. AIDD 가 ★5 를 ★3 으로 낮추면 안 된다.
 $hard = [];
 foreach ($rOn['items'] as $it) {

@@ -3780,6 +3780,10 @@
         // 엔진 기본은 "후보를 골랐으면 켬" 이라 끄는 길이 없어진다.
         var mo = $('#ba-al-minone');
         if (mo) body.min_one = mo.checked ? 1 : 0;
+        // 끄기만 보낸다. 프로젝트가 안 쓰기로 한 것을 차수가 되살리면
+        // 어느 쪽이 참인지 알 수 없게 된다 — 서버도 끄기만 받는다.
+        var ad = $('#ba-al-aidd');
+        if (ad && !ad.disabled && !ad.checked) { body.aidd = 0; }
       }
 
       api('api/allocate.php?act=propose', { method: 'POST', body: body })

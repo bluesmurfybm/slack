@@ -545,6 +545,38 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
           못 넘긴 경우에는 <b>왜 못 넘겼는지</b> 적습니다.
         </div>
 
+        <!-- ┌────────────────────────────────────────────────────────────┐
+             │ 차수별로 끌 수 있어야 견줄 수 있다 (2026-10-08)             │
+             │                                                            │
+             │ AIDD 계수는 **실측이 아니라 가정**이다. 가정이 결과를 얼마나 │
+             │ 바꾸는지는 켠 안과 끈 안을 나란히 놓아야 보인다 — 무작위    │
+             │ 배정을 대조군으로 둔 것과 같은 이유다.                      │
+             │                                                            │
+             │ 프로젝트 설정이 원본이라 여기서 **켤 수는 없다.** 끄기만    │
+             │ 한다 — 프로젝트가 안 쓰기로 한 것을 차수가 되살리면 어느    │
+             │ 쪽이 참인지 알 수 없게 된다.                                │
+             └────────────────────────────────────────────────────────────┘ -->
+        <?php $pvAidd = bs_aidd_of($project); ?>
+        <div class="ba-almode ba-almode--one">
+          <span class="ba-almode__l">AIDD</span>
+          <label><input type="checkbox" id="ba-al-aidd"
+                        <?= $pvAidd['enabled'] ? 'checked' : 'disabled' ?>>
+            이 차수에 AIDD 보정을 반영한다</label>
+        </div>
+        <div class="ba-almode__hint">
+          <?php if ($pvAidd['enabled']): ?>
+            프로젝트 설정은 <b>공수 &times;<?= h(number_format($pvAidd['effort'], 2)) ?>
+            · 점유 &times;<?= h(number_format($pvAidd['load'], 2)) ?></b> 입니다.
+            체크를 풀면 <b>이 차수만</b> 보정 없이 산출합니다 — 켠 차수와 끈 차수를
+            만들어 <b>[차수 비교]</b> 로 견주면 이 가정이 결과를 얼마나 바꾸는지 보입니다.
+            <b>여기서 끄는 것은 가용 공수에만 걸립니다</b> — 예상공수는 태스크에 이미
+            저장된 값을 그대로 씁니다.
+          <?php else: ?>
+            프로젝트 설정에서 꺼져 있습니다. 차수에서 켤 수는 없습니다 —
+            켜려면 <b>[수정] → 기간</b> 에서 바꾸십시오.
+          <?php endif; ?>
+        </div>
+
         <div class="ba-sliders" id="ba-al-wsliders"></div>
         <!-- 항목별 설명은 슬라이더마다 한 줄씩 붙는다(assign.js 의 W_HINT).
              여기는 **여러 항목에 걸친 규칙** 하나만 남긴다 — 설명이 두
