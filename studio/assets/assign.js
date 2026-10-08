@@ -149,6 +149,26 @@
    * │ 모듈 둘 이상이 쓰는 도우미는 반드시 이 자리에 둔다.                │
    * └──────────────────────────────────────────────────────────────────┘
    */
+  /**
+   * AIDD 로 돌려받은 여유.
+   *
+   * ┌──────────────────────────────────────────────────────────────────┐
+   * │ 가용도와 **합치지 않는다**                                        │
+   * │                                                                  │
+   * │ 확정 점유와 추정 점유를 한 숫자로 합치지 않는 것과 같은 이유다.   │
+   * │ AIDD 보정은 추정보다도 근거가 약한 **예측**이다 — 우리 회사의     │
+   * │ 속도 향상 실측이 없고 계수는 사람이 정한 가정이다. 가용 41% 에    │
+   * │ 녹여 44% 로 적어 버리면 사람이 그것을 측정값으로 읽고 일정을      │
+   * │ 짠다.                                                            │
+   * └──────────────────────────────────────────────────────────────────┘
+   */
+  function aiddSlice(a) {
+    if (!a || !a.aidd_on || !a.aidd_pct) return '';
+    return '<span class="ba-aidd-tag" title="AIDD 로 병행 가능한 몫입니다. ' +
+           '실측이 아니라 프로젝트에 설정한 계수로 낸 값입니다">' +
+           '+AIDD ' + a.aidd_pct + '%</span>';
+  }
+
   function overMonths(a) {
     var over = (a && a.over_months) || [];
     if (!over.length) return '';
@@ -232,7 +252,12 @@
         test_end:    P.testE  ? P.testE.value  : '',
         deploy_date: P.deploy ? P.deploy.value : '',
         notes:       ($('#ba-in-notes') || {}).value || '',
-        extra:       ($('#ba-in-extra') || {}).value || ''
+        extra:       ($('#ba-in-extra') || {}).value || '',
+        // 체크 해제를 '' 로 보내면 서버가 "안 보냈다" 로 읽어 켠 채로 둔다.
+        // 0/1 로 못 박는다.
+        aidd_enabled: ($('#ba-in-aidd') || {}).checked ? 1 : 0,
+        aidd_effort:  ($('#ba-in-aidd-effort') || {}).value || '',
+        aidd_load:    ($('#ba-in-aidd-load')   || {}).value || ''
       };
     }
 
@@ -1475,9 +1500,13 @@
           '<i class="ba-av__c" style="width:' + proj + '%"></i>' +
           (hasRnd ? '<i class="ba-av__r" style="width:' + a.rnd_pct + '%"></i>' : '') +
           '<i class="ba-av__i" style="width:' + a.inferred_pct + '%"></i>' +
+          // AIDD 몫은 점유의 **끝자락**을 덮는다. 점유에서 돌려받은
+          // 것이므로 여유 쪽이 아니라 점유 쪽에 붙어야 뜻이 맞는다.
+          (a.aidd_on && a.aidd_pct
+            ? '<i class="ba-av__a" style="width:' + a.aidd_pct + '%"></i>' : '') +
         '</div>' +
         '<div class="ba-av__txt">' +
-          '<b>가용 ' + a.available_pct + '%</b> ' +
+          '<b>가용 ' + a.available_pct + '%</b> ' + aiddSlice(a) + ' ' +
           '<span class="ba-dim">(' + parts.join(' + ') + ' 점유' +
             // 반일 근무자는 기준이 100 이 아니다. 안 적으면 남는 칸이
             // 무엇인지 알 수 없다 — 점유가 아니라 애초의 근무량이다.
@@ -1633,6 +1662,7 @@
               '<u style="left:' + cw + '%;width:' + iw + '%"></u></span>' +
             '<span class="ba-mb__v">' + used + '%</span>' +
             '<span class="ba-mb__m">' + (m.over ? '초과' : m.available_md + ' M/D') +
+              (m.aidd_md ? ' <span class="ba-aidd-tag">+' + m.aidd_md + '</span>' : '') +
             '</span></div>';
         }).join('') +
         '<p class="ba-cd__note">추정 점유는 끝나는 날이 없어 <b>모든 달에 고르게</b> 얹습니다. ' +
@@ -3356,6 +3386,11 @@
       // ★ 무작위로 뽑은 안을 가중치 안으로 오해하면 안 된다. 적합도 숫자가
       //   나란히 보이므로 **방식이 안 보이면 그 숫자가 근거처럼 읽힌다.**
       var p = CUR.params || {};
+      // 같은 WBS 라도 AIDD 를 켜고 끄면 공수와 가용 공수가 달라진다.
+      // 안 보이면 두 차수를 같은 조건으로 오해한다.
+      if (p.aidd && p.aidd.enabled) {
+        s += ' · AIDD ' + Number(p.aidd.effort).toFixed(2);
+      }
       if (p.method && p.method !== 'weighted') {
         s += ' · ' + (M_LABEL[p.method] || p.method);
         if (p.seed) s += '(씨앗 ' + p.seed + ')';
@@ -3403,7 +3438,12 @@
             '<i style="width:' + pctOfMax + '%"></i>' +
             '<u style="left:' + capMark + '%" title="가용 공수 ' + l.capacity_md + ' M/D"></u>' +
           '</span>' +
-          '<span class="ba-loadrow__v">' + l.assigned_md + ' / ' + l.capacity_md + ' M/D</span>' +
+          '<span class="ba-loadrow__v">' + l.assigned_md + ' / ' + l.capacity_md + ' M/D' +
+            // 가용 공수가 왜 늘었는지 말해 주지 않으면 숫자가 틀렸다고 읽는다.
+            (l.aidd_on && l.aidd_pct
+              ? ' <span class="ba-aidd-tag" title="AIDD 계수로 늘어난 몫이 들어 있습니다">' +
+                'AIDD</span>' : '') +
+          '</span>' +
           '<span class="ba-loadrow__p">' +
             (l.load_pct === null ? '-' : l.load_pct + '%') +
             (l.over ? ' <b>초과</b>' : '') + '</span>' +
@@ -3583,7 +3623,8 @@
     function cmpRow(r, curId) {
       var how = (M_LABEL[r.method] || r.method) +
                 (r.level && r.level !== 'leaf'
-                   ? ' · ' + (L_LABEL[r.level] || r.level) : '');
+                   ? ' · ' + (L_LABEL[r.level] || r.level) : '') +
+                (r.aidd ? ' · AIDD ' + Number(r.aidd_effort || 0).toFixed(2) : '');
       // 고른 후보가 있으면 분모를 그 수로 둔다. '8명 중 5명' 이 문제였지
       // '5명에게 갔다' 가 문제인 적은 없다.
       var who = r.picked ? r.members + ' / ' + r.picked : String(r.members);

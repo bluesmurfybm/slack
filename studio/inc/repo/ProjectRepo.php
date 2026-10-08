@@ -18,6 +18,7 @@ final class ProjectRepo
     /** 목록·상세에서 돌려주는 컬럼. parsed_text 처럼 큰 값은 여기 넣지 않는다. */
     private const COLS = 'id, code, name, summary, client, track,
         dev_start, dev_end, test_start, test_end, deploy_date,
+        aidd_enabled, aidd_effort, aidd_load,
         notes, extra, status, owner_id, owner_name,
         deleted_at, deleted_by, deleted_by_name, delete_reason,
         created_at, updated_at';
@@ -206,8 +207,9 @@ final class ProjectRepo
                     'INSERT INTO bs_project
                         (code, name, summary, client, track,
                          dev_start, dev_end, test_start, test_end, deploy_date,
+                         aidd_enabled, aidd_effort, aidd_load,
                          notes, extra, status, owner_id, owner_name)
-                     VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?)'
+                     VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?)'
                 );
                 $st->execute([
                     $code,
@@ -220,6 +222,11 @@ final class ProjectRepo
                     $this->nn($data['test_start'] ?? null),
                     $this->nn($data['test_end'] ?? null),
                     $this->nn($data['deploy_date'] ?? null),
+                    // AIDD 는 **기본이 켬**이다. 안 주면 기본값으로 들어간다.
+                    array_key_exists('aidd_enabled', $data)
+                        ? (int)!empty($data['aidd_enabled']) : BS_AIDD_DEFAULT['enabled'],
+                    $this->aiddFactor($data['aidd_effort'] ?? null, BS_AIDD_DEFAULT['effort']),
+                    $this->aiddFactor($data['aidd_load']   ?? null, BS_AIDD_DEFAULT['load']),
                     $this->nn($data['notes'] ?? null),
                     $this->nn($data['extra'] ?? null),
                     $data['status'] ?? 'draft',
@@ -266,6 +273,20 @@ final class ProjectRepo
                 $params[] = $this->nn($data[$col]);
             }
         }
+
+        // AIDD 세 칸은 nn() 을 태우지 않는다 — 빈 문자열이 NULL 이 되면
+        // NOT NULL 칸에 부딪히고, 0 으로 들어가면 공수가 전부 0 이 된다.
+        if (array_key_exists('aidd_enabled', $data)) {
+            $sets[]   = '`aidd_enabled` = ?';
+            $params[] = (int)!empty($data['aidd_enabled']);
+        }
+        foreach (['aidd_effort' => BS_AIDD_DEFAULT['effort'],
+                  'aidd_load'   => BS_AIDD_DEFAULT['load']] as $col => $def) {
+            if (array_key_exists($col, $data)) {
+                $sets[]   = "`$col` = ?";
+                $params[] = $this->aiddFactor($data[$col], $def);
+            }
+        }
         if (!$sets) {
             return;     // 바꿀 게 없으면 updated_at 도 건드리지 않는다
         }
@@ -275,6 +296,22 @@ final class ProjectRepo
             'UPDATE bs_project SET ' . implode(', ', $sets) . ' WHERE id = ? AND deleted_at IS NULL'
         );
         $st->execute($params);
+    }
+
+    /**
+     * AIDD 계수를 받아들일 수 있는 값으로.
+     *
+     * 범위를 벗어난 값은 **거절하지 않고 자른다.** 프로젝트 저장이 계수 하나
+     * 때문에 통째로 막히면 사람은 그 칸을 비우고 지나간다. 다만 0 쪽으로는
+     * 바닥(BS_AIDD_MIN)이 있다 — 0.1 이면 공수가 10분의 1 이 되고, 그건
+     * 옵션이 아니라 사고다.
+     */
+    private function aiddFactor(mixed $v, float $default): float
+    {
+        if ($v === null || $v === '' || !is_numeric($v)) {
+            return $default;
+        }
+        return round(max(BS_AIDD_MIN, min(BS_AIDD_MAX, (float)$v)), 2);
     }
 
     /** 상태 전이. 허용된 값인지 확인한다. */

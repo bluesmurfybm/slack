@@ -632,6 +632,111 @@ ok('어느 배정안 때문인지 남는다',
                       WHERE ref_type='allocation' AND ref_id=$aid2")->fetchColumn() === 3);
 
 // =====================================================================
+echo "\n[4-A] AIDD 고려 — 예측을 측정값으로 읽게 두지 않는다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 이 옵션이 지켜야 할 것 (2026-10-08)                               │
+// │                                                                  │
+// │ 계수는 **지어낸 값이다.** 우리 회사의 AIDD 속도 향상 실측이 없다. │
+// │ 그런 값이 조용히 섞여 들어가면 사람은 그것을 측정값으로 읽고      │
+// │ 일정을 짠다. 그래서 세 가지를 못 박는다 —                         │
+// │                                                                  │
+// │   ① 끄면 **한 글자도 안 바뀐다**                                  │
+// │   ② 가용도에 녹이지 않는다(available 은 그대로, 따로 더 준다)     │
+// │   ③ 난이도 게이트를 건드리지 않는다                               │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$pdo->exec("DELETE FROM bs_workload");
+
+// 점유를 넣어야 돌려받을 것이 생긴다. 점유가 0 이면 AIDD 도 0 이다.
+$mkW = $pdo->prepare(
+    'INSERT INTO bs_workload (member_id, kind, label, start_date, end_date,
+                              load_ratio, confidence, source)
+     VALUES (?, "manual", "타 프로젝트", "2026-01-01", "2026-12-31", 0.40, 1.0, "manual")');
+foreach ([$MEM['가개발'], $MEM['나개발'], $MEM['다개발']] as $m) { $mkW->execute([$m]); }
+
+$aFrom = '2026-03-02'; $aTo = '2026-05-29';
+$a100 = $avail->forMembers([$MEM['가개발']], $aFrom, $aTo, 1.00)[$MEM['가개발']];
+$a95  = $avail->forMembers([$MEM['가개발']], $aFrom, $aTo, 0.95)[$MEM['가개발']];
+
+// ① 계수 1.00 은 **이 변경 전과 완전히 같은 수치**여야 한다.
+ok('★ 계수 1.00 이면 보정이 없다',
+   $a100['aidd_on'] === false && $a100['aidd_relief'] === 0.0
+   && abs($a100['available_aidd'] - $a100['available']) < 0.0001,
+   json_encode([$a100['available'], $a100['available_aidd'], $a100['aidd_relief']]));
+
+// ② available 은 **손대지 않는다.** 보정분은 따로 담긴다.
+ok('★ available 은 보정해도 그대로다',
+   abs($a95['available'] - $a100['available']) < 0.0001,
+   $a95['available'] . ' vs ' . $a100['available']);
+ok('★ 보정분은 별도 칸에 담긴다', $a95['aidd_relief'] > 0 && $a95['aidd_on'] === true,
+   json_encode([$a95['aidd_relief'], $a95['aidd_on']]));
+ok('★ 합이 맞는다 (available + relief = available_aidd)',
+   abs(($a95['available'] + $a95['aidd_relief']) - $a95['available_aidd']) < 0.0001,
+   json_encode([$a95['available'], $a95['aidd_relief'], $a95['available_aidd']]));
+
+// 점유 0.40 의 5% = 0.02 를 돌려받는다. 숫자가 바뀌면 바로 걸린다.
+ok('★ 점유의 (1-계수)만큼 돌려받는다', abs($a95['aidd_relief'] - 0.02) < 0.0005,
+   (string)$a95['aidd_relief']);
+
+// 기본 가용량을 넘길 수 없다. 일을 안 하던 사람이 AIDD 로 100% 를 넘을 수는 없다.
+$free = $avail->forMembers([$MEM['라개발']], $aFrom, $aTo, 0.50)[$MEM['라개발']];
+ok('★ 기본 가용량을 넘지 않는다',
+   $free['available_aidd'] <= $free['base_capacity'] + 0.0001,
+   json_encode([$free['available_aidd'], $free['base_capacity']]));
+
+// 달별 띠에도 같은 할인이 걸린다. 합계만 보정하고 달별을 빼면 두 화면이
+// 다른 말을 한다.
+$mo = null;
+foreach ($a95['months'] as $m) { if ($m['aidd_pct'] > 0) { $mo = $m; break; } }
+ok('★ 달별에도 보정분이 실린다', $mo !== null, json_encode($a95['months']));
+ok('넘쳤다는 사실 자체는 지우지 않는다',
+   !array_filter($a95['months'], fn($m) => $m['over'] !== ($m['confirmed_pct']
+       + $m['inferred_pct'] > (int)round($a95['base_capacity'] * 100))),
+   '보정이 over 판정을 흔들었다');
+
+// ───────────────────────────────────────────────────────────────────
+// 배정에서
+// ───────────────────────────────────────────────────────────────────
+$pdo->prepare('UPDATE bs_project SET aidd_enabled = 0 WHERE id = ?')->execute([$pid]);
+$rOff = $engine->propose($pid, []);
+$pdo->prepare('UPDATE bs_project SET aidd_enabled = 1, aidd_effort = 0.85, aidd_load = 0.95
+                WHERE id = ?')->execute([$pid]);
+$rOn  = $engine->propose($pid, []);
+
+ok('★ 끄면 meta 가 꺼졌다고 말한다', $rOff['meta']['aidd']['enabled'] === false
+   && $rOff['meta']['aidd']['load'] === 1.0, json_encode($rOff['meta']['aidd']));
+ok('★ 켜면 계수를 박제한다', $rOn['meta']['aidd']['enabled'] === true
+   && abs($rOn['meta']['aidd']['effort'] - 0.85) < 0.001, json_encode($rOn['meta']['aidd']));
+
+$capOf = function (array $r, int $mid): float {
+    foreach ($r['summary']['by_member'] as $b) {
+        if ($b['member_id'] === $mid) { return (float)$b['capacity_md']; }
+    }
+    return -1.0;
+};
+ok('★ 켜면 가용 공수가 늘어난다',
+   $capOf($rOn, $MEM['가개발']) > $capOf($rOff, $MEM['가개발']),
+   $capOf($rOff, $MEM['가개발']) . ' → ' . $capOf($rOn, $MEM['가개발']));
+
+// 차수별로 끌 수 있어야 [차수 비교] 로 켠 안과 끈 안을 견줄 수 있다.
+$rVerOff = $engine->propose($pid, ['aidd' => false]);
+ok('★ 차수별로 끌 수 있다', $rVerOff['meta']['aidd']['enabled'] === false
+   && abs($capOf($rVerOff, $MEM['가개발']) - $capOf($rOff, $MEM['가개발'])) < 0.01,
+   json_encode([$capOf($rVerOff, $MEM['가개발']), $capOf($rOff, $MEM['가개발'])]));
+
+// ③ 난이도 게이트는 그대로. AIDD 가 ★5 를 ★3 으로 낮추면 안 된다.
+$hard = [];
+foreach ($rOn['items'] as $it) {
+    $t = $tasks->find($it['task_id']);
+    if ((int)($t['difficulty'] ?? 0) >= 5) { $hard[] = $t['difficulty']; }
+}
+ok('★ AIDD 가 난이도를 낮추지 않는다', $hard === [5],
+   json_encode($hard) . ' — ★5 가 그대로 하나 있어야 한다');
+
+$pdo->exec("DELETE FROM bs_workload");
+
+// =====================================================================
 echo "\n[4-M] 달별 점유 — 기간 평균은 \"언제\" 를 지운다\n";
 //
 // ┌──────────────────────────────────────────────────────────────────┐

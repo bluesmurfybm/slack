@@ -169,6 +169,41 @@ bs_layout_head(
 
     <!-- 서버도 같은 규칙으로 다시 검사한다(ProjectRepo::assertPeriods). -->
     <p class="ba-period__warn" id="ba-period-warn" hidden></p>
+
+    <!-- ┌────────────────────────────────────────────────────────────┐
+         │ 계수를 숨기지 않는다                                        │
+         │                                                            │
+         │ 우리 회사의 AIDD 속도 향상 실측이 없다. 지어낸 숫자를        │
+         │ 코드에 묻어 두면 아무도 그것이 추정인 줄 모른다. 칸에 담아   │
+         │ 보여 주고, 고칠 수 있게 하고, 배정안에 박제한다.             │
+         └────────────────────────────────────────────────────────────┘ -->
+    <div class="ba-aidd">
+      <label class="ba-aidd__on">
+        <input type="checkbox" id="ba-in-aidd"
+               <?= (int)($v('aidd_enabled') === '' ? 1 : $v('aidd_enabled')) === 0 ? '' : 'checked' ?>>
+        <b>AIDD 고려</b>
+      </label>
+      <label class="ba-aidd__f">
+        <span>공수 계수</span>
+        <input type="number" id="ba-in-aidd-effort" step="0.05" min="0.5" max="1"
+               value="<?= h($v('aidd_effort') ?: '0.85') ?>"
+               title="난이도 환산 공수에 곱합니다. 0.85 = 15% 단축, 1.00 = 보정 없음">
+      </label>
+      <label class="ba-aidd__f">
+        <span>점유 반영률</span>
+        <input type="number" id="ba-in-aidd-load" step="0.05" min="0.5" max="1"
+               value="<?= h($v('aidd_load') ?: '0.95') ?>"
+               title="다른 업무 점유를 이 비율만큼만 반영합니다. 0.95 = 5% 할인, 1.00 = 보정 없음">
+      </label>
+    </div>
+    <p class="ba-panel__hint ba-aidd__note">
+      AI 로 병행이 되는 만큼을 <b>공수</b>와 <b>다른 업무 점유</b>에 반영합니다.
+      <b>난이도는 바꾸지 않습니다</b> — AI 는 걸리는 시간을 줄이지 어려운 문제를
+      쉽게 만들지 않고, 난이도를 낮추면 ★4 이상을 그 분야 상위자에게 주는 규칙이
+      꺼집니다. 계수는 <b>실측이 아니라 가정</b>이라 화면에 드러내 두었습니다.
+      공수는 태스크에 저장되므로, 끄거나 계수를 고치면 <b>[난이도 매기기]를 다시</b>
+      돌려야 반영됩니다.
+    </p>
   </section>
 
   <!-- ============ 개발 범위 출처 ============ -->

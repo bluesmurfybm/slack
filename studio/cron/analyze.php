@@ -220,6 +220,12 @@ try {
         // 환산표는 한 번만 뽑는다. 태스크마다 물으면 같은 질의를 100번 한다.
         $effort = $tasks->effortTable();
 
+        // AIDD 계수. 꺼져 있으면 1.00 이라 곱해도 아무것도 안 바뀐다.
+        $aidd = bs_aidd_of($project);
+        if ($aidd['enabled']) {
+            $log("  AIDD 고려 — 공수 계수 " . number_format($aidd['effort'], 2));
+        }
+
         $ok = $aiCount = 0;
         foreach ($todo as $t) {
             if (time() >= $until) {
@@ -234,7 +240,7 @@ try {
             }
 
             $ctx = $an->contextFor($projectId, (string)$t['title']);
-            $r   = $scorer->score($t, $ctx['text'] ?? '', $pname, $effort);
+            $r   = $scorer->score($t, $ctx['text'] ?? '', $pname, $effort, $aidd['effort']);
 
             $note = $r['note'];
             if ($ctx !== null) {

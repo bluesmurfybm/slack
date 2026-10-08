@@ -519,13 +519,30 @@ final class TaskRepo
      */
     public function effortTable(int $minSamples = 5): array
     {
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ AIDD 실적은 **되돌려서** 평균낸다 (2026-10-08)                │
+        // │                                                              │
+        // │ 이 표는 "AIDD 없이 얼마나 걸리는가" 여야 한다. 쓸 때 계수를   │
+        // │ 곱하기 때문이다(estFromDifficulty). AIDD 프로젝트에서 사람이  │
+        // │ 적은 공수는 이미 AIDD 가 반영된 값이라, 그대로 평균에 넣으면  │
+        // │ 다음 프로젝트에서 **계수가 두 번 걸린다.**                    │
+        // │                                                              │
+        // │ 빼 버리지 않고 나눠 되돌린다 — 빼면 AIDD 를 쓰는 동안 표가    │
+        // │ 영영 안 쌓여 기본표에 묶인다.                                 │
+        // │                                                              │
+        // │ aidd_enabled=0 이면 나누는 수가 1.00 이라 **이 변경 전과      │
+        // │ 한 글자도 다르지 않다.** 시험이 그것을 지킨다.                │
+        // └──────────────────────────────────────────────────────────────┘
         try {
             $st = $this->pdo->query(
-                'SELECT difficulty, COUNT(*) n, AVG(est_md) md
-                   FROM bs_task
-                  WHERE est_md IS NOT NULL AND est_md > 0 AND difficulty IS NOT NULL
-                    AND COALESCE(est_md_by, "human") = "human"
-                  GROUP BY difficulty'
+                'SELECT t.difficulty, COUNT(*) n,
+                        AVG(t.est_md / IF(p.aidd_enabled = 1,
+                                          GREATEST(p.aidd_effort, 0.01), 1)) md
+                   FROM bs_task t
+                   JOIN bs_project p ON p.id = t.project_id
+                  WHERE t.est_md IS NOT NULL AND t.est_md > 0 AND t.difficulty IS NOT NULL
+                    AND COALESCE(t.est_md_by, "human") = "human"
+                  GROUP BY t.difficulty'
             );
             $out = [];
             foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {

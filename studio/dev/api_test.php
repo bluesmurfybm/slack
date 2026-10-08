@@ -1524,7 +1524,12 @@ ok('확정본은 고칠 수 없다', $r['status'] === 400
 
 $r = $admin->req('/studio/api/allocate.php?act=confirm',
                  ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
-ok('두 번 확정 불가', $r['status'] === 400);
+ok('두 번 확정 불가', $r['status'] === 400, $r['status'] . ' ' . substr($r['body'], 0, 200));
+// 확정된 안에는 과배정 경고를 띄우지 않는다. 사람이 고칠 수 없는 것을
+// 고치라고 하면 진짜 경고까지 안 읽는다.
+ok('★ 확정된 안에는 과배정 경고 대신 상태를 말한다',
+   str_contains($r['json']['error']['message'] ?? '', '확정'),
+   substr($r['body'], 0, 200));
 
 $r = $admin->req('/studio/api/allocate.php?act=versions&project_id=' . $pid);
 $confirmedN = count(array_filter($r['json']['data']['rows'],
@@ -2972,6 +2977,49 @@ ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
 // │ 화면에 있어야** 하고, 무엇을 옮겼는지 적을 자리도 있어야 한다.    │
 // └──────────────────────────────────────────────────────────────────┘
 ok('★ 최소 1건 보장 체크가 있다', str_contains($page, 'id="ba-al-minone"'));
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ AIDD 는 **보인 채로** 작동해야 한다 (2026-10-08)                  │
+// │                                                                  │
+// │ 기본이 켬이라 모든 화면의 숫자가 달라지는데, 왜 달라졌는지        │
+// │ 말해 주지 않으면 사람은 숫자가 틀렸다고 생각한다. 계수도          │
+// │ 실측이 아니라 가정이므로 숨기면 안 된다.                          │
+// └──────────────────────────────────────────────────────────────────┘
+$pform = $admin->req('/studio/project_form.php?id=' . $pid)['body'];
+ok('★ 프로젝트에 AIDD 칸이 있다', str_contains($pform, 'id="ba-in-aidd"'));
+ok('★ 계수를 화면에 드러낸다',
+   str_contains($pform, 'id="ba-in-aidd-effort"') && str_contains($pform, 'id="ba-in-aidd-load"'),
+   '계수를 코드에 묻으면 아무도 그것이 가정인 줄 모른다');
+ok('난이도는 안 바꾼다고 적는다', str_contains($pform, '난이도는 바꾸지 않습니다'));
+ok('다시 매겨야 반영된다고 알린다', str_contains($pform, '다시'));
+ok('★ 저장할 때 세 칸을 보낸다',
+   str_contains($js, 'aidd_enabled:') && str_contains($js, 'aidd_effort:')
+   && str_contains($js, 'aidd_load:'));
+// 체크 해제를 '' 로 보내면 서버가 "안 보냈다" 로 읽어 켠 채로 둔다.
+ok('★ 체크 해제를 0 으로 못 박는다',
+   str_contains($js, "checked ? 1 : 0"), '빈 문자열로 보내면 끌 수가 없다');
+ok('★ 가용도에 녹이지 않고 따로 그린다',
+   str_contains($js, 'function aiddSlice') && str_contains($js, 'ba-aidd-tag'),
+   '예측을 측정값으로 읽게 두면 안 된다');
+ok('배정 막대도 AIDD 가 걸렸다고 말한다', str_contains($js, 'l.aidd_on && l.aidd_pct'));
+ok('차수 비교에 AIDD 가 보인다', str_contains($js, "r.aidd ? ' · AIDD '"));
+
+$r = $admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'aidd_enabled' => 0]]);
+ok('AIDD 를 끌 수 있다', $r['status'] === 200, $r['body']);
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
+ok('★ 끈 상태가 되읽힌다', ($r['json']['data']['project']['aidd_enabled'] ?? true) === false,
+   $r['body']);
+$r = $admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'aidd_enabled' => 1, 'aidd_effort' => '0.01', 'aidd_load' => '9']]);
+ok('말도 안 되는 계수도 저장은 된다(자른다)', $r['status'] === 200, $r['body']);
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
+$pj = $r['json']['data']['project'] ?? [];
+ok('★ 계수를 범위로 잘라 저장한다',
+   abs(($pj['aidd_effort'] ?? 0) - 0.50) < 0.001 && abs(($pj['aidd_load'] ?? 0) - 1.00) < 0.001,
+   json_encode([$pj['aidd_effort'] ?? null, $pj['aidd_load'] ?? null]));
+$admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'aidd_enabled' => 1, 'aidd_effort' => '0.85', 'aidd_load' => '0.95']]);
 ok('무엇을 옮겼는지 적을 자리가 있다', str_contains($page, 'id="ba-al-minone-note"'));
 ok('★ 체크를 풀면 서버로 0 이 간다', str_contains($js, 'body.min_one = mo.checked ? 1 : 0'));
 // 산출할 때만 받는 값이라 버전을 갈아 끼우면 비워야 한다. 안 비우면

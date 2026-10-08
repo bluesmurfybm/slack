@@ -463,6 +463,67 @@ const BS_ALLOC_WEIGHTS = [
 const BS_ALLOC_WEIGHT_MAX = 1.0;
 
 /**
+ * AIDD 고려 옵션 기본값 (명세서 §11.2-AO).
+ *
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ 이 숫자들은 **지어낸 값이다**                                     │
+ * │                                                                  │
+ * │ 우리 회사의 AIDD 속도 향상 실측이 없다. scoring-design.md 가      │
+ * │ "사람이 자의로 정하는 것보다 데이터에서 뽑는 것이 방어하기 쉽다"  │
+ * │ 며 계열 기준값을 90분위로 뽑아 둔 것과 어긋나는 자리다.           │
+ * │                                                                  │
+ * │ 그러니 숨기지 않는다 — 프로젝트마다 칸에 담아 화면에 보여 주고,   │
+ * │ 배정안에 박제한다. 여기 값은 **새 프로젝트의 출발점**일 뿐이다.   │
+ * └──────────────────────────────────────────────────────────────────┘
+ *
+ * effort : 난이도 환산 공수에 곱한다. 0.85 = 15% 단축.
+ * load   : 타 업무 점유 반영률. 0.95 = 점유를 5% 할인해 그만큼 여유로 본다.
+ *
+ * 난이도는 **일부러 없다.** AIDD 는 "얼마나 걸리는가" 를 바꾸지
+ * "얼마나 어려운가" 를 바꾸지 않는다. 난이도를 낮추면 ★4+ 상위자
+ * 게이트가 꺼져 어려운 일이 못 하는 사람에게 간다.
+ */
+const BS_AIDD_DEFAULT = [
+    'enabled' => 1,
+    'effort'  => 0.85,
+    'load'    => 0.95,
+];
+
+/**
+ * 계수가 받을 수 있는 범위.
+ *
+ * 1.00 은 "보정 없음" 이라 허용한다. 0 에 가까운 값은 막는다 — 0.1 이면
+ * 공수가 10분의 1 이 되고, 그건 옵션이 아니라 사고다.
+ */
+const BS_AIDD_MIN = 0.50;
+const BS_AIDD_MAX = 1.00;
+
+/**
+ * 프로젝트 행에서 AIDD 설정을 꺼낸다. 칸이 없는 서버(021 이전)에서도
+ * 돌아야 하므로 기본값으로 메운다.
+ *
+ * @return array{enabled:bool, effort:float, load:float}
+ */
+function bs_aidd_of(?array $project): array
+{
+    $on = $project === null
+        ? false                                    // 프로젝트를 모르면 보정하지 않는다
+        : (int)($project['aidd_enabled'] ?? BS_AIDD_DEFAULT['enabled']) === 1;
+
+    $clamp = static function ($v, float $def): float {
+        $v = is_numeric($v) ? (float)$v : $def;
+        return max(BS_AIDD_MIN, min(BS_AIDD_MAX, $v));
+    };
+    return [
+        'enabled' => $on,
+        // 꺼져 있으면 1.00 — 곱해도 아무것도 안 바뀐다. 부르는 쪽이
+        // enabled 를 따로 보지 않아도 되게 **여기서 중화한다.**
+        'effort'  => $on ? $clamp($project['aidd_effort'] ?? null, BS_AIDD_DEFAULT['effort']) : 1.0,
+        'load'    => $on ? $clamp($project['aidd_load']   ?? null, BS_AIDD_DEFAULT['load'])   : 1.0,
+    ];
+}
+
+/**
  * 제약 조건 기본값 (명세서 §6.2).
  *
  * capacity_ratio : 총 배정 공수 ≤ 가용 공수 × 이 값. 명세서는 1.0 이다.

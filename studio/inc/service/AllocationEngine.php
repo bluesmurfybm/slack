@@ -483,6 +483,9 @@ final class AllocationEngine
                 // 이유**를 함께 남긴다 — 보장은 못 지킨 자리가 더 중요하다.
                 'min_one'       => $minOne,
                 'picked'        => $ctx['picked'],
+                // 그때 계수가 얼마였는지. 없으면 왜 이 공수가 나왔는지
+                // 설명할 수 없다.
+                'aidd'          => $ctx['aidd'],
             ],
         ];
     }
@@ -1496,9 +1499,26 @@ final class AllocationEngine
                 ? (bool)$params['min_one'] : (bool)$picked;
 
         // --- 기간과 가용도 ---
+        //
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ AIDD 는 프로젝트가 원본, 배정안이 사본 (2026-10-08)           │
+        // │                                                              │
+        // │ 보정이 3단계(공수)와 4단계(배정)에 걸쳐 있어 params_json 만   │
+        // │ 으로는 3단계가 못 본다. 그래서 프로젝트를 원본으로 두고,      │
+        // │ 여기서 산출 시점 값을 **복사해 meta 에 남긴다** — 나중에      │
+        // │ "그때 계수가 얼마였나" 에 답해야 한다.                        │
+        // │                                                              │
+        // │ 차수마다 끌 수 있다(params['aidd'] = false). 그래야 [차수     │
+        // │ 비교] 로 켠 안과 끈 안을 나란히 놓고 견줄 수 있다.            │
+        // └──────────────────────────────────────────────────────────────┘
+        $aidd = bs_aidd_of($this->projects?->find($projectId));
+        if (array_key_exists('aidd', $params) && !$params['aidd']) {
+            $aidd = ['enabled' => false, 'effort' => 1.0, 'load' => 1.0];
+        }
+
         [$from, $to] = $this->projectWindow($projectId);
         $avail = ($from !== null && $members)
-            ? $this->availability->forMembers(array_keys($members), $from, $to)
+            ? $this->availability->forMembers(array_keys($members), $from, $to, $aidd['load'])
             : [];
         $workdays = $avail ? (int)(reset($avail)['workdays'] ?? 0) : 0;
 
@@ -1506,8 +1526,11 @@ final class AllocationEngine
         foreach ($members as $mid => $m) {
             $a = $avail[$mid] ?? null;
             // 가용 공수(M/D) = 남은 가용량 × 영업일 × 제약 비율
+            //
+            // AIDD 를 켜면 available_aidd(= available + 할인분)를 쓴다.
+            // 계수가 1.00 이면 둘이 같아 **이 변경 전과 완전히 같은 값**이다.
             $capacity[$mid] = $a
-                ? round((float)$a['available'] * $workdays
+                ? round((float)($a['available_aidd'] ?? $a['available']) * $workdays
                         * (float)($constraints['capacity_ratio'] ?? 1.0), 2)
                 : 0.0;
         }
@@ -1587,6 +1610,7 @@ final class AllocationEngine
             // 건다. 전원 대상에서 20명 중 10건을 나누면 반은 반드시 0건이다.
             'picked'           => $picked,
             'min_one'          => $minOne,
+            'aidd'             => $aidd,
             // 자동이 왜 그렇게 나눴는지. 화면이 그대로 보여 준다.
             'split_reasons'    => $cut['reasons'],
             // 단위 하나에 말단이 몇 건 들었는지. 근거에 쓴다.

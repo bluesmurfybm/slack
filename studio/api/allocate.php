@@ -92,6 +92,10 @@ bs_route(bs_param_str('act', 'versions'), [
                 'level'     => $p['level']  ?? AllocationEngine::L_LEAF,
                 'seed'      => $p['seed']   ?? null,
                 'weights'   => $p['weights'] ?? null,
+                // 같은 WBS 라도 AIDD 를 켜고 끄면 공수·가용도가 달라진다.
+                // 안 보이면 두 차수를 같은 조건으로 오해한다.
+                'aidd'      => !empty($p['aidd']['enabled']),
+                'aidd_effort' => isset($p['aidd']['effort']) ? (float)$p['aidd']['effort'] : null,
                 // 고른 후보 수. 안 골랐으면 null — '전원 대상' 이었다는 뜻이다.
                 'picked'    => isset($p['member_ids']) && $p['member_ids']
                                ? count($p['member_ids']) : null,
@@ -235,6 +239,12 @@ bs_route(bs_param_str('act', 'versions'), [
         if (bs_has_param('min_one')) {
             $params['min_one'] = (bool)bs_param_int('min_one', 0);
         }
+        // AIDD 는 프로젝트 설정을 따르되 차수별로 끌 수 있다. 끈 차수를
+        // 하나 만들어 [차수 비교] 로 견주면 이 옵션이 얼마나 바꾸는지
+        // 숫자로 보인다.
+        if (bs_has_param('aidd')) {
+            $params['aidd'] = (bool)bs_param_int('aidd', 1);
+        }
 
         // 이전 안에서 사람이 손댄 항목을 그대로 가져올지.
         $keepId = bs_param_int('keep_manual_from', 0);
@@ -274,6 +284,9 @@ bs_route(bs_param_str('act', 'versions'), [
             // 최소 보장을 걸었는지. 안 적어 두면 같은 가중치로 다시 돌렸을
             // 때 왜 결과가 다른지 설명할 수 없다.
             'min_one'     => (bool)($r['meta']['min_one']['enabled'] ?? false),
+            // 계수까지 통째로 남긴다. 프로젝트 설정이 나중에 바뀌어도
+            // 이 차수는 그때 값으로 설명된다.
+            'aidd'        => $r['meta']['aidd'] ?? null,
         ], $user);
 
         $allocs->saveItems($allocationId, $r['items']);
@@ -465,6 +478,19 @@ bs_route(bs_param_str('act', 'versions'), [
         $projectId = (int)$a['project_id'];
         bs_require_cap_api(BS_CAP_ALLOCATION_CONFIRM, $projectId);
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 확정할 수 없는 안에는 경고하지 않는다 (2026-10-08)            │
+        // │                                                              │
+        // │ 과배정 경고가 상태 확인보다 먼저 있어서, **이미 확정된 안**을 │
+        // │ 다시 확정하려 하면 "이미 확정됐습니다" 대신 "가용 공수를      │
+        // │ 넘겼습니다" 가 떴다. 사람이 고칠 수 없는 것을 고치라고 하는   │
+        // │ 셈이다.                                                      │
+        // │                                                              │
+        // │ 규칙을 두 벌로 두지 않는다 — 여기서는 **경고를 건너뛰기만**   │
+        // │ 하고, 막는 일은 그대로 confirm() 이 한다.                     │
+        // └──────────────────────────────────────────────────────────────┘
+        $settled = in_array($a['status'], ['confirmed', 'archived'], true);
+
         $items = $allocs->items($allocationId);
         $load  = bs_alloc_load($allocs, $members, $tasks, $a, $items);
 
@@ -472,7 +498,7 @@ bs_route(bs_param_str('act', 'versions'), [
         // 그걸 아는 채로 밀어붙이는 판단은 사람 몫이다. 다만 모르고
         // 넘어가지는 않게 confirm=1 을 한 번 더 받는다.
         $over = array_values(array_filter($load, static fn($l) => !empty($l['over'])));
-        if ($over && bs_param_int('accept_overload', 0) !== 1) {
+        if (!$settled && $over && bs_param_int('accept_overload', 0) !== 1) {
             bs_json_error('OVERLOAD',
                 '가용 공수를 넘긴 사람이 있습니다:' . "\n · "
                 . implode("\n · ", array_map(
@@ -606,15 +632,24 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
     $pdo = bs_db();
     [$from, $to] = bs_alloc_window((int)$allocation['project_id']);
 
+    // 그 배정안이 **산출될 때 쓴** 계수로 본다. 프로젝트 설정을 나중에
+    // 바꿔도 지난 차수의 막대가 흔들리면 안 된다 — 그 차수는 그때 숫자로
+    // 만들어진 것이다.
+    $pa = $allocation['params'] ?? (isset($allocation['params_json'])
+          ? json_decode((string)$allocation['params_json'], true) : null);
+    $aiddLoad = (float)($pa['aidd']['load'] ?? 1.0);
+
     $peak = [];
     if ($from !== null && $to !== null && $from <= $to) {
         $calc = new AvailabilityCalculator($pdo);
-        foreach ($calc->forMembers($ids, $from, $to) as $mid => $a) {
-            $cap[$mid] = round((float)$a['available'] * (int)$a['workdays'], 2);
+        foreach ($calc->forMembers($ids, $from, $to, $aiddLoad) as $mid => $a) {
+            $cap[$mid] = round((float)($a['available_aidd'] ?? $a['available'])
+                             * (int)$a['workdays'], 2);
             // 가용 공수가 넉넉해도 그 공수가 **특정 달에 몰려 있을 수** 있다.
             // 10월에 115% 찬 사람에게 10월 일을 주면 막대는 74% 라고 하지만
             // 실제로는 불가능한 일정이다.
-            $peak[$mid] = ['over_months' => $a['over_months'], 'peak_pct' => $a['peak_pct']];
+            $peak[$mid] = ['over_months' => $a['over_months'], 'peak_pct' => $a['peak_pct'],
+                           'aidd_pct' => $a['aidd_pct'], 'aidd_on' => $a['aidd_on']];
         }
     }
 
@@ -635,6 +670,10 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
             'over'        => $c > 0 && $md > $c,
             'over_months' => $peak[$mid]['over_months'] ?? [],
             'peak_pct'    => $peak[$mid]['peak_pct'] ?? 0,
+            // 가용 공수에 AIDD 가 얼마나 보태졌는지. 막대가 왜 늘었는지
+            // 말해 주지 않으면 사람은 숫자가 틀렸다고 생각한다.
+            'aidd_on'     => !empty($peak[$mid]['aidd_on']),
+            'aidd_pct'    => $peak[$mid]['aidd_pct'] ?? 0,
         ];
     }
     usort($out, static fn($a, $b) => ($b['assigned_md'] <=> $a['assigned_md'])

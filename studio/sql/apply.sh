@@ -108,6 +108,7 @@ FILES="
 018_migration_job_result.sql
 019_migration_est_source.sql
 020_migration_workload_editor.sql
+021_migration_aidd.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

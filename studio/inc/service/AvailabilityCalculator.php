@@ -151,9 +151,10 @@ final class AvailabilityCalculator
      *   breakdown:array, inferred_items:array
      * }
      */
-    public function forMember(int $memberId, string $from, string $to): array
+    public function forMember(int $memberId, string $from, string $to,
+                             float $aiddLoad = 1.0): array
     {
-        $rows = $this->forMembers([$memberId], $from, $to);
+        $rows = $this->forMembers([$memberId], $from, $to, $aiddLoad);
         return $rows[$memberId] ?? $this->emptyResult($memberId, $from, $to);
     }
 
@@ -162,8 +163,22 @@ final class AvailabilityCalculator
      *
      * @return array<int, array> member_id => forMember() 와 같은 모양
      */
-    public function forMembers(array $memberIds, string $from, string $to): array
+    public function forMembers(array $memberIds, string $from, string $to,
+                               float $aiddLoad = 1.0): array
     {
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ AIDD 여유는 **따로 담는다. 섞지 않는다** (2026-10-08)         │
+        // │                                                              │
+        // │ 확정과 추정을 한 숫자로 합치지 않는 것과 같은 이유다. AIDD    │
+        // │ 보정은 추정보다도 근거가 약한 **예측**이다 — 우리 회사의      │
+        // │ 속도 향상 실측이 없다. available 에 녹여 버리면 사람이 그것을 │
+        // │ 측정값으로 읽고 일정을 짠다.                                  │
+        // │                                                              │
+        // │ available 은 한 글자도 바꾸지 않는다. available_aidd 를 따로  │
+        // │ 더 주고, 쓰는 쪽이 어느 것을 볼지 고른다. 계수가 1.00 이면    │
+        // │ 둘이 같아서 **이 변경 전과 완전히 같은 수치**가 나온다.       │
+        // └──────────────────────────────────────────────────────────────┘
+        $aiddLoad = max(BS_AIDD_MIN, min(BS_AIDD_MAX, $aiddLoad));
         $memberIds = array_values(array_unique(array_map('intval', $memberIds)));
         if (!$memberIds) {
             return [];
@@ -303,6 +318,10 @@ final class AvailabilityCalculator
             $conf = $used <= 0 ? 1.0
                   : round(($c + $i * BS_INFERRED_CONFIDENCE) / $used, 3);
 
+            // 점유를 할인해 돌려받는 몫. 기본 가용량을 넘지 않는다 —
+            // 일을 안 하던 사람이 AIDD 로 100% 를 넘을 수는 없다.
+            $relief = round(min(max(0.0, $base - $avail), ($c + $i) * (1.0 - $aiddLoad)), 4);
+
             $out[$mid] = [
                 'member_id'      => $mid,
                 'base_capacity'  => $base,
@@ -340,7 +359,16 @@ final class AvailabilityCalculator
                 'confidence'     => $conf,
                 'breakdown'      => $breakdown[$mid],
                 'inferred_items' => $inf[$mid]['items'] ?? [],
-            ] + $this->monthView($byMonth[$mid], $spans, $base, $i);
+
+                // ── AIDD (2026-10-08) ─────────────────────────────────
+                // available 과 **합치지 않는다.** 화면이 두 숫자를 나란히
+                // 놓고, 엔진만 available_aidd 를 쓴다.
+                'aidd_on'        => $aiddLoad < 1.0 - 0.0001,
+                'aidd_factor'    => $aiddLoad,
+                'aidd_relief'    => $relief,
+                'aidd_pct'       => (int)round($relief * 100),
+                'available_aidd' => round($avail + $relief, 4),
+            ] + $this->monthView($byMonth[$mid], $spans, $base, $i, $aiddLoad);
         }
         return $out;
     }
@@ -355,7 +383,8 @@ final class AvailabilityCalculator
      * @param array<string,float> $load  'YYYY-MM' => 확정 점유 비율
      * @param array<string,array> $spans monthSpans() 결과
      */
-    private function monthView(array $load, array $spans, float $base, float $inferred): array
+    private function monthView(array $load, array $spans, float $base, float $inferred,
+                              float $aiddLoad = 1.0): array
     {
         $months = [];
         $over   = [];
@@ -363,6 +392,9 @@ final class AvailabilityCalculator
         foreach ($spans as $ym => $sp) {
             $c    = round((float)($load[$ym] ?? 0), 4);
             $used = $c + $inferred;
+            // 달별 여유도 같은 규칙으로 돌려받는다. 달마다 점유가 다르니
+            // 돌려받는 몫도 다르다 — 꽉 찬 달일수록 많이 돌려받는다.
+            $rel  = min($used, $base) * (1.0 - $aiddLoad);
             $row  = [
                 'month'         => $ym,
                 // '2026-10' 은 눈에 안 들어온다. 화면은 '10월' 로 읽는다.
@@ -378,6 +410,10 @@ final class AvailabilityCalculator
                 'available_md'  => round(max(0.0, $base - $used) * $sp['workdays'], 2),
                 'over'          => $used > $base + 0.0001,
                 'over_pct'      => (int)round(max(0.0, $used - $base) * 100),
+                // 넘친 달에도 AIDD 가 숨통을 틔워 주지만, **넘쳤다는 사실
+                // 자체는 지우지 않는다.** over 는 측정값 그대로다.
+                'aidd_pct'      => (int)round($rel * 100),
+                'aidd_md'       => round($rel * $sp['workdays'], 2),
             ];
             $peak = max($peak, (int)round($used * 100));
             if ($row['over']) {
@@ -513,6 +549,8 @@ final class AvailabilityCalculator
             'breakdown' => [], 'inferred_items' => [],
             // 모양이 다르면 화면이 undefined 를 만난다.
             'months' => [], 'over_months' => [], 'peak_pct' => 0,
+            'aidd_on' => false, 'aidd_factor' => 1.0, 'aidd_relief' => 0.0,
+            'aidd_pct' => 0, 'available_aidd' => 1.0,
         ];
     }
 }

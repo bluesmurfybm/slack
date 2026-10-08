@@ -315,6 +315,79 @@ ok('상한 숫자가 담긴다', str_contains(implode(' ', $dropped), '300'));
     ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]]);
 ok('뗄 것이 없으면 조용하다', $none === []);
 
+// =====================================================================
+echo "\n[AIDD] 공수만 줄인다. 난이도는 그대로\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 난이도를 건드리면 안 되는 이유 (2026-10-08)                       │
+// │                                                                  │
+// │ 난이도는 공수 환산 말고도 세 군데서 쓰인다 —                      │
+// │   ★4+ 상위자 게이트(배정) · 추정 점유(0.05×diff/3) · 실적        │
+// │                                                                  │
+// │ AIDD 로 ★5 를 ★3 으로 낮추면 게이트가 **점수 비교 이전 단계에서** │
+// │ 적용을 멈춰 어려운 일이 못 하는 사람에게 간다. 그 값은 실적으로   │
+// │ 남아 영구히 오염된다.                                            │
+// │                                                                  │
+// │ AI 는 타이핑과 뼈대를 빠르게 하지 어려운 문제를 쉽게 만들지       │
+// │ 않는다. 그래서 ★5 는 ★5 로 두고 걸리는 날수만 줄인다.           │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$a0 = DifficultyScorer::estFromDifficulty(5, [], '', 1.00);
+$a1 = DifficultyScorer::estFromDifficulty(5, [], '', 0.85);
+
+ok('★ 계수 1.00 은 아무것도 안 바꾼다',
+   $a0['md'] === (float)DifficultyScorer::EST_DEFAULT[5] && $a0['by'] === 'rule',
+   json_encode($a0, JSON_UNESCAPED_UNICODE));
+ok('★ 계수를 곱해 공수를 줄인다', abs($a1['md'] - 6.8) < 0.001, (string)$a1['md']);
+ok('★ 보정한 값은 by=aidd 로 남는다', $a1['by'] === 'aidd', $a1['by']);
+ok('★ 근거에 계수를 적는다', str_contains($a1['note'], '0.85'), $a1['note']);
+ok('★ 난이도는 그대로라고 못 박는다', str_contains($a1['note'], '난이도는 그대로'), $a1['note']);
+
+// 환산표가 있으면 표 값에 곱한다. 표가 바뀌어도 계수는 같은 자리에 걸린다.
+$tbl = [5 => ['md' => 10.0, 'n' => 7]];
+ok('환산표 값에도 곱한다',
+   abs(DifficultyScorer::estFromDifficulty(5, $tbl, '', 0.85)['md'] - 8.5) < 0.001);
+ok('표가 있으면 표를 쓴다(기본표 아님)',
+   str_contains(DifficultyScorer::estFromDifficulty(5, $tbl, '', 0.85)['note'], '완료 건 7개'));
+
+// 범위 밖 계수는 거절하지 않고 자른다. 0.01 이면 공수가 100분의 1 이 되고
+// 그건 옵션이 아니라 사고다.
+ok('★ 계수가 바닥 아래면 바닥으로 자른다',
+   abs(DifficultyScorer::estFromDifficulty(5, [], '', 0.01)['md']
+       - (DifficultyScorer::EST_DEFAULT[5] * BS_AIDD_MIN)) < 0.001,
+   (string)DifficultyScorer::estFromDifficulty(5, [], '', 0.01)['md']);
+ok('계수가 1 을 넘으면 1 로 자른다(공수를 늘리지 않는다)',
+   DifficultyScorer::estFromDifficulty(5, [], '', 2.0)['md']
+   === (float)DifficultyScorer::EST_DEFAULT[5]);
+
+// 다섯 난이도 전부 같은 비율로 줄어야 한다. 하나만 다르면 환산이 깨진 것이다.
+$allOk = true;
+foreach ([1, 2, 3, 4, 5] as $lv) {
+    $x = DifficultyScorer::estFromDifficulty($lv, [], '', 0.85)['md'];
+    if (abs($x - round(DifficultyScorer::EST_DEFAULT[$lv] * 0.85, 2)) > 0.001) { $allOk = false; }
+}
+ok('★ 다섯 난이도 모두 같은 비율로 줄어든다', $allOk);
+
+// 숫자를 글에 적을 때 2.00 M/D 라고 쓰면 눈에 걸린다.
+ok('공수를 보기 좋게 적는다',
+   str_contains(DifficultyScorer::estFromDifficulty(3, [], '', 1.0)['note'], '2 M/D'),
+   DifficultyScorer::estFromDifficulty(3, [], '', 1.0)['note']);
+
+// bs_aidd_of — 꺼져 있으면 **1.00 으로 중화**한다. 부르는 쪽이 enabled 를
+// 따로 보지 않아도 되게 하려는 것이고, 안 그러면 빠뜨리는 자리가 생긴다.
+$on  = bs_aidd_of(['aidd_enabled' => 1, 'aidd_effort' => '0.85', 'aidd_load' => '0.95']);
+$off = bs_aidd_of(['aidd_enabled' => 0, 'aidd_effort' => '0.85', 'aidd_load' => '0.95']);
+ok('★ 켜면 계수가 그대로', $on['enabled'] && abs($on['effort'] - 0.85) < 0.001
+   && abs($on['load'] - 0.95) < 0.001, json_encode($on));
+ok('★ 끄면 계수가 1.00 으로 중화된다',
+   !$off['enabled'] && $off['effort'] === 1.0 && $off['load'] === 1.0, json_encode($off));
+ok('★ 프로젝트를 모르면 보정하지 않는다',
+   !bs_aidd_of(null)['enabled'] && bs_aidd_of(null)['effort'] === 1.0);
+$wild = bs_aidd_of(['aidd_enabled' => 1, 'aidd_effort' => '0.01', 'aidd_load' => '9']);
+ok('★ 말도 안 되는 값은 범위로 자른다',
+   abs($wild['effort'] - BS_AIDD_MIN) < 0.001 && abs($wild['load'] - BS_AIDD_MAX) < 0.001,
+   json_encode($wild));
+
 echo "\n" . str_repeat('=', 56) . "\n";
 echo "통과 $pass · 실패 $fail\n";
 exit($fail === 0 ? 0 : 1);

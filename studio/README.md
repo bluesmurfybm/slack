@@ -101,6 +101,7 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 018_migration_job_result.sql        작업 결과물 — WBS 도출 초안을 담는 칸
 019_migration_est_source.sql        예상공수를 누가 매겼는가 + 근거
 020_migration_workload_editor.sql   직접 등록한 점유를 누가 고쳤는가
+021_migration_aidd.sql              AIDD 고려 옵션 — 공수 계수·점유 반영률
 ```
 
 ### 적용 뒤 확인
@@ -124,6 +125,7 @@ mysql <db> -e "SELECT * FROM bs_setting"           # 4행인가
 | 018 | **안전하지 않음** — bs_analysis_job 에 맨 `ALTER` 가 있어 두 번째에 죽습니다 |
 | 019 | **안전하지 않음** — bs_task 에 맨 `ALTER` 가 있어 두 번째에 죽습니다 |
 | 020 | **안전하지 않음** — bs_workload 에 맨 `ALTER` 가 있어 두 번째에 죽습니다 |
+| 021 | **안전하지 않음** — bs_project 에 맨 `ALTER` 가 있어 두 번째에 죽습니다 (뒤의 `UPDATE` 는 안전) |
 | 001 | 안전하지 않음 (`CREATE TABLE`) |
 | 008 · 009 | **안전하지 않음** — 맨 `ALTER` 라 두 번째에 죽습니다 |
 

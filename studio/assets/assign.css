@@ -1730,3 +1730,26 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-mb__r.is-over .ba-mb__b i { background: var(--ba-danger); opacity: .8; }
 .ba-mb__r.is-over .ba-mb__v,
 .ba-mb__r.is-over .ba-mb__m { color: var(--ba-danger); font-weight: 600; }
+
+/* ── AIDD 고려 ──────────────────────────────────────────────────────
+   보정분은 가용도에 **녹이지 않는다.** 확정과 추정을 안 합치는 것과 같은
+   이유다 — 예측을 측정값으로 읽으면 그 일정으로 사람이 움직인다. */
+.ba-aidd {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin: 10px 0 0; font-size: 13px;
+}
+.ba-aidd__on { display: flex; align-items: center; gap: 6px; }
+.ba-aidd__f  { display: flex; align-items: center; gap: 6px; color: var(--ba-ink-soft); }
+.ba-aidd__f input { width: 72px; }
+.ba-aidd__note { margin-top: 6px; }
+
+/* 돌려받은 몫. 점유의 끝자락을 덮어 "점유에서 나왔다" 를 눈으로 말한다 */
+.ba-av__a {
+  display: block; height: 100%; opacity: .85;
+  background: repeating-linear-gradient(-45deg,
+    var(--ba-brand) 0 2px, #ffffff 2px 5px);
+}
+.ba-aidd-tag {
+  display: inline-block; font-size: 11px; font-weight: 600;
+  color: var(--ba-brand-dk); white-space: nowrap;
+}

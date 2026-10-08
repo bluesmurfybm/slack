@@ -107,6 +107,8 @@ bs_route(bs_param_str('act', 'list'), [
                     // 무거우니 근거 드로어(detail)에서만 준다.
                     'over_months'   => $a['over_months'],
                     'peak_pct'      => $a['peak_pct'],
+                    'aidd_on'       => $a['aidd_on'],
+                    'aidd_pct'      => $a['aidd_pct'],
                 ] : null,
 
                 'domain_fit'   => $r['domain_fit'],       // 고른 계열 평균. 없으면 null
@@ -226,6 +228,12 @@ bs_route(bs_param_str('act', 'list'), [
                 'months'        => $a['months'],
                 'over_months'   => $a['over_months'],
                 'peak_pct'      => $a['peak_pct'],
+                // AIDD 여유는 available 과 **합치지 않는다.** 화면이 두
+                // 숫자를 나란히 놓고 사람이 가려 읽는다.
+                'aidd_on'       => $a['aidd_on'],
+                'aidd_factor'   => $a['aidd_factor'],
+                'aidd_pct'      => $a['aidd_pct'],
+                'available_aidd'=> $a['available_aidd'],
             ],
             // 확정 내역과 추정 내역을 따로 담는다. 화면이 섞지 못하게.
             'confirmed_breakdown' => $a['breakdown'],

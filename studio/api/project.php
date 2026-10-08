@@ -326,6 +326,17 @@ function bs_read_project_input(bool $requireName = false): array
         }
     }
 
+    // AIDD 세 칸은 문자열이 아니다. bs_param_str 로 받으면 체크 해제가
+    // "" 가 되어 **켠 것과 구분이 안 된다.**
+    if (bs_has_param('aidd_enabled')) {
+        $out['aidd_enabled'] = bs_param_int('aidd_enabled', 1);
+    }
+    foreach (['aidd_effort', 'aidd_load'] as $c) {
+        if (bs_has_param($c)) {
+            $out[$c] = bs_param_str($c);     // 범위 자르기는 ProjectRepo 가 한다
+        }
+    }
+
     // 등록은 name 이 필수다. 없으면 빈 값으로 넣어 두고 호출부가 막게 한다.
     if ($requireName && !array_key_exists('name', $out)) {
         $out['name'] = '';
@@ -349,6 +360,9 @@ function bs_present_project(array $r): array
         'test_start'   => bs_date($r['test_start']),
         'test_end'     => bs_date($r['test_end']),
         'deploy_date'  => bs_date($r['deploy_date']),
+        'aidd_enabled' => (int)($r['aidd_enabled'] ?? 1) === 1,
+        'aidd_effort'  => (float)($r['aidd_effort'] ?? BS_AIDD_DEFAULT['effort']),
+        'aidd_load'    => (float)($r['aidd_load'] ?? BS_AIDD_DEFAULT['load']),
         'notes'        => $r['notes']  ?? null,
         'extra'        => $r['extra']  ?? null,
         'status'       => $r['status'],
@@ -380,6 +394,9 @@ function bs_present_project_row(array $r): array
         'test_start'   => bs_date($r['test_start']),
         'test_end'     => bs_date($r['test_end']),
         'deploy_date'  => bs_date($r['deploy_date']),
+        'aidd_enabled' => (int)($r['aidd_enabled'] ?? 1) === 1,
+        'aidd_effort'  => (float)($r['aidd_effort'] ?? BS_AIDD_DEFAULT['effort']),
+        'aidd_load'    => (float)($r['aidd_load'] ?? BS_AIDD_DEFAULT['load']),
         'owner_name'   => $r['owner_name'],
         'is_mine'      => $r['owner_id'] === $me,
         'is_deleted'   => !empty($r['deleted_at']),
