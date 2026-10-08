@@ -341,7 +341,8 @@ final class AllocationRepo
         $st->execute(array_merge(
             [(int)$a['project_id']], BS_TASK_NOT_ASSIGNABLE_STATUS, [$allocationId]
         ));
-        return $st->fetchAll(PDO::FETCH_ASSOC);
+        // ORDER BY wbs_no 는 글자 순이라 10 이 2 보다 앞에 온다.
+        return bs_wbs_sort($st->fetchAll(PDO::FETCH_ASSOC));
     }
 
     // =================================================================
@@ -363,7 +364,9 @@ final class AllocationRepo
               ORDER BY t.wbs_no, FIELD(i.role, "owner", "support", "reviewer"), m.emp_name'
         );
         $st->execute([$allocationId]);
-        return array_map([$this, 'presentItem'], $st->fetchAll(PDO::FETCH_ASSOC));
+        // SQL 의 ORDER BY 는 **역할·이름 2차 정렬**을 위해 그대로 둔다.
+        // 1차(번호)만 여기서 다시 센다 — usort 가 안정 정렬이라 2차는 안 흩어진다.
+        return bs_wbs_sort(array_map([$this, 'presentItem'], $st->fetchAll(PDO::FETCH_ASSOC)));
     }
 
     public function findItem(int $itemId): ?array

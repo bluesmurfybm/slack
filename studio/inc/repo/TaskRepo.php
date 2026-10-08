@@ -979,7 +979,7 @@ final class TaskRepo
               ORDER BY t.wbs_no"
         );
         $st->execute($taskIds);
-        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $rows = bs_wbs_sort($st->fetchAll(PDO::FETCH_ASSOC));
         if (!$rows) {
             return;
         }

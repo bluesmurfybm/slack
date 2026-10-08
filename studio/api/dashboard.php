@@ -509,7 +509,9 @@ function bs_dash_leaf_tasks(PDO $pdo, int $projectId): array
     );
     $st->execute([$projectId]);
     $out = [];
-    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    // ORDER BY wbs_no 는 글자 순이라 10 이 2 보다 앞에 온다. 키를 씌우기
+    // 전에 다시 센다 — 씌운 뒤에는 순서를 고칠 자리가 없다.
+    foreach (bs_wbs_sort($st->fetchAll(PDO::FETCH_ASSOC)) as $r) {
         $out[(int)$r['id']] = $r;
     }
     return $out;
@@ -673,6 +675,15 @@ function bs_dash_my_tasks(PDO $pdo, int $memberId): array
           ORDER BY (t.plan_end IS NULL), t.plan_end, t.wbs_no"
     );
     $st->execute([$memberId]);
+    // 1차는 마감일 그대로 두고, **같은 날짜 안에서만** 번호를 다시 센다.
+    // 통째로 번호순으로 돌리면 '내 일' 이 급한 것부터가 아니게 된다.
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    usort($rows, static function (array $x, array $y): int {
+        $nx = $x['plan_end'] === null; $ny = $y['plan_end'] === null;
+        return ($nx <=> $ny)
+            ?: (($nx && $ny) ? 0 : strcmp((string)$x['plan_end'], (string)$y['plan_end']))
+            ?: bs_wbs_cmp($x['wbs_no'] ?? null, $y['wbs_no'] ?? null);
+    });
     return array_map(static function (array $r): array {
         $r['task_id']      = (int)$r['task_id'];
         $r['project_id']   = (int)$r['project_id'];
@@ -682,5 +693,5 @@ function bs_dash_my_tasks(PDO $pdo, int $memberId): array
         $r['status_label'] = BS_TASK_STATUS[$r['status']] ?? $r['status'];
         $r['role_name']    = BS_ALLOC_ROLE[$r['role']] ?? $r['role'];
         return $r;
-    }, $st->fetchAll(PDO::FETCH_ASSOC));
+    }, $rows);
 }

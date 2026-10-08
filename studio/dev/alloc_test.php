@@ -632,6 +632,107 @@ ok('어느 배정안 때문인지 남는다',
                       WHERE ref_type='allocation' AND ref_id=$aid2")->fetchColumn() === 3);
 
 // =====================================================================
+echo "\n[4-N] WBS 번호 정렬 — 10 은 2 보다 뒤다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 같은 자료가 두 화면에서 다른 순서로 보였다 (2026-10-08)           │
+// │                                                                  │
+// │ wbs_no 가 VARCHAR 라 `ORDER BY t.wbs_no` 가 **글자 순**으로 센다. │
+// │ 배정 표가 1 · 10 · 11 · 12 · … · 19.1 · 2.1 로 나왔다.           │
+// │ 바로 위 WBS 표는 트리(depth·seq)로 그리므로 순서가 갈렸다.        │
+// │                                                                  │
+// │ 다섯 자리에 흩어져 있던 같은 버그다. 한 벌(bs_wbs_cmp)로 모았다.  │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$mk = fn(array $ns) => array_map(fn($x) => ['wbs_no' => $x], $ns);
+$no = fn(array $rows) => implode(',', array_column($rows, 'wbs_no'));
+
+ok('★ 10 은 2 보다 뒤다', $no(bs_wbs_sort($mk(['10', '2', '1']))) === '1,2,10',
+   $no(bs_wbs_sort($mk(['10', '2', '1']))));
+ok('★ 1.10 은 1.9 보다 뒤다',
+   $no(bs_wbs_sort($mk(['1.10', '1.9', '1.2']))) === '1.2,1.9,1.10',
+   $no(bs_wbs_sort($mk(['1.10', '1.9', '1.2']))));
+ok('★ 2.1 은 10 보다 앞이다',
+   $no(bs_wbs_sort($mk(['10', '2.1']))) === '2.1,10',
+   $no(bs_wbs_sort($mk(['10', '2.1']))));
+ok('부모가 자식보다 앞이다',
+   $no(bs_wbs_sort($mk(['1.1', '1', '1.1.1']))) === '1,1.1,1.1.1');
+ok('세 단계가 섞여도 트리 순서다',
+   $no(bs_wbs_sort($mk(['2', '1.2', '1', '2.1', '1.1', '10', '1.10'])))
+   === '1,1.1,1.2,1.10,2,2.1,10',
+   $no(bs_wbs_sort($mk(['2', '1.2', '1', '2.1', '1.1', '10', '1.10']))));
+
+// 번호가 빈 줄은 뒤로. 맨 앞에 두면 목록의 첫인상이 그 줄이 된다.
+ok('★ 번호 없는 줄은 뒤로 간다', $no(bs_wbs_sort($mk(['2', '', '1']))) === '1,2,',
+   $no(bs_wbs_sort($mk(['2', '', '1']))));
+ok('빈 줄끼리는 들어온 순서 그대로', bs_wbs_cmp('', '') === 0);
+ok('null 도 빈 값으로 본다', bs_wbs_cmp(null, '1') > 0 && bs_wbs_cmp('1', null) < 0);
+
+// 2차 정렬을 흩지 않는다. SQL 이 매겨 둔 역할·이름 순서가 살아 있어야 한다.
+$same = [['wbs_no' => '1', 'who' => 'ㄱ'], ['wbs_no' => '1', 'who' => 'ㄴ'],
+         ['wbs_no' => '1', 'who' => 'ㄷ']];
+ok('★ 같은 번호끼리는 들어온 순서 그대로(안정 정렬)',
+   implode('', array_column(bs_wbs_sort($same), 'who')) === 'ㄱㄴㄷ',
+   implode('', array_column(bs_wbs_sort($same), 'who')));
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 두 자리 번호를 일부러 만든다                                      │
+// │                                                                  │
+// │ 픽스처 번호가 1.1~2.2 뿐이면 **글자 순과 자연 순이 같은 답**을    │
+// │ 낸다. 그 상태로 시험을 쓰면 버그를 되돌려도 통과한다 — 실제로     │
+// │ 처음에 그렇게 썼다가 되돌리기 확인에서 걸렸다.                    │
+// └──────────────────────────────────────────────────────────────────┘
+$sortPid = $projects->create([
+    'name' => '정렬 시험', 'status' => 'allocating',
+    'dev_start' => '2026-03-02', 'dev_end' => '2026-05-29',
+], $actor);
+
+$sortTree = [];
+for ($i = 1; $i <= 12; $i++) {           // 대분류 12개 → 번호가 10 을 넘는다
+    $sortTree[] = ['title' => '분류 ' . $i, 'children' => [
+        ['title' => "일 {$i}-1", 'est_md' => 1, 'difficulty' => 2,
+         'domain_ids' => [$DOM_ACTIVITY]],
+        ['title' => "일 {$i}-2", 'est_md' => 1, 'difficulty' => 2,
+         'domain_ids' => [$DOM_ACTIVITY]],
+    ]];
+}
+$tasks->saveTree($sortPid, $sortTree, $actor);
+$sortLeaf = [];
+foreach ($tasks->allByProject($sortPid) as $t) {
+    if ((int)$t['depth'] > 1) { $sortLeaf[] = (int)$t['id']; }
+}
+$tasks->confirm($sortLeaf, true, $actor);
+
+$rSort = $engine->propose($sortPid, []);
+$aSort = $allocs->createVersion($sortPid, ['weights' => $rSort['meta']['weights'],
+                                           'eval_ver' => $rSort['meta']['eval_ver']], $actor);
+$allocs->saveItems($aSort, $rSort['items']);
+$got = array_column($allocs->items($aSort), 'wbs_no');
+
+// 이 전제가 깨지면 아래 시험이 공허해진다 — 글자 순과 자연 순이 같은 답을
+// 내는 자료로는 무엇도 확인할 수 없다.
+$byText = $got;
+sort($byText, SORT_STRING);
+ok('★ 글자 순과 자연 순이 갈리는 자료다(시험 전제)', $byText !== $got,
+   implode(',', $byText));
+
+$want = $got;
+usort($want, 'bs_wbs_cmp');
+ok('★ 배정 항목이 번호 순으로 나온다', $got === $want,
+   implode(',', array_slice($got, 0, 8)) . ' … / ' . implode(',', array_slice($want, 0, 8)));
+ok('★ 10.1 이 2.1 보다 뒤에 온다',
+   array_search('10.1', $got, true) > array_search('2.1', $got, true),
+   implode(',', $got));
+
+// 담당자 없는 목록도 같은 순서여야 한다. 두 표가 다른 순서면 눈으로 못 맞춘다.
+$orphans = array_column($allocs->tasksWithoutOwner($aSort), 'wbs_no');
+$oWant = $orphans;
+usort($oWant, 'bs_wbs_cmp');
+ok('담당자 없는 목록도 번호 순', $orphans === $oWant, implode(',', $orphans));
+
+$projects->softDelete($sortPid, $actor, "시험 뒷정리");
+
+// =====================================================================
 echo "\n[4-A] AIDD 고려 — 예측을 측정값으로 읽게 두지 않는다\n";
 //
 // ┌──────────────────────────────────────────────────────────────────┐
