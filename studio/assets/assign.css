@@ -848,10 +848,37 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 
 .ba-al__ver { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .ba-al__ver select { width: auto; min-width: 150px; }
-.ba-al__badge { font-size: 12px; font-weight: 600; }
-.ba-al__badge--confirmed { color: var(--ba-brand); }
-.ba-al__badge--archived  { color: var(--ba-ink-soft); }
-.ba-al__badge--adjusted  { color: var(--ba-warn); }
+/* ── 제목 밑 표식 ───────────────────────────────────────────────────
+   사실 하나에 표식 하나. 가운뎃점으로 이은 긴 글은 하나도 안 읽힌다.
+   모양은 WBS 표의 '자동' 표식(.ba-tag-auto)과 같은 결로 맞췄다.
+
+   ┌──────────────────────────────────────────────────────────────────┐
+   │ 색만으로 뜻을 나르지 않는다                                       │
+   │                                                                  │
+   │ 「자동」 한 낱말만 주황으로 떠 있으면, 그 칸에 여러 값이 올 수     │
+   │ 있다는 것을 모르는 사람에게는 **색이 잘못 나온 것**처럼 보인다.    │
+   │ 그래서 ① 이름을 앞에 붙이고(`단위 자동`) ② 숫자를 다르게 읽어야   │
+   │ 하는 것에만 `※` 를 붙인다. 색을 못 가리는 사람도 읽어야 한다.     │
+   └──────────────────────────────────────────────────────────────────┘ */
+.ba-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 10px; }
+.ba-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; border-radius: 4px; padding: 2px 7px;
+  border: 1px solid var(--ba-line); background: var(--ba-paper);
+  color: var(--ba-ink); white-space: nowrap;
+}
+/* 이름은 값보다 약하게 — 읽는 차례가 '무엇' 다음 '얼마' 다 */
+.ba-tag em { font-style: normal; font-weight: 500; color: var(--ba-ink-soft); }
+.ba-tag b  { font-weight: 700; }
+/* 색은 **뜻이 있을 때만**. 다 칠하면 색이 색을 가린다. */
+.ba-tag--ok   { color: var(--ba-brand);  border-color: #bfe0cc; background: #f4fbf6; }
+.ba-tag--ok   em { color: var(--ba-brand); opacity: .75; }
+.ba-tag--warn { color: var(--ba-warn);   border-color: #f0dcb8; background: #fffaf0; }
+.ba-tag--warn em { color: var(--ba-warn); opacity: .8; }
+.ba-tag--bad  { color: var(--ba-danger); border-color: #e8c4be; background: #fdf4f3; }
+.ba-tag--bad  em { color: var(--ba-danger); opacity: .8; }
+.ba-tag--off  { opacity: .6; }
+
 
 /* ---- 가중치 패널 ------------------------------------------------------ */
 .ba-wpanel {
@@ -908,7 +935,6 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 }
 /* 무작위로 뽑은 안은 한눈에 달라 보여야 한다. 적합도 숫자가 나란히
    보이므로, 방식이 안 보이면 그 숫자가 근거처럼 읽힌다. */
-.ba-al__badge--rand { color: #7a5a12; }
 /* 자동이 쪼갠 이유. 줄마다 하나씩 — 문단으로 뭉치면 어느 항목 얘기인지 흐려진다. */
 .ba-al-splits { margin: 10px 0; line-height: 1.75; }
 .ba-al-splits > div { margin-top: 3px; }
@@ -1800,3 +1826,72 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-caret--up   { border-bottom: 5px solid currentColor; margin-top: -2px; }
 .ba-caret--down { border-top: 5px solid currentColor; margin-bottom: -2px; }
 
+/* ── 설명 드로어 ────────────────────────────────────────────────────
+   설명을 화면에 다 적어 덮는 대신 **부를 때 열리는** 자리를 둔다.
+   평소에는 물음표 하나만 보인다. */
+/* 제목에서 한 칸 띄우고 **색을 달리한다.** 제목에 붙여 같은 색으로 두면
+   글자의 일부로 읽혀 아무도 누르지 않는다. */
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 칸의 **오른쪽 끝**에 못 박는다 (2026-10-08)                        │
+   │                                                                  │
+   │ 뱃지 뒤에 뒀더니 뱃지 길이("2차 · 산출됨 · 처리량 판정 264회차 ·  │
+   │ 엔진 v1")에 따라 떠다녔고, 제목 옆으로 당겼더니 제목과 뱃지를     │
+   │ 갈라 놓아 어색했다.                                               │
+   │                                                                  │
+   │ 늘 같은 자리에 있어야 찾는다. 오른쪽 끝은 **무엇이 길어져도**     │
+   │ 안 움직인다.                                                      │
+   └──────────────────────────────────────────────────────────────────┘ */
+/* 같은 꼴이 이미 .ba-prof__head h2 에 있다. 뱃지 모양은 건드리지 않는다. */
+.ba-h2 { display: flex; align-items: center; gap: 0; }
+.ba-help {
+  flex: 0 0 auto;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%;
+  background: var(--ba-brand); color: #fff;
+  font-size: 13px; font-weight: 700; line-height: 21px; cursor: pointer;
+  vertical-align: middle; transition: transform .12s ease-out, background .12s;
+}
+.ba-help:hover { background: var(--ba-brand-dk); transform: scale(1.12); }
+.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offset: 2px; }
+
+/* 식과 표가 많아 620px 로는 줄바꿈이 심하다 */
+.ba-drawer__box--wide { width: 860px; }
+
+.ba-guide { font-size: 13.5px; line-height: 1.72; }
+.ba-guide__lead {
+  margin: 0 0 16px; padding: 12px 14px; border-radius: var(--ba-r);
+  background: var(--ba-surface); font-size: 14px;
+}
+.ba-guide h3 {
+  margin: 22px 0 8px; font-size: 14px; font-weight: 700;
+  padding-bottom: 5px; border-bottom: 2px solid var(--ba-line);
+}
+.ba-guide h3:first-of-type { margin-top: 4px; }
+.ba-guide p { margin: 8px 0; }
+.ba-guide code { font-size: 12.5px; background: var(--ba-surface); padding: 1px 4px; border-radius: 4px; }
+/* 식은 줄을 맞춰야 읽힌다. 가로로 넘치면 줄바꿈 대신 스크롤 */
+.ba-guide__box {
+  margin: 8px 0; padding: 11px 13px; border-radius: var(--ba-r);
+  background: #16243a; color: #dce6f2; font-size: 12px; line-height: 1.75;
+  overflow-x: auto; white-space: pre; font-family: Consolas, 'D2Coding', monospace;
+}
+.ba-guide__box b { color: #9fd8b4; font-weight: 700; }
+.ba-guide__t { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12.5px; }
+.ba-guide__t th, .ba-guide__t td {
+  padding: 7px 9px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--ba-line);
+}
+.ba-guide__t th { font-size: 11.5px; color: var(--ba-ink-soft); background: var(--ba-surface); }
+.ba-guide__t td:first-child { white-space: nowrap; }
+.ba-guide__y { color: var(--ba-brand-dk); font-weight: 700; }
+.ba-guide__ul { margin: 8px 0; padding-left: 18px; }
+.ba-guide__ul li { margin: 5px 0; }
+.ba-guide__note {
+  margin: 8px 0 0; padding-left: 14px; position: relative;
+  font-size: 12.5px; color: var(--ba-ink-soft);
+}
+.ba-guide__note::before { content: '※'; position: absolute; left: 0; }
+
+@media (max-width: 900px) {
+  .ba-drawer__box--wide { width: 100vw; }
+}

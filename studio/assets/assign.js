@@ -127,6 +127,41 @@
   }
 
   /**
+   * 제목 밑에 붙는 표식 하나.
+   *
+   * ┌──────────────────────────────────────────────────────────────────┐
+   * │ 값만 적으면 색이 유일한 신호가 된다 (2026-10-08)                  │
+   * │                                                                  │
+   * │ 「자동」 한 낱말만 주황으로 떠 있으면, 그 칸에 여러 값이 올 수    │
+   * │ 있다는 것을 모르는 사람에게는 **색이 잘못 나온 것**처럼 보인다.   │
+   * │ 실제로 그렇게 읽혔다.                                             │
+   * │                                                                  │
+   * │ 그래서 신호를 둘로 둔다 —                                         │
+   * │   ① 무엇에 대한 값인지 **이름을 앞에 적는다**(`단위 자동`)        │
+   * │   ② 숫자를 다르게 읽어야 하는 것에만 `※` 를 붙이고 색을 준다     │
+   * │                                                                  │
+   * │ 색만으로 뜻을 나르지 않는다. 색을 못 가리는 사람도 읽어야 한다.   │
+   * └──────────────────────────────────────────────────────────────────┘
+   *
+   * @param {string}  label 무엇에 대한 값인가. 값만으로 분명하면 빈 문자열
+   * @param {string}  value 값
+   * @param {string}  tone  '' | 'ok' | 'warn' | 'bad' | 'off'
+   * @param {string}  tip   마우스를 올렸을 때의 한 줄
+   */
+  function tag(label, value, tone, tip) {
+    var mark = (tone === 'warn' || tone === 'bad') ? '<b>※</b> ' : '';
+    return '<span class="ba-tag' + (tone ? ' ba-tag--' + tone : '') + '"' +
+           (tip ? ' title="' + esc(tip) + '"' : '') + '>' + mark +
+           (label ? '<em>' + esc(label) + '</em>' : '') + esc(value) + '</span>';
+  }
+
+  /** 표식 묶음을 그 자리에 붙인다. 빈 것은 버린다. */
+  function tagsInto(sel, list) {
+    var el = $(sel);
+    if (el) { el.innerHTML = list.filter(Boolean).join(''); }
+  }
+
+  /**
    * 어느 달이 꽉 찼는지 한 줄로.
    *
    * ┌──────────────────────────────────────────────────────────────────┐
@@ -1616,7 +1651,7 @@
       });
 
       tb.innerHTML = html;
-      $('#ba-c-count').textContent = rows.length + '명';
+      tagsInto('#ba-c-count', [tag('', rows.length + '명', '', '조건에 맞는 후보 수')]);
       updatePicked();
     }
 
@@ -1890,12 +1925,14 @@
     function draw(d) {
       root.hidden = false;
       var c = d.count || {};
-      $('#ba-lk-sum').textContent = d.total
-        ? '전체 ' + d.total + '건 · 읽음 ' + (c.ok || 0)
-          + ' · 대기 ' + (c.pending || 0)
-          + ' · 실패 ' + (c.fail || 0)
-          + ' · 건너뜀 ' + (c.skip || 0)
-        : '아직 찾은 링크가 없습니다';
+      // 손봐야 할 것(실패)에만 색을 준다. 다 칠하면 색이 색을 가린다.
+      tagsInto('#ba-lk-sum', d.total ? [
+        tag('전체', d.total + '건', ''),
+        tag('읽음', (c.ok || 0) + '', c.ok ? 'ok' : ''),
+        (c.pending ? tag('대기', c.pending + '', '', '아직 안 읽었습니다') : ''),
+        (c.fail ? tag('실패', c.fail + '', 'bad', '읽지 못했습니다. [실패한 것만 다시] 로 되돌려 보세요') : ''),
+        (c.skip ? tag('건너뜀', c.skip + '', 'off', '안 쓰기로 한 연동입니다. 실패가 아닙니다') : '')
+      ] : [tag('', '아직 찾은 링크가 없습니다', 'off')]);
 
       var job = d.job;
       $('#ba-lk-cancel').hidden = !job;
@@ -2484,10 +2521,14 @@
         }
       });
 
-      var s = '전체 ' + rows.length + '건 · 확정 ' + conf + '건 · 총 예상공수 ' +
-              (est ? est.toFixed(2).replace(/\.?0+$/, '') : 0) + ' M/D';
-      if (leafNoEst) s += ' · 예상공수 미입력 ' + leafNoEst + '건';
-      $('#ba-w-sum').textContent = s;
+      tagsInto('#ba-w-sum', [
+        tag('전체', rows.length + '건', ''),
+        tag('확정', conf + '건', conf ? 'ok' : '', '확정한 태스크만 배정 대상이 됩니다'),
+        tag('총 예상공수', (est ? est.toFixed(2).replace(/\.?0+$/, '') : 0) + ' M/D', ''),
+        // 비어 있으면 그 줄은 배정 공수에 안 잡힌다. 손봐야 할 자리다.
+        (leafNoEst ? tag('예상공수 미입력', leafNoEst + '건', 'bad',
+                         '비어 있는 줄은 공수 합계에 안 잡힙니다') : '')
+      ]);
 
       var dirty = $('#ba-w-dirty');
       if (dirty) {
@@ -3330,6 +3371,12 @@
     var tabBtn = $('[data-pv-tab="wbs"]');
     if (tabBtn) tabBtn.addEventListener('click', function () { if (!loaded) load(); });
 
+    // 설명은 **권한과 무관**하다. 고칠 수 없는 사람이 오히려 더 궁금하다.
+    var helpBtn = $('#ba-al-help');
+    if (helpBtn) {
+      helpBtn.addEventListener('click', function () { openDrawer('ba-al-helpd'); });
+    }
+
     // ---- 통신 -----------------------------------------------------------
     function load() {
       loaded = true;
@@ -3373,7 +3420,7 @@
 
     // ---- 그리기 ----------------------------------------------------------
     function renderEmpty() {
-      $('#ba-al-badge').textContent = '';
+      $('#ba-al-badge').innerHTML = '';   // 이제 표식 묶음이다
       $('#ba-al-load').innerHTML = '';
       $('#ba-al-table').querySelector('tbody').innerHTML =
         '<tr><td colspan="8" class="ba-empty">' +
@@ -3445,32 +3492,60 @@
       box.innerHTML = h;
     }
 
+    /**
+     * 차수의 사실들을 **표식 하나에 하나씩** 적는다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 가운뎃점으로 이은 긴 글은 하나도 안 읽힌다 (2026-10-08)       │
+     * │                                                              │
+     * │ "3차 · 산출됨 · 자동 · 처리량 판정 276회차 · 엔진 v1" 은      │
+     * │ 다섯 가지 **서로 다른** 사실이다. 한 줄로 이으면 눈이 어디서  │
+     * │ 끊어야 할지 몰라 통째로 건너뛴다.                             │
+     * │                                                              │
+     * │ 색은 **뜻이 있을 때만** 쓴다. 확정·무작위·AIDD 처럼 결과를    │
+     * │ 다르게 읽어야 하는 것에만 칠하고, 나머지는 회색이다. 다 칠하면│
+     * │ 색이 색을 가린다.                                             │
+     * └──────────────────────────────────────────────────────────────┘
+     */
     function renderBadge() {
       var el = $('#ba-al-badge');
-      if (!CUR) { el.textContent = ''; return; }
-      var s = CUR.version + '차 · ' + CUR.status_label;
+      if (!el) { return; }
+      if (!CUR) { el.innerHTML = ''; return; }
+
+      var p = CUR.params || {};
+      var t = [];
+
+      t.push(tag('', CUR.version + '차', '', '이 프로젝트의 몇 번째 배정안인지'));
+      t.push(tag('', CUR.status_label,
+          CUR.status === 'confirmed' ? 'ok' : (CUR.status === 'archived' ? 'off' : ''),
+          CUR.status === 'confirmed' ? '확정된 안입니다. 대시보드에 나옵니다'
+                                     : '확정 전에는 대시보드에 나오지 않습니다'));
       // 단위가 다르면 같은 WBS 라도 다른 안이다. 안 보이면 공수 합계가
       // 왜 다른지 알 수 없다.
-      if (CUR.params && CUR.params.level && CUR.params.level !== 'leaf') {
-        s += ' · ' + (L_LABEL[CUR.params.level] || CUR.params.level);
+      if (p.level && p.level !== 'leaf') {
+        t.push(tag('단위', L_LABEL[p.level] || p.level, 'warn',
+                   '말단이 아니라 이 단위로 묶어 한 사람에게 줬습니다. '
+                   + '공수는 하위의 합이라 표의 줄 수가 WBS 보다 적습니다'));
+      }
+      // 같은 WBS 라도 AIDD 를 켜고 끄면 공수와 가용 공수가 달라진다.
+      if (p.aidd && p.aidd.enabled) {
+        t.push(tag('AIDD', Number(p.aidd.effort).toFixed(2), 'warn',
+                   '공수를 이 계수만큼 줄이고 다른 업무 점유를 덜 반영했습니다'));
       }
       // ★ 무작위로 뽑은 안을 가중치 안으로 오해하면 안 된다. 적합도 숫자가
       //   나란히 보이므로 **방식이 안 보이면 그 숫자가 근거처럼 읽힌다.**
-      var p = CUR.params || {};
-      // 같은 WBS 라도 AIDD 를 켜고 끄면 공수와 가용 공수가 달라진다.
-      // 안 보이면 두 차수를 같은 조건으로 오해한다.
-      if (p.aidd && p.aidd.enabled) {
-        s += ' · AIDD ' + Number(p.aidd.effort).toFixed(2);
-      }
       if (p.method && p.method !== 'weighted') {
-        s += ' · ' + (M_LABEL[p.method] || p.method);
-        if (p.seed) s += '(씨앗 ' + p.seed + ')';
+        t.push(tag('방식', (M_LABEL[p.method] || p.method)
+                           + (p.seed ? ' · 씨앗 ' + p.seed : ''), 'warn',
+                   '적합도를 보지 않고 뽑았습니다. 표의 적합도는 대조용으로 계산한 값입니다'));
       }
-      if (CUR.eval_ver) s += ' · 처리량 판정 ' + CUR.eval_ver + '회차';
-      if (CUR.engine_ver) s += ' · 엔진 ' + CUR.engine_ver;
-      el.textContent = s;
-      el.className = 'ba-dim ba-al__badge ba-al__badge--' + CUR.status
-                   + (p.method && p.method !== 'weighted' ? ' ba-al__badge--rand' : '');
+      if (CUR.eval_ver) {
+        t.push(tag('처리량 판정', CUR.eval_ver + '회차', '',
+                   '이 역량 스냅샷을 보고 매겼습니다'));
+      }
+      if (CUR.engine_ver) { t.push(tag('엔진', CUR.engine_ver, '')); }
+
+      el.innerHTML = t.join('');
     }
 
     /**
