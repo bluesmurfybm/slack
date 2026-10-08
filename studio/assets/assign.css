@@ -1753,3 +1753,8 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   display: inline-block; font-size: 11px; font-weight: 600;
   color: var(--ba-brand-dk); white-space: nowrap;
 }
+
+/* 개요의 AIDD 줄. 기간과 같은 격자를 쓰되 값이 날짜가 아니라 계수다 */
+.ba-period--aidd { font-size: 13px; }
+.ba-period--aidd .ba-dim { font-size: 12.5px; }
+.ba-aidd-on { color: var(--ba-brand-dk); }

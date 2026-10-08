@@ -2987,6 +2987,14 @@ ok('★ 최소 1건 보장 체크가 있다', str_contains($page, 'id="ba-al-min
 // └──────────────────────────────────────────────────────────────────┘
 $pform = $admin->req('/studio/project_form.php?id=' . $pid)['body'];
 ok('★ 프로젝트에 AIDD 칸이 있다', str_contains($pform, 'id="ba-in-aidd"'));
+// 기본이 켬이라 모든 숫자가 보정된 값으로 나온다. 설정이 수정 화면에만
+// 있으면 **보는 사람은 왜 이 공수가 나왔는지 알 길이 없다.**
+ok('★ 개요에도 AIDD 설정이 보인다',
+   str_contains($page, 'AIDD 고려') && str_contains($page, 'ba-period--aidd'),
+   '읽는 화면에 없으면 보정된 숫자의 근거가 사라진다');
+ok('개요가 계수를 숫자로 적는다', (bool)preg_match('/공수 &times;0\.\d\d/', $page));
+ok('개요도 난이도는 안 바꾼다고 적는다',
+   str_contains($page, '난이도는 바꾸지 않습니다'));
 ok('★ 계수를 화면에 드러낸다',
    str_contains($pform, 'id="ba-in-aidd-effort"') && str_contains($pform, 'id="ba-in-aidd-load"'),
    '계수를 코드에 묻으면 아무도 그것이 가정인 줄 모른다');

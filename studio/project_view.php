@@ -127,7 +127,48 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
           <span class="ba-period__label">운영 배포</span>
           <b><?= h(bs_date($project['deploy_date']) ?: '미정') ?></b>
         </div>
+
+        <!-- ┌──────────────────────────────────────────────────────────┐
+             │ 설정은 **읽는 화면에도** 있어야 한다 (2026-10-08)          │
+             │                                                          │
+             │ 기본이 켬이라 모든 숫자가 보정된 값으로 나오는데, 설정이  │
+             │ 수정 화면에만 있으면 보는 사람은 **왜 이 공수가 나왔는지** │
+             │ 알 길이 없다. 계수는 실측이 아니라 가정이라 더욱 그렇다.  │
+             │                                                          │
+             │ 기간 칸에 둔 이유 — 두 계수가 기간·공수와 맞물려 돈다.    │
+             │ 점유 반영률은 기간과 겹치는 영업일로 환산되고, 공수 계수는 │
+             │ 그 기간 안에 들어갈 M/D 를 바꾼다.                        │
+             └──────────────────────────────────────────────────────────┘ -->
+        <?php $aidd = bs_aidd_of($project); ?>
+        <div class="ba-period ba-period--aidd">
+          <span class="ba-period__label">AIDD 고려</span>
+          <?php if ($aidd['enabled']): ?>
+            <b class="ba-aidd-on">켬</b>
+            <span class="ba-dim">
+              공수 &times;<?= h(number_format($aidd['effort'], 2)) ?>
+              · 다른 업무 점유 &times;<?= h(number_format($aidd['load'], 2)) ?>
+            </span>
+          <?php else: ?>
+            <b class="ba-dim">끔</b>
+            <span class="ba-dim">공수와 가용도를 보정하지 않습니다.</span>
+          <?php endif; ?>
+        </div>
       </div>
+
+      <?php if ($aidd['enabled']): ?>
+      <p class="ba-panel__hint ba-aidd__note">
+        예상공수를 <b><?= h(number_format((1 - $aidd['effort']) * 100, 0)) ?>%</b> 줄이고,
+        다른 업무 점유를 <b><?= h(number_format((1 - $aidd['load']) * 100, 0)) ?>%</b>
+        덜 반영해 그만큼 여유로 봅니다.
+        <b>난이도는 바꾸지 않습니다</b> — AI 는 걸리는 시간을 줄이지 어려운 문제를
+        쉽게 만들지 않고, 난이도를 낮추면 ★4 이상을 그 분야 상위자에게 주는 규칙이
+        꺼집니다. 계수는 <b>실측이 아니라 가정</b>이라 화면에 드러내 둡니다.
+        <?php if ($canManage): ?>
+          고치려면 <b>[수정]</b> → <b>기간</b> 에서 바꾸고,
+          <b>예상공수는 [난이도 매기기]를 다시</b> 돌려야 반영됩니다.
+        <?php endif; ?>
+      </p>
+      <?php endif; ?>
     </div>
 
     <?php if (!empty($project['summary'])): ?>
