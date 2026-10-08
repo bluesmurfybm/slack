@@ -2648,6 +2648,37 @@ foreach (($d['links'] ?? []) as $l) {
 }
 ok('그 주소가 있던 줄을 함께 담는다', str_contains($ctx, '출석부'), $ctx);
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 올린 문서도 난이도 판정의 근거가 된다 (2026-10-08)                │
+// │                                                                  │
+// │ contextFor() 가 bs_source_link **한 표만** 봤다. 올린 엑셀의      │
+// │ 「설명·비고」 가 난이도를 가늠할 가장 좋은 재료인데 parsed_text 에 │
+// │ 멀쩡히 저장되어 있으면서 한 글자도 안 읽혔다 — 링크가 0건인       │
+// │ 프로젝트에서는 **제목만 보고** 판정됐다.                          │
+// └──────────────────────────────────────────────────────────────────┘
+$an = new LinkAnalyzer($pdoR);
+
+// 링크는 아직 못 읽은 상태(status=pending)라 문서 쪽만 남는다.
+$cFile = $an->contextFor($pid, '학습 출석부');
+ok('★ 올린 문서에서 맥락을 찾는다', $cFile !== null && $cFile['kind'] === 'file',
+   json_encode($cFile, JSON_UNESCAPED_UNICODE));
+ok('★ 문서를 통째로 주지 않는다',
+   $cFile !== null && mb_strlen($cFile['text']) < mb_strlen($iaText),
+   '12,000자짜리 엑셀을 128번 주면 모델이 어느 줄인지 못 가린다');
+ok('맞은 줄이 들어 있다', $cFile !== null && str_contains($cFile['text'], '출석부'));
+ok('★ 머리글도 함께 준다(칸 이름이 없으면 값이 무엇인지 모른다)',
+   $cFile !== null && str_contains($cFile['text'], '화면명'), $cFile['text'] ?? '');
+ok('어느 문서인지 남긴다', ($cFile['title'] ?? '') === 'IA 시트');
+
+// 짧은 제목도 맞춰야 한다. 「퍼널 분석」 처럼 두 낱말짜리가 실무에 흔하다.
+$cTwo = $an->contextFor($pid, '공통 로그인');
+ok('★ 두 낱말짜리 제목도 맞춘다(둘 다 맞으면)', $cTwo !== null,
+   '늘 셋을 요구하면 짧은 제목은 영영 못 맞춘다');
+
+// 한 낱말은 안 본다. "관리" 하나로 맞히면 아무 줄이나 걸린다.
+ok('★ 한 낱말로는 맞히지 않는다', $an->contextFor($pid, '학습') === null);
+ok('없는 말이면 맥락이 없다', $an->contextFor($pid, '존재하지않는기능이름') === null);
+
 // 다시 찾아도 이미 담긴 것은 그대로다. 읽어 둔 내용이 날아가면 안 된다.
 $r = $admin->req('/studio/api/analysis.php?act=scan',
     ['csrf' => true, 'json' => ['project_id' => $pid]]);

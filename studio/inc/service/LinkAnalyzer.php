@@ -435,6 +435,38 @@ final class LinkAnalyzer
      *
      * @return array{text:string, title:string, url:string}|null
      */
+    /** 낱말 둘은 우연히 겹친다("화면", "관리" 같은 말). 셋부터 본다. */
+    private const CTX_MIN_HIT = 3;
+
+    /**
+     * 이 제목에 몇 낱말이 맞아야 '맞았다' 로 볼지.
+     *
+     * ┌──────────────────────────────────────────────────────────────────┐
+     * │ 늘 셋을 요구하면 짧은 제목은 영영 못 맞춘다 (2026-10-08)          │
+     * │                                                                  │
+     * │ 「퍼널 분석」·「수료 관리」 처럼 두 낱말짜리 제목이 실무 WBS 에   │
+     * │ 흔하다. 그런 제목은 낱말이 둘뿐이라 셋을 맞출 수가 없다 —         │
+     * │ 문서에 그 줄이 또렷이 있어도 맥락 없이 판정된다.                  │
+     * │                                                                  │
+     * │ 둘뿐이면 **둘 다** 맞으라고 한다. 10개 중 3개보다 센 조건이다.    │
+     * │                                                                  │
+     * │ 낱말이 하나면 안 본다. "관리" 한 낱말로 맞히면 아무 줄이나 걸린다.│
+     * └──────────────────────────────────────────────────────────────────┘
+     *
+     * @param list<string> $want
+     */
+    private static function ctxThreshold(array $want): int
+    {
+        $n = count($want);
+        return $n >= 2 ? min(self::CTX_MIN_HIT, $n) : PHP_INT_MAX;
+    }
+
+    /** 맞은 줄의 앞뒤 몇 줄까지 함께 줄지. */
+    private const CTX_AROUND = 2;
+
+    /** 맥락 글의 길이 상한. 길다고 좋은 판정이 나오지 않는다. */
+    private const CTX_MAX_CHARS = 2000;
+
     public function contextFor(int $projectId, string $taskTitle): ?array
     {
         $want = self::tokens($taskTitle);
@@ -442,6 +474,36 @@ final class LinkAnalyzer
             return null;
         }
 
+        $link = $this->contextFromLinks($projectId, $want);
+        $file = $this->contextFromFiles($projectId, $want);
+
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 더 잘 맞는 쪽을 쓴다 (2026-10-08)                             │
+        // │                                                              │
+        // │ 전에는 **링크만** 봤다. 올린 엑셀의 '설명·비고' 가 난이도를   │
+        // │ 가늠할 가장 좋은 재료인데, parsed_text 에 멀쩡히 저장되어     │
+        // │ 있으면서 한 글자도 안 읽혔다. 링크가 0건인 프로젝트에서는     │
+        // │ 128건 전부가 **제목만 보고** 판정됐다.                        │
+        // │                                                              │
+        // │ 둘을 이어 붙이지 않는다. 글이 길수록 좋은 것이 아니고, 서로   │
+        // │ 다른 문서를 붙이면 모델이 어느 쪽 이야기인지 못 가린다.       │
+        // └──────────────────────────────────────────────────────────────┘
+        $best = null;
+        foreach ([$link, $file] as $c) {
+            if ($c !== null && ($best === null || $c['score'] > $best['score'])) {
+                $best = $c;
+            }
+        }
+        if ($best === null) {
+            return null;
+        }
+        unset($best['score']);
+        return $best;
+    }
+
+    /** 링크에서. 링크 한 건은 '그 줄' 이 곧 맥락이라 통째로 쓴다. */
+    private function contextFromLinks(int $projectId, array $want): ?array
+    {
         $st = $this->pdo->prepare(
             'SELECT url, title, context, parsed_text FROM bs_source_link
               WHERE project_id = ? AND status = "ok" AND parsed_text IS NOT NULL
@@ -462,15 +524,132 @@ final class LinkAnalyzer
             }
         }
 
-        // 낱말 둘은 우연히 겹친다("화면", "관리" 같은 말). 셋부터 본다.
-        if ($best === null || $bestScore < 3) {
+        if ($best === null || $bestScore < self::ctxThreshold($want)) {
             return null;
         }
         return [
             'text'  => (string)$best['parsed_text'],
             'title' => (string)($best['title'] ?? ''),
             'url'   => (string)$best['url'],
+            'kind'  => 'link',
+            'score' => $bestScore,
         ];
+    }
+
+    /**
+     * 올린 문서에서. **줄 단위로** 고른다.
+     *
+     * ┌──────────────────────────────────────────────────────────────────┐
+     * │ 문서를 통째로 주면 안 된다                                        │
+     * │                                                                  │
+     * │ 링크는 한 건이 작은 조각이라 통째로 줘도 된다. 올린 문서는        │
+     * │ 다르다 — 엑셀 한 장이 12,000자다. 128개 태스크에 **같은 글을      │
+     * │ 128번** 주면 모델은 어느 줄 이야기인지 못 가리고, 토큰만 쓴다.    │
+     * │                                                                  │
+     * │ 실무 문서는 한 줄이 한 화면·한 기능인 경우가 많다(IA 표가 그렇다).│
+     * │ 그 줄을 찾아 앞뒤 몇 줄과 함께 준다. 머리글 줄도 붙인다 — 칸      │
+     * │ 이름이 없으면 탭으로 나뉜 값이 무엇인지 알 수 없다.               │
+     * └──────────────────────────────────────────────────────────────────┘
+     */
+    private function contextFromFiles(int $projectId, array $want): ?array
+    {
+        $best = null;
+        foreach ($this->parsedSources($projectId) as $src) {
+            $lines = preg_split('/\R/u', (string)$src['parsed_text']) ?: [];
+            $hit = -1; $hitScore = 0;
+            foreach ($lines as $i => $line) {
+                if ($line === '') {
+                    continue;
+                }
+                $score = count(array_intersect($want, self::tokens($line)));
+                if ($score > $hitScore) {
+                    $hitScore = $score;
+                    $hit      = $i;
+                }
+            }
+            if ($hit < 0 || $hitScore < self::ctxThreshold($want)) {
+                continue;
+            }
+            if ($best !== null && $hitScore <= $best['score']) {
+                continue;
+            }
+            $best = [
+                'text'  => self::window($lines, $hit),
+                'title' => (string)($src['title'] ?? ''),
+                'url'   => null,
+                'kind'  => 'file',
+                'score' => $hitScore,
+            ];
+        }
+        return $best;
+    }
+
+    /**
+     * 맞은 줄과 그 둘레. 표의 머리글(블록 표시 바로 다음 줄)도 함께 준다.
+     *
+     * @param string[] $lines
+     */
+    private static function window(array $lines, int $at): string
+    {
+        $from = max(0, $at - self::CTX_AROUND);
+        $to   = min(count($lines) - 1, $at + self::CTX_AROUND);
+        $out  = [];
+
+        // ┌──────────────────────────────────────────────────────────┐
+        // │ 머리글 **한 줄만** 집는다                                  │
+        // │                                                          │
+        // │ "탭이 넷 이상" 으로 고르면 피그마 주소가 든 자료 줄까지    │
+        // │ 머리글로 집어, 맥락의 절반이 쓸모없는 글로 찬다.           │
+        // │                                                          │
+        // │ 머리글은 **값이 찬 칸이 가장 많은 줄**이다. 자료 줄은 빈   │
+        // │ 칸이 많다(담당자·QA·비고가 대개 비어 있다).                │
+        // └──────────────────────────────────────────────────────────┘
+        $head = -1; $headCells = 2;
+        for ($i = 0; $i < min(count($lines), 8); $i++) {
+            if ($i >= $from) {
+                break;
+            }
+            if ($lines[$i] === '') {
+                continue;
+            }
+            if (str_starts_with($lines[$i], '[[')) {
+                $out[] = $lines[$i];        // 어느 문서의 어느 자리인지
+                continue;
+            }
+            $n = count(array_filter(array_map('trim', explode("\t", $lines[$i])),
+                                    static fn($c) => $c !== ''));
+            if ($n > $headCells) { $headCells = $n; $head = $i; }
+        }
+        if ($head >= 0) {
+            $out[] = $lines[$head];         // 칸 이름이 없으면 값이 무엇인지 모른다
+        }
+        if ($out) {
+            $out[] = '…';
+        }
+        for ($i = $from; $i <= $to; $i++) {
+            if ($lines[$i] !== '') {
+                $out[] = $lines[$i];
+            }
+        }
+        return mb_substr(implode("\n", $out), 0, self::CTX_MAX_CHARS);
+    }
+
+    /** 같은 요청에서 태스크마다 불린다. 문서를 한 번만 읽는다. */
+    private array $srcCache = [];
+
+    private function parsedSources(int $projectId): array
+    {
+        if (!array_key_exists($projectId, $this->srcCache)) {
+            $st = $this->pdo->prepare(
+                'SELECT id, title, parsed_text FROM bs_project_source
+                  WHERE project_id = ? AND parse_status = "ok"
+                    AND parsed_text IS NOT NULL AND parsed_text <> ""
+                  ORDER BY id'
+            );
+            $st->execute([$projectId]);
+            $this->srcCache[$projectId] = $st->fetchAll(PDO::FETCH_ASSOC);
+        }
+        return $this->srcCache[$projectId];
     }
 
     /**
