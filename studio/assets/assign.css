@@ -1019,7 +1019,14 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 @media (max-width: 1100px) {
   .ba-loadrow { grid-template-columns: 64px 64px 1fr 100px 56px; }
   .ba-loadrow__cb { display: none; }
-  .ba-altable th:nth-child(4), .ba-altable td:nth-child(4) { display: none; }
+  /* ┌──────────────────────────────────────────────────────────────┐
+     │ 자리가 아니라 **그 칸**을 숨긴다 (2026-10-08)                 │
+     │                                                              │
+     │ nth-child(4) 로 숨기면 "넷째 칸" 이면 무엇이든 사라진다.      │
+     │ 분류 줄은 넷째가 병합 셀이라 **설명과 밑줄이 통째로** 사라져  │
+     │ 표 가운데가 뚫려 보였다. 칸에 이름을 주고 그 이름만 숨긴다.   │
+     └──────────────────────────────────────────────────────────────┘ */
+  .ba-altable th:nth-child(4), .ba-altable td.ba-al__df { display: none; }
 }
 
 /* =====================================================================

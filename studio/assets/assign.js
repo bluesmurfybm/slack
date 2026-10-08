@@ -3506,7 +3506,10 @@
             '<td class="ba-al__no">' + esc(g.wbs_no || '-') + '</td>' +
             '<td class="ba-al__t">' + esc(g.title) + '</td>' +
             '<td class="ba-al__md">' + (g.est_md === null ? '-' : g.est_md) + '</td>' +
-            '<td colspan="5" class="ba-cell-none">분류 — 배정 대상 아님</td>' +
+            // 난이도 칸은 **비워서라도 둔다.** 좁은 화면에서 이 칸만 숨기는
+            // 규칙이 있어, 빠지면 뒤 칸들이 한 자리씩 밀린다.
+            '<td class="ba-al__df"></td>' +
+            '<td colspan="4" class="ba-cell-none">분류 — 배정 대상 아님</td>' +
           '</tr>';
         }
         var it = row.v;
