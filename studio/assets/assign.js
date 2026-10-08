@@ -3584,15 +3584,23 @@
             '<i style="width:' + pctOfMax + '%"></i>' +
             '<u style="left:' + capMark + '%" title="가용 공수 ' + l.capacity_md + ' M/D"></u>' +
           '</span>' +
-          '<span class="ba-loadrow__v">' + l.assigned_md + ' / ' + l.capacity_md + ' M/D' +
+          // ┌──────────────────────────────────────────────────────┐
+          // │ 비율은 값에 **붙여** 적는다 (2026-10-08)              │
+          // │                                                      │
+          // │ 값과 비율을 따로 두니 칸 사이 간격이 막대와 값 사이   │
+          // │ 보다 넓어져, 셋이 한 묶음인데 셋으로 흩어져 보였다.   │
+          // │ 「75 / 100 M/D (75%)」 한 덩어리로 읽는다.            │
+          // └──────────────────────────────────────────────────────┘
+          // 단위는 자료가 아니다. 숫자보다 작게 적어 눈이 숫자부터 읽게 한다.
+          '<span class="ba-loadrow__v">' + l.assigned_md + ' / ' + l.capacity_md +
+            ' <span class="ba-unit">M/D</span>' +
             // 가용 공수가 왜 늘었는지 말해 주지 않으면 숫자가 틀렸다고 읽는다.
             (l.aidd_on && l.aidd_pct
               ? ' <span class="ba-aidd-tag" title="AIDD 계수로 늘어난 몫이 들어 있습니다">' +
                 'AIDD</span>' : '') +
+            ' <em>(' + (l.load_pct === null ? '-' : l.load_pct + '%') +
+              (l.over ? ' <b>초과</b>' : '') + ')</em>' +
           '</span>' +
-          '<span class="ba-loadrow__p">' +
-            (l.load_pct === null ? '-' : l.load_pct + '%') +
-            (l.over ? ' <b>초과</b>' : '') + '</span>' +
           // 기간 합계로는 74% 라도 그 공수가 특정 달에 몰려 있으면 그 달에는
           // 못 받는다. 배정하는 자리에서 말해 줘야 늦지 않는다.
           overMonths(l) +

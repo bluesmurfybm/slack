@@ -950,27 +950,63 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
    ---------------------------------------------------------------------- */
 .ba-loads { display: grid; gap: 4px; margin: 14px 0 18px; }
 .ba-loadrow {
-  display: grid; grid-template-columns: 76px 86px 1fr 120px 72px;
+  /* ┌──────────────────────────────────────────────────────────────┐
+     │ 여백이 묶음을 말한다 (2026-10-08)                             │
+     │                                                              │
+     │   이름 │ 건수막대 건수 │ 공수막대 「75 / 100 M/D (75%)」      │
+     │        └ 10px ┘  └── 28px ──┘      └ 10px ┘                  │
+     │                                                              │
+     │ 묶음 **안**은 10px, 묶음 **사이**는 28px. 전에는 다 10px 라   │
+     │ 다섯 칸이 한 줄로 늘어선 것처럼 보였고, 값과 비율을 따로 두니 │
+     │ 그 사이가 막대와 값 사이보다 넓어 더 흩어졌다.                │
+     │                                                              │
+     │ 건수 칸이 넓은 이유 — 막대가 짧으면 1건과 11건이 눈으로 안    │
+     │ 갈린다. 공수 막대(1fr)는 남는 폭을 다 쓰므로 넉넉하다.        │
+     └──────────────────────────────────────────────────────────────┘ */
+  display: grid; grid-template-columns: 76px 150px 1fr 200px;
   align-items: center; gap: 10px; font-size: 12.5px;
 }
 .ba-loadrow__n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 두 묶음은 떨어져 있어야 묶음으로 읽힌다 (2026-10-08)              │
+   │                                                                  │
+   │ 줄에는 묶음이 둘이다 — **건수**(막대+건수)와 **공수**(막대+값+%). │
+   │ 칸 사이 간격이 10px 로 모두 같으니 다섯 칸이 한 줄로 늘어선 것    │
+   │ 처럼 보여, 어디까지가 건수 이야기인지 눈이 못 가렸다.             │
+   │                                                                  │
+   │ 공수 막대 앞에만 여백을 더 준다. 선을 긋는 쪽은 여덟 줄에 세로줄  │
+   │ 이 여덟 번 생겨 더 시끄럽다.                                      │
+   └──────────────────────────────────────────────────────────────────┘ */
 .ba-loadrow__bar {
   position: relative; display: block; height: 12px; border-radius: 6px;
+  margin-left: 18px;
   background: var(--ba-surface); border: 1px solid var(--ba-line); overflow: hidden;
 }
+/* 건수와 맞바꿨다(2026-10-08 요청) — 건수 막대가 녹색, 공수 막대가 회색 */
 .ba-loadrow__bar i {
-  display: block; height: 100%; background: var(--ba-brand); opacity: .7;
+  display: block; height: 100%; background: var(--ba-ink-soft); opacity: .55;
 }
 /* 가용 공수 눈금 */
 .ba-loadrow__bar u {
   position: absolute; top: -2px; bottom: -2px; width: 2px;
   background: var(--ba-ink-soft); opacity: .8; overflow: visible;
 }
-.ba-loadrow__v, .ba-loadrow__p, .ba-loadrow__c {
+.ba-loadrow__v, .ba-loadrow__c {
   font-variant-numeric: tabular-nums; color: var(--ba-ink-soft); font-size: 11.5px;
 }
-.ba-loadrow__v { text-align: right; }
-.ba-loadrow__p { text-align: right; }
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 왼쪽에 맞춘다                                                     │
+   │                                                                  │
+   │ 오른쪽에 맞추면 글이 짧은 줄일수록 막대에서 멀어진다 — 막대가    │
+   │ 늘 같은 자리에서 끝나기 때문이다. 왼쪽에 맞추면 막대와의 간격이  │
+   │ **모든 줄에서 10px** 로 같고, 숫자도 같은 자리에서 시작한다.      │
+   │ 오른쪽 끝이 들쭉날쭉하지만 그 뒤에는 아무것도 없다.               │
+   └──────────────────────────────────────────────────────────────────┘ */
+.ba-loadrow__v { text-align: left; }
+/* 비율은 값에 딸린 것이라 한 단계 약하게 */
+.ba-loadrow__v em { font-style: normal; opacity: .8; }
+/* 단위는 **자료가 아니다.** 숫자보다 작게 적어 눈이 숫자부터 읽게 한다. */
+.ba-unit { font-size: .85em; opacity: .75; }
 
 /* 건수 막대 — 공수 막대와 **색을 달리한다.** 같은 색이면 두 막대가 한 축처럼
    읽힌다. 건수와 공수는 다른 자다(한 건이 대분류 통째일 수 있다). */
@@ -979,13 +1015,14 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   flex: 1; height: 8px; border-radius: 4px; overflow: hidden;
   background: var(--ba-surface); border: 1px solid var(--ba-line);
 }
-.ba-loadrow__cb b { display: block; height: 100%; background: var(--ba-ink-soft); opacity: .45; }
+.ba-loadrow__cb b { display: block; height: 100%; background: var(--ba-brand); opacity: .75; }
 .ba-loadrow__c em { font-style: normal; white-space: nowrap; }
 /* 달 초과 경고는 **다음 줄 전체**를 쓴다. 칸으로 끼워 넣으면 격자가 밀려
    다른 줄과 눈금이 어긋난다 — 막대를 견주려고 만든 격자다. */
 .ba-loadrow .ba-mover { grid-column: 1 / -1; margin: 1px 0 3px 86px; }
 .ba-loadrow.is-over .ba-loadrow__bar i { background: var(--ba-danger); opacity: .75; }
-.ba-loadrow.is-over .ba-loadrow__p b { color: var(--ba-danger); }
+.ba-loadrow.is-over .ba-loadrow__v b { color: var(--ba-danger); }
+.ba-loadrow.is-over .ba-loadrow__v em { opacity: 1; }
 /* 0건인 후보. 숨기지 않고 **눈에 띄게** 둔다 — 고르고도 못 받은 자리다. */
 .ba-loadrow.is-zero .ba-loadrow__n { color: var(--ba-warn); }
 .ba-loadrow.is-zero .ba-loadrow__c em { color: var(--ba-warn); font-weight: 600; }
@@ -1043,8 +1080,7 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-ev__m { display: block; font-size: 11px; color: var(--ba-ink-soft); margin-top: 2px; }
 
 @media (max-width: 1100px) {
-  .ba-loadrow { grid-template-columns: 64px 64px 1fr 100px 56px; }
-  .ba-loadrow__cb { display: none; }
+  .ba-loadrow { grid-template-columns: 64px 108px 1fr 168px; }
   /* ┌──────────────────────────────────────────────────────────────┐
      │ 자리가 아니라 **그 칸**을 숨긴다 (2026-10-08)                 │
      │                                                              │
