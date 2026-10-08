@@ -1931,3 +1931,15 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 @media (max-width: 900px) {
   .ba-drawer__box--wide { width: 100vw; }
 }
+
+/* ── 참여 비중 ──────────────────────────────────────────────────────
+   왼쪽 칸들은 전부 **잰 값**이고 이 칸만 사람의 판단이다.
+   1.0 이 아닐 때만 눈에 띄게 한다 — 다 칠하면 색이 색을 가린다. */
+.ba-ct__share { width: 100%; font-size: 12px; padding: 3px 6px; }
+.ba-ct__share.is-low {
+  color: var(--ba-warn); border-color: #f0dcb8; background: #fffaf0; font-weight: 600;
+}
+.ba-ct__share + .ba-cell-none {
+  display: block; margin-top: 3px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}

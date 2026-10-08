@@ -791,6 +791,120 @@ ok('담당자 없는 목록도 번호 순', $orphans === $oWant, implode(',', $o
 $projects->softDelete($sortPid, $actor, "시험 뒷정리");
 
 // =====================================================================
+echo "\n[4-P] 참여 비중 — 산술이 못 담는 판단\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 점수를 깎지 않고 **그릇**을 줄인다 (2026-10-08)                   │
+// │                                                                  │
+// │ 가용도·처리량·분야는 **잰 값**이다. 「요즘 컨디션이 안 좋다」      │
+// │ 「곧 다른 데로 빠진다」 는 재지지 않는다.                          │
+// │                                                                  │
+// │ 적합도에 곱하면 화면의 "적합도 47" 이 실제 47 이 아니게 된다 —    │
+// │ 최소 1건 보장을 정규화로 풀지 않은 바로 그 이유다. 가용 공수를    │
+// │ 줄이면 점수는 그대로 두고 배정량만 준다.                           │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$pdo->exec("DELETE FROM bs_workload");
+$pdo->exec("DELETE FROM bs_project_member");
+
+$capOfM = function (array $r, int $mid): array {
+    foreach ($r['summary']['by_member'] as $b) {
+        if ($b['member_id'] === $mid) { return $b; }
+    }
+    return ['capacity_md' => -1.0, 'task_count' => -1];
+};
+$fitOfM = function (array $r, int $mid): ?float {
+    foreach ($r['items'] as $it) {
+        if ($it['member_id'] === $mid) { return (float)$it['fit_score']; }
+    }
+    return null;
+};
+
+$shBefore = $engine->propose($pid, []);
+$capBefore = $capOfM($shBefore, $MEM['가개발'])['capacity_md'];
+$cntBefore = $capOfM($shBefore, $MEM['가개발'])['task_count'];
+
+$projects->setMemberShare($pid, $MEM['가개발'], 0.3, '', $actor);
+$shAfter  = $engine->propose($pid, []);
+$capAfter = $capOfM($shAfter, $MEM['가개발'])['capacity_md'];
+
+ok('★ 가용 공수가 비중만큼 줄어든다',
+   abs($capAfter - $capBefore * 0.3) < 0.02,
+   $capBefore . ' × 0.3 = ' . round($capBefore * 0.3, 2) . ' vs ' . $capAfter);
+ok('★ 배정도 따라 줄어든다',
+   $capOfM($shAfter, $MEM['가개발'])['task_count'] < $cntBefore,
+   $cntBefore . ' → ' . $capOfM($shAfter, $MEM['가개발'])['task_count']);
+
+// ★ 점수는 **한 글자도** 안 바뀐다. 이게 이 설계의 전부다.
+$sameFit = true;
+foreach ([$MEM['나개발'], $MEM['다개발']] as $m) {
+    $a = $fitOfM($shBefore, $m); $b = $fitOfM($shAfter, $m);
+    if ($a !== null && $b !== null && abs($a - $b) > 15) { $sameFit = false; }
+}
+ok('★ 남의 적합도를 흔들지 않는다', $sameFit);
+
+// 다른 사람 그릇은 그대로여야 한다. 한 사람을 낮췄는데 전원이 줄면 잘못이다.
+ok('★ 다른 사람 가용 공수는 그대로',
+   abs($capOfM($shAfter, $MEM['나개발'])['capacity_md']
+       - $capOfM($shBefore, $MEM['나개발'])['capacity_md']) < 0.01);
+
+// 그때 비중이 얼마였는지 박제한다. 없으면 "왜 적게 받았나" 에 답할 수 없다.
+ok('★ 차수에 비중을 박제한다',
+   abs((float)($shAfter['meta']['shares'][$MEM['가개발']]['share'] ?? 0) - 0.3) < 0.001,
+   json_encode($shAfter['meta']['shares'], JSON_UNESCAPED_UNICODE));
+
+// ★ 「적게 주라」 를 보장이 뒤집으면 안 된다.
+$shGuard = $engine->propose($pid, ['member_ids' => array_values($MEM)]);
+$lowered = array_filter($shGuard['meta']['min_one']['failed'],
+                        fn($f) => $f['member_id'] === $MEM['가개발']);
+ok('★ 비중을 낮춘 사람은 최소 보장 대상이 아니다', !$lowered,
+   '사람의 지시와 기계의 규칙이 맞서면 안 된다');
+
+// 사유는 **선택**이다. 회사가 작고 서로 아는 사이다.
+$projects->setMemberShare($pid, $MEM['나개발'], 0.5, '', $actor);
+$noReason = $projects->memberShares($pid)[$MEM['나개발']] ?? null;
+ok('★ 사유 없이도 저장된다', $noReason !== null && $noReason['reason'] === null,
+   json_encode($noReason, JSON_UNESCAPED_UNICODE));
+ok('누가 바꿨는지는 남는다', ($noReason['updated_by_name'] ?? '') === $actor['name'],
+   $noReason['updated_by_name'] ?? '(없음)');
+
+$projects->setMemberShare($pid, $MEM['다개발'], 0.4, '다른 과제로 곧 빠짐', $actor);
+ok('사유를 적으면 그대로 남는다',
+   ($projects->memberShares($pid)[$MEM['다개발']]['reason'] ?? '') === '다른 과제로 곧 빠짐');
+
+// 범위 — 0 은 '제외' 와 같은 말이 되므로 바닥에서 자른다.
+$projects->setMemberShare($pid, $MEM['라개발'], 0.0, '', $actor);
+ok('★ 0 은 바닥으로 자른다(제외와 길이 갈리면 안 된다)',
+   abs(($projects->memberShares($pid)[$MEM['라개발']]['share'] ?? 0) - ProjectRepo::SHARE_MIN) < 0.001,
+   (string)($projects->memberShares($pid)[$MEM['라개발']]['share'] ?? -1));
+
+// 1.0 은 '조정 없음' 이라 줄을 지운다 — 표가 안 불어나고 손댄 사람만 남는다.
+$projects->setMemberShare($pid, $MEM['라개발'], 1.0, '', $actor);
+ok('★ 1.0 이면 줄을 지운다', !isset($projects->memberShares($pid)[$MEM['라개발']]));
+$projects->setMemberShare($pid, $MEM['나개발'], null, '', $actor);
+ok('비우면 되돌아간다', !isset($projects->memberShares($pid)[$MEM['나개발']]));
+
+// 확정하면 다른 프로젝트에서도 그만큼만 잡혀야 한다. 이 프로젝트 안에서만
+// 살고 밖에서 죽으면 낮춘 뜻이 반쪽이 된다.
+$pdo->exec("DELETE FROM bs_project_member WHERE member_id <> " . $MEM['가개발']);
+$shConf = $engine->propose($pid, []);
+$aConf  = $allocs->createVersion($pid, ['weights' => $shConf['meta']['weights'],
+                                        'eval_ver' => $shConf['meta']['eval_ver']], $actor);
+$allocs->saveItems($aConf, $shConf['items']);
+$allocs->syncWorkloadFrom($aConf);
+$q = $pdo->prepare("SELECT load_ratio FROM bs_workload w
+                      JOIN bs_allocation_item i ON i.id = w.ref_id
+                     WHERE w.kind = 'assigned' AND i.member_id = ?");
+$q->execute([$MEM['가개발']]);
+$ratios = array_map('floatval', array_column($q->fetchAll(PDO::FETCH_ASSOC), 'load_ratio'));
+ok('★ 확정 점유도 비중만큼만 잡는다',
+   $ratios && !array_filter($ratios, fn($x) => abs($x - 0.3) > 0.001),
+   json_encode($ratios));
+
+$pdo->exec("DELETE FROM bs_project_member");
+$pdo->exec("DELETE FROM bs_workload");
+
+// =====================================================================
 echo "\n[4-A] AIDD 고려 — 예측을 측정값으로 읽게 두지 않는다\n";
 //
 // ┌──────────────────────────────────────────────────────────────────┐

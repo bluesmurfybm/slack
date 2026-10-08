@@ -298,6 +298,91 @@ final class ProjectRepo
         $st->execute($params);
     }
 
+    // =================================================================
+    // 참여 비중 (bs_project_member)
+    //
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 산술이 못 담는 판단을 담는 자리                                │
+    // │                                                              │
+    // │ 가용도·처리량·분야는 **잰 값**이다. 「요즘 컨디션이 안 좋다」 │
+    // │ 「곧 다른 데로 빠진다」 「신입이라 천천히」 는 재지지 않는다.  │
+    // │                                                              │
+    // │ 점수를 깎지 않고 **가용 공수(그릇)** 를 줄인다. 적합도를      │
+    // │ 주무르면 화면의 숫자가 거짓이 되고 근거 추적이 깨진다.         │
+    // └──────────────────────────────────────────────────────────────┘
+    // =================================================================
+
+    /** 비중을 받아들일 수 있는 값으로. 0 은 '제외' 와 같은 말이 되므로 막는다. */
+    public const SHARE_MIN = 0.10;
+    public const SHARE_MAX = 1.00;
+
+    /**
+     * 이 프로젝트에서 낮춰 둔 사람들.
+     *
+     * 1.000 인 사람은 **줄을 두지 않는다** — 그래야 표가 안 불어나고,
+     * "손댄 사람" 만 한눈에 보인다.
+     *
+     * @return array<int, array{share:float, reason:?string,
+     *                          updated_by_name:?string, updated_at:string}>
+     */
+    public function memberShares(int $projectId): array
+    {
+        try {
+            $st = $this->pdo->prepare(
+                'SELECT member_id, share, reason, updated_by, updated_by_name, updated_at
+                   FROM bs_project_member WHERE project_id = ?'
+            );
+            $st->execute([$projectId]);
+        } catch (Throwable $e) {
+            return [];   // 022 를 아직 안 올린 서버에서도 배정은 돌아야 한다
+        }
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $out[(int)$r['member_id']] = [
+                'share'           => (float)$r['share'],
+                'reason'          => $r['reason'],
+                'updated_by'      => $r['updated_by'],
+                'updated_by_name' => $r['updated_by_name'],
+                'updated_at'      => $r['updated_at'],
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * 비중을 적어 둔다. `null` 이나 1.0 이면 **줄을 지운다**(되돌리기).
+     *
+     * 사유는 **선택**이다. 회사가 작고 서로 아는 사이라 강제하면 아무 말이나
+     * 적어 넣게 된다. 대신 누가 언제는 반드시 남긴다 — 그건 공짜이고,
+     * 나중에 "이 사람 왜 적게 받았지" 를 되짚을 때 물어볼 상대가 된다.
+     */
+    public function setMemberShare(int $projectId, int $memberId, ?float $share,
+                                   string $reason, array $actor): void
+    {
+        if ($share === null || $share >= self::SHARE_MAX - 0.0001) {
+            $this->pdo->prepare(
+                'DELETE FROM bs_project_member WHERE project_id = ? AND member_id = ?'
+            )->execute([$projectId, $memberId]);
+            return;
+        }
+        // 범위를 벗어난 값은 거절하지 않고 자른다. 숫자 하나 때문에 저장이
+        // 통째로 막히면 사람은 그 칸을 비우고 지나간다.
+        $share = round(max(self::SHARE_MIN, min(self::SHARE_MAX, $share)), 3);
+
+        $this->pdo->prepare(
+            'INSERT INTO bs_project_member
+                (project_id, member_id, share, reason, updated_by, updated_by_name)
+             VALUES (?,?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE
+                share = VALUES(share), reason = VALUES(reason),
+                updated_by = VALUES(updated_by), updated_by_name = VALUES(updated_by_name)'
+        )->execute([
+            $projectId, $memberId, $share,
+            ($reason = trim($reason)) === '' ? null : mb_substr($reason, 0, 500),
+            $actor['id'] ?? null, $actor['name'] ?? null,
+        ]);
+    }
+
     /**
      * AIDD 계수를 받아들일 수 있는 값으로.
      *

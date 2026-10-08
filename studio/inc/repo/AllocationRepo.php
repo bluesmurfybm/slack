@@ -1039,6 +1039,27 @@ final class AllocationRepo
                 AND t.project_id = ?"
         )->execute([$projectId]);
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 비중을 낮춘 사람은 점유도 그만큼만 (2026-10-08)               │
+        // │                                                              │
+        // │ 「이 프로젝트에 절반만」 이라고 해 놓고 다른 프로젝트에서는    │
+        // │ 100% 로 잡히면, 그 사람은 두 곳 모두에서 꽉 찬 것으로 보인다. │
+        // │ 낮춘 뜻이 이 프로젝트 안에서만 살고 밖에서는 죽는 셈이다.     │
+        // │                                                              │
+        // │ 줄이 없는 사람은 1.0 이라 이 변경 전과 완전히 같은 값이다.    │
+        // └──────────────────────────────────────────────────────────────┘
+        $share = [];
+        try {
+            $q = $this->pdo->prepare(
+                'SELECT member_id, share FROM bs_project_member WHERE project_id = ?');
+            $q->execute([$projectId]);
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $share[(int)$r['member_id']] = (float)$r['share'];
+            }
+        } catch (Throwable $e) {
+            // 022 를 아직 안 올린 서버에서도 확정은 돌아야 한다
+        }
+
         $ins = $this->pdo->prepare(
             "INSERT INTO bs_workload
                 (member_id, kind, ref_type, ref_id, label, start_date, end_date,
@@ -1054,10 +1075,12 @@ final class AllocationRepo
                 // 넣느니 빼는 편이 낫다 — 가용도가 조용히 어긋난다.
                 continue;
             }
+            $mid = (int)$it['member_id'];
             $ins->execute([
-                (int)$it['member_id'], (int)$it['id'],
+                $mid, (int)$it['id'],
                 ($it['wbs_no'] ? $it['wbs_no'] . ' ' : '') . $it['task_title'],
-                $from, $to, (float)$it['alloc_ratio'],
+                $from, $to,
+                round((float)$it['alloc_ratio'] * ($share[$mid] ?? 1.0), 3),
             ]);
         }
     }

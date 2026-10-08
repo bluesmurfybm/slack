@@ -1591,7 +1591,7 @@
       // 권한이 없으면 서버가 표를 아예 안 그린다(안내문만 있다).
       // 탭도 disabled 라 여기까지 올 일이 없지만, 없는 것을 건드리지 않는다.
       if (!tb) return;
-      tb.innerHTML = '<tr><td colspan="9" class="ba-loading">불러오는 중…</td></tr>';
+      tb.innerHTML = '<tr><td colspan="10" class="ba-loading">불러오는 중…</td></tr>';
       clearError('#ba-pv-error');
 
       api('api/candidate.php?' + qs(conds())).then(function (d) {
@@ -1599,7 +1599,7 @@
         renderScope(d.scope, d.message);
         render(ROWS);
       }).catch(function (e) {
-        tb.innerHTML = '<tr><td colspan="9" class="ba-empty">' + esc(e.message) + '</td></tr>';
+        tb.innerHTML = '<tr><td colspan="10" class="ba-empty">' + esc(e.message) + '</td></tr>';
       });
     }
 
@@ -1616,7 +1616,7 @@
     function render(rows) {
       var tb = $('#ba-c-table tbody');
       if (!rows.length) {
-        tb.innerHTML = '<tr><td colspan="9" class="ba-empty">조건에 맞는 후보가 없습니다.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="10" class="ba-empty">조건에 맞는 후보가 없습니다.</td></tr>';
         updatePicked();
         return;
       }
@@ -1628,7 +1628,7 @@
         // 0 점으로 깔면 영영 배정되지 않는다(scoring-design.md §5).
         if (!seenBreak && (r.fit_score === null || r.filtered_out)) {
           seenBreak = true;
-          html += '<tr class="ba-ct__break"><td colspan="9">' +
+          html += '<tr class="ba-ct__break"><td colspan="10">' +
                   '판단 보류 — 표본이 부족하거나 조건에 못 미칩니다. ' +
                   '<span class="ba-dim">처리량이 적다는 뜻도 아닙니다 — 셀 자료가 모자란 것입니다.</span></td></tr>';
         }
@@ -1647,6 +1647,7 @@
           '<td>' + scoreCell(r.fit_score, r.insufficient_data, r.evaluable) +
             (r.filter_reason ? '<br><span class="ba-cell-none">' +
               esc(r.filter_reason) + '</span>' : '') + '</td>' +
+          '<td>' + shareCell(r) + '</td>' +
           '</tr>';
       });
 
@@ -1654,6 +1655,56 @@
       tagsInto('#ba-c-count', [tag('', rows.length + '명', '', '조건에 맞는 후보 수')]);
       updatePicked();
     }
+
+    /**
+     * 참여 비중 칸.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 잰 값과 섞어 적지 않는다                                      │
+     * │                                                              │
+     * │ 왼쪽 칸들은 전부 **잰 값**이다. 이 칸만 사람의 판단이라        │
+     * │ 1.0 이 아닐 때만 눈에 띄게 하고, 누가 왜 낮췄는지 붙여 둔다.   │
+     * │ 1.0 인 줄까지 칠하면 색이 색을 가린다.                         │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    function shareCell(r) {
+      var v = Number(r.share == null ? 1 : r.share);
+      var low = v < 0.9995;
+      var opts = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1].map(function (x) {
+        return '<option value="' + x.toFixed(1) + '"' +
+               (Math.abs(x - v) < 0.0005 ? ' selected' : '') + '>' +
+               (x === 1 ? '1.0 (조정 없음)' : x.toFixed(1)) + '</option>';
+      }).join('');
+      var who = [r.share_by, r.share_reason].filter(Boolean).join(' · ');
+      return '<select class="ba-input ba-ct__share' + (low ? ' is-low' : '') +
+               '" data-share="' + r.member_id + '"' +
+               (who ? ' title="' + esc(who) + '"' : '') + '>' + opts + '</select>' +
+             (r.share_reason
+               ? '<span class="ba-cell-none">' + esc(r.share_reason) + '</span>' : '');
+    }
+
+    // 고른 그 자리에서 바로 저장한다. 사유는 **선택** — 비워도 저장된다.
+    $('#ba-c-table').addEventListener('change', function (e) {
+      var sel = e.target.closest ? e.target.closest('.ba-ct__share') : null;
+      if (!sel) return;
+      var mid = parseInt(sel.dataset.share, 10);
+      var val = sel.value;
+      var row = ROWS.filter(function (x) { return x.member_id === mid; })[0] || {};
+      var why = val === '1.0' ? ''
+              : (prompt('참여 비중을 ' + val + ' 로 둡니다.\n'
+                        + '사유를 적어 두면 나중에 되짚기 좋습니다. 비워 두셔도 됩니다.',
+                        row.share_reason || '') || '');
+
+      api('api/candidate.php?act=set_share', { method: 'POST', body: {
+        project_id: PID, member_id: mid, share: val, reason: why
+      } }).then(function (d) {
+        toast(d.message);
+        load();          // 가용 공수가 달라지므로 표를 다시 받는다
+      }).catch(function (err) {
+        toast(err.message, true);
+        load();
+      });
+    });
 
     // ---- 선택 -----------------------------------------------------------
     function updatePicked() {
@@ -4496,13 +4547,20 @@
                '<span class="ba-metric__v">' + v + '</span>' +
                (it[2] ? '<span class="ba-metric__s">' + esc(it[2]) + '</span>' : '') + '</div>';
       }).join('');
-      if (m.manual_adjust) {
-        html += '<div class="ba-metric ba-metric--adj">' +
-                '<span class="ba-metric__k">관리자 보정</span>' +
-                '<span class="ba-metric__v">' + (m.manual_adjust > 0 ? '+' : '') +
-                  m.manual_adjust + '</span>' +
-                '<span class="ba-metric__s">' + esc(m.adjust_reason || '') + '</span></div>';
-      }
+      // ┌──────────────────────────────────────────────────────────┐
+      // │ '관리자 보정'(manual_adjust)을 치웠다 (2026-10-08)         │
+      // │                                                          │
+      // │ 저장되고 여기 보이기까지 했지만 **배정 엔진도 후보 적합도도│
+      // │ 한 번도 읽지 않았다.** 보이는데 아무 일도 안 하는 숫자는   │
+      // │ 없느니만 못하다 — 사람은 그게 먹는 줄 알고 조정한다.       │
+      // │                                                          │
+      // │ 하려던 일은 후보 표의 **참여 비중**이 대신한다. 그쪽은     │
+      // │ 프로젝트별이고 실제로 가용 공수를 줄인다. 이 칸은 eval_ver │
+      // │ 단위라 고치면 전 프로젝트에 동시에 걸렸다.                 │
+      // │                                                          │
+      // │ 칸과 자료는 그대로 둔다. 지난 조정 기록까지 지울 이유는    │
+      // │ 없다 — 화면에서만 뺀다.                                    │
+      // └──────────────────────────────────────────────────────────┘
       if (m.insufficient_data) {
         html += '<p class="ba-empty-inline">전체 표본이 부족합니다 (' +
                 m.total_cases + '건). 점수를 참고용으로만 보세요.</p>';

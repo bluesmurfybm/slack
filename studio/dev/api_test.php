@@ -3012,6 +3012,44 @@ ok('★ 최소 1건 보장 체크가 있다', str_contains($page, 'id="ba-al-min
 ok('★ 차수별 AIDD 체크가 있다', str_contains($page, 'id="ba-al-aidd"'));
 
 // ┌──────────────────────────────────────────────────────────────────┐
+// │ 산술이 못 담는 판단을 담는 칸 (2026-10-08)                        │
+// │                                                                  │
+// │ 왼쪽 칸들은 전부 **잰 값**이다. 「요즘 컨디션이 안 좋다」 는       │
+// │ 재지지 않는다. 점수를 깎지 않고 **가용 공수**를 줄인다.           │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 후보 표에 참여 비중 칸이 있다', str_contains($page, '참여 비중')
+   && str_contains($js, 'function shareCell'));
+ok('적합도를 안 건드린다고 적는다',
+   str_contains($page, '적합도 점수는 건드리지 않습니다'));
+ok('★ 1.0 이 아닐 때만 눈에 띄게 한다',
+   str_contains($js, "(low ? ' is-low' : '')") && str_contains($css, '.ba-ct__share.is-low'));
+
+// 아무 구성원이나 하나 잡는다 — 비중은 사람을 가리지 않는다.
+$shMid = (int)$pdoR->query('SELECT id FROM bs_member ORDER BY id LIMIT 1')->fetchColumn();
+ok('비중을 줄 구성원이 있다', $shMid > 0, (string)$shMid);
+
+$r = $admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.5']]);
+ok('★ 사유 없이도 저장된다', $r['status'] === 200
+   && abs(($r['json']['data']['share'] ?? 0) - 0.5) < 0.001, $r['body']);
+$r = $admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.01']]);
+ok('★ 바닥 아래 값은 잘린다', abs(($r['json']['data']['share'] ?? 0) - 0.10) < 0.001,
+   $r['body']);
+$r = $admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '']]);
+ok('비우면 되돌아간다', abs(($r['json']['data']['share'] ?? 0) - 1.0) < 0.001, $r['body']);
+$r = $guest->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.5']]);
+ok('★ 배정 권한이 있어야 남의 몫을 줄인다', $r['status'] === 403, (string)$r['status']);
+
+// 저장되고 보이기까지 했지만 엔진이 한 번도 안 읽던 칸. 보이는데 아무 일도
+// 안 하는 숫자는 없느니만 못하다 — 사람은 그게 먹는 줄 알고 조정한다.
+ok('★ 죽어 있던 관리자 보정을 화면에서 뺀다',
+   !str_contains($js, "'<span class=\"ba-metric__k\">관리자 보정</span>'"),
+   '참여 비중이 그 자리를 대신한다');
+
+// ┌──────────────────────────────────────────────────────────────────┐
 // │ 난이도 단추는 링크 전용이 아니다 (2026-10-08 — 쓰는 사람이 물었다)│
 // │                                                                  │
 // │ 대상은 확정된 태스크 전부인데 [링크 분석 시작] 바로 옆에 있어     │

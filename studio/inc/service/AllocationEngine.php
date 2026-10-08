@@ -486,6 +486,9 @@ final class AllocationEngine
                 // 그때 계수가 얼마였는지. 없으면 왜 이 공수가 나왔는지
                 // 설명할 수 없다.
                 'aidd'          => $ctx['aidd'],
+                // 그때 비중이 얼마였는지. 없으면 "왜 이 사람이 적게 받았나" 에
+                // 답할 수 없다. 프로젝트 설정을 나중에 바꿔도 이 차수는 설명된다.
+                'shares'        => $ctx['shares'],
             ],
         ];
     }
@@ -1097,6 +1100,22 @@ final class AllocationEngine
         // 대상은 고른 후보. 안 골랐으면 배정 대상 전원이 후보다.
         $targets = $ctx['picked'] ?: $ctx['member_order'];
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 「적게 주라」 를 보장이 뒤집으면 안 된다 (2026-10-08)         │
+        // │                                                              │
+        // │ 비중을 0.2 로 낮춘 사람에게 보장이 억지로 1건을 떠안기면      │
+        // │ 사람의 지시와 기계의 규칙이 맞선다. 비중을 낮춘 것 자체가     │
+        // │ **"덜 주라"** 는 뜻이므로 보장 대상에서 뺀다.                 │
+        // │                                                              │
+        // │ 아예 빼고 싶으면 후보에서 빼면 된다 — 그 길은 따로 있다.      │
+        // └──────────────────────────────────────────────────────────────┘
+        $lowered = [];
+        foreach (($ctx['shares'] ?? []) as $mid => $sh) {
+            if ((float)($sh['share'] ?? 1.0) < 1.0 - 0.0001) { $lowered[(int)$mid] = true; }
+        }
+        $targets = array_values(array_filter($targets,
+            static fn($mid) => !isset($lowered[$mid])));
+
         $counts = array_fill_keys(array_keys($ctx['members']), 0);
         foreach ($assign as $mid) { $counts[$mid] = ($counts[$mid] ?? 0) + 1; }
 
@@ -1522,16 +1541,33 @@ final class AllocationEngine
             : [];
         $workdays = $avail ? (int)(reset($avail)['workdays'] ?? 0) : 0;
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 점수를 깎지 않고 **그릇**을 줄인다 (2026-10-08)               │
+        // │                                                              │
+        // │ 「요즘 컨디션이 안 좋다」 「곧 다른 데로 빠진다」 는 재지지    │
+        // │ 않는다. 그런 판단을 적합도에 곱하면 화면의 "적합도 47" 이     │
+        // │ 실제 47 이 아니게 된다 — 최소 1건 보장을 정규화로 풀지 않은   │
+        // │ 바로 그 이유다.                                               │
+        // │                                                              │
+        // │ 가용 공수를 줄이면 적합도는 실제 값 그대로 두고, 가용도 축과  │
+        // │ 과부하 감점이 저절로 반응해 배정량이 준다. 그리고 "이 사람은  │
+        // │ 이 프로젝트에 절반만" 이라는 사람의 말과 1:1로 맞는다.        │
+        // │                                                              │
+        // │ 줄이 없는 사람은 1.0 이라 **이 변경 전과 완전히 같은 값**이다.│
+        // └──────────────────────────────────────────────────────────────┘
+        $shares = $this->projects?->memberShares($projectId) ?? [];
+
         $capacity = [];
         foreach ($members as $mid => $m) {
             $a = $avail[$mid] ?? null;
-            // 가용 공수(M/D) = 남은 가용량 × 영업일 × 제약 비율
+            // 가용 공수(M/D) = 남은 가용량 × 영업일 × 제약 비율 × 참여 비중
             //
             // AIDD 를 켜면 available_aidd(= available + 할인분)를 쓴다.
             // 계수가 1.00 이면 둘이 같아 **이 변경 전과 완전히 같은 값**이다.
             $capacity[$mid] = $a
                 ? round((float)($a['available_aidd'] ?? $a['available']) * $workdays
-                        * (float)($constraints['capacity_ratio'] ?? 1.0), 2)
+                        * (float)($constraints['capacity_ratio'] ?? 1.0)
+                        * (float)($shares[$mid]['share'] ?? 1.0), 2)
                 : 0.0;
         }
 
@@ -1611,6 +1647,8 @@ final class AllocationEngine
             'picked'           => $picked,
             'min_one'          => $minOne,
             'aidd'             => $aidd,
+            // 사람이 낮춰 둔 비중. 배정 대상인 사람 것만 들고 간다.
+            'shares'           => array_intersect_key($shares, $members),
             // 자동이 왜 그렇게 나눴는지. 화면이 그대로 보여 준다.
             'split_reasons'    => $cut['reasons'],
             // 단위 하나에 말단이 몇 건 들었는지. 근거에 쓴다.

@@ -56,6 +56,9 @@ bs_route(bs_param_str('act', 'list'), [
                 '프로젝트 기간이 비어 있어 가용도를 계산할 수 없습니다. 개발 기간을 먼저 입력하세요.', 400);
         }
 
+        // 사람이 손으로 낮춰 둔 참여 비중. 줄이 없는 사람은 1.0 이다.
+        $shares = $projects->memberShares($projectId);
+
         $minAvail = max(0, min(100, bs_param_int('min_availability', 0) ?? 0));
         $minCap   = max(0, min(100, bs_param_int('min_capability', 0) ?? 0));
         $domains  = array_values(array_filter(array_map('intval', bs_param_array('domains'))));
@@ -124,6 +127,13 @@ bs_route(bs_param_str('act', 'list'), [
                 'matched_categories' => $r['matched'],
 
                 'fit_score' => $fit,
+
+                // ── 참여 비중 (2026-10-08) ─────────────────────────────
+                // 잰 값이 아니라 **사람의 판단**이다. 가용도에 녹이지 않고
+                // 따로 내려보내 화면이 나란히 적는다.
+                'share'        => (float)($shares[$r['member_id']]['share'] ?? 1.0),
+                'share_reason' => $shares[$r['member_id']]['reason'] ?? null,
+                'share_by'     => $shares[$r['member_id']]['updated_by_name'] ?? null,
             ];
 
             // 조건 필터. 표본 부족인 사람은 **점수 조건으로 걸러내지 않는다** —
@@ -169,6 +179,56 @@ bs_route(bs_param_str('act', 'list'), [
      * 한 사람의 근거 — 현재 점유 내역 + 최근 처리 건.
      * 후보 표의 행을 눌렀을 때 드로어에 뿌린다.
      */
+    /**
+     * 참여 비중을 적는다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 산술이 못 담는 것을 담는 자리                                 │
+     * │                                                              │
+     * │ 가용도·처리량·분야는 잰 값이다. 「요즘 컨디션이 안 좋다」      │
+     * │ 「곧 다른 데로 빠진다」 는 재지지 않는다. 그런 판단은 사람이   │
+     * │ 적어 넣는 수밖에 없다.                                        │
+     * │                                                              │
+     * │ 사유는 **선택**이다 — 회사가 작고 서로 아는 사이라 강제하면   │
+     * │ 아무 말이나 적어 넣게 된다. 누가 언제는 그래도 남긴다.        │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    'set_share' => function () use ($projects, $members): void {
+        $user      = bs_begin_write();
+        $projectId = bs_param_int('project_id', 0);
+        $memberId  = bs_param_int('member_id', 0);
+        if (!$projectId || !$memberId) {
+            bs_json_error('MISSING_PARAM', '프로젝트와 구성원 번호가 필요합니다.', 400);
+        }
+        if (!$projects->find($projectId)) {
+            bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+        }
+        // 배정을 짜는 사람만 건드린다. 남의 몫을 줄이는 일이다.
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
+        if (!$members->find($memberId)) {
+            bs_json_error('NOT_FOUND', '구성원을 찾을 수 없습니다.', 404);
+        }
+
+        // 빈 값이면 **되돌리기**. 1.0 도 같은 뜻이라 줄을 지운다.
+        $raw   = trim(bs_param_str('share'));
+        $share = $raw === '' ? null : (float)$raw;
+
+        $projects->setMemberShare($projectId, $memberId, $share,
+                                  bs_param_str('reason'), $user);
+
+        $now = $projects->memberShares($projectId)[$memberId] ?? null;
+        bs_json_ok([
+            'member_id' => $memberId,
+            'share'     => $now ? (float)$now['share'] : 1.0,
+            'reason'    => $now['reason'] ?? null,
+            'share_by'  => $now['updated_by_name'] ?? null,
+            'message'   => $now === null
+                ? '참여 비중을 원래대로 되돌렸습니다.'
+                : sprintf('참여 비중을 %s 로 두었습니다. 다시 산출해야 배정에 반영됩니다.',
+                          number_format((float)$now['share'], 2)),
+        ]);
+    },
+
     'detail' => function () use ($projects, $members, $avail): void {
         bs_require_login_api();
 
