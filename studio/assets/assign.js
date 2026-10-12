@@ -705,6 +705,9 @@
     function loadMine() {
       api('api/dashboard.php?' + qs({ act: 'mine' })).then(function (d) {
         var box = $('#ba-mine');
+        // 맡은 태스크가 없어도 R&D 는 따로 그린다. 아래에서 return 하면
+        // '내 R&D 과제' 가 '불러오는 중…' 에 멈춘다.
+        renderMyRnd(d.rnd || []);
         if (!d.rows.length) {
           box.innerHTML = '<p class="ba-empty-inline">' +
             (d.message || '확정된 배정안에서 맡은 태스크가 없습니다.') + '</p>';
@@ -727,9 +730,11 @@
               (r.overdue ? ' <b>지연</b>' : '') + '</span>' +
           '</button>';
         }).join('') + '</div>';
-        renderMyRnd(d.rnd || []);
       }).catch(function (e) {
-        $('#ba-mine').innerHTML = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
+        var msg = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
+        $('#ba-mine').innerHTML = msg;
+        var rnd = $('#ba-myrnd');
+        if (rnd) rnd.innerHTML = msg;
       });
     }
 
@@ -1206,13 +1211,16 @@
 
     // ---- 붙이기 -------------------------------------------------------------
     document.addEventListener('click', function (e) {
-      var card = e.target.closest('[data-project]');
+      // root(#ba-dash) 자신도 data-project 를 달고 있다. '[data-project]' 로만
+      // 찾으면 화면 어디를 눌러도 root 가 잡혀 openBoard(0) 이 나간다.
+      var card = e.target.closest('.ba-card[data-project]');
       if (card && root.contains(card)) { openBoard(parseInt(card.dataset.project, 10)); return; }
 
       var t = e.target.closest('[data-task]');
       if (t) { openTask(parseInt(t.dataset.task, 10)); return; }
 
-      var v = e.target.closest('[data-view]');
+      // 칸반·간트 토글만. 위쪽 뷰 탭(통합/프로젝트/R&D)도 data-view 를 쓴다.
+      var v = e.target.closest('.ba-bd__toggle [data-view]');
       if (v) { setView(v.dataset.view); }
     });
 
