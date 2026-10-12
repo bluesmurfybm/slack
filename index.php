@@ -148,6 +148,8 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
             <div class="dd-sep"></div>
             <?= work_systems_menu('', '', true) ?>
             <div class="dd-sep"></div>
+            <!-- 설치할 수 있을 때만 보인다(pwa.js 의 bluePwa). 안내 띠에서 '다음에' 를 눌렀어도 여기서 다시 설치할 수 있다 -->
+            <a href="javascript:void(0)" id="menu-install" class="hidden" onclick="closeUserMenu();bluePwa.install()">📲 앱으로 설치</a>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
         </div>
@@ -700,12 +702,26 @@ function showProfile(alertMsg, forceEdit){
   loadPushPanel();
 }
 
+/* ---- 앱 설치 메뉴 ---- 설치할 수 있게 되면(pwa.js) 사용자 메뉴에 항목을 보인다 */
+function syncInstallMenu(){
+  const el=document.getElementById("menu-install");
+  if(el) el.classList.toggle("hidden", !(window.bluePwa && bluePwa.available()));
+}
+document.addEventListener("bluepwa:change", syncInstallMenu);
+window.addEventListener("load", syncInstallMenu);
+
 /* ---- 웹 푸시 알림 (마이페이지) ----
    서버는 api/push.php, 브라우저 쪽 구독은 pwa.js 의 window.bluePush.
    시험 기간에는 허용된 계정(current.push_ok)에만 보인다. */
 let pushInfo=null;
 async function loadPushPanel(){
   const box=document.getElementById("pf-push");
+  // pwa.js 는 defer 라 이 화면 스크립트보다 늦게 돈다. 첫 화면이 곧바로 마이페이지면
+  // (초기 비번, ?view=profile) 아직 bluePush 가 없다 — 다 불러온 뒤 다시 그린다.
+  if(current && current.push_ok && !window.bluePush && document.readyState!=="complete"){
+    window.addEventListener("load", loadPushPanel, {once:true});
+    return;
+  }
   const can=!!(current && current.push_ok) && !!window.bluePush;
   box.classList.toggle("hidden", !can);
   if(!can) return;

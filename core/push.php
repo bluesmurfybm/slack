@@ -210,6 +210,12 @@ function push_vapid_keys(): array
             error_log('[push] VAPID 키를 새로 만들었습니다: ' . $path);
         }
         clearstatcache(true, $path);
+        if (!$fh && !is_file($path)) {
+            // 열기도 못 했고 다른 요청이 만든 것도 아니다 — 폴더 쓰기 권한 문제다
+            $who = function_exists('posix_geteuid') && function_exists('posix_getpwuid')
+                ? (posix_getpwuid(posix_geteuid())['name'] ?? '?') : (get_current_user() ?: '?');
+            throw new RuntimeException('VAPID 키 파일을 만들 수 없습니다(쓰기 권한 확인): ' . $path . ' · 실행 계정 ' . $who);
+        }
     }
 
     $data = json_decode((string)@file_get_contents($path), true);
