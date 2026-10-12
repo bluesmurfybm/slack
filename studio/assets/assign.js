@@ -785,7 +785,7 @@
           el.textContent = (v === undefined || v === null) ? '–' : v;
         });
         var q = $('#ba-dash-q');
-        if (q && d.org.quarter_from) q.textContent = d.org.quarter_from + ' 이후 산출물';
+        if (q && d.org.quarter_from) q.textContent = '사내 전체 · ' + d.org.quarter_from + ' 이후 (이번 분기)';
 
         var box = $('#ba-me-load');
         if (!d.me || !d.me.donut) {
@@ -1250,7 +1250,9 @@
       });
       var saved = 'all';
       try { saved = localStorage.getItem('bs.dash.view') || 'all'; } catch (e) { /* 무시 */ }
-      applyView(saved);
+      // 탭을 숨겨 둔 동안은 언제나 '통합'이다 (2026-10-12). 예전에 '프로젝트' 를
+      // 골라 둔 브라우저는 그 기억 때문에 패널 일부가 안 보인 채 남는다.
+      applyView(views.hidden ? 'all' : saved);
     }
 
     loadOverview();

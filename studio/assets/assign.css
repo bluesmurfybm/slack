@@ -1645,6 +1645,66 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-viewtabs button[aria-selected="true"] {
   background: var(--ba-brand); border-color: var(--ba-brand); color: #fff;
 }
+/* display:flex 가 hidden 속성을 이긴다. 숨긴 동안 확실히 감춘다 (2026-10-12). */
+.ba-viewtabs[hidden] { display: none; }
+
+/* ── 사내 전체 현황 (2026-10-12) ─────────────────────────────────────
+   아래의 '내 …' 패널과 **다른 범위**라는 것이 먼저 보여야 한다. 그래서
+   제목과 '전사' 뱃지를 두고, 카드에도 "사내 전체" 를 한 번 더 적는다.
+   카드는 색 띠·아이콘으로 셋을 구분하고, 누르면 그 목록으로 간다. */
+.ba-org {
+  background: var(--ba-paper); border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r); padding: 16px 18px 18px; margin-bottom: 14px;
+}
+.ba-org__head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; }
+.ba-org__head h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--ba-ink); }
+.ba-org__badge {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  padding: 2px 8px; border-radius: 999px;
+  background: #e9f3ed; color: var(--ba-brand); border: 1px solid #cfe5d8;
+}
+.ba-org__hint { font-size: 12px; color: var(--ba-ink-soft); }
+
+.ba-org__cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .ba-org__cards { grid-template-columns: 1fr; } }
+
+.ba-orgc {
+  --c: var(--ba-brand); --c-soft: #e9f3ed;
+  position: relative; display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px 14px 18px; overflow: hidden;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: var(--ba-r);
+  color: inherit; text-decoration: none;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+/* 왼쪽 색 띠 — 셋을 색으로 먼저 가른다 */
+.ba-orgc::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c);
+}
+.ba-orgc:hover {
+  border-color: var(--c); box-shadow: 0 4px 14px rgba(22, 36, 58, .08); transform: translateY(-1px);
+}
+.ba-orgc:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+.ba-orgc--rnd { --c: #7a5bd6; --c-soft: #efeafc; }   /* 도넛의 R&D 색과 같다 */
+.ba-orgc--out { --c: #c98a12; --c-soft: #fbf1dc; }
+
+.ba-orgc__ic {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 42px; height: 42px; border-radius: 12px; background: var(--c-soft); color: var(--c);
+}
+.ba-orgc__ic svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.ba-orgc__body { display: flex; flex-direction: column; min-width: 0; }
+.ba-orgc__t { font-size: 12.5px; font-weight: 600; color: var(--ba-ink-soft); }
+.ba-orgc .n {
+  font-size: 26px; font-weight: 700; line-height: 1.15; color: var(--ba-ink);
+  font-variant-numeric: tabular-nums; margin: 2px 0;
+}
+.ba-orgc__s {
+  font-size: 11.5px; color: var(--ba-ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* 점유 구성 도넛 — 외부 라이브러리 없이 conic-gradient 로 그린다. */
 .ba-donut { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
