@@ -85,7 +85,8 @@ bs_route(bs_param_str('act', 'versions'), [
             $ratio  = (float)($p['constraints']['capacity_ratio'] ?? 1.0);
             $shares = (array)($p['shares'] ?? []);
             if ($calc !== null && !isset($availBy[(string)$load])) {
-                $availBy[(string)$load] = $calc->forMembers(array_keys($mids), $from, $to, $load);
+                $availBy[(string)$load] = $calc->forMembers(array_keys($mids), $from, $to, $load,
+                                                        $projectId);   // 자기 확정본은 빼고
             }
             $av = $availBy[(string)$load] ?? [];
 
@@ -688,7 +689,9 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
     $peak = [];
     if ($from !== null && $to !== null && $from <= $to) {
         $calc = new AvailabilityCalculator($pdo);
-        foreach ($calc->forMembers($ids, $from, $to, $aiddLoad) as $mid => $a) {
+        // 이 프로젝트의 확정본이 만든 점유는 빼고 센다 — 그것을 다시 배정하는 막대다.
+        foreach ($calc->forMembers($ids, $from, $to, $aiddLoad,
+                                   (int)$allocation['project_id']) as $mid => $a) {
             $cap[$mid] = AvailabilityCalculator::capacityMd(
                 $a, $ratio, (float)($shares[$mid]['share'] ?? 1.0));
             // 가용 공수가 넉넉해도 그 공수가 **특정 달에 몰려 있을 수** 있다.

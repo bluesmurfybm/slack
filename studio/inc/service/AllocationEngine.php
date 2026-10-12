@@ -1642,7 +1642,9 @@ final class AllocationEngine
 
         [$from, $to] = $this->projectWindow($projectId);
         $avail = ($from !== null && $members)
-            ? $this->availability->forMembers(array_keys($members), $from, $to, $aidd['load'])
+            // 이 프로젝트의 확정본이 만든 점유는 뺀다 — 같은 일을 두 번 세지 않게.
+            ? $this->availability->forMembers(array_keys($members), $from, $to, $aidd['load'],
+                                              $projectId)
             : [];
         $workdays = $avail ? (int)(reset($avail)['workdays'] ?? 0) : 0;
 

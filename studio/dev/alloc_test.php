@@ -1315,6 +1315,22 @@ ok('삭제된 프로젝트의 점유는 빠진다', $rawOf() < $before, $before 
 $pdo->prepare('UPDATE bs_project SET deleted_at = NULL WHERE id = ?')->execute([$pid]);
 $pdo->exec("DELETE FROM bs_workload WHERE label = '유령'");
 
+// 같은 프로젝트를 다시 배정할 때는 그 프로젝트의 확정본을 세지 않는다 (2026-10-12).
+$exOf = fn() => $avail->forMembers([$oMem], $win['f'], $win['t'], 1.0, $pid)[$oMem]['confirmed_raw'];
+ok('★ 자기 프로젝트의 확정 점유는 뺄 수 있다', $exOf() < $before - 0.00001,
+   $before . ' → ' . $exOf());
+
+// 배정 점유는 **공수만큼**이다. 기간 전체 100% 로 세지 않는다 (2026-10-12).
+$bd = $avail->forMembers([$oMem], $win['f'], $win['t'])[$oMem]['breakdown'];
+$ok15 = true; $why15 = '';
+foreach ($bd as $b) {
+    if (($b['ref_type'] ?? '') !== 'allocation_item' || $b['est_md'] === null) { continue; }
+    $span = max(1, $avail->workdays($b['start_date'], $b['end_date']));
+    $want = $b['load_ratio'] * min(1.0, $b['est_md'] / $span);
+    if (abs($b['ratio_used'] - $want) > 0.0001) { $ok15 = false; $why15 .= json_encode($b) . ' '; }
+}
+ok('★ 배정 점유는 예상공수 ÷ 기간 영업일로 환산된다', $ok15 && $bd !== [], $why15 ?: (string)count($bd));
+
 // =====================================================================
 echo "\n[15] 직전 안 유지 — ε 점 안이면 담당자를 그대로 둔다\n";
 // 가중치를 조금만 바꿔도 담당자가 절반 넘게 바뀌던 것을 막는다 (2026-10-12).

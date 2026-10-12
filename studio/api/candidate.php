@@ -79,7 +79,8 @@ bs_route(bs_param_str('act', 'list'), [
             ]);
         }
 
-        $av = $avail->forMembers(array_column($rows, 'member_id'), $from, $to);
+        // 이 프로젝트의 확정본이 만든 점유는 뺀다 — 다시 배정하려고 보는 표다.
+        $av = $avail->forMembers(array_column($rows, 'member_id'), $from, $to, 1.0, $projectId);
 
         $out = [];
         foreach ($rows as $r) {
@@ -302,7 +303,7 @@ bs_route(bs_param_str('act', 'list'), [
             bs_json_error('NO_PERIOD', '프로젝트 기간이 비어 있습니다.', 400);
         }
 
-        $a       = $avail->forMember($memberId, $from, $to);
+        $a       = $avail->forMember($memberId, $from, $to, 1.0, $projectId);
         $evalVer = $members->latestEvalVer();
 
         // 최근 처리 건은 **근거**다. 프로파일 열람 권한과 같은 선을 적용한다.
