@@ -167,7 +167,7 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
     <?php if (!empty($result['error'])): ?><br><?= h($result['error']) ?><?php endif; ?>
     <?php if (!$result['recipients'] && empty($result['error'])): ?>
       <br>보낼 기기가 없습니다. 받는 사람이 "알림 받기" 를 했는지, 이 종류를 꺼 두지 않았는지 확인하세요.
-      <?php if (!empty($result['notified'])): ?>알림함에는 남았습니다(포털 사용자 메뉴 → 알림).<?php endif; ?>
+      <?php if (!empty($result['notified'])): ?>알림함에는 남았습니다(포털 상단바 🔔 단추).<?php endif; ?>
     <?php endif; ?>
   </div>
   <?php if ($result['detail']): ?>

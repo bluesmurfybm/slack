@@ -133,17 +133,21 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         <button type="button" class="bg-btn" id="bgBtn" onclick="toggleBg()"
                 title="대시보드 배경" aria-label="대시보드 배경 바꾸기"></button>
 <?php endif; ?>
+        <!-- 알림함. 시험 기간에는 알림을 받는 계정(push_ok)에만 보인다. 안 읽은 수는 오른쪽 위 숫자.
+             배경 단추와 달리 로그인 전에도 그려 둔다 — 로그인 직후(홈 화면 앱은 늘 이 경로) renderShell 이 보이게 한다. -->
+        <button type="button" class="bg-btn nf-btn<?= empty($__current['push_ok']) ? ' hidden' : '' ?>" id="nfBtn"
+                onclick="showNotifs()" title="알림" aria-label="알림">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <span class="nf-badge hidden" id="nf-badge"></span>
+        </button>
         <div class="user-menu" id="userMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
             <span class="avatar" id="tb-avatar"></span>
-            <span class="nf-dot hidden" id="nf-dot" title="안 읽은 알림"></span>
             <span class="nm" id="tb-name"></span>
             <span class="user-caret">▾</span>
           </div>
           <div class="dd-menu" id="userDd">
             <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
-            <!-- 알림함. 시험 기간에는 알림을 받는 계정(push_ok)에만 보인다 -->
-            <a href="javascript:void(0)" id="menu-notifs" class="hidden" onclick="closeUserMenu();showNotifs()">🔔 알림 <span class="nf-badge hidden" id="nf-badge"></span></a>
             <a href="javascript:void(0)" onclick="closeUserMenu();showNotices(1)">📢 공지사항</a>
 <?php if ($__isAdmin): ?>
             <a href="javascript:void(0)" onclick="closeUserMenu();showManage('events')">⚙️ 포털 관리</a>
@@ -630,7 +634,9 @@ function renderShell(){
   av.textContent=first; av.style.background=current.color||avatarColor(current.name);
   document.getElementById("tb-name").textContent=current.name;
   document.getElementById("hero-hi").textContent=`${current.name}님, 환영합니다`;
-  document.getElementById("menu-notifs").classList.toggle("hidden", !current.push_ok);
+  // 로그인 직후에도 맞게 — 서버가 그린 값은 로그인 전 상태일 수 있다
+  const nfBtn=document.getElementById("nfBtn");
+  if(nfBtn) nfBtn.classList.toggle("hidden", !current.push_ok);
   refreshNotifBadge();
 }
 
@@ -743,10 +749,11 @@ async function refreshNotifBadge(){
   }catch(e){}
 }
 function paintNotifBadge(n){
-  const b=document.getElementById("nf-badge"), dot=document.getElementById("nf-dot");
+  const b=document.getElementById("nf-badge"), btn=document.getElementById("nfBtn");
   b.textContent = n>99 ? "99+" : String(n||0);
   b.classList.toggle("hidden", !n);
-  dot.classList.toggle("hidden", !n);
+  btn.classList.toggle("on", !!n);
+  btn.title = n ? `알림 — 안 읽음 ${n}` : "알림";
   const c=document.getElementById("nf-count");
   if(c) c.textContent = n ? `안 읽음 ${n}` : "";
 }

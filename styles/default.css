@@ -197,9 +197,11 @@ body.tile-dragging .tile.soon{cursor:move}
 .push-dev-empty{font-size:12.5px;color:var(--muted);margin-bottom:10px}
 
 /* ---- 알림함 (index.php #view-notifs) ---- */
-.user-chip{position:relative}
-.nf-dot{position:absolute;top:2px;left:26px;width:9px;height:9px;border-radius:50%;background:#E5484D;border:2px solid #fff}
-.nf-badge{display:inline-block;min-width:18px;padding:0 6px;margin-left:4px;border-radius:999px;background:#E5484D;color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+/* 상단바 종 단추 — 모양은 .bg-btn(board.css) 을 그대로 쓰고 숫자만 얹는다 */
+.nf-btn{position:relative}
+.nf-badge{position:absolute;top:-5px;right:-6px;min-width:17px;height:17px;padding:0 5px;box-sizing:border-box;
+  border-radius:999px;background:#E5484D;color:#fff;border:2px solid #fff;
+  font-size:10px;font-weight:700;line-height:13px;text-align:center;font-family:var(--sans)}
 .nf-count{font-size:13px;color:var(--blue);font-weight:600}
 .nf-row{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line);cursor:pointer}
 .nf-row:last-child{border-bottom:0}
