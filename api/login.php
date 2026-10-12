@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/../core/auth.php';
+require_once __DIR__ . '/../core/push.php';    // push_can_receive()
 header('Content-Type: application/json; charset=utf-8');
 
 $body     = json_decode(file_get_contents('php://input'), true) ?: [];
@@ -32,4 +33,7 @@ echo json_encode([
     'slack_email' => $row['slack_email'] ?? null,
     'needs_setup' => needs_setup($row),
     'color'       => user_color($row),
+    // index.php·api/me.php 와 같은 모양이어야 한다. 화면은 로그인 응답을 그대로 current 로 쓰므로
+    // 여기서 빠지면 로그인 직후(홈 화면 앱은 세션이 따로라 늘 이 경로) 마이페이지 알림 칸이 숨는다.
+    'push_ok'     => push_can_receive($row['email']),
 ], JSON_UNESCAPED_UNICODE);

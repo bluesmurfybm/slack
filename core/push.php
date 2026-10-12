@@ -552,6 +552,28 @@ function push_request_headers(string $endpoint, int $length, int $ttl, string $u
     return $h;
 }
 
+/**
+ * 푸시 서비스 인증서를 검증할 CA 묶음.
+ *
+ * WAMP 등 Windows PHP 는 CA 묶음이 설정돼 있지 않아 그대로 두면 모든 발송이
+ * "SSL certificate problem: unable to get local issuer certificate" 로 실패한다.
+ * php.ini 에 설정이 있으면 그것을, 없으면 저장소에 있는 Mozilla 묶음
+ * (slackai/vendor/cacert.pem — slackai/slack_lib.php 의 slackCurlSslOpts 와 같은 파일)을 쓴다.
+ * 리눅스는 보통 시스템 묶음이 있어 null(curl 기본값)로 충분하다.
+ *
+ * 검증을 끄지는 않는다. 끄면 중간에서 VAPID 서명(JWT)을 가로채 우리 이름으로 보낼 수 있다.
+ */
+function push_ca_file(): ?string
+{
+    static $ca = false;
+    if ($ca !== false) return $ca;
+    foreach ([ini_get('curl.cainfo'), ini_get('openssl.cafile'),
+              dirname(__DIR__) . '/slackai/vendor/cacert.pem'] as $f) {
+        if ($f && is_file($f)) return $ca = $f;
+    }
+    return $ca = null;
+}
+
 /** @return array{status:?int, error:?string} 예외를 던지지 않는다. */
 function push_http_post(string $endpoint, string $body, array $headers): array
 {
@@ -564,6 +586,7 @@ function push_http_post(string $endpoint, string $body, array $headers): array
         CURLOPT_CONNECTTIMEOUT => 3,
         CURLOPT_TIMEOUT        => 5,
     ]);
+    if (($ca = push_ca_file()) !== null) curl_setopt($c, CURLOPT_CAINFO, $ca);
     $resp = curl_exec($c);
     if ($resp === false) {
         return ['status' => null, 'error' => 'curl: ' . curl_error($c)];
