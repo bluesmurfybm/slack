@@ -1287,5 +1287,34 @@ ok('가용 공수를 넘으면 요약이 알려 준다', $sumRow['over'] === tru
    json_encode($sumRow));
 
 // =====================================================================
+echo "\n[14] 유효하지 않은 배정에서 온 점유는 세지 않는다\n";
+// 배정 항목이 지워지거나, 확정본이 아니게 되거나, 프로젝트가 삭제돼도
+// bs_workload 의 기록은 남는다. 그것을 세면 일이 없는 사람이 '꽉 참' 이 된다.
+$cf    = $allocs->confirmed($pid);
+$allocs->syncWorkloadFrom((int)$cf['id']);       // [12] 에서 점유를 비웠다
+$cfIt  = $allocs->items((int)$cf['id'])[0];
+$oMem  = (int)$cfIt['member_id'];
+$win   = $pdo->query("SELECT MIN(start_date) f, MAX(end_date) t FROM bs_workload
+                       WHERE kind='assigned' AND ref_type='allocation_item'")->fetch();
+$rawOf = fn() => $avail->forMembers([$oMem], $win['f'], $win['t'])[$oMem]['confirmed_raw'];
+$before = $rawOf();
+ok('확정본의 점유는 센다', $before > 0, (string)$before);
+
+$oldItem = (int)$allocs->items($aid)[0]['id'];   // 지난(archived) 안의 항목
+$mkOrphan = $pdo->prepare(
+    "INSERT INTO bs_workload (member_id, kind, ref_type, ref_id, label,
+                              start_date, end_date, load_ratio, confidence)
+     VALUES (?, 'assigned', 'allocation_item', ?, '유령', ?, ?, 1.000, 1.000)");
+$mkOrphan->execute([$oMem, 999999999, $win['f'], $win['t']]);   // 항목이 없다
+$mkOrphan->execute([$oMem, $oldItem,  $win['f'], $win['t']]);   // 확정본이 아니다
+ok('지워진 항목·지난 안의 점유는 더해지지 않는다', abs($rawOf() - $before) < 0.00001,
+   $before . ' → ' . $rawOf());
+
+$pdo->prepare('UPDATE bs_project SET deleted_at = NOW() WHERE id = ?')->execute([$pid]);
+ok('삭제된 프로젝트의 점유는 빠진다', $rawOf() < $before, $before . ' → ' . $rawOf());
+$pdo->prepare('UPDATE bs_project SET deleted_at = NULL WHERE id = ?')->execute([$pid]);
+$pdo->exec("DELETE FROM bs_workload WHERE label = '유령'");
+
+// =====================================================================
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";
 exit($fail > 0 ? 1 : 0);

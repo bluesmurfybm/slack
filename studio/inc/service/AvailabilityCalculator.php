@@ -229,15 +229,27 @@ final class AvailabilityCalculator
         // 그때그때 다시 계산한다. bs_workload 에 저장된 추정치를 함께 쓰면
         // 언제 갱신됐는지 모르는 값이 섞이고, refreshInferred() 를 돌린 뒤에는
         // 같은 건을 두 번 세게 된다.
+        //
+        // 배정이 만든 기록(ref_type='allocation_item')은 **지금도 확정된
+        // 배정안이고 프로젝트가 살아 있을 때만** 센다 (2026-10-12).
+        // 배정 항목이 지워지거나 프로젝트를 삭제해도 점유 기록은 남는다.
+        // 그것까지 세면 하는 일이 없는 사람이 '꽉 참' 으로 나와 배정에서
+        // 밀린다 — 대시보드에서 진행 중 프로젝트 0건인 사람이 프로젝트 92% 로 나왔다.
         $st = $this->pdo->prepare(
-            "SELECT id, member_id, kind, label, ref_type, ref_id,
-                    source, source_url, note, created_by, created_by_name,
-                    updated_by_name,
-                    start_date, end_date, load_ratio, confidence
-               FROM bs_workload
-              WHERE member_id IN ($ph)
-                AND kind IN ('assigned', 'manual')
-                AND start_date <= ? AND end_date >= ?"
+            "SELECT w.id, w.member_id, w.kind, w.label, w.ref_type, w.ref_id,
+                    w.source, w.source_url, w.note, w.created_by, w.created_by_name,
+                    w.updated_by_name,
+                    w.start_date, w.end_date, w.load_ratio, w.confidence
+               FROM bs_workload w
+               LEFT JOIN bs_allocation_item i
+                      ON w.ref_type = 'allocation_item' AND i.id = w.ref_id
+               LEFT JOIN bs_allocation a ON a.id = i.allocation_id
+               LEFT JOIN bs_project    p ON p.id = a.project_id
+              WHERE w.member_id IN ($ph)
+                AND w.kind IN ('assigned', 'manual')
+                AND w.start_date <= ? AND w.end_date >= ?
+                AND (w.ref_type IS NULL OR w.ref_type <> 'allocation_item'
+                     OR (a.status = 'confirmed' AND p.deleted_at IS NULL))"
         );
         $st->execute(array_merge($memberIds, [$to, $from]));
 
