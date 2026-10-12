@@ -103,6 +103,30 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 020_migration_workload_editor.sql   직접 등록한 점유를 누가 고쳤는가
 021_migration_aidd.sql              AIDD 고려 옵션 — 공수 계수·점유 반영률
 022_migration_project_member.sql    프로젝트별 참여 비중 — 산술이 못 담는 판단
+023_migration_source_purpose.sql    출처 용도(범위/참고) ← 빠지면 프로젝트 등록·수정 화면이 안 열림
+024_migration_candidate_mark.sql    후보 표 ★ 우선 후보·적합도 가감점
+025_migration_view_as.sql           관리자 "사용자로 보기" 기록
+```
+
+### 이미 돌고 있는 DB 에 새 번호만 더할 때
+
+`apply.sh` 는 빈 DB 에 처음부터 올리는 경로만 맡는다. 운영 중인 DB 에는
+**백업을 뜬 뒤** 아직 안 올린 번호만 순서대로 손으로 돌린다. **코드를 받기 전에**
+돌린다 — 023 이 없는 채로 새 코드가 돌면 프로젝트 등록·수정 화면이 깨진다.
+
+```sh
+sh studio/sql/dump.sh <db> -u <user> -p -o ~/backup
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/023_migration_source_purpose.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/024_migration_candidate_mark.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/025_migration_view_as.sql
+```
+
+어디까지 올렸는지 모르겠으면 칸·표가 있는지 본다:
+
+```sh
+mysql <db> -e "SHOW COLUMNS FROM bs_project_source LIKE 'purpose'"   # 023
+mysql <db> -e "SHOW COLUMNS FROM bs_project_member LIKE 'priority'"  # 024
+mysql <db> -e "SHOW TABLES LIKE 'bs\_view\_as\_log'"                 # 025
 ```
 
 ### 적용 뒤 확인
