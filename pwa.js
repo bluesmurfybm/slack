@@ -8,6 +8,7 @@
  *   await bluePush.status()       이 기기의 구독(PushSubscription) 또는 null
  *   await bluePush.subscribe(key) 권한 묻기 → 구독 → 서버 저장. 반드시 클릭 안에서 부른다(iOS)
  *   await bluePush.unsubscribe()  서버에서 지우고 브라우저 구독도 끊는다
+ *   await bluePush.endpointHash() 이 기기 구독 주소의 sha256(16진) 또는 null — 서버 기기 목록과 견준다
  */
 (function () {
   var script = document.currentScript;
@@ -86,6 +87,12 @@
         try { await sub.unsubscribe(); } catch (_) {}
         throw e;
       }
+    },
+    endpointHash: async function () {
+      var sub = await this.status().catch(function () { return null; });
+      if (!sub || !window.crypto || !crypto.subtle) return null;
+      var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sub.endpoint));
+      return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
     },
     unsubscribe: async function () {
       var sub = await this.status();

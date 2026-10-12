@@ -163,10 +163,11 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
   <h2>결과</h2>
   <div class="msg <?= $result['sent'] ? 'ok' : 'bad' ?>">
     성공 <?= $result['sent'] ?> · 실패 <?= $result['failed'] ?> · 정리(만료 구독 삭제) <?= $result['pruned'] ?>
-    · 허용 목록 밖 <?= $result['skipped'] ?> · 대상 기기 <?= $result['recipients'] ?>
+    · 허용 목록 밖 <?= $result['skipped'] ?>명 · 알림함 저장 <?= $result['notified'] ?? 0 ?>명 · 대상 기기 <?= $result['recipients'] ?>
     <?php if (!empty($result['error'])): ?><br><?= h($result['error']) ?><?php endif; ?>
     <?php if (!$result['recipients'] && empty($result['error'])): ?>
       <br>보낼 기기가 없습니다. 받는 사람이 "알림 받기" 를 했는지, 이 종류를 꺼 두지 않았는지 확인하세요.
+      <?php if (!empty($result['notified'])): ?>알림함에는 남았습니다(포털 사용자 메뉴 → 알림).<?php endif; ?>
     <?php endif; ?>
   </div>
   <?php if ($result['detail']): ?>

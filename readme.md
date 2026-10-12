@@ -24,7 +24,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── vapid.key                    웹 푸시 서명 키쌍 (자동 생성, 루트, gitignore)
 ├── .sessions/                   PHP 세션 저장 경로 (루트)
 ├── api/                         login.php, logout.php, me.php
-│                                notices.php, notice_file.php, events.php, admins.php, push.php
+│                                notices.php, notice_file.php, events.php, admins.php, push.php, notifications.php
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
 ├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
 ├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
@@ -204,7 +204,12 @@ push_send([
   남긴다. 기기(브라우저)마다 한 번씩 눌러야 한다. 종류별 체크는 누르는 즉시 저장된다 —
   다른 칸처럼 '수정/저장' 을 거치지 않는다. 권한 창이 뜨는 일은 '취소' 로 되돌릴 수 없기 때문이다.
 - 알림을 누르면 `url` 이 열린다. 상대경로는 sw.js 가 자기 scope(포털 루트)로 풀고, 같은 주소의 탭이
-  열려 있으면 그 탭을 앞으로 가져온다.
+  열려 있으면 그 탭을 앞으로 가져온다. 동시에 알림함에서 그 알림을 읽음으로 바꾼다.
+- 마이페이지 알림 칸에 **알림 받는 기기 목록**이 있다. 기기마다 '삭제' 로 끊을 수 있다(잃어버린 휴대폰 등).
+  지금 보고 있는 기기는 "이 기기" 로 표시되고, 이 기기를 지우면 브라우저 구독까지 끊는다.
+- **알림함**(사용자 메뉴 → 🔔 알림): 받은 알림을 모아 본다. 안 읽은 수가 메뉴와 아바타의 빨간 점으로 보인다.
+  누르면 읽음으로 바뀌고 그 주소로 간다. 모두 읽음·읽은 알림 지우기·하나씩 지우기가 된다.
+  알림함은 **사람 기준**이라 기기가 없거나 발송이 실패해도 남는다. 180일이 지나면 지운다.
 - **iOS 는 공유 → '홈 화면에 추가' 한 뒤 그 아이콘으로 연 화면에서만** 알림을 받을 수 있다(16.4+).
 - https 또는 localhost 에서만 동작한다. 그 밖의 주소에서는 알림 칸이 "받을 수 없음" 으로 보인다.
 
@@ -235,7 +240,8 @@ push_send([
 | 서명 키쌍 | 루트 `vapid.key` | 첫 사용 때 자동 생성. **바꾸면 모든 구독이 403 으로 끊긴다** — 서버를 옮길 때 같이 옮긴다 |
 | 구독 | `portal_push_subscription` | 기기마다 한 줄. 404/410 이면 바로 지우고, 5xx·타임아웃이 연달아 5번이면 지운다 |
 | 종류별 설정 | `portal_push_pref` | 고른 것만 줄로 남는다. 없으면 json 의 default |
-| 발송 기록 | `portal_push_log` | 이동 주소·HTTP 응답·오류 |
+| 발송 기록 | `portal_push_log` | 기기·시도마다 한 줄. 이동 주소·HTTP 응답·오류(운영용) |
+| 알림함 | `portal_notification` | 사람마다 한 줄. 읽음 여부. `api/notifications.php` |
 | 머리 태그 | `core/pwa.php` `pwa_head_tags($포털루트까지)` | 포털 `''`, 모듈 `'../'`, 하위 폴더 `'../../'`, dti `$page['base'].'../'` |
 | 아이콘 | `styles/icon-*.png`, `apple-touch-icon.png` | `python dev/gen_icons.py` — favicon 과 같은 심볼 |
 

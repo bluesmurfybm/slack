@@ -266,6 +266,28 @@ function portal_db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='웹 푸시 발송 시도 기록'
     ");
+    // 알림함 — 사람이 받은 알림을 다시 보는 곳(포털 '알림' 화면).
+    // 위 발송 기록은 기기·시도마다 남는 운영용이라 따로 둔다. 기기가 없거나
+    // 발송이 실패해도 여기에는 남아, 놓친 알림을 찾을 수 있다.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_notification` (
+            `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id`    INT UNSIGNED NOT NULL COMMENT 'portal_users.id',
+            `kind`       VARCHAR(40)  NOT NULL COMMENT 'core/push_kinds.json 의 key',
+            `title`      VARCHAR(200) NOT NULL,
+            `body`       TEXT         NULL,
+            `url`        VARCHAR(500) NULL     COMMENT '누르면 열 주소(포털 루트 기준 또는 절대주소)',
+            `created_at` DATETIME     NOT NULL,
+            `read_at`    DATETIME     NULL     COMMENT 'NULL 이면 안 읽음',
+            PRIMARY KEY (`id`),
+            KEY `ix_notif_user` (`user_id`, `id`),
+            KEY `ix_notif_unread` (`user_id`, `read_at`),
+            KEY `ix_notif_when` (`created_at`),
+            CONSTRAINT `fk_notif_user` FOREIGN KEY (`user_id`)
+                REFERENCES `portal_users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='사람별 알림함. 180일 지나면 지운다(core/push.php)'
+    ");
 
     // 사내 인원 13명 + book 모듈에서 쓰던 개인별 고유색을 이어받되, 아바타처럼 큰 면적을 단색으로
     // 채우면 book의 원래 뱃지(연한 배경 위 작은 글자)보다 훨씬 쨍하게 보여서 채도를 낮추고

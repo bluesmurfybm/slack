@@ -167,7 +167,16 @@ $ws = array_column(json_decode(file_get_contents(dirname(__DIR__) . '/core/works
 foreach (push_kinds() as $k) if ($k['sys'] !== 'portal' && !in_array($k['sys'], $ws, true)) $sysOk = false;
 ok('sys 는 portal 이거나 worksystems key', $sysOk, true);
 
-echo "\n[9] 구독 정보 검사\n";
+echo "\n[9] 기기 이름 · 알림함 번호\n";
+ok('iPhone 홈 화면 앱', push_device_label('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'), 'iPhone · Safari');
+ok('Windows Edge', push_device_label('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0'), 'Windows · Edge');
+ok('Android Chrome', push_device_label('Mozilla/5.0 (Linux; Android 14; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36'), 'Android · Chrome');
+ok('Mac Chrome', push_device_label('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'), 'Mac · Chrome');
+ok('빈 UA', push_device_label(''), 'PC · 브라우저');
+ok('페이로드 nid', json_decode(push_payload(['kind' => 'test.ping', 'title' => 't', 'nid' => 42]), true)['nid'], 42);
+ok('nid 없으면 null', json_decode(push_payload(['kind' => 'test.ping', 'title' => 't']), true)['nid'], null);
+
+echo "\n[10] 구독 정보 검사\n";
 $good = ['endpoint' => 'https://fcm.googleapis.com/x', 'keys' => ['p256dh' => push_b64url_encode($sub['pub']), 'auth' => push_b64url_encode($sub['auth'])]];
 ok('정상', push_clean_subscription($good)['endpoint'], 'https://fcm.googleapis.com/x');
 foreach ([

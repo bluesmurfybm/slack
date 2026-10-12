@@ -418,12 +418,48 @@ function push_unsubscribe(int $userId, string $endpoint): bool
     return $st->rowCount() > 0;
 }
 
+/** 기기 하나를 id 로 지운다. 본인 것만. 마이페이지 기기 목록의 '삭제'. */
+function push_unsubscribe_id(int $userId, int $subId): bool
+{
+    $st = portal_db()->prepare("DELETE FROM portal_push_subscription WHERE id = ? AND user_id = ?");
+    $st->execute([$subId, $userId]);
+    return $st->rowCount() > 0;
+}
+
+/**
+ * 내 기기 목록. hash 는 화면이 "지금 이 기기" 를 가려내는 데 쓴다
+ * (브라우저가 자기 endpoint 의 sha256 을 계산해 견준다). endpoint 원문은 내보내지 않는다.
+ */
 function push_subscriptions_of(int $userId): array
 {
-    $st = portal_db()->prepare("SELECT id, ua, created_at, last_ok_at, fail_count
+    $st = portal_db()->prepare("SELECT id, endpoint_hash AS hash, ua, created_at, last_ok_at, fail_count
                                   FROM portal_push_subscription WHERE user_id = ? ORDER BY id");
     $st->execute([$userId]);
-    return $st->fetchAll();
+    $rows = $st->fetchAll();
+    foreach ($rows as &$r) $r['label'] = push_device_label((string)$r['ua']);
+    unset($r);
+    return $rows;
+}
+
+/** User-Agent → "iPhone · Safari" 같은 짧은 이름. 목록에서 어느 기기인지 알아볼 만큼만. */
+function push_device_label(string $ua): string
+{
+    $os = 'PC';
+    if (preg_match('/iPhone/i', $ua))                   $os = 'iPhone';
+    elseif (preg_match('/iPad/i', $ua))                 $os = 'iPad';
+    elseif (preg_match('/Android/i', $ua))              $os = 'Android';
+    elseif (preg_match('/Windows/i', $ua))              $os = 'Windows';
+    elseif (preg_match('/Mac OS X|Macintosh/i', $ua))   $os = 'Mac';
+    elseif (preg_match('/CrOS/i', $ua))                 $os = 'ChromeOS';
+    elseif (preg_match('/Linux/i', $ua))                $os = 'Linux';
+
+    $br = '브라우저';
+    foreach (['Edg/' => 'Edge', 'Whale/' => 'Whale', 'SamsungBrowser/' => '삼성 인터넷', 'OPR/' => 'Opera',
+              'Firefox/' => 'Firefox', 'FxiOS/' => 'Firefox', 'CriOS/' => 'Chrome', 'Chrome/' => 'Chrome',
+              'Safari/' => 'Safari'] as $needle => $name) {
+        if (stripos($ua, $needle) !== false) { $br = $name; break; }
+    }
+    return $os . ' · ' . $br;
 }
 
 /** @return array<string,bool> 모든 종류에 대해 켜짐 여부. 고른 적 없는 종류는 json 의 default. */
@@ -448,19 +484,20 @@ function push_set_pref(int $userId, string $kind, bool $enabled): void
 }
 
 /**
- * 이 종류를 받을 구독 목록.
+ * 이 종류를 받을 **사람** 목록 — 종류를 켜 두었고(고른 적 없으면 json default) 허용 목록 안인 사람.
+ * 기기가 없어도 들어간다. 알림함(portal_notification)은 사람 기준이기 때문이다.
  *
  * @param array|string|null $to  이메일·portal_users.id 의 배열(또는 콤마 문자열). null 이면 켜 둔 전원
- * @param int $skipped           허용 목록 때문에 빠진 구독 수를 돌려준다
+ * @param int $skipped           허용 목록 때문에 빠진 사람 수를 돌려준다
+ * @return array<int,array{id:int,email:string}>
  */
-function push_recipients(string $kind, $to = null, int &$skipped = 0): array
+function push_target_users(string $kind, $to = null, int &$skipped = 0): array
 {
     $kindRow = push_kind($kind);
     if (!$kindRow) return [];
 
-    $sql = "SELECT s.id AS sub_id, s.endpoint, s.p256dh, s.auth, s.fail_count, u.id AS user_id, u.email
-              FROM portal_push_subscription s
-              JOIN portal_users u ON u.id = s.user_id
+    $sql = "SELECT u.id, u.email
+              FROM portal_users u
          LEFT JOIN portal_push_pref p ON p.user_id = u.id AND p.kind = ?
              WHERE COALESCE(p.enabled, ?) = 1";
     $args = [$kind, $kindRow['default'] ? 1 : 0];
@@ -478,16 +515,116 @@ function push_recipients(string $kind, $to = null, int &$skipped = 0): array
         if ($ids)    { $or[] = 'u.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')';          array_push($args, ...$ids); }
         $sql .= ' AND (' . implode(' OR ', $or) . ')';
     }
-    $sql .= ' ORDER BY s.id';
+    $sql .= ' ORDER BY u.id';
 
     $st = portal_db()->prepare($sql);
     $st->execute($args);
     $out = [];
-    foreach ($st->fetchAll() as $r) {
-        if (!push_can_receive($r['email'])) { $skipped++; continue; }
-        $out[] = $r;
+    foreach ($st->fetchAll() as $u) {
+        if (!push_can_receive($u['email'])) { $skipped++; continue; }
+        $out[] = ['id' => (int)$u['id'], 'email' => $u['email']];
     }
     return $out;
+}
+
+/** 이 사람들의 구독(기기) 전부. */
+function push_subscriptions_for(array $userIds): array
+{
+    if (!$userIds) return [];
+    $st = portal_db()->prepare(
+        "SELECT s.id AS sub_id, s.endpoint, s.p256dh, s.auth, s.fail_count, u.id AS user_id, u.email
+           FROM portal_push_subscription s JOIN portal_users u ON u.id = s.user_id
+          WHERE s.user_id IN (" . implode(',', array_fill(0, count($userIds), '?')) . ")
+          ORDER BY s.id");
+    $st->execute(array_values($userIds));
+    return $st->fetchAll();
+}
+
+// =====================================================================
+// 알림함 — 사람마다 받은 알림을 남긴다(기기 수와 상관없이 한 줄)
+//
+// 발송 기록(portal_push_log)은 기기마다·시도마다 남는 운영용이고, 알림함은
+// 사람이 "무슨 알림이 왔었지" 를 다시 보는 곳이다. 기기가 없거나 발송이
+// 실패해도 알림함에는 남는다 — 놓친 알림을 여기서 찾을 수 있어야 한다.
+// =====================================================================
+
+const PUSH_INBOX_KEEP_DAYS = 180;
+
+function push_inbox_add(int $userId, string $kind, string $title, string $body, string $url): ?int
+{
+    try {
+        $pdo = portal_db();
+        $pdo->prepare("INSERT INTO portal_notification (user_id, kind, title, body, url, created_at)
+                       VALUES (?, ?, ?, ?, ?, NOW())")
+            ->execute([$userId, $kind, mb_substr($title, 0, 200), mb_substr($body, 0, 2000), mb_substr($url, 0, 500)]);
+        $id = (int)$pdo->lastInsertId();
+        // 가끔 오래된 것을 치운다 — 따로 돌릴 정리 작업을 두지 않으려고
+        if (mt_rand(1, 50) === 1) {
+            $pdo->exec("DELETE FROM portal_notification WHERE created_at < NOW() - INTERVAL " . PUSH_INBOX_KEEP_DAYS . " DAY");
+        }
+        return $id;
+    } catch (Throwable $e) {
+        error_log('[push] 알림함 저장 실패: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * 내 알림함. 최신순, $beforeId 보다 오래된 것을 $limit 개.
+ * @return array{items:array, has_more:bool}
+ */
+function push_inbox_list(int $userId, ?int $beforeId = null, int $limit = 30, bool $unreadOnly = false): array
+{
+    $limit = max(1, min(100, $limit));
+    $sql = "SELECT id, kind, title, body, url, created_at, read_at FROM portal_notification WHERE user_id = ?";
+    $args = [$userId];
+    if ($beforeId) { $sql .= " AND id < ?"; $args[] = $beforeId; }
+    if ($unreadOnly) $sql .= " AND read_at IS NULL";
+    $sql .= " ORDER BY id DESC LIMIT " . ($limit + 1);
+    $st = portal_db()->prepare($sql);
+    $st->execute($args);
+    $rows = $st->fetchAll();
+    $more = count($rows) > $limit;
+    return ['items' => array_slice($rows, 0, $limit), 'has_more' => $more];
+}
+
+function push_inbox_unread(int $userId): int
+{
+    $st = portal_db()->prepare("SELECT COUNT(*) FROM portal_notification WHERE user_id = ? AND read_at IS NULL");
+    $st->execute([$userId]);
+    return (int)$st->fetchColumn();
+}
+
+/** 읽음 표시. $ids 가 null 이면 모두. 본인 것만. */
+function push_inbox_mark_read(int $userId, ?array $ids = null): int
+{
+    $sql = "UPDATE portal_notification SET read_at = NOW() WHERE user_id = ? AND read_at IS NULL";
+    $args = [$userId];
+    if ($ids !== null) {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (!$ids) return 0;
+        $sql .= " AND id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")";
+        array_push($args, ...$ids);
+    }
+    $st = portal_db()->prepare($sql);
+    $st->execute($args);
+    return $st->rowCount();
+}
+
+/** 지우기. $ids 가 null 이면 읽은 것 모두. 본인 것만. */
+function push_inbox_delete(int $userId, ?array $ids = null): int
+{
+    if ($ids === null) {
+        $st = portal_db()->prepare("DELETE FROM portal_notification WHERE user_id = ? AND read_at IS NOT NULL");
+        $st->execute([$userId]);
+        return $st->rowCount();
+    }
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+    if (!$ids) return 0;
+    $st = portal_db()->prepare("DELETE FROM portal_notification WHERE user_id = ? AND id IN ("
+                               . implode(',', array_fill(0, count($ids), '?')) . ")");
+    $st->execute(array_merge([$userId], $ids));
+    return $st->rowCount();
 }
 
 // =====================================================================
@@ -526,6 +663,7 @@ function push_payload(array $o): string
         'tag'   => isset($o['tag']) && $o['tag'] !== '' ? mb_substr((string)$o['tag'], 0, 64) : null,
         'icon'  => isset($o['icon']) && $o['icon'] !== '' ? (string)$o['icon'] : null,
         'kind'  => (string)$o['kind'],
+        'nid'   => isset($o['nid']) ? (int)$o['nid'] : null,   // 알림함 번호 — 누르면 sw.js 가 읽음 처리
         'ts'    => time(),
     ];
     $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -612,12 +750,14 @@ function push_http_post(string $endpoint, string $body, array $headers): array
  *   _subs   (시험용) DB 대신 쓸 구독 행 배열 — 주면 DB 를 전혀 건드리지 않는다
  *   _post   (시험용) push_http_post 대신 부를 함수
  *
- * @return array{sent:int, failed:int, pruned:int, skipped:int, recipients:int, detail:array, error?:string}
- *   skipped = 허용 목록 때문에 빠진 구독 수, 또는 종류를 몰라 통째로 건너뛰었으면 1
+ * @return array{sent:int, failed:int, pruned:int, skipped:int, notified:int, recipients:int, detail:array, error?:string}
+ *   notified   = 알림함에 남긴 사람 수(기기가 없어도 남는다)
+ *   recipients = 보낸 기기 수
+ *   skipped    = 허용 목록 때문에 빠진 사람 수, 또는 종류를 몰라 통째로 건너뛰었으면 1
  */
 function push_send(array $opts): array
 {
-    $r = ['sent' => 0, 'failed' => 0, 'pruned' => 0, 'skipped' => 0, 'recipients' => 0, 'detail' => []];
+    $r = ['sent' => 0, 'failed' => 0, 'pruned' => 0, 'skipped' => 0, 'notified' => 0, 'recipients' => 0, 'detail' => []];
     try {
         $kind = (string)($opts['kind'] ?? '');
         if (!push_kind($kind)) {
@@ -633,7 +773,6 @@ function push_send(array $opts): array
             return $r;
         }
         $opts['title'] = $title;
-        $payload = push_payload($opts);
         $url     = push_clean_url($opts['url'] ?? null);
         $ttl     = max(0, (int)($opts['ttl'] ?? PUSH_TTL_DEFAULT));
         $urgency = in_array($opts['urgency'] ?? '', PUSH_URGENCIES, true) ? $opts['urgency'] : 'normal';
@@ -641,15 +780,29 @@ function push_send(array $opts): array
         $post    = $opts['_post'] ?? 'push_http_post';
 
         $useDb = !array_key_exists('_subs', $opts);
-        $skipped = 0;
-        $subs = $useDb ? push_recipients($kind, $opts['to'] ?? null, $skipped) : (array)$opts['_subs'];
-        $r['skipped'] = $skipped;
+        // 사람마다 페이로드가 다르다(알림함 번호). 시험(_subs)은 DB 없이 한 벌만 쓴다.
+        $payloads = [];
+        if ($useDb) {
+            $skipped = 0;
+            $users = push_target_users($kind, $opts['to'] ?? null, $skipped);
+            $r['skipped'] = $skipped;
+            foreach ($users as $u) {
+                $nid = push_inbox_add($u['id'], $kind, $title, (string)($opts['body'] ?? ''), $url);
+                if ($nid) $r['notified']++;
+                $payloads[$u['id']] = push_payload(['nid' => $nid] + $opts);
+            }
+            $subs = push_subscriptions_for(array_keys($payloads));
+        } else {
+            $subs = (array)$opts['_subs'];
+        }
+        $common = push_payload($opts);
         $r['recipients'] = count($subs);
 
         foreach ($subs as $s) {
             $d = ['user_id' => $s['user_id'] ?? null, 'email' => $s['email'] ?? null, 'sub_id' => $s['sub_id'] ?? null,
                   'status' => null, 'error' => null, 'result' => 'failed'];
             try {
+                $payload = $payloads[$s['user_id'] ?? 0] ?? $common;
                 $body = push_encrypt($payload, push_b64url_decode($s['p256dh']), push_b64url_decode($s['auth']));
                 $res  = $post($s['endpoint'], $body, push_request_headers($s['endpoint'], strlen($body), $ttl, $urgency, $topic));
                 $d['status'] = isset($res['status']) ? (int)$res['status'] : null;

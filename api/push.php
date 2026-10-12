@@ -5,6 +5,7 @@
  *   GET                       공개키 · 발송 대상 여부 · 종류 목록(켜짐 여부) · 내 기기 수
  *   POST   { subscription }   이 기기 구독 저장 (PushSubscription.toJSON())
  *   DELETE { endpoint }       이 기기 구독 지우기 — endpoint 가 길어 쿼리가 아니라 본문으로 받는다
+ *   DELETE { id }             내 기기 목록에서 하나 지우기(다른 기기)
  *   PUT    { kind, enabled }  종류 하나 켜고 끄기 (즉시 저장)
  *
  * 응답은 모두 GET 과 같은 꼴이라 화면은 받은 대로 다시 그리면 된다.
@@ -25,7 +26,8 @@ function push_api_payload(array $u): array
     $sys = ['portal' => ['label' => 'blue-iWorks 포털', 'emoji' => '🏠']];
     foreach (work_systems() as $s) $sys[$s['key']] = ['label' => $s['label'], 'emoji' => $s['emoji'] ?? ''];
 
-    $prefs = push_prefs_of((int)$u['id']);
+    $prefs   = push_prefs_of((int)$u['id']);
+    $devices = push_subscriptions_of((int)$u['id']);
     $kinds = [];
     foreach (push_kinds() as $k) {
         $kinds[] = [
@@ -42,7 +44,12 @@ function push_api_payload(array $u): array
         'public_key'  => push_public_key(),
         'can_receive' => push_can_receive($u['email']),
         'kinds'       => $kinds,
-        'devices'     => count(push_subscriptions_of((int)$u['id'])),
+        'devices'     => count($devices),
+        // 내 기기 목록. hash 로 화면이 '지금 이 기기' 를 가린다
+        'device_list' => array_map(static fn ($d) => [
+            'id' => (int)$d['id'], 'hash' => $d['hash'], 'label' => $d['label'],
+            'created_at' => $d['created_at'], 'last_ok_at' => $d['last_ok_at'],
+        ], $devices),
     ];
 }
 
@@ -58,7 +65,8 @@ try {
     if ($method === 'POST') {
         push_subscribe($uid, $body['subscription'] ?? null, (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
     } elseif ($method === 'DELETE') {
-        push_unsubscribe($uid, (string)($body['endpoint'] ?? ''));
+        if (isset($body['id'])) push_unsubscribe_id($uid, (int)$body['id']);
+        else                    push_unsubscribe($uid, (string)($body['endpoint'] ?? ''));
     } elseif ($method === 'PUT') {
         if (!isset($body['kind']) || !array_key_exists('enabled', $body)) {
             throw new BoardError('무엇을 바꿀지 알 수 없습니다.', 400);

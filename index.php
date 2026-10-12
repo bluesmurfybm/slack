@@ -136,11 +136,14 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         <div class="user-menu" id="userMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
             <span class="avatar" id="tb-avatar"></span>
+            <span class="nf-dot hidden" id="nf-dot" title="안 읽은 알림"></span>
             <span class="nm" id="tb-name"></span>
             <span class="user-caret">▾</span>
           </div>
           <div class="dd-menu" id="userDd">
             <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
+            <!-- 알림함. 시험 기간에는 알림을 받는 계정(push_ok)에만 보인다 -->
+            <a href="javascript:void(0)" id="menu-notifs" class="hidden" onclick="closeUserMenu();showNotifs()">🔔 알림 <span class="nf-badge hidden" id="nf-badge"></span></a>
             <a href="javascript:void(0)" onclick="closeUserMenu();showNotices(1)">📢 공지사항</a>
 <?php if ($__isAdmin): ?>
             <a href="javascript:void(0)" onclick="closeUserMenu();showManage('events')">⚙️ 포털 관리</a>
@@ -235,6 +238,21 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     </div>
     <div class="list-card" id="nl-list"></div>
     <div class="pager" id="nl-pager"></div>
+  </div>
+
+  <!-- 알림함 — 받은 알림. 원본은 portal_notification(core/push.php), API 는 api/notifications.php -->
+  <div id="view-notifs" class="wrap hidden">
+    <div class="page-head">
+      <h1>알림</h1>
+      <span class="nf-count" id="nf-count"></span>
+      <span style="flex:1"></span>
+      <label class="check"><input type="checkbox" id="nf-only-unread" onchange="showNotifs()"> 안 읽은 것만</label>
+      <button class="btn-sm" onclick="readAllNotifs()">모두 읽음</button>
+      <button class="btn-sm danger" onclick="deleteReadNotifs()">읽은 알림 지우기</button>
+      <button class="btn-sm" onclick="showDash()">대시보드</button>
+    </div>
+    <div class="list-card" id="nf-list"></div>
+    <div class="pager" id="nf-pager"></div>
   </div>
 
   <!-- 포털 관리 -->
@@ -459,6 +477,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           <button type="button" class="btn-ghost" id="pf-push-btn" onclick="togglePushDevice()">이 기기에서 알림 받기</button>
           <span class="hintline" id="pf-push-state"></span>
         </div>
+        <div class="push-devices" id="pf-push-devices"></div>
         <div class="push-kinds" id="pf-push-kinds"></div>
         <div class="hintline" id="pf-push-hint">
           종류별 설정은 누르는 즉시 저장됩니다. 알림은 기기마다 따로 받습니다 — PC·휴대폰에서 각각 "알림 받기" 를 눌러 주세요.
@@ -611,6 +630,8 @@ function renderShell(){
   av.textContent=first; av.style.background=current.color||avatarColor(current.name);
   document.getElementById("tb-name").textContent=current.name;
   document.getElementById("hero-hi").textContent=`${current.name}님, 환영합니다`;
+  document.getElementById("menu-notifs").classList.toggle("hidden", !current.push_ok);
+  refreshNotifBadge();
 }
 
 function toggleUserMenu(e){
@@ -628,7 +649,7 @@ document.addEventListener("click",(e)=>{
 /* ---- views ---- */
 /* 화면이 늘어나면서 "이것만 보이고 나머지는 숨긴다"를 한 곳에서 처리한다.
    화면마다 서로를 숨기게 두면 하나 추가할 때마다 빠뜨리는 곳이 생긴다. */
-const VIEWS=["view-dash","view-profile","view-notices","view-manage"];
+const VIEWS=["view-dash","view-profile","view-notices","view-notifs","view-manage"];
 function showView(id){
   VIEWS.forEach(v=>{
     const el=document.getElementById(v);
@@ -710,6 +731,110 @@ function syncInstallMenu(){
 document.addEventListener("bluepwa:change", syncInstallMenu);
 window.addEventListener("load", syncInstallMenu);
 
+/* ---- 알림함 ----
+   서버는 api/notifications.php. 알림을 눌러 열면 sw.js 가 읽음으로 바꾸고,
+   여기서 누르면 읽음으로 바꾼 뒤 그 주소로 간다. */
+let nfItems=[], nfMore=false;
+async function refreshNotifBadge(){
+  if(!current || !current.push_ok) return;
+  try{
+    const d=await bapi("api/notifications.php?count=1");
+    paintNotifBadge(d.unread);
+  }catch(e){}
+}
+function paintNotifBadge(n){
+  const b=document.getElementById("nf-badge"), dot=document.getElementById("nf-dot");
+  b.textContent = n>99 ? "99+" : String(n||0);
+  b.classList.toggle("hidden", !n);
+  dot.classList.toggle("hidden", !n);
+  const c=document.getElementById("nf-count");
+  if(c) c.textContent = n ? `안 읽음 ${n}` : "";
+}
+// 다른 탭·앱에서 읽었거나 새 알림이 왔을 수 있다 — 돌아올 때 다시 센다
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) refreshNotifBadge(); });
+
+async function showNotifs(more){
+  if(!more){ showView("view-notifs"); nfItems=[]; }
+  const list=document.getElementById("nf-list");
+  if(!more) list.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
+  const only=document.getElementById("nf-only-unread").checked ? "&unread=1" : "";
+  const before=more && nfItems.length ? `&before=${nfItems[nfItems.length-1].id}` : "";
+  try{
+    const d=await bapi(`api/notifications.php?limit=30${only}${before}`);
+    nfItems=nfItems.concat(d.items);
+    nfMore=d.has_more;
+    paintNotifBadge(d.unread);
+    renderNotifs();
+  }catch(e){
+    list.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`;
+  }
+}
+function renderNotifs(){
+  const list=document.getElementById("nf-list");
+  if(!nfItems.length){
+    list.innerHTML=`<div class="panel-empty">받은 알림이 없습니다.</div>`;
+    document.getElementById("nf-pager").innerHTML="";
+    return;
+  }
+  list.innerHTML=nfItems.map(n=>`
+    <div class="nf-row${n.read_at?"":" unread"}" onclick="openNotif(${n.id})">
+      <span class="nf-ic">${esc(n.sys_emoji)||"🔔"}</span>
+      <span class="nf-main">
+        <span class="nf-meta">${esc(n.kind_label)} · ${esc(fmtNotifTime(n.created_at))}</span>
+        <span class="nf-title">${esc(n.title)}</span>
+        ${n.body?`<span class="nf-body">${esc(n.body)}</span>`:""}
+      </span>
+      <button type="button" class="nf-del" title="지우기" aria-label="지우기" onclick="event.stopPropagation();deleteNotif(${n.id})">&times;</button>
+    </div>`).join("");
+  document.getElementById("nf-pager").innerHTML = nfMore
+    ? `<button class="btn-sm" onclick="showNotifs(true)">더 보기</button>` : "";
+}
+/* 오늘이면 시각만, 아니면 날짜 */
+function fmtNotifTime(s){
+  const d=new Date((s||"").replace(" ","T"));
+  if(isNaN(d)) return s||"";
+  const now=new Date();
+  const p=n=>String(n).padStart(2,"0");
+  if(d.toDateString()===now.toDateString()) return `오늘 ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function openNotif(id){
+  const n=nfItems.find(x=>x.id===id);
+  if(!n) return;
+  if(!n.read_at){
+    try{ const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read:[id]})}); paintNotifBadge(d.unread); }catch(e){}
+    n.read_at="now";
+  }
+  const url=(n.url||"").trim();
+  // 주소가 없거나 포털 첫 화면이면 목록에 머문다. 다른 사이트 주소는 새 탭으로 연다
+  if(!url || url==="./" || url==="index.php"){ renderNotifs(); return; }
+  if(/^https?:\/\//i.test(url) && !url.startsWith(location.origin)) window.open(url,"_blank","noopener");
+  else location.href=url;
+}
+async function deleteNotif(id){
+  try{
+    const d=await bapi("api/notifications.php",{method:"DELETE",body:JSON.stringify({ids:[id]})});
+    nfItems=nfItems.filter(x=>x.id!==id);
+    paintNotifBadge(d.unread);
+    renderNotifs();
+  }catch(e){ toast(e.message); }
+}
+async function readAllNotifs(){
+  try{
+    const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read_all:true})});
+    paintNotifBadge(d.unread);
+    showNotifs();
+  }catch(e){ toast(e.message); }
+}
+async function deleteReadNotifs(){
+  if(!confirm("읽은 알림을 모두 지울까요?")) return;
+  try{
+    const d=await bapi("api/notifications.php",{method:"DELETE",body:JSON.stringify({read:true})});
+    paintNotifBadge(d.unread);
+    showNotifs();
+  }catch(e){ toast(e.message); }
+}
+
 /* ---- 웹 푸시 알림 (마이페이지) ----
    서버는 api/push.php, 브라우저 쪽 구독은 pwa.js 의 window.bluePush.
    시험 기간에는 허용된 계정(current.push_ok)에만 보인다. */
@@ -760,6 +885,8 @@ async function setPushKind(input){
 async function renderPushDevice(){
   const btn=document.getElementById("pf-push-btn");
   const st=document.getElementById("pf-push-state");
+  // 이 브라우저가 알림을 못 받아도(iOS Safari 탭 등) 다른 기기를 지울 수는 있어야 한다
+  renderPushDevices(null);
   if(!bluePush.supported()){
     btn.disabled=true;
     const ios=/iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone;
@@ -773,13 +900,44 @@ async function renderPushDevice(){
     st.textContent="브라우저에서 이 사이트 알림이 차단되어 있습니다. 주소창 왼쪽 자물쇠에서 허용으로 바꿔 주세요.";
     return;
   }
-  let sub=null;
-  try{ sub=await bluePush.status(); }catch(e){}
+  // 브라우저에 구독이 남아 있어도 서버 목록에서 지워졌으면(다른 기기에서 삭제) 받지 않는 것이다
+  let myHash=null;
+  try{ myHash=await bluePush.endpointHash(); }catch(e){}
+  const on = !!myHash && (pushInfo.device_list||[]).some(d=>d.hash===myHash);
   btn.disabled=false;
-  btn.textContent = sub ? "이 기기 알림 끄기" : "이 기기에서 알림 받기";
-  btn.dataset.on = sub ? "1" : "";
-  st.textContent = (sub ? "이 기기에서 받는 중" : "이 기기는 받지 않음")
-    + (pushInfo && pushInfo.devices ? ` · 등록된 기기 ${pushInfo.devices}대` : "");
+  btn.textContent = on ? "이 기기 알림 끄기" : "이 기기에서 알림 받기";
+  btn.dataset.on = on ? "1" : "";
+  st.textContent = on ? "이 기기에서 받는 중" : "이 기기는 받지 않음";
+  renderPushDevices(myHash);
+}
+/* 알림 받는 기기 목록. 다른 기기에서 받던 것도 여기서 끊을 수 있다(잃어버린 휴대폰 등). */
+function renderPushDevices(myHash){
+  const el=document.getElementById("pf-push-devices");
+  const list=(pushInfo && pushInfo.device_list)||[];
+  if(!list.length){ el.innerHTML=`<div class="push-dev-empty">알림을 받는 기기가 없습니다.</div>`; return; }
+  el.innerHTML=`<div class="push-sys">알림 받는 기기 ${list.length}대</div>`+list.map(d=>{
+    const mine = myHash && d.hash===myHash;
+    return `<div class="push-dev">
+      <span class="push-dev-nm">${esc(d.label)}${mine?` <span class="push-dev-me">이 기기</span>`:""}</span>
+      <span class="push-dev-dt">등록 ${fmtDateDot(d.created_at)}${d.last_ok_at?` · 마지막 수신 ${fmtDateDot(d.last_ok_at)}`:""}</span>
+      <button type="button" class="btn-sm danger" onclick="deletePushDevice(${d.id}, ${mine?"true":"false"})">삭제</button>
+    </div>`;
+  }).join("");
+}
+async function deletePushDevice(id, mine){
+  if(!confirm(mine ? "이 기기에서 알림을 그만 받을까요?" : "이 기기를 목록에서 지울까요? 그 기기로는 더 이상 알림이 가지 않습니다.")) return;
+  try{
+    if(mine){
+      // 브라우저 구독까지 끊는다. 서버 줄만 지우면 이 기기는 받는다고 착각한다
+      pushInfo=(await bluePush.unsubscribe()) || pushInfo;
+    }else{
+      pushInfo=await bapi("api/push.php",{method:"DELETE",body:JSON.stringify({id})});
+    }
+    toast("기기를 지웠습니다");
+  }catch(e){
+    toast(e.message);
+  }
+  await renderPushDevice();
 }
 async function togglePushDevice(){
   const btn=document.getElementById("pf-push-btn");
