@@ -1957,6 +1957,34 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
   text-overflow: ellipsis; white-space: nowrap;
 }
 
+/* ── 사용자로 보기 띠 (2026-10-12) ──────────────────────────────────
+   보는 동안 늘 위에 있어야 한다. 내 화면으로 착각하지 않게 눈에 띄는 색. */
+.ba-viewas {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  padding: 8px 16px; background: #fff4d6; border-bottom: 1px solid #f0d58a;
+  color: #7a5800; font-size: 13px;
+}
+.ba-viewas .ba-btn { margin-left: auto; }
+
+/* ── ★ 우선 후보 · 가감점 (024) ──────────────────────────────────────
+   참여 비중과 같은 규칙 — 사람이 손댄 칸만 눈에 띄게. 계산값은 작은
+   글씨로 곁에 남겨 둔다. 더한 값만 보이면 그것이 계산값처럼 읽힌다. */
+.ba-star {
+  border: 0; background: none; padding: 0 4px 0 0; cursor: pointer;
+  font-size: 15px; line-height: 1; color: var(--ba-line); vertical-align: -1px;
+}
+.ba-star:hover { color: var(--ba-warn); }
+.ba-star.is-on { color: #e0a100; }
+.ba-ct__adj { font-size: 11px; color: var(--ba-warn); white-space: nowrap; }
+.ba-ct__adjsel {
+  display: block; margin-top: 3px; width: 64px; font-size: 11.5px; padding: 1px 4px;
+  color: var(--ba-ink-soft);
+}
+.ba-ct__adjsel.is-on {
+  color: var(--ba-warn); border-color: #f0dcb8; background: #fffaf0; font-weight: 600;
+}
+
 /* 참여 비중을 낮춘 사람. 0건이어도 보장이 안 걸리므로 왜인지 보여야 한다 */
 .ba-share-tag {
   font-size: 10.5px; font-weight: 700; color: var(--ba-warn); white-space: nowrap;

@@ -546,7 +546,8 @@ $r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, '
 ok('모르는 용도는 400', $r['status'] === 400, 'status=' . $r['status']);
 
 $parsedIds = (function () use ($pid) {
-    require_once dirname(__DIR__) . '/inc/bootstrap.php';
+    // bootstrap 는 부르지 않는다 — 세션을 열려다 경고를 낸다. parsedSources() 는
+    // 상수를 쓰지 않아 클래스만 있으면 된다.
     require_once dirname(__DIR__) . '/inc/repo/ProjectRepo.php';
     $cfg = require dirname(__DIR__, 2) . '/config.php';
     $d   = $cfg['db'];
@@ -3098,6 +3099,53 @@ $r = $admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'js
     'project_id' => $pid, 'member_id' => $shMid, 'share' => '']]);
 ok('비우면 되돌아간다', abs(($r['json']['data']['share'] ?? 0) - 1.0) < 0.001, $r['body']);
 
+// --- ★ 우선 후보 · 가감점 (024, 2026-10-12) -------------------------------
+// 적합도를 덮어쓰지 않는다. 계산값(fit_score)은 그대로, 조정분과 더한 값은 따로.
+$candRow = function (int $mid) use ($admin, $pid): ?array {
+    $rows = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid)['json']['data']['rows'] ?? [];
+    foreach ($rows as $i => $x) { if ($x['member_id'] === $mid) { return $x + ['_pos' => $i]; } }
+    return null;
+};
+$scored = null;   // 점수가 있고 조건을 통과한 사람 중 맨 뒤 — 올라가는 것이 보이게
+foreach ($admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid)['json']['data']['rows'] ?? [] as $x) {
+    if ($x['fit_score'] !== null && !$x['filtered_out']) { $scored = $x; }
+}
+if ($scored === null) {
+    ok('점수 있는 후보가 없어 ★·가감점 시험을 건너뜀', true);
+} else {
+    $sm = $scored['member_id'];
+    $r = $admin->req('/studio/api/candidate.php?act=set_fit_adjust', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'adjust' => 10]]);
+    ok('가감점은 사유 없이도 저장된다', $r['status'] === 200, substr($r['body'], 0, 120));
+    $c = $candRow($sm);
+    ok('★ 계산값은 그대로다', abs(($c['fit_score'] ?? -1) - $scored['fit_score']) < 0.001,
+       json_encode([$scored['fit_score'], $c['fit_score'] ?? null]));
+    ok('조정분과 더한 값이 따로 온다', ($c['fit_adjust'] ?? null) === 10
+       && abs(($c['fit_adjusted'] ?? 0) - min(100, $scored['fit_score'] + 10)) < 0.001,
+       json_encode([$c['fit_adjust'] ?? null, $c['fit_adjusted'] ?? null]));
+    $r = $admin->req('/studio/api/candidate.php?act=set_fit_adjust', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'adjust' => 99]]);
+    ok('범위를 넘으면 자른다', ($r['json']['data']['fit_adjust'] ?? null) === 20, $r['body']);
+    $admin->req('/studio/api/candidate.php?act=set_fit_adjust', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'adjust' => 0]]);
+    ok('0 이면 지운다', ($candRow($sm)['fit_adjust'] ?? 'x') === null);
+
+    $r = $admin->req('/studio/api/candidate.php?act=set_priority', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'on' => '1']]);
+    ok('★ 켜기 200', $r['status'] === 200, substr($r['body'], 0, 120));
+    $c = $candRow($sm);
+    ok('★ 우선 후보는 맨 위로 온다', ($c['priority'] ?? false) === true && $c['_pos'] === 0,
+       'pos=' . ($c['_pos'] ?? '?'));
+    $r = $guest->req('/studio/api/candidate.php?act=set_priority', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'on' => '0']]);
+    ok('PM 아니면 ★ 못 바꾼다', $r['status'] === 403, 'status=' . $r['status']);
+    $admin->req('/studio/api/candidate.php?act=set_priority', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'on' => '0']]);
+    $left = (int)$pdoR->query('SELECT COUNT(*) FROM bs_project_member WHERE project_id = ' . (int)$pid
+                              . ' AND member_id = ' . (int)$sm)->fetchColumn();
+    ok('모두 되돌리면 줄이 남지 않는다', $left === 0, (string)$left);
+}
+
 // ┌──────────────────────────────────────────────────────────────────┐
 // │ 막대의 분모가 엔진과 같아야 한다 (2026-10-08 — 운영에서 드러남)   │
 // │                                                                  │
@@ -3581,6 +3629,44 @@ ok('멈출 수 있다', ($r['json']['data']['job'] ?? null) === null, $r['body']
 $worker = shell_exec(escapeshellarg(PHP_BINARY) . ' '
         . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
 ok('멈춘 뒤에는 워커가 집어갈 것이 없다', trim((string)$worker) === '', trim((string)$worker));
+
+// =====================================================================
+section('[VA] 사용자로 보기 — 보기 전용, 관리자만 (2026-10-12)');
+$r = $guest->req('/studio/api/view_as.php?act=start', ['csrf' => true, 'json' => [
+    'user_id' => $ADMIN['email']]]);
+ok('관리자가 아니면 403', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/view_as.php?act=start', ['csrf' => true, 'json' => [
+    'user_id' => 'nobody-' . bin2hex(random_bytes(3)) . '@x.kr']]);
+ok('명단에 없는 사람은 404', $r['status'] === 404, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/view_as.php?act=start', ['csrf' => true, 'json' => [
+    'user_id' => $USER['email']]]);
+ok('관리자는 시작할 수 있다', $r['status'] === 200, substr($r['body'], 0, 120));
+
+$page = $admin->req('/studio/index.php')['body'];
+ok('★ 보는 동안 띠가 뜬다', str_contains($page, '님으로 보는 중') && str_contains($page, 'ba-viewas-stop'));
+
+$probe = ['csrf' => true, 'json' => ['project_id' => $pid, 'member_id' => $shMid, 'share' => '']];
+$r = $admin->req('/studio/api/candidate.php?act=set_share', $probe);
+ok('★ 보는 동안 저장은 막힌다', $r['status'] === 403
+   && ($r['json']['error']['code'] ?? '') === 'VIEW_ONLY', substr($r['body'], 0, 140));
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid);
+ok('★ 관리자 권한도 꺼진다 — 일반 사용자는 후보 표를 못 본다', $r['status'] === 403,
+   'status=' . $r['status']);
+
+// 본문이 비면 시험 도구가 GET 으로 보낸다. 화면은 빈 객체를 POST 한다.
+$r = $admin->req('/studio/api/view_as.php?act=stop', ['csrf' => true, 'json' => ['_' => 1]]);
+ok('돌아가기 200', $r['status'] === 200, substr($r['body'], 0, 120));
+$r = $admin->req('/studio/api/candidate.php?act=set_share', $probe);
+ok('돌아오면 다시 저장된다', $r['status'] === 200, substr($r['body'], 0, 140));
+
+$log = $pdoR->prepare('SELECT target_id, ended_at FROM bs_view_as_log
+                        WHERE admin_id = ? ORDER BY id DESC LIMIT 1');
+$log->execute([$ADMIN['email']]);
+$lg = $log->fetch(PDO::FETCH_ASSOC) ?: [];
+ok('★ 누가 누구로 봤는지 남는다', ($lg['target_id'] ?? '') === $USER['email'] && !empty($lg['ended_at']),
+   json_encode($lg));
 
 // 뒷정리
 $pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);

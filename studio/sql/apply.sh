@@ -111,6 +111,8 @@ FILES="
 021_migration_aidd.sql
 022_migration_project_member.sql
 023_migration_source_purpose.sql
+024_migration_candidate_mark.sql
+025_migration_view_as.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

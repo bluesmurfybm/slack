@@ -70,6 +70,16 @@ function bs_layout_head(
   </div>
 </div>
 
+<?php if (!empty($user['view_as'])): ?>
+<!-- 사용자로 보기 중 (2026-10-12). 보는 동안 내내 떠 있어야 한다 — 내 화면으로
+     착각하고 "왜 저장이 안 되지" 하지 않게. -->
+<div class="ba-viewas" role="status">
+  <span>&#128065; <b><?= h($user['name']) ?></b> 님으로 보는 중입니다 —
+    보기만 되고 저장은 막혀 있습니다. <span class="ba-dim">(실제 로그인: <?= h($user['real_name']) ?>)</span></span>
+  <button type="button" class="ba-btn ba-btn--sm" id="ba-viewas-stop">돌아가기</button>
+</div>
+<?php endif; ?>
+
 <!-- ================= 모듈 머리말 ================= -->
 <header class="ba-site">
   <div class="ba-site__in">

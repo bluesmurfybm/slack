@@ -222,6 +222,12 @@ bs_layout_head(
               <?= h($r['emp_name']) ?>
             <?php endif; ?>
             <?= $isSelf ? '<span class="ba-badge">나</span>' : '' ?>
+            <?php if (bs_is_admin() && !$isSelf && !empty($r['user_id'])): ?>
+              <!-- 보기 전용 (2026-10-12). 저장은 서버가 막는다. -->
+              <button type="button" class="ba-mini" data-viewas="<?= h((string)$r['user_id']) ?>"
+                      data-name="<?= h($r['emp_name']) ?>"
+                      title="이 사람의 눈으로 BlueStudio 를 봅니다. 보기만 되고 저장은 막힙니다.">이 사람으로 보기</button>
+            <?php endif; ?>
           </td>
           <td><?= $r['role_label'] !== null && $r['role_label'] !== ''
                     ? h($r['role_label']) : '<span class="ba-cell-none">—</span>' ?></td>

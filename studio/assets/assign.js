@@ -1691,7 +1691,13 @@
         html += '<tr class="' + (r.filtered_out ? 'is-out' : '') + '" data-mid="' + r.member_id + '">' +
           '<td><input type="checkbox" class="ba-ct__pick" data-mid="' + r.member_id + '"' +
             (on ? ' checked' : '') + ' aria-label="후보 선택"></td>' +
-          '<td class="ba-ct__name"><button type="button" class="ba-linkish" data-detail="' +
+          '<td class="ba-ct__name">' +
+            // ★ 우선 후보 (024). 표에서 위로 올린다. 배정 엔진은 읽지 않는다.
+            '<button type="button" class="ba-star' + (r.priority ? ' is-on' : '') +
+              '" data-star="' + r.member_id + '" aria-pressed="' + (r.priority ? 'true' : 'false') +
+              '" title="' + (r.priority ? '우선 후보 — 눌러서 끄기' : '우선 후보로 표시') + '">' +
+              (r.priority ? '★' : '☆') + '</button>' +
+            '<button type="button" class="ba-linkish" data-detail="' +
             r.member_id + '">' + esc(r.emp_name) + '</button></td>' +
           '<td>' + esc(r.role_label || '—') + '</td>' +
           '<td>' + availCell(r.availability, r.member_id) + '</td>' +
@@ -1699,7 +1705,7 @@
           '<td>' + scoreCell(r.capability, r.insufficient_data, r.evaluable) + '</td>' +
           '<td>' + scoreCell(r.breadth, r.insufficient_data, r.evaluable) + '</td>' +
           '<td class="ba-num">' + (r.active_items || 0) + '</td>' +
-          '<td>' + scoreCell(r.fit_score, r.insufficient_data, r.evaluable) +
+          '<td>' + fitCell(r) +
             (r.filter_reason ? '<br><span class="ba-cell-none">' +
               esc(r.filter_reason) + '</span>' : '') + '</td>' +
           '<td>' + shareCell(r) + '</td>' +
@@ -1710,6 +1716,57 @@
       tagsInto('#ba-c-count', [tag('', rows.length + '명', '', '조건에 맞는 후보 수')]);
       updatePicked();
     }
+
+    /**
+     * 적합도 칸 (024). 계산값과 사람이 준 가감점을 **나눠** 적는다.
+     * 큰 숫자는 더한 값, 옆의 작은 글씨가 "계산 87 +5" 다. 계산값이 없으면
+     * (판단 보류) 더할 바탕이 없어 가감점 칸도 두지 않는다.
+     */
+    function fitCell(r) {
+      if (r.fit_score === null || r.fit_score === undefined) {
+        return scoreCell(r.fit_score, r.insufficient_data, r.evaluable);
+      }
+      var adj = r.fit_adjust || 0;
+      var opts = [0, 5, 10, 15, 20, -5, -10, -15, -20].map(function (x) {
+        return '<option value="' + x + '"' + (x === adj ? ' selected' : '') + '>' +
+               (x === 0 ? '±0' : (x > 0 ? '+' + x : String(x))) + '</option>';
+      }).join('');
+      var who = [r.adjust_reason].filter(Boolean).join(' · ');
+      return '<b>' + Number(r.fit_adjusted).toFixed(0) + '</b>' +
+        (adj ? ' <span class="ba-ct__adj" title="' + esc(who || '사람이 준 가감점') + '">' +
+                 '계산 ' + Number(r.fit_score).toFixed(0) + ' ' + (adj > 0 ? '+' : '') + adj + ' 수동</span>'
+             : '') +
+        '<select class="ba-input ba-ct__adjsel' + (adj ? ' is-on' : '') + '" data-adjust="' +
+          r.member_id + '" title="적합도 가감점 — 계산값은 그대로 두고 더해서 보여 줍니다">' +
+          opts + '</select>';
+    }
+
+    // ★ 켜기/끄기, 가감점 — 고른 자리에서 바로 저장하고 표를 다시 받는다(순서가 바뀐다).
+    $('#ba-c-table').addEventListener('click', function (e) {
+      var s = e.target.closest ? e.target.closest('[data-star]') : null;
+      if (!s) return;
+      var on = s.getAttribute('aria-pressed') !== 'true';
+      s.disabled = true;
+      api('api/candidate.php?act=set_priority', { method: 'POST', body: {
+        project_id: PID, member_id: parseInt(s.dataset.star, 10), on: on ? '1' : '0'
+      } }).then(function (d) { toast(d.message); load(); })
+        .catch(function (err) { toast(err.message, true); s.disabled = false; });
+    });
+
+    $('#ba-c-table').addEventListener('change', function (e) {
+      var sel = e.target.closest ? e.target.closest('[data-adjust]') : null;
+      if (!sel) return;
+      var mid = parseInt(sel.dataset.adjust, 10);
+      var v   = parseInt(sel.value, 10);
+      var row = ROWS.filter(function (x) { return x.member_id === mid; })[0] || {};
+      var why = v === 0 ? '' : (prompt('적합도에 ' + (v > 0 ? '+' : '') + v + ' 점을 더해 보여 줍니다.\n'
+                        + '계산값은 그대로 남습니다. 사유는 비워 두셔도 됩니다.',
+                        row.adjust_reason || '') || '');
+      api('api/candidate.php?act=set_fit_adjust', { method: 'POST', body: {
+        project_id: PID, member_id: mid, adjust: v, reason: why
+      } }).then(function (d) { toast(d.message); load(); })
+        .catch(function (err) { toast(err.message, true); load(); });
+    });
 
     /**
      * 참여 비중 칸.
@@ -5612,7 +5669,33 @@
     });
   }
 
+  // ---- 사용자로 보기 (2026-10-12) -------------------------------------
+  //
+  // 보기 전용이다. 시작은 구성원 목록의 [이 사람으로 보기], 끝은 위쪽 띠의
+  // [돌아가기]. 둘 다 끝나면 화면을 새로 그린다 — 권한이 통째로 바뀐다.
+  function initViewAs() {
+    document.addEventListener('click', function (e) {
+      var go = e.target.closest ? e.target.closest('[data-viewas]') : null;
+      if (go) {
+        if (!confirm(go.dataset.name + ' 님의 눈으로 BlueStudio 를 봅니다.\n\n'
+                     + '· 보기만 되고 저장은 막힙니다\n'
+                     + '· 관리자 권한은 보는 동안 꺼집니다\n'
+                     + '· 누가 언제 누구로 봤는지 기록이 남습니다')) return;
+        api('api/view_as.php?act=start', { method: 'POST', body: { user_id: go.dataset.viewas } })
+          .then(function () { location.href = 'index.php'; })
+          .catch(function (err) { toast(err.message, true); });
+        return;
+      }
+      if (e.target.closest && e.target.closest('#ba-viewas-stop')) {
+        api('api/view_as.php?act=stop', { method: 'POST', body: {} })
+          .then(function () { location.reload(); })
+          .catch(function (err) { toast(err.message, true); });
+      }
+    });
+  }
+
   // ---- 진입 ---------------------------------------------------------
+  initViewAs();
   initDrawer();
   initRndLoadDrawer();
   initRndLoadPage();

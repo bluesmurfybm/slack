@@ -134,6 +134,14 @@ bs_route(bs_param_str('act', 'list'), [
                 'share'        => (float)($shares[$r['member_id']]['share'] ?? 1.0),
                 'share_reason' => $shares[$r['member_id']]['reason'] ?? null,
                 'share_by'     => $shares[$r['member_id']]['updated_by_name'] ?? null,
+
+                // ── ★ 우선 후보 · 가감점 (024, 2026-10-12) ─────────────
+                // fit_score 는 **계산값 그대로**다. 조정분을 따로 싣고, 더한
+                // 값(fit_adjusted)은 정렬과 표시에만 쓴다. 저장하지 않는다.
+                'priority'      => $shares[$r['member_id']]['priority'] ?? false,
+                'fit_adjust'    => $shares[$r['member_id']]['fit_adjust'] ?? null,
+                'adjust_reason' => $shares[$r['member_id']]['adjust_reason'] ?? null,
+                'fit_adjusted'  => bs_fit_adjusted($fit, $shares[$r['member_id']]['fit_adjust'] ?? null),
             ];
 
             // 조건 필터. 표본 부족인 사람은 **점수 조건으로 걸러내지 않는다** —
@@ -153,19 +161,24 @@ bs_route(bs_param_str('act', 'list'), [
         // 정렬 — 이 프로젝트 기준 적합도 순.
         // 점수를 낼 수 없는 사람(fit_score === null)은 **뒤로 보내되 지우지 않는다.**
         // 0 점으로 깔면 그 사람은 영원히 배정되지 않는다(scoring-design.md §5).
+        // ★ 우선 후보는 조건을 통과한 사람 안에서 맨 위로 (024). 가감점이
+        // 있으면 더한 값으로 줄 세운다 — 계산값은 그대로 따로 실려 있다.
         usort($out, static function (array $x, array $y): int {
             if ($x['filtered_out'] !== $y['filtered_out']) {
                 return $x['filtered_out'] ? 1 : -1;
             }
-            $xn = $x['fit_score'] === null;
-            $yn = $y['fit_score'] === null;
+            if ($x['priority'] !== $y['priority']) {
+                return $x['priority'] ? -1 : 1;
+            }
+            $xn = $x['fit_adjusted'] === null;
+            $yn = $y['fit_adjusted'] === null;
             if ($xn !== $yn) {
                 return $xn ? 1 : -1;
             }
             if ($xn) {
                 return strcmp((string)$x['emp_name'], (string)$y['emp_name']);
             }
-            return $y['fit_score'] <=> $x['fit_score'];
+            return $y['fit_adjusted'] <=> $x['fit_adjusted'];
         });
 
         bs_json_ok([
@@ -226,6 +239,41 @@ bs_route(bs_param_str('act', 'list'), [
                 ? '참여 비중을 원래대로 되돌렸습니다.'
                 : sprintf('참여 비중을 %s 로 두었습니다. 다시 산출해야 배정에 반영됩니다.',
                           number_format((float)$now['share'], 2)),
+        ]);
+    },
+
+    /**
+     * ★ 우선 후보 켜기/끄기 (024). 2단계 후보 표의 정렬에만 쓴다.
+     * 누가 켰는지는 남는다(updated_by).
+     */
+    'set_priority' => function () use ($projects, $members): void {
+        $user = bs_begin_write();
+        [$projectId, $memberId] = bs_candidate_target($projects, $members);
+        $on = bs_param_str('on') === '1';
+        $projects->setMemberPriority($projectId, $memberId, $on, $user);
+        bs_json_ok([
+            'member_id' => $memberId,
+            'priority'  => $on,
+            'message'   => $on ? '우선 후보로 표시했습니다.' : '우선 후보 표시를 지웠습니다.',
+        ]);
+    },
+
+    /**
+     * 적합도 가감점 (024). **계산값은 그대로**고 조정분만 남긴다 —
+     * 화면은 "87 (+5 수동)" 처럼 나눠 적는다. 사유는 선택이다.
+     */
+    'set_fit_adjust' => function () use ($projects, $members): void {
+        $user = bs_begin_write();
+        [$projectId, $memberId] = bs_candidate_target($projects, $members);
+        $raw = trim(bs_param_str('adjust'));
+        $adj = ($raw === '' || (int)$raw === 0) ? null : (int)$raw;
+        $projects->setMemberFitAdjust($projectId, $memberId, $adj, bs_param_str('reason'), $user);
+        $now = $projects->memberShares($projectId)[$memberId]['fit_adjust'] ?? null;
+        bs_json_ok([
+            'member_id'  => $memberId,
+            'fit_adjust' => $now,
+            'message'    => $now === null ? '가감점을 지웠습니다.'
+                          : sprintf('적합도에 %+d 점을 더해 보여 줍니다. 계산값은 그대로입니다.', $now),
         ]);
     },
 
@@ -443,6 +491,38 @@ function bs_candidate_rows(PDO $pdo, ?int $evalVer, array $cats): array
     unset($r);
 
     return $rows;
+}
+
+/**
+ * 가감점을 더한 값 (024). 정렬과 표시에만 쓰고 **저장하지 않는다.**
+ * 계산값이 없으면(판단 보류) 더할 바탕이 없으므로 null 그대로 — 0 에서
+ * 시작하지 않는다(CLAUDE.md: 무점수를 0 점으로 깔지 마라).
+ */
+function bs_fit_adjusted(?float $fit, ?int $adjust): ?float
+{
+    if ($fit === null) {
+        return null;
+    }
+    return $adjust ? max(0.0, min(100.0, $fit + $adjust)) : $fit;
+}
+
+/** set_priority / set_fit_adjust 공통 — 대상 확인과 권한. */
+function bs_candidate_target(ProjectRepo $projects, MemberRepo $members): array
+{
+    $projectId = bs_param_int('project_id', 0);
+    $memberId  = bs_param_int('member_id', 0);
+    if (!$projectId || !$memberId) {
+        bs_json_error('MISSING_PARAM', '프로젝트와 구성원 번호가 필요합니다.', 400);
+    }
+    if (!$projects->find($projectId)) {
+        bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+    }
+    // 배정을 짜는 사람만. 후보 표 자체가 그 사람에게만 보인다.
+    bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
+    if (!$members->find($memberId)) {
+        bs_json_error('NOT_FOUND', '구성원을 찾을 수 없습니다.', 404);
+    }
+    return [$projectId, $memberId];
 }
 
 /**

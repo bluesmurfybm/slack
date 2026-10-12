@@ -328,10 +328,9 @@ final class ProjectRepo
     public function memberShares(int $projectId): array
     {
         try {
-            $st = $this->pdo->prepare(
-                'SELECT member_id, share, reason, updated_by, updated_by_name, updated_at
-                   FROM bs_project_member WHERE project_id = ?'
-            );
+            // * 로 읽는다 — 024 의 칸(priority·fit_adjust)이 아직 없는 서버에서도
+            // 비중은 읽혀야 한다. 칸을 이름으로 적으면 통째로 실패해 비중까지 잃는다.
+            $st = $this->pdo->prepare('SELECT * FROM bs_project_member WHERE project_id = ?');
             $st->execute([$projectId]);
         } catch (Throwable $e) {
             return [];   // 022 를 아직 안 올린 서버에서도 배정은 돌아야 한다
@@ -341,12 +340,82 @@ final class ProjectRepo
             $out[(int)$r['member_id']] = [
                 'share'           => (float)$r['share'],
                 'reason'          => $r['reason'],
+                // ── 후보 표의 사람 판단 (024) ──
+                'priority'        => !empty($r['priority']),
+                'fit_adjust'      => isset($r['fit_adjust']) ? (int)$r['fit_adjust'] : null,
+                'adjust_reason'   => $r['adjust_reason'] ?? null,
                 'updated_by'      => $r['updated_by'],
                 'updated_by_name' => $r['updated_by_name'],
                 'updated_at'      => $r['updated_at'],
             ];
         }
         return $out;
+    }
+
+    /** 가감점 범위. 계산값을 뒤집을 만큼 크지 않게 — 20 이면 한두 자리 순위가 바뀐다. */
+    public const FIT_ADJUST_MAX = 20;
+
+    /**
+     * ★ 우선 후보를 켜고 끈다 (024). 2단계 후보 표의 정렬에만 쓴다.
+     */
+    public function setMemberPriority(int $projectId, int $memberId, bool $on, array $actor): void
+    {
+        $this->upsertMember($projectId, $memberId, ['priority' => $on ? 1 : 0], $actor);
+    }
+
+    /**
+     * 적합도 가감점 (024). **계산값을 덮어쓰지 않는다** — 조정분만 담는다.
+     * null 이나 0 이면 지운다. 범위를 벗어나면 자른다.
+     */
+    public function setMemberFitAdjust(int $projectId, int $memberId, ?int $adjust,
+                                       string $reason, array $actor): void
+    {
+        if ($adjust !== null) {
+            $adjust = max(-self::FIT_ADJUST_MAX, min(self::FIT_ADJUST_MAX, $adjust));
+        }
+        $reason = trim($reason);
+        $this->upsertMember($projectId, $memberId, [
+            'fit_adjust'    => $adjust ?: null,
+            'adjust_reason' => ($adjust && $reason !== '') ? mb_substr($reason, 0, 500) : null,
+        ], $actor);
+    }
+
+    /**
+     * 프로젝트×사람 줄의 칸 몇 개만 바꾼다. 줄이 없으면 비중 1.000 으로 만든다.
+     * 다 바꾼 뒤 **모든 칸이 기본값이면 줄을 지운다** — 022 의 "조정 없는
+     * 사람은 줄을 두지 않는다" 를 그대로 지킨다.
+     */
+    private function upsertMember(int $projectId, int $memberId, array $set, array $actor): void
+    {
+        $cols = array_keys($set);
+        $this->pdo->prepare(
+            'INSERT INTO bs_project_member
+                (project_id, member_id, share, ' . implode(', ', $cols) . ', updated_by, updated_by_name)
+             VALUES (?, ?, 1.000, ' . implode(', ', array_fill(0, count($cols), '?')) . ', ?, ?)
+             ON DUPLICATE KEY UPDATE '
+            . implode(', ', array_map(static fn($c) => "$c = VALUES($c)", $cols))
+            . ', updated_by = VALUES(updated_by), updated_by_name = VALUES(updated_by_name)'
+        )->execute(array_merge([$projectId, $memberId], array_values($set),
+                               [$actor['id'] ?? null, $actor['name'] ?? null]));
+        $this->pruneMember($projectId, $memberId);
+    }
+
+    /** 비중 1.000 · ★ 없음 · 가감점 없음이면 지운다. */
+    private function pruneMember(int $projectId, int $memberId): void
+    {
+        try {
+            $this->pdo->prepare(
+                'DELETE FROM bs_project_member
+                  WHERE project_id = ? AND member_id = ?
+                    AND share >= 0.9999 AND priority = 0 AND fit_adjust IS NULL'
+            )->execute([$projectId, $memberId]);
+        } catch (Throwable $e) {
+            // 024 이전 서버 — priority 칸이 없다. 그때는 비중만 본다.
+            $this->pdo->prepare(
+                'DELETE FROM bs_project_member
+                  WHERE project_id = ? AND member_id = ? AND share >= 0.9999'
+            )->execute([$projectId, $memberId]);
+        }
     }
 
     /**
@@ -360,9 +429,13 @@ final class ProjectRepo
                                    string $reason, array $actor): void
     {
         if ($share === null || $share >= self::SHARE_MAX - 0.0001) {
+            // 비중만 되돌린다. ★·가감점(024)이 남아 있으면 줄은 남긴다.
             $this->pdo->prepare(
-                'DELETE FROM bs_project_member WHERE project_id = ? AND member_id = ?'
-            )->execute([$projectId, $memberId]);
+                'UPDATE bs_project_member SET share = 1.000, reason = NULL,
+                        updated_by = ?, updated_by_name = ?
+                  WHERE project_id = ? AND member_id = ?'
+            )->execute([$actor['id'] ?? null, $actor['name'] ?? null, $projectId, $memberId]);
+            $this->pruneMember($projectId, $memberId);
             return;
         }
         // 범위를 벗어난 값은 거절하지 않고 자른다. 숫자 하나 때문에 저장이

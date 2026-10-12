@@ -747,8 +747,58 @@ function bs_current_user(): ?array
             'email' => (string)$row['email'],
             'color' => user_color($row),        // core/auth.php — 상단바 아바타 색
         ];
+
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 사용자로 보기 (2026-10-12) — **보기 전용, BlueStudio 안에서만** │
+        // │                                                              │
+        // │ 관리자가 고른 사람의 눈으로 화면을 본다. 이 함수가 그 사람을   │
+        // │ 돌려주므로 권한(bs_is_admin·bs_can·프로파일 열람)도 전부 그    │
+        // │ 사람 기준이 된다 — 관리자 권한은 보는 동안 꺼진다.              │
+        // │                                                              │
+        // │ 저장은 bs_begin_write() 가 막는다. 포털 세션은 건드리지 않아    │
+        // │ 다른 모듈은 원래 사람 그대로다.                                │
+        // │                                                              │
+        // │ 진짜 관리자가 아니면 세션 값을 지운다 — 관리자 명단에서 빠진   │
+        // │ 사람이 남의 눈으로 계속 보는 일이 없게.                        │
+        // └──────────────────────────────────────────────────────────────┘
+        $as = (string)($_SESSION['bs_view_as'] ?? '');
+        if ($as !== '') {
+            $target = board_is_admin($user['id']) ? bs_portal_user_by_email($as) : null;
+            if ($target === null) {
+                unset($_SESSION['bs_view_as']);
+            } else {
+                $user = [
+                    'id'        => (string)$target['email'],
+                    'name'      => (string)$target['name'],
+                    'email'     => (string)$target['email'],
+                    'color'     => user_color($target),
+                    'view_as'   => true,
+                    'real_id'   => $user['id'],
+                    'real_name' => $user['name'],
+                ];
+            }
+        }
     }
     return $user;
+}
+
+/** 포털 사용자 한 명(이메일로). 없으면 null. */
+function bs_portal_user_by_email(string $email): ?array
+{
+    $st = bs_db()->prepare('SELECT * FROM portal_users WHERE email = ? LIMIT 1');
+    $st->execute([$email]);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    return $r ?: null;
+}
+
+/** 실제로 로그인한 사람. 사용자로 보기 중에도 관리자 본인이다. */
+function bs_real_user(): ?array
+{
+    $u = bs_current_user();
+    if ($u === null || empty($u['view_as'])) {
+        return $u;
+    }
+    return ['id' => $u['real_id'], 'name' => $u['real_name'], 'email' => $u['real_id']];
 }
 
 /**
