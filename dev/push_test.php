@@ -2,9 +2,14 @@
 /**
  * 웹 푸시 시험 발송 — 브라우저에서 직접 보내 보고 결과(푸시 서비스 응답 코드)를 본다.
  *
- * 들어올 수 있는 사람: 포털 관리자, 그리고 시험 기간에는 PUSH_TEST_ALLOW 에 든 계정.
- * 받는 사람은 언제나 core/push.php 의 허용 목록으로 걸러진다 — 여기서 '전원' 을
- * 골라도 시험 기간에는 허용된 계정에만 간다.
+ * 받는 사람은 처음에 **로그인한 본인**이 골라져 있다.
+ *  - 포털 관리자와 시험 허용 계정(PUSH_TEST_ALLOW)은 여러 사람을 골라 보낼 수 있다.
+ *  - 그 밖의 사람은 본인에게만 보낸다. 아무나 남에게 알림을 보내면 안 되기 때문이다.
+ * 여기서 고른 사람에게는 시험 허용 목록을 거치지 않고 보낸다(직접 고른 것이므로).
+ * 다만 받는 사람이 그 종류를 꺼 두었으면 빠진다 — 본인 설정이 먼저다.
+ *
+ * 다른 사람의 구독 현황과 발송 기록은 포털 관리자에게만 보인다. 일반 사용자는
+ * 자기 기록만 본다.
  *
  * 이 페이지에서도 "이 기기에서 알림 받기" 를 할 수 있다(마이페이지와 같은 pwa.js).
  */
@@ -18,12 +23,10 @@ if (!$u) {
     header('Location: ../index.php?need_login=push');
     exit;
 }
-$allowed = board_is_admin($u['email']) || (PUSH_TEST_ALLOW && push_can_receive($u['email']));
-if (!$allowed) {
-    http_response_code(403);
-    echo '<!DOCTYPE html><meta charset="utf-8"><p>포털 관리자나 알림 시험 계정만 쓸 수 있습니다.</p>';
-    exit;
-}
+$isAdmin = board_is_admin($u['email']);
+// 여러 사람에게 보낼 수 있는 사람 — 관리자, 시험 허용 계정
+$canPick = $isAdmin || (PUSH_TEST_ALLOW && push_can_receive($u['email']));
+$selfId  = (int)$u['id'];
 
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
@@ -36,15 +39,31 @@ $form = [
     'body'  => date('H:i:s') . ' 에 보낸 시험 알림입니다.',
     'url'   => './',
     'tag'   => '',
-    'to'    => $u['email'],
 ];
 $result = null;
 $error  = null;
+$toIds  = [$selfId];      // 고른 사람. 처음에는 본인
+
+// 고를 수 있는 사람 목록(기기 수 포함). 고를 수 없는 사람에게는 필요 없다.
+$people = $canPick ? portal_db()->query("
+    SELECT u.id, u.name, u.email, COUNT(s.id) AS devices
+      FROM portal_users u
+ LEFT JOIN portal_push_subscription s ON s.user_id = u.id
+  GROUP BY u.id, u.name, u.email
+  ORDER BY (u.id = {$selfId}) DESC, devices DESC, u.name
+")->fetchAll() : [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($form as $k => $_) $form[$k] = trim((string)($_POST[$k] ?? ''));
+    if ($canPick) {
+        // 목록에 있는 사람만 받는다 — 화면을 고쳐 다른 번호를 넣어도 걸러진다
+        $valid = array_map('intval', array_column($people, 'id'));
+        $toIds = array_values(array_intersect(array_map('intval', (array)($_POST['to'] ?? [])), $valid));
+    }
     if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) {
         $error = '화면이 오래되었습니다. 새로고침한 뒤 다시 보내 주세요.';
+    } elseif (!$toIds) {
+        $error = '받는 사람을 한 명 이상 고르세요.';
     } else {
         $result = push_send([
             'kind'  => $form['kind'],
@@ -52,7 +71,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'body'  => $form['body'],
             'url'   => $form['url'],
             'tag'   => $form['tag'],
-            'to'    => $form['to'] === '' ? null : $form['to'],
+            'to'    => $toIds,              // 고를 수 없는 사람은 언제나 본인 하나
+            'ignore_allowlist' => true,     // 직접 고른 사람이므로 시험 허용 목록을 거치지 않는다
         ]);
     }
 }
@@ -62,17 +82,20 @@ $vapidPath = push_vapid_path();
 $publicKey = null;
 try { $publicKey = push_public_key(); } catch (Throwable $e) { $error = $error ?: $e->getMessage(); }
 
-$accounts = $pdo->query("
+// 다른 사람의 구독·기록은 관리자에게만. 일반 사용자는 자기 것만 본다.
+$accounts = $isAdmin ? $pdo->query("
     SELECT u.id, u.name, u.email, COUNT(s.id) AS devices, MAX(s.last_ok_at) AS last_ok
       FROM portal_users u
  LEFT JOIN portal_push_subscription s ON s.user_id = u.id
   GROUP BY u.id, u.name, u.email
   ORDER BY devices DESC, u.name
-")->fetchAll();
-$logs = $pdo->query("
-    SELECT l.*, u.email FROM portal_push_log l LEFT JOIN portal_users u ON u.id = l.user_id
-     ORDER BY l.id DESC LIMIT 30
-")->fetchAll();
+")->fetchAll() : [];
+$myDevices = push_subscriptions_of((int)$u['id']);
+$logSql = "SELECT l.*, u.email FROM portal_push_log l LEFT JOIN portal_users u ON u.id = l.user_id"
+        . ($isAdmin ? '' : ' WHERE l.user_id = ?') . " ORDER BY l.id DESC LIMIT 30";
+$logSt = $pdo->prepare($logSql);
+$logSt->execute($isAdmin ? [] : [(int)$u['id']]);
+$logs = $logSt->fetchAll();
 $allowSubscribed = 0;
 foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])) $allowSubscribed++;
 ?>
@@ -105,6 +128,15 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
   .msg{padding:10px 14px;border-radius:8px;margin:12px 0;max-width:980px}
   .msg.bad{background:#fef3f2} .msg.ok{background:#ecfdf3}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  button.sm{font-size:12.5px;padding:5px 12px}
+  .pick-acts{margin-bottom:8px}
+  .people{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;margin-bottom:6px}
+  label.person{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border:1px solid #e4e7ec;border-radius:8px;cursor:pointer;color:#1d2433}
+  label.person input{width:auto;margin:3px 0 0}
+  label.person small{display:block}
+  label.person.nodev{opacity:.6}
+  label.person:has(input:checked){border-color:#1C5DE5;background:#f3f7ff;opacity:1}
+  .me{font-size:11px;font-weight:700;color:#1C5DE5;background:#e8f0fe;border-radius:999px;padding:0 6px}
 </style>
 </head>
 <body>
@@ -115,9 +147,13 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
 
 <div class="card">
   <div class="grid">
-    <label>허용 목록</label>
+    <label>내 기기</label>
+    <div><?php if ($myDevices): ?>
+        <?= h(implode(', ', array_column($myDevices, 'label'))) ?> <small>(<?= count($myDevices) ?>대)</small>
+      <?php else: ?><span class="bad">없음</span> <small>— 아래 "이 기기에서 알림 받기" 를 먼저 누르세요</small><?php endif; ?></div>
+    <label>시험 허용 목록</label>
     <div><?= PUSH_TEST_ALLOW ? h(implode(', ', PUSH_TEST_ALLOW)) : '<b>비어 있음 — 전원 발송</b>' ?>
-      <small> · 허용·구독 중인 계정 <?= $allowSubscribed ?>명</small></div>
+      <small> · 모듈이 보내는 알림에만 적용됩니다<?= $isAdmin ? ' · 허용·구독 중인 계정 ' . $allowSubscribed . '명' : '' ?></small></div>
     <label>VAPID 키</label>
     <div><?php if (is_file($vapidPath)): ?>
         <span class="ok">있음</span> <small><?= h(date('Y-m-d H:i', filemtime($vapidPath))) ?> 생성</small>
@@ -152,10 +188,32 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
     <div><input name="tag" value="<?= h($form['tag']) ?>">
       <small>같은 tag 의 알림은 기기에서 하나로 겹쳐집니다. 비우면 매번 새 알림.</small></div>
     <label>받는 사람</label>
-    <div><input name="to" value="<?= h($form['to']) ?>">
-      <small>이메일을 콤마로. 비우면 이 종류를 켜 둔 전원(시험 기간에는 허용 목록 안에서만).</small></div>
+    <?php if ($canPick): ?>
+    <div>
+      <div class="row pick-acts">
+        <button type="button" class="ghost sm" onclick="pick('me')">나만</button>
+        <button type="button" class="ghost sm" onclick="pick('dev')">기기 있는 사람</button>
+        <button type="button" class="ghost sm" onclick="pick('all')">모두</button>
+        <button type="button" class="ghost sm" onclick="pick('none')">해제</button>
+        <small id="pick-n"></small>
+      </div>
+      <div class="people">
+        <?php foreach ($people as $pp): $pid = (int)$pp['id']; ?>
+          <label class="person<?= $pp['devices'] ? '' : ' nodev' ?>">
+            <input type="checkbox" name="to[]" value="<?= $pid ?>" data-dev="<?= (int)$pp['devices'] ?>"
+                   data-me="<?= $pid === $selfId ? 1 : 0 ?>" <?= in_array($pid, $toIds, true) ? 'checked' : '' ?>>
+            <span><b><?= h($pp['name']) ?></b><?= $pid === $selfId ? ' <span class="me">나</span>' : '' ?>
+              <small><?= h($pp['email']) ?> · 기기 <?= (int)$pp['devices'] ?>대</small></span>
+          </label>
+        <?php endforeach; ?>
+      </div>
+      <small>고른 사람에게는 시험 허용 목록과 상관없이 갑니다. 그 종류를 꺼 둔 사람은 빠집니다.</small>
+    </div>
+    <?php else: ?>
+    <div><b><?= h($u['name']) ?></b> <small>(<?= h($u['email']) ?>) — 본인에게만 보낼 수 있습니다</small></div>
+    <?php endif; ?>
     <span></span>
-    <div><button type="submit">보내기</button></div>
+    <div><button type="submit"><?= $canPick ? '보내기' : '나에게 보내기' ?></button></div>
   </div>
 </form>
 
@@ -163,11 +221,15 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
   <h2>결과</h2>
   <div class="msg <?= $result['sent'] ? 'ok' : 'bad' ?>">
     성공 <?= $result['sent'] ?> · 실패 <?= $result['failed'] ?> · 정리(만료 구독 삭제) <?= $result['pruned'] ?>
-    · 허용 목록 밖 <?= $result['skipped'] ?>명 · 알림함 저장 <?= $result['notified'] ?? 0 ?>명 · 대상 기기 <?= $result['recipients'] ?>
+    · 알림함 저장 <?= $result['notified'] ?? 0 ?>건 · 대상 기기 <?= $result['recipients'] ?>대
     <?php if (!empty($result['error'])): ?><br><?= h($result['error']) ?><?php endif; ?>
-    <?php if (!$result['recipients'] && empty($result['error'])): ?>
-      <br>보낼 기기가 없습니다. 받는 사람이 "알림 받기" 를 했는지, 이 종류를 꺼 두지 않았는지 확인하세요.
-      <?php if (!empty($result['notified'])): ?>알림함에는 남았습니다(포털 상단바 🔔 단추).<?php endif; ?>
+    <?php $off = count($toIds) - (int)($result['notified'] ?? 0); ?>
+    <?php if (empty($result['error']) && $off > 0): ?>
+      <br>고른 <?= count($toIds) ?>명 중 <?= $off ?>명은 이 종류의 알림을 꺼 두어 빠졌습니다(마이페이지 알림 칸에서 켤 수 있습니다).
+    <?php endif; ?>
+    <?php if (!$result['recipients'] && !empty($result['notified']) && empty($result['error'])): ?>
+      <br>받는 사람에게 알림을 받는 기기가 없습니다. 각자 "이 기기에서 알림 받기" 를 먼저 눌러야 합니다.
+      알림함에는 남았습니다(포털 상단바 🔔 단추).
     <?php endif; ?>
   </div>
   <?php if ($result['detail']): ?>
@@ -182,7 +244,8 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
   <?php endif; ?>
 <?php endif; ?>
 
-<h2>계정별 구독</h2>
+<?php if ($isAdmin): ?>
+<h2>계정별 구독 <small>(관리자)</small></h2>
 <div class="card"><table>
   <tr><th>이름</th><th>이메일</th><th>기기</th><th>마지막 성공</th><th>시험 발송</th></tr>
   <?php foreach ($accounts as $a): ?>
@@ -192,8 +255,9 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
       <td><?= push_can_receive($a['email']) ? '<span class="ok">받음</span>' : '<span class="muted">제외</span>' ?></td></tr>
   <?php endforeach; ?>
 </table></div>
+<?php endif; ?>
 
-<h2>최근 발송 기록</h2>
+<h2><?= $isAdmin ? '최근 발송 기록 <small>(전체)</small>' : '내 발송 기록' ?></h2>
 <div class="card"><table>
   <tr><th>시각</th><th>계정</th><th>종류</th><th>제목</th><th>이동 주소</th><th>HTTP</th><th>오류</th></tr>
   <?php if (!$logs): ?><tr><td colspan="7" class="muted">아직 없습니다.</td></tr><?php endif; ?>
@@ -233,6 +297,21 @@ document.getElementById('dev-btn').addEventListener('click', async (e) => {
   } catch (err) { alert(err.message); devRender(); }
 });
 window.addEventListener('load', devRender);
+
+// 받는 사람 빠른 선택 (고를 수 있는 사람에게만 목록이 있다)
+const boxes = () => Array.from(document.querySelectorAll('input[name="to[]"]'));
+function pick(mode) {
+  boxes().forEach(b => {
+    b.checked = mode === 'all' || (mode === 'me' && b.dataset.me === '1') || (mode === 'dev' && +b.dataset.dev > 0);
+  });
+  pickCount();
+}
+function pickCount() {
+  const el = document.getElementById('pick-n');
+  if (el) el.textContent = boxes().filter(b => b.checked).length + '명 선택';
+}
+document.addEventListener('change', (e) => { if (e.target.name === 'to[]') pickCount(); });
+pickCount();
 </script>
 </body>
 </html>

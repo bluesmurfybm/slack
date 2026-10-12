@@ -491,7 +491,7 @@ function push_set_pref(int $userId, string $kind, bool $enabled): void
  * @param int $skipped           허용 목록 때문에 빠진 사람 수를 돌려준다
  * @return array<int,array{id:int,email:string}>
  */
-function push_target_users(string $kind, $to = null, int &$skipped = 0): array
+function push_target_users(string $kind, $to = null, int &$skipped = 0, bool $ignoreAllow = false): array
 {
     $kindRow = push_kind($kind);
     if (!$kindRow) return [];
@@ -521,7 +521,7 @@ function push_target_users(string $kind, $to = null, int &$skipped = 0): array
     $st->execute($args);
     $out = [];
     foreach ($st->fetchAll() as $u) {
-        if (!push_can_receive($u['email'])) { $skipped++; continue; }
+        if (!$ignoreAllow && !push_can_receive($u['email'])) { $skipped++; continue; }
         $out[] = ['id' => (int)$u['id'], 'email' => $u['email']];
     }
     return $out;
@@ -747,6 +747,8 @@ function push_http_post(string $endpoint, string $body, array $headers): array
  *   to      이메일·portal_users.id 배열 또는 콤마 문자열. 생략하면 이 종류를 켜 둔 전원
  *   ttl     초. 기본 하루
  *   urgency very-low|low|normal|high
+ *   ignore_allowlist  true 면 PUSH_TEST_ALLOW 를 거치지 않는다. 시험 발송 페이지가 **로그인한 본인에게**
+ *           보낼 때만 쓴다 — 모듈에서 쓰면 시험 기간 제한이 풀리므로 쓰지 않는다
  *   _subs   (시험용) DB 대신 쓸 구독 행 배열 — 주면 DB 를 전혀 건드리지 않는다
  *   _post   (시험용) push_http_post 대신 부를 함수
  *
@@ -784,7 +786,7 @@ function push_send(array $opts): array
         $payloads = [];
         if ($useDb) {
             $skipped = 0;
-            $users = push_target_users($kind, $opts['to'] ?? null, $skipped);
+            $users = push_target_users($kind, $opts['to'] ?? null, $skipped, !empty($opts['ignore_allowlist']));
             $r['skipped'] = $skipped;
             foreach ($users as $u) {
                 $nid = push_inbox_add($u['id'], $kind, $title, (string)($opts['body'] ?? ''), $url);
