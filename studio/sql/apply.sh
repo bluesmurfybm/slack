@@ -110,6 +110,7 @@ FILES="
 020_migration_workload_editor.sql
 021_migration_aidd.sql
 022_migration_project_member.sql
+023_migration_source_purpose.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

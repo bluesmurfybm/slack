@@ -175,13 +175,23 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     <div class="ba-panel"><h2>개요</h2><p class="ba-pre"><?= h($project['summary']) ?></p></div>
     <?php endif; ?>
 
+    <?php
+    // 업무 내용 및 범위 / 참고 자료 — 등록 화면과 같은 두 블록 (023).
+    foreach (BS_SOURCE_PURPOSE as $pk => $plabel):
+      $rows = array_values(array_filter($sources,
+          static fn($s) => ($s['purpose'] ?? 'scope') === $pk));
+      if ($pk !== 'scope' && !$rows) { continue; }   // 참고 자료는 있을 때만
+    ?>
     <div class="ba-panel">
-      <h2>업무 내용 및 범위 <span class="ba-dim"><?= count($sources) ?>건</span></h2>
-      <?php if (!$sources): ?>
+      <h2><?= h($plabel) ?> <span class="ba-dim"><?= count($rows) ?>건</span></h2>
+      <?php if ($pk === 'reference'): ?>
+        <p class="ba-panel__hint">WBS 초안을 뽑을 때는 쓰지 않습니다. 난이도·공수 근거로만 찾아봅니다.</p>
+      <?php endif; ?>
+      <?php if (!$rows): ?>
         <p class="ba-empty-inline">등록된 문서가 없습니다.</p>
       <?php else: ?>
         <div class="ba-srclist">
-          <?php foreach ($sources as $s): ?>
+          <?php foreach ($rows as $s): ?>
             <div class="ba-src">
               <span class="ba-src__kind"><?= h(BS_SOURCE_KIND[$s['kind']] ?? $s['kind']) ?></span>
               <span class="ba-src__title">
@@ -197,6 +207,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         </div>
       <?php endif; ?>
     </div>
+    <?php endforeach; ?>
 
     <?php if (!empty($project['notes']) || !empty($project['extra'])): ?>
     <div class="ba-panel">

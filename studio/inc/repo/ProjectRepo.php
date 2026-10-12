@@ -460,7 +460,7 @@ final class ProjectRepo
     public function sources(int $projectId): array
     {
         $st = $this->pdo->prepare(
-            'SELECT id, project_id, kind, title, url, file_size, mime,
+            'SELECT id, project_id, purpose, kind, title, url, file_size, mime,
                     parse_status, parse_error,
                     CHAR_LENGTH(COALESCE(parsed_text, "")) AS parsed_len,
                     uploaded_by, uploaded_by_name, created_at
@@ -480,6 +480,9 @@ final class ProjectRepo
      * 돼도 응답이 수 MB 가 된다. 본문이 필요한 곳에서만 이쪽을 쓸 것.
      *
      * file_path 는 담지 않는다 — 응답에 실릴 일이 없게.
+     *
+     * **참고 자료(purpose='reference')는 뺀다** (023). 넣으면 그 안의 내용이
+     * 할 일로 뽑힌다.
      */
     public function parsedSources(int $projectId): array
     {
@@ -487,6 +490,7 @@ final class ProjectRepo
             'SELECT id, project_id, kind, title, url, parse_status, parsed_text
                FROM bs_project_source
               WHERE project_id = ?
+                AND purpose = "scope"
                 AND parse_status = "ok"
                 AND parsed_text IS NOT NULL
                 AND parsed_text <> ""
@@ -543,6 +547,25 @@ final class ProjectRepo
             $actor['name'],
         ]);
         return (int)$this->pdo->lastInsertId();
+    }
+
+    /**
+     * 방금 올린 문서들의 용도를 정한다. 올리는 길(파일·링크·직접 입력)이
+     * 셋이라 각각에 인자를 늘리지 않고, 올린 뒤 한 번에 바꾼다.
+     */
+    public function setSourcePurpose(int $projectId, array $sourceIds, string $purpose): void
+    {
+        if (!isset(BS_SOURCE_PURPOSE[$purpose])) {
+            throw new InvalidArgumentException('알 수 없는 용도입니다: ' . $purpose);
+        }
+        $ids = array_values(array_filter(array_map('intval', $sourceIds)));
+        if (!$ids) {
+            return;
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $this->pdo->prepare(
+            "UPDATE bs_project_source SET purpose = ? WHERE project_id = ? AND id IN ($ph)"
+        )->execute(array_merge([$purpose, $projectId], $ids));
     }
 
     /** 파싱 결과 반영. P2 의 파서가 부른다. */

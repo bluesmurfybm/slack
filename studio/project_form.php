@@ -206,31 +206,43 @@ bs_layout_head(
     </p>
   </section>
 
-  <!-- ============ 개발 범위 출처 ============ -->
-  <section class="ba-panel" id="ba-source-panel">
-    <h2>업무 내용 및 범위</h2>
-    <p class="ba-panel__hint">
-      WBS 초안을 뽑을 재료입니다. 파일·링크·직접 입력을 섞어 넣을 수 있습니다.
-      <b>파일 내용 분석은 다음 단계에서 합니다</b> — 지금은 올려두기만 합니다.
-    </p>
+  <?php
+  // ┌──────────────────────────────────────────────────────────────────┐
+  // │ 출처 블록 — 같은 꼴을 두 번 그린다 (2026-10-12)                    │
+  // │                                                                  │
+  // │ 업무 내용 및 범위(scope)  WBS 초안의 재료                          │
+  // │ 참고 자료(reference)      WBS 도출에서 뺀다. 난이도·공수 근거는 찾는다│
+  // │                                                                  │
+  // │ id 를 쓰지 않고 data-src-* 로 블록 안에서만 찾는다 — 같은 화면에   │
+  // │ 둘이 있으므로 id 가 겹친다. assign.js 의 initSourcePanel 이 짝이다.│
+  // └──────────────────────────────────────────────────────────────────┘
+  $sourcePanel = static function (string $purpose, string $title, string $hint)
+      use ($projectId, $sources, $parseLabel, $sizeLabel): void {
+      $rows = array_values(array_filter($sources,
+          static fn($s) => ($s['purpose'] ?? 'scope') === $purpose));
+      $off  = $projectId ? '' : ' hidden';
+  ?>
+  <section class="ba-panel" data-src-panel="<?= h($purpose) ?>"
+           <?= $purpose === 'scope' ? 'id="ba-source-panel"' : '' ?>>
+    <h2><?= h($title) ?></h2>
+    <p class="ba-panel__hint"><?= $hint ?></p>
 
     <?php if (!$projectId): ?>
-      <div class="ba-note" id="ba-source-locked">
+      <div class="ba-note">
         기본 정보를 먼저 저장하면 이 자리에서 문서를 올릴 수 있습니다.
       </div>
     <?php endif; ?>
 
-    <div class="ba-source-tabs" role="tablist" aria-label="출처 종류"
-         <?= $projectId ? '' : 'hidden' ?>>
+    <div class="ba-source-tabs" role="tablist" aria-label="출처 종류"<?= $off ?>>
       <button type="button" role="tab" data-src-tab="file" aria-selected="true">파일 올리기</button>
       <button type="button" role="tab" data-src-tab="link" aria-selected="false">링크 등록</button>
       <button type="button" role="tab" data-src-tab="text" aria-selected="false">직접 입력</button>
     </div>
 
-    <div class="ba-source-pane" data-src-pane="file" <?= $projectId ? '' : 'hidden' ?>>
+    <div class="ba-source-pane" data-src-pane="file"<?= $off ?>>
       <label>
         <span>파일</span>
-        <input type="file" id="ba-in-files" multiple
+        <input type="file" data-src-in="files" multiple
                accept=".xlsx,.pptx,.docx,.pdf,.jpg,.jpeg,.png,.gif,.webp">
         <em class="ba-help">
           xlsx · pptx · docx · pdf · 이미지 /
@@ -238,42 +250,42 @@ bs_layout_head(
           한 번에 <?= BS_UPLOAD_MAX_FILES ?>개까지
         </em>
       </label>
-      <button type="button" class="ba-btn" id="ba-src-upload">올리기</button>
+      <button type="button" class="ba-btn" data-src-act="file">올리기</button>
     </div>
 
     <div class="ba-source-pane" data-src-pane="link" hidden>
       <div class="ba-form__row">
         <label>
           <span class="ba-req">주소</span>
-          <input type="url" id="ba-in-link-url" placeholder="https://www.figma.com/file/...">
+          <input type="url" data-src-in="link-url" placeholder="https://www.figma.com/file/...">
         </label>
         <label>
           <span>표시 이름</span>
-          <input type="text" id="ba-in-link-title" maxlength="200" placeholder="비우면 주소에서 자동으로">
+          <input type="text" data-src-in="link-title" maxlength="200" placeholder="비우면 주소에서 자동으로">
         </label>
       </div>
-      <button type="button" class="ba-btn" id="ba-src-link">등록</button>
+      <button type="button" class="ba-btn" data-src-act="link">등록</button>
     </div>
 
     <div class="ba-source-pane" data-src-pane="text" hidden>
       <label>
         <span>표시 이름</span>
-        <input type="text" id="ba-in-text-title" maxlength="200" placeholder="비우면 첫 줄을 제목으로">
+        <input type="text" data-src-in="text-title" maxlength="200" placeholder="비우면 첫 줄을 제목으로">
       </label>
       <label>
         <span class="ba-req">내용</span>
-        <textarea id="ba-in-text" rows="8"
+        <textarea data-src-in="text" rows="8"
                   placeholder="회의록, 요구사항 메모, 메일 본문 등을 붙여 넣으세요."></textarea>
       </label>
-      <button type="button" class="ba-btn" id="ba-src-text">등록</button>
+      <button type="button" class="ba-btn" data-src-act="text">등록</button>
     </div>
 
     <!-- 등록된 출처 목록. 서버가 그린 것을 assign.js 가 이후 갱신한다. -->
-    <div class="ba-srclist" id="ba-srclist">
-      <?php if (!$sources): ?>
+    <div class="ba-srclist" data-src-list>
+      <?php if (!$rows): ?>
         <p class="ba-empty-inline">아직 등록된 문서가 없습니다.</p>
       <?php else: ?>
-        <?php foreach ($sources as $s): ?>
+        <?php foreach ($rows as $s): ?>
           <div class="ba-src" data-id="<?= (int)$s['id'] ?>">
             <span class="ba-src__kind"><?= h(BS_SOURCE_KIND[$s['kind']] ?? $s['kind']) ?></span>
             <span class="ba-src__title">
@@ -299,6 +311,19 @@ bs_layout_head(
       <?php endif; ?>
     </div>
   </section>
+  <?php
+  };
+  ?>
+
+  <!-- ============ 개발 범위 출처 ============ -->
+  <?php $sourcePanel('scope', '업무 내용 및 범위',
+      'WBS 초안을 뽑을 재료입니다. 파일·링크·직접 입력을 섞어 넣을 수 있습니다.
+       <b>파일 내용 분석은 다음 단계에서 합니다</b> — 지금은 올려두기만 합니다.'); ?>
+
+  <!-- ============ 참고 자료 ============ -->
+  <?php $sourcePanel('reference', '참고 자료',
+      '지난 산출물, 학교 소개서, 비슷한 시스템 설명서처럼 <b>할 일은 아니지만 알아 둘</b> 자료입니다.
+       <b>WBS 초안을 뽑을 때는 쓰지 않습니다.</b> 난이도·공수를 매길 때 근거로는 찾아봅니다.'); ?>
 
   <!-- ============ 특이점 / 기타 ============ -->
   <section class="ba-panel">

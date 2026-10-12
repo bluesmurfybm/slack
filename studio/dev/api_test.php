@@ -530,6 +530,36 @@ $r = $guest->req('/studio/api/project.php?act=upload_source', ['csrf' => true, '
     'project_id' => $pid, 'source_type' => 'text', 'text' => '권한 없음']]);
 ok('PM 아닌 사람의 출처 등록 403', $r['status'] === 403);
 
+// --- 참고 자료 (023, 2026-10-12) ------------------------------------------
+// 같은 길로 올리되 용도만 다르다. WBS 도출의 재료(parsedSources)에서 빠져야 한다.
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'text', 'purpose' => 'reference',
+    'text' => "지난 사업 산출물\n로그인 화면 개편 — 이건 할 일이 아니다"]]);
+ok('참고 자료 등록 200', $r['status'] === 200, substr($r['body'], 0, 120));
+$refId = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+$refRow = null;
+foreach ($r['json']['data']['sources'] ?? [] as $s) { if ($s['id'] === $refId) { $refRow = $s; } }
+ok('목록에 참고 자료로 표시된다', ($refRow['purpose'] ?? '') === 'reference');
+
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'text', 'purpose' => 'x', 'text' => '용도 틀림']]);
+ok('모르는 용도는 400', $r['status'] === 400, 'status=' . $r['status']);
+
+$parsedIds = (function () use ($pid) {
+    require_once dirname(__DIR__) . '/inc/bootstrap.php';
+    require_once dirname(__DIR__) . '/inc/repo/ProjectRepo.php';
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    return array_map('intval', array_column((new ProjectRepo($p))->parsedSources($pid), 'id'));
+})();
+ok('★ 참고 자료는 WBS 도출 재료에서 빠진다', $refId > 0 && !in_array($refId, $parsedIds, true),
+   json_encode($parsedIds));
+ok('범위 문서는 그대로 재료다', count($parsedIds) > 0);
+$admin->req('/studio/api/project.php?act=delete_source',
+            ['csrf' => true, 'json' => ['source_id' => $refId]]);
+
 // =====================================================================
 section('[J] 목록 필터');
 $r = $admin->req('/studio/api/project.php?act=list&keyword=' . rawurlencode('Z대학교'));

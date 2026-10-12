@@ -212,6 +212,16 @@ bs_route(bs_param_str('act', 'list'), [
 
         $uploader = new SourceUploader($repo);
         $type     = bs_param_str('source_type', 'file');
+        // 어느 블록에서 올렸는가 (023). 참고 자료는 WBS 도출에서 빠진다.
+        $purpose  = bs_param_str('purpose', 'scope');
+        if (!isset(BS_SOURCE_PURPOSE[$purpose])) {
+            bs_json_error('INVALID_ARGUMENT', '알 수 없는 용도입니다: ' . $purpose, 400);
+        }
+        $mark = static function (array $saved) use ($repo, $projectId, $purpose): void {
+            if ($purpose !== 'scope') {
+                $repo->setSourcePurpose($projectId, array_column($saved, 'id'), $purpose);
+            }
+        };
 
         switch ($type) {
             case 'file':
@@ -219,6 +229,7 @@ bs_route(bs_param_str('act', 'list'), [
                     bs_json_error('MISSING_PARAM', '선택된 파일이 없습니다.', 400);
                 }
                 $r = $uploader->storeMany($projectId, $_FILES['files'], $user);
+                $mark($r['saved']);
 
                 $msg = count($r['saved']) . '개를 등록했습니다.';
                 if ($r['failed']) {
@@ -239,6 +250,7 @@ bs_route(bs_param_str('act', 'list'), [
                     bs_param_str('title'),
                     $user
                 );
+                $mark([$saved]);
                 bs_json_ok([
                     'saved'   => [$saved],
                     'failed'  => [],
@@ -253,6 +265,7 @@ bs_route(bs_param_str('act', 'list'), [
                     bs_param_str('title'),
                     $user
                 );
+                $mark([$saved]);
                 bs_json_ok([
                     'saved'   => [$saved],
                     'failed'  => [],
@@ -413,6 +426,7 @@ function bs_present_source(array $r): array
 {
     return [
         'id'           => (int)$r['id'],
+        'purpose'      => $r['purpose'] ?? 'scope',
         'kind'         => $r['kind'],
         'kind_label'   => BS_SOURCE_KIND[$r['kind']] ?? $r['kind'],
         'title'        => $r['title'],

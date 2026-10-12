@@ -395,43 +395,41 @@
   }
 
   // ---- 출처 패널 ------------------------------------------------------
+  //
+  // 같은 꼴의 블록이 둘이다 — 업무 내용 및 범위(scope) / 참고 자료(reference).
+  // id 대신 블록 안에서 data-src-* 로 찾는다. 서버는 목록을 **통째로** 돌려
+  // 주므로, 각 블록이 자기 용도의 것만 골라 그린다 (2026-10-12).
   function initSourcePanel(pid) {
-    // 종류 탭
-    $$('.ba-source-tabs [data-src-tab]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var kind = btn.dataset.srcTab;
-        $$('.ba-source-tabs [data-src-tab]').forEach(function (b) {
-          b.setAttribute('aria-selected', String(b === btn));
-        });
-        $$('[data-src-pane]').forEach(function (p) {
-          p.hidden = p.dataset.srcPane !== kind;
-        });
-      });
-    });
+    var panels = $$('[data-src-panel]');
 
     function renderSources(rows) {
-      var box = $('#ba-srclist');
-      if (!box) return;
-      if (!rows || !rows.length) {
-        box.innerHTML = '<p class="ba-empty-inline">아직 등록된 문서가 없습니다.</p>';
-        return;
-      }
-      box.innerHTML = rows.map(function (s) {
-        var meta = s.size_label ? esc(s.size_label)
-                 : (s.parsed_len ? Number(s.parsed_len).toLocaleString('ko-KR') + '자' : '');
-        var title = s.url
-          ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>'
-          : esc(s.title);
-        return '<div class="ba-src" data-id="' + s.id + '">' +
-               '<span class="ba-src__kind">' + esc(s.kind_label) + '</span>' +
-               '<span class="ba-src__title">' + title + '</span>' +
-               '<span class="ba-src__meta">' + meta + '</span>' +
-               '<span class="ba-src__parse ba-src__parse--' + esc(s.parse_status) + '">' +
-                 esc(PARSE_LABEL[s.parse_status] || s.parse_status) +
-               '</span>' +
-               '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="' + s.id + '">삭제</button>' +
-               '</div>';
-      }).join('');
+      panels.forEach(function (panel) {
+        var box = $('[data-src-list]', panel);
+        if (!box) return;
+        var mine = (rows || []).filter(function (s) {
+          return (s.purpose || 'scope') === panel.dataset.srcPanel;
+        });
+        if (!mine.length) {
+          box.innerHTML = '<p class="ba-empty-inline">아직 등록된 문서가 없습니다.</p>';
+          return;
+        }
+        box.innerHTML = mine.map(function (s) {
+          var meta = s.size_label ? esc(s.size_label)
+                   : (s.parsed_len ? Number(s.parsed_len).toLocaleString('ko-KR') + '자' : '');
+          var title = s.url
+            ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>'
+            : esc(s.title);
+          return '<div class="ba-src" data-id="' + s.id + '">' +
+                 '<span class="ba-src__kind">' + esc(s.kind_label) + '</span>' +
+                 '<span class="ba-src__title">' + title + '</span>' +
+                 '<span class="ba-src__meta">' + meta + '</span>' +
+                 '<span class="ba-src__parse ba-src__parse--' + esc(s.parse_status) + '">' +
+                   esc(PARSE_LABEL[s.parse_status] || s.parse_status) +
+                 '</span>' +
+                 '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="' + s.id + '">삭제</button>' +
+                 '</div>';
+        }).join('');
+      });
     }
 
     function afterChange(data) {
@@ -446,94 +444,84 @@
       toast(data.message || '등록했습니다.');
     }
 
-    // 파일
-    var upBtn = $('#ba-src-upload');
-    if (upBtn) {
-      upBtn.addEventListener('click', function () {
-        var input = $('#ba-in-files');
-        if (!input || !input.files || !input.files.length) {
-          toast('파일을 선택하세요.', true);
-          return;
-        }
-        var fd = new FormData();
-        fd.append('project_id', pid);
-        fd.append('source_type', 'file');
-        Array.prototype.forEach.call(input.files, function (f) { fd.append('files[]', f); });
+    panels.forEach(function (panel) {
+      var purpose = panel.dataset.srcPanel;
+      var inp = function (k) { return $('[data-src-in="' + k + '"]', panel); };
 
-        upBtn.disabled = true;
-        upload('api/project.php?act=upload_source', fd).then(function (data) {
-          input.value = '';
-          afterChange(data);
-        }).catch(function (e) {
-          showError('#ba-form-error', e.message);
-        }).then(function () { upBtn.disabled = false; });
-      });
-    }
-
-    // 링크
-    var linkBtn = $('#ba-src-link');
-    if (linkBtn) {
-      linkBtn.addEventListener('click', function () {
-        var url = ($('#ba-in-link-url') || {}).value || '';
-        if (!url.trim()) { toast('주소를 입력하세요.', true); return; }
-
-        linkBtn.disabled = true;
-        api('api/project.php?act=upload_source', {
-          method: 'POST',
-          body: {
-            project_id: pid, source_type: 'link',
-            url: url, title: ($('#ba-in-link-title') || {}).value || ''
-          }
-        }).then(function (data) {
-          $('#ba-in-link-url').value = '';
-          $('#ba-in-link-title').value = '';
-          afterChange(data);
-        }).catch(function (e) {
-          showError('#ba-form-error', e.message);
-        }).then(function () { linkBtn.disabled = false; });
-      });
-    }
-
-    // 직접 입력
-    var textBtn = $('#ba-src-text');
-    if (textBtn) {
-      textBtn.addEventListener('click', function () {
-        var text = ($('#ba-in-text') || {}).value || '';
-        if (!text.trim()) { toast('내용을 입력하세요.', true); return; }
-
-        textBtn.disabled = true;
-        api('api/project.php?act=upload_source', {
-          method: 'POST',
-          body: {
-            project_id: pid, source_type: 'text',
-            text: text, title: ($('#ba-in-text-title') || {}).value || ''
-          }
-        }).then(function (data) {
-          $('#ba-in-text').value = '';
-          $('#ba-in-text-title').value = '';
-          afterChange(data);
-        }).catch(function (e) {
-          showError('#ba-form-error', e.message);
-        }).then(function () { textBtn.disabled = false; });
-      });
-    }
-
-    // 삭제 — 목록이 다시 그려지므로 개별 버튼이 아니라 컨테이너에 건다.
-    var list = $('#ba-srclist');
-    if (list) {
-      list.addEventListener('click', function (e) {
-        var btn = e.target.closest ? e.target.closest('[data-src-del]') : null;
-        if (!btn) return;
-        if (!window.confirm('이 문서를 삭제합니다. 올린 파일도 함께 지워집니다.')) return;
-
-        api('api/project.php?act=delete_source', {
-          method: 'POST',
-          body: { source_id: parseInt(btn.dataset.srcDel, 10) }
-        }).then(afterChange).catch(function (e2) {
-          showError('#ba-form-error', e2.message);
+      // 종류 탭 — 이 블록 안에서만 바꾼다.
+      $$('.ba-source-tabs [data-src-tab]', panel).forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var kind = btn.dataset.srcTab;
+          $$('.ba-source-tabs [data-src-tab]', panel).forEach(function (b) {
+            b.setAttribute('aria-selected', String(b === btn));
+          });
+          $$('[data-src-pane]', panel).forEach(function (p) {
+            p.hidden = p.dataset.srcPane !== kind;
+          });
         });
       });
-    }
+
+      function send(btn, req, done) {
+        btn.disabled = true;
+        req.then(function (data) {
+          done();
+          afterChange(data);
+        }).catch(function (e) {
+          showError('#ba-form-error', e.message);
+        }).then(function () { btn.disabled = false; });
+      }
+
+      panel.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('[data-src-act], [data-src-del]') : null;
+        if (!btn) return;
+
+        // 삭제 — 목록이 다시 그려지므로 블록에 건다.
+        if (btn.dataset.srcDel) {
+          if (!window.confirm('이 문서를 삭제합니다. 올린 파일도 함께 지워집니다.')) return;
+          api('api/project.php?act=delete_source', {
+            method: 'POST',
+            body: { source_id: parseInt(btn.dataset.srcDel, 10) }
+          }).then(afterChange).catch(function (e2) {
+            showError('#ba-form-error', e2.message);
+          });
+          return;
+        }
+
+        var act = btn.dataset.srcAct;
+        if (act === 'file') {
+          var input = inp('files');
+          if (!input || !input.files || !input.files.length) {
+            toast('파일을 선택하세요.', true);
+            return;
+          }
+          var fd = new FormData();
+          fd.append('project_id', pid);
+          fd.append('source_type', 'file');
+          fd.append('purpose', purpose);
+          Array.prototype.forEach.call(input.files, function (f) { fd.append('files[]', f); });
+          send(btn, upload('api/project.php?act=upload_source', fd),
+               function () { input.value = ''; });
+        }
+        if (act === 'link') {
+          var url = (inp('link-url') || {}).value || '';
+          if (!url.trim()) { toast('주소를 입력하세요.', true); return; }
+          send(btn, api('api/project.php?act=upload_source', {
+            method: 'POST',
+            body: { project_id: pid, source_type: 'link', purpose: purpose,
+                    url: url, title: (inp('link-title') || {}).value || '' }
+          }), function () { inp('link-url').value = ''; inp('link-title').value = ''; });
+        }
+        if (act === 'text') {
+          var text = (inp('text') || {}).value || '';
+          if (!text.trim()) { toast('내용을 입력하세요.', true); return; }
+          send(btn, api('api/project.php?act=upload_source', {
+            method: 'POST',
+            body: { project_id: pid, source_type: 'text', purpose: purpose,
+                    text: text, title: (inp('text-title') || {}).value || '' }
+          }), function () { inp('text').value = ''; inp('text-title').value = ''; });
+        }
+      });
+    });
   }
 
   // =====================================================================
