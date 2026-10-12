@@ -4178,6 +4178,9 @@
         // 어느 쪽이 참인지 알 수 없게 된다 — 서버도 끄기만 받는다.
         var ad = $('#ba-al-aidd');
         if (ad && !ad.disabled && !ad.checked) { body.aidd = 0; }
+        // 지금 보고 있는 차수를 기준으로 약하게 붙든다 (2026-10-12).
+        var st = $('#ba-al-stick');
+        if (st && st.checked && CUR) { body.stick_from = CUR.id; }
       }
 
       api('api/allocate.php?act=propose', { method: 'POST', body: body })

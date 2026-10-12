@@ -489,6 +489,15 @@ final class AllocationEngine
                 // 그때 비중이 얼마였는지. 없으면 "왜 이 사람이 적게 받았나" 에
                 // 답할 수 없다. 프로젝트 설정을 나중에 바꿔도 이 차수는 설명된다.
                 'shares'        => $ctx['shares'],
+                // 직전 안 유지 (2026-10-12). 몇 건이 그대로고 몇 건이 바뀌었는지.
+                // 바뀐 것은 ε 점 넘게 나은 사람이 있었다는 뜻이다.
+                'stick'         => $ctx['prev_owner'] ? [
+                    'eps'     => $ctx['stick_eps'],
+                    'compared'=> count($ctx['prev_owner']),
+                    'kept'    => count(array_filter($ctx['prev_owner'],
+                                     static fn($m, $t) => ($assign[$t] ?? null) === $m,
+                                     ARRAY_FILTER_USE_BOTH)),
+                ] : null,
             ],
         ];
     }
@@ -930,6 +939,10 @@ final class AllocationEngine
             }
         }
 
+        if ($ctx['prev_owner']) {
+            return $this->stickStart($assign, $ctx);
+        }
+
         foreach ($ctx['order'] as $taskId) {
             if (isset($assign[$taskId])) {
                 continue;
@@ -939,6 +952,64 @@ final class AllocationEngine
             $best = $this->bestMemberFor($t, $ctx, $snap);
             if ($best !== null) {
                 $assign[$taskId] = $best;
+            }
+        }
+        return $assign;
+    }
+
+    /**
+     * 직전 안에서 출발한다 (2026-10-12).
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 왜 그리디에 가산점만 얹지 않는가                              │
+     * │                                                              │
+     * │ 그리디는 앞에서 고른 것이 뒤의 부하를 바꾼다. 앞 태스크에서    │
+     * │ 직전 담당자를 붙들면 부하가 직전 안과 달라져, 같은 조건으로    │
+     * │ 다시 돌려도 뒤가 밀렸다(시험 4건 중 1건).                      │
+     * │                                                              │
+     * │ 그래서 직전 안을 **통째로 놓고 시작**한다. 그 위에서 한 건씩   │
+     * │ "지금 사람보다 ε 점 넘게 나은 사람이 있나" 만 묻고, 있으면      │
+     * │ 옮긴다. 옮길 것이 없을 때까지 돈다. 직전 안에 없던 태스크는    │
+     * │ 평소대로 그리디로 붙인다.                                      │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    private function stickStart(array $assign, array $ctx): array
+    {
+        foreach ($ctx['prev_owner'] as $taskId => $memberId) {
+            if (!isset($assign[$taskId])) {
+                $assign[$taskId] = $memberId;
+            }
+        }
+        foreach ($ctx['order'] as $taskId) {
+            if (isset($assign[$taskId])) {
+                continue;
+            }
+            $best = $this->bestMemberFor($ctx['tasks'][$taskId], $ctx, $this->snapshot($ctx, $assign));
+            if ($best !== null) {
+                $assign[$taskId] = $best;
+            }
+        }
+
+        $max = (int)($ctx['constraints']['max_passes'] ?? BS_ALLOC_MAX_PASSES);
+        for ($pass = 0; $pass < $max; $pass++) {
+            $moved = false;
+            foreach ($ctx['order'] as $taskId) {
+                if (isset($ctx['pinned'][$taskId]) || !isset($assign[$taskId])) {
+                    continue;
+                }
+                // 지금 담당자를 '직전 담당자' 로 두고 묻는다 — ε 안이면 그대로 온다.
+                // ★4 이상에서 지금 사람이 상위자가 아니면 상위자에게 간다.
+                $c = $ctx;
+                $c['prev_owner'][$taskId] = $assign[$taskId];
+                $best = $this->bestMemberFor($ctx['tasks'][$taskId], $c,
+                                             $this->snapshot($ctx, $assign, [$taskId]));
+                if ($best !== null && $best !== $assign[$taskId]) {
+                    $assign[$taskId] = $best;
+                    $moved = true;
+                }
+            }
+            if (!$moved) {
+                break;
             }
         }
         return $assign;
@@ -957,6 +1028,8 @@ final class AllocationEngine
 
         $best = null; $bestScore = null;
         $fallback = null; $fallbackScore = null;
+        $prev = $ctx['prev_owner'][$task['id']] ?? null;
+        $prevScore = null; $prevTop = false;
 
         foreach ($ctx['member_order'] as $mid) {
             $m   = $ctx['members'][$mid];
@@ -969,6 +1042,9 @@ final class AllocationEngine
             // 난이도 4~5 는 해당 분야 상위자 우선(명세서 §6.2).
             // 상위자가 아무도 없으면 막히므로 차선을 따로 들고 간다.
             $isTop = !$isHard || $this->isTopInDomain($task, $m, $ctx);
+            if ($mid === $prev) {
+                $prevScore = $s; $prevTop = $isTop;
+            }
 
             if ($isTop) {
                 if ($bestScore === null || $s > $bestScore) {
@@ -978,6 +1054,20 @@ final class AllocationEngine
                 if ($fallbackScore === null || $s > $fallbackScore) {
                     $fallbackScore = $s; $fallback = $mid;
                 }
+            }
+        }
+
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 직전 담당자는 ε 점 안이면 그대로 (2026-10-12)                 │
+        // │                                                              │
+        // │ 1·2위가 2점 안팎으로 붙어 있어, 한 건이 다른 사람에게 가면     │
+        // │ 뒤의 모든 결정이 줄줄이 바뀌었다. 같은 묶음(상위자/차선) 안에서│
+        // │ 비길 만하면 직전 사람을 둔다 — ★4 규칙은 그대로 지켜진다.      │
+        // └──────────────────────────────────────────────────────────────┘
+        if ($prevScore !== null) {
+            $poolBest = $prevTop ? $bestScore : ($best === null ? $fallbackScore : null);
+            if ($poolBest !== null && $prevScore >= $poolBest - $ctx['stick_eps']) {
+                return $prev;
             }
         }
         return $best ?? $fallback;
@@ -1026,6 +1116,19 @@ final class AllocationEngine
         $n      = count($order);
         $passes = 0;
         $max    = (int)($ctx['constraints']['max_passes'] ?? BS_ALLOC_MAX_PASSES);
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 직전 안 유지 — 직전 담당자에게 ε 를 얹어 견준다 (2026-10-12)  │
+        // │                                                              │
+        // │ 그리디만 붙잡고 여기서 풀어 주면 지역 탐색이 다시 섞는다.      │
+        // │ 그렇다고 문턱을 통째로 ε 로 올리면, 직전 안이 **맞바꾸기로**   │
+        // │ 얻은 자리를 되찾지 못해 같은 조건인데도 결과가 달라진다.       │
+        // │ 얹어 견주면 빼앗을 때는 ε 넘게 나아야 하고 되돌릴 때는 ε 안의  │
+        // │ 손해를 감수한다 — 그리디의 "ε 안이면 둔다" 와 같은 뜻이다.     │
+        // └──────────────────────────────────────────────────────────────┘
+        $eps   = (float)($ctx['stick_eps'] ?? 0.0);
+        $prevO = $ctx['prev_owner'] ?? [];
+        $hold  = static fn(int $t, int $m): float
+            => ($eps > 0 && ($prevO[$t] ?? null) === $m) ? $eps : 0.0;
 
         for ($pass = 0; $pass < $max; $pass++) {
             $passes++;
@@ -1045,8 +1148,10 @@ final class AllocationEngine
                         continue;
                     }
 
-                    $before = $this->pairScore($a, $ma, $b, $mb, $assign, $ctx);
-                    $after  = $this->pairScore($a, $mb, $b, $ma, $assign, $ctx);
+                    $before = $this->pairScore($a, $ma, $b, $mb, $assign, $ctx)
+                            + $hold($a, $ma) + $hold($b, $mb);
+                    $after  = $this->pairScore($a, $mb, $b, $ma, $assign, $ctx)
+                            + $hold($a, $mb) + $hold($b, $ma);
 
                     // 부동소수 비교라 아주 작은 차이는 개선으로 치지 않는다.
                     if ($after > $before + 1e-9) {
@@ -1619,6 +1724,19 @@ final class AllocationEngine
             }
         }
 
+        // 직전 안의 담당자 (2026-10-12). 고정(pinned)과 달리 **약하다** — ε 점
+        // 넘게 나은 사람이 있으면 바뀐다. 단위가 달라 번호가 안 맞는 태스크나
+        // 이번 후보에 없는 사람은 버린다.
+        $prevOwner = [];
+        foreach (($params['prev_owner'] ?? []) as $tid => $mid) {
+            $tid = (int)$tid; $mid = (int)$mid;
+            if (isset($tasks[$tid]) && isset($members[$mid])) {
+                $prevOwner[$tid] = $mid;
+            }
+        }
+        $stickEps = $prevOwner
+            ? max(0.0, (float)($params['stick_eps'] ?? BS_ALLOC_STICK_EPS)) : 0.0;
+
         return [
             'tasks'            => $tasks,
             'order'            => $order,
@@ -1641,6 +1759,8 @@ final class AllocationEngine
             'to'               => $to,
             'workdays'         => $workdays,
             'pinned'           => $pinned,
+            'prev_owner'       => $prevOwner,
+            'stick_eps'        => $stickEps,
             'level'            => $level,
             // 명시적으로 고른 후보. 안 골랐으면 빈 배열이다 — '전원 대상'
             // 과 '이 사람들로 하자' 는 다른 말이고, 최소 보장은 **뒤쪽에만**

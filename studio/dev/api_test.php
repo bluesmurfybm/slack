@@ -3631,6 +3631,18 @@ $worker = shell_exec(escapeshellarg(PHP_BINARY) . ' '
 ok('멈춘 뒤에는 워커가 집어갈 것이 없다', trim((string)$worker) === '', trim((string)$worker));
 
 // =====================================================================
+section('[ST] 직전 안 유지 — stick_from (2026-10-12)');
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'stick_from' => $shAid]]);
+ok('기준 차수를 주면 붙들고 산출한다', $r['status'] === 200
+   && ($r['json']['data']['meta']['stick']['compared'] ?? 0) > 0, substr($r['body'], 0, 160));
+ok('몇 건을 그대로 뒀는지 말해 준다', str_contains($r['json']['data']['message'] ?? '', '그대로 두었습니다'),
+   $r['json']['data']['message'] ?? '');
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'stick_from' => 999999999]]);
+ok('없는 차수는 404', $r['status'] === 404, 'status=' . $r['status']);
+
+// =====================================================================
 section('[VA] 사용자로 보기 — 보기 전용, 관리자만 (2026-10-12)');
 $r = $guest->req('/studio/api/view_as.php?act=start', ['csrf' => true, 'json' => [
     'user_id' => $ADMIN['email']]]);

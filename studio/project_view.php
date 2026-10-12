@@ -626,6 +626,13 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
           <label><input type="checkbox" id="ba-al-minone" checked>
             고른 후보는 적어도 1건 받게 한다</label>
         </div>
+        <!-- 직전 안 유지 (2026-10-12). 가중치를 0.02 만 고쳐도 담당자가 절반 넘게
+             뒤섞였다 — 점수차가 2점 안팎이라 한 건이 바뀌면 뒤가 줄줄이 밀린다. -->
+        <div class="ba-almode ba-almode--one">
+          <span class="ba-almode__l">직전 안 유지</span>
+          <label><input type="checkbox" id="ba-al-stick" checked>
+            지금 보고 있는 차수의 담당자를 기준으로, <b><?= (int)BS_ALLOC_STICK_EPS ?>점 넘게 나은 사람이 있을 때만</b> 바꾼다</label>
+        </div>
         <div class="ba-almode__hint">
           배정이 끝난 뒤, 0건인 후보에게 <b>적합도 손실이 가장 작은 한 건</b>을 넘깁니다.
           점수를 주무르지 않으므로 화면의 적합도는 그대로 실제 값입니다.

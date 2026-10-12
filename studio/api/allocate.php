@@ -279,6 +279,24 @@ bs_route(bs_param_str('act', 'versions'), [
             $params['pinned'] = $pinned;
         }
 
+        // 직전 안 유지 (2026-10-12). 그 차수의 담당자를 **약하게** 붙든다 —
+        // ε 점 넘게 나은 사람이 있으면 바뀐다. 가중치를 조금 고칠 때마다
+        // 담당자가 절반 넘게 뒤섞이던 것을 막는다.
+        $stickId = bs_param_int('stick_from', 0);
+        if ($stickId) {
+            $prev = $allocs->find($stickId);
+            if (!$prev || (int)$prev['project_id'] !== $projectId) {
+                bs_json_error('NOT_FOUND', '기준으로 삼을 배정안을 찾을 수 없습니다.', 404);
+            }
+            $owners = [];
+            foreach ($allocs->items($stickId) as $it) {
+                if ($it['role'] === 'owner') {
+                    $owners[(int)$it['task_id']] = (int)$it['member_id'];
+                }
+            }
+            $params['prev_owner'] = $owners;
+        }
+
         $r = $engine->propose($projectId, $params);
 
         // 엔진이 쓴 eval_ver 를 반드시 기록한다. 나중에 "왜 이렇게 배정됐나" 를
@@ -307,6 +325,10 @@ bs_route(bs_param_str('act', 'versions'), [
             // 막대의 분모도 **그때 비중**으로 그려야 한다. 오늘 비중을 바꿨다고
             // 지난 차수의 막대가 흔들리면 그 차수를 설명할 수 없다.
             'shares'      => $r['meta']['shares'] ?? [],
+            // 어느 차수를 기준으로 붙들었는지. 같은 가중치라도 기준이 다르면
+            // 결과가 다르다 — 안 적으면 재현할 수 없다.
+            'stick_from'  => $stickId ?: null,
+            'stick'       => $r['meta']['stick'] ?? null,
         ], $user);
 
         $allocs->saveItems($allocationId, $r['items']);
@@ -330,6 +352,11 @@ bs_route(bs_param_str('act', 'versions'), [
                 . ($r['meta']['method'] !== AllocationEngine::M_WEIGHTED
                     ? ' ' . AllocationEngine::METHOD_LABEL[$r['meta']['method']]
                       . ' 로 뽑았습니다(씨앗 ' . $r['meta']['seed'] . ').'
+                    : '')
+                . (!empty($r['meta']['stick'])
+                    ? sprintf(' 직전 안과 견준 %d건 중 %d건은 담당자를 그대로 두었습니다(%g점 넘게 나을 때만 바꿈).',
+                              $r['meta']['stick']['compared'], $r['meta']['stick']['kept'],
+                              $r['meta']['stick']['eps'])
                     : '')
                 . ($r['meta']['min_one']['moved'] ?? []
                     ? ' 0건이던 후보 ' . count($r['meta']['min_one']['moved'])

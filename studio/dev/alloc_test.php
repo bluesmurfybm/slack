@@ -1316,5 +1316,43 @@ $pdo->prepare('UPDATE bs_project SET deleted_at = NULL WHERE id = ?')->execute([
 $pdo->exec("DELETE FROM bs_workload WHERE label = '유령'");
 
 // =====================================================================
+echo "\n[15] 직전 안 유지 — ε 점 안이면 담당자를 그대로 둔다\n";
+// 가중치를 조금만 바꿔도 담당자가 절반 넘게 바뀌던 것을 막는다 (2026-10-12).
+$own = static function (array $r): array {
+    $o = [];
+    foreach ($r['items'] as $it) { $o[$it['task_id']] = $it['member_id']; }
+    ksort($o);
+    return $o;
+};
+$sBase = $engine->propose($pid, []);
+$bOwn  = $own($sBase);
+
+// 처음 붙들 때는 바뀔 수 있다 — 그리디가 순서대로 붙이며 남긴 자국(그 자리에
+// ε 넘게 나은 사람이 있는 태스크)을 바로잡는다. 그 뒤로는 **멈춰야** 한다.
+$once  = $own($engine->propose($pid, ['prev_owner' => $bOwn]));
+$same  = $engine->propose($pid, ['prev_owner' => $once]);
+ok('★ 붙든 결과를 같은 조건으로 다시 붙들면 하나도 안 바뀐다', $own($same) === $once,
+   json_encode([$once, $own($same)]));
+ok('몇 건을 견주고 몇 건을 뒀는지 남긴다',
+   ($same['meta']['stick']['compared'] ?? 0) === count($once)
+   && ($same['meta']['stick']['kept'] ?? -1) === count($once),
+   json_encode($same['meta']['stick'] ?? null));
+ok('붙들지 않으면 stick 은 비어 있다', $sBase['meta']['stick'] === null);
+
+// 직전 담당자를 엉뚱하게 돌려 넣는다 — 모든 태스크를 한 사람에게.
+$someone = (int)array_values($bOwn)[0];
+$skew    = array_fill_keys(array_keys($bOwn), $someone);
+$loose   = $own($engine->propose($pid, ['prev_owner' => $skew, 'stick_eps' => 0.0001]));
+$tight   = $own($engine->propose($pid, ['prev_owner' => $skew, 'stick_eps' => 1000]));
+$cnt = static fn(array $o) => count(array_filter($o, static fn($m) => $m === $someone));
+ok('ε 가 크면 직전 담당자를 붙든다', $cnt($tight) > $cnt($loose),
+   'eps1000=' . $cnt($tight) . ' eps0=' . $cnt($loose));
+ok('★ ε 가 작으면 더 나은 사람에게 간다 — 고정이 아니다', $cnt($loose) < count($bOwn),
+   $cnt($loose) . '/' . count($bOwn));
+
+$ghost = $engine->propose($pid, ['prev_owner' => [999999 => $someone]]);
+ok('없는 태스크·사람은 버린다', $ghost['meta']['stick'] === null);
+
+// =====================================================================
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";
 exit($fail > 0 ? 1 : 0);
