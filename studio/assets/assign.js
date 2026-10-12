@@ -1307,6 +1307,16 @@
     });
 
     if (!HAS_PERIOD) return;
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 후보 표가 없으면 여기서 끝낸다 (2026-10-12)                   │
+    // │                                                              │
+    // │ 배정 권한이 없는 사람에게는 서버가 표를 안 그린다. 아래는 전부│
+    // │ 그 표 전용인데 $('#ba-c-table').addEventListener 가 null 에서 │
+    // │ 터지면, 진입부가 뒤이어 부르는 initWbs·initAllocation 까지    │
+    // │ 돌지 못해 **일반 사용자 화면의 WBS·배정안 표와 [?] 가 통째로  │
+    // │ 죽었다.**                                                     │
+    // └──────────────────────────────────────────────────────────────┘
+    if (!$('#ba-c-table')) return;
 
     // ---- 선택 상태 ------------------------------------------------------
     //
@@ -5703,12 +5713,21 @@
   initRndLoadDrawer();
   initRndLoadPage();
 
+  // 하나가 터져도 다른 것은 돈다 (2026-10-12). 전에는 initProjectView 가
+  // 터지자 같은 줄의 initWbs·initAllocation 이 통째로 안 돌았다. 오류는
+  // 콘솔에 남긴다 — 삼키면 다음에 또 모르고 지나간다.
+  function run() {
+    Array.prototype.forEach.call(arguments, function (fn) {
+      try { fn(); } catch (e) { if (window.console) console.error('[BlueStudio] ' + (fn.name || '') , e); }
+    });
+  }
+
   switch (NAV) {
-    case 'dashboard': initDashboard(); break;
-    case 'project':   initProjectList(); initProjectForm(); initProjectView(); initWbs(); initAllocation(); initLinks();
-                      initRndBoard(); initRndForm(); initRndView(); break;
-    case 'member':    initMemberList(); initMemberProfile(); break;
-    case 'settings': initSettings(); break;
+    case 'dashboard': run(initDashboard); break;
+    case 'project':   run(initProjectList, initProjectForm, initProjectView, initWbs, initAllocation, initLinks,
+                          initRndBoard, initRndForm, initRndView); break;
+    case 'member':    run(initMemberList, initMemberProfile); break;
+    case 'settings':  run(initSettings); break;
   }
 
   window.BA = { api: api, upload: upload, qs: qs, toast: toast, esc: esc, $: $, $$: $$,
