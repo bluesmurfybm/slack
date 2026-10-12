@@ -1470,9 +1470,8 @@ foreach ($mlist as $m) { if ($m['id'] !== $item['member_id']) { $otherM = $m['id
 
 $r = $admin->req('/studio/api/allocate.php?act=update_item',
                  ['csrf' => true, 'json' => ['item_id' => $item['id'], 'member_id' => $otherM]]);
-ok('사유 없이 담당자 변경은 400', $r['status'] === 400
-   && str_contains($r['json']['error']['message'] ?? '', '사유'),
-   substr($r['body'], 0, 120));
+// 사유는 선택이다 (2026-10-12). 비워도 바뀌고, 누가 바꿨는지는 남는다.
+ok('사유 없이도 담당자를 바꿀 수 있다', $r['status'] === 200, substr($r['body'], 0, 120));
 
 $r = $admin->req('/studio/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
     'item_id' => $item['id'], 'member_id' => $otherM, 'manual_note' => '본인 요청']]);

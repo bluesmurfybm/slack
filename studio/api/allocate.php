@@ -347,7 +347,7 @@ bs_route(bs_param_str('act', 'versions'), [
 
     /**
      * 담당자 수동 조정.
-     * is_manual=1 과 사유를 반드시 남긴다 — 나중에 왜 바꿨는지 알아야 한다.
+     * is_manual=1 을 남긴다. 사유는 적으면 남기고, 비워도 된다.
      */
     'update_item' => function () use ($allocs, $members, $tasks): void {
         $user = bs_begin_write();
@@ -362,15 +362,9 @@ bs_route(bs_param_str('act', 'versions'), [
         $projectId = (int)$cur['project_id'];
         bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
 
-        // 사유 없는 변경은 나중에 설명할 수 없다. 담당자를 바꿀 때는 받는다.
-        $note      = bs_param_str('manual_note');
-        $newMember = bs_has_param('member_id') ? bs_param_int('member_id', 0) : null;
-        if ($newMember !== null && $newMember !== (int)$cur['member_id'] && $note === '') {
-            bs_json_error('MISSING_PARAM',
-                '담당자를 바꾸려면 사유를 적어 주세요. 나중에 왜 바꿨는지 알아야 합니다.', 400);
-        }
-
-        $data = ['manual_note' => $note];
+        // 사유는 **선택**이다 (2026-10-12). 회사가 작고 서로 믿는다 — 비워도
+        // 바뀌고, 누가 바꿨는지(is_manual·수정자)는 그대로 남는다.
+        $data = ['manual_note' => bs_param_str('manual_note')];
         foreach (['member_id' => 'int', 'role' => 'str', 'alloc_ratio' => 'float'] as $k => $t) {
             if (!bs_has_param($k)) {
                 continue;

@@ -92,6 +92,11 @@ bs_layout_head(
       <span>내 과제만</span>
     </label>
 
+    <label class="ba-check" for="ba-r-interest">
+      <input type="checkbox" id="ba-r-interest">
+      <span>관심 과제만</span>
+    </label>
+
     <span class="ba-spacer"></span>
     <button type="button" class="ba-btn" id="ba-r-reset">조건 초기화</button>
   </div>

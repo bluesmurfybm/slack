@@ -717,25 +717,49 @@
         var late = d.rows.filter(function (r) { return r.overdue; }).length;
         $('#ba-mine-sum').textContent = d.rows.length + '건' + (late ? ' · 지연 ' + late + '건' : '');
 
-        box.innerHTML = '<div class="ba-mylist">' + d.rows.map(function (r) {
-          return '<button type="button" class="ba-my' + (r.overdue ? ' is-late' : '') +
-                 '" data-task="' + r.task_id + '">' +
-            '<span class="ba-my__p">' + esc(r.project_name) + '</span>' +
-            '<span class="ba-my__t">' + esc(r.wbs_no || '') + ' ' + esc(r.title) + '</span>' +
-            '<span class="ba-my__s ba-st--' + (STATUS_CLASS[r.status] || 'todo') + '">' +
-              esc(r.status_label) + '</span>' +
-            '<span class="ba-my__b"><i style="width:' + r.progress_pct + '%"></i></span>' +
-            '<span class="ba-my__n">' + r.progress_pct + '%</span>' +
-            '<span class="ba-my__d">' + (r.plan_end ? esc(r.plan_end) : '기한 없음') +
-              (r.overdue ? ' <b>지연</b>' : '') + '</span>' +
-          '</button>';
-        }).join('') + '</div>';
+        // 프로젝트별로 묶는다. 서버가 마감 순으로 주므로, 마감이 가장
+        // 급한 일을 가진 프로젝트가 위에 온다. 묶음 안도 마감 순 그대로다.
+        var groups = [], byPid = {};
+        d.rows.forEach(function (r) {
+          if (!byPid[r.project_id]) {
+            byPid[r.project_id] = { id: r.project_id, name: r.project_name,
+                                    code: r.project_code, rows: [] };
+            groups.push(byPid[r.project_id]);
+          }
+          byPid[r.project_id].rows.push(r);
+        });
+
+        box.innerHTML = groups.map(function (g) {
+          var gl = g.rows.filter(function (r) { return r.overdue; }).length;
+          return '<div class="ba-mygroup">' +
+            '<div class="ba-mygroup__h">' +
+              '<a href="project_view.php?id=' + g.id + '">' + esc(g.name) + '</a>' +
+              '<span class="ba-dim">' + esc(g.code || '') + ' · ' + g.rows.length + '건' +
+                (gl ? ' · <b class="is-late">지연 ' + gl + '</b>' : '') + '</span>' +
+            '</div>' +
+            '<div class="ba-mylist">' + g.rows.map(myRow).join('') + '</div>' +
+          '</div>';
+        }).join('');
       }).catch(function (e) {
         var msg = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
         $('#ba-mine').innerHTML = msg;
         var rnd = $('#ba-myrnd');
         if (rnd) rnd.innerHTML = msg;
       });
+    }
+
+    function myRow(r) {
+      return '<button type="button" class="ba-my' + (r.overdue ? ' is-late' : '') +
+             '" data-task="' + r.task_id + '">' +
+        '<span class="ba-my__p">' + esc(r.wbs_no || '') + '</span>' +
+        '<span class="ba-my__t">' + esc(r.title) + '</span>' +
+        '<span class="ba-my__s ba-st--' + (STATUS_CLASS[r.status] || 'todo') + '">' +
+          esc(r.status_label) + '</span>' +
+        '<span class="ba-my__b"><i style="width:' + r.progress_pct + '%"></i></span>' +
+        '<span class="ba-my__n">' + r.progress_pct + '%</span>' +
+        '<span class="ba-my__d">' + (r.plan_end ? esc(r.plan_end) : '기한 없음') +
+          (r.overdue ? ' <b>지연</b>' : '') + '</span>' +
+      '</button>';
     }
 
     // ---- 내 R&D 과제 (P11) ----------------------------------------------
@@ -4125,9 +4149,10 @@
       ITEMS.forEach(function (x) { if (x.id === itemId) it = x; });
       if (!it) return;
 
-      // 사유를 받는다. 나중에 왜 바꿨는지 알아야 한다(서버도 요구한다).
-      var note = prompt('담당자를 ' + it.emp_name + ' 에서 바꿉니다.\n사유를 적어 주세요.', '');
-      if (note === null || !note.trim()) {
+      // 사유는 선택이다. [취소] 만 되돌리고, 비워 두고 [확인] 하면 그대로 바꾼다.
+      var note = prompt('담당자를 ' + it.emp_name + ' 에서 바꿉니다.\n'
+                        + '사유를 적어 두면 나중에 되짚기 좋습니다. 비워 두셔도 됩니다.', '');
+      if (note === null) {
         renderTable([]);   // 선택을 되돌린다
         openVersion(CUR.id);
         return;
@@ -4879,6 +4904,7 @@
         sort:       ($('#ba-r-sort')       || {}).value || 'recent',
         recruiting: ($('#ba-r-recruiting') || {}).checked ? '1' : '',
         mine:       ($('#ba-r-mine')       || {}).checked ? '1' : '',
+        interest:   ($('#ba-r-interest')   || {}).checked ? '1' : '',
         page:       state.page,
         size:       24
       };
@@ -4986,7 +5012,7 @@
       var el = $('#' + id);
       if (el) el.addEventListener('change', function () { state.page = 1; load(); });
     });
-    ['ba-r-recruiting', 'ba-r-mine'].forEach(function (id) {
+    ['ba-r-recruiting', 'ba-r-mine', 'ba-r-interest'].forEach(function (id) {
       var el = $('#' + id);
       if (el) el.addEventListener('change', function () { state.page = 1; load(); });
     });
@@ -5003,7 +5029,7 @@
         ['ba-r-category', 'ba-r-sort', 'ba-r-keyword'].forEach(function (id) {
           var el = $('#' + id); if (el) el.value = id === 'ba-r-sort' ? 'recent' : '';
         });
-        ['ba-r-recruiting', 'ba-r-mine'].forEach(function (id) {
+        ['ba-r-recruiting', 'ba-r-mine', 'ba-r-interest'].forEach(function (id) {
           var el = $('#' + id); if (el) el.checked = false;
         });
         state = { status: '', page: 1 };

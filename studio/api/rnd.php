@@ -54,6 +54,7 @@ bs_route(bs_param_str('act', 'board'), [
             'status'     => bs_param_str('status'),
             'recruiting' => bs_param_str('recruiting') === '1',
             'mine'       => bs_param_str('mine') === '1',
+            'interest'   => bs_param_str('interest') === '1',
             'keyword'    => bs_param_str('keyword'),
             'sort'       => bs_param_str('sort', 'recent'),
             'page'       => bs_param_int('page', 1),

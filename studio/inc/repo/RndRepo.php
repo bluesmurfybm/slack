@@ -1094,6 +1094,13 @@ final class RndRepo
             $p[] = (string)($me['id'] ?? '');
             $p[] = $mid ?? 0;
         }
+        if (!empty($f['interest'])) {
+            // 내가 관심 표시한 과제만. 구성원 명단에 없으면 아무것도 안 나온다.
+            $me  = bs_current_user();
+            $w[] = 'EXISTS (SELECT 1 FROM bs_rnd_interest ri
+                             WHERE ri.project_id = p.id AND ri.member_id = ?)';
+            $p[] = $this->memberIdOf((string)($me['id'] ?? '')) ?? 0;
+        }
 
         return [implode(' AND ', $w), $p];
     }

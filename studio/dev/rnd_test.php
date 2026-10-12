@@ -476,8 +476,16 @@ echo "\n[12] 관심 표시 — 점유를 만들지 않는다\n";
 
 $r = $user->req('/studio/api/rnd.php?act=interest', ['csrf' => true, 'json' => ['id' => $openId]]);
 ok('관심 표시 켜기', ($r['json']['data']['interested'] ?? null) === true, substr($r['body'], 0, 140));
+
+// '관심 과제만' — 내가 표시한 과제만 남는다 (2026-10-12).
+$ids = fn($c) => array_map(static fn($x) => (int)$x['id'],
+    $c->req('/studio/api/rnd.php?act=board&interest=1&size=100')['json']['data']['rows'] ?? []);
+ok('관심 과제만 — 표시한 과제가 나온다', in_array((int)$openId, $ids($user), true));
+ok('관심 과제만 — 표시하지 않은 사람에게는 안 나온다', !in_array((int)$openId, $ids($admin), true));
+
 $r = $user->req('/studio/api/rnd.php?act=interest', ['csrf' => true, 'json' => ['id' => $openId]]);
 ok('다시 누르면 꺼진다', ($r['json']['data']['interested'] ?? null) === false);
+ok('끄면 관심 과제에서 빠진다', !in_array((int)$openId, $ids($user), true));
 
 echo "\n[13] 나가기 — 본인만, 주도자는 못 나간다\n";
 
