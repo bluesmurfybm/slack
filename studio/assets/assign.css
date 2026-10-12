@@ -1549,6 +1549,64 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-rv-h { margin: 16px 0 6px; font-size: 14px; color: var(--ba-ink); }
 .ba-rv-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ba-ink-soft); white-space: pre-wrap; }
 
+/* ── R&D 과제 개요 (2026-10-12) ─────────────────────────────────────
+   위: 사실 카드 다섯(아이콘 + 이름 + 값). 아래: 제목 띠가 있는 글 카드 둘.
+   색은 R&D 보라를 바탕으로 — 대시보드 도넛·사내 현황 카드와 같은 색이다. */
+.ba-rvfs {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px;
+}
+@media (max-width: 1100px) { .ba-rvfs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { .ba-rvfs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ba-rvf {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 12px 14px; background: var(--ba-paper);
+  border: 1px solid var(--ba-line); border-radius: var(--ba-r);
+}
+.ba-rvf__ic {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 34px; height: 34px; border-radius: 10px; background: #efeafc; color: #7a5bd6;
+}
+.ba-rvf__ic svg, .ba-rvc__h svg {
+  width: 18px; height: 18px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.ba-rvf__b { display: flex; flex-direction: column; min-width: 0; }
+.ba-rvf__k { font-size: 11.5px; color: var(--ba-ink-soft); }
+/* 자르지 않고 줄을 넘긴다 — 공개 범위·기간은 잘리면 뜻이 없어진다 */
+.ba-rvf__v {
+  font-size: 14px; font-weight: 700; color: var(--ba-ink);
+  line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere;
+}
+.ba-rvf__s { font-size: 11px; color: var(--ba-ink-soft); }
+
+.ba-rvcards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .ba-rvcards { grid-template-columns: 1fr; } }
+.ba-rvc {
+  --c: #7a5bd6; --c-soft: #f5f2fd;
+  background: var(--ba-paper); border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r); overflow: hidden;
+}
+.ba-rvc--scope { --c: var(--ba-brand); --c-soft: #f0f7f2; }
+.ba-rvc__h {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 16px; background: var(--c-soft); color: var(--c);
+  border-bottom: 1px solid var(--ba-line);
+}
+.ba-rvc__h h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--ba-ink); }
+.ba-rvc__b { padding: 14px 18px 16px; font-size: 13.5px; line-height: 1.75; color: #33425a; }
+
+/* 사람이 적은 글 — [소제목] / - 점 목록 / 1. 번호 목록만 알아본다 */
+.ba-rt__h {
+  margin: 14px 0 4px; font-size: 12.5px; font-weight: 700; color: var(--c, var(--ba-brand));
+  letter-spacing: .01em;
+}
+.ba-rt__h:first-child { margin-top: 0; }
+.ba-rt__p { margin: 0 0 6px; }
+.ba-rt__ul, .ba-rt__ol { margin: 2px 0 8px; padding-left: 20px; }
+.ba-rt__ul li, .ba-rt__ol li { margin: 3px 0; padding-left: 2px; }
+.ba-rt__ul li::marker { color: var(--c, var(--ba-brand)); }
+.ba-rt__ol li::marker { color: var(--c, var(--ba-brand)); font-weight: 700; }
+
 .ba-kvs { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
 .ba-kv { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
 .ba-kv dt { color: var(--ba-ink-soft); margin: 0; }

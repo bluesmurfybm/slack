@@ -5342,19 +5342,84 @@
              '<div class="ba-rnd-head__acts">' + acts.join('') + '</div>';
     }
 
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 개요 (2026-10-12 다시 꾸밈)                                    │
+    // │                                                              │
+    // │ 위: 아이콘이 붙은 사실 카드 다섯. 아래: 제목 띠가 있는 글 카드 │
+    // │ 둘. 글은 사람이 적은 그대로 두되 [소제목] · "- " 점 목록 ·      │
+    // │ "1. " 번호 목록만 알아보게 바꾼다 — 마크다운 전체를 받지 않는다.│
+    // │ **먼저 이스케이프하고** 줄 단위로만 감싸므로 HTML 이 새지 않는다.│
+    // └──────────────────────────────────────────────────────────────┘
+    var RV_ICON = {
+      eye:   '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+      tag:   '<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+      cal:   '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+      gauge: '<path d="M12 14l4-4"/><path d="M3.5 18a9 9 0 1 1 17 0"/>',
+      users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+      goal:  '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+      box:   '<path d="M21 8l-9-5-9 5 9 5zM3 8v8l9 5 9-5V8M12 13v8"/>'
+    };
+    function rvIcon(k) {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true">' + RV_ICON[k] + '</svg>';
+    }
+
+    /** 사람이 적은 글 → 읽기 좋은 블록. 이스케이프가 먼저다. */
+    function richText(src) {
+      var lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
+      var html = '', list = null;
+      function close() { if (list) { html += '</' + list + '>'; list = null; } }
+      function open(tag) { if (list !== tag) { close(); html += '<' + tag + ' class="ba-rt__' + tag + '">'; list = tag; } }
+      lines.forEach(function (raw) {
+        var t = raw.trim(), m;
+        if (!t) { close(); return; }
+        if ((m = /^\[(.+)\]$/.exec(t))) { close(); html += '<h4 class="ba-rt__h">' + esc(m[1]) + '</h4>'; return; }
+        if ((m = /^[-·•*]\s+(.*)$/.exec(t))) { open('ul'); html += '<li>' + esc(m[1]) + '</li>'; return; }
+        if ((m = /^(\d+)[.)]\s+(.*)$/.exec(t))) { open('ol'); html += '<li value="' + m[1] + '">' + esc(m[2]) + '</li>'; return; }
+        close(); html += '<p class="ba-rt__p">' + esc(t) + '</p>';
+      });
+      close();
+      return html || '<p class="ba-rt__p ba-dim">아직 적지 않았습니다.</p>';
+    }
+
     function overview(r) {
-      function row(k, v) {
-        return '<div class="ba-kv"><dt>' + esc(k) + '</dt><dd>' + (v || '—') + '</dd></div>';
+      function fact(icon, k, v, sub) {
+        return '<div class="ba-rvf">' +
+          '<span class="ba-rvf__ic">' + rvIcon(icon) + '</span>' +
+          '<span class="ba-rvf__b"><span class="ba-rvf__k">' + esc(k) + '</span>' +
+          '<span class="ba-rvf__v">' + (v || '—') + '</span>' +
+          (sub ? '<span class="ba-rvf__s">' + sub + '</span>' : '') + '</span></div>';
       }
-      return '<dl class="ba-kvs">' +
-        row('공개 범위', esc(r.visibility_label)) +
-        row('갈래', esc(r.category_label || '')) +
-        row('예상 기간', esc((r.dev_start || '') + (r.dev_end ? ' ~ ' + r.dev_end : ''))) +
-        row('신고 점유율', r.load_cap == null ? '' : esc(String(r.load_cap))) +
-        row('참여', (r.member_count || 0) + '명') +
-        '</dl>' +
-        '<h3 class="ba-rv-h">배경 · 목적</h3><p class="ba-rv-text">' + esc(r.summary || '—') + '</p>' +
-        '<h3 class="ba-rv-h">검토 범위 · 기대 산출물</h3><p class="ba-rv-text">' + esc(r.notes || '—') + '</p>';
+      // 기간은 날짜 둘과 함께 **며칠짜리인지**도 적는다.
+      var days = '';
+      if (r.dev_start && r.dev_end) {
+        var dd = Math.round((new Date(r.dev_end) - new Date(r.dev_start)) / 86400000) + 1;
+        if (dd > 0) days = dd + '일';
+      }
+      // 같은 해면 끝 날짜의 연도를 뺀다 — 칸이 좁아 잘렸다.
+      var endShown = r.dev_end && r.dev_start && r.dev_end.slice(0, 4) === r.dev_start.slice(0, 4)
+        ? r.dev_end.slice(5) : r.dev_end;
+      var period = r.dev_start || r.dev_end
+        ? esc((r.dev_start || '?') + ' ~ ' + (endShown || '?')) : '';
+      // 비어 있으면 '없다' 가 아니라 전역 설정값을 따른다는 뜻이다(010).
+      var cap = r.load_cap == null ? '기본값' : Math.round(Number(r.load_cap) * 100) + '%';
+
+      return '<div class="ba-rvfs">' +
+          fact('eye',   '공개 범위', esc(r.visibility_label)) +
+          fact('tag',   '갈래', esc(r.category_label || '')) +
+          fact('cal',   '예상 기간', period, days) +
+          fact('gauge', '신고 점유율', cap, r.load_cap == null ? '전역 설정을 따름' : '1인 기준 상한') +
+          fact('users', '참여', (r.member_count || 0) + '명') +
+        '</div>' +
+        '<div class="ba-rvcards">' +
+          '<article class="ba-rvc ba-rvc--goal">' +
+            '<header class="ba-rvc__h">' + rvIcon('goal') + '<h3>배경 · 목적</h3></header>' +
+            '<div class="ba-rvc__b">' + richText(r.summary) + '</div>' +
+          '</article>' +
+          '<article class="ba-rvc ba-rvc--scope">' +
+            '<header class="ba-rvc__h">' + rvIcon('box') + '<h3>검토 범위 · 기대 산출물</h3></header>' +
+            '<div class="ba-rvc__b">' + richText(r.notes) + '</div>' +
+          '</article>' +
+        '</div>';
     }
 
     function members(list, r) {
