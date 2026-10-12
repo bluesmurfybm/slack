@@ -1043,6 +1043,10 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-al__fit { text-align: right; }
 .ba-al__fitb { font-variant-numeric: tabular-nums; font-size: 14px; }
 .ba-al__act { text-align: right; }
+/* 보조 고르는 줄 — 담당 줄 바로 밑에 열린다 (2026-10-12) */
+.ba-al__pick td { background: var(--ba-surface); }
+.ba-al__pickbox { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 4px 0; }
+.ba-al__act .ba-mini { white-space: nowrap; }
 .ba-altable tr.is-manual > td { background: #fffdf6; }
 .ba-altable tr.is-orphan > td { background: #fdf5f5; }
 .ba-al__break td {

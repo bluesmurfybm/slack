@@ -3808,6 +3808,9 @@
           '<td class="ba-al__act">' +
             (canEdit && it.role !== 'owner'
               ? '<button type="button" class="ba-mini ba-mini--x" data-a="del">&times;</button>' : '') +
+            // 보조는 담당 줄에서 붙인다. 한 번에 여러 명을 고른다 (2026-10-12).
+            (canEdit && it.role === 'owner'
+              ? '<button type="button" class="ba-mini" data-a="addsup" title="보조 담당자를 붙입니다">+ 보조</button>' : '') +
           '</td>' +
         '</tr>';
       }).join('');
@@ -4168,6 +4171,65 @@
         .then(function () { btn.disabled = false; });
     }
 
+    // ---- 보조 담당자 붙이기 ------------------------------------------------
+    //
+    // 담당 줄 바로 밑에 고르는 줄을 연다. 이미 그 태스크에 들어간 사람
+    // (담당·보조)은 빼고 보여 준다 — 같은 사람을 두 번 넣을 수 없다.
+    function toggleSupPicker(tr, itemId) {
+      var next = tr.nextElementSibling;
+      if (next && next.classList.contains('ba-al__pick')) { next.remove(); return; }
+
+      var it = null;
+      ITEMS.forEach(function (x) { if (x.id === itemId) it = x; });
+      if (!it) return;
+      var inTask = {};
+      ITEMS.forEach(function (x) { if (x.task_id === it.task_id) inTask[x.member_id] = true; });
+      var cand = MEMBERS.filter(function (m) { return !inTask[m.id]; });
+
+      var row = document.createElement('tr');
+      row.className = 'ba-al__pick';
+      row.dataset.task = it.task_id;
+      row.innerHTML = '<td></td><td colspan="7">' +
+        '<div class="ba-al__pickbox">' +
+          '<span class="ba-dim">보조로 붙일 사람</span>' +
+          (cand.length
+            ? cand.map(function (m) {
+                return '<label class="ba-check"><input type="checkbox" value="' + m.id + '">' +
+                       '<span>' + esc(m.emp_name) + '</span></label>';
+              }).join('')
+            : '<span class="ba-cell-none">더 붙일 사람이 없습니다</span>') +
+          '<span class="ba-spacer"></span>' +
+          (cand.length ? '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" data-a="sup-save">보조로 추가</button>' : '') +
+          '<button type="button" class="ba-btn ba-btn--sm" data-a="sup-cancel">닫기</button>' +
+        '</div></td>';
+      tr.parentNode.insertBefore(row, tr.nextSibling);
+    }
+
+    /** 고른 사람을 한 명씩 넣는다. 중간에 실패하면 거기서 멈추고 표를 다시 받는다. */
+    function saveSupports(row, btn) {
+      var ids = $$('input:checked', row).map(function (c) { return parseInt(c.value, 10); });
+      if (!ids.length) { toast('보조로 붙일 사람을 고르세요.', true); return; }
+      var taskId = parseInt(row.dataset.task, 10);
+      btn.disabled = true;
+
+      var last = null;
+      ids.reduce(function (p, mid) {
+        return p.then(function () {
+          return api('api/allocate.php?act=add_item', { method: 'POST', body: {
+            allocation_id: CUR.id, task_id: taskId, member_id: mid, role: 'support'
+          } }).then(function (d) { last = d; });
+        });
+      }, Promise.resolve())
+        .then(function () {
+          apply(last);
+          toast('보조 ' + ids.length + '명을 붙였습니다.');
+        })
+        .catch(function (err) {
+          showError('#ba-al-error', err.message);
+          openVersion(CUR.id);
+        });
+    }
+
     function changeMember(itemId, memberId) {
       var it = null;
       ITEMS.forEach(function (x) { if (x.id === itemId) it = x; });
@@ -4233,9 +4295,16 @@
       var btn = e.target.closest('[data-a]');
       if (!btn) return;
       var tr = btn.closest('tr');
-      if (!tr || !tr.dataset.id) return;
+      if (!tr) return;
+
+      // 보조 고르는 줄. 이 줄에는 data-id 가 없다.
+      if (btn.dataset.a === 'sup-cancel') { tr.remove(); return; }
+      if (btn.dataset.a === 'sup-save')   { saveSupports(tr, btn); return; }
+
+      if (!tr.dataset.id) return;
       var id = parseInt(tr.dataset.id, 10);
 
+      if (btn.dataset.a === 'addsup') { toggleSupPicker(tr, id); return; }
       if (btn.dataset.a === 'why') openWhy(id);
       if (btn.dataset.a === 'del') {
         if (!confirm('이 배정 항목을 지웁니다.')) return;

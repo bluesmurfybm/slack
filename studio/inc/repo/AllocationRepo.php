@@ -606,9 +606,11 @@ final class AllocationRepo
             }
             throw $e;
         }
+        // markAdjusted() 의 UPDATE 를 거치면 lastInsertId() 가 0 이 된다. 먼저 읽는다.
+        $id = (int)$this->pdo->lastInsertId();
 
         $this->markAdjusted($allocationId, $actor);
-        return (int)$this->pdo->lastInsertId();
+        return $id;
     }
 
     public function deleteItem(int $itemId): void

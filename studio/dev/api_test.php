@@ -1488,6 +1488,35 @@ $r = $guest->req('/studio/api/allocate.php?act=update_item', ['csrf' => true, 'j
     'item_id' => $item['id'], 'member_id' => $otherM, 'manual_note' => 'x']]);
 ok('PM 아니면 조정 403', $r['status'] === 403);
 
+// --- 보조 여러 명 (2026-10-12) ------------------------------------------
+// 화면은 고른 사람마다 add_item 을 부른다. 한 태스크에 둘 이상 붙어야 한다.
+$supIds = [];
+foreach ($mlist as $m) {
+    if ($m['id'] !== $otherM && count($supIds) < 2) { $supIds[] = $m['id']; }
+}
+$addedIds = [];
+foreach ($supIds as $sm) {
+    $r = $admin->req('/studio/api/allocate.php?act=add_item', ['csrf' => true, 'json' => [
+        'allocation_id' => $aid3, 'task_id' => $item['task_id'],
+        'member_id' => $sm, 'role' => 'support']]);
+    if ($r['status'] === 200) { $addedIds[] = $r['json']['data']['item_id']; }
+}
+$supN = 0;
+foreach ($r['json']['data']['items'] ?? [] as $x) {
+    if ($x['task_id'] === $item['task_id'] && $x['role'] === 'support') { $supN++; }
+}
+ok('한 태스크에 보조를 둘 붙일 수 있다', count($addedIds) === 2 && $supN >= 2,
+   'added=' . count($addedIds) . ' support=' . $supN);
+ok('추가하면 새 항목 번호를 돌려준다', !in_array(0, $addedIds, true), json_encode($addedIds));
+$r = $admin->req('/studio/api/allocate.php?act=add_item', ['csrf' => true, 'json' => [
+    'allocation_id' => $aid3, 'task_id' => $item['task_id'],
+    'member_id' => $supIds[0], 'role' => 'support']]);
+ok('같은 사람을 두 번 붙일 수는 없다', $r['status'] !== 200, 'status=' . $r['status']);
+foreach ($addedIds as $x) {   // 뒤 시험의 항목 수가 흔들리지 않게 되돌린다
+    $admin->req('/studio/api/allocate.php?act=delete_item',
+                ['csrf' => true, 'json' => ['item_id' => $x]]);
+}
+
 // --- 확정 --------------------------------------------------------------
 $r = $guest->req('/studio/api/allocate.php?act=confirm',
                  ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
