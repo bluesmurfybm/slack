@@ -462,9 +462,16 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                 title="하위를 모두 접습니다. 대분류만 남습니다"
                 aria-pressed="false"><i class="ba-caret ba-caret--up"></i><span>모두 접기</span></button>
         <span class="ba-spacer"></span>
+        <!-- 표를 통째로 감춘다. 접기(대분류만 남김)와 달리 줄이 하나도 안 남아
+             아래 배정 표로 바로 내려갈 수 있다 (2026-10-12). 보기만 바꾼다. -->
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--ghost" id="ba-w-hide"
+                aria-controls="ba-w-tablewrap" aria-expanded="true"><span>표 숨기기</span></button>
       </div>
+      <p class="ba-panel__hint" id="ba-w-hidden-note" hidden>
+        WBS 표를 숨겨 두었습니다. 자료는 그대로입니다 — [표 펼치기] 로 다시 봅니다.
+      </p>
 
-      <div class="ba-table-wrap">
+      <div class="ba-table-wrap" id="ba-w-tablewrap">
         <table class="ba-table ba-wbs" id="ba-w-table">
           <thead>
             <tr>

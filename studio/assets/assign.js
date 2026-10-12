@@ -3388,6 +3388,30 @@
       });
     }
 
+    // 표 통째로 숨기기. 프로젝트마다 이 브라우저에 기억한다 — 다시 들어와도
+    // 숨긴 채면 배정 표로 바로 간다. 저장소가 막혀 있으면 펼친 채로 시작한다.
+    var hideBtn = $('#ba-w-hide');
+    function setTableHidden(on, keep) {
+      var wrap = $('#ba-w-tablewrap');
+      if (!wrap || !hideBtn) { return; }
+      wrap.hidden = on;
+      $('#ba-w-hidden-note').hidden = !on;
+      hideBtn.querySelector('span').textContent = on ? '표 펼치기' : '표 숨기기';
+      hideBtn.setAttribute('aria-expanded', on ? 'false' : 'true');
+      if (foldBtn) { foldBtn.disabled = on; }
+      if (keep) {
+        try { localStorage.setItem('bs.wbs.hide.' + PID, on ? '1' : '0'); } catch (e) { /* 무시 */ }
+      }
+    }
+    if (hideBtn) {
+      hideBtn.addEventListener('click', function () {
+        setTableHidden(!$('#ba-w-tablewrap').hidden, true);
+      });
+      var hid = false;
+      try { hid = localStorage.getItem('bs.wbs.hide.' + PID) === '1'; } catch (e) { /* 무시 */ }
+      setTableHidden(hid, false);
+    }
+
     // ---- 붙이기 -----------------------------------------------------------
     if (CAN_EDIT) {
       $('#ba-w-parse').addEventListener('click', function () { parseDocs(false); });
