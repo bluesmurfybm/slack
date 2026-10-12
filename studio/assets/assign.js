@@ -1252,6 +1252,24 @@
   /** 2단계에서 고른 후보를 담는 자리. **2·3단계가 같은 키를 봐야 한다.** */
   var PICK_KEY = 'ba.picked.';
 
+  /**
+   * 이 탭에 담아 둔 선택. **null 과 [] 는 다른 뜻이다.**
+   *   null — 이 탭에서 아직 고른 적이 없다(새 탭·브라우저 재시작). 지난 배정안에서 되살린다
+   *   []   — [선택 해제] 로 일부러 비웠다. 되살리지 않는다
+   */
+  function readPick(pid) {
+    try {
+      var s = sessionStorage.getItem(PICK_KEY + pid);
+      return s === null ? null : JSON.parse(s);
+    } catch (e) { return null; }
+  }
+
+  /** 가장 최근 배정안이 쓴 후보. 고르지 않고 산출했으면 []. */
+  function lastPick(rows) {
+    var p = rows && rows[0] && rows[0].params;
+    return (p && p.member_ids ? p.member_ids : []).map(Number);
+  }
+
   function initProjectView() {
     var root = $('#ba-pv');
     if (!root) return;
@@ -1284,14 +1302,31 @@
     // **DB 저장은 Step3(배정안 생성) 에서 한다** — 그때 bs_allocation.params_json
     // 에 들어간다. 여기서 저장하면 확정 전 선택이 영구 기록으로 남는다.
     function loadPicked() {
-      try {
-        return JSON.parse(sessionStorage.getItem(PICK_KEY + PID) || '[]');
-      } catch (e) { return []; }
+      return readPick(PID) || [];
     }
     function savePicked() {
       try {
         sessionStorage.setItem(PICK_KEY + PID, JSON.stringify(picked));
       } catch (e) { /* 사생활 보호 모드 등 — 그냥 둔다 */ }
+    }
+
+    // 탭 저장소는 탭을 닫으면 사라진다. 다시 들어오면 체크가 모두 풀려
+    // 있었고, 그대로 3단계를 돌리면 **전원**이 대상이 됐다 (2026-10-12).
+    // DB 에 새로 저장하지 않고, 이미 남아 있는 마지막 배정안의 명단을 쓴다.
+    if (readPick(PID) === null) {
+      api('api/allocate.php?' + qs({ act: 'versions', project_id: PID }))
+        .then(function (d) {
+          var ids = lastPick(d.rows);
+          if (!ids.length || readPick(PID) !== null) return;   // 그 사이 직접 골랐으면 두기
+          picked = ids;
+          savePicked();
+          $$('.ba-ct__pick').forEach(function (c) {
+            c.checked = picked.indexOf(parseInt(c.dataset.mid, 10)) >= 0;
+          });
+          updatePicked();
+          toast(d.rows[0].version + '차 배정안에 쓴 후보 ' + ids.length + '명을 다시 불러왔습니다.');
+        })
+        .catch(function () { /* 못 불러오면 빈 채로 둔다 */ });
     }
 
     // ---- 조건 -----------------------------------------------------------
@@ -3406,6 +3441,7 @@
     var GROUPS   = [];     // 배정 대상이 아닌 상위 분류. 자리만 잡아 준다
     var MEMBERS  = [];     // 담당자 선택지
     var WEIGHTS  = null;
+    var LAST_PICK = [];    // 가장 최근 배정안이 쓴 후보
     var loaded   = false;
 
     var W_LABEL = {
@@ -3441,6 +3477,7 @@
       loaded = true;
       api('api/allocate.php?' + qs({ act: 'versions', project_id: PID }))
         .then(function (d) {
+          LAST_PICK = lastPick(d.rows);
           renderVersions(d.rows || [], d.confirmed_version);
           if (d.rows && d.rows.length) openVersion(d.rows[0].id);
           else renderEmpty();
@@ -3979,6 +4016,21 @@
 
     // ---- 동작 -------------------------------------------------------------
     function propose(weights, keepManual) {
+      // 2단계에서 고른 후보. 이 탭에서 고른 적이 없으면(null) 지난 배정안의
+      // 명단을 이어 쓴다 — 2단계를 거치지 않고 바로 여기로 와도 같게.
+      var pick = readPick(PID);
+      if (pick === null) {
+        pick = LAST_PICK.slice();
+        if (pick.length) {
+          try { sessionStorage.setItem(PICK_KEY + PID, JSON.stringify(pick)); } catch (e) { /* 무시 */ }
+        }
+      }
+      // 아무도 안 고른 채 산출하면 전원이 대상이 된다. 모르고 그렇게 되지 않게 묻는다.
+      if (!pick.length && !confirm('2단계에서 고른 후보가 없습니다.\n'
+                                   + '배정 가능한 전원을 대상으로 산출합니다. 계속할까요?')) {
+        return;
+      }
+
       var btn = $('#ba-al-propose');
       btn.disabled = true;
       clearError('#ba-al-error');
@@ -3996,12 +4048,8 @@
       // │                                                          │
       // │ 아무도 안 골랐으면 안 보낸다 — 그때는 "전원"이 맞다.       │
       // └──────────────────────────────────────────────────────────┘
-      // 2단계와 3단계는 다른 함수라 loadPicked() 를 못 부른다. 저장소에서
-      // 직접 읽는다 — 키는 그쪽과 **반드시 같아야** 하므로 상수로 둔다.
-      var pick = [];
-      try {
-        pick = JSON.parse(sessionStorage.getItem(PICK_KEY + PID) || '[]');
-      } catch (e) { pick = []; }
+      // 2단계와 3단계는 다른 함수라 loadPicked() 를 못 부른다. 둘 다
+      // readPick() 으로 읽는다 — 키가 **반드시 같아야** 한다.
       if (pick.length) { body.member_ids = pick; }
 
       // ┌──────────────────────────────────────────────────────────┐
