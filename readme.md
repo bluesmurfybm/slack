@@ -224,17 +224,15 @@ push_send([
 - "다음에" 를 누르면 그 브라우저에서는 14일 동안 저절로 뜨지 않는다. 포털 사용자 메뉴의 "📲 앱으로 설치" 로는 언제든 다시 부를 수 있다.
 - 이미 설치한 앱으로 열었으면 띄우지 않는다. https·localhost 가 아니면 설치 대상이 아니라 뜨지 않는다.
 
-### 시험 기간
+### 시험 도구
 
-- 모듈이 보내는 알림은 `core/push.php` 의 `PUSH_TEST_ALLOW` 에 든 계정에만 **발송**된다(지금 `akddd@naddle.net`, `akddd@bluesoft.co.kr`).
-  마이페이지 알림 칸도 이 계정에만 보인다. 시험이 끝나면 `[]` 로 비우면 전원에게 열린다.
+알림은 포털 사용자 전원에게 열려 있다. 받을지 말지는 사람마다 마이페이지에서 종류별로 정한다.
+
 - `dev/push_test.php` — 브라우저에서 종류·제목·본문·이동 주소를 넣고 보내 본다. 로그인한 사람은 누구나 열 수 있다.
-  - 받는 사람은 처음에 본인이 골라져 있다. 포털 관리자와 시험 허용 계정은 여러 사람을 골라 보낼 수 있고,
-    그 밖의 사람은 본인에게만 보낸다.
-  - 여기서 고른 사람에게는 시험 허용 목록을 거치지 않고 간다(`push_send` 의 `ignore_allowlist`).
-    그 종류를 꺼 둔 사람은 빠진다. 모듈 코드에서는 `ignore_allowlist` 를 쓰지 않는다.
+  - 받는 사람은 처음에 본인이 골라져 있다. 포털 관리자는 여러 사람을 골라 보낼 수 있고,
+    그 밖의 사람은 본인에게만 보낸다. 그 종류를 꺼 둔 사람은 빠진다.
   - 결과(푸시 서비스 HTTP 응답)와 발송 기록을 보여 준다. 다른 사람의 구독 현황과 전체 기록은 관리자에게만 보인다.
-- `php dev/push_cli.php --kind test.ping --title 시험 --body 본문 --url dti/index.php --to akddd@naddle.net`
+- `php dev/push_cli.php --kind test.ping --title 시험 --body 본문 --url dti/index.php --to akddd@bluesoft.co.kr`
 - `php dev/push_crypto_test.php` — 서명(ES256)·암호화(RFC 8291) 왕복과 `push_send()` 의 뒷정리 규칙. DB·네트워크를 쓰지 않는다.
 
 ### 구성 요소

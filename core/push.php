@@ -39,14 +39,6 @@
 
 require_once __DIR__ . '/db.php';
 
-/**
- * 시험 기간 동안 **실제로 발송되는** 계정.
- *
- * 비어 있으면 종류를 켜 둔 전원에게 간다. 구독·설정은 누구나 할 수 있고
- * 막는 것은 발송뿐이다. 시험이 끝나면 [] 로 비운다.
- */
-const PUSH_TEST_ALLOW = ['akddd@naddle.net', 'akddd@bluesoft.co.kr'];
-
 /** VAPID 'sub'. 푸시 서비스(구글·모질라·애플)가 문제 생기면 연락할 곳. */
 const PUSH_VAPID_SUBJECT = 'mailto:akddd@bluesoft.co.kr';
 
@@ -74,20 +66,6 @@ function push_b64url_decode(string $s): string
     if ($pad) $s .= str_repeat('=', 4 - $pad);
     $out = base64_decode($s, true);
     return $out === false ? '' : $out;
-}
-
-/** 시험 기간 허용 목록(소문자). */
-function push_allowlist(): array
-{
-    return array_values(array_map('strtolower', PUSH_TEST_ALLOW));
-}
-
-/** 이 계정으로 실제 발송이 되는가. 마이페이지가 알림 칸을 보일지 정할 때 쓴다. */
-function push_can_receive(?string $email): bool
-{
-    $allow = push_allowlist();
-    if (!$allow) return true;
-    return $email !== null && in_array(strtolower(trim($email)), $allow, true);
 }
 
 // =====================================================================
@@ -484,14 +462,13 @@ function push_set_pref(int $userId, string $kind, bool $enabled): void
 }
 
 /**
- * 이 종류를 받을 **사람** 목록 — 종류를 켜 두었고(고른 적 없으면 json default) 허용 목록 안인 사람.
+ * 이 종류를 받을 **사람** 목록 — 종류를 켜 둔 사람(고른 적 없으면 json default).
  * 기기가 없어도 들어간다. 알림함(portal_notification)은 사람 기준이기 때문이다.
  *
  * @param array|string|null $to  이메일·portal_users.id 의 배열(또는 콤마 문자열). null 이면 켜 둔 전원
- * @param int $skipped           허용 목록 때문에 빠진 사람 수를 돌려준다
  * @return array<int,array{id:int,email:string}>
  */
-function push_target_users(string $kind, $to = null, int &$skipped = 0, bool $ignoreAllow = false): array
+function push_target_users(string $kind, $to = null): array
 {
     $kindRow = push_kind($kind);
     if (!$kindRow) return [];
@@ -519,12 +496,7 @@ function push_target_users(string $kind, $to = null, int &$skipped = 0, bool $ig
 
     $st = portal_db()->prepare($sql);
     $st->execute($args);
-    $out = [];
-    foreach ($st->fetchAll() as $u) {
-        if (!$ignoreAllow && !push_can_receive($u['email'])) { $skipped++; continue; }
-        $out[] = ['id' => (int)$u['id'], 'email' => $u['email']];
-    }
-    return $out;
+    return array_map(static fn ($u) => ['id' => (int)$u['id'], 'email' => $u['email']], $st->fetchAll());
 }
 
 /** 이 사람들의 구독(기기) 전부. */
@@ -747,15 +719,13 @@ function push_http_post(string $endpoint, string $body, array $headers): array
  *   to      이메일·portal_users.id 배열 또는 콤마 문자열. 생략하면 이 종류를 켜 둔 전원
  *   ttl     초. 기본 하루
  *   urgency very-low|low|normal|high
- *   ignore_allowlist  true 면 PUSH_TEST_ALLOW 를 거치지 않는다. 시험 발송 페이지가 **로그인한 본인에게**
- *           보낼 때만 쓴다 — 모듈에서 쓰면 시험 기간 제한이 풀리므로 쓰지 않는다
  *   _subs   (시험용) DB 대신 쓸 구독 행 배열 — 주면 DB 를 전혀 건드리지 않는다
  *   _post   (시험용) push_http_post 대신 부를 함수
  *
  * @return array{sent:int, failed:int, pruned:int, skipped:int, notified:int, recipients:int, detail:array, error?:string}
  *   notified   = 알림함에 남긴 사람 수(기기가 없어도 남는다)
  *   recipients = 보낸 기기 수
- *   skipped    = 허용 목록 때문에 빠진 사람 수, 또는 종류를 몰라 통째로 건너뛰었으면 1
+ *   skipped    = 종류를 모르거나 제목이 비어 통째로 건너뛰었으면 1
  */
 function push_send(array $opts): array
 {
@@ -785,10 +755,7 @@ function push_send(array $opts): array
         // 사람마다 페이로드가 다르다(알림함 번호). 시험(_subs)은 DB 없이 한 벌만 쓴다.
         $payloads = [];
         if ($useDb) {
-            $skipped = 0;
-            $users = push_target_users($kind, $opts['to'] ?? null, $skipped, !empty($opts['ignore_allowlist']));
-            $r['skipped'] = $skipped;
-            foreach ($users as $u) {
+            foreach (push_target_users($kind, $opts['to'] ?? null) as $u) {
                 $nid = push_inbox_add($u['id'], $kind, $title, (string)($opts['body'] ?? ''), $url);
                 if ($nid) $r['notified']++;
                 $payloads[$u['id']] = push_payload(['nid' => $nid] + $opts);

@@ -2,7 +2,7 @@
 /**
  * 웹 푸시 — 내 구독과 종류별 설정. 본인 것만 다룬다.
  *
- *   GET                       공개키 · 발송 대상 여부 · 종류 목록(켜짐 여부) · 내 기기 수
+ *   GET                       공개키 · 종류 목록(켜짐 여부) · 내 기기 목록
  *   POST   { subscription }   이 기기 구독 저장 (PushSubscription.toJSON())
  *   DELETE { endpoint }       이 기기 구독 지우기 — endpoint 가 길어 쿼리가 아니라 본문으로 받는다
  *   DELETE { id }             내 기기 목록에서 하나 지우기(다른 기기)
@@ -42,7 +42,6 @@ function push_api_payload(array $u): array
     }
     return [
         'public_key'  => push_public_key(),
-        'can_receive' => push_can_receive($u['email']),
         'kinds'       => $kinds,
         'devices'     => count($devices),
         // 내 기기 목록. hash 로 화면이 '지금 이 기기' 를 가린다

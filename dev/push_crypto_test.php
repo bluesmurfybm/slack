@@ -155,10 +155,7 @@ ok('모르는 종류 → skipped', [$r['sent'], $r['skipped']], [0, 1]);
 $r = push_send(['kind' => 'test.ping', 'title' => '  ', '_subs' => [$row], '_post' => fn() => ['status' => 201]]);
 ok('빈 제목 → skipped', [$r['sent'], $r['skipped']], [0, 1]);
 
-echo "\n[8] 허용 목록 · 종류\n";
-ok('대소문자 무시', push_can_receive('AKDDD@Naddle.net'), true);
-ok('목록 밖', push_can_receive('someone@bluesoft.co.kr'), PUSH_TEST_ALLOW ? false : true);
-ok('null', push_can_receive(null), PUSH_TEST_ALLOW ? false : true);
+echo "\n[8] 종류\n";
 ok('test.ping 등록됨', push_kind('test.ping')['default'], true);
 $keys = array_keys(push_kinds());
 ok('key 는 kind 컬럼(40자) 안', max(array_map('strlen', $keys)) <= 40, true);

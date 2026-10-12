@@ -3,10 +3,9 @@
  * 웹 푸시 시험 발송 — 브라우저에서 직접 보내 보고 결과(푸시 서비스 응답 코드)를 본다.
  *
  * 받는 사람은 처음에 **로그인한 본인**이 골라져 있다.
- *  - 포털 관리자와 시험 허용 계정(PUSH_TEST_ALLOW)은 여러 사람을 골라 보낼 수 있다.
+ *  - 포털 관리자는 여러 사람을 골라 보낼 수 있다.
  *  - 그 밖의 사람은 본인에게만 보낸다. 아무나 남에게 알림을 보내면 안 되기 때문이다.
- * 여기서 고른 사람에게는 시험 허용 목록을 거치지 않고 보낸다(직접 고른 것이므로).
- * 다만 받는 사람이 그 종류를 꺼 두었으면 빠진다 — 본인 설정이 먼저다.
+ * 받는 사람이 그 종류를 꺼 두었으면 빠진다 — 본인 설정이 먼저다.
  *
  * 다른 사람의 구독 현황과 발송 기록은 포털 관리자에게만 보인다. 일반 사용자는
  * 자기 기록만 본다.
@@ -24,8 +23,8 @@ if (!$u) {
     exit;
 }
 $isAdmin = board_is_admin($u['email']);
-// 여러 사람에게 보낼 수 있는 사람 — 관리자, 시험 허용 계정
-$canPick = $isAdmin || (PUSH_TEST_ALLOW && push_can_receive($u['email']));
+// 여러 사람에게 보낼 수 있는 사람 — 포털 관리자
+$canPick = $isAdmin;
 $selfId  = (int)$u['id'];
 
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
@@ -72,7 +71,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'url'   => $form['url'],
             'tag'   => $form['tag'],
             'to'    => $toIds,              // 고를 수 없는 사람은 언제나 본인 하나
-            'ignore_allowlist' => true,     // 직접 고른 사람이므로 시험 허용 목록을 거치지 않는다
         ]);
     }
 }
@@ -96,8 +94,6 @@ $logSql = "SELECT l.*, u.email FROM portal_push_log l LEFT JOIN portal_users u O
 $logSt = $pdo->prepare($logSql);
 $logSt->execute($isAdmin ? [] : [(int)$u['id']]);
 $logs = $logSt->fetchAll();
-$allowSubscribed = 0;
-foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])) $allowSubscribed++;
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -151,9 +147,6 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
     <div><?php if ($myDevices): ?>
         <?= h(implode(', ', array_column($myDevices, 'label'))) ?> <small>(<?= count($myDevices) ?>대)</small>
       <?php else: ?><span class="bad">없음</span> <small>— 아래 "이 기기에서 알림 받기" 를 먼저 누르세요</small><?php endif; ?></div>
-    <label>시험 허용 목록</label>
-    <div><?= PUSH_TEST_ALLOW ? h(implode(', ', PUSH_TEST_ALLOW)) : '<b>비어 있음 — 전원 발송</b>' ?>
-      <small> · 모듈이 보내는 알림에만 적용됩니다<?= $isAdmin ? ' · 허용·구독 중인 계정 ' . $allowSubscribed . '명' : '' ?></small></div>
     <label>VAPID 키</label>
     <div><?php if (is_file($vapidPath)): ?>
         <span class="ok">있음</span> <small><?= h(date('Y-m-d H:i', filemtime($vapidPath))) ?> 생성</small>
@@ -207,7 +200,7 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
           </label>
         <?php endforeach; ?>
       </div>
-      <small>고른 사람에게는 시험 허용 목록과 상관없이 갑니다. 그 종류를 꺼 둔 사람은 빠집니다.</small>
+      <small>그 종류의 알림을 꺼 둔 사람은 빠집니다.</small>
     </div>
     <?php else: ?>
     <div><b><?= h($u['name']) ?></b> <small>(<?= h($u['email']) ?>) — 본인에게만 보낼 수 있습니다</small></div>
@@ -247,12 +240,11 @@ foreach ($accounts as $a) if ($a['devices'] > 0 && push_can_receive($a['email'])
 <?php if ($isAdmin): ?>
 <h2>계정별 구독 <small>(관리자)</small></h2>
 <div class="card"><table>
-  <tr><th>이름</th><th>이메일</th><th>기기</th><th>마지막 성공</th><th>시험 발송</th></tr>
+  <tr><th>이름</th><th>이메일</th><th>기기</th><th>마지막 성공</th></tr>
   <?php foreach ($accounts as $a): ?>
     <tr class="<?= $a['devices'] ? '' : 'muted' ?>">
       <td><?= h($a['name']) ?></td><td><?= h($a['email']) ?></td><td><?= (int)$a['devices'] ?></td>
-      <td><?= h($a['last_ok'] ?? '—') ?></td>
-      <td><?= push_can_receive($a['email']) ? '<span class="ok">받음</span>' : '<span class="muted">제외</span>' ?></td></tr>
+      <td><?= h($a['last_ok'] ?? '—') ?></td></tr>
   <?php endforeach; ?>
 </table></div>
 <?php endif; ?>

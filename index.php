@@ -6,7 +6,6 @@
  *    PHP가 세션을 먼저 확인하고 처음부터 올바른 화면 상태로 HTML을 내려준다.
  */
 require_once __DIR__ . '/core/auth.php';
-require_once __DIR__ . '/core/push.php';
 require_once __DIR__ . '/core/pwa.php';
 // 로그인 상태에 따라 매번 다르게 그려지는 페이지라 브라우저/중간 캐시에 절대 남으면 안 됨.
 // 캐시된 옛 버전이 남아 있으면 "저장 후 대시보드로 안 돌아간다"/"그리드가 가끔 안 보인다" 처럼
@@ -23,8 +22,6 @@ $__current = $__u ? [
     'slack_email' => $__u['slack_email'] ?? null,
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
-    // 웹 푸시 시험 기간에는 허용 목록의 계정에만 마이페이지 알림 칸을 보인다(core/push.php PUSH_TEST_ALLOW)
-    'push_ok'     => push_can_receive($__u['email']),
 ] : null;
 require_once __DIR__ . '/core/worksystems.php';
 require_once __DIR__ . '/core/board.php';
@@ -133,9 +130,9 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         <button type="button" class="bg-btn" id="bgBtn" onclick="toggleBg()"
                 title="대시보드 배경" aria-label="대시보드 배경 바꾸기"></button>
 <?php endif; ?>
-        <!-- 알림함. 시험 기간에는 알림을 받는 계정(push_ok)에만 보인다. 안 읽은 수는 오른쪽 위 숫자.
+        <!-- 알림함. 안 읽은 수는 오른쪽 위 숫자.
              배경 단추와 달리 로그인 전에도 그려 둔다 — 로그인 직후(홈 화면 앱은 늘 이 경로) renderShell 이 보이게 한다. -->
-        <button type="button" class="bg-btn nf-btn<?= empty($__current['push_ok']) ? ' hidden' : '' ?>" id="nfBtn"
+        <button type="button" class="bg-btn nf-btn<?= $__current ? '' : ' hidden' ?>" id="nfBtn"
                 onclick="showNotifs()" title="알림" aria-label="알림">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           <span class="nf-badge hidden" id="nf-badge"></span>
@@ -636,7 +633,7 @@ function renderShell(){
   document.getElementById("hero-hi").textContent=`${current.name}님, 환영합니다`;
   // 로그인 직후에도 맞게 — 서버가 그린 값은 로그인 전 상태일 수 있다
   const nfBtn=document.getElementById("nfBtn");
-  if(nfBtn) nfBtn.classList.toggle("hidden", !current.push_ok);
+  if(nfBtn) nfBtn.classList.remove("hidden");
   refreshNotifBadge();
 }
 
@@ -742,7 +739,7 @@ window.addEventListener("load", syncInstallMenu);
    여기서 누르면 읽음으로 바꾼 뒤 그 주소로 간다. */
 let nfItems=[], nfMore=false;
 async function refreshNotifBadge(){
-  if(!current || !current.push_ok) return;
+  if(!current) return;
   try{
     const d=await bapi("api/notifications.php?count=1");
     paintNotifBadge(d.unread);
@@ -843,18 +840,17 @@ async function deleteReadNotifs(){
 }
 
 /* ---- 웹 푸시 알림 (마이페이지) ----
-   서버는 api/push.php, 브라우저 쪽 구독은 pwa.js 의 window.bluePush.
-   시험 기간에는 허용된 계정(current.push_ok)에만 보인다. */
+   서버는 api/push.php, 브라우저 쪽 구독은 pwa.js 의 window.bluePush. */
 let pushInfo=null;
 async function loadPushPanel(){
   const box=document.getElementById("pf-push");
   // pwa.js 는 defer 라 이 화면 스크립트보다 늦게 돈다. 첫 화면이 곧바로 마이페이지면
   // (초기 비번, ?view=profile) 아직 bluePush 가 없다 — 다 불러온 뒤 다시 그린다.
-  if(current && current.push_ok && !window.bluePush && document.readyState!=="complete"){
+  if(!window.bluePush && document.readyState!=="complete"){
     window.addEventListener("load", loadPushPanel, {once:true});
     return;
   }
-  const can=!!(current && current.push_ok) && !!window.bluePush;
+  const can=!!window.bluePush;
   box.classList.toggle("hidden", !can);
   if(!can) return;
   try{
