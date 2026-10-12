@@ -147,7 +147,18 @@ final class AllocationEngine
         if ($pConc > 0)  { $flags[] = 'concentrated'; }
         if ($bGroup > 0) { $flags[] = 'same_group'; }
 
-        $fit = $base - $pOver - $pConc + $bGroup;
+        // --- 사람이 준 가점 (024, 2026-10-12) --------------------------------
+        //
+        // 2단계 후보 표의 ★ 우선 후보와 가감점. 계산값(base·감점·가산)과
+        // **따로 담아** 근거에 갈라 적는다 — 섞으면 그 점수가 잰 값인지 사람의
+        // 판단인지 알 수 없다. 저장하지 않는다(종합 점수를 저장하지 마라).
+        $sh    = $context['shares'][$member['member_id']] ?? [];
+        $human = (!empty($sh['priority']) ? BS_ALLOC_PRIORITY_BONUS : 0.0)
+               + (float)($sh['fit_adjust'] ?? 0);
+        if (!empty($sh['priority'])) { $flags[] = 'priority'; }
+        if (!empty($sh['fit_adjust'])) { $flags[] = 'fit_adjust'; }
+
+        $fit = $base - $pOver - $pConc + $bGroup + $human;
         $fit = max(0.0, min(100.0, $fit));
 
         return [
@@ -156,6 +167,7 @@ final class AllocationEngine
             'parts'     => array_map(static fn($v) => round($v, 2), $parts),
             'penalty'   => round($pOver + $pConc, 2),
             'bonus'     => round($bGroup, 2),
+            'human'     => round($human, 2),
             'evidence'  => $df['evidence'],
             'flags'     => $flags,
         ];
@@ -1440,6 +1452,15 @@ final class AllocationEngine
         $adj = [];
         if ($fit['penalty'] > 0) { $adj[] = '감점 ' . $this->num($fit['penalty']); }
         if ($fit['bonus'] > 0)   { $adj[] = '가산 ' . $this->num($fit['bonus']); }
+        // 사람이 준 가점은 **따로** 적는다 — 잰 값으로 읽히지 않게.
+        if (!empty($fit['human'])) {
+            $sh  = $ctx['shares'][$member['member_id']] ?? [];
+            $why = [];
+            if (!empty($sh['priority']))   { $why[] = '★ 우선 후보 +' . $this->num(BS_ALLOC_PRIORITY_BONUS); }
+            if (!empty($sh['fit_adjust'])) { $why[] = '가감점 ' . sprintf('%+d', (int)$sh['fit_adjust']); }
+            $adj[] = '사람이 준 가점 ' . sprintf('%+g', $fit['human'])
+                   . ($why ? '(' . implode(', ', $why) . ')' : '');
+        }
         $lines[] = '적합도 ' . $this->num($fit['fit_score'])
                  . ' = ' . implode(' / ', $bits) . ' 가중평균'
                  . ($adj ? ' · ' . implode(', ', $adj) : '') . '.';

@@ -1702,10 +1702,10 @@
           '<td><input type="checkbox" class="ba-ct__pick" data-mid="' + r.member_id + '"' +
             (on ? ' checked' : '') + ' aria-label="후보 선택"></td>' +
           '<td class="ba-ct__name">' +
-            // ★ 우선 후보 (024). 표에서 위로 올린다. 배정 엔진은 읽지 않는다.
+            // ★ 우선 후보 (024). 표에서 위로 올리고, 3단계 엔진이 적합도에 +10 을 더한다.
             '<button type="button" class="ba-star' + (r.priority ? ' is-on' : '') +
               '" data-star="' + r.member_id + '" aria-pressed="' + (r.priority ? 'true' : 'false') +
-              '" title="' + (r.priority ? '우선 후보 — 눌러서 끄기' : '우선 후보로 표시') + '">' +
+              '" title="' + (r.priority ? '우선 후보 — 배정 때 적합도 +10. 눌러서 끄기' : '우선 후보로 표시 — 배정 때 적합도 +10') + '">' +
               (r.priority ? '★' : '☆') + '</button>' +
             '<button type="button" class="ba-linkish" data-detail="' +
             r.member_id + '">' + esc(r.emp_name) + '</button></td>' +
@@ -1747,7 +1747,7 @@
                  '계산 ' + Number(r.fit_score).toFixed(0) + ' ' + (adj > 0 ? '+' : '') + adj + ' 수동</span>'
              : '') +
         '<select class="ba-input ba-ct__adjsel' + (adj ? ' is-on' : '') + '" data-adjust="' +
-          r.member_id + '" title="적합도 가감점 — 계산값은 그대로 두고 더해서 보여 줍니다">' +
+          r.member_id + '" title="적합도 가감점 — 계산값은 그대로 두고 더해서 보여 주며, 배정 때도 그만큼 더합니다">' +
           opts + '</select>';
     }
 

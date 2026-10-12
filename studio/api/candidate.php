@@ -255,7 +255,8 @@ bs_route(bs_param_str('act', 'list'), [
         bs_json_ok([
             'member_id' => $memberId,
             'priority'  => $on,
-            'message'   => $on ? '우선 후보로 표시했습니다.' : '우선 후보 표시를 지웠습니다.',
+            'message'   => ($on ? '우선 후보로 표시했습니다. 배정 때 적합도에 +10 을 더합니다.'
+                                 : '우선 후보 표시를 지웠습니다.') . ' 배정안을 다시 산출해야 반영됩니다.',
         ]);
     },
 
@@ -274,7 +275,7 @@ bs_route(bs_param_str('act', 'list'), [
             'member_id'  => $memberId,
             'fit_adjust' => $now,
             'message'    => $now === null ? '가감점을 지웠습니다.'
-                          : sprintf('적합도에 %+d 점을 더해 보여 줍니다. 계산값은 그대로입니다.', $now),
+                          : sprintf('적합도에 %+d 점을 더합니다(배정 때도). 계산값은 그대로이고, 배정안을 다시 산출해야 반영됩니다.', $now),
         ]);
     },
 

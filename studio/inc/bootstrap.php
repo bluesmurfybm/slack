@@ -608,6 +608,14 @@ const BS_ALLOC_MAX_PASSES = 20;
  */
 const BS_ALLOC_STICK_EPS = 3.0;
 
+/**
+ * ★ 우선 후보의 배정 가점 (024, 2026-10-12). 2단계에서 ★ 을 붙인 사람에게
+ * 3단계 엔진이 적합도에 더한다. 1·2위 점수차가 2~3점이라 10점이면 확실히
+ * 더 받는다. 가감점(fit_adjust)도 같은 자리에 그대로 더한다 — 근거 화면에는
+ * 계산값과 갈라 "사람이 준 가점" 으로 적는다.
+ */
+const BS_ALLOC_PRIORITY_BONUS = 10.0;
+
 /** bs_allocation.status */
 const BS_ALLOC_STATUS = [
     'proposed'  => '산출됨',

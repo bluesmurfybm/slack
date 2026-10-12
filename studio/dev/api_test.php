@@ -3470,9 +3470,9 @@ ok('★ 접기 단추는 하나다', str_contains($page, 'id="ba-w-fold"')
 ok('★ 지금 상태의 반대를 적는다', str_contains($js, 'function syncFoldBtn')
    && str_contains($js, "folded ? '모두 펼치기' : '모두 접기'"));
 ok('그리는 자리에서 이름을 맞춘다',
-   (bool)preg_match('/function render\(\) \{\s*(\/\/[^
-]*
-\s*)*syncFoldBtn\(\);/', $js),
+   // 줄바꿈을 글자 그대로 넣지 않는다 — 이 파일이 CRLF 로 내려받히면
+   // 패턴이 \r\n 을 요구하게 돼 LF 인 assign.js 와 안 맞았다 (2026-10-12).
+   (bool)preg_match('/function render\(\) \{\s*(\/\/[^\r\n]*\R\s*)*syncFoldBtn\(\);/', $js),
    '접는 길이 여럿이라 한 군데서 맞춰야 안 갈린다');
 
 // ┌──────────────────────────────────────────────────────────────────┐

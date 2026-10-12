@@ -1370,5 +1370,46 @@ $ghost = $engine->propose($pid, ['prev_owner' => [999999 => $someone]]);
 ok('없는 태스크·사람은 버린다', $ghost['meta']['stick'] === null);
 
 // =====================================================================
+echo "\n[16] ★ 우선 후보·가감점이 배정에 반영된다\n";
+// 2단계에서 사람이 준 판단이 3단계 엔진에도 먹어야 한다 (2026-10-12).
+$hActor = ['id' => 'pm@x.kr', 'name' => 'PM'];
+$fitOf = static function (array $r, int $mid): array {
+    $s = []; foreach ($r['items'] as $it) { if ($it['member_id'] === $mid) { $s[] = $it; } }
+    return $s;
+};
+$h0   = $engine->propose($pid, []);
+$cnt0 = [];
+foreach ($h0['items'] as $it) { $cnt0[$it['member_id']] = ($cnt0[$it['member_id']] ?? 0) + 1; }
+// 배정 대상(엔진이 점수를 내는 사람) 중 가장 적게 받은 사람에게 ★ — 올라가는 것이 보이게.
+$low  = null;
+foreach ($h0['summary']['by_member'] as $row) {
+    $mid = (int)$row['member_id'];
+    if ($low === null || ($cnt0[$mid] ?? 0) < ($cnt0[$low] ?? 0)) { $low = $mid; }
+}
+// 이 시험 자료에서 0건인 사람은 1등보다 20~30점 낮다. ★(+10)만으로는 못 넘는
+// 것이 맞는 동작이라, ★ 과 가감점 +20 을 함께 줘서(+30) 넘어서는지 본다.
+$projects->setMemberPriority($pid, $low, true, $hActor);
+$projects->setMemberFitAdjust($pid, $low, 20, '', $hActor);
+$h1   = $engine->propose($pid, []);
+$cnt1 = count($fitOf($h1, $low));
+ok('★ 우선 후보 + 가점이면 전보다 많이 받는다', $cnt1 > ($cnt0[$low] ?? 0),
+   ($cnt0[$low] ?? 0) . ' → ' . $cnt1);
+$line = '';
+foreach ($fitOf($h1, $low) as $it) { $line = implode(' ', $it['reason_json']['lines'] ?? []); break; }
+ok('근거에 "사람이 준 가점" 을 따로 적는다', str_contains($line, '사람이 준 가점 +30')
+   && str_contains($line, '★ 우선 후보') && str_contains($line, '가감점 +20'), $line);
+ok('배정안 기록에 그때의 ★ 이 남는다', !empty($h1['meta']['shares'][$low]['priority']));
+$projects->setMemberPriority($pid, $low, false, $hActor);
+$projects->setMemberFitAdjust($pid, $low, null, '', $hActor);
+
+$projects->setMemberFitAdjust($pid, $low, -20, '', $hActor);
+$h2 = $engine->propose($pid, []);
+ok('★ 가감점 -20 이면 덜 받는다', count($fitOf($h2, $low)) <= ($cnt0[$low] ?? 0),
+   ($cnt0[$low] ?? 0) . ' → ' . count($fitOf($h2, $low)));
+$projects->setMemberFitAdjust($pid, $low, null, '', $hActor);
+$h3 = $engine->propose($pid, []);
+ok('되돌리면 원래대로', count($fitOf($h3, $low)) === ($cnt0[$low] ?? 0));
+
+// =====================================================================
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";
 exit($fail > 0 ? 1 : 0);
