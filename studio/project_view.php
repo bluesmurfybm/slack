@@ -454,7 +454,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       </div>
       <div id="ba-w-docs" hidden></div>
       <?php else: ?>
-      <div class="ba-note">읽기 전용입니다. WBS 를 고치려면 이 프로젝트의 담당 PM 이어야 합니다.</div>
+      <div class="ba-note ba-note--readonly">읽기 전용입니다. WBS 를 고치려면 이 프로젝트의 담당 PM 이어야 합니다.</div>
       <?php endif; ?>
 
       <!-- ┌──────────────────────────────────────────────────────────────┐

@@ -1855,7 +1855,16 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
    같은 줄에 섞어 두면 눌러도 되는지 망설인다. */
 .ba-viewbar {
   display: flex; align-items: center; gap: 6px;
-  margin: 0 0 6px; padding: 0 2px;
+  /* 위 상자(작업 단추 줄·읽기 전용 안내)와 붙으면 이 단추가 그쪽 소속으로
+     읽혔다. 위로 띄우고 아래 표에 붙인다 — 단추는 **표의 것**이다 (2026-10-12). */
+  margin: 16px 0 6px; padding: 0 2px;
+}
+
+/* 읽기 전용 안내 (2026-10-12). 공통 .ba-note 는 아주 옅은 점선이라, 상자가
+   반 픽셀 자리에 걸리면 위 선이 흐려져 안 보였다. 실선·짙은 색으로 또렷하게. */
+.ba-note--readonly {
+  border: 1px solid #d5dce8; background: var(--ba-surface);
+  padding: 12px 16px;
 }
 /* 자료를 안 바꾸는 단추라 테두리를 뺀다 — 무게를 낮춘다 */
 .ba-btn--ghost {
