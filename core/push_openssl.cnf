@@ -1,0 +1,6 @@
+# core/push.php 가 EC 키를 만들 때만 쓰는 최소 openssl 설정.
+#
+# Windows 용 PHP(WAMP 등)는 openssl.cnf 를 못 찾으면 openssl_pkey_new() 가
+# "configuration file routines::no such file" 로 실패한다. 서버 설정을 건드리지
+# 않고 웹 푸시만 돌게 하려고, 기본 설정으로 실패했을 때에만 이 파일을 넘긴다.
+# 내용이 비어 있어도 "읽을 수 있는 설정 파일" 이기만 하면 된다.

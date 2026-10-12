@@ -18,6 +18,7 @@ Thumbs.db
 config.php
 config.local.php
 sso_secret.key
+vapid.key
 
 # book(도서구매신청) 로컬 전용 설정/데이터
 book/config_local.py

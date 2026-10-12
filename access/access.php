@@ -22,6 +22,7 @@ $__bwCurrent = 'access';
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Coursemos EnvHub</title>
 <link rel="icon" href="../styles/favicon.ico">
+<?php require_once __DIR__ . '/../core/pwa.php'; echo pwa_head_tags('../'); ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="../slack/styles/header.css">
 <link rel="stylesheet" href="../slack/styles/common.css">

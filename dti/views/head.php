@@ -17,6 +17,7 @@ $admin = $page['admin'];
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><?= dti_h($admin ? "{$page['label']} · BlueMagazine" : 'BlueMagazine') ?></title>
   <link rel="icon" href="<?= dti_asset($page, 'styles/favicon.ico') ?>">
+  <?php require_once __DIR__ . '/../../core/pwa.php'; echo pwa_head_tags($page['base'] . '../'); ?>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">

@@ -176,3 +176,14 @@ body.tile-dragging .tile.soon{cursor:move}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 @media(max-width:560px){.hero h1{font-size:22px}}
+
+/* ---- 마이페이지 웹 푸시 알림 (index.php #pf-push) ----
+   .fld 안에 들어가므로 .fld label / .fld input 의 꾸밈(블록·전체 폭·여백)을 되돌린다. */
+.push-device{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.push-device .hintline{margin-top:0}
+.push-kinds{display:grid;gap:6px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px}
+.push-sys{font-size:12px;font-weight:600;color:var(--muted);margin-top:4px}
+.push-sys:first-child{margin-top:0}
+.fld label.push-kind{display:flex;align-items:flex-start;gap:8px;margin:0 0 0 4px;font-size:13.5px;font-weight:400;color:var(--ink);cursor:pointer}
+.fld label.push-kind input{width:16px;height:16px;padding:0;margin:2px 0 0;border:0;flex:none;accent-color:var(--blue)}
+.push-kind small{color:var(--muted);font-size:11.5px;margin-left:4px}

@@ -6,6 +6,8 @@
  *    PHP가 세션을 먼저 확인하고 처음부터 올바른 화면 상태로 HTML을 내려준다.
  */
 require_once __DIR__ . '/core/auth.php';
+require_once __DIR__ . '/core/push.php';
+require_once __DIR__ . '/core/pwa.php';
 // 로그인 상태에 따라 매번 다르게 그려지는 페이지라 브라우저/중간 캐시에 절대 남으면 안 됨.
 // 캐시된 옛 버전이 남아 있으면 "저장 후 대시보드로 안 돌아간다"/"그리드가 가끔 안 보인다" 처럼
 // 예전 코드가 실행되는 것처럼 보이는 현상이 생긴다.
@@ -21,6 +23,8 @@ $__current = $__u ? [
     'slack_email' => $__u['slack_email'] ?? null,
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
+    // 웹 푸시 시험 기간에는 허용 목록의 계정에만 마이페이지 알림 칸을 보인다(core/push.php PUSH_TEST_ALLOW)
+    'push_ok'     => push_can_receive($__u['email']),
 ] : null;
 require_once __DIR__ . '/core/worksystems.php';
 require_once __DIR__ . '/core/board.php';
@@ -66,6 +70,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>blue-iWorks</title>
 <link rel="icon" href="styles/favicon.ico">
+<?= pwa_head_tags('') ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -443,6 +448,21 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         </div>
       </div>
 
+      <!-- 웹 푸시 알림. 위 칸들과 달리 '수정/저장' 을 거치지 않고 누르는 즉시 저장한다.
+           기기 구독은 브라우저 권한 창이 뜨는 일이라 '취소' 로 되돌릴 수 없기 때문이다.
+           종류 목록의 원본은 core/push_kinds.json, 저장은 api/push.php. -->
+      <div class="fld hidden" id="pf-push">
+        <label>알림</label>
+        <div class="push-device">
+          <button type="button" class="btn-ghost" id="pf-push-btn" onclick="togglePushDevice()">이 기기에서 알림 받기</button>
+          <span class="hintline" id="pf-push-state"></span>
+        </div>
+        <div class="push-kinds" id="pf-push-kinds"></div>
+        <div class="hintline" id="pf-push-hint">
+          종류별 설정은 누르는 즉시 저장됩니다. 알림은 기기마다 따로 받습니다 — PC·휴대폰에서 각각 "알림 받기" 를 눌러 주세요.
+        </div>
+      </div>
+
       <div class="token-note">
         🔒 <b>슬랙 연동 토큰</b>은 민감정보입니다. 본인만 입력·수정하며, 저장 후에는 화면에 원문이 다시 표시되지 않습니다.
         토큰이 유출되면 즉시 재발급하세요.
@@ -677,6 +697,89 @@ function showProfile(alertMsg, forceEdit){
   tokenEl.placeholder = current.has_token ? "저장됨 · 변경하려면 새 토큰 입력" : "xoxp-... (본인 토큰 붙여넣기)";
   setProfileMode(!!(current && current.needs_setup) || !!forceEdit);
   if(alertMsg) toast(alertMsg);
+  loadPushPanel();
+}
+
+/* ---- 웹 푸시 알림 (마이페이지) ----
+   서버는 api/push.php, 브라우저 쪽 구독은 pwa.js 의 window.bluePush.
+   시험 기간에는 허용된 계정(current.push_ok)에만 보인다. */
+let pushInfo=null;
+async function loadPushPanel(){
+  const box=document.getElementById("pf-push");
+  const can=!!(current && current.push_ok) && !!window.bluePush;
+  box.classList.toggle("hidden", !can);
+  if(!can) return;
+  try{
+    pushInfo=await bapi("api/push.php");
+  }catch(e){
+    document.getElementById("pf-push-state").textContent="알림 설정을 불러오지 못했습니다: "+e.message;
+    return;
+  }
+  renderPushKinds();
+  await renderPushDevice();
+}
+function renderPushKinds(){
+  const el=document.getElementById("pf-push-kinds");
+  let lastSys="";
+  el.innerHTML=pushInfo.kinds.map(k=>{
+    const head = k.sys!==lastSys ? `<div class="push-sys">${esc(k.sys_emoji)} ${esc(k.sys_label)}</div>` : "";
+    lastSys=k.sys;
+    return head+`<label class="check push-kind" title="${esc(k.desc)}">
+      <input type="checkbox" data-kind="${esc(k.key)}" ${k.enabled?"checked":""} onchange="setPushKind(this)">
+      <span>${esc(k.label)} <small>${esc(k.desc)}</small></span></label>`;
+  }).join("");
+}
+async function setPushKind(input){
+  input.disabled=true;
+  try{
+    pushInfo=await bapi("api/push.php",{method:"PUT",body:JSON.stringify({kind:input.dataset.kind,enabled:input.checked})});
+    toast(input.checked ? "알림을 켰습니다" : "알림을 껐습니다");
+  }catch(e){
+    input.checked=!input.checked;
+    toast(e.message);
+  }finally{
+    input.disabled=false;
+  }
+}
+async function renderPushDevice(){
+  const btn=document.getElementById("pf-push-btn");
+  const st=document.getElementById("pf-push-state");
+  if(!bluePush.supported()){
+    btn.disabled=true;
+    const ios=/iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone;
+    st.textContent = ios
+      ? "iOS 는 공유 → '홈 화면에 추가' 한 뒤 그 아이콘으로 열어야 알림을 받을 수 있습니다."
+      : "이 브라우저(또는 https 가 아닌 주소)에서는 알림을 받을 수 없습니다.";
+    return;
+  }
+  if(bluePush.permission()==="denied"){
+    btn.disabled=true;
+    st.textContent="브라우저에서 이 사이트 알림이 차단되어 있습니다. 주소창 왼쪽 자물쇠에서 허용으로 바꿔 주세요.";
+    return;
+  }
+  let sub=null;
+  try{ sub=await bluePush.status(); }catch(e){}
+  btn.disabled=false;
+  btn.textContent = sub ? "이 기기 알림 끄기" : "이 기기에서 알림 받기";
+  btn.dataset.on = sub ? "1" : "";
+  st.textContent = (sub ? "이 기기에서 받는 중" : "이 기기는 받지 않음")
+    + (pushInfo && pushInfo.devices ? ` · 등록된 기기 ${pushInfo.devices}대` : "");
+}
+async function togglePushDevice(){
+  const btn=document.getElementById("pf-push-btn");
+  btn.disabled=true;
+  try{
+    if(btn.dataset.on){
+      pushInfo=(await bluePush.unsubscribe()) || pushInfo;
+      toast("이 기기에서 알림을 끊었습니다");
+    }else{
+      pushInfo=await bluePush.subscribe(pushInfo.public_key);
+      toast("이 기기에서 알림을 받습니다");
+    }
+  }catch(e){
+    toast(e.message);
+  }
+  await renderPushDevice();
 }
 
 const arrow=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>`;

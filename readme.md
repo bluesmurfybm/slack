@@ -13,12 +13,18 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── auth.php                 세션·SSO·current_portal_user()
 │   ├── db.php                   portal_db() · 테이블 자동 생성
 │   ├── board.php                알림판 — 공지·중요 일정·포털 관리자
+│   ├── push.php                 웹 푸시 알림 — 암호화·발송·구독·종류별 설정 ('PWA · 웹 푸시 알림' 절)
+│   ├── push_kinds.json          알림 종류 목록의 유일한 원본
+│   ├── pwa.php                  pwa_head_tags() — 모든 모듈 <head> 에 넣는 PWA 태그
 │   └── worksystems.php/.json    상단바 "업무 시스템" 목록의 렌더러 + 유일한 원본
+├── sw.js, pwa.js                service worker(알림 수신·클릭) · 등록/구독 도우미 — 루트에 있어야 한다
+├── manifest.webmanifest         PWA 설치 정보
 ├── config.php                   접속 정보 (gitignore, 루트에 그대로 둔다)
 ├── sso_secret.key               book 과 나눠 쓰는 HMAC 키 (자동 생성, 루트)
+├── vapid.key                    웹 푸시 서명 키쌍 (자동 생성, 루트, gitignore)
 ├── .sessions/                   PHP 세션 저장 경로 (루트)
 ├── api/                         login.php, logout.php, me.php
-│                                notices.php, notice_file.php, events.php, admins.php
+│                                notices.php, notice_file.php, events.php, admins.php, push.php
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
 ├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
 ├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
@@ -133,6 +139,8 @@ php.ini 에 `date.timezone` 이 없으면 PHP 는 UTC 로 돌고 MySQL 은 서�
 | `db.php` | access, dti, learn, moodle (`add_column_if_missing()` 재사용) |
 | `worksystems.php` / `.json` | index, dti, learn, moodle, slack/header, bluecart, book |
 | `board.php` | api/notices·notice_file·events·admins |
+| `push.php` / `push_kinds.json` | index, api/me·push, dti, dev/push_*, slackai 워커(dev/push_cli.php 경유) |
+| `pwa.php` | 모든 모듈의 `<head>` |
 
 모듈에서는 한 단계 위의 `core/` 를 부른다.
 
@@ -156,6 +164,73 @@ require_once __DIR__ . '/core/worksystems.php';    // 포털 루트(index.php)�
 WORK_SYSTEMS = os.path.join(BASE, "..", "core", "worksystems.json")
 SSO_SECRET_PATH = os.path.join(BASE, "..", "sso_secret.key")   # 루트 그대로
 ```
+
+---
+
+## PWA · 웹 푸시 알림
+
+포털을 PWA 로 설치할 수 있게 하고(홈 화면·작업 표시줄 아이콘), 모듈들이 **웹 푸시 알림**을
+보낼 수 있는 공용 뼈대를 `core/push.php` 에 둔다. 알림을 내는 곳은 모듈마다 다르지만
+암호화·전송·구독 관리·종류별 켜고 끄기는 포털이 한 번만 갖는다.
+
+### 모듈에서 알림 보내기
+
+1. `core/push_kinds.json` 에 종류를 한 줄 더한다. `sys` 는 `worksystems.json` 의 key(또는 `portal`)이고,
+   마이페이지가 그 시스템 이름 아래에 묶어 보여 준다. `default` 는 사람이 고른 적 없을 때의 켜짐 여부다.
+2. 알릴 자리에서 부른다.
+
+```php
+require_once __DIR__ . '/../core/push.php';
+push_send([
+    'kind'  => 'dti.presenter',
+    'title' => 'DTI 발표자 등록',
+    'body'  => '아티클 제목 — 홍길동 (2026-09-01)',
+    'url'   => 'dti/index.php',          // 알림을 누르면 열 주소. 포털 루트 기준 또는 https:// 절대주소. 비면 포털 첫 화면
+    'tag'   => 'dti-topic-12',           // 같은 tag 는 기기에서 하나로 겹쳐진다(선택)
+    'to'    => ['a@bluesoft.co.kr'],     // 생략하면 이 종류를 켜 둔 전원
+]);
+```
+
+- **`push_send()` 는 예외를 던지지 않는다.** 결과는 `{sent, failed, pruned, skipped, recipients, detail}` 로
+  돌려주고 `portal_push_log` 에 남긴다. 본 작업(발표자 등록 등)이 알림 때문에 실패하지 않게 하려는 약속이다.
+- 시험에서는 dti 처럼 `$ctx['push']` 로 기록용 함수를 끼워 넣는다(`dti/tests/Support/TestCase.php`).
+  dti 의 실제 예는 `dti/lib/notify.php` 의 `dti_push_new_presenter()`.
+- Python(slackai 워커)은 `tools/php_cli.push()` 또는 `notify.push(ctx, ...)` 를 쓴다. 안에서
+  `php dev/push_cli.php --json-file …` 를 부른다(한글 인자가 Windows 코드페이지에서 깨지지 않게 파일로 넘긴다).
+
+### 받는 쪽
+
+- 마이페이지 **알림** 칸에서 "이 기기에서 알림 받기" 를 누르면 브라우저가 권한을 묻고 구독을 서버에
+  남긴다. 기기(브라우저)마다 한 번씩 눌러야 한다. 종류별 체크는 누르는 즉시 저장된다 —
+  다른 칸처럼 '수정/저장' 을 거치지 않는다. 권한 창이 뜨는 일은 '취소' 로 되돌릴 수 없기 때문이다.
+- 알림을 누르면 `url` 이 열린다. 상대경로는 sw.js 가 자기 scope(포털 루트)로 풀고, 같은 주소의 탭이
+  열려 있으면 그 탭을 앞으로 가져온다.
+- **iOS 는 공유 → '홈 화면에 추가' 한 뒤 그 아이콘으로 연 화면에서만** 알림을 받을 수 있다(16.4+).
+- https 또는 localhost 에서만 동작한다. 그 밖의 주소에서는 알림 칸이 "받을 수 없음" 으로 보인다.
+
+### 시험 기간
+
+- `core/push.php` 의 `PUSH_TEST_ALLOW` 에 든 계정에만 **발송**된다(지금 `akddd@naddle.net`, `akddd@bluesoft.co.kr`).
+  마이페이지 알림 칸도 이 계정에만 보인다. 시험이 끝나면 `[]` 로 비우면 전원에게 열린다.
+- `dev/push_test.php` — 브라우저에서 종류·제목·본문·이동 주소·받는 사람을 넣고 보내 본다. 결과(푸시
+  서비스 HTTP 응답), 계정별 구독 기기 수, 최근 발송 기록을 보여 준다. 포털 관리자와 허용 계정만 열 수 있다.
+- `php dev/push_cli.php --kind test.ping --title 시험 --body 본문 --url dti/index.php --to akddd@naddle.net`
+- `php dev/push_crypto_test.php` — 서명(ES256)·암호화(RFC 8291) 왕복과 `push_send()` 의 뒷정리 규칙. DB·네트워크를 쓰지 않는다.
+
+### 구성 요소
+
+| 무엇 | 어디 | 메모 |
+|---|---|---|
+| 서명 키쌍 | 루트 `vapid.key` | 첫 사용 때 자동 생성. **바꾸면 모든 구독이 403 으로 끊긴다** — 서버를 옮길 때 같이 옮긴다 |
+| 구독 | `portal_push_subscription` | 기기마다 한 줄. 404/410 이면 바로 지우고, 5xx·타임아웃이 연달아 5번이면 지운다 |
+| 종류별 설정 | `portal_push_pref` | 고른 것만 줄로 남는다. 없으면 json 의 default |
+| 발송 기록 | `portal_push_log` | 이동 주소·HTTP 응답·오류 |
+| 머리 태그 | `core/pwa.php` `pwa_head_tags($포털루트까지)` | 포털 `''`, 모듈 `'../'`, 하위 폴더 `'../../'`, dti `$page['base'].'../'` |
+| 아이콘 | `styles/icon-*.png`, `apple-touch-icon.png` | `python dev/gen_icons.py` — favicon 과 같은 심볼 |
+
+왜 composer 라이브러리(minishlink/web-push)를 쓰지 않았나 — 운영 서버에는 `vendor/` 를 깔지 않는다.
+필요한 것(P-256 서명·ECDH·HKDF·AES-128-GCM)은 PHP openssl 확장에 다 있다. Windows PHP 는
+`openssl.cnf` 를 못 찾으면 EC 키 생성이 실패하므로 그때만 `core/push_openssl.cnf`(빈 설정)를 넘긴다.
 
 ---
 
@@ -1259,6 +1334,7 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 | `slackai/worker/.env` | slackai 워커 설정(PHP 경로, Slack 앱 토큰 xapp/xoxb, 개인 xoxp 토큰, API 키, 예산) | `slackai/worker/.env.example` 복사. `config.php` 에 `'slackai'` 절도 추가 |
 | `config.local.php` (루트) | 포털 SSO 토큰 암호화 키 | **자동 생성됨**(최초 실행 시) |
 | `sso_secret.key` (루트) | book과 공유하는 SSO 서명 키 | **자동 생성됨**(최초 실행 시) |
+| `vapid.key` (루트) | 웹 푸시 서명 키쌍 | **자동 생성됨**(첫 알림 사용 시). 서버를 옮기면 같이 옮겨야 구독이 유지된다 |
 | `slack/config.local.php` | Gmail IMAP 계정 정보 | **직접 생성 필요**, 아래 형식 |
 | `book/config_local.py` | Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성 |
 | `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
@@ -1419,6 +1495,15 @@ dti·learn·moodle 은 PHP 라 프록시 블록이 필요 없다. 대신 **문�
 ```nginx
 location ^~ /moodle/watch/ { deny all; }
 location ^~ /learn/var/    { deny all; }
+```
+
+루트의 비밀 키 파일(`sso_secret.key`, `vapid.key`)도 문서루트 안에 있어 막지 않으면 URL 로 그대로
+내려받힌다. PWA 파일 두 개는 갱신이 바로 퍼지도록·형식이 맞도록 따로 적는다:
+
+```nginx
+location ~ \.key$                 { deny all; }
+location = /sw.js                 { add_header Cache-Control "no-cache"; }
+location = /manifest.webmanifest  { default_type application/manifest+json; }
 ```
 
 `learn/var/.htaccess` 가 같은 내용을 담고 있지만 **nginx 는 .htaccess 를 읽지 않는다.** 위 블록이

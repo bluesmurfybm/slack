@@ -32,3 +32,27 @@ function dti_notify_new_presenter(?string $webhookUrl, ?callable $post, string $
     $post = $post ?: 'dti_webhook_post';
     $post($webhookUrl, ['text' => $text]);
 }
+
+/**
+ * 같은 일을 웹 푸시로도 알린다(core/push.php, 종류 'dti.presenter').
+ *
+ * 웹훅과 달리 주소 설정이 없어도 보낸다 — 받을지 말지는 사람마다 마이페이지에서
+ * 정한다. 알림을 누르면 매거진 목록이 열린다.
+ *
+ * $push 는 시험이 바꿔 끼우는 자리다. 비어 있으면 그때 core/push.php 를 불러
+ * push_send 를 쓴다(dti 는 포털 core 를 함수 안에서 늦게 부르는 방식을 따른다 — guard.php).
+ */
+function dti_push_new_presenter(?callable $push, int $tid, string $title, string $presenter,
+                                string $plannedDate): void {
+    if (!$push) {
+        require_once __DIR__ . '/../../core/push.php';
+        $push = 'push_send';
+    }
+    $push([
+        'kind'  => 'dti.presenter',
+        'title' => 'DTI 발표자 등록',
+        'body'  => "{$title} — {$presenter}" . ($plannedDate !== '' ? " ({$plannedDate})" : ''),
+        'url'   => 'dti/index.php',
+        'tag'   => "dti-topic-{$tid}",
+    ]);
+}

@@ -207,6 +207,66 @@ function portal_db() {
         ADD COLUMN `tile_collapsed` VARCHAR(255) NULL
         COMMENT '접어 둔 카드 묶음 id(콤마로 이음). 비면 모두 펼침' AFTER `tile_order`");
 
+    // -----------------------------------------------------------------
+    // 웹 푸시 알림 — core/push.php 가 읽고 쓴다
+    //
+    // 구독은 **기기(브라우저)마다** 한 줄이다. 한 사람이 PC·휴대폰에서 각각
+    // "알림 받기" 를 누르면 두 줄이 된다. endpoint 는 길어서(수백 자) 유니크
+    // 키는 sha256 으로 건다.
+    //
+    // 종류별 켜고 끄기는 사람이 **고른 것만** 줄로 남는다. 줄이 없으면
+    // core/push_kinds.json 의 default 를 따른다 — 그래야 새 종류를 더했을 때
+    // 모든 사람에게 줄을 심어 주는 손질이 필요 없다.
+    // -----------------------------------------------------------------
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_push_subscription` (
+            `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id`       INT UNSIGNED NOT NULL COMMENT 'portal_users.id',
+            `endpoint_hash` CHAR(64)     NOT NULL COMMENT 'sha256(endpoint)',
+            `endpoint`      TEXT         NOT NULL COMMENT '푸시 서비스 주소(FCM·모질라·애플)',
+            `p256dh`        VARCHAR(120) NOT NULL COMMENT '구독 공개키 base64url(65바이트)',
+            `auth`          VARCHAR(40)  NOT NULL COMMENT '구독 인증값 base64url(16바이트)',
+            `ua`            VARCHAR(255) NULL     COMMENT '등록한 브라우저 — 기기 목록 표시용',
+            `created_at`    DATETIME     NOT NULL,
+            `last_ok_at`    DATETIME     NULL     COMMENT '마지막으로 발송에 성공한 때',
+            `fail_count`    INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '연달아 실패한 횟수(5xx·타임아웃). 성공하면 0',
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uq_push_endpoint` (`endpoint_hash`),
+            KEY `ix_push_user` (`user_id`),
+            CONSTRAINT `fk_push_user` FOREIGN KEY (`user_id`)
+                REFERENCES `portal_users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='웹 푸시 구독. 기기마다 한 줄'
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_push_pref` (
+            `user_id`    INT UNSIGNED NOT NULL,
+            `kind`       VARCHAR(40)  NOT NULL COMMENT 'core/push_kinds.json 의 key',
+            `enabled`    TINYINT(1)   NOT NULL,
+            `updated_at` DATETIME     NOT NULL,
+            PRIMARY KEY (`user_id`, `kind`),
+            CONSTRAINT `fk_pushpref_user` FOREIGN KEY (`user_id`)
+                REFERENCES `portal_users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='알림 종류별 켜고 끄기. 줄이 없으면 json 의 default'
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_push_log` (
+            `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id`     INT UNSIGNED NULL,
+            `sub_id`      INT UNSIGNED NULL COMMENT '보낸 구독. 지워졌을 수 있어 FK 를 걸지 않는다',
+            `kind`        VARCHAR(40)  NOT NULL,
+            `title`       VARCHAR(200) NOT NULL,
+            `url`         VARCHAR(500) NULL     COMMENT '알림을 누르면 열 주소',
+            `status_code` SMALLINT     NULL     COMMENT '푸시 서비스 HTTP 응답. NULL 이면 보내기 전에 실패',
+            `error`       VARCHAR(255) NULL,
+            `created_at`  DATETIME     NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `ix_pushlog_when` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='웹 푸시 발송 시도 기록'
+    ");
+
     // 사내 인원 13명 + book 모듈에서 쓰던 개인별 고유색을 이어받되, 아바타처럼 큰 면적을 단색으로
     // 채우면 book의 원래 뱃지(연한 배경 위 작은 글자)보다 훨씬 쨍하게 보여서 채도를 낮추고
     // 명도를 살짝 올렸다(색상은 원래 값에서 파생 — 사람 구분은 그대로 유지됨).

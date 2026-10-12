@@ -140,6 +140,8 @@ function dti_topic_claim(array $ctx, int $tid, array $body): array {
     $pres = dti_presentation_of_topic($pdo, $tid);
     dti_notify_new_presenter($ctx['config']['slack_webhook'], $ctx['webhook'] ?? null,
         $topic['title'], $pres['presenter'], $pres['planned_date']);
+    dti_push_new_presenter($ctx['push'] ?? null, $tid,
+        $topic['title'], $pres['presenter'], (string)$pres['planned_date']);
 
     return dti_json(dti_topic_present_one($pdo, $topic, $pres));
 }
@@ -223,6 +225,8 @@ function dti_topic_assign(array $ctx, int $tid, array $body): array {
     }
     dti_notify_new_presenter($ctx['config']['slack_webhook'], $ctx['webhook'] ?? null,
         $topic['title'], $pres['presenter'], $pres['planned_date']);
+    dti_push_new_presenter($ctx['push'] ?? null, $tid,
+        $topic['title'], $pres['presenter'], (string)$pres['planned_date']);
 
     return dti_json(dti_topic_present_one($pdo, $topic, $pres));
 }

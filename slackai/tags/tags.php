@@ -21,6 +21,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 <title>태그 관리 · WorkHub AI</title>
 <script>(function(){var t=localStorage.getItem("ui_theme");if(t)document.documentElement.classList.add(t);})();</script>
 <link rel="icon" href="../../styles/favicon.ico">
+<?php require_once __DIR__ . '/../../core/pwa.php'; echo pwa_head_tags('../../'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">

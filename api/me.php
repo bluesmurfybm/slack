@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/../core/board.php';   // board_bg_pref()
+require_once __DIR__ . '/../core/push.php';    // push_can_receive()
 header('Content-Type: application/json; charset=utf-8');
 
 $u = require_portal_login();
@@ -14,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
         'bg_pref'     => board_bg_pref($u),
+        'push_ok'     => push_can_receive($u['email']),   // 마이페이지 알림 칸 노출 — index.php 와 같은 키
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -116,6 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
         'bg_pref'     => board_bg_pref($u),
+        'push_ok'     => push_can_receive($u['email']),   // 마이페이지 알림 칸 노출 — index.php 와 같은 키
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }

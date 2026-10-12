@@ -15,6 +15,7 @@ header('Content-Type: text/html; charset=utf-8');
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>업무 허브</title>
 <link rel="icon" href="../../styles/favicon.ico">
+<?php require_once __DIR__ . '/../../core/pwa.php'; echo pwa_head_tags('../../'); ?>
 <style>
   * { box-sizing:border-box; }
   html, body { height:100%; }
