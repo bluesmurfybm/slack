@@ -329,6 +329,7 @@ async function load() {
     const j = await (await fetch("access_api.php" + all, { cache: "no-store" })).json();
     DATA = j.rows || [];
   } catch (e) { DATA = []; }
+  resetDetail();            // 새로 불러온 값으로 상세를 다시 만든다
   buildVers();
   buildVpnFilter();
   render();
@@ -379,6 +380,34 @@ function matches(r, q) {
     .some(v => (v || "").toLowerCase().includes(q));
 }
 
+/* 검색창 포커스 지키기.
+   목록을 다시 그리면 상세 패널의 Editor.js 가 새로 만들어지는데, 그 초기화가 비동기라
+   우리가 포커스를 되돌린 "뒤에" 에디터가 포커스를 가져가는 경우가 있다. 일반 브라우저
+   탭에서는 타이밍이 어긋나 잘 안 보이지만 PWA 창에서는 매번 재현된다.
+   그래서 즉시 → 다음 프레임 → 에디터 준비 완료 후, 세 번에 걸쳐 되돌린다.
+   사용자가 중간에 다른 곳을 직접 누르면(아래 mousedown) 그 즉시 포기한다. */
+let searchRefocus = false;
+
+function keepSearchFocus(caret) {
+  const el = $("search");
+  searchRefocus = true;
+  const apply = () => {
+    if (!searchRefocus || document.activeElement === el) return;
+    el.focus();
+    try { el.setSelectionRange(caret, caret); } catch (e) {}
+  };
+  apply();
+  requestAnimationFrame(apply);
+  const ready = Object.values(EDITORS).map(i => i && i.isReady).filter(Boolean);
+  if (ready.length) Promise.all(ready).then(apply, apply);
+  setTimeout(() => { searchRefocus = false; }, 600);
+}
+
+/* 사용자가 직접 어딘가를 누르면 더 이상 검색창으로 끌고 오지 않는다 */
+document.addEventListener("mousedown", e => {
+  if (e.target !== $("search")) searchRefocus = false;
+}, true);
+
 function render() {
   const q = $("search").value.trim().toLowerCase();
   const onlyMissing = $("onlyMissing").checked;
@@ -389,24 +418,25 @@ function render() {
     matches(r, q));
 
   $("count").textContent = list.length + "건";
-  // 목록을 통째로 다시 그리면 그 안의 에디터가 포커스를 가져가 검색창에서 커서가 빠진다.
-  // 검색 중이었다면 자리를 기억했다가 되돌려 놓는다.
   const sEl = $("search");
   const keepFocus = document.activeElement === sEl;
   const caret = keepFocus ? sEl.selectionStart : 0;
-  destroyEditors("d:");      // 다시 그리기 전에 상세 패널의 에디터만 정리한다
   const box = $("list");
+
+  // 상세 패널은 다시 만들지 않는다. 목록만 새로 그리고, 살아 있는 상세 노드를 떼었다가
+  // 제자리에 도로 끼운다 — 안의 Editor.js 가 그대로 유지돼야 검색어를 고칠 때마다
+  // 에디터가 새로 만들어지며 포커스를 가져가는 일이 없다.
+  if (detailEl && detailEl.parentNode) detailEl.parentNode.removeChild(detailEl);
+
   if (!list.length) {
+    discardDetail();
     box.innerHTML = '<div class="empty">데이터가 없습니다.</div>';
-    if (keepFocus) { sEl.focus(); try { sEl.setSelectionRange(caret, caret); } catch (e) {} }
+    if (keepFocus) keepSearchFocus(caret);
     return;
   }
 
   box.innerHTML = view === "card"
-    ? `<div class="cards">` +
-        list.map(r => cardHtml(r) +
-          (openKey === rowKey(r) ? `<div class="dwide">${detailBody(r)}</div>` : "")).join("") +
-      `</div>`
+    ? `<div class="cards">` + list.map(cardHtml).join("") + `</div>`
     : `<table><thead><tr>
         <th class="c-name">대학(기관)명</th>
         <th class="c-ver">버전</th>
@@ -415,15 +445,58 @@ function render() {
         <th class="c-site">사이트</th>
         <th class="c-copy">빠른 복사</th>
         <th class="c-act"></th>
-      </tr></thead><tbody>` +
-      list.map(r => rowHtml(r) +
-        (openKey === rowKey(r) ? `<tr class="d"><td colspan="7">${detailBody(r)}</td></tr>` : "")).join("") +
-      `</tbody></table>`;
-  bind(box);
-  if (keepFocus && document.activeElement !== sEl) {
-    sEl.focus();
-    try { sEl.setSelectionRange(caret, caret); } catch (e) {}
+      </tr></thead><tbody>` + list.map(rowHtml).join("") + `</tbody></table>`;
+  bindList(box);
+  placeDetail(box);
+  if (keepFocus) keepSearchFocus(caret);
+}
+
+/* ── 열려 있는 상세 패널 ──────────────────────────────────────
+   목록을 다시 그려도 이 노드는 살려 둔다(안의 에디터와 편집 중인 내용까지).
+   행이 걸러져 사라지거나 다른 행을 열면 그때 버린다. */
+let detailEl = null, detailKey = "", detailView = "";
+
+function discardDetail() {
+  destroyEditors("d:");
+  if (detailEl && detailEl.parentNode) detailEl.parentNode.removeChild(detailEl);
+  detailEl = null; detailKey = ""; detailView = "";
+}
+
+/* 저장·취소처럼 값이 바뀐 뒤에는 상세를 새로 그려야 한다 */
+function resetDetail() { detailKey = ""; }
+
+function placeDetail(box) {
+  if (!openKey) { discardDetail(); return; }
+  const rowEl = box.querySelector('[data-key="' + openKey + '"]');
+  if (!rowEl) { discardDetail(); return; }   // 검색에 걸러져 안 보이는 행
+
+  if (!detailEl || detailKey !== openKey || detailView !== view) {
+    const r = DATA.find(x => rowKey(x) === openKey);
+    if (!r) { discardDetail(); return; }
+    discardDetail();
+    detailEl = makeDetail(r);
+    detailKey = openKey;
+    detailView = view;
   }
+  rowEl.insertAdjacentElement("afterend", detailEl);
+}
+
+function makeDetail(r) {
+  let el;
+  if (view === "card") {
+    el = document.createElement("div");
+    el.className = "dwide";
+    el.innerHTML = detailBody(r);
+  } else {
+    el = document.createElement("tr");
+    el.className = "d";
+    const td = document.createElement("td");
+    td.colSpan = 7;
+    td.innerHTML = detailBody(r);
+    el.appendChild(td);
+  }
+  bindDetail(el, r);
+  return el;
 }
 
 /* 한 행이 쓰는 조각들 — 표와 카드가 같은 값을 쓰도록 한 곳에서 만든다 */
@@ -573,9 +646,24 @@ function cellControl(f, v) {
 }
 
 /* 상세 패널의 편집 요소를 붙인다 — 서식 칸은 Editor.js, 나머지는 입력칸 감시 */
-function bindDetail(box) {
-  const r = DATA.find(x => rowKey(x) === openKey);
+function bindDetail(box, r) {
   if (!r) return;
+
+  box.querySelectorAll(".cp").forEach(b =>
+    b.addEventListener("click", e => { e.stopPropagation(); copyText(b.dataset.cp, b); }));
+  box.querySelectorAll("a.link").forEach(a =>
+    a.addEventListener("click", e => e.stopPropagation()));
+  box.querySelectorAll(".deye").forEach(b =>
+    b.addEventListener("click", e => {
+      e.stopPropagation();
+      const el = b.closest(".dcell").querySelector("input.dpw");
+      if (!el) return;
+      const shown = el.type === "password";
+      el.type = shown ? "text" : "password";
+      b.textContent = shown ? "숨기기" : "보기";
+    }));
+  box.querySelectorAll(".del").forEach(b =>
+    b.addEventListener("click", e => { e.stopPropagation(); delAccess(b.dataset.key); }));
 
   box.querySelectorAll(".ejholder[data-ej]").forEach(el => {
     if (typeof EditorJS === "undefined") return;
@@ -597,7 +685,7 @@ function bindDetail(box) {
   box.querySelectorAll(".dsave").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); saveCell(b.closest(".dcell"), r); }));
   box.querySelectorAll(".dcancel").forEach(b =>
-    b.addEventListener("click", e => { e.stopPropagation(); render(); }));
+    b.addEventListener("click", e => { e.stopPropagation(); resetDetail(); render(); }));
 }
 
 function markDirty(cell) {
@@ -646,6 +734,7 @@ async function saveCell(cell, r) {
     r[key] = value;
     if (j.access_id && !r.access_id) { r.access_id = j.access_id; openKey = "a" + j.access_id; }
     toast("저장했습니다");
+    resetDetail();          // 저장된 값으로 상세를 새로 그린다
     render();
   } catch (e) {
     toast("저장 실패: " + e.message);
@@ -653,26 +742,19 @@ async function saveCell(cell, r) {
   }
 }
 
-function bind(box) {
+/* 목록(행)만 묶는다. 상세 패널은 makeDetail 에서 한 번만 묶으므로 여기서 건드리지 않는다. */
+function bindList(box) {
   box.querySelectorAll(".cp").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); copyText(b.dataset.cp, b); }));
+  // 개발/운영 사이트 링크는 새 창으로 여는 것이 목적이다 — 행 클릭(상세 펼치기)까지
+  // 같이 일어나면 안 된다.
+  box.querySelectorAll("a.link").forEach(a =>
+    a.addEventListener("click", e => e.stopPropagation()));
   box.querySelectorAll("tr.r, .card").forEach(el =>
     el.addEventListener("click", () => {
       openKey = (openKey === el.dataset.key) ? "" : el.dataset.key;
       render();
     }));
-  box.querySelectorAll(".deye").forEach(b =>
-    b.addEventListener("click", e => {
-      e.stopPropagation();
-      const el = b.closest(".dcell").querySelector("input.dpw");
-      if (!el) return;
-      const shown = el.type === "password";
-      el.type = shown ? "text" : "password";
-      b.textContent = shown ? "숨기기" : "보기";
-    }));
-  box.querySelectorAll(".del").forEach(b =>
-    b.addEventListener("click", e => { e.stopPropagation(); delAccess(b.dataset.key); }));
-  bindDetail(box);
 }
 
 /* ── 편집 ──────────────────────────────────────────────────── */
@@ -1070,9 +1152,13 @@ $("btnNew").addEventListener("click", openCreate);
 $("btnImport").addEventListener("click", () => openModal("mImport"));
 $("doImport").addEventListener("click", doImport);
 $("doSave").addEventListener("click", save);
+/* 상세가 열려 있으면 한 글자마다 Editor.js 를 8개쯤 부수고 다시 만들게 된다.
+   조금 미뤘다가 한 번만 그린다 — 포커스를 뺏길 기회 자체를 줄인다. */
+let searchT = null;
 $("search").addEventListener("input", () => {
   $("searchClear").hidden = !$("search").value;
-  render();
+  clearTimeout(searchT);
+  searchT = setTimeout(render, 180);
 });
 $("searchClear").addEventListener("click", () => {
   $("search").value = "";
