@@ -158,6 +158,8 @@
   background:#101828;border-radius:3px;
   box-shadow:inset 0 1px 3px rgba(0,0,0,.55),0 0 0 1px #8E9CB3}
 .pix rect{transition:fill .3s ease}
+/* 흐를 때는 물들이지 않고 바로 켜고 끈다. .1s 만 걸어도 잔상이 남아 읽기 불편했다. */
+.ev-pix.marquee .pix rect{transition:none}
 /* 번짐은 viewBox 단위라 0.35 면 점 하나의 절반이 채 안 된다. 켜진 점에만 건다. */
 .pix .on{fill:var(--k-lit);filter:drop-shadow(0 0 .35px var(--k-lit))}
 .pix .off{fill:#28344C}

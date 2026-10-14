@@ -1533,23 +1533,60 @@ function pixSkeleton(){
   return `<svg class="pix" viewBox="0 0 ${PIX_W} ${PIX_H}" aria-hidden="true">${dots}</svg>`;
 }
 
-/** 켜야 할 점의 자리(판 전체를 훑은 일련번호) */
-function pixOnMap(label){
-  const txt=pixText(label);
+/** 글자 덩어리의 가로 자리 — 가운데에 놓였을 때의 왼쪽 끝과 폭(점 칸) */
+function pixSpan(txt){
   // 글자 수가 아니라 '점 칸' 으로 가운데를 잡는다. 칸 단위로 맞추면
   // D-43 처럼 네 글자일 때 한쪽으로 한 칸 치우친다.
   const cols=txt.length*(PIX_GW+1)-1;                 // 글자 3칸 + 사이 1칸
   const x0=PIX_PAD_X+Math.round((PIX_CELLS*(PIX_GW+1)-1-cols)/2);
+  return {x0, cols};
+}
+
+/** 켜야 할 점의 자리(판 전체를 훑은 일련번호).
+    shift 만큼 가운데에서 옆으로 민다 — 판 밖으로 나간 점은 버린다. */
+function pixOnMap(label, shift=0){
+  const txt=pixText(label);
+  const {x0}=pixSpan(txt);
   const on=new Set();
   for(let c=0;c<txt.length;c++){
     const g=PIX_FONT[txt[c]]||PIX_FONT[" "];
     for(let i=0;i<PIX_GW*PIX_GH;i++){
       if(g[i]!=="1") continue;
       const x=i%PIX_GW, y=(i-x)/PIX_GW;
-      on.add((y+PIX_PAD_Y)*PIX_W + x0+c*(PIX_GW+1)+x);
+      const px=x0+c*(PIX_GW+1)+x+shift;
+      if(px<0 || px>=PIX_W) continue;
+      on.add((y+PIX_PAD_Y)*PIX_W + px);
     }
   }
   return on;
+}
+
+/* 전광판처럼 글자가 오른쪽 밖에서 흘러 들어와 가운데에 멈추고,
+   잠시 머문 뒤 왼쪽으로 빠져나갔다가 다시 들어온다.
+   한 칸씩 끊어 움직인다 — 매끄럽게 미끄러지면 점판이 아니라 그림처럼 보인다.
+   움직임을 줄여 달라고 했으면 흐르지 않고 가운데에 바로 찍는다. */
+const PIX_STEP_MS=70, PIX_HOLD_MS=3000;
+const pixCalm=window.matchMedia("(prefers-reduced-motion: reduce)");
+let pixTimer=null;
+function pixRun(box, label){
+  clearTimeout(pixTimer);
+  const rects=box.querySelectorAll("rect");
+  const draw=s=>{
+    const on=pixOnMap(label, s);
+    for(let k=0;k<rects.length;k++) rects[k].setAttribute("class", on.has(k) ? "on" : "off");
+  };
+  if(pixCalm.matches){ draw(0); return; }
+  box.classList.add("marquee");
+  const {x0, cols}=pixSpan(pixText(label));
+  const from=PIX_W-x0, to=-(x0+cols);   // 오른쪽 끝 바로 밖 → 왼쪽 끝 바로 밖
+  let s=from;
+  const step=()=>{
+    draw(s);
+    const wait = s===0 ? PIX_HOLD_MS : PIX_STEP_MS;
+    s = s===to ? from : s-1;
+    pixTimer=setTimeout(step, wait);
+  };
+  step();
 }
 
 /** 지금 보고 있는 일정에 맞춰 판을 다시 칠한다. */
@@ -1559,17 +1596,14 @@ function paintPix(i){
   if(!e || !box) return;
   box.className="ev-pix k-"+e.kind.key+(e.heat==="today" ? " today" : "");
   box.setAttribute("aria-label", e.dday_label);
-  const on=pixOnMap(e.dday_label);
-  const rects=box.querySelectorAll("rect");
-  for(let k=0;k<rects.length;k++){
-    rects[k].setAttribute("class", on.has(k) ? "on" : "off");
-  }
+  pixRun(box, e.dday_label);
 }
 
 function renderBoardEvents(rows){
   const box=document.getElementById("board-events");
   if(!rows.length){
     box.innerHTML=`<div class="panel-empty">다가오는 일정이 없습니다.</div>`;
+    clearTimeout(pixTimer);
     eventSlider.stop();
     return;
   }
