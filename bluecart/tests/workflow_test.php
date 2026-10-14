@@ -868,6 +868,58 @@ ok('주입 시도 후에도 테이블이 그대로 있음',
    count(bc_fetch_all('SHOW TABLES LIKE "bc_request"')) === 1);
 
 // ---------------------------------------------------------------------
+echo "\n[24] 같은 알림이 두 번 가지 않기\n";
+// 채널은 역할과 상관없이 같은 곳이라, 두 역할에 다 켜 두면 같은 글이 두 번 올라갔다.
+Setting::saveNotifyMatrix([
+    'PURCHASE_DONE' => [
+        'REQUESTER' => ['EMAIL' => 1, 'SLACK_DM' => 1, 'SLACK_CHANNEL' => 1],
+        'REVIEWER'  => ['EMAIL' => 1, 'SLACK_DM' => 0, 'SLACK_CHANNEL' => 1],
+    ],
+], 'admin');
+$idCh = PurchaseRequest::create(['category_id' => $catId, 'item_name' => '채널 중복 시험',
+    'quantity' => 1, 'unit' => '개', 'est_amount' => null, 'ref_url' => '',
+    'deliver_to' => '', 'need_by' => '', 'note' => ''], $hoyoung);
+PurchaseRequest::transition($idCh, 'approve', $jian);
+PurchaseRequest::transition($idCh, 'start_purchase', $jian);
+PurchaseRequest::transition($idCh, 'complete', $jian, ['actual_amount' => '1000']);
+
+$chLogs = bc_fetch_all(
+    'SELECT target_role, body FROM bc_notify_log
+      WHERE request_id = ? AND event_code = "PURCHASE_DONE" AND channel = "SLACK_CHANNEL"', [$idCh]
+);
+ok('두 역할에 켜져 있어도 채널에는 한 건', count($chLogs) === 1, (string)count($chLogs));
+ok('먼저 오는 요청자 문구로 나간다',
+   ($chLogs[0]['target_role'] ?? '') === 'REQUESTER'
+   && str_contains((string)($chLogs[0]['body'] ?? ''), '수령해 주세요'),
+   $chLogs[0]['target_role'] ?? '-');
+$doneMail = bc_fetch_all(
+    'SELECT DISTINCT target_role FROM bc_notify_log
+      WHERE request_id = ? AND event_code = "PURCHASE_DONE" AND channel = "EMAIL"', [$idCh]
+);
+ok('메일은 역할마다 그대로 나간다', count($doneMail) === 2, (string)count($doneMail));
+
+// 검토승인자가 직접 요청한 건은 요청자와 검토승인자가 같은 사람이다.
+$idSelf = PurchaseRequest::create(['category_id' => $catId, 'item_name' => '겸직 중복 시험',
+    'quantity' => 1, 'unit' => '개', 'est_amount' => null, 'ref_url' => '',
+    'deliver_to' => '', 'need_by' => '', 'note' => ''], $jian);
+$selfReq = PurchaseRequest::find($idSelf);
+if ($selfReq['status'] === 'REQUESTED') {
+    PurchaseRequest::transition($idSelf, 'approve', $jian);
+}
+PurchaseRequest::transition($idSelf, 'start_purchase', $jian);
+PurchaseRequest::transition($idSelf, 'complete', $jian, ['actual_amount' => '1000']);
+
+$jianMail = RoleAssign::resolveRecipients('REQUESTER', PurchaseRequest::find($idSelf))[0]['email'] ?? '';
+$selfMails = bc_fetch_all(
+    'SELECT target_role FROM bc_notify_log
+      WHERE request_id = ? AND event_code = "PURCHASE_DONE" AND channel = "EMAIL" AND recipient = ?',
+    [$idSelf, $jianMail]
+);
+ok('두 역할을 겸한 사람은 메일 한 통', $jianMail !== '' && count($selfMails) === 1,
+   $jianMail . ' / ' . count($selfMails));
+ok('그 한 통은 요청자 문구', ($selfMails[0]['target_role'] ?? '') === 'REQUESTER');
+
+// ---------------------------------------------------------------------
 echo "\n";
 echo str_repeat('─', 50) . "\n";
 printf("결과: %d건 통과, %d건 실패\n", $pass, $fail);

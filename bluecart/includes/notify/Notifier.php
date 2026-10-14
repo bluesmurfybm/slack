@@ -20,6 +20,13 @@ final class Notifier
         }
         $targets = BC_EVENT_TARGETS[$event] ?? [];
 
+        // 한 이벤트에서 같은 곳에 두 번 보내지 않는다.
+        //   - 슬랙 채널은 역할과 상관없이 같은 채널이라, 여러 역할에 켜 두면 같은 글이 겹친다
+        //   - 한 사람이 두 역할을 겸하면(직접 요청한 검토승인자 등) 메일·DM 이 두 통 간다
+        // 먼저 오는 역할(BC_EVENT_TARGETS 순서)의 문구로 나간다.
+        $channelPosted = false;
+        $delivered     = ['EMAIL' => [], 'SLACK_DM' => []];
+
         foreach ($targets as $role) {
             $channels = Setting::enabledChannels($event, $role);
             if (!$channels) {
@@ -35,10 +42,26 @@ final class Notifier
             $msg = self::compose($event, $request, $actor, $comment, $role);
 
             foreach ($channels as $channel) {
+                if ($channel === 'SLACK_CHANNEL') {
+                    if ($channelPosted) {
+                        continue;
+                    }
+                    $channelPosted = true;
+                }
+                $to = $recipients;
+                if (isset($delivered[$channel])) {
+                    $to = array_values(array_filter($to, fn($r) => !isset($delivered[$channel][$r['id']])));
+                    if (!$to) {
+                        continue;
+                    }
+                    foreach ($to as $r) {
+                        $delivered[$channel][$r['id']] = true;
+                    }
+                }
                 try {
                     match ($channel) {
-                        'EMAIL'         => self::sendEmail($recipients, $msg, $request, $event, $role),
-                        'SLACK_DM'      => self::sendSlackDm($recipients, $msg, $request, $event, $role),
+                        'EMAIL'         => self::sendEmail($to, $msg, $request, $event, $role),
+                        'SLACK_DM'      => self::sendSlackDm($to, $msg, $request, $event, $role),
                         'SLACK_CHANNEL' => self::sendSlackChannel($msg, $request, $event, $role),
                         default         => null,
                     };
