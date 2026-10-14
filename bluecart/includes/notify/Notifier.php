@@ -13,8 +13,10 @@ require_once __DIR__ . '/SlackChannel.php';
  */
 final class Notifier
 {
-    public static function dispatch(string $event, array $request, array $actor, string $comment = ''): void
-    {
+    /** @param ?string $from 전이 전 상태. 어디서 왔는지에 따라 알릴 사람이 달라지는 이벤트가 있다. */
+    public static function dispatch(
+        string $event, array $request, array $actor, string $comment = '', ?string $from = null
+    ): void {
         if (!isset(BC_EVENT[$event])) {
             return;
         }
@@ -28,6 +30,10 @@ final class Notifier
         $delivered     = ['EMAIL' => [], 'SLACK_DM' => []];
 
         foreach ($targets as $role) {
+            // 검토 대기·반려 건의 철회는 구매담당자와 상관이 없다. 아직 넘어온 적이 없다.
+            if ($event === 'REQUEST_CANCELED' && $role === 'BUYER' && $from !== 'APPROVED') {
+                continue;
+            }
             $channels = Setting::enabledChannels($event, $role);
             if (!$channels) {
                 continue;
@@ -116,7 +122,11 @@ final class Notifier
         $lines[] = '처리자: ' . $actor['name'];
 
         if ($comment !== '') {
-            $lines[] = ($event === 'REVIEW_REJECTED' ? '반려 사유: ' : '의견: ') . $comment;
+            $lines[] = match ($event) {
+                'REVIEW_REJECTED'   => '반려 사유: ',
+                'PURCHASE_CANCELED' => '중단 사유: ',
+                default             => '의견: ',
+            } . $comment;
         }
 
         // 수신자가 다음에 무엇을 해야 하는지 한 줄로 알려준다.
@@ -141,6 +151,8 @@ final class Notifier
             $event === 'PURCHASE_ASSIGNED'   && $role === 'BUYER'     => '이 건의 구매 담당으로 지정되었습니다. 관리자 탭 > 신청 물품 관리에서 확인하세요.',
             $event === 'REVIEW_REJECTED'     && $role === 'REQUESTER' => '내용을 수정해 재요청하거나 요청을 철회할 수 있습니다.',
             $event === 'PURCHASE_DONE'       && $role === 'REQUESTER' => '물품이 입고되었습니다. 수령해 주세요.',
+            $event === 'REQUEST_CANCELED'    && $role === 'BUYER'     => '요청자가 철회했습니다. 이 건은 구매하지 않아도 됩니다.',
+            $event === 'PURCHASE_CANCELED'   && $role === 'REQUESTER' => '구매가 중단되었습니다. 계속 필요하면 새로 요청해 주세요.',
             default => null,
         };
     }

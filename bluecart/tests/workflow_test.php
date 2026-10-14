@@ -920,6 +920,95 @@ ok('두 역할을 겸한 사람은 메일 한 통', $jianMail !== '' && count($s
 ok('그 한 통은 요청자 문구', ($selfMails[0]['target_role'] ?? '') === 'REQUESTER');
 
 // ---------------------------------------------------------------------
+echo "
+[25] 구매 중단 (구비 완료 전에 그만두기)
+";
+$newStop = fn(string $name) => PurchaseRequest::create(['category_id' => $catId, 'item_name' => $name,
+    'quantity' => 1, 'unit' => '개', 'est_amount' => null, 'ref_url' => '',
+    'deliver_to' => '', 'need_by' => '', 'note' => ''], $hoyoung);
+
+// 구매 진행 중에 중단
+$idStop = $newStop('중단 시험 진행중');
+PurchaseRequest::transition($idStop, 'approve', $jian);
+PurchaseRequest::transition($idStop, 'start_purchase', $jian);
+$rowStop = PurchaseRequest::find($idStop);
+ok('구매 진행 건에 구매 중단 버튼', in_array('stop', bc_available_actions($rowStop, $jian), true));
+ok('요청자에게는 구매 중단이 없다', !in_array('stop', bc_available_actions($rowStop, $hoyoung), true));
+ok('역할 없는 사람에게도 없다', !in_array('stop', bc_available_actions($rowStop, $byeongmun), true));
+throws('요청자가 중단을 보내면 거절', fn() => PurchaseRequest::transition($idStop, 'stop', $hoyoung), '권한');
+
+$stopped = PurchaseRequest::transition($idStop, 'stop', $jian);
+ok('사유 없이도 중단된다', $stopped['status'] === 'CANCELED', $stopped['status']);
+ok('종료 시각이 찍힌다', !empty($stopped['closed_at']));
+ok('철회 건에는 더 할 일이 없다', bc_available_actions($stopped, $jian) === []);
+
+$stopHist = bc_fetch_all('SELECT event_code, from_status FROM bc_request_history WHERE request_id = ? ORDER BY id DESC LIMIT 1', [$idStop]);
+ok('이력에 구매 중단으로 남는다',
+   ($stopHist[0]['event_code'] ?? '') === 'PURCHASE_CANCELED' && ($stopHist[0]['from_status'] ?? '') === 'PURCHASING',
+   json_encode($stopHist));
+
+$stopLogs = bc_fetch_all(
+    'SELECT target_role, channel, body FROM bc_notify_log WHERE request_id = ? AND event_code = "PURCHASE_CANCELED"', [$idStop]
+);
+$stopRoles = array_values(array_unique(array_column($stopLogs, 'target_role')));
+sort($stopRoles);
+ok('요청자와 검토승인자에게 알림', $stopRoles === ['REQUESTER', 'REVIEWER'], implode(',', $stopRoles));
+$toReq = array_values(array_filter($stopLogs, fn($l) => $l['target_role'] === 'REQUESTER'));
+ok('요청자 알림에 다음 할 일 안내', str_contains((string)($toReq[0]['body'] ?? ''), '새로 요청해 주세요'));
+
+// 구매 대기(승인만 된) 건도 중단, 사유를 적으면 알림에 실린다
+$idStop2 = $newStop('중단 시험 대기');
+PurchaseRequest::transition($idStop2, 'approve', $jian);
+PurchaseRequest::transition($idStop2, 'stop', $jian, ['comment' => '단종']);
+ok('구매 대기 건도 중단된다', PurchaseRequest::find($idStop2)['status'] === 'CANCELED');
+$body2 = bc_fetch_all(
+    'SELECT body FROM bc_notify_log WHERE request_id = ? AND event_code = "PURCHASE_CANCELED" LIMIT 1', [$idStop2]
+)[0]['body'] ?? '';
+ok('적은 사유가 알림에 실린다', str_contains((string)$body2, '중단 사유: 단종'));
+
+// 검토 대기·구비 완료 건에는 없다
+$idStop3 = $newStop('중단 시험 검토대기');
+ok('검토 대기 건에는 구매 중단이 없다',
+   !in_array('stop', bc_available_actions(PurchaseRequest::find($idStop3), $jian), true));
+ok('구비 완료 건에는 구매 중단이 없다',
+   !in_array('stop', bc_available_actions(PurchaseRequest::find($idCh), $jian), true));
+
+// ---------------------------------------------------------------------
+echo "
+[26] 요청자 철회는 구매 진행 전까지
+";
+$idWd = $newStop('철회 시험 구매대기');
+PurchaseRequest::transition($idWd, 'approve', $jian);
+$rowWd = PurchaseRequest::find($idWd);
+ok('구매 대기 건에서 요청자는 철회할 수 있다', in_array('cancel', bc_available_actions($rowWd, $hoyoung), true));
+ok('처리하는 쪽에는 철회 대신 구매 중단만',
+   !in_array('cancel', bc_available_actions($rowWd, $jian), true)
+   && in_array('stop', bc_available_actions($rowWd, $jian), true));
+
+$wd = PurchaseRequest::transition($idWd, 'cancel', $hoyoung);
+ok('구매 대기 건이 철회된다', $wd['status'] === 'CANCELED', $wd['status']);
+$wdBuyer = bc_fetch_all(
+    'SELECT body FROM bc_notify_log WHERE request_id = ? AND event_code = "REQUEST_CANCELED" AND target_role = "BUYER"', [$idWd]
+);
+ok('사려던 구매담당자에게 알린다', count($wdBuyer) > 0
+   && str_contains((string)$wdBuyer[0]['body'], '구매하지 않아도 됩니다'), (string)count($wdBuyer));
+
+$idWd2 = $newStop('철회 시험 검토대기');
+PurchaseRequest::transition($idWd2, 'cancel', $hoyoung);
+$wd2Buyer = bc_fetch_all(
+    'SELECT id FROM bc_notify_log WHERE request_id = ? AND event_code = "REQUEST_CANCELED" AND target_role = "BUYER"', [$idWd2]
+);
+ok('검토 대기 건의 철회는 구매담당자에게 안 간다', $wd2Buyer === [], (string)count($wd2Buyer));
+
+$idWd3 = $newStop('철회 시험 구매진행');
+PurchaseRequest::transition($idWd3, 'approve', $jian);
+PurchaseRequest::transition($idWd3, 'start_purchase', $jian);
+ok('구매 진행 건은 요청자가 철회할 수 없다',
+   !in_array('cancel', bc_available_actions(PurchaseRequest::find($idWd3), $hoyoung), true));
+throws('구매 진행 건에 철회를 보내면 거절',
+   fn() => PurchaseRequest::transition($idWd3, 'cancel', $hoyoung), '권한');
+
+// ---------------------------------------------------------------------
 echo "\n";
 echo str_repeat('─', 50) . "\n";
 printf("결과: %d건 통과, %d건 실패\n", $pass, $fail);
