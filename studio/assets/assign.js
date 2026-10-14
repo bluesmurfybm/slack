@@ -3431,7 +3431,7 @@
       var folded = anyFolded();
       var cap = btn.querySelector('span');
       var ic  = btn.querySelector('.ba-caret');
-      if (cap) { cap.textContent = folded ? '태스크 모두 보기' : '대분류만 보기'; }
+      if (cap) { cap.textContent = folded ? '모두 보기' : '대분류만 보기'; }
       // 접혀 있으면 할 일은 '펼치기' 이므로 아래쪽 세모.
       if (ic)  { ic.className = 'ba-caret ba-caret--' + (folded ? 'down' : 'up'); }
       btn.setAttribute('aria-pressed', folded ? 'true' : 'false');
