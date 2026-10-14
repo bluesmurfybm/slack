@@ -283,6 +283,18 @@ bs_route(bs_param_str('act', 'versions'), [
         // 직전 안 유지 (2026-10-12). 그 차수의 담당자를 **약하게** 붙든다 —
         // ε 점 넘게 나은 사람이 있으면 바뀐다. 가중치를 조금 고칠 때마다
         // 담당자가 절반 넘게 뒤섞이던 것을 막는다.
+        // 목표 공수 (2026-10-14). 화면에서 막대를 끌어 정한 값 — member_id => M/D.
+        // 엔진이 이번 산출의 그릇으로만 쓴다(기울이기). 0 이하·숫자 아님은 버린다.
+        $targets = [];
+        foreach (bs_alloc_assoc('targets') as $tmid => $tmd) {
+            if (is_numeric($tmd) && (float)$tmd > 0 && (float)$tmd <= 2000) {
+                $targets[(int)$tmid] = round((float)$tmd, 2);
+            }
+        }
+        if ($targets) {
+            $params['targets'] = $targets;
+        }
+
         $stickId = bs_param_int('stick_from', 0);
         if ($stickId) {
             $prev = $allocs->find($stickId);
@@ -329,6 +341,8 @@ bs_route(bs_param_str('act', 'versions'), [
             // 어느 차수를 기준으로 붙들었는지. 같은 가중치라도 기준이 다르면
             // 결과가 다르다 — 안 적으면 재현할 수 없다.
             'stick_from'  => $stickId ?: null,
+            // 목표 공수 — 엔진이 실제로 받아들인 것만(후보에 없는 사람은 버려진다).
+            'targets'     => $r['meta']['targets'] ?? [],
             'stick'       => $r['meta']['stick'] ?? null,
         ], $user);
 
@@ -347,6 +361,9 @@ bs_route(bs_param_str('act', 'versions'), [
             'unassigned'    => $r['unassigned'],
             'meta'          => $r['meta'],
             'message'       => '배정안 ' . $a['version'] . '차를 만들었습니다. 검토 후 확정하세요.'
+                . (!empty($r['meta']['targets'])
+                    ? ' ' . count($r['meta']['targets']) . '명은 정해 준 목표 공수 쪽으로 기울여 나눴습니다(딱 맞지는 않습니다).'
+                    : '')
                 . ($r['meta']['level'] !== AllocationEngine::L_LEAF
                     ? ' ' . AllocationEngine::LEVEL_LABEL[$r['meta']['level']] . ' 로 묶었습니다.'
                     : '')
@@ -727,6 +744,9 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
             // 말해 주지 않으면 사람은 숫자가 틀렸다고 생각한다.
             'aidd_on'     => !empty($peak[$mid]['aidd_on']),
             'aidd_pct'    => $peak[$mid]['aidd_pct'] ?? 0,
+            // 이 차수를 산출할 때 쓴 목표 공수 (2026-10-14). 막대의 눈금(잰 가용
+            // 공수)과 **따로** 그린다 — 사람이 정한 값을 잰 값처럼 보이지 않게.
+            'target_md'   => isset($pa['targets'][$mid]) ? (float)$pa['targets'][$mid] : null,
         ];
     }
     usort($out, static fn($a, $b) => ($b['assigned_md'] <=> $a['assigned_md'])

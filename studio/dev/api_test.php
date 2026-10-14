@@ -3644,6 +3644,22 @@ $r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json'
     'project_id' => $pid, 'stick_from' => 999999999]]);
 ok('없는 차수는 404', $r['status'] === 404, 'status=' . $r['status']);
 
+// 목표 공수 (2026-10-14) — 막대를 끌어 정한 값을 보내면 그 차수에 남고 막대에 실린다.
+// 목표를 너무 작게 주면 그 사람이 한 건도 못 받아 막대에서 빠진다 — 60% 로.
+$tgMid = (int)($r0['json']['data']['load'][0]['member_id'] ?? 0);
+$tgVal = max(1.0, round((float)($r0['json']['data']['load'][0]['assigned_md'] ?? 2) * 0.6 * 2) / 2);
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'targets' => [$tgMid => $tgVal, 999999 => 10]]]);
+ok('목표 공수로 산출한다', $r['status'] === 200
+   && (float)($r['json']['data']['meta']['targets'][$tgMid] ?? 0) === $tgVal,
+   substr($r['body'], 0, 160));
+ok('후보에 없는 사람의 목표는 버린다', !isset($r['json']['data']['meta']['targets'][999999]));
+$tgRow = null;
+foreach ($r['json']['data']['load'] ?? [] as $l) { if ((int)$l['member_id'] === $tgMid) { $tgRow = $l; } }
+ok('막대에 그 차수의 목표가 실린다', $tgRow === null || (float)($tgRow['target_md'] ?? 0) === $tgVal,
+   json_encode([$tgVal, $tgRow['target_md'] ?? null]));
+ok('목표를 썼다고 말해 준다', str_contains($r['json']['data']['message'] ?? '', '목표 공수'));
+
 // =====================================================================
 section('[ED] 공동 편집자 — PM 이 지정, 확정·삭제는 못 한다 (2026-10-14)');
 $r = $guest->req('/studio/api/project.php?act=add_editor', ['csrf' => true, 'json' => [

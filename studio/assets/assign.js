@@ -3548,6 +3548,9 @@
     var MEMBERS  = [];     // 담당자 선택지
     var WEIGHTS  = null;
     var LAST_PICK = [];    // 가장 최근 배정안이 쓴 후보
+    var TARGETS   = {};    // 막대를 끌어 정한 목표 공수 member_id => M/D (2026-10-14)
+    var LOAD      = [];    // 지금 그린 부하 줄 — 검산 줄이 다시 쓴다
+    var LOAD_MAX  = 1;     // 막대 눈금의 끝(M/D). 끈 자리를 M/D 로 바꿀 때 쓴다
     var loaded   = false;
 
     var W_LABEL = {
@@ -3592,6 +3595,8 @@
     }
 
     function openVersion(id) {
+      // 다른 차수를 열면 끌어 둔 목표는 버린다 — 그 차수의 막대가 아니다.
+      if (!CUR || CUR.id !== id) TARGETS = {};
       api('api/allocate.php?' + qs({ act: 'detail', allocation_id: id }))
         .then(apply)
         .catch(function (e) { showError('#ba-al-error', e.message); });
@@ -3767,8 +3772,14 @@
       });
       if (maxCap <= 0) maxCap = 1;
       if (maxCnt <= 0) maxCnt = 1;
+      // 끌어서 목표를 크게 잡을 수 있게 눈금 끝을 조금 넉넉히 둔다.
+      maxCap = Math.ceil(maxCap * 1.15);
+      LOAD = load; LOAD_MAX = maxCap;
+      // 손잡이는 고칠 수 있는 차수에서만. 확정본·지난 안은 보기만 한다.
+      var dragOk = CAN_EDIT && CUR && CUR.status !== 'confirmed' && CUR.status !== 'archived';
 
-      box.innerHTML = '<div class="ba-loads">' + load.map(function (l) {
+      box.innerHTML = (dragOk ? '<div class="ba-tgtbar" id="ba-tgtbar"></div>' : '') +
+        '<div class="ba-loads' + (dragOk ? ' is-drag' : '') + '">' + load.map(function (l) {
         var pctOfMax = Math.min(100, l.assigned_md / maxCap * 100);
         var capMark  = Math.min(100, l.capacity_md / maxCap * 100);
         // 건수 막대는 **공수 막대와 색을 달리한다.** 같은 색이면 두 막대가
@@ -3791,9 +3802,19 @@
             '<i class="ba-loadrow__cb"><b style="width:' + cntPct + '%"></b></i>' +
             '<em>' + l.task_count + '건</em>' +
           '</span>' +
-          '<span class="ba-loadrow__bar">' +
+          '<span class="ba-loadrow__bar" data-mid="' + l.member_id + '">' +
             '<i style="width:' + pctOfMax + '%"></i>' +
             '<u style="left:' + capMark + '%" title="가용 공수 ' + l.capacity_md + ' M/D"></u>' +
+            // 이 차수를 산출할 때 쓴 목표 공수 — 다이아몬드로 따로 (2026-10-14)
+            (l.target_md != null
+              ? '<s class="ba-tgt-was" style="left:' + Math.min(100, l.target_md / maxCap * 100) + '%"' +
+                ' title="이 차수에 쓴 목표 공수 ' + l.target_md + ' M/D"></s>' : '') +
+            // 끌어서 목표를 정하는 손잡이. 처음 자리는 지금 맡은 양이다.
+            (dragOk
+              ? '<b class="ba-tgt' + (TARGETS[l.member_id] != null ? ' is-set' : '') + '"' +
+                ' style="left:' + Math.min(100, (TARGETS[l.member_id] != null ? TARGETS[l.member_id] : l.assigned_md) / maxCap * 100) + '%"' +
+                ' role="slider" tabindex="0" aria-label="' + esc(l.emp_name) + ' 목표 공수"' +
+                ' title="끌어서 목표 공수를 정합니다"></b>' : '') +
           '</span>' +
           // ┌──────────────────────────────────────────────────────┐
           // │ 비율은 값에 **붙여** 적는다 (2026-10-08)              │
@@ -3811,13 +3832,114 @@
                 'AIDD</span>' : '') +
             ' <em>(' + (l.load_pct === null ? '-' : l.load_pct + '%') +
               (l.over ? ' <b>초과</b>' : '') + ')</em>' +
+            // 끌어 정한 목표 — 같은 칸 끝에 붙여 '이것이 바뀐다' 를 보인다
+            '<span class="ba-tgt-v" data-tgtv="' + l.member_id + '">' +
+              (TARGETS[l.member_id] != null ? '→ 목표 ' + TARGETS[l.member_id] : '') + '</span>' +
           '</span>' +
           // 기간 합계로는 74% 라도 그 공수가 특정 달에 몰려 있으면 그 달에는
           // 못 받는다. 배정하는 자리에서 말해 줘야 늦지 않는다.
           overMonths(l) +
         '</div>';
       }).join('') + '</div>';
+      if (dragOk) renderTargetBar();
     }
+
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 목표 공수 — 막대 끝을 끌어 정한다 (2026-10-14)                │
+    // │                                                              │
+    // │ 끈 값은 **다음 산출 한 번**의 그릇으로만 쓴다. 엔진은 목표 쪽 │
+    // │ 으로 기울일 뿐 딱 맞추지 않는다(사람이 그 방식을 골랐다).     │
+    // │ 목표 합계가 일의 총량과 다르면 누군가는 목표를 벗어날 수밖에  │
+    // │ 없으므로, 끄는 동안 검산 줄에서 바로 보여 준다.                │
+    // └──────────────────────────────────────────────────────────────┘
+    function renderTargetBar() {
+      var bar = $('#ba-tgtbar');
+      if (!bar) return;
+      var ids = Object.keys(TARGETS);
+      if (!ids.length) {
+        bar.innerHTML = '<span class="ba-dim">막대 끝의 손잡이를 끌면 그 사람의 목표 공수를 정할 수 있습니다. ' +
+          '정한 목표 쪽으로 기울여 다시 산출합니다.</span>';
+        return;
+      }
+      var total = 0, planned = 0;
+      LOAD.forEach(function (l) {
+        total   += l.assigned_md;
+        planned += TARGETS[l.member_id] != null ? TARGETS[l.member_id] : l.assigned_md;
+      });
+      var gap = Math.round((planned - total) * 10) / 10;
+      bar.innerHTML =
+        '<span>목표 ' + ids.length + '명 · 목표 합계 <b>' + (Math.round(planned * 10) / 10) + '</b> / ' +
+          '배정할 일 <b>' + (Math.round(total * 10) / 10) + '</b> M/D' +
+          (Math.abs(gap) >= 0.5
+            ? ' <em class="' + (gap < 0 ? 'is-short' : 'is-spare') + '">(' +
+              (gap < 0 ? -gap + ' M/D 모자람 — 누군가는 목표를 넘깁니다' : gap + ' M/D 남음') + ')</em>'
+            : ' <em class="is-ok">(맞음)</em>') +
+          '<span class="ba-dim"> · 손잡이를 안 건드린 사람은 지금 맡은 양으로 셉니다</span></span>' +
+        '<span class="ba-spacer"></span>' +
+        '<button type="button" class="ba-btn ba-btn--sm" id="ba-tgt-clear">목표 지우기</button>' +
+        '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" id="ba-tgt-run">목표 공수로 재산출</button>';
+    }
+
+    /** 막대 위 x 좌표 → M/D. 0.5 단위로 끊는다(태스크가 대개 0.5 의 배수다). */
+    function mdAt(barEl, clientX) {
+      var r = barEl.getBoundingClientRect();
+      var pct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+      return Math.max(0.5, Math.round(pct * LOAD_MAX * 2) / 2);
+    }
+
+    function setTarget(mid, md) {
+      TARGETS[mid] = md;
+      var bar = $('.ba-loadrow__bar[data-mid="' + mid + '"]');
+      var h = bar && bar.querySelector('.ba-tgt');
+      if (h) { h.style.left = Math.min(100, md / LOAD_MAX * 100) + '%'; h.classList.add('is-set'); }
+      var v = $('[data-tgtv="' + mid + '"]');
+      if (v) v.textContent = '→ 목표 ' + md;
+      renderTargetBar();
+    }
+
+    (function bindTargetDrag() {
+      var box = $('#ba-al-load');
+      if (!box) return;
+      var drag = null;
+      box.addEventListener('pointerdown', function (e) {
+        var bar = e.target.closest ? e.target.closest('.ba-loads.is-drag .ba-loadrow__bar') : null;
+        if (!bar) return;
+        e.preventDefault();
+        drag = { bar: bar, mid: parseInt(bar.dataset.mid, 10) };
+        try { bar.setPointerCapture(e.pointerId); } catch (x) { /* 오래된 브라우저 */ }
+        setTarget(drag.mid, mdAt(bar, e.clientX));
+      });
+      box.addEventListener('pointermove', function (e) {
+        if (drag) setTarget(drag.mid, mdAt(drag.bar, e.clientX));
+      });
+      ['pointerup', 'pointercancel'].forEach(function (t) {
+        box.addEventListener(t, function () { drag = null; });
+      });
+      // 키보드로도 — 손잡이에 초점을 두고 ←/→ 로 0.5 씩
+      box.addEventListener('keydown', function (e) {
+        var h = e.target.closest ? e.target.closest('.ba-tgt') : null;
+        if (!h || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+        e.preventDefault();
+        var mid = parseInt(h.parentNode.dataset.mid, 10);
+        var row = LOAD.filter(function (l) { return l.member_id === mid; })[0] || {};
+        var cur = TARGETS[mid] != null ? TARGETS[mid] : (row.assigned_md || 0);
+        setTarget(mid, Math.max(0.5, Math.min(LOAD_MAX, cur + (e.key === 'ArrowRight' ? 0.5 : -0.5))));
+      });
+      box.addEventListener('click', function (e) {
+        if (e.target.id === 'ba-tgt-clear') { TARGETS = {}; renderLoad(LOAD); return; }
+        if (e.target.id !== 'ba-tgt-run' || !CUR) return;
+        var p = CUR.params || {};
+        // 지금 차수의 조건을 **그대로** 두고 목표만 얹는다. 패널을 안 열어도
+        // 같은 방식·단위·가중치로 돈다. 직전 안을 기준으로 붙든다.
+        var extra = { targets: TARGETS, stick_from: CUR.id, keep_manual_from: CUR.id };
+        if (p.weights) extra.weights = p.weights;
+        if (p.method && p.method !== 'weighted') { extra.method = p.method; if (p.seed) extra.seed = p.seed; }
+        if (p.level && p.level !== 'leaf') extra.level = p.level;
+        if (p.min_one !== undefined) extra.min_one = p.min_one ? 1 : 0;
+        if (p.aidd && p.aidd.enabled === false) extra.aidd = 0;
+        propose(null, true, extra);
+      });
+    })();
 
     function renderTable(unassigned) {
       var tb = $('#ba-al-table').querySelector('tbody');
@@ -4124,7 +4246,7 @@
     }
 
     // ---- 동작 -------------------------------------------------------------
-    function propose(weights, keepManual) {
+    function propose(weights, keepManual, extra) {
       // 2단계에서 고른 후보. 이 탭에서 고른 적이 없으면(null) 지난 배정안의
       // 명단을 이어 쓴다 — 2단계를 거치지 않고 바로 여기로 와도 같게.
       var pick = readPick(PID);
@@ -4195,9 +4317,12 @@
         var st = $('#ba-al-stick');
         if (st && st.checked && CUR) { body.stick_from = CUR.id; }
       }
+      // 부르는 쪽이 통째로 정해 넘기는 값(목표 공수 재산출 등). 위 패널 값보다 앞선다.
+      if (extra) { Object.keys(extra).forEach(function (k) { body[k] = extra[k]; }); }
 
       api('api/allocate.php?act=propose', { method: 'POST', body: body })
         .then(function (d) {
+          TARGETS = {};          // 쓴 목표는 그 차수에 남았다. 손잡이는 새로 시작한다
           WEIGHTS = (d.meta && d.meta.weights) || WEIGHTS;
           // 씨앗을 칸에 되돌려 놓는다. 비우고 돌렸을 때 **방금 뽑힌 값**을
           // 알아야 같은 결과를 다시 만들 수 있다.

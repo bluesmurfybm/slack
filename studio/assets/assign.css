@@ -1022,6 +1022,38 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-loadrow__c em { font-style: normal; white-space: nowrap; }
 /* 달 초과 경고는 **다음 줄 전체**를 쓴다. 칸으로 끼워 넣으면 격자가 밀려
    다른 줄과 눈금이 어긋난다 — 막대를 견주려고 만든 격자다. */
+/* ── 목표 공수 끌기 (2026-10-14) ─────────────────────────────────────
+   막대 끝의 손잡이를 끌어 그 사람의 목표 공수를 정한다. 이 차수에 쓴
+   목표는 다이아몬드로 따로 — 잰 가용 공수(세로 눈금)와 섞지 않는다. */
+.ba-tgtbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px;
+  margin: 12px 0 2px; padding: 8px 12px; font-size: 12.5px;
+  background: var(--ba-surface); border: 1px dashed var(--ba-line); border-radius: 8px;
+}
+.ba-tgtbar b { font-variant-numeric: tabular-nums; }
+.ba-tgtbar em { font-style: normal; font-weight: 600; }
+.ba-tgtbar .is-short { color: var(--ba-danger); }
+.ba-tgtbar .is-spare { color: var(--ba-warn); }
+.ba-tgtbar .is-ok    { color: var(--ba-brand); }
+.ba-loads.is-drag .ba-loadrow__bar { cursor: ew-resize; touch-action: none; overflow: visible; }
+.ba-loads.is-drag .ba-loadrow__bar > i { border-radius: 6px 0 0 6px; }
+.ba-loadrow__bar { position: relative; }
+.ba-tgt {
+  position: absolute; top: 50%; width: 12px; height: 18px; margin: -9px 0 0 -6px;
+  border-radius: 4px; background: var(--ba-paper); border: 2px solid var(--ba-ink-soft);
+  box-shadow: 0 1px 3px rgba(22, 36, 58, .25); cursor: ew-resize; z-index: 2;
+  opacity: .55; transition: opacity .12s;
+}
+.ba-loadrow:hover .ba-tgt, .ba-tgt:focus-visible, .ba-tgt.is-set { opacity: 1; }
+.ba-tgt.is-set { border-color: #2f6fd6; background: #e8f0fd; }
+.ba-tgt:focus-visible { outline: 2px solid #2f6fd6; outline-offset: 2px; }
+.ba-tgt-v { margin-left: 6px; font-size: 11.5px; font-weight: 700; color: #2f6fd6; white-space: nowrap; }
+.ba-tgt-was {
+  position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
+  background: #2f6fd6; transform: rotate(45deg); opacity: .8; z-index: 1;
+  text-decoration: none;
+}
+
 /* 자기 줄 바로 밑에 붙이고, 다음 사람과는 띄운다 */
 .ba-loadrow .ba-mover { grid-column: 1 / -1; margin: 0 0 8px 86px; }
 .ba-loadrow.is-over .ba-loadrow__bar i { background: var(--ba-danger); opacity: .75; }

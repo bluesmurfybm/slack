@@ -1411,5 +1411,38 @@ $h3 = $engine->propose($pid, []);
 ok('되돌리면 원래대로', count($fitOf($h3, $low)) === ($cnt0[$low] ?? 0));
 
 // =====================================================================
+echo "\n[17] 목표 공수 — 막대를 끌어 정한 쪽으로 기울인다 (2026-10-14)\n";
+$mdOf = static function (array $r): array {
+    $o = [];
+    foreach ($r['summary']['by_member'] as $row) { $o[(int)$row['member_id']] = (float)$row['assigned_md']; }
+    return $o;
+};
+$t0  = $engine->propose($pid, []);
+$md0 = $mdOf($t0);
+arsort($md0);
+$top = (int)array_key_first($md0);
+asort($md0);
+$bot = (int)array_key_first($md0);
+
+$t1  = $engine->propose($pid, ['targets' => [$top => 0.5]]);
+$md1 = $mdOf($t1);
+ok('★ 많이 받던 사람의 목표를 낮추면 덜 받는다', $md1[$top] < $md0[$top],
+   $md0[$top] . ' → ' . $md1[$top]);
+ok('목표는 그 차수 기록에 남는다', ($t1['meta']['targets'][$top] ?? null) === 0.5,
+   json_encode($t1['meta']['targets'] ?? null));
+$line = '';
+foreach ($t1['items'] as $it) {
+    if ($it['member_id'] === $top) { $line = implode(' ', $it['reason_json']['lines'] ?? []); break; }
+}
+ok('근거에 목표 공수로 산출했다고 적는다 (받은 건이 있으면)',
+   $line === '' || str_contains($line, '목표 공수'), $line);
+
+$t2  = $engine->propose($pid, ['targets' => [$bot => 500]]);
+ok('적게 받던 사람의 목표를 크게 잡으면 줄지 않는다', $mdOf($t2)[$bot] >= $md0[$bot],
+   $md0[$bot] . ' → ' . $mdOf($t2)[$bot]);
+ok('없는 사람·0 이하는 버린다',
+   $engine->propose($pid, ['targets' => [999999 => 10, $top => 0]])['meta']['targets'] === []);
+
+// =====================================================================
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";
 exit($fail > 0 ? 1 : 0);
