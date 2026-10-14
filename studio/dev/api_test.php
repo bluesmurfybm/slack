@@ -3488,8 +3488,10 @@ ok('★ 접기 단추가 표 바로 위에 따로 있다',
    && strpos($page, 'id="ba-w-fold"') < strpos($page, 'id="ba-w-table"'),
    '자료를 바꾸는 단추와 섞여 있다');
 // 표의 첫 칸과 세로로 맞춘다 — 영향이 미치는 곳 바로 위다.
+// 2026-10-14: [표 숨기기] 가 맨 왼쪽, 그 오른쪽에 접기 단추 — 사이에 여백(spacer)이 없어야 한다.
 ok('왼쪽 끝에 붙는다',
-   (bool)preg_match('/ba-viewbar">\s*(<!--.*?-->\s*)?<button[^>]*id="ba-w-fold"/s', $page),
+   (bool)preg_match('/ba-viewbar">\s*(<!--.*?-->\s*)?<button[^>]*id="ba-w-hide"'
+                  . '.*?<\/button>\s*(<!--.*?-->\s*)?<button[^>]*id="ba-w-fold"/s', $page),
    '앞에 여백을 미는 자리가 있으면 오른쪽으로 밀린다');
 // 세모가 가리키는 쪽이 **누르면 가는 쪽**이다 —
 // ▲ 접기(위로 말려 올라간다) / ▼ 펼치기(아래로 펼쳐진다)
