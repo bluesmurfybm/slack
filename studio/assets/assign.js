@@ -3833,8 +3833,9 @@
             ' <em>(' + (l.load_pct === null ? '-' : l.load_pct + '%') +
               (l.over ? ' <b>초과</b>' : '') + ')</em>' +
             // 끌어 정한 목표 — 같은 칸 끝에 붙여 '이것이 바뀐다' 를 보인다
-            '<span class="ba-tgt-v" data-tgtv="' + l.member_id + '">' +
-              (TARGETS[l.member_id] != null ? '→ 목표 ' + TARGETS[l.member_id] : '') + '</span>' +
+            '<span class="ba-tgt-v' + (TARGETS[l.member_id] === 0 ? ' is-zero' : '') +
+              '" data-tgtv="' + l.member_id + '">' +
+              (TARGETS[l.member_id] != null ? tgtLabel(TARGETS[l.member_id]) : '') + '</span>' +
           '</span>' +
           // 기간 합계로는 74% 라도 그 공수가 특정 달에 몰려 있으면 그 달에는
           // 못 받는다. 배정하는 자리에서 말해 줘야 늦지 않는다.
@@ -3856,11 +3857,26 @@
       var bar = $('#ba-tgtbar');
       if (!bar) return;
       var ids = Object.keys(TARGETS);
+
+      // 공수가 없는 태스크는 M/D 로 기울일 수 없다 — 누구에게 가도 막대가
+      // 안 움직인다. 먼저 알려 준다 (2026-10-14).
+      var noMd = 0, seen = {};
+      ITEMS.forEach(function (it) {
+        if (it.role !== 'owner' || seen[it.task_id]) return;
+        seen[it.task_id] = true;
+        if (it.est_md === null || it.est_md === undefined || Number(it.est_md) <= 0) noMd++;
+      });
+      var warn = noMd
+        ? '<div class="ba-tgtbar__warn">공수가 없는 태스크 <b>' + noMd + '건</b>은 목표 공수로 나눌 수 없습니다 ' +
+          '— 누구에게 가도 막대가 움직이지 않습니다. 먼저 WBS 의 [난이도·공수 매기기] 를 돌리세요.</div>'
+        : '';
+
       if (!ids.length) {
         bar.innerHTML = '<span class="ba-dim">막대 끝의 손잡이를 끌면 그 사람의 목표 공수를 정할 수 있습니다. ' +
-          '정한 목표 쪽으로 기울여 다시 산출합니다.</span>';
+          '맨 왼쪽 끝은 <b>주지 않음</b>입니다. 정한 목표 쪽으로 기울여 다시 산출합니다.</span>' + warn;
         return;
       }
+      var zeros = ids.filter(function (k) { return TARGETS[k] <= 0; }).length;
       var total = 0, planned = 0;
       LOAD.forEach(function (l) {
         total   += l.assigned_md;
@@ -3868,7 +3884,8 @@
       });
       var gap = Math.round((planned - total) * 10) / 10;
       bar.innerHTML =
-        '<span>목표 ' + ids.length + '명 · 목표 합계 <b>' + (Math.round(planned * 10) / 10) + '</b> / ' +
+        '<span>목표 ' + ids.length + '명' + (zeros ? '(주지 않음 ' + zeros + '명)' : '') +
+          ' · 목표 합계 <b>' + (Math.round(planned * 10) / 10) + '</b> / ' +
           '배정할 일 <b>' + (Math.round(total * 10) / 10) + '</b> M/D' +
           (Math.abs(gap) >= 0.5
             ? ' <em class="' + (gap < 0 ? 'is-short' : 'is-spare') + '">(' +
@@ -3877,23 +3894,32 @@
           '<span class="ba-dim"> · 손잡이를 안 건드린 사람은 지금 맡은 양으로 셉니다</span></span>' +
         '<span class="ba-spacer"></span>' +
         '<button type="button" class="ba-btn ba-btn--sm" id="ba-tgt-clear">목표 지우기</button>' +
-        '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" id="ba-tgt-run">목표 공수로 재산출</button>';
+        '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" id="ba-tgt-run">목표 공수로 재산출</button>' + warn;
     }
 
-    /** 막대 위 x 좌표 → M/D. 0.5 단위로 끊는다(태스크가 대개 0.5 의 배수다). */
+    /**
+     * 막대 위 x 좌표 → M/D. 0.5 단위로 끊는다(태스크가 대개 0.5 의 배수다).
+     * 맨 왼쪽 끝은 0 — "이번엔 주지 않기" 다 (2026-10-14).
+     */
     function mdAt(barEl, clientX) {
       var r = barEl.getBoundingClientRect();
       var pct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
-      return Math.max(0.5, Math.round(pct * LOAD_MAX * 2) / 2);
+      return Math.round(pct * LOAD_MAX * 2) / 2;
     }
+
+    function tgtLabel(md) { return md <= 0 ? '→ 주지 않음' : '→ 목표 ' + md; }
 
     function setTarget(mid, md) {
       TARGETS[mid] = md;
       var bar = $('.ba-loadrow__bar[data-mid="' + mid + '"]');
       var h = bar && bar.querySelector('.ba-tgt');
-      if (h) { h.style.left = Math.min(100, md / LOAD_MAX * 100) + '%'; h.classList.add('is-set'); }
+      if (h) {
+        h.style.left = Math.min(100, md / LOAD_MAX * 100) + '%';
+        h.classList.add('is-set');
+        h.classList.toggle('is-zero', md <= 0);
+      }
       var v = $('[data-tgtv="' + mid + '"]');
-      if (v) v.textContent = '→ 목표 ' + md;
+      if (v) { v.textContent = tgtLabel(md); v.classList.toggle('is-zero', md <= 0); }
       renderTargetBar();
     }
 
@@ -3923,7 +3949,7 @@
         var mid = parseInt(h.parentNode.dataset.mid, 10);
         var row = LOAD.filter(function (l) { return l.member_id === mid; })[0] || {};
         var cur = TARGETS[mid] != null ? TARGETS[mid] : (row.assigned_md || 0);
-        setTarget(mid, Math.max(0.5, Math.min(LOAD_MAX, cur + (e.key === 'ArrowRight' ? 0.5 : -0.5))));
+        setTarget(mid, Math.max(0, Math.min(LOAD_MAX, cur + (e.key === 'ArrowRight' ? 0.5 : -0.5))));
       });
       box.addEventListener('click', function (e) {
         if (e.target.id === 'ba-tgt-clear') { TARGETS = {}; renderLoad(LOAD); return; }

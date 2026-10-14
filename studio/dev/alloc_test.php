@@ -1440,8 +1440,30 @@ ok('근거에 목표 공수로 산출했다고 적는다 (받은 건이 있으�
 $t2  = $engine->propose($pid, ['targets' => [$bot => 500]]);
 ok('적게 받던 사람의 목표를 크게 잡으면 줄지 않는다', $mdOf($t2)[$bot] >= $md0[$bot],
    $md0[$bot] . ' → ' . $mdOf($t2)[$bot]);
-ok('없는 사람·0 이하는 버린다',
-   $engine->propose($pid, ['targets' => [999999 => 10, $top => 0]])['meta']['targets'] === []);
+ok('없는 사람·음수는 버린다',
+   $engine->propose($pid, ['targets' => [999999 => 10, $top => -1]])['meta']['targets'] === []);
+
+// 목표 0 = "이번엔 주지 않기" (2026-10-14). 다른 사람이 받을 수 있으면 0건.
+$t3  = $engine->propose($pid, ['targets' => [$top => 0], 'min_one' => true]);
+$got = 0;
+foreach ($t3['items'] as $it) { if ($it['member_id'] === $top) { $got++; } }
+ok('★ 목표 0 이면 받지 않는다', $got === 0, (string)$got);
+ok('목표 0 도 기록에 남는다', ($t3['meta']['targets'][$top] ?? null) === 0.0,
+   json_encode($t3['meta']['targets'] ?? null));
+
+// 목표를 정한 사람은 최소 1건 보장에서 빠진다 — 보장이 지시를 덮어쓰지 않게.
+$mo = $t3['meta']['min_one'] ?? [];
+ok('★ 목표를 정한 사람에게는 보장이 한 건을 넘기지 않는다',
+   !in_array($top, array_column($mo['moved'] ?? [], 'member_id'), true), json_encode($mo));
+
+// 모두 0 이면 받을 사람이 없다 — 그래도 태스크를 버리지 않고 예외로 준다.
+$allZero = array_fill_keys(array_keys($md0), 0);
+$t4 = $engine->propose($pid, ['targets' => $allZero]);
+ok('모두 주지 않기면 예외로라도 나눈다(태스크를 버리지 않는다)', count($t4['unassigned']) === 0,
+   (string)count($t4['unassigned']));
+$why = '';
+foreach ($t4['items'] as $it) { $why = implode(' ', $it['reason_json']['lines'] ?? []); break; }
+ok('예외로 왔다고 적는다', str_contains($why, '주지 않기로'), $why);
 
 // =====================================================================
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";

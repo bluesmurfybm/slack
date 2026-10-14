@@ -1048,6 +1048,12 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-tgt.is-set { border-color: #2f6fd6; background: #e8f0fd; }
 .ba-tgt:focus-visible { outline: 2px solid #2f6fd6; outline-offset: 2px; }
 .ba-tgt-v { margin-left: 6px; font-size: 11.5px; font-weight: 700; color: #2f6fd6; white-space: nowrap; }
+/* 목표 0 = 주지 않음 — 파랑이 아니라 경고색으로 */
+.ba-tgt.is-zero { border-color: var(--ba-danger); background: #fdf3f2; }
+.ba-tgt-v.is-zero { color: var(--ba-danger); }
+.ba-tgtbar__warn {
+  flex: 1 1 100%; margin-top: 2px; font-size: 12px; color: var(--ba-warn);
+}
 .ba-tgt-was {
   position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
   background: #2f6fd6; transform: rotate(45deg); opacity: .8; z-index: 1;

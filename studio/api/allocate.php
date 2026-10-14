@@ -284,10 +284,10 @@ bs_route(bs_param_str('act', 'versions'), [
         // ε 점 넘게 나은 사람이 있으면 바뀐다. 가중치를 조금 고칠 때마다
         // 담당자가 절반 넘게 뒤섞이던 것을 막는다.
         // 목표 공수 (2026-10-14). 화면에서 막대를 끌어 정한 값 — member_id => M/D.
-        // 엔진이 이번 산출의 그릇으로만 쓴다(기울이기). 0 이하·숫자 아님은 버린다.
+        // 엔진이 이번 산출의 그릇으로만 쓴다(기울이기). 0 은 '주지 않기', 음수·숫자 아님은 버린다.
         $targets = [];
         foreach (bs_alloc_assoc('targets') as $tmid => $tmd) {
-            if (is_numeric($tmd) && (float)$tmd > 0 && (float)$tmd <= 2000) {
+            if (is_numeric($tmd) && (float)$tmd >= 0 && (float)$tmd <= 2000) {
                 $targets[(int)$tmid] = round((float)$tmd, 2);
             }
         }
