@@ -568,11 +568,30 @@ final class ProjectRepo
     // 출처 문서 (bs_project_source)
     // =================================================================
 
+    /**
+     * 023(출처 용도)이 이 DB 에 올라가 있는가. 요청당 한 번만 본다.
+     * 코드가 DB 보다 먼저 올라가도 프로젝트 화면이 500 이 되지 않게 — 칸이
+     * 없으면 모든 문서를 범위 문서로 보고, 참고 자료 블록만 쓸 수 없다.
+     */
+    private function hasPurposeColumn(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            try {
+                $has = (bool)$this->pdo->query(
+                    "SHOW COLUMNS FROM bs_project_source LIKE 'purpose'")->fetch();
+            } catch (Throwable $e) {
+                $has = false;
+            }
+        }
+        return $has;
+    }
+
     /** 해당 프로젝트의 출처 문서 목록. parsed_text 는 크니까 빼고 길이만 준다. */
     public function sources(int $projectId): array
     {
         $st = $this->pdo->prepare(
-            'SELECT id, project_id, purpose, kind, title, url, file_size, mime,
+            'SELECT id, project_id, ' . ($this->hasPurposeColumn() ? 'purpose' : '"scope" AS purpose') . ', kind, title, url, file_size, mime,
                     parse_status, parse_error,
                     CHAR_LENGTH(COALESCE(parsed_text, "")) AS parsed_len,
                     uploaded_by, uploaded_by_name, created_at
@@ -602,7 +621,7 @@ final class ProjectRepo
             'SELECT id, project_id, kind, title, url, parse_status, parsed_text
                FROM bs_project_source
               WHERE project_id = ?
-                AND purpose = "scope"
+                ' . ($this->hasPurposeColumn() ? 'AND purpose = "scope"' : '') . '
                 AND parse_status = "ok"
                 AND parsed_text IS NOT NULL
                 AND parsed_text <> ""
@@ -671,7 +690,7 @@ final class ProjectRepo
             throw new InvalidArgumentException('알 수 없는 용도입니다: ' . $purpose);
         }
         $ids = array_values(array_filter(array_map('intval', $sourceIds)));
-        if (!$ids) {
+        if (!$ids || !$this->hasPurposeColumn()) {   // 023 전 서버 — 모두 범위 문서로 남는다
             return;
         }
         $ph = implode(',', array_fill(0, count($ids), '?'));

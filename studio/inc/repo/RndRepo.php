@@ -95,16 +95,20 @@ final class RndRepo
                     (SELECT rm.role FROM bs_rnd_member rm
                        JOIN bs_member mm ON mm.id = rm.member_id
                       WHERE rm.project_id = p.id AND mm.user_id = ?) AS my_role,
-                    (SELECT rm.can_edit FROM bs_rnd_member rm
-                       JOIN bs_member mm ON mm.id = rm.member_id
-                      WHERE rm.project_id = p.id AND mm.user_id = ?) AS my_can_edit,
+                    ' . ($this->hasEditColumn()
+                        ? '(SELECT rm.can_edit FROM bs_rnd_member rm
+                             JOIN bs_member mm ON mm.id = rm.member_id
+                            WHERE rm.project_id = p.id AND mm.user_id = ?)'
+                        : '0') . ' AS my_can_edit,
                     (SELECT COUNT(*) FROM bs_rnd_interest ri
                        JOIN bs_member mi ON mi.id = ri.member_id
                       WHERE ri.project_id = p.id AND mi.user_id = ?) AS my_interest
                FROM bs_project p
               WHERE p.id = ? AND p.deleted_at IS NULL AND ' . $vis
         );
-        $st->execute(array_merge([$me, $me, $me, $me, $id], $visParams));
+        $st->execute(array_merge(
+            $this->hasEditColumn() ? [$me, $me, $me, $me, $id] : [$me, $me, $me, $id],
+            $visParams));
         $r = $st->fetch(PDO::FETCH_ASSOC);
 
         return $r ?: null;
@@ -514,7 +518,9 @@ final class RndRepo
                     rm.join_reason, rm.reject_reason,
                     rm.approved_by, rm.approved_by_name, rm.approved_at,
                     rm.joined_at, rm.left_at, rm.created_at,
-                    rm.can_edit, rm.edit_granted_by,
+                    ' . ($this->hasEditColumn()
+                        ? 'rm.can_edit, rm.edit_granted_by,'
+                        : '0 AS can_edit, NULL AS edit_granted_by,') . '
                     m.emp_name, m.user_id, m.role_label
                FROM bs_rnd_member rm
                JOIN bs_member m ON m.id = rm.member_id
@@ -657,6 +663,9 @@ final class RndRepo
         }
         if ((string)$row['role'] === 'lead') {
             throw new DomainException('주도자는 원래 고칠 수 있습니다.');
+        }
+        if (!$this->hasEditColumn()) {
+            throw new DomainException('이 서버에는 수정 권한 기능이 아직 설치되지 않았습니다(026). 관리자에게 알려 주세요.');
         }
         $this->pdo->prepare(
             'UPDATE bs_rnd_member
@@ -1035,6 +1044,26 @@ final class RndRepo
     }
 
     /** 참여 행 한 건. 볼 수 있는 과제의 것만. */
+    /**
+     * 026(참여자 수정 권한)이 이 DB 에 올라가 있는가. 요청당 한 번만 본다.
+     *
+     * 코드가 DB 보다 먼저 올라가면 칸이 없어 R&D 과제 화면 전체가 500 이
+     * 됐다(2026-10-14 운영). 칸이 없으면 수정 권한 기능만 꺼진 채로 돈다.
+     */
+    private function hasEditColumn(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            try {
+                $has = (bool)$this->pdo->query(
+                    "SHOW COLUMNS FROM bs_rnd_member LIKE 'can_edit'")->fetch();
+            } catch (Throwable $e) {
+                $has = false;
+            }
+        }
+        return $has;
+    }
+
     private function requireMemberRow(int $rowId): array
     {
         $st = $this->pdo->prepare(
