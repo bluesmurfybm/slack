@@ -965,6 +965,9 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
      └──────────────────────────────────────────────────────────────┘ */
   display: grid; grid-template-columns: 76px 150px 1fr 200px;
   align-items: center; gap: 10px; font-size: 12.5px;
+  /* 위아래 간격은 따로 — 칸 사이 10px 가 아래 줄(달 초과 경고)에도 걸려
+     경고가 자기 줄보다 다음 사람 줄에 붙어 보였다 (2026-10-14). */
+  row-gap: 2px;
 }
 .ba-loadrow__n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* ┌──────────────────────────────────────────────────────────────────┐
@@ -1019,7 +1022,8 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-loadrow__c em { font-style: normal; white-space: nowrap; }
 /* 달 초과 경고는 **다음 줄 전체**를 쓴다. 칸으로 끼워 넣으면 격자가 밀려
    다른 줄과 눈금이 어긋난다 — 막대를 견주려고 만든 격자다. */
-.ba-loadrow .ba-mover { grid-column: 1 / -1; margin: 1px 0 3px 86px; }
+/* 자기 줄 바로 밑에 붙이고, 다음 사람과는 띄운다 */
+.ba-loadrow .ba-mover { grid-column: 1 / -1; margin: 0 0 8px 86px; }
 .ba-loadrow.is-over .ba-loadrow__bar i { background: var(--ba-danger); opacity: .75; }
 .ba-loadrow.is-over .ba-loadrow__v b { color: var(--ba-danger); }
 .ba-loadrow.is-over .ba-loadrow__v em { opacity: 1; }
