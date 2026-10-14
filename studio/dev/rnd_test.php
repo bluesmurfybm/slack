@@ -1200,6 +1200,59 @@ ok('합계가 과제별 점유율의 합과 같다',
 $pdo->exec("DELETE FROM bs_project WHERE project_type='rnd' AND code LIKE 'RNDX-%'");
 
 // ---------------------------------------------------------------------
+echo "\n[24] 점유 상한 — 관리자가 고치고, 과제의 신고 점유율이 그 과제의 상한 (2026-10-14)\n";
+
+$capKeys = ['rnd_total_cap', 'rnd_per_project_cap', 'rnd_concurrent_max', 'rnd_stale_weeks'];
+$capWas  = $pdo->query("SELECT k, v FROM bs_setting WHERE k IN ('" . implode("','", $capKeys) . "')")
+               ->fetchAll(PDO::FETCH_KEY_PAIR);
+
+$r = $user->req('/studio/api/setting.php?act=save_rnd_caps', ['csrf' => true, 'json' => [
+    'total_pct' => '50', 'project_pct' => '30', 'concurrent' => '3', 'stale_weeks' => '4']]);
+ok('관리자가 아니면 못 바꾼다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/setting.php?act=save_rnd_caps', ['csrf' => true, 'json' => [
+    'total_pct' => '0', 'project_pct' => '30', 'concurrent' => '3', 'stale_weeks' => '4']]);
+ok('0% 같은 값은 받지 않는다', $r['status'] === 400, substr($r['body'], 0, 120));
+$r = $admin->req('/studio/api/setting.php?act=save_rnd_caps', ['csrf' => true, 'json' => [
+    'total_pct' => '30', 'project_pct' => '40', 'concurrent' => '3', 'stale_weeks' => '4']]);
+ok('과제당이 합계보다 크면 받지 않는다', $r['status'] === 400, substr($r['body'], 0, 120));
+
+$r = $admin->req('/studio/api/setting.php?act=save_rnd_caps', ['csrf' => true, 'json' => [
+    'total_pct' => '50', 'project_pct' => '30', 'concurrent' => '3', 'stale_weeks' => '4']]);
+ok('관리자는 바꾼다', $r['status'] === 200, substr($r['body'], 0, 120));
+$now = $pdo->query("SELECT k, v FROM bs_setting WHERE k IN ('" . implode("','", $capKeys) . "')")
+           ->fetchAll(PDO::FETCH_KEY_PAIR);
+ok('비율로 저장된다', (float)$now['rnd_total_cap'] === 0.5 && (float)$now['rnd_per_project_cap'] === 0.3
+   && (int)$now['rnd_concurrent_max'] === 3, json_encode($now));
+ok('누가 바꿨는지 남는다', (string)$pdo->query(
+    "SELECT updated_by FROM bs_setting WHERE k = 'rnd_total_cap'")->fetchColumn() === $ADMIN);
+$page = $admin->req('/studio/settings.php')['body'];
+ok('설정 화면에 상한 칸이 있다', str_contains($page, 'id="ba-caps"') && str_contains($page, 'value="50"'));
+
+// 과제의 신고 점유율(load_cap)이 있으면 그 과제는 그 값을 상한으로 쓴다.
+// 판정만 본다 — 서비스를 직접 부른다(설정 캐시가 없는 새 요청이어야 하므로
+// 전역 상한은 위에서 바꾼 30% 가 아니라 DB 값을 그대로 읽는다).
+require_once dirname(__DIR__) . '/inc/service/RndLoadService.php';
+$svc  = new RndLoadService($pdo);
+$who  = (int)$pdo->query("SELECT id FROM bs_member WHERE user_id = '$ADMIN'")->fetchColumn();
+$lim  = $svc->limits()['per_project_cap'];
+$over = round($lim + 0.1, 2);
+$pdo->prepare('UPDATE bs_project SET load_cap = NULL WHERE id = ?')->execute([$openId]);
+$c0 = $svc->checkCap($who, $openId, $over);
+$pdo->prepare('UPDATE bs_project SET load_cap = ? WHERE id = ?')->execute([$over, $openId]);
+$c1 = $svc->checkCap($who, $openId, $over);
+$codes = static fn($c) => array_column($c['violations'], 'code');
+ok('신고 점유율이 없으면 전역 과제당 상한에 걸린다',
+   in_array(RndLoadService::CAP_PROJECT, $codes($c0), true), json_encode($codes($c0)));
+ok('★ 신고 점유율이 있으면 그 값까지는 과제당 상한에 안 걸린다',
+   !in_array(RndLoadService::CAP_PROJECT, $codes($c1), true), json_encode($codes($c1)));
+$pdo->prepare('UPDATE bs_project SET load_cap = NULL WHERE id = ?')->execute([$openId]);
+
+// 설정을 시험 전 값으로 되돌린다.
+$back = $pdo->prepare('UPDATE bs_setting SET v = ? WHERE k = ?');
+foreach ($capWas as $k => $v) { $back->execute([$v, $k]); }
+
+// ---------------------------------------------------------------------
 echo "\n[뒷정리]\n";
 $pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");

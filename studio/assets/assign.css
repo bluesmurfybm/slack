@@ -1860,6 +1860,20 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-ig__uri code { flex: 1; overflow-x: auto; white-space: nowrap; font-size: 12.5px;
   background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 8px; padding: 7px 10px; }
 .ba-ig__form { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+
+/* R&D 점유 상한 (2026-10-14) */
+.ba-caps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+@media (max-width: 900px) { .ba-caps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ba-caps .ba-field { display: flex; flex-direction: column; gap: 4px; }
+.ba-caps .ba-field > span:first-child { font-size: 12.5px; font-weight: 600; color: var(--ba-ink); }
+.ba-caps__in { display: flex; align-items: center; gap: 6px; }
+.ba-caps__in input {
+  width: 90px; padding: 7px 10px; font: inherit; font-size: 15px; font-weight: 700;
+  border: 1px solid var(--ba-line); border-radius: 8px; text-align: right;
+}
+.ba-caps__in em { font-style: normal; color: var(--ba-ink-soft); font-weight: 600; }
+.ba-caps small { font-size: 11.5px; color: var(--ba-ink-soft); }
+.ba-settings__h { margin: 22px 0 6px; font-size: 15px; color: var(--ba-ink); }
 .ba-ig__btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .ba-ig__out { margin: 12px 0 0; padding: 12px 14px; max-height: 260px; overflow: auto;
   font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-all;

@@ -4487,6 +4487,22 @@
       }).catch(function (e) { toast(e.message, true); });
     }
 
+    // R&D 점유 상한 (2026-10-14). 서버가 범위를 다시 본다.
+    var capSave = $('#ba-cap-save');
+    if (capSave) {
+      capSave.addEventListener('click', function () {
+        var v = function (id) { return ($('#' + id) || {}).value || ''; };
+        if (Number(v('ba-cap-total')) >= 100 || Number(v('ba-cap-project')) >= 100) {
+          if (!confirm('100% 로 두면 그 상한은 사실상 풀립니다.\n'
+                       + 'R&D 참여로 배정을 피할 수 있게 됩니다. 계속할까요?')) return;
+        }
+        send('api/setting.php?act=save_rnd_caps', {
+          total_pct: v('ba-cap-total'), project_pct: v('ba-cap-project'),
+          concurrent: v('ba-cap-conc'), stale_weeks: v('ba-cap-stale')
+        }, '저장했습니다');
+      });
+    }
+
     var gsave = $('#ba-ig-gsave');
     if (gsave) {
       gsave.addEventListener('click', function () {

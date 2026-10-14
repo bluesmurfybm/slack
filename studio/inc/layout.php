@@ -121,7 +121,7 @@ function bs_layout_nav(string $current = ''): string
     // 외부 연동은 관리자만 쓴다. 다른 사람에게는 눌러 봐야 튕기는 줄이라
     // 아예 그리지 않는다. 막는 쪽은 settings.php 와 API 가 따로 한다.
     if (bs_is_admin()) {
-        $items['settings'] = ['settings.php', '연동'];
+        $items['settings'] = ['settings.php', '설정'];
     }
 
     $html = '<nav class="ba-nav" aria-label="화면 이동">';

@@ -160,6 +160,17 @@ final class RndLoadService
     public function checkCap(int $memberId, int $projectId, float $loadRatio): array
     {
         $lim     = $this->limits();
+        // 과제에 적은 신고 점유율(load_cap)이 있으면 **그것이** 이 과제의 상한이다
+        // (010 의 칸 설명: "NULL 이면 전역 설정값"). 전에는 늘 전역값만 봐서,
+        // 과제에 40% 를 적고 승인을 받아도 20% 에서 막혔다 (2026-10-14).
+        // 과제 승인 때 관리자가 그 값을 보고 승인하므로 통제는 그대로다.
+        // 1인 합계 상한은 여전히 따로 건다.
+        $pc = $this->pdo->prepare('SELECT load_cap FROM bs_project WHERE id = ?');
+        $pc->execute([$projectId]);
+        $own = $pc->fetchColumn();
+        if ($own !== false && $own !== null && (float)$own > 0) {
+            $lim['per_project_cap'] = (float)$own;
+        }
         $cur     = $this->currentLoad($memberId, $projectId);
         $willBe  = round($cur['total'] + $loadRatio, 3);
         $willCnt = $cur['count'] + 1;
