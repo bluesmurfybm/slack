@@ -13,6 +13,7 @@
  * GET  api/rnd.php?act=load_check      신청 전 점유 상한 사전 확인 (본인 것만)
  * POST api/rnd.php?act=approve_member  합류 승인 — lead 또는 관리자. 상한을 넘으면 거부
  * POST api/rnd.php?act=reject_member   합류 반려 (사유 필수)
+ * POST api/rnd.php?act=member_edit     참여자 수정 권한 켜기/끄기 (주도자·관리자)
  * POST api/rnd.php?act=leave           스스로 나가기 — 본인만
  * POST api/rnd.php?act=log             진행 기록 (content + finding)
  * POST api/rnd.php?act=output          산출물 등록
@@ -420,6 +421,25 @@ bs_route(bs_param_str('act', 'board'), [
             'message' => $row['emp_name'] . ' 님의 합류를 반려했습니다.'
                        . ($queued ? ' 알림 ' . $queued . '건을 보낼 목록에 넣었습니다.' : ''),
             'notify_notice' => '알림은 적재만 된 상태입니다. 실제 발송 경로는 아직 없습니다.',
+        ]);
+    },
+
+    /**
+     * 참여자 수정 권한 켜기/끄기 (026, 2026-10-14). 주도자·관리자만.
+     * 권한 판정은 Repo 안에 있다(requireTeamAuthority).
+     */
+    'member_edit' => function () use ($repo): void {
+        $user  = bs_begin_write();
+        $rowId = bs_param_int('member_row_id', 0);
+        if (!$rowId) {
+            bs_json_error('MISSING_PARAM', '참여 기록 번호가 없습니다.', 400);
+        }
+        $on  = bs_param_str('on') === '1';
+        $row = $repo->setMemberEdit($rowId, $on, $user);
+        bs_json_ok(bs_rnd_detail($repo, (int)$row['project_id']) + [
+            'message' => $row['emp_name'] . ' 님' . ($on
+                ? '에게 과제 수정 권한을 주었습니다.'
+                : '의 과제 수정 권한을 거두었습니다.'),
         ]);
     },
 

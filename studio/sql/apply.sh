@@ -113,6 +113,7 @@ FILES="
 023_migration_source_purpose.sql
 024_migration_candidate_mark.sql
 025_migration_view_as.sql
+026_migration_editors.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

@@ -1549,6 +1549,28 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-rv-h { margin: 16px 0 6px; font-size: 14px; color: var(--ba-ink); }
 .ba-rv-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ba-ink-soft); white-space: pre-wrap; }
 
+/* ── 수정 권한 토글 (026, 2026-10-14) ──────────────────────────────
+   켜짐/꺼짐이 한눈에 — 작은 스위치 모양. R&D 참여자 표와 프로젝트
+   공동 편집자 목록이 함께 쓴다. */
+.ba-edit-t {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 4px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--ba-line); background: var(--ba-paper);
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--ba-ink-soft);
+}
+.ba-edit-t i {
+  position: relative; width: 26px; height: 15px; border-radius: 999px;
+  background: #cfd6e2; transition: background .15s;
+}
+.ba-edit-t i::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px;
+  border-radius: 50%; background: #fff; transition: left .15s;
+}
+.ba-edit-t.is-on { color: var(--ba-brand); border-color: #cfe5d8; background: #f0f7f2; }
+.ba-edit-t.is-on i { background: var(--ba-brand); }
+.ba-edit-t.is-on i::after { left: 13px; }
+.ba-edit-t:focus-visible { outline: 2px solid var(--ba-brand); outline-offset: 2px; }
+
 /* ── R&D 과제 개요 (2026-10-12) ─────────────────────────────────────
    위: 사실 카드 다섯(아이콘 + 이름 + 값). 아래: 제목 띠가 있는 글 카드 둘.
    색은 R&D 보라를 바탕으로 — 대시보드 도넛·사내 현황 카드와 같은 색이다. */

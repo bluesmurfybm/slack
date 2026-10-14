@@ -95,13 +95,16 @@ final class RndRepo
                     (SELECT rm.role FROM bs_rnd_member rm
                        JOIN bs_member mm ON mm.id = rm.member_id
                       WHERE rm.project_id = p.id AND mm.user_id = ?) AS my_role,
+                    (SELECT rm.can_edit FROM bs_rnd_member rm
+                       JOIN bs_member mm ON mm.id = rm.member_id
+                      WHERE rm.project_id = p.id AND mm.user_id = ?) AS my_can_edit,
                     (SELECT COUNT(*) FROM bs_rnd_interest ri
                        JOIN bs_member mi ON mi.id = ri.member_id
                       WHERE ri.project_id = p.id AND mi.user_id = ?) AS my_interest
                FROM bs_project p
               WHERE p.id = ? AND p.deleted_at IS NULL AND ' . $vis
         );
-        $st->execute(array_merge([$me, $me, $me, $id], $visParams));
+        $st->execute(array_merge([$me, $me, $me, $me, $id], $visParams));
         $r = $st->fetch(PDO::FETCH_ASSOC);
 
         return $r ?: null;
@@ -334,6 +337,14 @@ final class RndRepo
         if (array_key_exists('domain_ids', $data)) {
             $this->saveDomains($id, (array)$data['domain_ids']);
         }
+
+        // 승인 뒤 기간을 고치면 이미 올라간 점유의 기간도 맞춘다 (2026-10-14).
+        // 안 맞추면 가용도는 옛 기간으로 계속 깎인다. 점유량(승인된 참여율)은
+        // 그대로다 — syncWorkload 는 기간만 새로 읽는다.
+        if ((array_key_exists('dev_start', $data) || array_key_exists('dev_end', $data))
+            && in_array((string)$cur['status'], ['approved', 'running'], true)) {
+            (new RndLoadService($this->pdo))->syncWorkload($id);
+        }
     }
 
     /**
@@ -503,6 +514,7 @@ final class RndRepo
                     rm.join_reason, rm.reject_reason,
                     rm.approved_by, rm.approved_by_name, rm.approved_at,
                     rm.joined_at, rm.left_at, rm.created_at,
+                    rm.can_edit, rm.edit_granted_by,
                     m.emp_name, m.user_id, m.role_label
                FROM bs_rnd_member rm
                JOIN bs_member m ON m.id = rm.member_id
@@ -624,6 +636,33 @@ final class RndRepo
             $this->pdo->rollBack();
             throw $e;
         }
+
+        return $this->requireMemberRow($rowId);
+    }
+
+    /**
+     * 참여자에게 과제 수정 권한을 켜고 끈다 (026, 2026-10-14).
+     *
+     * 주도자·관리자만. **승인된 일반 참여자**에게만 의미가 있다 — 주도자는
+     * 이 칸과 무관하게 언제나 고치고, 신청 중인 사람은 아직 팀이 아니다.
+     * 누가 켰는지 남긴다.
+     */
+    public function setMemberEdit(int $rowId, bool $on, array $actor): array
+    {
+        $row = $this->requireMemberRow($rowId);
+        $this->requireTeamAuthority((int)$row['project_id']);
+
+        if ((string)$row['status'] !== 'approved') {
+            throw new DomainException('승인된 참여자에게만 수정 권한을 줄 수 있습니다.');
+        }
+        if ((string)$row['role'] === 'lead') {
+            throw new DomainException('주도자는 원래 고칠 수 있습니다.');
+        }
+        $this->pdo->prepare(
+            'UPDATE bs_rnd_member
+                SET can_edit = ?, edit_granted_by = ?, edit_granted_at = NOW()
+              WHERE id = ?'
+        )->execute([$on ? 1 : 0, $actor['id'] ?? null, $rowId]);
 
         return $this->requireMemberRow($rowId);
     }

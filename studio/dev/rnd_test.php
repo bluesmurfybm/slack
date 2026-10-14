@@ -472,6 +472,49 @@ ok('갈래 이름이 함께 온다', ($out['kind_label'] ?? '') === '보고서')
 ok('file_path 는 내보내지 않는다', !array_key_exists('file_path', $out),
    json_encode(array_keys($out)));
 
+echo "\n[11-2] 참여자 수정 권한 — 주도자·관리자가 사람마다 (2026-10-14)\n";
+
+// 관리자는 [9] 에서 일반 참여자로 승인됐다. 시험사용자가 주도자다.
+$r = $user->req('/studio/api/rnd.php?act=member_edit', ['csrf' => true, 'json' => [
+    'member_row_id' => (int)$joinRow['id'], 'on' => '1']]);
+ok('주도자는 참여자에게 수정 권한을 준다', $r['status'] === 200, substr($r['body'], 0, 160));
+$granted = null; $leadRow = null;
+foreach ($r['json']['data']['members'] ?? [] as $m) {
+    if ((int)$m['id'] === (int)$joinRow['id']) { $granted = $m; }
+    if (($m['role'] ?? '') === 'lead') { $leadRow = $m; }
+}
+ok('목록에 허용으로 보인다', ($granted['can_edit'] ?? false) === true, json_encode($granted['can_edit'] ?? null));
+ok('누가 줬는지 남는다', ($granted['edit_granted_by'] ?? '') === $USER);
+ok('주도자는 원래 고칠 수 있어 칸이 늘 켜져 있다', ($leadRow['can_edit'] ?? false) === true);
+
+$r = $user->req('/studio/api/rnd.php?act=member_edit', ['csrf' => true, 'json' => [
+    'member_row_id' => (int)$leadRow['id'], 'on' => '0']]);
+ok('주도자의 권한은 끌 수 없다', $r['status'] === 400, substr($r['body'], 0, 120));
+
+// 받은 사람이 실제로 고칠 수 있는가 — 관리자는 원래 고칠 수 있어 HTTP 로는
+// 가릴 수 없다. 판정 함수를 직접 부른다(로그인 없음 = 관리자 아님).
+require_once dirname(__DIR__) . '/inc/bootstrap.php';
+require_once dirname(__DIR__) . '/inc/presenter.php';
+$base = ['status' => 'approved', 'proposer_id' => 'x@x', 'my_status' => 'approved', 'my_role' => 'member'];
+ok('★ 권한을 받은 참여자는 승인 뒤에도 고친다', bs_rnd_can_edit($base + ['my_can_edit' => 1]));
+ok('★ 받지 않은 참여자는 못 고친다', !bs_rnd_can_edit($base + ['my_can_edit' => 0]));
+ok('신청 중인 사람은 받아도 못 고친다',
+   !bs_rnd_can_edit(['my_status' => 'requested', 'my_can_edit' => 1] + $base));
+ok('끝난 과제는 관리자만', !bs_rnd_can_edit(['status' => 'done', 'my_can_edit' => 1] + $base));
+
+// 승인 뒤 기간을 고치면 이미 올라간 점유의 기간도 따라간다.
+$newEnd = date('Y-m-d', strtotime('+120 day'));
+$r = $user->req('/studio/api/rnd.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $openId, 'dev_end' => $newEnd]]);
+ok('주도자는 승인 뒤에도 기간을 고친다', $r['status'] === 200, substr($r['body'], 0, 160));
+$we = $pdo->prepare("SELECT MAX(end_date) FROM bs_workload
+                      WHERE ref_type = 'rnd' AND ref_id = ? AND kind = 'assigned'");
+$we->execute([$openId]);
+ok('★ 점유 기간이 새 기간으로 바뀐다', (string)$we->fetchColumn() === $newEnd, $newEnd);
+
+$user->req('/studio/api/rnd.php?act=member_edit', ['csrf' => true, 'json' => [
+    'member_row_id' => (int)$joinRow['id'], 'on' => '0']]);
+
 echo "\n[12] 관심 표시 — 점유를 만들지 않는다\n";
 
 $r = $user->req('/studio/api/rnd.php?act=interest', ['csrf' => true, 'json' => ['id' => $openId]]);

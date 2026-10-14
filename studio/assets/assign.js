@@ -5422,6 +5422,26 @@
         '</div>';
     }
 
+    /**
+     * 수정 권한 칸 (026, 2026-10-14). 주도자는 늘 '주도자' 로 고칠 수 있고,
+     * 승인된 참여자는 주도자·관리자가 켜고 끈다. 권한이 없는 사람에게는
+     * 켜졌는지만 보인다.
+     */
+    function editCell(m) {
+      if (m.role === 'lead') {
+        return '<span class="ba-badge ba-badge--ok" title="주도자는 언제나 고칠 수 있습니다">주도자</span>';
+      }
+      if (m.can.grant_edit) {
+        return '<button type="button" class="ba-edit-t' + (m.can_edit ? ' is-on' : '') + '"' +
+               ' data-rv="member_edit" data-row="' + m.id + '" data-on="' + (m.can_edit ? '0' : '1') + '"' +
+               ' aria-pressed="' + (m.can_edit ? 'true' : 'false') + '"' +
+               ' title="' + (m.can_edit ? '눌러서 권한을 거둡니다' : '눌러서 과제 수정 권한을 줍니다') + '">' +
+               '<i></i>' + (m.can_edit ? '허용' : '없음') + '</button>';
+      }
+      return m.can_edit ? '<span class="ba-badge ba-badge--ok">허용</span>'
+                        : '<span class="ba-cell-none">—</span>';
+    }
+
     function members(list, r) {
       var rows = list.map(function (m) {
         var acts = '';
@@ -5438,6 +5458,7 @@
           '<td>' + esc(m.role_name) + '</td>' +
           '<td>' + esc(String(m.load_ratio)) + '</td>' +
           '<td><span class="ba-badge">' + esc(m.status_label) + '</span></td>' +
+          '<td>' + editCell(m) + '</td>' +
           '<td class="ba-rv-reason">' + esc(m.join_reason || '') +
             (m.reject_reason ? '<em>반려: ' + esc(m.reject_reason) + '</em>' : '') + '</td>' +
           '<td>' + acts + '</td>' +
@@ -5456,9 +5477,11 @@
 
       return join + '<div class="ba-table-wrap"><table class="ba-table"><thead><tr>' +
         '<th>이름</th><th style="width:70px">역할</th><th style="width:80px">점유율</th>' +
-        '<th style="width:90px">상태</th><th>사유</th><th style="width:130px"></th>' +
+        '<th style="width:90px">상태</th>' +
+        '<th style="width:110px" title="과제 정보를 고칠 수 있는가. 주도자·관리자가 사람마다 켭니다">수정 권한</th>' +
+        '<th>사유</th><th style="width:130px"></th>' +
         '</tr></thead><tbody>' +
-        (rows || '<tr><td colspan="6" class="ba-empty">아직 참여자가 없습니다.</td></tr>') +
+        (rows || '<tr><td colspan="7" class="ba-empty">아직 참여자가 없습니다.</td></tr>') +
         '</tbody></table></div>';
     }
 
@@ -5588,6 +5611,10 @@
         post('finish'); return;
       }
       if (act === 'approve_member') { post('approve_member', { member_row_id: +b.dataset.row }); return; }
+      if (act === 'member_edit') {
+        post('member_edit', { member_row_id: +b.dataset.row, on: b.dataset.on });
+        return;
+      }
       if (act === 'reject_member') {
         var r2 = window.prompt('반려 사유를 적어 주세요.');
         if (r2 === null) return;

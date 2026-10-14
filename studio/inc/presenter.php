@@ -99,8 +99,21 @@ function bs_rnd_can_edit(array $rnd): bool
     if (bs_is_admin()) {
         return true;
     }
-    return bs_rnd_is_proposer($rnd)
-        && in_array((string)$rnd['status'], ['draft', 'proposed'], true);
+    $status = (string)$rnd['status'];
+    if (bs_rnd_is_proposer($rnd) && in_array($status, ['draft', 'proposed'], true)) {
+        return true;
+    }
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 승인 뒤 — 주도자와 수정 권한을 받은 참여자 (2026-10-14)       │
+    // │                                                              │
+    // │ 기간·점유율까지 고칠 수 있다(사람이 정했다). 그래도 사람별     │
+    // │ 점유는 **승인된 참여율**로만 올라가므로 승인 통제(§9.1)는 그대로│
+    // │ 다 — 바뀐 기간은 update() 가 점유에 다시 맞춘다. 끝난 과제     │
+    // │ (done·dropped)는 기록이므로 관리자만 고친다.                    │
+    // └──────────────────────────────────────────────────────────────┘
+    return in_array($status, ['approved', 'running'], true)
+        && (string)($rnd['my_status'] ?? '') === 'approved'
+        && ((string)($rnd['my_role'] ?? '') === 'lead' || !empty($rnd['my_can_edit']));
 }
 
 /** 승인·반려할 수 있는가. 상태가 proposed 일 때만 의미가 있다. */
@@ -264,10 +277,15 @@ function bs_present_rnd_member(array $m, bool $canManage): array
         'approved_at'   => bs_date($m['approved_at'] ?? null),
         'joined_at'     => bs_date($m['joined_at'] ?? null),
         'left_at'       => bs_date($m['left_at'] ?? null),
+        // 수정 권한 (026). 주도자는 칸과 무관하게 언제나 고친다.
+        'can_edit'      => (string)$m['role'] === 'lead' || !empty($m['can_edit']),
+        'edit_granted_by' => $m['edit_granted_by'] ?? null,
         // 신청 상태인 사람에게만 승인·반려 단추가 의미 있다.
         'can'           => [
             'approve' => $canManage && $status === 'requested',
             'reject'  => $canManage && $status === 'requested',
+            // 승인된 일반 참여자에게만 켜고 끈다. 주도자는 늘 켜져 있다.
+            'grant_edit' => $canManage && $status === 'approved' && (string)$m['role'] !== 'lead',
         ],
     ];
 }
