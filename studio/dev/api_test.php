@@ -3643,6 +3643,45 @@ $r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json'
 ok('없는 차수는 404', $r['status'] === 404, 'status=' . $r['status']);
 
 // =====================================================================
+section('[ED] 공동 편집자 — PM 이 지정, 확정·삭제는 못 한다 (2026-10-14)');
+$r = $guest->req('/studio/api/project.php?act=add_editor', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'user_id' => $USER['email']]]);
+ok('PM 이 아니면 지정할 수 없다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $guest->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'notes' => '편집자 시험']]);
+ok('지정 전에는 못 고친다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/project.php?act=add_editor', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'user_id' => $USER['email']]]);
+ok('PM·관리자는 지정한다', $r['status'] === 200
+   && in_array($USER['email'], array_column($r['json']['data']['editors'] ?? [], 'user_id'), true),
+   substr($r['body'], 0, 160));
+
+$r = $guest->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'notes' => '편집자 시험']]);
+ok('★ 편집자는 프로젝트를 고친다', $r['status'] === 200, substr($r['body'], 0, 140));
+$r = $guest->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('★ 편집자는 배정안을 산출한다', $r['status'] === 200, substr($r['body'], 0, 140));
+$edAid = (int)($r['json']['data']['allocation_id'] ?? 0);
+$r = $guest->req('/studio/api/allocate.php?act=confirm', ['csrf' => true, 'json' => [
+    'allocation_id' => $edAid, 'accept_overload' => 1]]);
+ok('★ 편집자는 배정을 확정하지 못한다', $r['status'] === 403, 'status=' . $r['status']);
+$r = $guest->req('/studio/api/project.php?act=delete', ['csrf' => true, 'json' => [
+    'id' => $pid, 'confirm' => $code]]);
+ok('★ 편집자는 프로젝트를 지우지 못한다', $r['status'] === 403, 'status=' . $r['status']);
+$r = $guest->req('/studio/api/project.php?act=add_editor', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'user_id' => $ADMIN['email']]]);
+ok('편집자는 편집자를 늘리지 못한다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/project.php?act=remove_editor', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'user_id' => $USER['email']]]);
+ok('해제 200', $r['status'] === 200);
+$r = $guest->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'notes' => '편집자 시험']]);
+ok('해제하면 다시 못 고친다', $r['status'] === 403, 'status=' . $r['status']);
+
+// =====================================================================
 section('[VA] 사용자로 보기 — 보기 전용, 관리자만 (2026-10-12)');
 $r = $guest->req('/studio/api/view_as.php?act=start', ['csrf' => true, 'json' => [
     'user_id' => $ADMIN['email']]]);

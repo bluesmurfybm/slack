@@ -10,6 +10,8 @@
  * POST api/project.php?act=restore         삭제 취소
  * POST api/project.php?act=upload_source   파일(multipart) | 링크 | 직접입력
  * POST api/project.php?act=delete_source
+ * POST api/project.php?act=add_editor      공동 편집자 지정 (PM·관리자)
+ * POST api/project.php?act=remove_editor   공동 편집자 해제 (PM·관리자)
  */
 
 declare(strict_types=1);
@@ -157,6 +159,11 @@ bs_route(bs_param_str('act', 'list'), [
             bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
         }
         bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $id);
+        // 삭제는 PM·관리자만 (2026-10-14). 공동 편집자도 PROJECT_MANAGE 를
+        // 가지므로 따로 막는다 — 고칠 수 있다고 지울 수 있는 것은 아니다.
+        if (!bs_can_own_project($id)) {
+            bs_json_error('FORBIDDEN', '프로젝트 삭제는 담당 PM 과 관리자만 할 수 있습니다.', 403);
+        }
 
         // 실수로 지우는 것을 막는다. BlueCart 가 영구 삭제에 요청번호를 받는 것과 같은 장치.
         if (bs_param_str('confirm') !== $row['code']) {
@@ -276,6 +283,37 @@ bs_route(bs_param_str('act', 'list'), [
             default:
                 bs_json_error('INVALID_ARGUMENT', '알 수 없는 출처 종류입니다: ' . $type, 400);
         }
+    },
+
+    /**
+     * 공동 편집자 지정·해제 (026, 2026-10-14). PM·관리자만.
+     *
+     * 편집자는 정보·문서·WBS·배정안 산출까지 한다. 배정 확정·삭제·편집자
+     * 지정은 하지 않는다(bs_can, bs_can_own_project).
+     */
+    'add_editor' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $id   = bs_editor_project_param($repo);
+        $uid  = trim(bs_param_str('user_id'));
+        require_once BS_ROOT . '/inc/repo/MemberRepo.php';
+        $m = $uid !== '' ? (new MemberRepo(bs_db()))->findByUserId($uid) : null;
+        if (!$m) {
+            bs_json_error('NOT_FOUND', '구성원 명단에 없는 사람입니다.', 404);
+        }
+        if (bs_is_pm($id, $uid)) {
+            bs_json_error('INVALID_ARGUMENT', '담당 PM 은 원래 고칠 수 있습니다.', 400);
+        }
+        $repo->addEditor($id, $uid, (string)$m['emp_name'], $user);
+        bs_json_ok(['editors' => $repo->editors($id),
+                    'message' => $m['emp_name'] . ' 님을 공동 편집자로 지정했습니다.']);
+    },
+
+    'remove_editor' => function () use ($repo): void {
+        bs_begin_write();
+        $id  = bs_editor_project_param($repo);
+        $uid = trim(bs_param_str('user_id'));
+        $repo->removeEditor($id, $uid);
+        bs_json_ok(['editors' => $repo->editors($id), 'message' => '공동 편집자에서 뺐습니다.']);
     },
 
     'delete_source' => function () use ($repo): void {
@@ -416,6 +454,19 @@ function bs_present_project_row(array $r): array
         'source_count' => (int)($r['source_count'] ?? 0),
         'created_at'   => bs_date($r['created_at']),
     ];
+}
+
+/** add_editor / remove_editor 공통 — 프로젝트가 있고, PM·관리자인가. */
+function bs_editor_project_param(ProjectRepo $repo): int
+{
+    $id = bs_param_int('project_id', 0);
+    if (!$id || !$repo->find($id)) {
+        bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+    }
+    if (!bs_can_own_project($id)) {
+        bs_json_error('FORBIDDEN', '공동 편집자는 담당 PM 과 관리자만 지정할 수 있습니다.', 403);
+    }
+    return $id;
 }
 
 /**

@@ -484,6 +484,45 @@ final class ProjectRepo
         $st->execute([$status, $id]);
     }
 
+    // =================================================================
+    // 공동 편집자 (026, 2026-10-14)
+    // =================================================================
+
+    /** 이 프로젝트의 편집자. 표가 없는 서버에서는 빈 배열. */
+    public function editors(int $projectId): array
+    {
+        try {
+            $st = $this->pdo->prepare(
+                'SELECT e.user_id, COALESCE(m.emp_name, e.user_name) AS name,
+                        e.granted_by_name, e.created_at
+                   FROM bs_project_editor e
+                   LEFT JOIN bs_member m ON m.user_id = e.user_id
+                  WHERE e.project_id = ?
+                  ORDER BY e.id'
+            );
+            $st->execute([$projectId]);
+            return $st->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
+    /** 편집자로 넣는다. 이미 있으면 그대로 둔다. 누가 넣었는지 남긴다. */
+    public function addEditor(int $projectId, string $userId, string $userName, array $actor): void
+    {
+        $this->pdo->prepare(
+            'INSERT IGNORE INTO bs_project_editor
+                (project_id, user_id, user_name, granted_by, granted_by_name)
+             VALUES (?,?,?,?,?)'
+        )->execute([$projectId, $userId, $userName, $actor['id'] ?? null, $actor['name'] ?? null]);
+    }
+
+    public function removeEditor(int $projectId, string $userId): void
+    {
+        $this->pdo->prepare('DELETE FROM bs_project_editor WHERE project_id = ? AND user_id = ?')
+                  ->execute([$projectId, $userId]);
+    }
+
     /** 담당 PM 변경. */
     public function changeOwner(int $id, string $ownerId, string $ownerName): void
     {

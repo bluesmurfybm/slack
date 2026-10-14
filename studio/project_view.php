@@ -26,6 +26,22 @@ if (!$project) {
 $sources   = $repo->sources($projectId);
 $canManage = bs_can(BS_CAP_PROJECT_MANAGE, $projectId);
 
+// 공동 편집자 (026, 2026-10-14). 명단은 누구나 보고, 지정은 PM·관리자만.
+$editors   = $repo->editors($projectId);
+$canOwn    = bs_can_own_project($projectId);
+$editorPick = [];
+if ($canOwn) {
+    $taken = array_flip(array_column($editors, 'user_id'));
+    foreach (bs_db()->query(
+        "SELECT user_id, emp_name FROM bs_member
+          WHERE user_id IS NOT NULL AND user_id <> '' ORDER BY emp_name"
+    )->fetchAll(PDO::FETCH_ASSOC) as $m) {
+        if (!isset($taken[$m['user_id']]) && $m['user_id'] !== ($project['owner_id'] ?? '')) {
+            $editorPick[] = $m;
+        }
+    }
+}
+
 // 2단계(참여 가능 개발자)는 **인원을 고르는 자리**다. 여러 사람의 점수를
 // 나란히 놓고 보므로, 배정을 짜는 사람에게만 연다. API 도 같은 선을 쓴다
 // (api/candidate.php) — 화면만 막으면 API 를 직접 불러 뚫린다.
@@ -168,6 +184,41 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
           <b>예상공수는 [난이도 매기기]를 다시</b> 돌려야 반영됩니다.
         <?php endif; ?>
       </p>
+      <?php endif; ?>
+    </div>
+
+    <!-- 공동 편집자 (026, 2026-10-14) — PM 이 사람마다 지정한다 -->
+    <div class="ba-panel ba-editors" id="ba-editors" data-project-id="<?= (int)$projectId ?>">
+      <h2>공동 편집자 <span class="ba-dim"><?= count($editors) ?>명</span></h2>
+      <p class="ba-panel__hint">
+        담당 PM(<?= h($project['owner_name'] ?? '-') ?>) 외에 이 프로젝트를 고칠 수 있는 사람입니다.
+        정보·문서·WBS 편집과 <b>배정안 산출</b>까지 하고, <b>배정 확정과 삭제는 PM·관리자만</b> 합니다.
+      </p>
+      <div class="ba-editors__list">
+        <?php if (!$editors): ?>
+          <span class="ba-cell-none">지정된 사람이 없습니다.</span>
+        <?php endif; ?>
+        <?php foreach ($editors as $e): ?>
+          <span class="ba-editor" title="<?= h(($e['granted_by_name'] ? $e['granted_by_name'] . ' 님이 ' : '') . bs_date($e['created_at'])) ?> 지정">
+            <span class="ba-editor__av"><?= h(mb_substr((string)$e['name'], 0, 1)) ?></span>
+            <?= h($e['name']) ?>
+            <?php if ($canOwn): ?>
+              <button type="button" class="ba-editor__x" data-editor-del="<?= h($e['user_id']) ?>"
+                      aria-label="<?= h($e['name']) ?> 빼기" title="빼기">&times;</button>
+            <?php endif; ?>
+          </span>
+        <?php endforeach; ?>
+      </div>
+      <?php if ($canOwn): ?>
+        <div class="ba-editors__add">
+          <select class="ba-input" id="ba-editor-pick">
+            <option value="">구성원 고르기</option>
+            <?php foreach ($editorPick as $m): ?>
+              <option value="<?= h($m['user_id']) ?>"><?= h($m['emp_name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <button type="button" class="ba-btn ba-btn--sm ba-btn--primary" id="ba-editor-add">편집자로 지정</button>
+        </div>
       <?php endif; ?>
     </div>
 

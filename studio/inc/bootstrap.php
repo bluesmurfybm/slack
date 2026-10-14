@@ -888,6 +888,43 @@ function bs_is_pm(int $projectId, ?string $email = null): bool
 }
 
 /**
+ * PM 이 지정한 공동 편집자인가 (026, 2026-10-14).
+ *
+ * 프로젝트(project_type='project')에만 쓴다. R&D 과제는 bs_rnd_member.can_edit
+ * 으로 따로 본다. 표(026)가 없는 서버에서는 아무도 편집자가 아니다.
+ */
+function bs_is_project_editor(int $projectId, ?string $email = null): bool
+{
+    static $cache = [];
+
+    $email ??= bs_current_user()['id'] ?? '';
+    if ($email === '' || $projectId <= 0) {
+        return false;
+    }
+    $k = $projectId . '|' . $email;
+    if (!array_key_exists($k, $cache)) {
+        try {
+            $st = bs_db()->prepare(
+                'SELECT 1 FROM bs_project_editor WHERE project_id = ? AND user_id = ? LIMIT 1');
+            $st->execute([$projectId, $email]);
+            $cache[$k] = (bool)$st->fetchColumn();
+        } catch (Throwable $e) {
+            $cache[$k] = false;
+        }
+    }
+    return $cache[$k];
+}
+
+/**
+ * 편집자를 지정·해제하고, 프로젝트를 지울 수 있는가 — PM 과 관리자만.
+ * 편집자에게 열면 편집자가 편집자를 늘리거나 프로젝트를 지울 수 있다.
+ */
+function bs_can_own_project(int $projectId): bool
+{
+    return bs_is_admin() || bs_is_pm($projectId);
+}
+
+/**
  * 기능 권한 판정.
  *
  * $projectId 를 주면 그 프로젝트의 PM 인지까지 본다. 안 주면 관리자만 통과한다.
@@ -904,11 +941,16 @@ function bs_can(string $capability, ?int $projectId = null): bool
     }
 
     $isPm = $projectId !== null && bs_is_pm($projectId);
+    // PM 이 지정한 공동 편집자 (026, 2026-10-14).
+    $isEd = !$isPm && $projectId !== null && bs_is_project_editor($projectId);
 
     return match ($capability) {
+        // 편집자는 정보·문서·WBS·배정안 산출까지 한다.
         BS_CAP_PROJECT_MANAGE,
         BS_CAP_WBS_CONFIRM,
-        BS_CAP_ALLOCATION_PROPOSE,
+        BS_CAP_ALLOCATION_PROPOSE => $isPm || $isEd,
+
+        // 확정은 점유(bs_workload)를 만드는 결정이다 — PM 의 몫으로 남긴다.
         BS_CAP_ALLOCATION_CONFIRM => $isPm,
 
         // 남의 프로파일 열람은 PM/관리자만. 본인 것은 bs_can_view_profile() 로 따로 본다.

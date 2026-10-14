@@ -5776,6 +5776,34 @@
     });
   }
 
+  // ---- 공동 편집자 (026, 2026-10-14) ----------------------------------
+  //
+  // 지정·해제 뒤에는 화면을 새로 그린다 — 권한이 바뀌면 단추가 달라진다.
+  function initEditors() {
+    var box = $('#ba-editors');
+    if (!box) return;
+    var pid = parseInt(box.dataset.projectId, 10);
+    box.addEventListener('click', function (e) {
+      var add = e.target.closest ? e.target.closest('#ba-editor-add') : null;
+      var del = e.target.closest ? e.target.closest('[data-editor-del]') : null;
+      if (add) {
+        var uid = ($('#ba-editor-pick') || {}).value || '';
+        if (!uid) { toast('편집자로 지정할 사람을 고르세요.', true); return; }
+        add.disabled = true;
+        api('api/project.php?act=add_editor', { method: 'POST', body: { project_id: pid, user_id: uid } })
+          .then(function (d) { toast(d.message); location.reload(); })
+          .catch(function (err) { toast(err.message, true); add.disabled = false; });
+      }
+      if (del) {
+        if (!confirm('공동 편집자에서 뺍니다. 그 사람은 이 프로젝트를 더 고칠 수 없습니다.')) return;
+        api('api/project.php?act=remove_editor', { method: 'POST',
+              body: { project_id: pid, user_id: del.dataset.editorDel } })
+          .then(function (d) { toast(d.message); location.reload(); })
+          .catch(function (err) { toast(err.message, true); });
+      }
+    });
+  }
+
   // ---- 사용자로 보기 (2026-10-12) -------------------------------------
   //
   // 보기 전용이다. 시작은 구성원 목록의 [이 사람으로 보기], 끝은 위쪽 띠의
@@ -5818,7 +5846,7 @@
 
   switch (NAV) {
     case 'dashboard': run(initDashboard); break;
-    case 'project':   run(initProjectList, initProjectForm, initProjectView, initWbs, initAllocation, initLinks,
+    case 'project':   run(initProjectList, initProjectForm, initProjectView, initWbs, initAllocation, initLinks, initEditors,
                           initRndBoard, initRndForm, initRndView); break;
     case 'member':    run(initMemberList, initMemberProfile); break;
     case 'settings':  run(initSettings); break;

@@ -1571,6 +1571,26 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-edit-t.is-on i::after { left: 13px; }
 .ba-edit-t:focus-visible { outline: 2px solid var(--ba-brand); outline-offset: 2px; }
 
+/* ── 프로젝트 공동 편집자 (026, 2026-10-14) ──────────────────────────── */
+.ba-editors__list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.ba-editor {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 6px 4px 4px; border-radius: 999px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line);
+  font-size: 13px; font-weight: 600; color: var(--ba-ink);
+}
+.ba-editor__av {
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: #e9f3ed; color: var(--ba-brand); font-size: 12px; font-weight: 700;
+}
+.ba-editor__x {
+  border: 0; background: none; cursor: pointer; padding: 0 4px;
+  font-size: 15px; line-height: 1; color: var(--ba-ink-soft);
+}
+.ba-editor__x:hover { color: var(--ba-danger); }
+.ba-editors__add { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.ba-editors__add .ba-input { width: auto; min-width: 200px; }
+
 /* ── R&D 과제 개요 (2026-10-12) ─────────────────────────────────────
    위: 사실 카드 다섯(아이콘 + 이름 + 값). 아래: 제목 띠가 있는 글 카드 둘.
    색은 R&D 보라를 바탕으로 — 대시보드 도넛·사내 현황 카드와 같은 색이다. */
