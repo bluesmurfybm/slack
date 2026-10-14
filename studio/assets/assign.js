@@ -3414,7 +3414,7 @@
     // │                                                              │
     // │ 단추는 **하나**다. 접기와 펼치기는 서로의 반대라 둘을 나란히   │
     // │ 두면 둘 중 하나는 늘 할 일이 없다. 지금 상태의 반대를 적는다 — │
-    // │ "모두 접기" 가 보이면 지금은 펼쳐져 있다는 뜻이다.             │
+    // │ "대분류만 보기" 가 보이면 지금은 펼쳐져 있다는 뜻이다.         │
     // └──────────────────────────────────────────────────────────────┘
     var foldBtn = $('#ba-w-fold');
 
@@ -3431,11 +3431,11 @@
       var folded = anyFolded();
       var cap = btn.querySelector('span');
       var ic  = btn.querySelector('.ba-caret');
-      if (cap) { cap.textContent = folded ? '모두 펼치기' : '모두 접기'; }
+      if (cap) { cap.textContent = folded ? '태스크 모두 보기' : '대분류만 보기'; }
       // 접혀 있으면 할 일은 '펼치기' 이므로 아래쪽 세모.
       if (ic)  { ic.className = 'ba-caret ba-caret--' + (folded ? 'down' : 'up'); }
       btn.setAttribute('aria-pressed', folded ? 'true' : 'false');
-      btn.title = folded ? '접어 둔 것을 모두 펼칩니다'
+      btn.title = folded ? '접어 둔 하위 태스크를 모두 펼칩니다'
                          : '하위를 모두 접습니다. 대분류만 남습니다';
     }
 
@@ -3454,6 +3454,7 @@
       wrap.hidden = on;
       $('#ba-w-hidden-note').hidden = !on;
       hideBtn.querySelector('span').textContent = on ? '표 펼치기' : '표 숨기기';
+      hideBtn.classList.toggle('is-hidden', on);   // 눈 아이콘에 빗금
       hideBtn.setAttribute('aria-expanded', on ? 'false' : 'true');
       if (foldBtn) { foldBtn.disabled = on; }
       if (keep) {

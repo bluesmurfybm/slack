@@ -3468,7 +3468,7 @@ ok('전체 규칙 문장을 항목 설명과 갈라 놓는다',
 ok('★ 접기 단추는 하나다', str_contains($page, 'id="ba-w-fold"')
    && !str_contains($page, 'id="ba-w-unfold"'));
 ok('★ 지금 상태의 반대를 적는다', str_contains($js, 'function syncFoldBtn')
-   && str_contains($js, "folded ? '모두 펼치기' : '모두 접기'"));
+   && str_contains($js, "folded ? '태스크 모두 보기' : '대분류만 보기'"));
 ok('그리는 자리에서 이름을 맞춘다',
    // 줄바꿈을 글자 그대로 넣지 않는다 — 이 파일이 CRLF 로 내려받히면
    // 패턴이 \r\n 을 요구하게 돼 LF 인 assign.js 와 안 맞았다 (2026-10-12).
@@ -3496,7 +3496,7 @@ ok('왼쪽 끝에 붙는다',
 ok('★ 세모를 함께 그린다', str_contains($page, 'ba-caret')
    && str_contains($css, '.ba-caret--up') && str_contains($css, '.ba-caret--down'));
 ok('★ 접기는 ▲, 펼치기는 ▼',
-   str_contains($page, 'ba-caret ba-caret--up"></i><span>모두 접기')
+   str_contains($page, 'ba-caret ba-caret--up"></i><span>대분류만 보기')
    && str_contains($js, "(folded ? 'down' : 'up')"),
    '접혀 있으면 할 일은 펼치기라 아래쪽 세모여야 한다');
 // 접기는 보기라 읽기 전용으로 보는 사람도 써야 한다.

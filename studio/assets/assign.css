@@ -2040,6 +2040,32 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   border: 1px solid #d5dce8; background: var(--ba-surface);
   padding: 12px 16px;
 }
+/* 보기 단추 (2026-10-14). 테두리 없는 글자만으로는 단추로 안 보였다 —
+   테두리·옅은 바탕을 두되, 자료를 바꾸는 단추보다는 가볍게. */
+.ba-btn--view {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-color: var(--ba-line); background: var(--ba-surface); color: var(--ba-ink);
+  font-weight: 600;
+}
+.ba-btn--view:hover { border-color: var(--ba-brand); color: var(--ba-brand); background: var(--ba-paper); }
+.ba-btn--view:disabled { opacity: .45; cursor: default; }
+.ba-btn--view:disabled:hover { border-color: var(--ba-line); color: var(--ba-ink); background: var(--ba-surface); }
+.ba-btn--view .ba-caret { margin-right: 0; }
+
+/* 눈 아이콘 — 라이브러리 없이 테두리로. 숨긴 상태에는 빗금을 긋는다 */
+.ba-eye {
+  position: relative; display: inline-block; width: 13px; height: 8px;
+  border: 1.6px solid currentColor; border-radius: 70% 15%; transform: rotate(45deg) scale(.9);
+}
+.ba-eye::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
+  margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: currentColor;
+}
+.ba-btn--view.is-hidden .ba-eye::before {
+  content: ''; position: absolute; left: 50%; top: -5px; width: 1.6px; height: 18px;
+  margin-left: -.8px; background: currentColor; transform: rotate(45deg);
+}
+
 /* 자료를 안 바꾸는 단추라 테두리를 뺀다 — 무게를 낮춘다 */
 .ba-btn--ghost {
   border-color: transparent; background: transparent; color: var(--ba-ink-soft);

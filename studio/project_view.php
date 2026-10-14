@@ -519,15 +519,17 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
            └──────────────────────────────────────────────────────────────┘ -->
       <div class="ba-viewbar">
         <!-- 단추 하나가 두 일을 한다. 지금 상태의 **반대**를 적는다 —
-             "모두 접기" 가 보이면 지금은 펼쳐져 있다는 뜻이다. -->
-        <button type="button" class="ba-btn ba-btn--sm ba-btn--ghost" id="ba-w-fold"
+             "대분류만 보기" 가 보이면 지금은 펼쳐져 있다는 뜻이다.
+             (2026-10-14 문구 변경: 모두 접기 → 대분류만 보기, 모두 펼치기 → 태스크 모두 보기.
+              '접기' 는 무엇이 접히는지 말하지 않았다.) -->
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--view" id="ba-w-fold"
                 title="하위를 모두 접습니다. 대분류만 남습니다"
-                aria-pressed="false"><i class="ba-caret ba-caret--up"></i><span>모두 접기</span></button>
-        <span class="ba-spacer"></span>
+                aria-pressed="false"><i class="ba-caret ba-caret--up"></i><span>대분류만 보기</span></button>
         <!-- 표를 통째로 감춘다. 접기(대분류만 남김)와 달리 줄이 하나도 안 남아
-             아래 배정 표로 바로 내려갈 수 있다 (2026-10-12). 보기만 바꾼다. -->
-        <button type="button" class="ba-btn ba-btn--sm ba-btn--ghost" id="ba-w-hide"
-                aria-controls="ba-w-tablewrap" aria-expanded="true"><span>표 숨기기</span></button>
+             아래 배정 표로 바로 내려갈 수 있다 (2026-10-12). 보기만 바꾼다.
+             2026-10-14: 오른쪽 끝에 홀로 있어 단추로 안 보였다 — 보기 단추와 나란히 둔다. -->
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--view" id="ba-w-hide"
+                aria-controls="ba-w-tablewrap" aria-expanded="true"><i class="ba-eye" aria-hidden="true"></i><span>표 숨기기</span></button>
       </div>
       <p class="ba-panel__hint" id="ba-w-hidden-note" hidden>
         WBS 표를 숨겨 두었습니다. 자료는 그대로입니다 — [표 펼치기] 로 다시 봅니다.
