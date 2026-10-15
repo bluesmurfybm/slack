@@ -33,9 +33,18 @@ final class ProjectRepo
      * 한 건. 없으면 null.
      * @param bool $withDeleted true 면 지워진 것도 찾는다.
      */
+    /**
+     * 프로젝트 한 건. **R&D 과제는 돌려주지 않는다** (2026-10-15).
+     *
+     * 전에는 id 만 봤다. 그래서 project_view.php?id=<R&D 과제 번호> 를
+     * 직접 치면 비공개 과제도 프로젝트 화면으로 열렸고, 같은 번호로
+     * api/project·task·allocate 를 불러도 통과했다. 이 함수를 부르는 곳은
+     * 모두 프로젝트 진입점이고 R&D 는 RndRepo::find() 로 공개 범위를 본다.
+     * 진입점마다 거르지 않고 여기 한 곳에서 거른다.
+     */
     public function find(int $id, bool $withDeleted = false): ?array
     {
-        $sql = 'SELECT ' . self::COLS . ' FROM bs_project WHERE id = ?';
+        $sql = "SELECT " . self::COLS . " FROM bs_project WHERE id = ? AND project_type = 'project'";
         if (!$withDeleted) {
             $sql .= ' AND deleted_at IS NULL';
         }

@@ -546,6 +546,12 @@ ok('없는 문서는 404', $r['status'] === 404);
 })();
 $r = $guest->req('/studio/api/source_download.php?id=' . $srcId);
 $rt = $guest->req('/studio/api/project.php?act=source_text&id=' . $srcId);
+// 프로젝트 화면·API 도 R&D 과제 번호로는 열리지 않는다 (ProjectRepo::find, 2026-10-15).
+// 전에는 project_view.php?id=<과제> 로 비공개 과제가 그대로 보였다.
+$rv  = $guest->req('/studio/project_view.php?id=' . $pid);
+$rg  = $guest->req('/studio/api/project.php?act=get&id=' . $pid);
+$rgA = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
+$rtk = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid);
 (function () use ($pid) {
     $cfg = require dirname(__DIR__, 2) . '/config.php';
     $d   = $cfg['db'];
@@ -555,6 +561,13 @@ $rt = $guest->req('/studio/api/project.php?act=source_text&id=' . $srcId);
 })();
 ok('★ R&D 과제의 파일은 내려받지 못한다', $r['status'] === 404, 'status=' . $r['status']);
 ok('★ R&D 과제의 본문도 못 본다', $rt['status'] === 404, 'status=' . $rt['status']);
+ok('★ R&D 과제 번호로 프로젝트 화면이 열리지 않는다',
+   $rv['status'] === 302 && !str_contains($rv['body'], 'ba-pv__head'), 'status=' . $rv['status']);
+ok('★ R&D 과제 번호로 프로젝트 API 가 답하지 않는다', $rg['status'] === 404, 'status=' . $rg['status']);
+ok('★ 관리자라도 프로젝트 API 로는 과제를 못 연다', $rgA['status'] === 404, 'status=' . $rgA['status']);
+ok('★ 과제 번호로 WBS 경로도 막힌다', $rtk['status'] === 404, 'status=' . $rtk['status']);
+$rv = $guest->req('/studio/project_view.php?id=' . $pid);
+ok('되돌리면 프로젝트 화면이 다시 열린다', $rv['status'] === 200, 'status=' . $rv['status']);
 
 // =====================================================================
 section('[I] 출처 — 링크 / 직접 입력');
