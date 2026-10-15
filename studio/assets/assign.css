@@ -2266,11 +2266,19 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
    출처 문서 보기·내려받기 (2026-10-15) — assign.js initSourceViewer
    ===================================================================== */
 .ba-src__acts { flex: 0 0 auto; display: flex; gap: 4px; }
-.ba-sv { display: flex; flex-direction: column; min-height: 60vh; }
-.ba-sv__pdf { flex: 1; width: 100%; min-height: 70vh; border: 1px solid var(--ba-line); border-radius: 6px; }
-.ba-sv__img { flex: 1; display: flex; align-items: flex-start; justify-content: center; overflow: auto; }
-.ba-sv__img img { max-width: 100%; height: auto; border: 1px solid var(--ba-line); border-radius: 6px; }
+/* 가로 스크롤을 만들지 않는다 (2026-10-15). 테두리 1px 이 width:100% 위에 얹혀
+   2px 넘치던 것이 원인이었다 — 테두리를 너비 안에 넣고, 남는 넘침은 자른다. */
+.ba-sv { display: flex; flex-direction: column; min-height: 0; overflow-x: hidden; }
+.ba-sv--pdf { overflow: hidden; }   /* PDF 는 자기 뷰어가 스크롤한다 (initSourceViewer 가 붙인다) */
+.ba-sv__pdf {
+  display: block; box-sizing: border-box; flex: 1 1 auto;
+  width: 100%; height: 100%; min-height: 360px;
+  border: 1px solid var(--ba-line); border-radius: 6px;
+}
+.ba-sv__img { flex: 1; display: flex; align-items: flex-start; justify-content: center; min-width: 0; }
+.ba-sv__img img { display: block; box-sizing: border-box; max-width: 100%; height: auto; border: 1px solid var(--ba-line); border-radius: 6px; }
 .ba-sv__text {
+  box-sizing: border-box; max-width: 100%; overflow-wrap: anywhere;
   margin: 0; padding: 14px; white-space: pre-wrap; word-break: break-word;
   font: 13px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace;
   background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 6px;

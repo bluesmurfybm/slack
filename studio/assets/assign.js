@@ -6179,6 +6179,7 @@
       var raw   = 'api/source_download.php?id=' + encodeURIComponent(id);
 
       $('#ba-sv-title').textContent = b.dataset.title || '문서 보기';
+      body.classList.toggle('ba-sv--pdf', file && mime === 'application/pdf');
       note.textContent = '';
       dl.hidden  = !file;  dl.href  = raw;
       tab.hidden = true;
