@@ -774,6 +774,7 @@ final class ProjectRepo
             'SELECT id, project_id, kind, file_path, url, mime
                FROM bs_project_source
               WHERE parse_status = ?
+                ' . ($this->hasPurposeColumn() ? 'AND purpose = "scope"' : '') . '
               ORDER BY id ASC
               LIMIT ?'
         );

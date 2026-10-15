@@ -633,6 +633,57 @@ $parsedIds = (function () use ($pid) {
 ok('★ 참고 자료는 WBS 도출 재료에서 빠진다', $refId > 0 && !in_array($refId, $parsedIds, true),
    json_encode($parsedIds));
 ok('범위 문서는 그대로 재료다', count($parsedIds) > 0);
+
+// --- 참고 자료는 보관용 — 분석하지 않는다 (2026-10-15) ----------------------
+// 본문을 뽑지 않고, 그 안의 링크를 찾지 않고, 난이도·공수 근거에도 쓰지 않는다.
+$png3 = "$tmp/참고.png"; copy($png, $png3);
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+    'project_id' => $pid, 'source_type' => 'file', 'purpose' => 'reference',
+    'files[]' => fixture($png3),
+]]);
+$refFile = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+ok('참고 자료 파일 등록', $refFile > 0, substr($r['body'], 0, 120));
+
+// 대기 중인 것만 분석한다(기본). all=1 은 직접 입력 글을 ok → skip 으로 바꾸는
+// 별개의 문제가 있어(2026-10-15 보고) 여기서 쓰지 않는다 — 뒤 시험의 재료가 빠진다.
+$r = $admin->req('/studio/api/task.php?act=parse',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('분석을 돌려도 성공한다', $r['status'] === 200, substr($r['body'], 0, 160));
+ok('★ 분석 결과에 참고 자료가 없다',
+   !in_array($refFile, array_column($r['json']['data']['sources'] ?? [], 'id'), true));
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
+$st = null;
+foreach ($r['json']['data']['sources'] ?? [] as $s) { if ($s['id'] === $refFile) { $st = $s['parse_status']; } }
+ok('★ 참고 자료는 분석되지 않고 그대로 남는다', $st === 'pending', (string)$st);
+
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'text', 'purpose' => 'reference',
+    'text' => "지난 기획서
+https://www.figma.com/file/REFONLY123/Old?node-id=1-2"]]);
+$refLinkSrc = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+$admin->req('/studio/api/analysis.php?act=scan', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$refLinks = (function () use ($refLinkSrc) {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $st = $p->prepare('SELECT COUNT(*) FROM bs_source_link WHERE source_id = ?');
+    $st->execute([$refLinkSrc]);
+    return (int)$st->fetchColumn();
+})();
+ok('★ 참고 자료 안의 링크는 따라가지 않는다', $refLinkSrc > 0 && $refLinks === 0, "링크 $refLinks 개");
+
+$page = $guest->req('/studio/project_view.php?id=' . $pid)['body'];
+$refPanel = preg_match('#<h2>참고 자료.*?</div>\s*</div>\s*</div>#su', $page, $mm) ? $mm[0] : '';
+ok('화면에 참고 자료 블록이 있다', $refPanel !== '');
+ok('★ 참고 자료에는 분석 상태 문구가 없다', $refPanel !== '' && !str_contains($refPanel, 'ba-src__parse'));
+ok('참고 자료 이미지는 보기·내려받기가 된다',
+   str_contains($refPanel, 'data-src-view="' . $refFile . '"')
+   && str_contains($refPanel, 'source_download.php?id=' . $refFile . '"'));
+
+foreach ([$refFile, $refLinkSrc] as $x) {
+    $admin->req('/studio/api/project.php?act=delete_source', ['csrf' => true, 'json' => ['source_id' => $x]]);
+}
 $admin->req('/studio/api/project.php?act=delete_source',
             ['csrf' => true, 'json' => ['source_id' => $refId]]);
 

@@ -213,7 +213,7 @@ bs_layout_head(
   // │ 출처 블록 — 같은 꼴을 두 번 그린다 (2026-10-12)                    │
   // │                                                                  │
   // │ 업무 내용 및 범위(scope)  WBS 초안의 재료                          │
-  // │ 참고 자료(reference)      WBS 도출에서 뺀다. 난이도·공수 근거는 찾는다│
+  // │ 참고 자료(reference)      보관용. 분석하지 않는다 (2026-10-15)     │
   // │                                                                  │
   // │ id 를 쓰지 않고 data-src-* 로 블록 안에서만 찾는다 — 같은 화면에   │
   // │ 둘이 있으므로 id 가 겹친다. assign.js 의 initSourcePanel 이 짝이다.│
@@ -304,9 +304,11 @@ bs_layout_head(
                 <?= number_format((int)$s['parsed_len']) ?>자
               <?php endif; ?>
             </span>
+            <?php if ($purpose !== 'reference'): /* 참고 자료는 분석하지 않는다 — 상태도 없다 */ ?>
             <span class="ba-src__parse ba-src__parse--<?= h($s['parse_status']) ?>">
               <?= h($parseLabel((string)$s['parse_status'])) ?>
             </span>
+            <?php endif; ?>
             <button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="<?= (int)$s['id'] ?>">삭제</button>
           </div>
         <?php endforeach; ?>
@@ -325,7 +327,7 @@ bs_layout_head(
   <!-- ============ 참고 자료 ============ -->
   <?php $sourcePanel('reference', '참고 자료',
       '지난 산출물, 학교 소개서, 비슷한 시스템 설명서처럼 <b>할 일은 아니지만 알아 둘</b> 자료입니다.
-       <b>WBS 초안을 뽑을 때는 쓰지 않습니다.</b> 난이도·공수를 매길 때 근거로는 찾아봅니다.'); ?>
+       <b>보관용입니다 — 분석하지 않고</b> WBS·난이도·공수 판정에도 쓰지 않습니다. 보기·내려받기만 합니다.'); ?>
 
   <!-- ============ 특이점 / 기타 ============ -->
   <section class="ba-panel">

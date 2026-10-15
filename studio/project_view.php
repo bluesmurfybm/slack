@@ -262,7 +262,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     <div class="ba-panel">
       <h2><?= h($plabel) ?> <span class="ba-dim"><?= count($rows) ?>건</span></h2>
       <?php if ($pk === 'reference'): ?>
-        <p class="ba-panel__hint">WBS 초안을 뽑을 때는 쓰지 않습니다. 난이도·공수 근거로만 찾아봅니다.</p>
+        <p class="ba-panel__hint">보관용 자료입니다. 분석하지 않으며 WBS·난이도·공수 판정에 쓰지 않습니다.</p>
       <?php endif; ?>
       <?php if (!$rows): ?>
         <p class="ba-empty-inline">등록된 문서가 없습니다.</p>
@@ -276,14 +276,20 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                   <a href="<?= h($s['url']) ?>" target="_blank" rel="noopener"><?= h($s['title']) ?></a>
                 <?php else: ?><?= h($s['title']) ?><?php endif; ?>
               </span>
+              <?php if ($pk !== 'reference'): /* 참고 자료는 분석하지 않는다 — 상태도 없다 */ ?>
               <span class="ba-src__parse ba-src__parse--<?= h($s['parse_status']) ?>">
                 <?= h(['pending'=>'분석 대기','ok'=>'분석 완료','fail'=>'분석 실패','skip'=>'분석 안 함'][$s['parse_status']] ?? $s['parse_status']) ?>
               </span>
+              <?php endif; ?>
               <?php
               // 보기·내려받기 (2026-10-15). 파일로 올린 것만 내려받는다.
               // 보기는 파일이 있거나 추출 본문이 있을 때 — 링크만 있는 출처는 제목 링크로 연다.
               $hasFile = !empty($s['has_file']);
-              $canSee  = $hasFile || (int)($s['parsed_len'] ?? 0) > 0;
+              // 브라우저가 그리는 형식(이미지·PDF)이거나 추출 본문이 있을 때만 '보기'.
+              // 참고 자료의 엑셀·PPT 는 본문을 뽑지 않으므로 내려받기만 남는다.
+              $inlineOk = $hasFile && in_array((string)$s['mime'],
+                  ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'], true);
+              $canSee  = $inlineOk || (int)($s['parsed_len'] ?? 0) > 0;
               ?>
               <?php if ($canSee || $hasFile): ?>
               <span class="ba-src__acts">

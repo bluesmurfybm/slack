@@ -423,9 +423,11 @@
                  '<span class="ba-src__kind">' + esc(s.kind_label) + '</span>' +
                  '<span class="ba-src__title">' + title + '</span>' +
                  '<span class="ba-src__meta">' + meta + '</span>' +
+                 // 참고 자료는 분석하지 않는다 — 상태 문구도 없다 (2026-10-15).
+                 ((s.purpose || 'scope') === 'reference' ? '' :
                  '<span class="ba-src__parse ba-src__parse--' + esc(s.parse_status) + '">' +
                    esc(PARSE_LABEL[s.parse_status] || s.parse_status) +
-                 '</span>' +
+                 '</span>') +
                  '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="' + s.id + '">삭제</button>' +
                  '</div>';
         }).join('');

@@ -87,6 +87,9 @@ bs_route(bs_param_str('act', 'tree'), [
 
         $rows = [];
         foreach ($projects->sources($projectId) as $s) {
+            if (($s['purpose'] ?? 'scope') === 'reference') {
+                continue;   // 참고 자료는 분석하지 않는다 (2026-10-15)
+            }
             $id = (int)$s['id'];
             $r  = $results[$id] ?? null;
             $rows[] = [

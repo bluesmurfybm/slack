@@ -227,6 +227,11 @@ final class WbsExtractor
     {
         $out = [];
         foreach ($this->projects->sources($projectId) as $s) {
+            // 참고 자료는 보관용이다 — 본문을 뽑지 않는다 (2026-10-15).
+            // 용도를 업무 범위로 바꾸면 그때 pending 그대로 분석에 들어온다.
+            if (($s['purpose'] ?? 'scope') === 'reference') {
+                continue;
+            }
             if ($onlyPending && $s['parse_status'] !== 'pending') {
                 continue;
             }
