@@ -98,6 +98,31 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       </p>
     </div>
     <div class="ba-spacer"></div>
+    <?php
+    // 공유 (assign.js initShare). 슬랙에 붙일 요약 — 머리에 보이는 것만 담는다.
+    // 점수·배정은 넣지 않는다. 슬랙은 볼 권한을 따지지 않는다.
+    $shareLines = array_values(array_filter([
+        implode(' · ', array_filter([
+            $project['code'],
+            BS_PROJECT_STATUS[$project['status']] ?? $project['status'],
+            !empty($project['track']) ? (BS_PROJECT_TRACK[$project['track']] ?? $project['track']) : null,
+        ])),
+        implode(' · ', array_filter([
+            !empty($project['client']) ? '고객 ' . $project['client'] : null,
+            '담당 ' . ($project['owner_name'] ?? '-'),
+        ])),
+        implode(' · ', array_filter([
+            !empty($project['dev_start']) || !empty($project['dev_end'])
+                ? '개발 ' . ($project['dev_start'] ?: '?') . ' ~ ' . ($project['dev_end'] ?: '?') : null,
+            !empty($project['deploy_date']) ? '배포 ' . $project['deploy_date'] : null,
+        ])),
+    ]));
+    ?>
+    <button type="button" class="ba-btn ba-share" aria-haspopup="menu"
+            data-share-kind="프로젝트"
+            data-share-title="<?= h($project['name']) ?>"
+            data-share-lines="<?= h(json_encode($shareLines, JSON_UNESCAPED_UNICODE)) ?>"
+            data-share-path="project_view.php?id=<?= (int)$projectId ?>">공유</button>
     <?php if ($canManage): ?>
       <a class="ba-btn" href="project_form.php?id=<?= (int)$projectId ?>">수정</a>
     <?php endif; ?>

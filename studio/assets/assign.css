@@ -2240,3 +2240,24 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
 .ba-share-tag {
   font-size: 10.5px; font-weight: 700; color: var(--ba-warn); white-space: nowrap;
 }
+
+/* =====================================================================
+   공유 메뉴 (2026-10-15) — assign.js initShare
+   ===================================================================== */
+.ba-share-menu {
+  position: absolute; z-index: 1200;
+  min-width: 180px; padding: 6px;
+  background: var(--ba-paper); border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r); box-shadow: 0 8px 24px rgba(22, 36, 58, .14);
+}
+.ba-share-menu button {
+  display: block; width: 100%; text-align: left;
+  padding: 8px 10px; border: 0; border-radius: 6px;
+  background: none; color: var(--ba-ink); font: inherit; font-size: 13px; cursor: pointer;
+}
+.ba-share-menu button:hover,
+.ba-share-menu button:focus-visible { background: var(--ba-surface); outline: none; }
+.ba-share-menu__note {
+  margin: 4px 4px 2px; padding-top: 6px; border-top: 1px solid var(--ba-line);
+  font-size: 12px; color: var(--ba-ink-soft); max-width: 220px;
+}

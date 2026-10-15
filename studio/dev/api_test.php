@@ -661,6 +661,17 @@ ok('왜 못 보는지 알려 준다',
 ok('본인 프로파일로 가는 길을 함께 준다',
    str_contains($r['body'], 'member_profile.php'));
 
+// 공유 단추 (2026-10-15). 편집 권한이 없어도 보는 사람이면 공유할 수 있다.
+// 요약은 머리에 보이는 것만 — 점수·배정이 섞이면 슬랙으로 샌다.
+ok('일반 사용자에게도 공유 단추가 있다', str_contains($r['body'], 'class="ba-btn ba-share"'));
+$shareLines = preg_match('/data-share-lines="([^"]*)"/', $r['body'], $sm)
+    ? json_decode(html_entity_decode($sm[1], ENT_QUOTES), true) : null;
+ok('공유 요약이 JSON 배열로 실린다', is_array($shareLines) && $shareLines !== [], $sm[1] ?? '없음');
+ok('공유 요약에 담당이 들어간다', str_contains(implode("\n", (array)$shareLines), '담당 '));
+ok('공유 요약에 점수·적합도가 없다',
+   !preg_match('/점수|적합도|처리량|가용/u', implode("\n", (array)$shareLines)));
+ok('공유 주소는 이 프로젝트', str_contains($r['body'], 'data-share-path="project_view.php?id=' . $pid . '"'));
+
 // 프로젝트 번호 없이는 후보를 낼 수 없다 — 전역 순위를 만들지 않기 위한 방어다.
 $r = $admin->req('/studio/api/candidate.php?act=list');
 ok('project_id 없으면 400', $r['status'] === 400, 'status=' . $r['status']);

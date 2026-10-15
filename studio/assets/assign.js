@@ -5533,6 +5533,18 @@
       if (r.can.finish)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="finish">종료</button>');
       if (r.can.drop)    acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="drop">중단</button>');
 
+      // 공유 (initShare). 볼 수 있는 사람에게만 이 화면이 열리므로 단추는 늘 둔다.
+      var shareLines = [
+        [r.code, r.status_label, r.category_label].filter(Boolean).join(' · '),
+        '발의 ' + (r.proposer_name || '-') + ' · 참여 ' + (r.member_count || 0) + '명',
+        r.dev_start || r.dev_end ? '기간 ' + (r.dev_start || '?') + ' ~ ' + (r.dev_end || '?') : ''
+      ];
+      acts.push('<button type="button" class="ba-btn ba-btn--sm ba-share" aria-haspopup="menu"' +
+                ' data-share-kind="R&amp;D 과제" data-share-title="' + esc(r.name) + '"' +
+                ' data-share-lines="' + esc(JSON.stringify(shareLines)) + '"' +
+                ' data-share-path="rnd_view.php?id=' + r.id + '"' +
+                ' data-share-private="' + (r.visibility === 'private' ? '1' : '0') + '">공유</button>');
+
       return '<div class="ba-rnd-head__top"><span class="ba-rnd-card__code">' + esc(r.code) + '</span>' +
              b + '</div>' +
              '<h2 class="ba-rnd-head__title">' + esc(r.name) + '</h2>' +
@@ -6030,7 +6042,120 @@
     });
   }
 
+  // ===================================================================
+  // 공유 단추 (2026-10-15) — 프로젝트·R&D 과제 상세 머리
+  //
+  // 슬랙에 **직접 보내지 않는다.** 바깥으로 나가는 경로가 없고(알림도
+  // 발송 경로가 없다), 만들면 그것부터 승인받아야 한다. 대신 붙여 넣기
+  // 좋은 글을 클립보드에 담는다 — 무엇을 어디에 붙일지는 사람이 정한다.
+  //
+  // 단추가 들고 오는 것: data-share-kind / -title / -lines(JSON 배열) /
+  // -path(이 화면 주소, 상대) / -private(1 이면 안내 한 줄).
+  // 요약에 점수·배정을 넣지 않는다 — 슬랙은 볼 권한을 따지지 않는다.
+  // ===================================================================
+  function copyText(t) {
+    // 사내 운영이 http 일 수 있다. clipboard API 는 보안 출처에서만 열린다.
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(t);
+    }
+    return new Promise(function (ok, no) {
+      var ta = document.createElement('textarea');
+      ta.value = t;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.top = '-1000px';
+      document.body.appendChild(ta);
+      ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      document.body.removeChild(ta);
+      done ? ok() : no(new Error('copy'));
+    });
+  }
+
+  function initShare() {
+    var menu = null;
+
+    function close() {
+      if (menu) { menu.remove(); menu = null; }
+    }
+
+    function data(btn) {
+      var lines = [];
+      try { lines = JSON.parse(btn.dataset.shareLines || '[]'); } catch (e) { lines = []; }
+      return {
+        kind:  btn.dataset.shareKind || '',
+        title: btn.dataset.shareTitle || document.title,
+        lines: lines.filter(Boolean),
+        url:   new URL(btn.dataset.sharePath || location.href, location.href).href,
+        priv:  btn.dataset.sharePrivate === '1'
+      };
+    }
+
+    function slackText(d) {
+      // 슬랙 입력창은 *굵게* 를 알아본다. 링크는 맨 끝 줄에 맨몸으로 둔다
+      // — 슬랙이 미리보기를 붙인다.
+      return ['*' + (d.kind ? '[' + d.kind + '] ' : '') + d.title + '*']
+        .concat(d.lines, [d.url]).join('\n');
+    }
+
+    function copied(p, what) {
+      p.then(function () { toast(what + '을(를) 복사했습니다'); })
+       .catch(function () { toast('복사하지 못했습니다. 주소창에서 직접 복사하세요.', true); });
+      close();
+    }
+
+    function open(btn) {
+      close();
+      var d = data(btn);
+      menu = document.createElement('div');
+      menu.className = 'ba-share-menu';
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML =
+        '<button type="button" role="menuitem" data-sh="link">링크 복사</button>' +
+        '<button type="button" role="menuitem" data-sh="slack">슬랙용 요약 복사</button>' +
+        (navigator.share ? '<button type="button" role="menuitem" data-sh="native">다른 앱으로 공유…</button>' : '') +
+        (d.priv ? '<p class="ba-share-menu__note">비공개 과제입니다. 볼 권한이 없는 사람은 링크를 열 수 없습니다.</p>' : '');
+      document.body.appendChild(menu);
+
+      var r = btn.getBoundingClientRect();
+      var left = Math.min(r.left + window.scrollX,
+                          window.scrollX + document.documentElement.clientWidth - menu.offsetWidth - 8);
+      menu.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+      menu.style.left = Math.max(8, left) + 'px';
+
+      menu.addEventListener('click', function (e) {
+        var it = e.target.closest('[data-sh]');
+        if (!it) return;
+        if (it.dataset.sh === 'link')  return copied(copyText(d.url), '링크');
+        if (it.dataset.sh === 'slack') return copied(copyText(slackText(d)), '요약');
+        if (it.dataset.sh === 'native') {
+          navigator.share({ title: d.title, text: [d.title].concat(d.lines).join('\n'), url: d.url })
+            .catch(function () { /* 사용자가 닫은 것 — 알릴 일 없음 */ });
+          close();
+        }
+      });
+      var first = menu.querySelector('button');
+      if (first) first.focus();
+    }
+
+    // R&D 머리는 JS 가 다시 그리므로 단추에 직접 걸지 않고 위임한다.
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('.ba-share');
+      if (btn) {
+        e.preventDefault();
+        if (menu && menu.__for === btn) { close(); return; }
+        open(btn);
+        menu.__for = btn;
+        return;
+      }
+      if (menu && !menu.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    window.addEventListener('resize', close);
+  }
+
   // ---- 진입 ---------------------------------------------------------
+  initShare();
   initViewAs();
   initDrawer();
   initRndLoadDrawer();
