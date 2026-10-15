@@ -42,6 +42,15 @@ function work_system_label(string $key): ?string {
     return null;
 }
 
+/** key → 카드 아이콘 SVG(styles/icons/<key>.svg). */
+function work_system_icons(): array {
+    $icons = [];
+    foreach (glob(dirname(__DIR__) . '/styles/icons/*.svg') as $file) {
+        $icons[basename($file, '.svg')] = trim(file_get_contents($file));
+    }
+    return $icons;
+}
+
 /**
  * 미로그인으로 포털에 되돌려보내진 사용자에게 보여줄 문구.
  * 모듈들이 ?need_login=<key> 를 붙여 보내므로 왜 튕겼는지 이름까지 말해 줄 수 있다.

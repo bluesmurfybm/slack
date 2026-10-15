@@ -26,6 +26,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── api/                         login.php, logout.php, me.php
 │                                notices.php, notice_file.php, events.php, admins.php, push.php, notifications.php
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
+│                                icons/(카드 아이콘) · favicons/(시스템별 탭 파비콘, gen_favicons.py)
 ├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
 ├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
 │
@@ -311,6 +312,14 @@ push_send([
   - 별도 프로세스인 book 은 PHP 를 못 쓰니 `app.py` 가 **같은 json 을 직접 읽어**
     `whoami` 로 내려주고 화면 JS(`renderWorkSystems`)가 그린다. 포털 트리가 안 보이면 목록만
     비고 화면은 정상 동작한다.
+- **카드 아이콘과 탭 파비콘**: 시스템마다 포털 카드의 색 배지(서비스 색 둥근 사각 + 흰 아이콘)를
+  그대로 줄여 탭 파비콘으로 쓴다. 시스템을 더하면 다음을 함께 한다.
+  1. `styles/icons/<key>.svg` 에 카드 아이콘을 둔다(24 격자, `stroke="currentColor"`). 포털 `ICONS` 는
+     `worksystems.php::work_system_icons()` 로 이 폴더를 읽는다.
+  2. `python dev/gen_favicons.py` 로 `styles/favicons/<key>.svg` 를 만들어 커밋한다(색은 `worksystems.json`).
+  3. 그 시스템의 모든 페이지 `<head>` 에 `<link rel="icon" type="image/svg+xml" href="<포털 루트>styles/favicons/<key>.svg">`
+     를 건다. book 은 `shared-styles/`, dti 는 `dti_asset($page, '../styles/favicons/dti.svg')`.
+  포털 루트(blue-iWorks)만 `styles/favicon.ico`(세 줄)를 그대로 쓴다.
 
 ---
 
