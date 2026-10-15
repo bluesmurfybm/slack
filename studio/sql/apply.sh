@@ -115,6 +115,7 @@ FILES="
 025_migration_view_as.sql
 026_migration_editors.sql
 027_migration_project_creator.sql
+028_migration_text_source_status.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

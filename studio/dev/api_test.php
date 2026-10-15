@@ -644,10 +644,9 @@ $r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, '
 $refFile = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
 ok('참고 자료 파일 등록', $refFile > 0, substr($r['body'], 0, 120));
 
-// 대기 중인 것만 분석한다(기본). all=1 은 직접 입력 글을 ok → skip 으로 바꾸는
-// 별개의 문제가 있어(2026-10-15 보고) 여기서 쓰지 않는다 — 뒤 시험의 재료가 빠진다.
+// '전체 다시 분석'(all=1). 이미 읽은 것까지 다시 읽어도 참고 자료는 건드리지 않는다.
 $r = $admin->req('/studio/api/task.php?act=parse',
-                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+                 ['csrf' => true, 'json' => ['project_id' => $pid, 'all' => 1]]);
 ok('분석을 돌려도 성공한다', $r['status'] === 200, substr($r['body'], 0, 160));
 ok('★ 분석 결과에 참고 자료가 없다',
    !in_array($refFile, array_column($r['json']['data']['sources'] ?? [], 'id'), true));
@@ -655,6 +654,11 @@ $r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
 $st = null;
 foreach ($r['json']['data']['sources'] ?? [] as $s) { if ($s['id'] === $refFile) { $st = $s['parse_status']; } }
 ok('★ 참고 자료는 분석되지 않고 그대로 남는다', $st === 'pending', (string)$st);
+// ★ 전체 다시 분석이 직접 입력 글을 ok → skip 으로 덮던 버그 (2026-10-15).
+//   글은 남는데 WBS 도출·난이도 근거(ok 만 본다)에서 조용히 빠졌다.
+$st = null;
+foreach ($r['json']['data']['sources'] ?? [] as $s) { if ($s['id'] === $textSrc) { $st = $s['parse_status']; } }
+ok('★ 전체 다시 분석해도 직접 입력 글은 ok 로 남는다', $st === 'ok', (string)$st);
 
 $r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'source_type' => 'text', 'purpose' => 'reference',

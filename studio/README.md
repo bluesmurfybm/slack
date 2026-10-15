@@ -109,6 +109,7 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 026_migration_editors.sql           수정 권한 — R&D 참여자 칸 + 프로젝트 공동 편집자 표
                                     ← 빠지면 R&D 과제 화면이 안 열림
 027_migration_project_creator.sql   프로젝트 등록 권한 — 관리자가 구성원마다 켠다
+028_migration_text_source_status.sql 직접 입력 글의 분석 상태 되돌리기 (데이터만)
 ```
 
 ### 이미 돌고 있는 DB 에 새 번호만 더할 때
@@ -124,6 +125,7 @@ mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/024_migrati
 mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/025_migration_view_as.sql
 mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/026_migration_editors.sql
 mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/027_migration_project_creator.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/028_migration_text_source_status.sql
 ```
 
 어디까지 올렸는지 모르겠으면 칸·표가 있는지 본다:
