@@ -6154,6 +6154,67 @@
     window.addEventListener('resize', close);
   }
 
+  // ===================================================================
+  // 출처 문서 보기 (2026-10-15) — project_view.php 의 '보기' 단추
+  //
+  // 이미지·PDF 는 api/source_download.php?inline=1 로 그대로 띄운다.
+  // 엑셀·PPT·워드는 브라우저가 못 그리고, 외부 뷰어는 문서를 바깥으로
+  // 보내는 일이라 쓰지 않는다 — 업로드 때 뽑아 둔 본문을 글로 보여 준다.
+  // ===================================================================
+  function initSourceViewer() {
+    var EL = $('#ba-src-viewer');
+    if (!EL) return;
+    var INLINE = ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-src-view]');
+      if (!b) return;
+      var id    = b.dataset.srcView;
+      var mime  = b.dataset.mime || '';
+      var file  = b.dataset.file === '1';
+      var body  = $('#ba-sv-body');
+      var note  = $('#ba-sv-note');
+      var dl    = $('#ba-sv-dl');
+      var tab   = $('#ba-sv-tab');
+      var raw   = 'api/source_download.php?id=' + encodeURIComponent(id);
+
+      $('#ba-sv-title').textContent = b.dataset.title || '문서 보기';
+      note.textContent = '';
+      dl.hidden  = !file;  dl.href  = raw;
+      tab.hidden = true;
+
+      if (file && INLINE.indexOf(mime) >= 0) {
+        var src = raw + '&inline=1';
+        tab.hidden = false; tab.href = src;
+        body.innerHTML = mime === 'application/pdf'
+          ? '<iframe class="ba-sv__pdf" src="' + esc(src) + '" title="' + esc(b.dataset.title || '') + '"></iframe>'
+          : '<div class="ba-sv__img"><img src="' + esc(src) + '" alt="' + esc(b.dataset.title || '') + '"></div>';
+        openDrawer('ba-src-viewer');
+        return;
+      }
+
+      body.innerHTML = '<div class="ba-loading">불러오는 중…</div>';
+      openDrawer('ba-src-viewer');
+      api('api/project.php?act=source_text&id=' + encodeURIComponent(id)).then(function (d) {
+        if (!d.text) {
+          body.innerHTML = '<p class="ba-empty-inline">추출된 본문이 없습니다' +
+            (d.has_file ? ' — 내려받아 원본으로 여십시오.' : '.') + '</p>';
+          return;
+        }
+        body.innerHTML = '<pre class="ba-sv__text">' + esc(d.text) + '</pre>';
+        note.textContent = '서식 없이 글만 뽑은 것입니다. 표·그림은 원본에서 보십시오.' +
+          (d.truncated ? ' (앞부분 ' + (200000).toLocaleString() + '자만 표시)' : '');
+      }).catch(function (err) {
+        body.innerHTML = '<p class="ba-empty-inline">' + esc(err.message) + '</p>';
+      });
+    });
+
+    // 닫으면 비운다 — PDF 가 뒤에서 계속 메모리를 잡지 않게.
+    new MutationObserver(function () {
+      if (EL.hidden) $('#ba-sv-body').innerHTML = '';
+    }).observe(EL, { attributes: true, attributeFilter: ['hidden'] });
+  }
+
   // ---- 진입 ---------------------------------------------------------
   initShare();
   initViewAs();
@@ -6172,7 +6233,7 @@
 
   switch (NAV) {
     case 'dashboard': run(initDashboard); break;
-    case 'project':   run(initProjectList, initProjectForm, initProjectView, initWbs, initAllocation, initLinks, initEditors,
+    case 'project':   run(initProjectList, initProjectForm, initProjectView, initSourceViewer, initWbs, initAllocation, initLinks, initEditors,
                           initRndBoard, initRndForm, initRndView); break;
     case 'member':    run(initMemberList, initMemberProfile); break;
     case 'settings':  run(initSettings); break;

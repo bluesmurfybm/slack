@@ -2261,3 +2261,21 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
   margin: 4px 4px 2px; padding-top: 6px; border-top: 1px solid var(--ba-line);
   font-size: 12px; color: var(--ba-ink-soft); max-width: 220px;
 }
+
+/* =====================================================================
+   출처 문서 보기·내려받기 (2026-10-15) — assign.js initSourceViewer
+   ===================================================================== */
+.ba-src__acts { flex: 0 0 auto; display: flex; gap: 4px; }
+.ba-sv { display: flex; flex-direction: column; min-height: 60vh; }
+.ba-sv__pdf { flex: 1; width: 100%; min-height: 70vh; border: 1px solid var(--ba-line); border-radius: 6px; }
+.ba-sv__img { flex: 1; display: flex; align-items: flex-start; justify-content: center; overflow: auto; }
+.ba-sv__img img { max-width: 100%; height: auto; border: 1px solid var(--ba-line); border-radius: 6px; }
+.ba-sv__text {
+  margin: 0; padding: 14px; white-space: pre-wrap; word-break: break-word;
+  font: 13px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 6px;
+}
+@media (max-width: 640px) {
+  .ba-src { flex-wrap: wrap; }
+  .ba-src__acts { width: 100%; justify-content: flex-end; }
+}

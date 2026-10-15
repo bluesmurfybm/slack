@@ -69,6 +69,13 @@ final class Client
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_TIMEOUT        => 20,
         ]);
+        // 응답 헤더 (2026-10-15 — 내려받기 시험이 Content-Disposition 을 본다). 소문자 키.
+        $resHeaders = [];
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($c, $line) use (&$resHeaders) {
+            $kv = explode(':', $line, 2);
+            if (count($kv) === 2) { $resHeaders[strtolower(trim($kv[0]))] = trim($kv[1]); }
+            return strlen($line);
+        });
 
         $headers = [];
         if (!empty($opt['json'])) {
@@ -97,7 +104,8 @@ final class Client
         }
         $json = json_decode($body, true);
 
-        return ['status' => $status, 'body' => $body, 'json' => is_array($json) ? $json : null];
+        return ['status' => $status, 'body' => $body, 'json' => is_array($json) ? $json : null,
+                'headers' => $resHeaders];
     }
 
     /** 포털 로그인 후 BlueStudio 화면에서 CSRF 토큰을 긁어 온다. */
@@ -507,6 +515,47 @@ ok('부분 성공 — 1건 저장 / 1건 실패',
 $r = $anon->req('/studio/var/source/' . date('Y') . '/' . $pid . '/');
 ok('업로드 경로 직접 접근 404', $r['status'] === 404);
 
+// --- 내려받기 · 보기 (2026-10-15) -------------------------------------------
+// 저장 경로는 막혀 있고 api/source_download.php 만 파일을 내보낸다.
+// 그 프로젝트를 볼 수 있는 사람(로그인한 구성원)이면 받는다.
+$r = $guest->req('/studio/api/source_download.php?id=' . $srcId);
+ok('일반 사용자도 내려받는다', $r['status'] === 200, 'status=' . $r['status']);
+ok('내려받은 내용이 올린 파일과 같다', $r['body'] === file_get_contents($png));
+ok('기본은 내려받기(attachment)', str_starts_with($r['headers']['content-disposition'] ?? '', 'attachment'),
+   $r['headers']['content-disposition'] ?? '');
+ok('한글 파일명을 지킨다', str_contains($r['headers']['content-disposition'] ?? '', rawurlencode('시안.png')));
+ok('형식 추측을 막는다', ($r['headers']['x-content-type-options'] ?? '') === 'nosniff');
+
+$r = $guest->req('/studio/api/source_download.php?id=' . $srcId . '&inline=1');
+ok('이미지는 바로 보기(inline)', str_starts_with($r['headers']['content-disposition'] ?? '', 'inline')
+   && ($r['headers']['content-type'] ?? '') === 'image/png', json_encode($r['headers']));
+ok('바로 보기에도 sandbox CSP', str_contains($r['headers']['content-security-policy'] ?? '', 'sandbox'));
+
+$r = $anon->req('/studio/api/source_download.php?id=' . $srcId);
+ok('로그인 안 하면 401', $r['status'] === 401, 'status=' . $r['status']);
+$r = $guest->req('/studio/api/source_download.php?id=99999999');
+ok('없는 문서는 404', $r['status'] === 404);
+
+// ★ R&D 과제의 출처는 이 길로 열리지 않는다 — 비공개 과제가 샌다.
+(function () use ($pid) {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $p->prepare("UPDATE bs_project SET project_type = 'rnd' WHERE id = ?")->execute([$pid]);
+})();
+$r = $guest->req('/studio/api/source_download.php?id=' . $srcId);
+$rt = $guest->req('/studio/api/project.php?act=source_text&id=' . $srcId);
+(function () use ($pid) {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $p->prepare("UPDATE bs_project SET project_type = 'project' WHERE id = ?")->execute([$pid]);
+})();
+ok('★ R&D 과제의 파일은 내려받지 못한다', $r['status'] === 404, 'status=' . $r['status']);
+ok('★ R&D 과제의 본문도 못 본다', $rt['status'] === 404, 'status=' . $rt['status']);
+
 // =====================================================================
 section('[I] 출처 — 링크 / 직접 입력');
 $r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
@@ -525,6 +574,19 @@ $r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, '
 ok('직접 입력 200', $r['status'] === 200);
 ok('첫 줄을 제목으로', ($r['json']['data']['saved'][0]['title'] ?? '') === '첫 줄이 제목');
 ok('parse_status=ok', ($r['json']['data']['saved'][0]['parse_status'] ?? '') === 'ok');
+$textSrc = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+
+// 뷰어 — 파일 없는 출처는 본문만 보이고 내려받기는 없다 (2026-10-15).
+$r = $guest->req('/studio/api/project.php?act=source_text&id=' . $textSrc);
+ok('추출 본문을 일반 사용자도 본다', $r['status'] === 200
+   && str_contains($r['json']['data']['text'] ?? '', '본문 내용입니다'), substr($r['body'], 0, 160));
+ok('파일이 없다고 알려 준다', ($r['json']['data']['has_file'] ?? null) === false);
+$r = $guest->req('/studio/api/source_download.php?id=' . $textSrc);
+ok('파일 없는 출처는 내려받기 404', $r['status'] === 404, 'status=' . $r['status']);
+$page = $guest->req('/studio/project_view.php?id=' . $pid)['body'];
+ok('화면에 보기 단추', str_contains($page, 'data-src-view="' . $textSrc . '"'));
+ok('화면에 내려받기 단추', str_contains($page, 'api/source_download.php?id=' . $srcId . '"'));
+ok('파일 없는 출처엔 내려받기 단추가 없다', !str_contains($page, 'api/source_download.php?id=' . $textSrc . '"'));
 
 $r = $guest->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'source_type' => 'text', 'text' => '권한 없음']]);

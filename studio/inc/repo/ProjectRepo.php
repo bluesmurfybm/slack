@@ -594,6 +594,7 @@ final class ProjectRepo
             'SELECT id, project_id, ' . ($this->hasPurposeColumn() ? 'purpose' : '"scope" AS purpose') . ', kind, title, url, file_size, mime,
                     parse_status, parse_error,
                     CHAR_LENGTH(COALESCE(parsed_text, "")) AS parsed_len,
+                    (file_path IS NOT NULL AND file_path <> "") AS has_file,
                     uploaded_by, uploaded_by_name, created_at
                FROM bs_project_source
               WHERE project_id = ?
@@ -635,6 +636,31 @@ final class ProjectRepo
     public function findSource(int $sourceId): ?array
     {
         $st = $this->pdo->prepare('SELECT * FROM bs_project_source WHERE id = ?');
+        $st->execute([$sourceId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+
+        return $row === false ? null : $row;
+    }
+
+    /**
+     * 내려받기·보기용 한 건 (2026-10-15). 그 프로젝트를 볼 수 있을 때만 돌려준다.
+     *
+     * 프로젝트(project_type='project')의 출처만 본다 — R&D 과제는 공개 범위가
+     * 따로 있어(RndRepo::find) 이 경로로 열면 비공개 과제가 샌다. 지워진
+     * 프로젝트는 $withDeleted(관리자) 일 때만. file_path 를 포함하므로 응답에
+     * 그대로 싣지 말 것.
+     */
+    public function findSourceForView(int $sourceId, bool $withDeleted = false): ?array
+    {
+        $st = $this->pdo->prepare(
+            "SELECT s.id, s.project_id, s.kind, s.title, s.url, s.file_path, s.file_size, s.mime,
+                    s.parse_status, s.parsed_text
+               FROM bs_project_source s
+               JOIN bs_project p ON p.id = s.project_id
+              WHERE s.id = ?
+                AND p.project_type = 'project'"
+            . ($withDeleted ? '' : ' AND p.deleted_at IS NULL')
+        );
         $st->execute([$sourceId]);
         $row = $st->fetch(PDO::FETCH_ASSOC);
 

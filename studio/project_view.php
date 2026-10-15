@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
 require_once __DIR__ . '/inc/repo/ProjectRepo.php';
+require_once __DIR__ . '/inc/service/SourceUploader.php';   // humanSize() — 내려받기 단추 크기 표시
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -278,6 +279,25 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
               <span class="ba-src__parse ba-src__parse--<?= h($s['parse_status']) ?>">
                 <?= h(['pending'=>'분석 대기','ok'=>'분석 완료','fail'=>'분석 실패','skip'=>'분석 안 함'][$s['parse_status']] ?? $s['parse_status']) ?>
               </span>
+              <?php
+              // 보기·내려받기 (2026-10-15). 파일로 올린 것만 내려받는다.
+              // 보기는 파일이 있거나 추출 본문이 있을 때 — 링크만 있는 출처는 제목 링크로 연다.
+              $hasFile = !empty($s['has_file']);
+              $canSee  = $hasFile || (int)($s['parsed_len'] ?? 0) > 0;
+              ?>
+              <?php if ($canSee || $hasFile): ?>
+              <span class="ba-src__acts">
+                <?php if ($canSee): ?>
+                  <button type="button" class="ba-btn ba-btn--sm" data-src-view="<?= (int)$s['id'] ?>"
+                          data-mime="<?= h((string)$s['mime']) ?>" data-file="<?= $hasFile ? '1' : '0' ?>"
+                          data-title="<?= h($s['title']) ?>">보기</button>
+                <?php endif; ?>
+                <?php if ($hasFile): ?>
+                  <a class="ba-btn ba-btn--sm" href="api/source_download.php?id=<?= (int)$s['id'] ?>"
+                     title="<?= h($s['title']) ?><?= !empty($s['file_size']) ? ' · ' . h(SourceUploader::humanSize((int)$s['file_size'])) : '' ?>">내려받기</a>
+                <?php endif; ?>
+              </span>
+              <?php endif; ?>
             </div>
           <?php endforeach; ?>
         </div>
@@ -819,6 +839,25 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
   <section data-pv-pane="dash" hidden>
     <div class="ba-note">대시보드는 P6 에서 구현합니다.</div>
   </section>
+</div>
+
+<!-- 출처 문서 보기 (2026-10-15). 이미지·PDF 는 그대로, 엑셀·PPT·워드는 추출 본문.
+     외부 뷰어는 쓰지 않는다 — 업무 문서를 바깥으로 보내는 일이다. -->
+<div class="ba-drawer" id="ba-src-viewer" hidden>
+  <div class="ba-drawer__box ba-drawer__box--wide" role="dialog" aria-modal="true" aria-labelledby="ba-sv-title">
+    <div class="ba-drawer__head">
+      <h2 id="ba-sv-title">문서 보기</h2>
+      <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
+    </div>
+    <div class="ba-drawer__body ba-sv" id="ba-sv-body"></div>
+    <div class="ba-drawer__foot">
+      <span class="ba-dim" id="ba-sv-note"></span>
+      <span class="ba-spacer"></span>
+      <a class="ba-btn" id="ba-sv-dl" href="#" hidden>내려받기</a>
+      <a class="ba-btn" id="ba-sv-tab" href="#" target="_blank" rel="noopener" hidden>새 창에서 열기</a>
+      <button type="button" class="ba-btn" data-close>닫기</button>
+    </div>
+  </div>
 </div>
 
 <!-- 배정 근거 드로어 -->

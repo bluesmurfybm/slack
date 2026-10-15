@@ -4,6 +4,7 @@
  *
  * GET  api/project.php?act=list
  * GET  api/project.php?act=get&id=1
+ * GET  api/project.php?act=source_text&id=12   출처 문서 추출 본문 (뷰어용)
  * POST api/project.php?act=create
  * POST api/project.php?act=update
  * POST api/project.php?act=delete          소프트 삭제
@@ -81,6 +82,38 @@ bs_route(bs_param_str('act', 'list'), [
             'can'     => [
                 'manage' => bs_can(BS_CAP_PROJECT_MANAGE, $id),
             ],
+        ]);
+    },
+
+    /**
+     * 출처 문서의 추출 본문 — 화면 뷰어용 (2026-10-15).
+     *
+     * 엑셀·PPT·워드는 브라우저가 그리지 못하고, 외부 뷰어는 문서를 바깥으로
+     * 보내는 일이라 쓰지 않는다. 업로드 때 뽑아 둔 글(parsed_text)을 보여 준다.
+     * 원본 그대로가 필요하면 내려받기(api/source_download.php)를 쓴다.
+     */
+    'source_text' => function () use ($repo): void {
+        bs_require_login_api();
+
+        $sid = bs_param_int('id', 0) ?? 0;
+        $src = $sid > 0 ? $repo->findSourceForView($sid, bs_is_admin()) : null;
+        if (!$src) {
+            bs_json_error('NOT_FOUND', '문서를 찾을 수 없습니다.', 404);
+        }
+
+        // 화면이 굳지 않을 만큼만. 넘치면 잘랐다고 알린다.
+        $max  = 200000;
+        $text = (string)($src['parsed_text'] ?? '');
+        $len  = mb_strlen($text);
+
+        bs_json_ok([
+            'id'           => (int)$src['id'],
+            'title'        => $src['title'],
+            'parse_status' => $src['parse_status'],
+            'text'         => $len > $max ? mb_substr($text, 0, $max) : $text,
+            'truncated'    => $len > $max,
+            'length'       => $len,
+            'has_file'     => !empty($src['file_path']),
         ]);
     },
 
