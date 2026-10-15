@@ -2382,6 +2382,73 @@ ok('일반 사용자에게 남의 프로파일 링크가 적다',
    '남의 프로파일 링크가 그대로 보인다');
 
 // ---------------------------------------------------------------------
+// 프로젝트 등록 권한 (027, 2026-10-15)
+//
+// 관리자만 등록하던 것을, 관리자가 켜 준 PM 도 등록하게 한다. 등록한 사람이
+// PM 이 되고 PM 은 남의 점유·근거·배정 확정에 닿으므로 모두에게 열지 않는다.
+// ---------------------------------------------------------------------
+$guestMid = (int)$pdoR->query(
+    "SELECT id FROM bs_member WHERE user_id = 'batest-user@bluesoft.co.kr'"
+)->fetchColumn();
+$pdoR->exec("UPDATE bs_member SET can_create_project = 0 WHERE id = $guestMid");
+
+ok('관리자 구성원 목록에 등록 권한 단추가 있다', str_contains($r['body'], 'ba-create-t'));
+ok('일반 사용자 구성원 목록에는 등록 권한 열이 없다', !str_contains($r3['body'], 'ba-create-t'));
+
+$rc = $guest->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => $guestMid, 'can_create' => 1]]);
+ok('일반 사용자는 등록 권한을 못 바꾼다', $rc['status'] === 403, '상태 ' . $rc['status']);
+$rc = $admin->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => $guestMid, 'can_create' => 5]]);
+ok('등록 권한: 0/1 아닌 값은 거절', $rc['status'] === 400, '상태 ' . $rc['status']);
+$rc = $admin->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => 0, 'can_create' => 1]]);
+ok('등록 권한: 구성원을 안 주면 거절', $rc['status'] === 400, '상태 ' . $rc['status']);
+
+$rc = $guest->req('/studio/api/project.php?act=create',
+    ['csrf' => true, 'json' => ['name' => '시험-등록권한 없음']]);
+ok('권한을 켜기 전에는 등록 403', $rc['status'] === 403, '상태 ' . $rc['status']);
+ok('권한을 켜기 전에는 새 프로젝트 단추가 없다',
+   !str_contains($guest->req('/studio/project_list.php')['body'], 'href="project_form.php"'));
+
+$rc = $admin->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => $guestMid, 'can_create' => 1]]);
+ok('관리자가 등록 권한을 켠다', $rc['status'] === 200, $rc['body']);
+$g = $pdoR->query("SELECT can_create_project, create_granted_by FROM bs_member WHERE id = $guestMid")->fetch();
+ok('누가 켰는지 남는다',
+   (int)$g['can_create_project'] === 1 && $g['create_granted_by'] === $ADMIN['email'], json_encode($g));
+
+ok('켜면 새 프로젝트 단추가 보인다',
+   str_contains($guest->req('/studio/project_list.php')['body'], 'href="project_form.php"'));
+// 권한이 없으면 project_list.php?err=denied 로 302 를 돌린다.
+ok('켜면 등록 화면이 열린다', $guest->req('/studio/project_form.php')['status'] === 200);
+
+$rc = $guest->req('/studio/api/project.php?act=create',
+    ['csrf' => true, 'json' => ['name' => '시험-PM 직접 등록']]);
+ok('켜면 등록된다', $rc['status'] === 200, $rc['body']);
+$gPid = (int)($rc['json']['data']['id'] ?? 0);
+$owner = $gPid ? $pdoR->query("SELECT owner_id FROM bs_project WHERE id = $gPid")->fetchColumn() : null;
+ok('등록한 사람이 PM 이 된다', $owner === $USER['email'], (string)$owner);
+
+$rc = $admin->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => $guestMid, 'can_create' => 0]]);
+ok('관리자가 등록 권한을 끈다', $rc['status'] === 200, $rc['body']);
+$rc = $guest->req('/studio/api/project.php?act=create',
+    ['csrf' => true, 'json' => ['name' => '시험-끈 뒤 등록']]);
+ok('끄면 새 등록은 403', $rc['status'] === 403, '상태 ' . $rc['status']);
+$rc = $guest->req('/studio/api/project.php?act=update',
+    ['csrf' => true, 'json' => ['id' => $gPid, 'name' => '시험-PM 직접 등록(수정)']]);
+ok('꺼도 이미 등록한 프로젝트는 PM 으로 고친다', $rc['status'] === 200, $rc['body']);
+
+// 뒷정리 — 시험 계정이 PM 으로 남으면 bs_can_edit_workload 가 "어느 프로젝트든
+// PM" 으로 열린다. 다음 시험을 흐리지 않게 행째 지운다.
+if ($gPid > 0) {
+    $pdoR->exec("DELETE FROM bs_project WHERE id = $gPid");
+}
+$pdoR->exec("UPDATE bs_member SET can_create_project = 0, create_granted_by = NULL, create_granted_at = NULL
+              WHERE user_id LIKE 'batest-%'");
+
+// ---------------------------------------------------------------------
 section('[U] 외부 연동 — 구글 드라이브 · 피그마');
 
 // ┌──────────────────────────────────────────────────────────────────┐

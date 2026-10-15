@@ -4817,6 +4817,39 @@
       });
     });
 
+    // 프로젝트 등록 권한 (027). 등록한 사람이 그 프로젝트의 PM 이 되므로
+    // 켜기 전에 무엇이 따라오는지 한 번 알린다.
+    $$('.ba-create-t').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var on   = b.dataset.on === '1';
+        var name = b.dataset.name || '이 구성원';
+        var msg  = on
+          ? [name + ' 님의 프로젝트 등록 권한을 끕니다.', '',
+             '· 새 프로젝트를 등록하지 못합니다',
+             '· 이미 등록한 프로젝트의 PM 권한은 그대로입니다',
+             '', '진행할까요?'].join('\n')
+          : [name + ' 님에게 프로젝트 등록 권한을 줍니다.', '',
+             '등록한 프로젝트의 PM 이 되어 다음을 할 수 있습니다.',
+             '· 후보 표에서 후보 전원의 근거 열람',
+             '· 배정 확정 (구성원 점유가 생깁니다)',
+             '· 구성원의 직접 등록 점유 수정',
+             '', '진행할까요?'].join('\n');
+        if (!confirm(msg)) return;
+
+        b.disabled = true;
+        api('api/member.php?act=set_can_create', {
+          method: 'POST',
+          body: { member_id: parseInt(b.dataset.mid, 10), can_create: on ? 0 : 1 }
+        }).then(function (d) {
+          toast(d.message);
+          location.reload();
+        }).catch(function (e) {
+          toast(e.message, true);
+          b.disabled = false;
+        });
+      });
+    });
+
 
     if (!btn) return;   // 관리자가 아니면 단추를 안 그린다
     btn.addEventListener('click', function () {

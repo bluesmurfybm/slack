@@ -103,7 +103,8 @@ const BS_ROLES = [
  * 화면·API 가 역할 이름을 직접 비교하지 않고 이 코드로 묻게 한다.
  * 나중에 역할 체계가 바뀌어도 bs_can() 한 곳만 고치면 된다.
  */
-const BS_CAP_PROJECT_MANAGE     = 'project.manage';      // 프로젝트 등록·수정·삭제
+const BS_CAP_PROJECT_CREATE     = 'project.create';      // 프로젝트 새로 등록 (027 — 관리자가 사람마다 켠다)
+const BS_CAP_PROJECT_MANAGE     = 'project.manage';      // 프로젝트 수정·삭제
 const BS_CAP_WBS_CONFIRM        = 'wbs.confirm';         // WBS 초안 확정(confirmed=1)
 const BS_CAP_ALLOCATION_PROPOSE = 'allocation.propose';  // 배정안 산출
 const BS_CAP_ALLOCATION_CONFIRM = 'allocation.confirm';  // 배정안 확정
@@ -928,6 +929,36 @@ function bs_is_project_editor(int $projectId, ?string $email = null): bool
 }
 
 /**
+ * 관리자가 프로젝트 등록 권한을 켜 준 사람인가 (027, 2026-10-15).
+ *
+ * 관리자 여부는 보지 않는다 — bs_can() 이 먼저 거른다. 칸(027)이 없는
+ * 서버에서는 아무도 켜지지 않은 것으로 본다.
+ *
+ * 끈다고 이미 등록한 프로젝트의 PM 권한이 사라지지는 않는다. PM 은
+ * bs_project.owner_id 로 정해진다.
+ */
+function bs_can_create_project_flag(?string $email = null): bool
+{
+    static $cache = [];
+
+    $email ??= bs_current_user()['id'] ?? '';
+    if ($email === '') {
+        return false;
+    }
+    if (!array_key_exists($email, $cache)) {
+        try {
+            $st = bs_db()->prepare(
+                'SELECT can_create_project FROM bs_member WHERE user_id = ? LIMIT 1');
+            $st->execute([$email]);
+            $cache[$email] = (int)$st->fetchColumn() === 1;
+        } catch (Throwable $e) {
+            $cache[$email] = false;
+        }
+    }
+    return $cache[$email];
+}
+
+/**
  * 편집자를 지정·해제하고, 프로젝트를 지울 수 있는가 — PM 과 관리자만.
  * 편집자에게 열면 편집자가 편집자를 늘리거나 프로젝트를 지울 수 있다.
  */
@@ -957,6 +988,9 @@ function bs_can(string $capability, ?int $projectId = null): bool
     $isEd = !$isPm && $projectId !== null && bs_is_project_editor($projectId);
 
     return match ($capability) {
+        // 등록은 특정 프로젝트에 매이지 않는다. 관리자가 켠 사람만 (027).
+        BS_CAP_PROJECT_CREATE     => bs_can_create_project_flag(),
+
         // 편집자는 정보·문서·WBS·배정안 산출까지 한다.
         BS_CAP_PROJECT_MANAGE,
         BS_CAP_WBS_CONFIRM,

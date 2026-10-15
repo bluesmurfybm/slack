@@ -108,6 +108,7 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 025_migration_view_as.sql           관리자 "사용자로 보기" 기록
 026_migration_editors.sql           수정 권한 — R&D 참여자 칸 + 프로젝트 공동 편집자 표
                                     ← 빠지면 R&D 과제 화면이 안 열림
+027_migration_project_creator.sql   프로젝트 등록 권한 — 관리자가 구성원마다 켠다
 ```
 
 ### 이미 돌고 있는 DB 에 새 번호만 더할 때
@@ -122,6 +123,7 @@ mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/023_migrati
 mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/024_migration_candidate_mark.sql
 mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/025_migration_view_as.sql
 mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/026_migration_editors.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/027_migration_project_creator.sql
 ```
 
 어디까지 올렸는지 모르겠으면 칸·표가 있는지 본다:
@@ -131,6 +133,7 @@ mysql <db> -e "SHOW COLUMNS FROM bs_project_source LIKE 'purpose'"   # 023
 mysql <db> -e "SHOW COLUMNS FROM bs_project_member LIKE 'priority'"  # 024
 mysql <db> -e "SHOW TABLES LIKE 'bs\_view\_as\_log'"                 # 025
 mysql <db> -e "SHOW TABLES LIKE 'bs\_project\_editor'"               # 026
+mysql <db> -e "SHOW COLUMNS FROM bs_member LIKE 'can_create_project'" # 027
 ```
 
 ### 적용 뒤 확인

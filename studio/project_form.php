@@ -21,8 +21,10 @@ if ($projectId > 0) {
     }
 }
 
-// 수정이면 그 프로젝트 기준, 신규면 프로젝트 없이 권한을 본다.
-if (!bs_can(BS_CAP_PROJECT_MANAGE, $projectId > 0 ? $projectId : null)) {
+// 수정이면 그 프로젝트 기준, 신규면 등록 권한(027)을 본다.
+if (!($projectId > 0
+        ? bs_can(BS_CAP_PROJECT_MANAGE, $projectId)
+        : bs_can(BS_CAP_PROJECT_CREATE))) {
     header('Location: project_list.php?err=denied');
     exit;
 }

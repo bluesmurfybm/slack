@@ -90,7 +90,8 @@ bs_route(bs_param_str('act', 'list'), [
 
     'create' => function () use ($repo): void {
         $user = bs_begin_write();
-        bs_require_cap_api(BS_CAP_PROJECT_MANAGE);
+        // 관리자 + 관리자가 등록 권한을 켜 준 사람 (027). 등록한 사람이 PM 이 된다.
+        bs_require_cap_api(BS_CAP_PROJECT_CREATE);
 
         $data = bs_read_project_input(true);
         if ($data['name'] === '') {
