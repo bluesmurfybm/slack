@@ -1544,8 +1544,9 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-badge--done     { background: #eef1f6; color: var(--ba-ink-soft); }
 .ba-badge--dropped  { background: #fbeceb; color: var(--ba-danger); }
 
-/* 발의 폼 */
-.ba-form {
+/* 발의 폼 — R&D 발의 폼에만. 전에는 .ba-form 전체에 걸려 프로젝트 등록·이의 제기
+   폼의 입력란이 글자 폭만큼 좁아졌다 (2026-10-15). 그쪽은 위의 grid 를 쓴다. */
+#ba-rnd-form.ba-form {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 14px;
