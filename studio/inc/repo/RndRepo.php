@@ -934,7 +934,8 @@ final class RndRepo
      *
      * 누가 할 수 있는지는 bs_rnd_can_delete() 가 정한다(화면 단추와 같은 판정).
      * 점유는 오늘로 닫는다 — 보드에서 사라진 과제가 가용도를 계속 깎으면 안 된다.
-     * 상태(status)는 그대로 둔다. 복구하면 그 자리로 돌아간다.
+     * 상태(status)·모집 여부(recruiting)는 그대로 둔다. 복구하면 그 자리로 돌아간다.
+     * 삭제된 과제는 find() 가 걸러 보드·합류에서 빠지므로 모집 표시를 끌 필요가 없다.
      */
     public function softDelete(int $projectId, string $reason, array $actor): void
     {
@@ -953,7 +954,7 @@ final class RndRepo
             $this->pdo->prepare(
                 "UPDATE bs_project
                     SET deleted_at = NOW(), deleted_by = ?, deleted_by_name = ?,
-                        delete_reason = ?, recruiting = 0
+                        delete_reason = ?
                   WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NULL"
             )->execute([
                 (string)($actor['id'] ?? ''), (string)($actor['name'] ?? ''),

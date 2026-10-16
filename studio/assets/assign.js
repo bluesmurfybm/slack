@@ -5263,6 +5263,73 @@
   };
 
   /**
+   * 화면 안 확인·입력 창 (2026-10-16). Promise 로 입력값(문자열)을, 취소면 null 을 준다.
+   *
+   * window.prompt / confirm 을 쓰지 않는다. 브라우저가 "이 페이지의 대화 상자를
+   * 막기" 를 기억하거나 내장 브라우저에서 열리면 **아무 창도 없이 취소로** 끝나,
+   * 단추를 눌러도 반응이 없었다(R&D [중단]·[삭제]).
+   *
+   * opts: title, message(줄바꿈 \n), input(true 면 입력칸), placeholder,
+   *       required(빈 값 거절), expect(이 값과 같아야 진행 — 영구삭제 코드 확인),
+   *       ok(단추 글자), danger(빨간 단추)
+   */
+  function askDialog(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      var last = document.activeElement;
+      var wrap = document.createElement('div');
+      wrap.className = 'ba-dlg';
+      wrap.innerHTML =
+        '<div class="ba-dlg__box" role="dialog" aria-modal="true" aria-labelledby="ba-dlg-t">' +
+          '<h2 class="ba-dlg__t" id="ba-dlg-t">' + esc(opts.title || '확인') + '</h2>' +
+          (opts.message ? '<p class="ba-dlg__m">' + esc(opts.message).replace(/\n/g, '<br>') + '</p>' : '') +
+          (opts.input
+            ? '<textarea class="ba-dlg__in" rows="3" placeholder="' + esc(opts.placeholder || '') + '"></textarea>'
+            : '') +
+          '<p class="ba-dlg__err" hidden></p>' +
+          '<div class="ba-dlg__foot">' +
+            '<button type="button" class="ba-btn" data-dlg="cancel">취소</button>' +
+            '<button type="button" class="ba-btn ' + (opts.danger ? 'ba-btn--danger-fill' : 'ba-btn--primary') +
+              '" data-dlg="ok">' + esc(opts.ok || '확인') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(wrap);
+
+      var input = wrap.querySelector('.ba-dlg__in');
+      var err   = wrap.querySelector('.ba-dlg__err');
+      (input || wrap.querySelector('[data-dlg="ok"]')).focus();
+
+      function dlgClose(v) {
+        wrap.remove();
+        document.removeEventListener('keydown', onKey, true);
+        if (last && last.focus) last.focus();
+        resolve(v);
+      }
+      function dlgOk() {
+        var v = input ? input.value.trim() : '';
+        if (opts.required && v === '') {
+          err.hidden = false; err.textContent = '내용을 입력하세요.'; input.focus(); return;
+        }
+        if (opts.expect !== undefined && v !== opts.expect) {
+          err.hidden = false; err.textContent = '입력한 값이 맞지 않습니다.'; input.focus(); return;
+        }
+        dlgClose(v);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') { e.stopPropagation(); dlgClose(null); }
+        // 입력칸이 한 줄짜리 확인(코드)일 때만 Enter 로 진행한다. 사유는 여러 줄일 수 있다.
+        if (e.key === 'Enter' && (!input || opts.expect !== undefined) && !e.shiftKey) { e.preventDefault(); dlgOk(); }
+      }
+      document.addEventListener('keydown', onKey, true);
+      wrap.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-dlg]');
+        if (b) { b.dataset.dlg === 'ok' ? dlgOk() : dlgClose(null); return; }
+        if (e.target === wrap) dlgClose(null);   // 바깥을 누르면 취소
+      });
+    });
+  }
+
+  /**
    * R&D 과제 중단·삭제·복구·영구삭제 (2026-10-16). 보드 카드와 상세 머리가 같이 쓴다.
    * 처리했으면 true. 끝나면 after() 를 부른다(보드는 다시 읽고, 상세는 보드로 간다).
    * 단추에는 data-id · data-code · data-name 이 있어야 한다.
@@ -5271,7 +5338,7 @@
     var id   = parseInt(btn.dataset.id, 10);
     var code = btn.dataset.code || '';
     var name = btn.dataset.name || '';
-    var head = '[' + code + '] ' + name + '\n\n';
+    var head = '[' + code + '] ' + name;
     var send = function (a, body, okFallback) {
       body = body || {};
       body.id = id;
@@ -5282,36 +5349,45 @@
     };
 
     if (act === 'drop') {
-      var why = window.prompt(head + '과제를 중단합니다. 사유를 적어 주세요.\n' +
-                              '중단한 과제는 역량 지표에 반영하지 않고, 참여자 점유는 오늘로 닫힙니다.');
-      if (why === null) return true;
-      if (!why.trim()) { toast('중단 사유를 입력하세요.', true); return true; }
-      send('drop', { reason: why }, '과제를 중단했습니다.');
+      askDialog({
+        title: '과제 중단', ok: '중단', danger: true, input: true, required: true,
+        message: head + '\n\n중단한 과제는 역량 지표에 반영하지 않고, 참여자 점유는 오늘로 닫힙니다.',
+        placeholder: '중단 사유 (필수)'
+      }).then(function (why) {
+        if (why !== null) send('drop', { reason: why }, '과제를 중단했습니다.');
+      });
       return true;
     }
     if (act === 'delete') {
-      var r = window.prompt(head + '과제를 삭제합니다.\n' +
-                            '· 보드에서 보이지 않게 되고, 참여자 점유는 오늘로 닫힙니다\n' +
-                            '· 관리자는 [삭제 포함] 에서 복구할 수 있습니다\n\n' +
-                            '삭제 사유 (비워도 됩니다)', '');
-      if (r === null) return true;
-      send('delete', { reason: r }, '과제를 삭제했습니다.');
+      askDialog({
+        title: '과제 삭제', ok: '삭제', danger: true, input: true,
+        message: head + '\n\n· 보드에서 보이지 않게 되고, 참여자 점유는 오늘로 닫힙니다\n' +
+                 '· 관리자는 [삭제 포함] 에서 복구할 수 있습니다',
+        placeholder: '삭제 사유 (비워도 됩니다)'
+      }).then(function (r) {
+        if (r !== null) send('delete', { reason: r }, '과제를 삭제했습니다.');
+      });
       return true;
     }
     if (act === 'restore') {
-      if (!window.confirm(head + '과제를 복구합니다.\n' +
-                          '승인·진행 중이던 과제면 참여자 점유도 다시 올라갑니다.')) return true;
-      send('restore', {}, '과제를 복구했습니다.');
+      askDialog({
+        title: '과제 복구', ok: '복구',
+        message: head + '\n\n승인·진행 중이던 과제면 참여자 점유도 다시 올라갑니다.'
+      }).then(function (v) {
+        if (v !== null) send('restore', {}, '과제를 복구했습니다.');
+      });
       return true;
     }
     if (act === 'purge') {
       // 되돌릴 수 없다 — 코드를 직접 쳐야 진행한다.
-      var typed = window.prompt(head + '영구삭제합니다. 되돌릴 수 없습니다.\n' +
-                                '· 참여자·진행 기록·산출물·점유 기록이 모두 지워집니다\n\n' +
-                                '진행하려면 과제 코드 ' + code + ' 를 그대로 입력하세요.');
-      if (typed === null) return true;
-      if (typed.trim() !== code) { toast('코드가 맞지 않아 멈췄습니다.', true); return true; }
-      send('purge', {}, '영구삭제했습니다.');
+      askDialog({
+        title: '영구삭제', ok: '영구삭제', danger: true, input: true, expect: code,
+        message: head + '\n\n되돌릴 수 없습니다. 참여자·진행 기록·산출물·점유 기록이 모두 지워집니다.\n' +
+                 '진행하려면 과제 코드 ' + code + ' 를 그대로 입력하세요.',
+        placeholder: code
+      }).then(function (v) {
+        if (v !== null) send('purge', {}, '영구삭제했습니다.');
+      });
       return true;
     }
     return false;
@@ -5518,23 +5594,28 @@
       if (rndLifecycle(act, b, load)) return;
 
       if (act === 'reject') {
-        var reason = window.prompt('반려 사유를 적어 주세요. 발의자가 고쳐서 다시 낼 수 있습니다.');
-        if (reason === null) return;
-        if (!reason.trim()) { toast('반려 사유를 입력하세요.', true); return; }
-        b.disabled = true;
-        api('api/rnd.php?act=reject', { method: 'POST', body: { id: id, reason: reason } })
-          .then(function (d) { toast(d.message); load(); })
-          .catch(function (err) { b.disabled = false; toast(err.message, true); });
+        askDialog({ title: '과제 반려', ok: '반려', input: true, required: true,
+                    message: '발의자가 고쳐서 다시 낼 수 있습니다.', placeholder: '반려 사유 (필수)' })
+          .then(function (reason) {
+            if (reason === null) return;
+            b.disabled = true;
+            api('api/rnd.php?act=reject', { method: 'POST', body: { id: id, reason: reason } })
+              .then(function (d) { toast(d.message); load(); })
+              .catch(function (err) { b.disabled = false; toast(err.message, true); });
+          });
         return;
       }
 
       if (act === 'approve') {
-        if (!window.confirm('이 과제를 승인합니다.\n\n승인은 과제를 열어 줄 뿐이며, ' +
-                            '가용도는 사람이 합류해야 바뀝니다.')) return;
-        b.disabled = true;
-        api('api/rnd.php?act=approve', { method: 'POST', body: { id: id } })
-          .then(function (d) { toast(d.message); load(); })
-          .catch(function (err) { b.disabled = false; toast(err.message, true); });
+        askDialog({ title: '과제 승인', ok: '승인',
+                    message: '승인은 과제를 열어 줄 뿐이며, 가용도는 사람이 합류해야 바뀝니다.' })
+          .then(function (v) {
+            if (v === null) return;
+            b.disabled = true;
+            api('api/rnd.php?act=approve', { method: 'POST', body: { id: id } })
+              .then(function (d) { toast(d.message); load(); })
+              .catch(function (err) { b.disabled = false; toast(err.message, true); });
+          });
       }
     });
 
@@ -5922,23 +6003,33 @@
         return;
       }
       if (act === 'leave') {
-        if (!window.confirm('이 과제에서 나갑니다.')) return;
-        post('leave'); return;
+        askDialog({ title: '과제에서 나가기', ok: '나가기', message: '이 과제에서 나갑니다.' })
+          .then(function (v) { if (v !== null) post('leave'); });
+        return;
       }
       if (act === 'interest') { post('interest'); return; }
       if (act === 'approve')  { post('approve'); return; }
 
+      // 중단·반려는 화면 안 창으로 사유를 받는다 (2026-10-16 — window.prompt 가 막혀
+      // 단추가 반응하지 않았다).
       if (act === 'reject' || act === 'drop') {
         var what = act === 'reject' ? '반려' : '중단';
-        var why  = window.prompt(what + ' 사유를 적어 주세요.');
-        if (why === null) return;
-        if (!why.trim()) { toast(what + ' 사유를 입력하세요.', true); return; }
-        post(act, { reason: why });
+        askDialog({
+          title: '과제 ' + what, ok: what, danger: act === 'drop', input: true, required: true,
+          message: act === 'drop'
+            ? '중단한 과제는 역량 지표에 반영하지 않고, 참여자 점유는 오늘로 닫힙니다.'
+            : '발의자가 고쳐서 다시 낼 수 있습니다.',
+          placeholder: what + ' 사유 (필수)'
+        }).then(function (why) {
+          if (why !== null) post(act, { reason: why });
+        });
         return;
       }
       if (act === 'finish') {
-        if (!window.confirm('과제를 종료합니다.\n\n산출물이 한 건도 없으면 종료할 수 없습니다.')) return;
-        post('finish'); return;
+        askDialog({ title: '과제 종료', ok: '종료',
+                    message: '산출물이 한 건도 없으면 종료할 수 없습니다. 남길 것이 없다면 [중단] 으로 끝냅니다.' })
+          .then(function (v) { if (v !== null) post('finish'); });
+        return;
       }
       if (act === 'approve_member') { post('approve_member', { member_row_id: +b.dataset.row }); return; }
       if (act === 'member_edit') {
@@ -5946,10 +6037,11 @@
         return;
       }
       if (act === 'reject_member') {
-        var r2 = window.prompt('반려 사유를 적어 주세요.');
-        if (r2 === null) return;
-        if (!r2.trim()) { toast('반려 사유를 입력하세요.', true); return; }
-        post('reject_member', { member_row_id: +b.dataset.row, reason: r2 });
+        askDialog({ title: '합류 반려', ok: '반려', input: true, required: true,
+                    placeholder: '반려 사유 (필수)' })
+          .then(function (r2) {
+            if (r2 !== null) post('reject_member', { member_row_id: +b.dataset.row, reason: r2 });
+          });
         return;
       }
       if (act === 'log') {

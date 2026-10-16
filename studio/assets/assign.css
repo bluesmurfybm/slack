@@ -2384,3 +2384,31 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
 }
 .ba-more__item:hover { background: var(--ba-surface); }
 .ba-more__item.is-danger { color: var(--ba-danger); }
+
+/* =====================================================================
+   화면 안 확인·입력 창 (2026-10-16) — assign.js askDialog
+   window.prompt/confirm 은 브라우저가 소리 없이 막을 수 있어 직접 그린다.
+   ===================================================================== */
+.ba-dlg {
+  position: fixed; inset: 0; z-index: 9500;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(16, 26, 38, .42);
+}
+.ba-dlg__box {
+  width: min(460px, 100%); box-sizing: border-box;
+  background: var(--ba-paper); border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(16, 26, 38, .28);
+  padding: 20px 20px 16px;
+}
+.ba-dlg__t { margin: 0 0 8px; font-size: 16px; }
+.ba-dlg__m { margin: 0 0 12px; font-size: 13.5px; line-height: 1.6; color: var(--ba-ink-soft); }
+.ba-dlg__in {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 8px 11px;
+  font: inherit; font-size: 13.5px;
+}
+.ba-dlg__in:focus { outline: 2px solid color-mix(in srgb, var(--ba-brand) 35%, transparent); border-color: var(--ba-brand); }
+.ba-dlg__err { margin: 6px 0 0; font-size: 12.5px; color: var(--ba-danger); }
+.ba-dlg__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.ba-btn--danger-fill { background: var(--ba-danger); border-color: var(--ba-danger); color: #fff; }
+.ba-btn--danger-fill:hover { filter: brightness(.93); }
