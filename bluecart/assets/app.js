@@ -949,9 +949,17 @@
               var del = (res.can_modify && f.is_mine)
                 ? '<button type="button" class="bc-file__x" data-del="' + f.id + '" aria-label="삭제">&times;</button>'
                 : '';
+              // 보기와 내려받기를 나눈다 (2026-10-16). 보기는 이미지·PDF 만,
+              // 상세가 이미 서랍이라 서랍을 겹치지 않고 새 탭으로 연다.
+              var view = f.view_url
+                ? '<a class="bc-btn bc-btn--sm" href="' + esc(f.view_url) + '" target="_blank" rel="noopener">보기</a>'
+                : '';
               return '<div class="bc-file">' +
-                     '<span class="bc-file__name"><a href="' + esc(f.url) + '">' + esc(f.name) + '</a></span>' +
-                     '<span class="bc-file__size">' + esc(f.size) + '</span>' + del + '</div>';
+                     '<span class="bc-file__name">' + esc(f.name) + '</span>' +
+                     '<span class="bc-file__size">' + esc(f.size) + '</span>' +
+                     '<span class="bc-file__acts">' + view +
+                       '<a class="bc-btn bc-btn--sm" href="' + esc(f.url) + '">내려받기</a></span>' +
+                     del + '</div>';
             }).join('')
           : '<p class="bc-muted">첨부된 파일이 없습니다.</p>';
 

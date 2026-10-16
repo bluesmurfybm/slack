@@ -34,6 +34,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
             'uploader'  => $a['uploader_id'],
             'is_mine'   => $a['uploader_id'] === $user['id'],
             'url'       => 'api/attachment_download.php?id=' . (int)$a['id'],
+            // 브라우저가 그리는 형식(이미지·PDF)만 '보기' 를 준다 (2026-10-16).
+            'view_url'  => in_array((string)$a['mime_type'],
+                               ['application/pdf', 'image/png', 'image/jpeg', 'image/gif'], true)
+                           ? 'api/attachment_download.php?id=' . (int)$a['id'] . '&inline=1' : null,
         ], Attachment::listFor($requestId)),
     ]);
 }

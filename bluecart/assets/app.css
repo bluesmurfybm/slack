@@ -593,6 +593,7 @@ body { margin: 0; background: #EEF3FB; }
 .bc-file__name { flex: 1; word-break: break-all; }
 .bc-file__name a { color: var(--brand); }
 .bc-file__size { color: var(--ink-soft); font-size: 12px; white-space: nowrap; }
+.bc-file__acts { display: flex; gap: 4px; flex: 0 0 auto; }   /* 보기 · 내려받기 (2026-10-16) */
 .bc-file__x {
   appearance: none; border: 0; background: none; cursor: pointer;
   color: var(--ink-soft); font-size: 16px; line-height: 1; padding: 0 2px;
