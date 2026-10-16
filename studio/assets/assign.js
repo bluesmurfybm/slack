@@ -765,7 +765,7 @@
       $('#ba-myrnd-sum').textContent = rows.length + '건' + (quiet ? ' · 조용함 ' + quiet + '건' : '');
 
       box.innerHTML = '<div class="ba-mylist">' + rows.map(function (r) {
-        return '<a class="ba-my' + (r.stale ? ' is-quiet' : '') +
+        return '<a class="ba-my ba-my--rnd' + (r.stale ? ' is-quiet' : '') +
                '" href="rnd_view.php?id=' + r.project_id + '">' +
           '<span class="ba-my__p">' + esc(r.code) + '</span>' +
           '<span class="ba-my__t">' + esc(r.name) + '</span>' +

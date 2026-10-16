@@ -1241,6 +1241,12 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   background: var(--ba-paper); font: inherit; font-size: 12.5px; cursor: pointer;
 }
 .ba-my:hover { background: var(--ba-surface); }
+/* 링크로 쓸 때 (2026-10-16 — 내 R&D 과제). 버튼과 달리 <a> 는 여백을 너비 밖에 더해
+   패널 밖으로 넘쳤고, 링크 밑줄·색이 그대로 묻었다. */
+a.ba-my { box-sizing: border-box; color: inherit; text-decoration: none; }
+/* 내 R&D 과제 — 칸이 다섯이다(코드 · 과제명 · 역할·점유 · 산출물 · 최근 기록).
+   '내가 맡은 일' 의 여섯 칸 배치를 그대로 쓰면 마지막 칸이 44px 에 끼어 넘쳤다. */
+.ba-my--rnd { grid-template-columns: 120px 1fr 96px 70px 170px; }
 .ba-my.is-late { border-color: #e8c4be; background: #fdf7f6; }
 .ba-my__p { color: var(--ba-ink-soft); font-size: 11.5px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2412,3 +2418,9 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
 .ba-dlg__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .ba-btn--danger-fill { background: var(--ba-danger); border-color: var(--ba-danger); color: #fff; }
 .ba-btn--danger-fill:hover { filter: brightness(.93); }
+
+/* 내 R&D 과제 — 좁은 화면에서는 과제명 · 역할·점유 · 산출물만 (2026-10-16).
+   위의 1100px 규칙(.ba-my 세 칸)보다 뒤에 둬야 이긴다. */
+@media (max-width: 1100px) {
+  .ba-my--rnd { grid-template-columns: 1fr 96px 70px; }
+}
