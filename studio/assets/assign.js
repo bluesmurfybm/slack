@@ -2368,7 +2368,10 @@
     }
 
     function snapshot() { return JSON.stringify(toPayload(MODEL)); }
-    function isDirty()  { return snapshot() !== SAVED; }
+    // 불러오기 전(SAVED === '')에는 바뀐 것이 없다 (2026-10-16). WBS 는 탭을 눌러야
+    // 불러오는데, 전에는 빈 표의 '[]' 와 '' 를 견줘 늘 '바뀜' 으로 보았다 — 개요만 보고
+    // 다른 메뉴로 가도 "변경사항이 저장되지 않을 수 있습니다" 가 떴다.
+    function isDirty()  { return SAVED !== '' && snapshot() !== SAVED; }
 
     /** 평면화 — 렌더와 위치 찾기에 쓴다. */
     function flat(nodes, depth, parent, out) {
