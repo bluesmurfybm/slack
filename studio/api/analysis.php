@@ -88,6 +88,17 @@ function an_payload(LinkAnalyzer $an, JobRepo $jobs, int $projectId): array
     }
 
     $job = $jobs->liveOf($projectId);
+    // 종류별 진행 (2026-10-16). 링크 읽기와 난이도 매기기는 따로 큐에 들어가고
+    // 단추도 다른 칸에 있다. 하나로 섞어 주면 화면이 엉뚱한 칸에 진행을 그린다.
+    $jobOut = static fn(?array $j): ?array => $j === null ? null : [
+        'id'      => (int)$j['id'],
+        'kind'    => $j['kind'],
+        'status'  => $j['status'],
+        'total'   => (int)$j['total'],
+        'done'    => (int)$j['done'],
+        'failed'  => (int)$j['failed'],
+        'message' => $j['message'],
+    ];
     return [
         'links'   => $links,
         'count'   => $count,
@@ -96,13 +107,10 @@ function an_payload(LinkAnalyzer $an, JobRepo $jobs, int $projectId): array
         // 쓰지 않기로 한 연동의 링크를 정리하거나 되살리는 단추를 가른다.
         'by_provider' => $an->byProvider($projectId),
         // 도는 중인 작업이 있으면 진행률. 없으면 null — 화면이 단추를 되살린다.
-        'job'     => $job === null ? null : [
-            'id'      => (int)$job['id'],
-            'status'  => $job['status'],
-            'total'   => (int)$job['total'],
-            'done'    => (int)$job['done'],
-            'failed'  => (int)$job['failed'],
-            'message' => $job['message'],
+        'job'     => $jobOut($job),
+        'jobs'    => [
+            'links'      => $jobOut($jobs->liveOf($projectId, 'links')),
+            'difficulty' => $jobOut($jobs->liveOf($projectId, 'difficulty')),
         ],
         'recent'  => array_map(static fn($j) => [
             'id'          => (int)$j['id'],
@@ -263,8 +271,9 @@ bs_route(bs_param_str('act', 'status'), [
     },
 
     'cancel' => function () use ($projects, $an, $jobs): void {
-        $pid = an_project($projects);
-        $n   = $jobs->cancel($pid);
+        $pid  = an_project($projects);
+        $kind = bs_param_str('kind');
+        $n    = $jobs->cancel($pid, in_array($kind, ['links', 'difficulty'], true) ? $kind : null);
         bs_json_ok(an_payload($an, $jobs, $pid) + [
             'message' => $n > 0
                 ? '멈췄습니다. 읽던 한 건은 끝내고 멈춥니다.'

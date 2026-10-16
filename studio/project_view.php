@@ -554,6 +554,13 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <button type="button" class="ba-btn" id="ba-w-revert" hidden>되돌리기</button>
         <button type="button" class="ba-btn ba-btn--primary" id="ba-w-save">저장</button>
       </div>
+      <!-- 난이도·공수 매기기 진행 (2026-10-16). 단추가 이 칸에 있는데 진행 막대는
+           위 링크 칸에만 있어서, 누른 자리와 다른 곳이 움직였다. 이 칸에 따로 둔다. -->
+      <div class="ba-lk-prog" id="ba-sc-prog" hidden>
+        <div class="ba-lk-bar"><i id="ba-sc-fill"></i></div>
+        <span class="ba-dim" id="ba-sc-progtxt"></span>
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--danger" id="ba-sc-cancel">멈추기</button>
+      </div>
       <div id="ba-w-docs" hidden></div>
       <?php else: ?>
       <div class="ba-note ba-note--readonly">읽기 전용입니다. WBS 를 고치려면 이 프로젝트의 담당 PM 이어야 합니다.</div>

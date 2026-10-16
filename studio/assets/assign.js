@@ -2111,7 +2111,12 @@
         (c.skip ? tag('건너뜀', c.skip + '', 'off', '안 쓰기로 한 연동입니다. 실패가 아닙니다') : '')
       ] : [tag('', '아직 찾은 링크가 없습니다', 'off')]);
 
-      var job = d.job;
+      // 링크 읽기와 난이도 매기기는 **따로** 돈다 (2026-10-16). 전에는 무엇이 돌든
+      // 이 칸의 막대에 그려서, WBS 칸에서 [난이도·공수 매기기] 를 누르면 여기가
+      // 움직이고 [링크 분석 시작] 까지 막혔다. 옛 서버(jobs 없음)면 전처럼 job 하나.
+      var jobs  = d.jobs || { links: d.job, difficulty: null };
+      var job   = jobs.links;
+      var djob  = jobs.difficulty;
       $('#ba-lk-cancel').hidden = !job;
       $('#ba-lk-start').disabled = !!job || !(c.pending > 0);
       $('#ba-lk-retry').hidden = !(c.fail > 0) || !!job;
@@ -2152,22 +2157,13 @@
         }).join('');
       }
 
-      var prog = $('#ba-lk-prog');
-      if (job) {
-        prog.hidden = false;
-        var pct = job.total ? Math.round(job.done / job.total * 100) : 0;
-        $('#ba-lk-fill').style.width = pct + '%';
-        // 서버가 적어 둔 사유가 있으면 **그것을 보여 준다.** 전에는 여기서
-        // '대기 중입니다' 로 덮어써서, 피그마가 "2일 쉬어라" 한 사실이
-        // 화면 어디에도 안 보였다.
-        $('#ba-lk-progtxt').textContent =
-          job.status === 'queued'
-            ? (job.message || '대기 중입니다. 크론이 집어 갈 때까지 1분쯤 걸립니다.')
-            : job.done + ' / ' + job.total + ' 건'
-              + (job.failed ? ' (실패 ' + job.failed + ')' : '');
-      } else {
-        prog.hidden = true;
-      }
+      drawProg('#ba-lk-prog', '#ba-lk-fill', '#ba-lk-progtxt', job);
+      // 난이도 매기기는 WBS 칸에 그린다. 도는 동안 같은 단추를 또 누르지 않게.
+      drawProg('#ba-sc-prog', '#ba-sc-fill', '#ba-sc-progtxt', djob);
+      ['#ba-lk-score', '#ba-lk-rescore'].forEach(function (sel) {
+        var el = $(sel);
+        if (el) el.disabled = !!djob;
+      });
 
       // 목록은 드로어에서 본다. 여기서는 상태별 수만 단추로 보여 주고,
       // 누르면 그 상태만 걸러 연다 — 보통 보고 싶은 건 '실패' 뿐이다.
@@ -2176,8 +2172,26 @@
       if (!$('#ba-lk-drawer').hidden) { drawLinkRows(); }
 
       // 도는 중일 때만 되묻는다. 끝났는데 계속 물으면 서버가 공연히 바쁘다.
-      if (job && !timer) { timer = setInterval(load, 3000); }
-      if (!job && timer) { clearInterval(timer); timer = null; }
+      var busy = !!(job || djob);
+      if (busy && !timer) { timer = setInterval(load, 3000); }
+      if (!busy && timer) { clearInterval(timer); timer = null; }
+    }
+
+    /** 진행 막대 하나. 링크 칸·WBS 칸이 같은 모양을 쓴다. */
+    function drawProg(boxSel, fillSel, txtSel, j) {
+      var box = $(boxSel);
+      if (!box) return;
+      box.hidden = !j;
+      if (!j) return;
+      $(fillSel).style.width = (j.total ? Math.round(j.done / j.total * 100) : 0) + '%';
+      // 서버가 적어 둔 사유가 있으면 **그것을 보여 준다.** 전에는 여기서
+      // '대기 중입니다' 로 덮어써서, 피그마가 "2일 쉬어라" 한 사실이
+      // 화면 어디에도 안 보였다.
+      $(txtSel).textContent =
+        j.status === 'queued'
+          ? (j.message || '대기 중입니다. 크론이 집어 갈 때까지 1분쯤 걸립니다.')
+          : j.done + ' / ' + j.total + ' 건'
+            + (j.failed ? ' (실패 ' + j.failed + ')' : '');
     }
 
     function load() {
@@ -2191,13 +2205,12 @@
       if (extra) { Object.keys(extra).forEach(function (k) { body[k] = extra[k]; }); }
       return api('api/analysis.php?act=' + act, { method: 'POST', body: body })
         .then(function (d) {
-          // 난이도 단추는 **다른 칸(WBS)으로 옮겼다.** 링크 칸이 접혀
-          // 있으면 거기 쓴 글이 안 보이므로 두 자리에 같이 적는다.
+          // 누른 단추가 있는 칸에만 적는다 (2026-10-16). 난이도 매기기는 WBS 칸,
+          // 나머지는 링크 칸. 두 곳에 같이 적으면 링크 칸에 엉뚱한 말이 남는다.
           if (d.message) {
-            ['#ba-lk-msg', '#ba-lk-msg2'].forEach(function (sel) {
-              var el = $(sel);
-              if (el) el.textContent = d.message;
-            });
+            var forScore = act === 'score' || (extra && extra.kind === 'difficulty');
+            var el = $(forScore ? '#ba-lk-msg2' : '#ba-lk-msg');
+            if (el) el.textContent = d.message;
           }
           draw(d);
           if (okMsg) toast(okMsg);
@@ -2253,9 +2266,14 @@
                     '', '진행할까요?'].join('\n'))) return;
       post('score', null, { redo: '1' });
     });
+    // 멈추기는 그 칸의 작업만 멈춘다 — 링크 칸에서 누르면 난이도 매기기는 계속 돈다.
     $('#ba-lk-cancel').addEventListener('click', function () {
-      if (!confirm('분석을 멈춥니다. 읽던 한 건은 끝내고 멈춥니다.')) return;
-      post('cancel');
+      if (!confirm('링크 읽기를 멈춥니다. 읽던 한 건은 끝내고 멈춥니다.')) return;
+      post('cancel', null, { kind: 'links' });
+    });
+    $('#ba-sc-cancel').addEventListener('click', function () {
+      if (!confirm('난이도·공수 매기기를 멈춥니다. 매기던 한 건은 끝내고 멈춥니다.')) return;
+      post('cancel', null, { kind: 'difficulty' });
     });
 
     load();

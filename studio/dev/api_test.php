@@ -3441,10 +3441,23 @@ ok('★ 링크 칸이 자기 몫을 분명히 말한다',
    str_contains($page, '이 칸은 링크만 다룹니다'));
 ok('올린 파일을 어디서 읽는지 알려 준다',
    str_contains($page, '[새 문서만 분석]'));
-// 링크 칸이 접혀 있어도 결과 글이 보여야 한다.
+// 누른 칸에 결과 글이 적혀야 한다 (2026-10-16 — 두 칸에 같이 적던 것을 가름).
 ok('★ 옮긴 자리에도 결과를 적는다',
    str_contains($page, 'id="ba-lk-msg2"')
-   && str_contains($js, "['#ba-lk-msg', '#ba-lk-msg2']"));
+   && str_contains($js, "$(forScore ? '#ba-lk-msg2' : '#ba-lk-msg')"));
+// ★ 진행 막대도 누른 칸에 (2026-10-16). 전에는 난이도를 매겨도 링크 칸 막대가
+//   움직이고 [링크 분석 시작] 까지 막혔다.
+$spAt = strpos($page, 'id="ba-sc-prog"');
+ok('★ 난이도 진행 막대가 WBS 칸에 있다', $spAt !== false && $spAt > $wbAt);
+ok('WBS 칸에 난이도 멈추기가 있다', str_contains($page, 'id="ba-sc-cancel"'));
+ok('멈추기는 그 종류만 멈춘다',
+   str_contains($js, "post('cancel', null, { kind: 'links' })")
+   && str_contains($js, "post('cancel', null, { kind: 'difficulty' })"));
+$st = $admin->req('/studio/api/analysis.php?act=status&project_id=' . $pid);
+ok('★ 진행을 종류별로 돌려준다',
+   is_array($st['json']['data']['jobs'] ?? null)
+   && array_key_exists('links', $st['json']['data']['jobs'])
+   && array_key_exists('difficulty', $st['json']['data']['jobs']), substr($st['body'], 0, 160));
 
 
 // 배정 표가 말단만 보여 주면 번호가 뛴다. 바로 위 WBS 표와 같은 뼈대여야
