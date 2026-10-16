@@ -20,6 +20,9 @@
  * POST api/rnd.php?act=interest        관심 표시 토글
  * POST api/rnd.php?act=finish          종료 — 산출물 1건 이상 필수
  * POST api/rnd.php?act=drop            중단 (사유 필수)
+ * POST api/rnd.php?act=delete          삭제 — 삭제 상태로. 발의자는 시작 전만, 관리자는 언제든
+ * POST api/rnd.php?act=restore         복구 — 관리자, 삭제 상태인 과제만
+ * POST api/rnd.php?act=purge           영구삭제 — 관리자, 삭제 상태인 과제만. 되돌릴 수 없다
  *
  * **가시성은 RndRepo 가 쿼리에서 강제한다.** 이 파일은 그 결과를 그대로
  * 내보낸다 — 여기서 다시 거르지 않는다. 두 곳에서 거르면 언젠가 어긋난다.
@@ -56,6 +59,8 @@ bs_route(bs_param_str('act', 'board'), [
             'recruiting' => bs_param_str('recruiting') === '1',
             'mine'       => bs_param_str('mine') === '1',
             'interest'   => bs_param_str('interest') === '1',
+            // 관리자만 먹는다 — RndRepo::buildWhere 가 한 번 더 본다.
+            'with_deleted' => bs_param_str('with_deleted') === '1',
             'keyword'    => bs_param_str('keyword'),
             'sort'       => bs_param_str('sort', 'recent'),
             'page'       => bs_param_int('page', 1),
@@ -530,6 +535,36 @@ bs_route(bs_param_str('act', 'board'), [
             'message' => '과제를 중단했습니다.',
             'notice'  => '중단한 과제는 역량 지표에 반영하지 않습니다.',
         ]);
+    },
+
+    // =================================================================
+    // 삭제 · 복구 · 영구삭제 (2026-10-16)
+    // =================================================================
+
+    'delete' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+        $repo->softDelete($pid, bs_param_str('reason'), $user);
+        bs_json_ok([
+            'id'      => $pid,
+            'message' => bs_is_admin()
+                ? '과제를 삭제했습니다. [삭제 포함] 을 켜면 다시 보이고, 거기서 복구하거나 영구삭제할 수 있습니다.'
+                : '과제를 삭제했습니다. 되살려야 하면 관리자에게 요청하세요.',
+        ]);
+    },
+
+    'restore' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+        $repo->restore($pid, $user);
+        bs_json_ok(['id' => $pid, 'message' => '과제를 복구했습니다.']);
+    },
+
+    'purge' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+        $what = $repo->purge($pid, $user);
+        bs_json_ok(['id' => $pid, 'message' => $what . ' 과제를 영구삭제했습니다.']);
     },
 ]);
 

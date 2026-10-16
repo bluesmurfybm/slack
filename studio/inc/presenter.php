@@ -198,8 +198,16 @@ function bs_present_rnd(array $r, array $extra = []): array
             'add_output'   => bs_rnd_can_contribute($r),
             'finish'       => bs_rnd_can_close($r),
             'drop'         => bs_rnd_can_close($r),
-            'interest'     => true,
+            'delete'       => bs_rnd_can_delete($r),
+            'restore'      => bs_rnd_can_purge($r),
+            'purge'        => bs_rnd_can_purge($r),
+            'interest'     => !bs_rnd_is_deleted($r),
         ],
+        // 삭제 상태 (2026-10-16). 관리자가 [삭제 포함] 으로 볼 때만 이 값이 선다.
+        'deleted'         => bs_rnd_is_deleted($r),
+        'deleted_at'      => bs_date($r['deleted_at'] ?? null, 'Y-m-d H:i'),
+        'deleted_by_name' => $r['deleted_by_name'] ?? null,
+        'delete_reason'   => $r['delete_reason'] ?? null,
         'actions'         => bs_rnd_actions($r, $canEdit, $canApprove),
     ] + $extra;
 }
@@ -229,11 +237,57 @@ function bs_rnd_can_contribute(array $rnd): bool
         && in_array((string)$rnd['status'], ['approved', 'running'], true);
 }
 
-/** 종료·중단할 수 있는가. lead 이거나 관리자이고, 아직 돌아가는 과제여야 한다. */
+/**
+ * 종료·중단할 수 있는가. 발의자·lead 이거나 관리자이고, 아직 돌아가는 과제여야 한다.
+ *
+ * 발의자도 넣는다(2026-10-16) — 발의자는 발의할 때 승인된 lead 로 붙으므로
+ * 실제로는 같은 사람이다. 다만 보드 카드는 내 역할(my_role)을 싣지 않아
+ * lead 판정만으로는 카드에서 [중단] 이 안 보였다.
+ */
 function bs_rnd_can_close(array $rnd): bool
 {
-    return bs_rnd_can_manage_team($rnd)
+    return !bs_rnd_is_deleted($rnd)
+        && (bs_rnd_can_manage_team($rnd) || bs_rnd_is_proposer($rnd))
         && in_array((string)$rnd['status'], ['approved', 'running'], true);
+}
+
+/** 삭제 상태인가 (deleted_at). */
+function bs_rnd_is_deleted(array $rnd): bool
+{
+    return !empty($rnd['deleted_at']);
+}
+
+/**
+ * 삭제(삭제 상태로 바꾸기)할 수 있는가 (2026-10-16).
+ *
+ *   관리자      언제든
+ *   발의자·lead **시작 전에만** — 작성 중·발의됨이거나, 다른 참여자·진행 기록·
+ *               산출물이 하나도 없을 때. 이미 굴러간 과제는 [중단] 으로 끝낸다.
+ *               발의자가 남의 기록까지 한 번에 감추지 못하게 하려는 것이다.
+ */
+function bs_rnd_can_delete(array $rnd): bool
+{
+    if (bs_rnd_is_deleted($rnd)) {
+        return false;
+    }
+    if (bs_is_admin()) {
+        return true;
+    }
+    if (!bs_rnd_is_proposer($rnd) && !bs_rnd_is_lead($rnd)) {
+        return false;
+    }
+    if (in_array((string)$rnd['status'], ['draft', 'proposed'], true)) {
+        return true;
+    }
+    return (int)($rnd['member_count'] ?? 0) <= 1
+        && (int)($rnd['log_count'] ?? 0) === 0
+        && (int)($rnd['output_count'] ?? 0) === 0;
+}
+
+/** 복구·영구삭제 — 관리자만, 삭제 상태인 과제만. */
+function bs_rnd_can_purge(array $rnd): bool
+{
+    return bs_is_admin() && bs_rnd_is_deleted($rnd);
 }
 
 /**
@@ -337,6 +391,10 @@ function bs_present_rnd_row(array $r): array
  */
 function bs_rnd_actions(array $rnd, bool $canEdit, bool $canApprove): array
 {
+    // 삭제된 과제는 되살리거나 영구히 지우는 것 말고는 하지 않는다.
+    if (bs_rnd_is_deleted($rnd)) {
+        return bs_rnd_can_purge($rnd) ? ['restore', 'purge'] : [];
+    }
     $out = [];
     if ($canEdit)                     { $out[] = 'update'; }
     if ($canApprove)                  { $out[] = 'approve'; $out[] = 'reject'; }
@@ -344,6 +402,7 @@ function bs_rnd_actions(array $rnd, bool $canEdit, bool $canApprove): array
     if (bs_rnd_can_leave($rnd))       { $out[] = 'leave'; }
     if (bs_rnd_can_contribute($rnd))  { $out[] = 'log'; $out[] = 'output'; }
     if (bs_rnd_can_close($rnd))       { $out[] = 'finish'; $out[] = 'drop'; }
+    if (bs_rnd_can_delete($rnd))      { $out[] = 'delete'; }
     return $out;
 }
 

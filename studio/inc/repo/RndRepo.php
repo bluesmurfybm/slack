@@ -59,6 +59,7 @@ final class RndRepo
         p.proposer_id, p.proposer_name,
         p.approved_by, p.approved_by_name, p.approved_at,
         p.load_cap, p.recruiting,
+        p.deleted_at, p.deleted_by_name, p.delete_reason,
         p.created_at, p.updated_at';
 
     public function __construct(private PDO $pdo) {}
@@ -925,6 +926,128 @@ final class RndRepo
     }
 
     // =================================================================
+    // 삭제 · 복구 · 영구삭제 (2026-10-16)
+    // =================================================================
+
+    /**
+     * 삭제 — **삭제 상태로 바꾼다.** 행은 남는다.
+     *
+     * 누가 할 수 있는지는 bs_rnd_can_delete() 가 정한다(화면 단추와 같은 판정).
+     * 점유는 오늘로 닫는다 — 보드에서 사라진 과제가 가용도를 계속 깎으면 안 된다.
+     * 상태(status)는 그대로 둔다. 복구하면 그 자리로 돌아간다.
+     */
+    public function softDelete(int $projectId, string $reason, array $actor): void
+    {
+        $rnd = $this->find($projectId);
+        if (!$rnd) {
+            throw new DomainException('과제를 찾을 수 없습니다.');
+        }
+        if (!bs_rnd_can_delete($rnd)) {
+            throw new DomainException(
+                '삭제할 수 없습니다. 발의자는 시작 전 과제(작성 중·발의됨, 또는 다른 참여자·'
+                . '기록·산출물이 없는 과제)만 지울 수 있습니다. 진행된 과제는 [중단] 으로 끝내세요.');
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare(
+                "UPDATE bs_project
+                    SET deleted_at = NOW(), deleted_by = ?, deleted_by_name = ?,
+                        delete_reason = ?, recruiting = 0
+                  WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NULL"
+            )->execute([
+                (string)($actor['id'] ?? ''), (string)($actor['name'] ?? ''),
+                trim($reason) !== '' ? mb_substr(trim($reason), 0, 500) : null, $projectId,
+            ]);
+            $this->closeWorkloadFor($projectId, null);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * 복구 — 관리자만. 삭제 상태를 걷고, 살아 있는 과제면 점유를 다시 맞춘다.
+     *
+     * 삭제할 때 점유를 오늘로 닫았으므로, 승인·진행 중 과제는 syncWorkload()
+     * 로 참여율·기간을 다시 올린다(승인된 참여만 — §9.1 통제는 그대로).
+     */
+    public function restore(int $projectId, array $actor): void
+    {
+        $this->requireDeletedForAdmin($projectId);
+        $this->pdo->prepare(
+            "UPDATE bs_project
+                SET deleted_at = NULL, deleted_by = NULL, deleted_by_name = NULL, delete_reason = NULL
+              WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NOT NULL"
+        )->execute([$projectId]);
+        (new RndLoadService($this->pdo))->syncWorkload($projectId);
+        unset($actor);
+    }
+
+    /**
+     * 영구삭제 — 관리자만, **삭제 상태인 과제만.** 되돌릴 수 없다.
+     *
+     * 참여자·기록·산출물·관심·분야는 FK(ON DELETE CASCADE)로 함께 지워진다.
+     * 점유(bs_workload)는 FK 가 없어 직접 지운다 — 남기면 주인 없는 점유가
+     * 가용도를 계속 깎는다. 산출물 파일도 디스크에서 지운다.
+     *
+     * @return string 지운 과제의 코드·이름 (알림 문구용)
+     */
+    public function purge(int $projectId, array $actor): string
+    {
+        $row = $this->requireDeletedForAdmin($projectId);
+
+        $st = $this->pdo->prepare(
+            "SELECT file_path FROM bs_rnd_output WHERE project_id = ? AND file_path IS NOT NULL AND file_path <> ''"
+        );
+        $st->execute([$projectId]);
+        $files = $st->fetchAll(PDO::FETCH_COLUMN);
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare("DELETE FROM bs_workload WHERE ref_type = 'rnd' AND ref_id = ?")
+                ->execute([$projectId]);
+            $this->pdo->prepare(
+                "DELETE FROM bs_project WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NOT NULL"
+            )->execute([$projectId]);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        // 파일은 DB 가 지워진 뒤에. 앞서 지우면 롤백돼도 파일은 돌아오지 않는다.
+        foreach ($files as $f) {
+            if (is_string($f) && is_file($f)) {
+                @unlink($f);
+            }
+        }
+        error_log(sprintf('[BlueStudio] R&D 과제 영구삭제 #%d %s %s by %s',
+            $projectId, (string)$row['code'], (string)$row['name'], (string)($actor['id'] ?? '')));
+
+        return trim((string)$row['code'] . ' ' . (string)$row['name']);
+    }
+
+    /** 삭제 상태인 과제 한 건 — 관리자만. 아니면 '없다' 로 끊는다. */
+    private function requireDeletedForAdmin(int $projectId): array
+    {
+        if (!bs_is_admin()) {
+            throw new DomainException('관리자만 할 수 있습니다.');
+        }
+        $st = $this->pdo->prepare(
+            "SELECT id, code, name FROM bs_project
+              WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NOT NULL"
+        );
+        $st->execute([$projectId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            throw new DomainException('삭제 상태인 과제를 찾을 수 없습니다.');
+        }
+        return $row;
+    }
+
+    // =================================================================
     // 안쪽
     // =================================================================
 
@@ -1126,7 +1249,9 @@ final class RndRepo
     private function buildWhere(array $f): array
     {
         [$vis, $p] = bs_rnd_visible_sql('p');
-        $w = ['p.deleted_at IS NULL', $vis];
+        // 관리자가 [삭제 포함] 을 켜면 삭제 상태인 과제도 보인다 (2026-10-16).
+        // 복구·영구삭제는 거기서 한다. 관리자가 아니면 이 값은 무시한다.
+        $w = !empty($f['with_deleted']) && bs_is_admin() ? [$vis] : ['p.deleted_at IS NULL', $vis];
 
         if (!empty($f['category']) && isset(BS_RND_CATEGORY[$f['category']])) {
             $w[] = 'p.rnd_category = ?';

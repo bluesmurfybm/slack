@@ -5262,6 +5262,61 @@
     running: '진행 중', done: '종료', dropped: '중단'
   };
 
+  /**
+   * R&D 과제 중단·삭제·복구·영구삭제 (2026-10-16). 보드 카드와 상세 머리가 같이 쓴다.
+   * 처리했으면 true. 끝나면 after() 를 부른다(보드는 다시 읽고, 상세는 보드로 간다).
+   * 단추에는 data-id · data-code · data-name 이 있어야 한다.
+   */
+  function rndLifecycle(act, btn, after) {
+    var id   = parseInt(btn.dataset.id, 10);
+    var code = btn.dataset.code || '';
+    var name = btn.dataset.name || '';
+    var head = '[' + code + '] ' + name + '\n\n';
+    var send = function (a, body, okFallback) {
+      body = body || {};
+      body.id = id;
+      btn.disabled = true;
+      return api('api/rnd.php?act=' + a, { method: 'POST', body: body })
+        .then(function (d) { toast(d.message || okFallback); after(d); })
+        .catch(function (e) { btn.disabled = false; toast(e.message, true); });
+    };
+
+    if (act === 'drop') {
+      var why = window.prompt(head + '과제를 중단합니다. 사유를 적어 주세요.\n' +
+                              '중단한 과제는 역량 지표에 반영하지 않고, 참여자 점유는 오늘로 닫힙니다.');
+      if (why === null) return true;
+      if (!why.trim()) { toast('중단 사유를 입력하세요.', true); return true; }
+      send('drop', { reason: why }, '과제를 중단했습니다.');
+      return true;
+    }
+    if (act === 'delete') {
+      var r = window.prompt(head + '과제를 삭제합니다.\n' +
+                            '· 보드에서 보이지 않게 되고, 참여자 점유는 오늘로 닫힙니다\n' +
+                            '· 관리자는 [삭제 포함] 에서 복구할 수 있습니다\n\n' +
+                            '삭제 사유 (비워도 됩니다)', '');
+      if (r === null) return true;
+      send('delete', { reason: r }, '과제를 삭제했습니다.');
+      return true;
+    }
+    if (act === 'restore') {
+      if (!window.confirm(head + '과제를 복구합니다.\n' +
+                          '승인·진행 중이던 과제면 참여자 점유도 다시 올라갑니다.')) return true;
+      send('restore', {}, '과제를 복구했습니다.');
+      return true;
+    }
+    if (act === 'purge') {
+      // 되돌릴 수 없다 — 코드를 직접 쳐야 진행한다.
+      var typed = window.prompt(head + '영구삭제합니다. 되돌릴 수 없습니다.\n' +
+                                '· 참여자·진행 기록·산출물·점유 기록이 모두 지워집니다\n\n' +
+                                '진행하려면 과제 코드 ' + code + ' 를 그대로 입력하세요.');
+      if (typed === null) return true;
+      if (typed.trim() !== code) { toast('코드가 맞지 않아 멈췄습니다.', true); return true; }
+      send('purge', {}, '영구삭제했습니다.');
+      return true;
+    }
+    return false;
+  }
+
   function initRndBoard() {
     var root = $('#ba-rnd-board');
     if (!root) return;
@@ -5279,6 +5334,7 @@
         recruiting: ($('#ba-r-recruiting') || {}).checked ? '1' : '',
         mine:       ($('#ba-r-mine')       || {}).checked ? '1' : '',
         interest:   ($('#ba-r-interest')   || {}).checked ? '1' : '',
+        with_deleted: ($('#ba-r-deleted')  || {}).checked ? '1' : '',
         page:       state.page,
         size:       24
       };
@@ -5320,6 +5376,11 @@
       if (r.visibility === 'private') {
         badges += '<span class="ba-badge ba-badge--private">비공개</span>';
       }
+      if (r.deleted) {
+        badges += '<span class="ba-badge ba-badge--dropped" title="' +
+                  esc((r.deleted_at || '') + ' ' + (r.deleted_by_name || '') +
+                      (r.delete_reason ? ' — ' + r.delete_reason : '')) + '">삭제됨</span>';
+      }
 
       // 단추는 서버가 내려준 actions 에 있는 것만 그린다.
       var acts = (r.actions || []).map(function (a) {
@@ -5334,8 +5395,25 @@
           return '<button type="button" class="ba-btn ba-btn--sm"' +
                  ' data-act="reject" data-id="' + r.id + '">반려</button>';
         }
+        if (a === 'restore') {
+          return '<button type="button" class="ba-btn ba-btn--sm"' +
+                 ' data-act="restore" data-id="' + r.id + '">복구</button>';
+        }
         return '';
       }).join('');
+
+      // 중단·삭제·영구삭제는 [⋯] 안에 둔다 (2026-10-16). 되돌리기 어려운 일이라
+      // 늘 보이는 자리에 두지 않는다 — 한 번 더 열어야 누를 수 있게.
+      var MORE = { drop: '중단', 'delete': '삭제', purge: '영구삭제' };
+      var more = (r.actions || []).filter(function (a) { return MORE[a]; }).map(function (a) {
+        return '<button type="button" class="ba-more__item' + (a === 'drop' ? '' : ' is-danger') + '"' +
+               ' data-act="' + a + '" data-id="' + r.id + '" data-code="' + esc(r.code || '') + '"' +
+               ' data-name="' + esc(r.name || '') + '">' + MORE[a] + '</button>';
+      }).join('');
+      if (more) {
+        acts += '<details class="ba-more"><summary class="ba-btn ba-btn--sm" aria-label="더보기" title="더보기">⋯</summary>' +
+                '<div class="ba-more__menu">' + more + '</div></details>';
+      }
 
       return '<article class="ba-rnd-card" data-id="' + r.id + '">' +
         '<div class="ba-rnd-card__head"><span class="ba-rnd-card__code">' + esc(r.code) + '</span>' +
@@ -5386,7 +5464,7 @@
       var el = $('#' + id);
       if (el) el.addEventListener('change', function () { state.page = 1; load(); });
     });
-    ['ba-r-recruiting', 'ba-r-mine', 'ba-r-interest'].forEach(function (id) {
+    ['ba-r-recruiting', 'ba-r-mine', 'ba-r-interest', 'ba-r-deleted'].forEach(function (id) {
       var el = $('#' + id);
       if (el) el.addEventListener('change', function () { state.page = 1; load(); });
     });
@@ -5403,7 +5481,7 @@
         ['ba-r-category', 'ba-r-sort', 'ba-r-keyword'].forEach(function (id) {
           var el = $('#' + id); if (el) el.value = id === 'ba-r-sort' ? 'recent' : '';
         });
-        ['ba-r-recruiting', 'ba-r-mine', 'ba-r-interest'].forEach(function (id) {
+        ['ba-r-recruiting', 'ba-r-mine', 'ba-r-interest', 'ba-r-deleted'].forEach(function (id) {
           var el = $('#' + id); if (el) el.checked = false;
         });
         state = { status: '', page: 1 };
@@ -5424,12 +5502,20 @@
       load();
     });
 
+    // [⋯] 메뉴는 바깥을 누르면 닫는다.
+    document.addEventListener('click', function (e) {
+      $$('.ba-more[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });
+    });
+
     // 승인·반려
     $('#ba-r-grid').addEventListener('click', function (e) {
       var b = e.target.closest('[data-act]');
       if (!b) return;
       var id  = parseInt(b.dataset.id, 10);
       var act = b.dataset.act;
+
+      // 중단·삭제·복구·영구삭제 (2026-10-16)
+      if (rndLifecycle(act, b, load)) return;
 
       if (act === 'reject') {
         var reason = window.prompt('반려 사유를 적어 주세요. 발의자가 고쳐서 다시 낼 수 있습니다.');
@@ -5552,6 +5638,11 @@
       if (r.can.reject)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="reject">과제 반려</button>');
       if (r.can.finish)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="finish">종료</button>');
       if (r.can.drop)    acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="drop">중단</button>');
+      // 삭제 (2026-10-16). 처리는 rndLifecycle — 보드 카드와 같은 확인을 거친다.
+      if (r.can['delete']) {
+        acts.push('<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-rv="delete"' +
+                  ' data-id="' + r.id + '" data-code="' + esc(r.code || '') + '" data-name="' + esc(r.name || '') + '">삭제</button>');
+      }
 
       // 공유 (initShare). 볼 수 있는 사람에게만 이 화면이 열리므로 단추는 늘 둔다.
       var shareLines = [
@@ -5816,6 +5907,12 @@
       var b = e.target.closest('[data-rv]');
       if (!b) return;
       var act = b.dataset.rv;
+
+      // 삭제하면 이 화면에 머물 이유가 없다 — 보드로 간다.
+      if (act === 'delete') {
+        rndLifecycle('delete', b, function () { location.href = 'rnd_board.php'; });
+        return;
+      }
 
       if (act === 'join') {
         var reason = ($('#ba-rv-join-reason') || {}).value || '';

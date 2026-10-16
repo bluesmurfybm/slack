@@ -133,6 +133,13 @@ bs_layout_head(
       <span>관심 과제만</span>
     </label>
 
+    <?php if (bs_is_admin()): /* 삭제한 과제의 복구·영구삭제는 여기서 (2026-10-16) */ ?>
+    <label class="ba-check" for="ba-r-deleted" title="관리자만 보입니다">
+      <input type="checkbox" id="ba-r-deleted">
+      <span>삭제 포함</span>
+    </label>
+    <?php endif; ?>
+
     <span class="ba-spacer"></span>
     <button type="button" class="ba-btn" id="ba-r-reset">조건 초기화</button>
   </div>

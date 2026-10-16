@@ -2363,3 +2363,24 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
   .ba-src { flex-wrap: wrap; }
   .ba-src__acts { width: 100%; justify-content: flex-end; }
 }
+
+/* =====================================================================
+   R&D 카드 [⋯] 더보기 (2026-10-16) — 중단·삭제·영구삭제
+   되돌리기 어려운 일이라 늘 보이는 자리에 두지 않고 한 번 더 열게 한다.
+   ===================================================================== */
+.ba-more { position: relative; display: inline-block; }
+.ba-more > summary { list-style: none; cursor: pointer; min-width: 32px; text-align: center; }
+.ba-more > summary::-webkit-details-marker { display: none; }
+.ba-more__menu {
+  position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 20;
+  min-width: 120px; padding: 4px;
+  background: var(--ba-paper); border: 1px solid var(--ba-line); border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(22, 36, 58, .14);
+}
+.ba-more__item {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  border: 0; border-radius: 6px; background: none; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--ba-ink);
+}
+.ba-more__item:hover { background: var(--ba-surface); }
+.ba-more__item.is-danger { color: var(--ba-danger); }

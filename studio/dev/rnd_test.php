@@ -1253,6 +1253,88 @@ $back = $pdo->prepare('UPDATE bs_setting SET v = ? WHERE k = ?');
 foreach ($capWas as $k => $v) { $back->execute([$v, $k]); }
 
 // ---------------------------------------------------------------------
+echo "\n[25] 삭제 · 복구 · 영구삭제 (2026-10-16)\n";
+
+// 보드에서 그 과제 한 줄을 집는다.
+$rowOf = static function ($who, int $id, bool $withDeleted = false): ?array {
+    $q = '/studio/api/rnd.php?act=board&size=100' . ($withDeleted ? '&with_deleted=1' : '');
+    foreach ($who->req($q)['json']['data']['rows'] ?? [] as $x) {
+        if ((int)$x['id'] === $id) { return $x; }
+    }
+    return null;
+};
+
+// A. 시작 전 과제 — 발의자가 지운다
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 지울 과제', 'visibility' => 'open', 'status' => 'proposed']]);
+$delId = (int)($r['json']['data']['id'] ?? 0);
+$row = $rowOf($user, $delId);
+ok('발의자 카드에 삭제가 있다', in_array('delete', $row['actions'] ?? [], true), json_encode($row['actions'] ?? null));
+$r = $admin->req('/studio/api/rnd.php?act=delete', ['csrf' => true, 'json' => ['id' => 0]]);
+ok('번호 없으면 400', $r['status'] === 400);
+$r = $user->req('/studio/api/rnd.php?act=delete', ['csrf' => true, 'json' => ['id' => $delId, 'reason' => '잘못 올림']]);
+ok('발의자가 시작 전 과제를 지운다', $r['status'] === 200, substr($r['body'], 0, 160));
+ok('보드에서 사라진다', $rowOf($user, $delId) === null);
+ok('★ 행은 남는다 — 삭제 상태일 뿐', (int)$pdo->query(
+    "SELECT COUNT(*) FROM bs_project WHERE id = $delId AND deleted_at IS NOT NULL")->fetchColumn() === 1);
+ok('누가 왜 지웠는지 남는다', (string)$pdo->query(
+    "SELECT CONCAT(deleted_by, '|', delete_reason) FROM bs_project WHERE id = $delId")->fetchColumn()
+    === $USER . '|잘못 올림');
+ok('일반 사용자는 [삭제 포함] 을 줘도 못 본다', $rowOf($user, $delId, true) === null);
+$row = $rowOf($admin, $delId, true);
+ok('관리자는 [삭제 포함] 에서 본다', $row !== null && ($row['deleted'] ?? false) === true);
+ok('삭제된 과제는 복구·영구삭제만', ($row['actions'] ?? null) === ['restore', 'purge'], json_encode($row['actions'] ?? null));
+ok('관리자도 [삭제 포함] 을 끄면 안 보인다', $rowOf($admin, $delId) === null);
+
+// B. 복구
+$r = $user->req('/studio/api/rnd.php?act=restore', ['csrf' => true, 'json' => ['id' => $delId]]);
+ok('일반 사용자는 복구 못 한다', $r['status'] === 400, 'status=' . $r['status']);
+$r = $admin->req('/studio/api/rnd.php?act=restore', ['csrf' => true, 'json' => ['id' => $delId]]);
+ok('관리자가 복구한다', $r['status'] === 200, substr($r['body'], 0, 160));
+ok('복구하면 보드에 다시 나온다', $rowOf($user, $delId) !== null);
+
+// C. 굴러간 과제 — 발의자는 못 지우고 [중단] 으로 끝낸다. 관리자는 지운다.
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 굴러간 과제', 'visibility' => 'open', 'status' => 'proposed']]);
+$runId = (int)($r['json']['data']['id'] ?? 0);
+$admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $runId]]);
+$r = $user->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $runId, 'content' => '[시험] 해 본 일']]);
+ok('발의자가 기록을 남겼다', $r['status'] === 200, substr($r['body'], 0, 160));
+$row = $rowOf($user, $runId);
+ok('★ 기록이 있으면 발의자 카드에 삭제가 없다', !in_array('delete', $row['actions'] ?? [], true));
+ok('★ 대신 카드에 중단이 있다', in_array('drop', $row['actions'] ?? [], true), json_encode($row['actions'] ?? null));
+$r = $user->req('/studio/api/rnd.php?act=delete', ['csrf' => true, 'json' => ['id' => $runId]]);
+ok('★ 발의자는 굴러간 과제를 못 지운다', $r['status'] === 400, 'status=' . $r['status']);
+ok('왜 못 하는지 [중단] 을 알려 준다', str_contains($r['json']['error']['message'] ?? '', '중단'));
+$r = $admin->req('/studio/api/rnd.php?act=delete', ['csrf' => true, 'json' => ['id' => $runId]]);
+ok('관리자는 굴러간 과제도 지운다', $r['status'] === 200, substr($r['body'], 0, 160));
+ok('★ 지우면 점유가 오늘로 닫힌다', (int)$pdo->query(
+    "SELECT COUNT(*) FROM bs_workload WHERE ref_type = 'rnd' AND ref_id = $runId AND end_date > CURDATE()")
+    ->fetchColumn() === 0);
+
+// D. 영구삭제
+$r = $admin->req('/studio/api/rnd.php?act=purge', ['csrf' => true, 'json' => ['id' => $delId]]);
+ok('★ 삭제 상태가 아니면 영구삭제 못 한다', $r['status'] === 400, 'status=' . $r['status']);
+$r = $user->req('/studio/api/rnd.php?act=purge', ['csrf' => true, 'json' => ['id' => $runId]]);
+ok('일반 사용자는 영구삭제 못 한다', $r['status'] === 400, 'status=' . $r['status']);
+$r = $admin->req('/studio/api/rnd.php?act=purge', ['csrf' => true, 'json' => ['id' => $runId]]);
+ok('관리자가 영구삭제한다', $r['status'] === 200, substr($r['body'], 0, 160));
+ok('과제 행이 없어진다', (int)$pdo->query("SELECT COUNT(*) FROM bs_project WHERE id = $runId")->fetchColumn() === 0);
+ok('기록·참여자도 함께 없어진다', (int)$pdo->query(
+    "SELECT (SELECT COUNT(*) FROM bs_rnd_log WHERE project_id = $runId)
+          + (SELECT COUNT(*) FROM bs_rnd_member WHERE project_id = $runId)")->fetchColumn() === 0);
+ok('★ 점유 행도 남지 않는다', (int)$pdo->query(
+    "SELECT COUNT(*) FROM bs_workload WHERE ref_type = 'rnd' AND ref_id = $runId")->fetchColumn() === 0);
+
+// E. 화면 — 상세 머리의 삭제, 보드의 [삭제 포함]
+$page = $admin->req('/studio/rnd_board.php')['body'];
+ok('관리자 보드에 [삭제 포함] 이 있다', str_contains($page, 'id="ba-r-deleted"'));
+ok('일반 사용자 보드에는 없다', !str_contains($user->req('/studio/rnd_board.php')['body'], 'id="ba-r-deleted"'));
+$d = $user->req('/studio/api/rnd.php?act=get&id=' . $delId)['json']['data']['rnd'] ?? [];
+ok('상세에도 삭제 판정이 실린다', ($d['can']['delete'] ?? null) === true, json_encode($d['can'] ?? null));
+
+// ---------------------------------------------------------------------
 echo "\n[뒷정리]\n";
 $pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");
