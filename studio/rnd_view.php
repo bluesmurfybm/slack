@@ -26,7 +26,7 @@ bs_layout_head(
     $rnd['name'],
     '과업 편성/현황',
     '',
-    'project'
+    'rnd'
 );
 ?>
 

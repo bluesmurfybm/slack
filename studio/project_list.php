@@ -47,7 +47,7 @@ bs_layout_head(
   </div>
 
   <!-- ============ 실행 줄 ============ -->
-  <div class="ba-filters" style="justify-content:flex-start">
+  <div class="ba-filters ba-actionbar">
     <?php if ($canCreate): ?>
       <a class="ba-btn ba-btn--primary" href="project_form.php">새 프로젝트</a>
     <?php endif; ?>
@@ -57,7 +57,7 @@ bs_layout_head(
   </div>
 
   <!-- ============ 조회 조건 ============ -->
-  <div class="ba-filters">
+  <div class="ba-filters ba-filterbox">
     <label class="ba-field">
       <span>트랙</span>
       <select id="ba-f-track">

@@ -6236,7 +6236,9 @@
 
   switch (NAV) {
     case 'dashboard': run(initDashboard); break;
-    case 'project':   run(initProjectList, initProjectForm, initProjectView, initSourceViewer, initWbs, initAllocation, initLinks, initEditors,
+    // R&D 과제가 위 탭 띠에서 따로 켜진다(2026-10-16). 초기화는 그대로 함께 돈다.
+    case 'project':
+    case 'rnd':       run(initProjectList, initProjectForm, initProjectView, initSourceViewer, initWbs, initAllocation, initLinks, initEditors,
                           initRndBoard, initRndForm, initRndView); break;
     case 'member':    run(initMemberList, initMemberProfile); break;
     case 'settings':  run(initSettings); break;

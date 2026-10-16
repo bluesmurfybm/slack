@@ -50,16 +50,71 @@ body {
   font-family: 'Space Grotesk', Pretendard, sans-serif;
 }
 .ba-site__desc { margin: 4px 0 0; color: var(--ba-ink-soft); font-size: 13.5px; }
-.ba-site__aside { flex: 0 0 auto; }
+.ba-site__aside { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
-/* ---- 화면 이동 탭 --------------------------------------------------- */
-.ba-nav { display: flex; gap: 4px; }
-.ba-nav a {
-  display: block; padding: 7px 14px; border-radius: 8px;
-  color: var(--ba-ink-soft); text-decoration: none; font-size: 13.5px; font-weight: 600;
+/* ---- 대메뉴 구성원 / 관리자 (2026-10-16) — bluecart .bc-tabs 와 같은 모양 ---- */
+.ba-mode {
+  display: flex; gap: 2px;
+  padding: 3px; border-radius: 999px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line);
 }
-.ba-nav a:hover { background: var(--ba-surface); color: var(--ba-ink); }
-.ba-nav a.on { background: var(--ba-brand); color: #fff; }
+.ba-mode a {
+  display: block; padding: 6px 18px; border-radius: 999px;
+  font-size: 13.5px; font-weight: 600; color: var(--ba-ink-soft);
+  text-decoration: none; white-space: nowrap;
+  transition: background .14s ease, color .14s ease;
+}
+.ba-mode a:hover { color: var(--ba-ink); }
+.ba-mode a.on {
+  background: var(--ba-paper); color: var(--ba-brand);
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .12);
+}
+
+/* ---- 서브 메뉴 (2026-10-16) — 본문 맨 위. bluecart .bc-subtabs 와 같은 모양 ---- */
+.ba-subnav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.ba-subnav a {
+  padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--ba-line); background: var(--ba-paper);
+  color: var(--ba-ink-soft); font-size: 13.5px; font-weight: 600; text-decoration: none;
+}
+.ba-subnav a:hover { color: var(--ba-ink); }
+.ba-subnav a.on { background: var(--ba-ink); border-color: var(--ba-ink); color: #fff; }
+
+/* ---- 서브 메뉴 띠 (2026-10-16 시안, BS_SUBNAV_STYLE='band') -----------------
+   머리말 아래쪽에 붙은 전폭 탭. 본문 안의 탭(프로젝트 | R&D 과제 — 14px·600·밑줄 2px)
+   보다 한 단계 위라는 것이 보이도록 글자·굵기·밑줄을 한 치수씩 키운다. */
+.ba-subbar { border-top: 1px solid var(--ba-line); }
+.ba-subbar__in {
+  max-width: 1280px; margin: 0 auto; padding: 0 2px;
+  display: flex; align-items: stretch; gap: 6px;
+  /* 좁은 화면에서 넘치면 옆으로 민다. 세로는 넘칠 일이 없으니 막고, 막대는 숨긴다. */
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.ba-subbar__in::-webkit-scrollbar { display: none; }
+.ba-subbar__in a {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  /* 밑줄이 글자 폭을 따라가면 '설정' 처럼 짧은 메뉴가 빈약해 보인다 — 탭에 최소 폭을
+     주고 밑줄은 탭 폭에 맞춘다 (2026-10-16). */
+  min-width: 112px; box-sizing: border-box;
+  padding: 15px 18px; white-space: nowrap;
+  font-size: 16px; font-weight: 800; letter-spacing: -.01em;
+  color: var(--ba-ink-soft); text-decoration: none;
+}
+.ba-subbar__in a:hover { color: var(--ba-ink); }
+.ba-subbar__in a.on { color: var(--ba-ink); }
+/* 홈(대시보드) — 글자 대신 아이콘. 다른 탭과 갈라 보이게 폭을 줄인다 (2026-10-16). */
+.ba-subbar__in a.ba-tab--icon { min-width: 64px; padding-left: 14px; padding-right: 14px; }
+.ba-tab--icon svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.ba-subnav a.ba-tab--icon { display: inline-flex; align-items: center; }
+.ba-subnav a.ba-tab--icon svg { width: 18px; height: 18px; }
+.ba-subbar__in a.on::after {
+  content: ''; position: absolute; left: 6px; right: 6px; bottom: 0;
+  height: 4px; border-radius: 4px 4px 0 0; background: var(--ba-brand);
+}
+
 
 /* ---- 본문 컨테이너 -------------------------------------------------- */
 .ba { max-width: 1280px; margin: 0 auto; padding: 22px 20px 60px; }
@@ -245,7 +300,22 @@ body {
 .ba-head__sub { color: var(--ba-ink-soft); font-size: 13px; }
 
 /* ---- 상태 탭 -------------------------------------------------------- */
-.ba-listbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.ba-listbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* ---- 목록 화면 짜임 (2026-10-16) — 프로젝트 목록 · R&D 보드 --------------
+   서브 탭 / 실행 줄 / 조회 조건 / 상태 칩 / 표 가 같은 간격으로 붙어 복잡해
+   보였다. 실행 줄은 아래 선으로 끊고, 조회 조건은 상자로 묶어 덩어리를 가른다.
+   .ba-filters 는 다른 화면도 쓰므로 덧붙이는 클래스로만 바꾼다. */
+.ba-actionbar {
+  align-items: center; justify-content: flex-start;
+  padding-bottom: 18px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--ba-line);
+}
+.ba-filterbox {
+  background: var(--ba-paper);
+  border: 1px solid var(--ba-line); border-radius: 12px;
+  padding: 14px 16px 16px; margin-bottom: 20px;
+}
 .ba-statabs { display: flex; gap: 4px; flex-wrap: wrap; row-gap: 8px; }
 .ba-statabs button {
   appearance: none; border: 1px solid var(--ba-line); background: var(--ba-paper);
@@ -1431,24 +1501,26 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 
 /* 프로젝트 / R&D 를 오가는 탭. 상태 탭(.ba-statabs)과 역할이 다르므로
    생김새도 다르게 둔다 — 둘이 비슷하면 어느 쪽이 지금 위치인지 헷갈린다. */
+/* 숨김 (2026-10-16) — 프로젝트 | R&D 과제 는 위 탭 띠로 올라갔다. 되살리려면 이 줄만 지운다. */
+.ba-typetabs[role="tablist"] { display: none; }
 .ba-typetabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 2px solid var(--ba-line);
-  margin-bottom: 16px;
+  /* 둥근 칩 (2026-10-16). 위 탭 띠(대시보드 · 프로젝트)보다 한 단계 아래로 읽히게.
+     선택은 짙은 남색 — 아래 상태 필터 칩(초록)과 섞이지 않게 색을 가른다. */
+  display: flex; flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
 }
 .ba-typetabs a {
-  padding: 9px 18px;
-  font-weight: 600;
+  padding: 6px 16px;
+  border: 1px solid var(--ba-line); border-radius: 999px;
+  background: var(--ba-paper);
+  font-size: 13.5px; font-weight: 600;
   color: var(--ba-ink-soft);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
 }
-.ba-typetabs a:hover { color: var(--ba-ink); }
+.ba-typetabs a:hover { color: var(--ba-ink); border-color: #cdd5e1; }
 .ba-typetabs a.on {
-  color: var(--ba-brand);
-  border-bottom-color: var(--ba-brand);
+  background: var(--ba-ink); border-color: var(--ba-ink); color: #fff;
 }
 
 /* 머리 통계 */
@@ -1829,6 +1901,9 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-orgc:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
 .ba-orgc--rnd { --c: #7a5bd6; --c-soft: #efeafc; }   /* 도넛의 R&D 색과 같다 */
 .ba-orgc--out { --c: #c98a12; --c-soft: #fbf1dc; }
+.ba-orgc--done { --c: var(--ba-brand); --c-soft: #e9f3ed; }
+/* 누를 곳이 없는 카드(R&D 보드) — 떠오르지 않게 (2026-10-16) */
+.ba-orgc--static:hover { border-color: var(--ba-line); box-shadow: none; transform: none; }
 
 .ba-orgc__ic {
   flex: 0 0 auto; display: grid; place-items: center;
