@@ -356,3 +356,15 @@ function bs_source_viewer_html(): string
 </div>
 HTML;
 }
+
+/**
+ * 목록으로 돌아가는 링크 (2026-10-19). 상세·등록·수정 화면 맨 위에 같은 모양으로.
+ *
+ * 목록의 조회 조건(필터·쪽)은 assign.js 가 sessionStorage 에 두었다가 목록을
+ * 다시 열 때 되살린다(listMemory) — 그래서 여기서는 주소만 건다.
+ */
+function bs_back_link(string $href, string $label): string
+{
+    return '<nav class="ba-back" aria-label="이동"><a href="' . h($href) . '">'
+         . '<span aria-hidden="true">&lsaquo;</span> ' . h($label) . '</a></nav>';
+}

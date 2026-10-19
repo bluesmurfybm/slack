@@ -47,6 +47,8 @@ bs_layout_head(
 );
 ?>
 
+<?= bs_back_link($isNew ? 'rnd_board.php' : 'rnd_view.php?id=' . (int)$rnd['id'], $isNew ? 'R&D 과제 목록' : '과제 상세') ?>
+
 <div class="ba-form" id="ba-rnd-form" data-id="<?= $isNew ? '' : (int)$rnd['id'] ?>">
 
   <?php if (!$isNew): ?>
@@ -190,16 +192,6 @@ bs_layout_head(
     <span>팀원을 모집합니다</span>
   </label>
 
-  <!-- 실행 -->
-  <div class="ba-form__foot">
-    <a class="ba-btn" href="rnd_board.php">취소</a>
-    <?php if ($isNew): ?>
-      <button type="button" class="ba-btn" id="ba-r-save-draft">임시 저장</button>
-      <button type="button" class="ba-btn ba-btn--primary" id="ba-r-submit">발의하기</button>
-    <?php else: ?>
-      <button type="button" class="ba-btn ba-btn--primary" id="ba-r-submit">저장</button>
-    <?php endif; ?>
-  </div>
 </div>
 
 <!-- ============ 참고 자료 (2026-10-19) ============
@@ -270,6 +262,27 @@ bs_layout_head(
   </div>
   <?php endif; ?>
 </section>
+
+<!-- ============ 하단 단추 (2026-10-19) ============
+     프로젝트 등록 화면(.ba-formbar)과 같은 짜임 — 위 폼 안에 있으면 아래 참고 자료와
+     따로 노는 것처럼 보였다. 페이지 맨 아래 한 줄로: 왼쪽 이동, 오른쪽 실행. -->
+<div class="ba-formbar ba-rnd-formbar">
+  <a class="ba-btn" href="rnd_board.php">목록</a>
+  <?php if ($isNew): ?>
+    <span class="ba-spacer"></span>
+    <button type="button" class="ba-btn" id="ba-r-save-draft">임시 저장</button>
+    <button type="button" class="ba-btn ba-btn--primary" id="ba-r-submit">발의하기</button>
+  <?php else: ?>
+    <a class="ba-btn" href="rnd_view.php?id=<?= (int)$rnd['id'] ?>">상세 보기</a>
+    <span class="ba-spacer"></span>
+    <?php if (bs_rnd_can_delete($rnd)): ?>
+      <button type="button" class="ba-btn ba-btn--danger" id="ba-r-delete"
+              data-id="<?= (int)$rnd['id'] ?>" data-code="<?= h((string)$rnd['code']) ?>"
+              data-name="<?= h((string)$rnd['name']) ?>">삭제</button>
+    <?php endif; ?>
+    <button type="button" class="ba-btn ba-btn--primary" id="ba-r-submit">저장</button>
+  <?php endif; ?>
+</div>
 
 <?= bs_source_viewer_html() ?>
 

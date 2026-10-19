@@ -68,6 +68,8 @@ bs_layout_head(
 );
 ?>
 
+<?= bs_back_link($projectId ? 'project_view.php?id=' . (int)$projectId : 'project_list.php', $projectId ? '프로젝트 상세' : '프로젝트 목록') ?>
+
 <div class="ba-wizard" id="ba-form"
      data-project-id="<?= (int)$projectId ?>"
      data-code="<?= h($v('code')) ?>">

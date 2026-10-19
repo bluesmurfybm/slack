@@ -2483,3 +2483,14 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
 .ba-rv-files { grid-template-columns: minmax(0, 1fr); }
 .ba-rv-files .ba-src { min-width: 0; }
 .ba-src__link { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: normal; overflow-wrap: normal; }
+
+/* ---- 목록으로 돌아가기 · R&D 하단 단추 (2026-10-19) ---------------------- */
+.ba-back { margin: -6px 0 12px; }
+.ba-back a {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 600; color: var(--ba-ink-soft); text-decoration: none;
+  padding: 4px 8px 4px 4px; border-radius: 6px;
+}
+.ba-back a:hover { color: var(--ba-ink); background: var(--ba-paper); }
+.ba-back a span { font-size: 18px; line-height: 1; }
+.ba-rnd-formbar { margin-top: 16px; }

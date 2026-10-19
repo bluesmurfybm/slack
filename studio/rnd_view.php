@@ -30,6 +30,8 @@ bs_layout_head(
 );
 ?>
 
+<?= bs_back_link('rnd_board.php', 'R&D 과제 목록') ?>
+
 <div class="ba-rnd-view" id="ba-rnd-view" data-id="<?= (int)$rnd['id'] ?>">
 
   <div class="ba-typetabs" role="tablist" aria-label="과업 유형">

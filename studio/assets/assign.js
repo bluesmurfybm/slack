@@ -556,12 +556,47 @@
   // =====================================================================
   // 프로젝트 목록
   // =====================================================================
+  /**
+   * 목록 조회 조건 기억 (2026-10-19). 상세에서 '‹ 목록' 으로 돌아오면 보던 조건을
+   * 되살린다. 조건이 주소에 없고 JS 안에만 있어, 돌아오면 늘 처음 상태였다.
+   * sessionStorage — 이 탭에서만, 닫으면 사라진다. 막혀 있으면 그냥 기억하지 않는다.
+   */
+  function listMemory(key, ids) {
+    return {
+      restore: function (state) {
+        try {
+          var s = JSON.parse(sessionStorage.getItem(key) || 'null');
+          if (!s) return;
+          Object.keys(s.state || {}).forEach(function (k) { state[k] = s.state[k]; });
+          ids.forEach(function (id) {
+            var el = $('#' + id);
+            if (!el || !s.f || !(id in s.f)) return;
+            if (el.type === 'checkbox') el.checked = !!s.f[id]; else el.value = s.f[id];
+          });
+        } catch (e) { /* 기억 못 하면 처음 상태로 */ }
+      },
+      save: function (state) {
+        try {
+          var f = {};
+          ids.forEach(function (id) {
+            var el = $('#' + id);
+            if (el) f[id] = el.type === 'checkbox' ? el.checked : el.value;
+          });
+          sessionStorage.setItem(key, JSON.stringify({ state: state, f: f }));
+        } catch (e) { /* 저장 못 해도 목록은 돈다 */ }
+      }
+    };
+  }
+
   function initProjectList() {
     var root = $('#ba-list-app');
     if (!root) return;
 
     var state = { status: '', page: 1 };
     var debounceTimer;
+    var MEM = listMemory('bs.list.project',
+      ['ba-f-track', 'ba-f-from', 'ba-f-to', 'ba-f-keyword', 'ba-f-sort', 'ba-f-mine', 'ba-f-deleted']);
+    MEM.restore(state);
 
     function filters() {
       return {
@@ -580,6 +615,7 @@
     }
 
     function load() {
+      MEM.save(state);
       var tbody = $('#ba-list tbody');
       tbody.innerHTML = '<tr><td colspan="9" class="ba-loading">불러오는 중…</td></tr>';
 
@@ -5429,6 +5465,9 @@
 
     var state = { status: '', page: 1 };
     var debounceTimer;
+    var MEM = listMemory('bs.list.rnd',
+      ['ba-r-category', 'ba-r-keyword', 'ba-r-sort', 'ba-r-recruiting', 'ba-r-mine', 'ba-r-interest', 'ba-r-deleted']);
+    MEM.restore(state);
 
     function filters() {
       return {
@@ -5560,6 +5599,7 @@
     }
 
     function load() {
+      MEM.save(state);
       api('api/rnd.php?' + qs(filters())).then(render).catch(function (e) {
         $('#ba-r-grid').innerHTML = '<div class="ba-empty">' + esc(e.message) + '</div>';
       });
@@ -5700,6 +5740,12 @@
 
     var draft = $('#ba-r-save-draft');
     if (draft) draft.addEventListener('click', function () { save('draft', draft); });
+
+    // 하단 [삭제] (2026-10-19) — 보드·상세와 같은 확인을 거친다.
+    var del = $('#ba-r-delete');
+    if (del) del.addEventListener('click', function () {
+      rndLifecycle('delete', del, function () { location.href = 'rnd_board.php'; });
+    });
   }
 
   // =====================================================================

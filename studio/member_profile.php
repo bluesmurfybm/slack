@@ -49,6 +49,8 @@ bs_layout_head(
 );
 ?>
 
+<?php if (!$isSelf): /* 남의 프로파일은 구성원 관리에서 들어온다 */ ?><?= bs_back_link('member_list.php', '구성원 관리') ?><?php endif; ?>
+
 <div class="ba-profile" id="ba-profile"
      data-member-id="<?= (int)$target['id'] ?>"
      data-is-self="<?= $isSelf ? '1' : '0' ?>"

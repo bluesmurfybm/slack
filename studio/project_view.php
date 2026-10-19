@@ -77,6 +77,8 @@ $domains = array_values(array_filter(
 bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 ?>
 
+<?= bs_back_link('project_list.php', '프로젝트 목록') ?>
+
 <div class="ba-pv" id="ba-pv"
      data-project-id="<?= (int)$projectId ?>"
      data-has-period="<?= $hasPeriod ? '1' : '0' ?>">
