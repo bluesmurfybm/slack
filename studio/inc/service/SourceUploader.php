@@ -205,8 +205,10 @@ final class SourceUploader
         if ($safe === null) {
             throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
         }
-        if (mb_strlen($safe) > 500) {
-            throw new InvalidArgumentException('주소가 너무 깁니다. 500자 이내로 넣어 주세요.');
+        if (mb_strlen($safe) > BS_URL_MAX) {
+            throw new InvalidArgumentException(sprintf(
+                '주소가 너무 깁니다(%s자). %s자 이내로 넣어 주세요.',
+                number_format(mb_strlen($safe)), number_format(BS_URL_MAX)));
         }
 
         $kind  = $this->linkKind($safe);

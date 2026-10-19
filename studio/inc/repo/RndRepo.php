@@ -824,6 +824,12 @@ final class RndRepo
         if ($url !== null && !preg_match('#^https?://#i', (string)$url)) {
             throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
         }
+        if ($url !== null && mb_strlen((string)$url) > BS_URL_MAX) {
+            // 길이를 먼저 본다 — 전에는 검사가 없어 DB 가 거절했고 "처리 중 오류" 만 떴다.
+            throw new InvalidArgumentException(sprintf(
+                '주소가 너무 깁니다(%s자). %s자 이내로 넣어 주세요.',
+                number_format(mb_strlen((string)$url)), number_format(BS_URL_MAX)));
+        }
 
         $this->pdo->prepare(
             'INSERT INTO bs_rnd_output
@@ -982,6 +988,12 @@ final class RndRepo
         $url = $this->nn($data['url'] ?? null);
         if ($url !== null && !preg_match('#^https?://#i', (string)$url)) {
             throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
+        }
+        if ($url !== null && mb_strlen((string)$url) > BS_URL_MAX) {
+            // 길이를 먼저 본다 — 전에는 검사가 없어 DB 가 거절했고 "처리 중 오류" 만 떴다.
+            throw new InvalidArgumentException(sprintf(
+                '주소가 너무 깁니다(%s자). %s자 이내로 넣어 주세요.',
+                number_format(mb_strlen((string)$url)), number_format(BS_URL_MAX)));
         }
         $this->pdo->prepare(
             'UPDATE bs_rnd_output SET kind = ?, title = ?, url = ?, summary = ?'

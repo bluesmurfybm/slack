@@ -1544,6 +1544,26 @@ $page = $user->req('/studio/rnd_view.php?id=' . $attRnd)['body'];
 ok('상세 화면에 보기 창이 있다', str_contains($page, 'id="ba-src-viewer"'));
 @unlink($png2);
 
+echo "\n[28] 긴 링크 (030, 2026-10-19)\n";
+// 문서 뷰어 주소는 700자를 넘는다. 전에는 산출물 링크가 DB 에서 거절돼 500 이 났다.
+$longUrl  = 'https://docviewer.worksmobile.com/rl/24101/officeview?x=' . str_repeat('A', 720);
+$tooLong  = 'https://a.com/?x=' . str_repeat('B', 2100);
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 긴 링크 과제', 'visibility' => 'open', 'status' => 'proposed']]);
+$urlRnd = (int)($r['json']['data']['id'] ?? 0);
+$admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $urlRnd]]);
+$r = $user->req('/studio/api/rnd.php?act=output', ['csrf' => true, 'json' => [
+    'id' => $urlRnd, 'kind' => 'doc', 'title' => '[시험] 긴 링크', 'url' => $longUrl]]);
+ok('★ 700자 넘는 산출물 링크도 저장된다', $r['status'] === 200, 'status=' . $r['status'] . ' ' . substr($r['body'], 0, 120));
+ok('잘리지 않고 그대로', ($r['json']['data']['outputs'][0]['url'] ?? '') === $longUrl);
+$r = $user->req('/studio/api/rnd.php?act=output', ['csrf' => true, 'json' => [
+    'id' => $urlRnd, 'kind' => 'doc', 'title' => '[시험] 너무 긴 링크', 'url' => $tooLong]]);
+ok('★ 2000자를 넘으면 500 이 아니라 400 으로 이유를 알린다',
+   $r['status'] === 400 && str_contains($r['json']['error']['message'] ?? '', '2,000자'), 'status=' . $r['status']);
+$r = $user->req('/studio/api/rnd.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $urlRnd, 'source_type' => 'link', 'url' => $longUrl]]);
+ok('★ 참고 자료 링크도 700자를 넘어도 된다', $r['status'] === 200, substr($r['body'], 0, 120));
+
 echo "\n[뒷정리]\n";
 $pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");
