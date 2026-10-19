@@ -6028,7 +6028,7 @@
           '<input type="date" id="ba-rv-log-date"></label>' +
           '<label class="ba-field" style="flex:1 1 260px"><span>첨부 (선택)</span>' +
           '<input type="file" id="ba-rv-log-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
-          '<button type="button" class="ba-btn ba-btn--primary" data-rv="log">기록 남기기</button>' +
+          '<div class="ba-rv-form__foot"><button type="button" class="ba-btn ba-btn--primary" data-rv="log">기록 남기기</button></div>' +
           '</div>'
         : '';
 
@@ -6090,7 +6090,7 @@
           '<textarea id="ba-rv-out-summary" rows="2"></textarea></label>' +
           '<label class="ba-field ba-field--wide"><span>파일 (선택)</span>' +
           '<input type="file" id="ba-rv-out-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
-          '<button type="button" class="ba-btn ba-btn--primary" data-rv="output">산출물 등록</button>' +
+          '<div class="ba-rv-form__foot"><button type="button" class="ba-btn ba-btn--primary" data-rv="output">산출물 등록</button></div>' +
           '</div>'
         : '';
 
