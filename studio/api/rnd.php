@@ -25,6 +25,12 @@
  * POST api/rnd.php?act=purge           영구삭제 — 관리자, 삭제 상태인 과제만. 되돌릴 수 없다
  * POST api/rnd.php?act=upload_source   참고자료 — 파일(multipart) | 링크 | 직접 입력 (과제를 고칠 수 있는 사람)
  * POST api/rnd.php?act=delete_source   참고자료 지우기
+ * POST api/rnd.php?act=log_update      진행 기록 고치기   — 작성자·주도자·관리자, 언제든
+ * POST api/rnd.php?act=log_delete      진행 기록 지우기   — 붙은 파일도 함께
+ * POST api/rnd.php?act=output_update   산출물 고치기
+ * POST api/rnd.php?act=output_delete   산출물 지우기
+ * POST api/rnd.php?act=file_upload     진행 기록·산출물에 파일 붙이기 (multipart: owner_type, owner_id, files[])
+ * POST api/rnd.php?act=file_delete     붙인 파일 지우기
  *
  * **가시성은 RndRepo 가 쿼리에서 강제한다.** 이 파일은 그 결과를 그대로
  * 내보낸다 — 여기서 다시 거르지 않는다. 두 곳에서 거르면 언젠가 어긋난다.
@@ -471,27 +477,28 @@ bs_route(bs_param_str('act', 'board'), [
         $user = bs_begin_write();
         $pid  = bs_rnd_project_param();
 
-        $repo->addLog($pid, [
+        $logId = $repo->addLog($pid, [
             'content'   => bs_param_str('content'),
             'finding'   => bs_param_str('finding'),
             'worked_on' => bs_param_str('worked_on'),
         ], $user);
 
-        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '진행 기록을 남겼습니다.']);
+        // log_id — 화면이 이어서 파일을 붙인다(file_upload).
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['log_id' => $logId, 'message' => '진행 기록을 남겼습니다.']);
     },
 
     'output' => function () use ($repo): void {
         $user = bs_begin_write();
         $pid  = bs_rnd_project_param();
 
-        $repo->addOutput($pid, [
+        $outId = $repo->addOutput($pid, [
             'kind'    => bs_param_str('kind', 'doc'),
             'title'   => bs_param_str('title'),
             'url'     => bs_param_str('url'),
             'summary' => bs_param_str('summary'),
         ], $user);
 
-        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '산출물을 등록했습니다.']);
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['output_id' => $outId, 'message' => '산출물을 등록했습니다.']);
     },
 
     'interest' => function () use ($repo): void {
@@ -630,6 +637,67 @@ bs_route(bs_param_str('act', 'board'), [
         (new ProjectRepo(bs_db()))->deleteSource((int)$sid);
         bs_json_ok(['sources' => bs_rnd_sources((int)$src['project_id']), 'message' => '자료를 지웠습니다.']);
     },
+
+    // =================================================================
+    // 진행 기록·산출물 고치기·지우기, 첨부 (2026-10-19)
+    // 권한은 RndRepo::requireItem → bs_rnd_can_edit_item (작성자·주도자·관리자, 언제든).
+    // 막히면 DomainException → 400 으로 사유가 그대로 간다.
+    // =================================================================
+
+    'log_update' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = $repo->updateLog((int)bs_param_int('log_id', 0), [
+            'content'   => bs_param_str('content'),
+            'finding'   => bs_param_str('finding'),
+            'worked_on' => bs_param_str('worked_on'),
+        ], $user);
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '진행 기록을 고쳤습니다.']);
+    },
+
+    'log_delete' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = $repo->deleteLog((int)bs_param_int('log_id', 0), $user);
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '진행 기록을 지웠습니다.']);
+    },
+
+    'output_update' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = $repo->updateOutput((int)bs_param_int('output_id', 0), [
+            'kind'    => bs_param_str('kind', 'doc'),
+            'title'   => bs_param_str('title'),
+            'url'     => bs_param_str('url'),
+            'summary' => bs_param_str('summary'),
+        ], $user);
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '산출물을 고쳤습니다.']);
+    },
+
+    'output_delete' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = $repo->deleteOutput((int)bs_param_int('output_id', 0), $user);
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '산출물을 지웠습니다.']);
+    },
+
+    'file_upload' => function () use ($repo): void {
+        $user = bs_begin_write();
+        if (empty($_FILES['files'])) {
+            bs_json_error('MISSING_PARAM', '선택된 파일이 없습니다.', 400);
+        }
+        $type = bs_param_str('owner_type');
+        if (!in_array($type, ['log', 'output'], true)) {
+            bs_json_error('INVALID_ARGUMENT', '어디에 붙일지 알 수 없습니다.', 400);
+        }
+        $r = $repo->addFiles($type, (int)bs_param_int('owner_id', 0), $_FILES['files'], $user);
+        $msg = count($r['saved']) . '개를 붙였습니다.'
+             . ($r['failed'] ? ' ' . count($r['failed']) . '개는 실패했습니다.' : '');
+        bs_json_ok(bs_rnd_detail($repo, $r['project_id'])
+                   + ['saved' => $r['saved'], 'failed' => $r['failed'], 'message' => $msg]);
+    },
+
+    'file_delete' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = $repo->deleteFile((int)bs_param_int('file_id', 0), $user);
+        bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '파일을 지웠습니다.']);
+    },
 ]);
 
 /** 과제를 고칠 수 있어야 한다 — 아니면 끊는다. 못 보는 과제는 '없다' 로. */
@@ -683,6 +751,7 @@ function bs_rnd_detail(RndRepo $repo, int $pid): array
     // 발의 때 경고를 띄우고 끝내면, 정작 판단하는 사람은 모른 채 승인한다.
     $rnd['proposer_warning'] = $svc->proposalWarning((string)($r['proposer_id'] ?? ''), (int)$r['id']);
     $rnd['domains'] = $repo->domains($pid);
+    $files = $repo->filesOf($pid);
 
     return [
         'rnd'     => $rnd,
@@ -691,8 +760,15 @@ function bs_rnd_detail(RndRepo $repo, int $pid): array
             static fn(array $m) => bs_present_rnd_member($m, $canManage),
             $repo->members($pid)
         ),
-        'logs'    => array_map('bs_present_rnd_log', $repo->logs($pid)),
-        'outputs' => array_map('bs_present_rnd_output', $repo->outputs($pid)),
+        // 첨부(029)와 고치기·지우기 판정을 함께 싣는다 (2026-10-19).
+        'logs'    => array_map(
+            static fn(array $l) => bs_present_rnd_log($l, $r, $files['log'][(int)$l['id']] ?? []),
+            $repo->logs($pid)
+        ),
+        'outputs' => array_map(
+            static fn(array $o) => bs_present_rnd_output($o, $r, $files['output'][(int)$o['id']] ?? []),
+            $repo->outputs($pid)
+        ),
         'sources' => bs_rnd_sources($pid),
     ];
 }

@@ -5939,17 +5939,82 @@
         '</tbody></table></div>';
     }
 
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 진행 기록 · 산출물 (2026-10-19 — 첨부, 고치기·지우기)           │
+    // │                                                              │
+    // │ 고치기·지우기 단추는 서버가 내려준 can.edit 로만 그린다        │
+    // │ (작성자·주도자·관리자). 수정은 그 자리에서 폼으로 바뀐다 —     │
+    // │ 파일 추가와 붙인 파일 지우기(×)는 수정 중에만 한다. 보다가      │
+    // │ 실수로 지우지 않게.                                            │
+    // └──────────────────────────────────────────────────────────────┘
+    var EDITING = null;          // { type: 'log' | 'output', id: n } — 지금 고치는 한 건
+
+    /** 첨부 목록. edit 이면 × 단추를 붙인다. */
+    function fileList(files, edit) {
+      if (!files || !files.length) return '';
+      return '<div class="ba-rv-files">' + files.map(function (f) {
+        var view = f.viewable
+          ? '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' + f.id + '"' +
+            ' data-src-url="' + esc(f.url) + '" data-mime="' + esc(f.mime || '') + '" data-file="1"' +
+            ' data-title="' + esc(f.name) + '">보기</button>'
+          : '';
+        return '<div class="ba-rv-file">' +
+          '<span class="ba-rv-file__n">' + esc(f.name) + '</span>' +
+          '<span class="ba-rv-file__s">' + esc(f.size_label || '') + '</span>' +
+          '<span class="ba-src__acts">' + view +
+            '<a class="ba-btn ba-btn--sm" href="' + esc(f.url) + '">내려받기</a>' +
+            (edit ? '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-rv="file_delete"' +
+                    ' data-file="' + f.id + '" data-name="' + esc(f.name) + '" title="이 파일 지우기">×</button>' : '') +
+          '</span></div>';
+      }).join('') + '</div>';
+    }
+
+    /** 고칠 수 있는 사람에게만 [수정]·[삭제]. */
+    function itemActs(type, it) {
+      if (!it.can || !it.can.edit) return '';
+      return '<span class="ba-rv-item__acts">' +
+        '<button type="button" class="ba-btn ba-btn--sm" data-rv="item_edit" data-type="' + type + '" data-item="' + it.id + '">수정</button>' +
+        '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-rv="item_delete" data-type="' + type + '" data-item="' + it.id + '">삭제</button>' +
+        '</span>';
+    }
+
+    function edited(it) {
+      return it.updated_at
+        ? ' <span class="ba-dim" title="' + esc((it.updated_by_name || '') + ' ' + it.updated_at) + '">· 고침</span>'
+        : '';
+    }
+
+    var FILE_HINT = 'xlsx · pptx · docx · pdf · 이미지, 여러 개 가능';
+
     function logs(list, r) {
       // content 와 finding 을 끝까지 나눠 보여 준다. 과제의 값어치는 대개
       // '무엇을 했다' 가 아니라 '무엇을 알아냈다' 에 쌓인다 (명세서 §8.3).
       var items = list.map(function (l) {
+        if (EDITING && EDITING.type === 'log' && EDITING.id === l.id) {
+          return '<li class="ba-rv-log is-editing">' +
+            '<div class="ba-rv-form ba-rv-form--col">' +
+            '<label class="ba-field ba-field--wide"><span>진행 내용</span>' +
+            '<textarea id="ba-rv-e-content" rows="3">' + esc(l.content) + '</textarea></label>' +
+            '<label class="ba-field ba-field--wide"><span>발견사항</span>' +
+            '<textarea id="ba-rv-e-finding" rows="2">' + esc(l.finding || '') + '</textarea></label>' +
+            '<label class="ba-field"><span>작업한 날</span>' +
+            '<input type="date" id="ba-rv-e-date" value="' + esc(l.worked_on || '') + '"></label>' +
+            '<label class="ba-field ba-field--wide"><span>파일 추가</span>' +
+            '<input type="file" id="ba-rv-e-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
+            fileList(l.files, true) +
+            '<div class="ba-rv-form__foot">' +
+              '<button type="button" class="ba-btn" data-rv="item_cancel">취소</button>' +
+              '<button type="button" class="ba-btn ba-btn--primary" data-rv="item_save" data-type="log" data-item="' + l.id + '">저장</button>' +
+            '</div></div></li>';
+        }
         return '<li class="ba-rv-log">' +
           '<div class="ba-rv-log__meta">' + esc(l.emp_name) +
-          ' · ' + esc(l.worked_on || l.created_at || '') + '</div>' +
+          ' · ' + esc(l.worked_on || l.created_at || '') + edited(l) + itemActs('log', l) + '</div>' +
           '<div class="ba-rv-log__content">' + esc(l.content) + '</div>' +
           (l.finding
             ? '<div class="ba-rv-log__finding"><strong>발견</strong> ' + esc(l.finding) + '</div>'
             : '') +
+          fileList(l.files, false) +
         '</li>';
       }).join('');
 
@@ -5961,6 +6026,8 @@
           '<textarea id="ba-rv-log-finding" rows="2" placeholder="알아낸 것 (선택)"></textarea></label>' +
           '<label class="ba-field"><span>작업한 날</span>' +
           '<input type="date" id="ba-rv-log-date"></label>' +
+          '<label class="ba-field" style="flex:1 1 260px"><span>첨부 (선택)</span>' +
+          '<input type="file" id="ba-rv-log-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
           '<button type="button" class="ba-btn ba-btn--primary" data-rv="log">기록 남기기</button>' +
           '</div>'
         : '';
@@ -5969,32 +6036,60 @@
         (items || '<li class="ba-empty">아직 진행 기록이 없습니다.</li>') + '</ul>';
     }
 
+    var OUT_KINDS = ['doc', 'repo', 'demo', 'report', 'module', 'slide'];
+    var OUT_LABEL = { doc: '문서', repo: '저장소', demo: '시연', report: '보고서',
+                      module: '모듈', slide: '발표자료' };
+    function kindOptions(sel) {
+      return OUT_KINDS.map(function (k) {
+        return '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + OUT_LABEL[k] + '</option>';
+      }).join('');
+    }
+
     function outputs(list, r) {
       var items = list.map(function (o) {
+        if (EDITING && EDITING.type === 'output' && EDITING.id === o.id) {
+          return '<li class="ba-rv-output is-editing">' +
+            '<div class="ba-rv-form ba-rv-form--col">' +
+            '<label class="ba-field"><span>갈래</span><select id="ba-rv-e-kind">' + kindOptions(o.kind) + '</select></label>' +
+            '<label class="ba-field" style="flex:1 1 260px"><span>제목</span>' +
+            '<input type="text" id="ba-rv-e-title" value="' + esc(o.title) + '"></label>' +
+            '<label class="ba-field" style="flex:1 1 260px"><span>링크</span>' +
+            '<input type="url" id="ba-rv-e-url" value="' + esc(o.url || '') + '" placeholder="https://"></label>' +
+            '<label class="ba-field ba-field--wide"><span>요약</span>' +
+            '<textarea id="ba-rv-e-summary" rows="2">' + esc(o.summary || '') + '</textarea></label>' +
+            '<label class="ba-field ba-field--wide"><span>파일 추가</span>' +
+            '<input type="file" id="ba-rv-e-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
+            fileList(o.files, true) +
+            '<div class="ba-rv-form__foot">' +
+              '<button type="button" class="ba-btn" data-rv="item_cancel">취소</button>' +
+              '<button type="button" class="ba-btn ba-btn--primary" data-rv="item_save" data-type="output" data-item="' + o.id + '">저장</button>' +
+            '</div></div></li>';
+        }
         return '<li class="ba-rv-output">' +
-          '<span class="ba-badge">' + esc(o.kind_label) + '</span> ' +
-          (o.url ? '<a href="' + esc(o.url) + '" target="_blank" rel="noopener">' + esc(o.title) + '</a>'
-                 : '<strong>' + esc(o.title) + '</strong>') +
+          '<div class="ba-rv-output__h">' +
+            '<span class="ba-badge">' + esc(o.kind_label) + '</span> ' +
+            (o.url ? '<a href="' + esc(o.url) + '" target="_blank" rel="noopener">' + esc(o.title) + '</a>'
+                   : '<strong>' + esc(o.title) + '</strong>') +
+            itemActs('output', o) +
+          '</div>' +
           '<div class="ba-rv-output__sum">' + esc(o.summary || '') + '</div>' +
+          fileList(o.files, false) +
           '<div class="ba-rv-log__meta">' + esc(o.created_by_name || '') +
-          ' · ' + esc(o.created_at || '') + '</div>' +
+          ' · ' + esc(o.created_at || '') + edited(o) + '</div>' +
         '</li>';
       }).join('');
 
-      var kinds = ['doc', 'repo', 'demo', 'report', 'module', 'slide'];
-      var kindLabel = { doc: '문서', repo: '저장소', demo: '시연', report: '보고서',
-                        module: '모듈', slide: '발표자료' };
       var form = r.can.add_output
         ? '<div class="ba-rv-form ba-rv-form--col">' +
-          '<label class="ba-field"><span>갈래</span><select id="ba-rv-out-kind">' +
-          kinds.map(function (k) { return '<option value="' + k + '">' + kindLabel[k] + '</option>'; }).join('') +
-          '</select></label>' +
+          '<label class="ba-field"><span>갈래</span><select id="ba-rv-out-kind">' + kindOptions('doc') + '</select></label>' +
           '<label class="ba-field" style="flex:1 1 260px"><span>제목</span>' +
           '<input type="text" id="ba-rv-out-title"></label>' +
-          '<label class="ba-field" style="flex:1 1 260px"><span>링크</span>' +
+          '<label class="ba-field" style="flex:1 1 260px"><span>링크 (선택)</span>' +
           '<input type="url" id="ba-rv-out-url" placeholder="https://"></label>' +
           '<label class="ba-field ba-field--wide"><span>요약</span>' +
           '<textarea id="ba-rv-out-summary" rows="2"></textarea></label>' +
+          '<label class="ba-field ba-field--wide"><span>파일 (선택)</span>' +
+          '<input type="file" id="ba-rv-out-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
           '<button type="button" class="ba-btn ba-btn--primary" data-rv="output">산출물 등록</button>' +
           '</div>'
         : '';
@@ -6002,6 +6097,115 @@
       return form + '<ul class="ba-rv-outputs">' +
         (items || '<li class="ba-empty">아직 산출물이 없습니다. ' +
                   '종료하려면 한 건 이상 있어야 합니다.</li>') + '</ul>';
+    }
+
+    /**
+     * 등록·저장 뒤 고른 파일을 이어 붙인다. 파일이 없으면 받은 상세를 그대로 그린다.
+     * 붙이다 일부가 실패하면 무엇이 왜 안 됐는지 알린다 — 글은 이미 저장됐다.
+     */
+    function attachThen(d, type, ownerId, input) {
+      if (!input || !input.files || !input.files.length || !ownerId) { paint(d); return Promise.resolve(); }
+      var fd = new FormData();
+      fd.append('owner_type', type);
+      fd.append('owner_id', ownerId);
+      Array.prototype.forEach.call(input.files, function (f) { fd.append('files[]', f); });
+      return upload('api/rnd.php?act=file_upload', fd).then(function (d2) {
+        paint(d2);
+        if (d2.failed && d2.failed.length) {
+          toast('일부 파일을 붙이지 못했습니다 — ' +
+                d2.failed.map(function (f) { return f.name + ': ' + f.message; }).join(' / '), true);
+        }
+      }).catch(function (e) {
+        paint(d);
+        toast('글은 저장했지만 파일을 붙이지 못했습니다 — ' + e.message, true);
+      });
+    }
+
+    /** 등록·저장 — 서버에 보낸 뒤 파일을 이어 붙인다. */
+    function saveWithFiles(act, body, type, idOf, input, okMsg) {
+      body.id = ID;
+      return api('api/rnd.php?act=' + act, { method: 'POST', body: body })
+        .then(function (d) {
+          EDITING = null;
+          return attachThen(d, type, idOf(d), input).then(function () { toast(okMsg); });
+        })
+        .catch(function (e) { toast(e.message, true); });
+    }
+
+    /** 진행 기록·산출물 쪽 클릭. 처리했으면 true. */
+    function itemClick(act, b) {
+      if (act === 'log') {
+        var c = ($('#ba-rv-log-content') || {}).value || '';
+        if (!c.trim()) { toast('진행 내용을 입력하세요.', true); return true; }
+        saveWithFiles('log', { content: c,
+                               finding:   ($('#ba-rv-log-finding') || {}).value || '',
+                               worked_on: ($('#ba-rv-log-date')    || {}).value || '' },
+                      'log', function (d) { return d.log_id; }, $('#ba-rv-log-files'), '진행 기록을 남겼습니다.');
+        return true;
+      }
+      if (act === 'output') {
+        var t = ($('#ba-rv-out-title') || {}).value || '';
+        if (!t.trim()) { toast('산출물 제목을 입력하세요.', true); return true; }
+        saveWithFiles('output', { title: t,
+                                  kind:    ($('#ba-rv-out-kind')    || {}).value || 'doc',
+                                  url:     ($('#ba-rv-out-url')     || {}).value || '',
+                                  summary: ($('#ba-rv-out-summary') || {}).value || '' },
+                      'output', function (d) { return d.output_id; }, $('#ba-rv-out-files'), '산출물을 등록했습니다.');
+        return true;
+      }
+      if (act === 'item_edit') {
+        EDITING = { type: b.dataset.type, id: parseInt(b.dataset.item, 10) };
+        paint(D);
+        return true;
+      }
+      if (act === 'item_cancel') {
+        EDITING = null;
+        paint(D);
+        return true;
+      }
+      if (act === 'item_save') {
+        var type = b.dataset.type, iid = parseInt(b.dataset.item, 10), input = $('#ba-rv-e-files');
+        if (type === 'log') {
+          var ec = ($('#ba-rv-e-content') || {}).value || '';
+          if (!ec.trim()) { toast('진행 내용을 입력하세요.', true); return true; }
+          saveWithFiles('log_update', { log_id: iid, content: ec,
+                                        finding:   ($('#ba-rv-e-finding') || {}).value || '',
+                                        worked_on: ($('#ba-rv-e-date')    || {}).value || '' },
+                        'log', function () { return iid; }, input, '진행 기록을 고쳤습니다.');
+        } else {
+          var et = ($('#ba-rv-e-title') || {}).value || '';
+          if (!et.trim()) { toast('산출물 제목을 입력하세요.', true); return true; }
+          saveWithFiles('output_update', { output_id: iid, title: et,
+                                           kind:    ($('#ba-rv-e-kind')    || {}).value || 'doc',
+                                           url:     ($('#ba-rv-e-url')     || {}).value || '',
+                                           summary: ($('#ba-rv-e-summary') || {}).value || '' },
+                        'output', function () { return iid; }, input, '산출물을 고쳤습니다.');
+        }
+        return true;
+      }
+      if (act === 'item_delete') {
+        var dt = b.dataset.type, did = parseInt(b.dataset.item, 10);
+        var msg = dt === 'log' ? '이 진행 기록을 지웁니다. 붙인 파일도 함께 지워집니다.'
+                               : '이 산출물을 지웁니다. 붙인 파일도 함께 지워집니다.';
+        // 종료된 과제의 마지막 산출물이면 '산출물 1건 이상' 이 깨진다 — 알리고 지운다.
+        if (dt === 'output' && D && D.rnd.status === 'done' && (D.outputs || []).length === 1) {
+          msg += '\n\n종료된 과제의 마지막 산출물입니다. 지우면 산출물 없이 종료된 상태로 남습니다.';
+        }
+        askDialog({ title: dt === 'log' ? '진행 기록 삭제' : '산출물 삭제', ok: '삭제', danger: true, message: msg })
+          .then(function (v) {
+            if (v === null) return;
+            var body = dt === 'log' ? { log_id: did } : { output_id: did };
+            post(dt === 'log' ? 'log_delete' : 'output_delete', body);
+          });
+        return true;
+      }
+      if (act === 'file_delete') {
+        askDialog({ title: '파일 삭제', ok: '삭제', danger: true,
+                    message: (b.dataset.name || '이 파일') + ' 을(를) 지웁니다.' })
+          .then(function (v) { if (v !== null) post('file_delete', { file_id: parseInt(b.dataset.file, 10) }); });
+        return true;
+      }
+      return false;
     }
 
     function showTab(name) {
@@ -6093,22 +6297,8 @@
           });
         return;
       }
-      if (act === 'log') {
-        var c = ($('#ba-rv-log-content') || {}).value || '';
-        if (!c.trim()) { toast('진행 내용을 입력하세요.', true); return; }
-        post('log', { content: c,
-                      finding:   ($('#ba-rv-log-finding') || {}).value || '',
-                      worked_on: ($('#ba-rv-log-date')    || {}).value || '' });
-        return;
-      }
-      if (act === 'output') {
-        var t = ($('#ba-rv-out-title') || {}).value || '';
-        if (!t.trim()) { toast('산출물 제목을 입력하세요.', true); return; }
-        post('output', { title: t,
-                         kind:    ($('#ba-rv-out-kind')    || {}).value || 'doc',
-                         url:     ($('#ba-rv-out-url')     || {}).value || '',
-                         summary: ($('#ba-rv-out-summary') || {}).value || '' });
-      }
+      // 진행 기록·산출물 — 등록·고치기·지우기·첨부 (2026-10-19)
+      itemClick(act, b);
     });
 
     api('api/rnd.php?act=get&id=' + ID).then(paint).catch(function (e) {
@@ -6434,7 +6624,8 @@
       var note  = $('#ba-sv-note');
       var dl    = $('#ba-sv-dl');
       var tab   = $('#ba-sv-tab');
-      var raw   = 'api/source_download.php?id=' + encodeURIComponent(id);
+      // data-src-url 이 있으면 그 주소 (2026-10-19 — R&D 첨부는 api/rnd_file.php).
+      var raw   = b.dataset.srcUrl || ('api/source_download.php?id=' + encodeURIComponent(id));
 
       $('#ba-sv-title').textContent = b.dataset.title || '문서 보기';
       body.classList.toggle('ba-sv--pdf', file && mime === 'application/pdf');

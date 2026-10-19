@@ -344,8 +344,43 @@ function bs_present_rnd_member(array $m, bool $canManage): array
     ];
 }
 
-/** 진행 기록 한 건. content 와 finding 을 끝까지 나눠 둔다 (명세서 §8.3). */
-function bs_present_rnd_log(array $l): array
+/**
+ * 진행 기록·산출물을 고치고 지울 수 있는가 (2026-10-19).
+ *
+ * 작성자·주도자·관리자, **과제 상태와 무관하게 언제든** (사용자 결정).
+ * 종료된 과제의 산출물을 모두 지우면 '산출물 1건 이상' 이 깨진 채 남는다 —
+ * 화면이 지울 때 그 점을 알린다.
+ */
+function bs_rnd_can_edit_item(array $rnd, string $authorId): bool
+{
+    if (bs_is_admin() || bs_rnd_is_lead($rnd)) {
+        return true;
+    }
+    $me = bs_current_user();
+    return $me !== null && $authorId !== '' && $authorId === (string)$me['id'];
+}
+
+/** 첨부 한 건 (bs_rnd_file). file_path 는 내보내지 않는다. */
+function bs_present_rnd_file(array $f): array
+{
+    require_once BS_ROOT . '/inc/service/SourceUploader.php';   // humanSize()
+    $mime = (string)($f['mime'] ?? '');
+    return [
+        'id'         => (int)$f['id'],
+        'name'       => $f['orig_name'],
+        'mime'       => $mime,
+        'size_label' => isset($f['file_size']) ? SourceUploader::humanSize((int)$f['file_size']) : null,
+        'viewable'   => in_array($mime, BS_VIEWABLE_MIME, true),
+        'url'        => 'api/rnd_file.php?id=' . (int)$f['id'],
+        'uploaded_by_name' => $f['uploaded_by_name'] ?? null,
+    ];
+}
+
+/**
+ * 진행 기록 한 건. content 와 finding 을 끝까지 나눠 둔다 (명세서 §8.3).
+ * $rnd 를 주면 고치기·지우기 판정을, $files 를 주면 첨부를 함께 싣는다 (2026-10-19).
+ */
+function bs_present_rnd_log(array $l, ?array $rnd = null, array $files = []): array
 {
     return [
         'id'         => (int)$l['id'],
@@ -355,11 +390,15 @@ function bs_present_rnd_log(array $l): array
         'finding'    => $l['finding'] ?? null,
         'worked_on'  => $l['worked_on'] ?? null,
         'created_at' => bs_date($l['created_at'] ?? null),
+        'updated_at' => bs_date($l['updated_at'] ?? null, 'Y-m-d H:i'),
+        'updated_by_name' => $l['updated_by_name'] ?? null,
+        'files'      => array_map('bs_present_rnd_file', $files),
+        'can'        => ['edit' => $rnd !== null && bs_rnd_can_edit_item($rnd, (string)($l['author_id'] ?? ''))],
     ];
 }
 
-/** 산출물 한 건. */
-function bs_present_rnd_output(array $o): array
+/** 산출물 한 건. $rnd·$files 는 진행 기록과 같다 (2026-10-19). */
+function bs_present_rnd_output(array $o, ?array $rnd = null, array $files = []): array
 {
     $kind = (string)$o['kind'];
     return [
@@ -373,6 +412,10 @@ function bs_present_rnd_output(array $o): array
         'summary'    => $o['summary'] ?? null,
         'created_by_name' => $o['created_by_name'] ?? null,
         'created_at' => bs_date($o['created_at'] ?? null),
+        'updated_at' => bs_date($o['updated_at'] ?? null, 'Y-m-d H:i'),
+        'updated_by_name' => $o['updated_by_name'] ?? null,
+        'files'      => array_map('bs_present_rnd_file', $files),
+        'can'        => ['edit' => $rnd !== null && bs_rnd_can_edit_item($rnd, (string)($o['author_id'] ?? ''))],
     ];
 }
 

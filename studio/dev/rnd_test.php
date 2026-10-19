@@ -1419,6 +1419,131 @@ ok('자료를 지운다', $r['status'] === 200 && count($r['json']['data']['sour
 ok('올린 파일도 지워진다', $path !== '' && !is_file($path), $path);
 @unlink($pngPath);
 
+echo "\n[27] 진행 기록·산출물 고치기·지우기, 첨부 (2026-10-19)\n";
+
+$png2 = sys_get_temp_dir() . '/bs_rnd_att_' . getmypid() . '.png';
+file_put_contents($png2, base64_decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='));
+
+// 일반 사용자가 발의 → 관리자 승인. 발의자는 승인된 주도자다.
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 첨부 과제', 'visibility' => 'private', 'status' => 'proposed']]);
+$attRnd = (int)($r['json']['data']['id'] ?? 0);
+$admin->req('/studio/api/rnd.php?act=approve', ['csrf' => true, 'json' => ['id' => $attRnd]]);
+
+// --- 진행 기록 ---
+$r = $user->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $attRnd, 'content' => '[시험] 처음 기록', 'finding' => '알아낸 것']]);
+$logId = (int)($r['json']['data']['log_id'] ?? 0);
+ok('기록을 남기면 새 번호를 돌려준다', $logId > 0, substr($r['body'], 0, 160));
+$lg = $r['json']['data']['logs'][0] ?? [];
+ok('작성자에게 고치기 권한이 실린다', ($lg['can']['edit'] ?? null) === true, json_encode($lg['can'] ?? null));
+
+$r = $user->req('/studio/api/rnd.php?act=file_upload', ['csrf' => true, 'form' => [
+    'owner_type' => 'log', 'owner_id' => $logId,
+    'files[]' => new CURLFile($png2, 'image/png', '실험결과.png')]]);
+ok('기록에 파일을 붙인다', $r['status'] === 200 && count($r['json']['data']['saved'] ?? []) === 1, substr($r['body'], 0, 200));
+$lg  = $r['json']['data']['logs'][0] ?? [];
+$fid = (int)($lg['files'][0]['id'] ?? 0);
+ok('기록 목록에 첨부가 실린다', $fid > 0 && ($lg['files'][0]['viewable'] ?? false) === true
+   && ($lg['files'][0]['name'] ?? '') === '실험결과.png', json_encode($lg['files'] ?? null));
+ok('첨부에 실경로를 싣지 않는다', !str_contains($r['body'], 'file_path') && !str_contains($r['body'], 'var\/source'));
+
+$r = $user->req('/studio/api/rnd_file.php?id=' . $fid);
+ok('첨부를 내려받는다', $r['status'] === 200 && $r['body'] === file_get_contents($png2), 'status=' . $r['status']);
+$r = $user->req('/studio/api/rnd_file.php?id=' . $fid . '&inline=1');
+ok('그림은 바로 보기로도 열린다', $r['status'] === 200);
+$r = $anon->req('/studio/api/rnd_file.php?id=' . $fid);
+ok('로그인 안 하면 401', $r['status'] === 401, 'status=' . $r['status']);
+
+$r = $user->req('/studio/api/rnd.php?act=log_update', ['csrf' => true, 'json' => [
+    'log_id' => $logId, 'content' => '[시험] 고친 기록', 'finding' => '', 'worked_on' => '2026-10-18']]);
+ok('작성자가 기록을 고친다', $r['status'] === 200, substr($r['body'], 0, 160));
+$lg = $r['json']['data']['logs'][0] ?? [];
+ok('고친 내용이 반영된다', ($lg['content'] ?? '') === '[시험] 고친 기록' && ($lg['worked_on'] ?? '') === '2026-10-18');
+ok('누가 언제 고쳤는지 남는다', !empty($lg['updated_at']) && !empty($lg['updated_by_name']), json_encode($lg));
+$r = $user->req('/studio/api/rnd.php?act=log_update', ['csrf' => true, 'json' => ['log_id' => $logId, 'content' => '  ']]);
+ok('내용이 비면 거절', $r['status'] === 400);
+
+// --- 산출물 ---
+$r = $user->req('/studio/api/rnd.php?act=output', ['csrf' => true, 'json' => [
+    'id' => $attRnd, 'kind' => 'doc', 'title' => '[시험] 결과 보고서']]);
+$outId = (int)($r['json']['data']['output_id'] ?? 0);
+ok('산출물을 등록하면 새 번호를 돌려준다', $outId > 0, substr($r['body'], 0, 160));
+$r = $user->req('/studio/api/rnd.php?act=file_upload', ['csrf' => true, 'form' => [
+    'owner_type' => 'output', 'owner_id' => $outId,
+    'files[]' => new CURLFile($png2, 'image/png', '보고서표지.png')]]);
+ok('산출물에 파일을 붙인다', $r['status'] === 200 && count($r['json']['data']['saved'] ?? []) === 1, substr($r['body'], 0, 200));
+$ofid = (int)($r['json']['data']['outputs'][0]['files'][0]['id'] ?? 0);
+$opath = (string)$pdo->query("SELECT file_path FROM bs_rnd_file WHERE id = $ofid")->fetchColumn();
+
+$r = $user->req('/studio/api/rnd.php?act=output_update', ['csrf' => true, 'json' => [
+    'output_id' => $outId, 'kind' => 'report', 'title' => '[시험] 최종 보고서', 'url' => 'ftp://x']]);
+ok('http(s) 아닌 주소는 거절', $r['status'] === 400);
+$r = $user->req('/studio/api/rnd.php?act=output_update', ['csrf' => true, 'json' => [
+    'output_id' => $outId, 'kind' => 'report', 'title' => '[시험] 최종 보고서', 'url' => '']]);
+ok('작성자가 산출물을 고친다', $r['status'] === 200
+   && ($r['json']['data']['outputs'][0]['title'] ?? '') === '[시험] 최종 보고서', substr($r['body'], 0, 160));
+
+// 시험 관리자 계정은 앞 시험들로 R&D 점유가 차 있어 자기 발의를 승인하면 상한에 걸린다.
+// 여기서 보려는 것은 첨부·권한이므로, 승인 상태(과제 approved + 주도자 행)를 DB 로 만든다.
+$forceApprove = static function (int $id) use ($pdo, $ADMIN): void {
+    $mid = (int)$pdo->query("SELECT id FROM bs_member WHERE user_id = " . $pdo->quote($ADMIN))->fetchColumn();
+    $pdo->prepare("UPDATE bs_project SET status = 'approved', approved_at = NOW() WHERE id = ?")->execute([$id]);
+    $pdo->prepare("INSERT INTO bs_rnd_member (project_id, member_id, role, load_ratio, status, join_reason, approved_at, joined_at)
+                   VALUES (?, ?, 'lead', 0.1, 'approved', '발의자', NOW(), NOW())
+                   ON DUPLICATE KEY UPDATE role = 'lead', status = 'approved'")->execute([$id, $mid]);
+};
+
+// --- 남은 못 한다 · 관리자는 한다 ---
+$r = $admin->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 관리자 과제', 'visibility' => 'open', 'status' => 'proposed']]);
+$admRnd = (int)($r['json']['data']['id'] ?? 0);
+$forceApprove($admRnd);
+$r = $admin->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => ['id' => $admRnd, 'content' => '[시험] 관리자 기록']]);
+$admLog = (int)($r['json']['data']['log_id'] ?? 0);
+$lg = $user->req('/studio/api/rnd.php?act=get&id=' . $admRnd)['json']['data']['logs'][0] ?? [];
+ok('★ 남의 기록에는 고치기 권한이 안 실린다', ($lg['can']['edit'] ?? null) === false, json_encode($lg['can'] ?? null));
+$r = $user->req('/studio/api/rnd.php?act=log_update', ['csrf' => true, 'json' => ['log_id' => $admLog, 'content' => '가로채기']]);
+ok('★ 남의 기록은 못 고친다', $r['status'] === 400, 'status=' . $r['status']);
+$r = $user->req('/studio/api/rnd.php?act=log_delete', ['csrf' => true, 'json' => ['log_id' => $admLog]]);
+ok('★ 남의 기록은 못 지운다', $r['status'] === 400, 'status=' . $r['status']);
+$r = $user->req('/studio/api/rnd.php?act=file_upload', ['csrf' => true, 'form' => [
+    'owner_type' => 'log', 'owner_id' => $admLog, 'files[]' => new CURLFile($png2, 'image/png', 'x.png')]]);
+ok('★ 남의 기록에는 파일을 못 붙인다', $r['status'] === 400, 'status=' . $r['status']);
+$r = $admin->req('/studio/api/rnd.php?act=log_update', ['csrf' => true, 'json' => [
+    'log_id' => $logId, 'content' => '[시험] 관리자가 고침']]);
+ok('관리자는 남의 기록도 고친다', $r['status'] === 200, substr($r['body'], 0, 160));
+
+// --- 비공개 과제의 첨부는 못 보는 사람에게 새지 않는다 ---
+// 관리자 비공개 과제에 관리자가 붙인 파일을 일반 사용자가 받으려 한다.
+$r = $admin->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 관리자 비공개', 'visibility' => 'private', 'status' => 'proposed']]);
+$prvRnd = (int)($r['json']['data']['id'] ?? 0);
+$forceApprove($prvRnd);
+$r = $admin->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => ['id' => $prvRnd, 'content' => '[시험] 비공개 기록']]);
+$prvLog = (int)($r['json']['data']['log_id'] ?? 0);
+$r = $admin->req('/studio/api/rnd.php?act=file_upload', ['csrf' => true, 'form' => [
+    'owner_type' => 'log', 'owner_id' => $prvLog, 'files[]' => new CURLFile($png2, 'image/png', '비밀.png')]]);
+$prvFile = (int)($r['json']['data']['logs'][0]['files'][0]['id'] ?? 0);
+$r = $user->req('/studio/api/rnd_file.php?id=' . $prvFile);
+ok('★ 비공개 과제의 첨부는 못 보는 사람이 못 받는다', $prvFile > 0 && $r['status'] === 404, 'status=' . $r['status']);
+
+// --- 지우기 — 파일도 함께 ---
+$r = $user->req('/studio/api/rnd.php?act=file_delete', ['csrf' => true, 'json' => ['file_id' => $fid]]);
+ok('붙인 파일 하나를 지운다', $r['status'] === 200 && ($r['json']['data']['logs'][0]['files'] ?? null) === []);
+$r = $user->req('/studio/api/rnd.php?act=output_delete', ['csrf' => true, 'json' => ['output_id' => $outId]]);
+ok('작성자가 산출물을 지운다', $r['status'] === 200 && ($r['json']['data']['outputs'] ?? null) === [], substr($r['body'], 0, 160));
+ok('★ 산출물을 지우면 붙은 파일도 지워진다', $opath !== '' && !is_file($opath)
+   && (int)$pdo->query("SELECT COUNT(*) FROM bs_rnd_file WHERE id = $ofid")->fetchColumn() === 0, $opath);
+$r = $user->req('/studio/api/rnd.php?act=log_delete', ['csrf' => true, 'json' => ['log_id' => $logId]]);
+ok('작성자가 기록을 지운다', $r['status'] === 200 && ($r['json']['data']['logs'] ?? null) === [], substr($r['body'], 0, 160));
+
+// 화면
+$page = $user->req('/studio/rnd_view.php?id=' . $attRnd)['body'];
+ok('상세 화면에 보기 창이 있다', str_contains($page, 'id="ba-src-viewer"'));
+@unlink($png2);
+
 echo "\n[뒷정리]\n";
 $pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");

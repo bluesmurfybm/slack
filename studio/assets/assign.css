@@ -2429,3 +2429,26 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
 @media (max-width: 1100px) {
   .ba-my--rnd { grid-template-columns: 1fr 96px 70px; }
 }
+
+/* =====================================================================
+   R&D 진행 기록·산출물 — 첨부, 고치기·지우기 (2026-10-19)
+   ===================================================================== */
+.ba-rv-item__acts { margin-left: auto; display: inline-flex; gap: 4px; }
+.ba-rv-log__meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ba-rv-output__h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ba-rv-files { display: grid; gap: 4px; margin-top: 8px; }
+.ba-rv-file {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 5px 8px; border: 1px solid var(--ba-line); border-radius: 6px;
+  background: var(--ba-surface); font-size: 12.5px;
+}
+.ba-rv-file__n { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.ba-rv-file__s { color: var(--ba-ink-soft); font-size: 11.5px; white-space: nowrap; }
+.ba-rv-form__foot { display: flex; justify-content: flex-end; gap: 6px; width: 100%; }
+/* 수정 폼 안의 첨부 목록은 한 줄 전체를 쓴다 — 좁은 칸에 갇혀 단추가 줄바꿈됐다 */
+.ba-rv-form .ba-rv-files { flex: 1 1 100%; width: 100%; }
+/* 파일 칸이 테두리 밖으로 나가지 않게 (여백을 너비 안에) */
+.ba-rv-form input[type="file"] { box-sizing: border-box; max-width: 100%; }
+.ba-rv-log.is-editing, .ba-rv-output.is-editing {
+  border-color: var(--ba-brand); background: #f6fbf8;
+}
