@@ -652,28 +652,38 @@ final class ProjectRepo
     }
 
     /**
-     * 내려받기·보기용 한 건 (2026-10-15). 그 프로젝트를 볼 수 있을 때만 돌려준다.
+     * 내려받기·보기용 한 건 (2026-10-15). 그 과업을 볼 수 있을 때만 돌려준다.
      *
-     * 프로젝트(project_type='project')의 출처만 본다 — R&D 과제는 공개 범위가
-     * 따로 있어(RndRepo::find) 이 경로로 열면 비공개 과제가 샌다. 지워진
-     * 프로젝트는 $withDeleted(관리자) 일 때만. file_path 를 포함하므로 응답에
-     * 그대로 싣지 말 것.
+     *   프로젝트  로그인한 구성원 누구나. 지워진 프로젝트는 $withDeleted(관리자) 일 때만
+     *   R&D 과제  **RndRepo::find() 로 공개 범위를 본다** (2026-10-19 — R&D 에도
+     *            참고자료가 붙었다). 비공개 과제의 파일이 번호만으로 새면 안 된다.
+     *
+     * file_path 를 포함하므로 응답에 그대로 싣지 말 것.
      */
     public function findSourceForView(int $sourceId, bool $withDeleted = false): ?array
     {
         $st = $this->pdo->prepare(
             "SELECT s.id, s.project_id, s.kind, s.title, s.url, s.file_path, s.file_size, s.mime,
-                    s.parse_status, s.parsed_text
+                    s.parse_status, s.parsed_text, p.project_type, p.deleted_at
                FROM bs_project_source s
                JOIN bs_project p ON p.id = s.project_id
-              WHERE s.id = ?
-                AND p.project_type = 'project'"
-            . ($withDeleted ? '' : ' AND p.deleted_at IS NULL')
+              WHERE s.id = ?"
         );
         $st->execute([$sourceId]);
         $row = $st->fetch(PDO::FETCH_ASSOC);
+        if ($row === false) {
+            return null;
+        }
 
-        return $row === false ? null : $row;
+        if ((string)$row['project_type'] === 'rnd') {
+            require_once __DIR__ . '/RndRepo.php';
+            // find() 가 공개 범위와 삭제 여부를 함께 본다. 못 보면 null.
+            return (new RndRepo($this->pdo))->find((int)$row['project_id']) ? $row : null;
+        }
+        if ((string)$row['project_type'] !== 'project') {
+            return null;
+        }
+        return $withDeleted || $row['deleted_at'] === null ? $row : null;
     }
 
     public function countSources(int $projectId): int

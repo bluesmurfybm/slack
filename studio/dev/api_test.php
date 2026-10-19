@@ -536,13 +536,18 @@ ok('로그인 안 하면 401', $r['status'] === 401, 'status=' . $r['status']);
 $r = $guest->req('/studio/api/source_download.php?id=99999999');
 ok('없는 문서는 404', $r['status'] === 404);
 
-// ★ R&D 과제의 출처는 이 길로 열리지 않는다 — 비공개 과제가 샌다.
-(function () use ($pid) {
+// ★ **볼 수 없는** R&D 과제의 출처는 이 길로 열리지 않는다 — 비공개 과제가 샌다.
+//   (2026-10-19 — R&D 에도 참고자료가 붙어, 볼 수 있는 사람에게는 열린다.
+//    그래서 남이 발의한 비공개 과제로 바꿔 놓고 본다.)
+$flipWas = (function () use ($pid) {
     $cfg = require dirname(__DIR__, 2) . '/config.php';
     $d   = $cfg['db'];
     $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
                    $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $p->prepare("UPDATE bs_project SET project_type = 'rnd' WHERE id = ?")->execute([$pid]);
+    $was = $p->query("SELECT visibility, proposer_id FROM bs_project WHERE id = " . (int)$pid)->fetch(PDO::FETCH_ASSOC);
+    $p->prepare("UPDATE bs_project SET project_type = 'rnd', visibility = 'private',
+                        proposer_id = 'batest-nobody@bluesoft.co.kr' WHERE id = ?")->execute([$pid]);
+    return $was;
 })();
 $r = $guest->req('/studio/api/source_download.php?id=' . $srcId);
 $rt = $guest->req('/studio/api/project.php?act=source_text&id=' . $srcId);
@@ -552,15 +557,16 @@ $rv  = $guest->req('/studio/project_view.php?id=' . $pid);
 $rg  = $guest->req('/studio/api/project.php?act=get&id=' . $pid);
 $rgA = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
 $rtk = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid);
-(function () use ($pid) {
+(function () use ($pid, $flipWas) {
     $cfg = require dirname(__DIR__, 2) . '/config.php';
     $d   = $cfg['db'];
     $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
                    $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-    $p->prepare("UPDATE bs_project SET project_type = 'project' WHERE id = ?")->execute([$pid]);
+    $p->prepare("UPDATE bs_project SET project_type = 'project', visibility = ?, proposer_id = ? WHERE id = ?")
+      ->execute([$flipWas['visibility'], $flipWas['proposer_id'], $pid]);
 })();
-ok('★ R&D 과제의 파일은 내려받지 못한다', $r['status'] === 404, 'status=' . $r['status']);
-ok('★ R&D 과제의 본문도 못 본다', $rt['status'] === 404, 'status=' . $rt['status']);
+ok('★ 볼 수 없는 R&D 과제의 파일은 내려받지 못한다', $r['status'] === 404, 'status=' . $r['status']);
+ok('★ 볼 수 없는 R&D 과제의 본문도 못 본다', $rt['status'] === 404, 'status=' . $rt['status']);
 ok('★ R&D 과제 번호로 프로젝트 화면이 열리지 않는다',
    $rv['status'] === 302 && !str_contains($rv['body'], 'ba-pv__head'), 'status=' . $rv['status']);
 ok('★ R&D 과제 번호로 프로젝트 API 가 답하지 않는다', $rg['status'] === 404, 'status=' . $rg['status']);

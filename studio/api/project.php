@@ -17,6 +17,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
+require_once BS_ROOT . '/inc/presenter.php';      // bs_present_source()
 require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
 require_once BS_ROOT . '/inc/service/SourceUploader.php';
 
@@ -503,27 +504,4 @@ function bs_editor_project_param(ProjectRepo $repo): int
     return $id;
 }
 
-/**
- * 출처 문서.
- * file_path 는 절대 내보내지 않는다 — 서버 디렉터리 구조를 알려 줄 이유가 없다.
- */
-function bs_present_source(array $r): array
-{
-    return [
-        'id'           => (int)$r['id'],
-        'purpose'      => $r['purpose'] ?? 'scope',
-        'kind'         => $r['kind'],
-        'kind_label'   => BS_SOURCE_KIND[$r['kind']] ?? $r['kind'],
-        'title'        => $r['title'],
-        'url'          => $r['url'],
-        'file_size'    => isset($r['file_size']) ? (int)$r['file_size'] : null,
-        'size_label'   => isset($r['file_size']) && $r['file_size'] !== null
-                            ? SourceUploader::humanSize((int)$r['file_size']) : null,
-        'mime'         => $r['mime'],
-        'parse_status' => $r['parse_status'],
-        'parse_error'  => $r['parse_error'],
-        'parsed_len'   => isset($r['parsed_len']) ? (int)$r['parsed_len'] : null,
-        'uploaded_by'  => $r['uploaded_by_name'] ?? null,
-        'created_at'   => bs_date($r['created_at'], 'Y-m-d H:i'),
-    ];
-}
+// bs_present_source() 는 inc/presenter.php 로 옮겼다 (2026-10-19 — R&D 참고자료도 쓴다).

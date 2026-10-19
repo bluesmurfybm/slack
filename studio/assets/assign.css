@@ -1750,6 +1750,11 @@ a.ba-my { box-sizing: border-box; color: inherit; text-decoration: none; }
   border-radius: var(--ba-r); overflow: hidden;
 }
 .ba-rvc--scope { --c: var(--ba-brand); --c-soft: #f0f7f2; }
+/* 참고 자료 (2026-10-19) — 개요 카드 아래 한 줄 전체 */
+.ba-rvc--src { --c: #c98a12; --c-soft: #fbf1dc; margin-top: 14px; }
+.ba-rvc--src .ba-srclist { padding: 10px 14px 12px; }
+/* 발의·수정 화면의 참고 자료 패널 — 위 폼 상자와 붙지 않게 */
+.ba-rnd-src { margin-top: 16px; }
 .ba-rvc__h {
   display: flex; align-items: center; gap: 8px;
   padding: 11px 16px; background: var(--c-soft); color: var(--c);

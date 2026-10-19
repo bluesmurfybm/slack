@@ -720,6 +720,12 @@ const BS_UPLOAD_MIME = [
     'webp' => ['image/webp'],
 ];
 
+/**
+ * 브라우저가 바로 그리는 형식 — [보기] 를 줄지 정한다 (2026-10-19 한 곳으로).
+ * api/source_download.php · api/rnd_file.php 의 inline 허용과 같아야 한다.
+ */
+const BS_VIEWABLE_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
 /** 확장자 → bs_project_source.kind */
 const BS_EXT_KIND = [
     'xlsx' => 'xlsx',

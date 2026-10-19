@@ -55,6 +55,10 @@ final class RndClient
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($o['json'], JSON_UNESCAPED_UNICODE));
             $h[] = 'Content-Type: application/json';
+        } elseif (!empty($o['form'])) {
+            // 파일 올리기 (2026-10-19 — 참고자료·첨부)
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $o['form']);
         }
         if (!empty($o['csrf']) && $this->csrf !== null) {
             $h[] = 'X-CSRF-Token: ' . $this->csrf;
@@ -1335,6 +1339,86 @@ $d = $user->req('/studio/api/rnd.php?act=get&id=' . $delId)['json']['data']['rnd
 ok('상세에도 삭제 판정이 실린다', ($d['can']['delete'] ?? null) === true, json_encode($d['can'] ?? null));
 
 // ---------------------------------------------------------------------
+echo "\n[26] 참고 자료 (2026-10-19)\n";
+
+// 1x1 PNG — 업로드 검사(확장자·내용 일치)를 통과하는 진짜 그림.
+$pngPath = sys_get_temp_dir() . '/bs_rnd_ref_' . getmypid() . '.png';
+file_put_contents($pngPath, base64_decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='));
+
+// 관리자가 발의한 비공개 과제 — 일반 사용자는 볼 수 없다.
+$r = $admin->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 참고자료 과제', 'visibility' => 'private', 'status' => 'proposed']]);
+$refRnd = (int)($r['json']['data']['id'] ?? 0);
+
+$r = $admin->req('/studio/api/rnd.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $refRnd, 'source_type' => 'text', 'text' => "조사 메모\n경쟁 제품 셋을 봤다"]]);
+ok('직접 입력 자료를 올린다', $r['status'] === 200, substr($r['body'], 0, 160));
+$txtSrc = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+
+$r = $admin->req('/studio/api/rnd.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $refRnd, 'source_type' => 'link', 'url' => 'https://www.figma.com/file/abc/Ref']]);
+ok('링크 자료를 올린다', $r['status'] === 200, substr($r['body'], 0, 160));
+
+$r = $admin->req('/studio/api/rnd.php?act=upload_source', ['csrf' => true, 'form' => [
+    'project_id' => $refRnd, 'source_type' => 'file',
+    'files[]' => new CURLFile($pngPath, 'image/png', '화면시안.png')]]);
+ok('파일 자료를 올린다', $r['status'] === 200 && count($r['json']['data']['saved'] ?? []) === 1,
+   substr($r['body'], 0, 200));
+$pngSrc = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+
+$d = $admin->req('/studio/api/rnd.php?act=get&id=' . $refRnd)['json']['data'] ?? [];
+$srcs = $d['sources'] ?? [];
+ok('상세에 자료 3건이 실린다', count($srcs) === 3, json_encode(array_column($srcs, 'title')));
+ok('★ 모두 참고 자료(보관용)로 들어간다',
+   array_unique(array_column($srcs, 'purpose')) === ['reference'], json_encode(array_column($srcs, 'purpose')));
+$png = null;
+foreach ($srcs as $s) { if ((int)$s['id'] === $pngSrc) { $png = $s; } }
+ok('그림은 보기·내려받기가 된다', ($png['has_file'] ?? false) && ($png['viewable'] ?? false), json_encode($png));
+
+$r = $admin->req('/studio/api/source_download.php?id=' . $pngSrc);
+ok('볼 수 있는 사람은 내려받는다', $r['status'] === 200 && $r['body'] === file_get_contents($pngPath),
+   'status=' . $r['status']);
+$r = $user->req('/studio/api/source_download.php?id=' . $pngSrc);
+ok('★ 비공개 과제를 못 보는 사람은 못 받는다', $r['status'] === 404, 'status=' . $r['status']);
+$r = $user->req('/studio/api/project.php?act=source_text&id=' . $txtSrc);
+ok('★ 본문도 못 본다', $r['status'] === 404, 'status=' . $r['status']);
+$r = $admin->req('/studio/api/project.php?act=source_text&id=' . $txtSrc);
+ok('볼 수 있는 사람은 본문을 본다', str_contains($r['json']['data']['text'] ?? '', '경쟁 제품'), substr($r['body'], 0, 120));
+
+$r = $user->req('/studio/api/rnd.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $refRnd, 'source_type' => 'text', 'text' => '남의 과제']]);
+ok('★ 못 보는 과제에는 못 올린다', $r['status'] === 404, 'status=' . $r['status']);
+$r = $user->req('/studio/api/rnd.php?act=delete_source', ['csrf' => true, 'json' => ['source_id' => $txtSrc]]);
+ok('★ 못 보는 과제의 자료는 못 지운다', $r['status'] === 404, 'status=' . $r['status']);
+$r = $user->req('/studio/api/project.php?act=delete_source', ['csrf' => true, 'json' => ['source_id' => $txtSrc]]);
+ok('★ 프로젝트 API 로 돌아가도 못 지운다', $r['status'] === 403, 'status=' . $r['status']);
+
+// 내 과제에는 올린다
+$r = $user->req('/studio/api/rnd.php?act=propose', ['csrf' => true, 'json' => [
+    'name' => '[시험] 내 참고자료 과제', 'visibility' => 'open', 'status' => 'proposed']]);
+$myRnd = (int)($r['json']['data']['id'] ?? 0);
+$r = $user->req('/studio/api/rnd.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $myRnd, 'source_type' => 'text', 'text' => '내 메모']]);
+ok('발의자는 자기 과제에 올린다', $r['status'] === 200, substr($r['body'], 0, 160));
+
+// 화면
+$page = $admin->req('/studio/rnd_form.php?id=' . $refRnd)['body'];
+ok('수정 화면에 참고 자료 패널이 있다',
+   str_contains($page, 'data-src-panel="reference"') && str_contains($page, 'data-src-api="api/rnd.php"'));
+ok('수정 화면 목록에 보기·내려받기', str_contains($page, 'data-src-view="' . $pngSrc . '"')
+   && str_contains($page, 'source_download.php?id=' . $pngSrc . '"'));
+ok('새 과제 화면은 먼저 저장하라고 안내한다',
+   str_contains($admin->req('/studio/rnd_form.php')['body'], '과제를 먼저 저장하면'));
+ok('상세 화면에 보기 창이 있다', str_contains($admin->req('/studio/rnd_view.php?id=' . $refRnd)['body'], 'id="ba-src-viewer"'));
+
+// 지우기 — 파일도 함께
+$path = (string)$pdo->query("SELECT file_path FROM bs_project_source WHERE id = $pngSrc")->fetchColumn();
+$r = $admin->req('/studio/api/rnd.php?act=delete_source', ['csrf' => true, 'json' => ['source_id' => $pngSrc]]);
+ok('자료를 지운다', $r['status'] === 200 && count($r['json']['data']['sources'] ?? []) === 2, substr($r['body'], 0, 160));
+ok('올린 파일도 지워진다', $path !== '' && !is_file($path), $path);
+@unlink($pngPath);
+
 echo "\n[뒷정리]\n";
 $pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");

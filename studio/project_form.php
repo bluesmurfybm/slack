@@ -309,6 +309,7 @@ bs_layout_head(
               <?= h($parseLabel((string)$s['parse_status'])) ?>
             </span>
             <?php endif; ?>
+            <?= bs_source_acts_html($s) ?>
             <button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="<?= (int)$s['id'] ?>">삭제</button>
           </div>
         <?php endforeach; ?>
@@ -360,6 +361,8 @@ bs_layout_head(
     <?php endif; ?>
   </div>
 </div>
+
+<?= bs_source_viewer_html() ?>
 
 <?php
 bs_layout_foot();

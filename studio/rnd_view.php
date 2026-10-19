@@ -58,4 +58,6 @@ bs_layout_head(
   <section class="ba-rv-pane" data-pane="outputs"  id="ba-rv-outputs" hidden></section>
 </div>
 
+<?= bs_source_viewer_html() ?>
+
 <?php bs_layout_foot(); ?>

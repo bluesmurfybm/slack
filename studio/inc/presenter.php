@@ -432,3 +432,36 @@ function bs_rnd_is_stale(array $rnd): bool
     require_once __DIR__ . '/service/RndLoadService.php';
     return (new RndLoadService(bs_db()))->isStale($rnd);
 }
+
+/**
+ * 출처 문서(참고자료 포함) 한 건 → 화면 모양. 프로젝트와 R&D 과제가 같이 쓴다.
+ * file_path 는 절대 내보내지 않는다 — 서버 디렉터리 구조를 알려 줄 이유가 없다.
+ *
+ * has_file · viewable 은 화면이 [보기]·[내려받기] 를 그릴지 정하는 데 쓴다.
+ * viewable 은 브라우저가 바로 그리는 형식(이미지·PDF)인가.
+ */
+function bs_present_source(array $r): array
+{
+    require_once BS_ROOT . '/inc/service/SourceUploader.php';   // humanSize()
+    $hasFile = !empty($r['has_file']);
+    $mime    = (string)($r['mime'] ?? '');
+    return [
+        'id'           => (int)$r['id'],
+        'purpose'      => $r['purpose'] ?? 'scope',
+        'kind'         => $r['kind'],
+        'kind_label'   => BS_SOURCE_KIND[$r['kind']] ?? $r['kind'],
+        'title'        => $r['title'],
+        'url'          => $r['url'],
+        'file_size'    => isset($r['file_size']) ? (int)$r['file_size'] : null,
+        'size_label'   => isset($r['file_size']) && $r['file_size'] !== null
+                            ? SourceUploader::humanSize((int)$r['file_size']) : null,
+        'mime'         => $r['mime'],
+        'has_file'     => $hasFile,
+        'viewable'     => $hasFile && in_array($mime, BS_VIEWABLE_MIME, true),
+        'parse_status' => $r['parse_status'],
+        'parse_error'  => $r['parse_error'] ?? null,
+        'parsed_len'   => isset($r['parsed_len']) ? (int)$r['parsed_len'] : null,
+        'uploaded_by'  => $r['uploaded_by_name'] ?? null,
+        'created_at'   => bs_date($r['created_at'], 'Y-m-d H:i'),
+    ];
+}

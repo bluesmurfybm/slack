@@ -397,8 +397,29 @@
   // ---- 출처 패널 ------------------------------------------------------
   //
   // 같은 꼴의 블록이 둘이다 — 업무 내용 및 범위(scope) / 참고 자료(reference).
+  /**
+   * 첨부 한 건의 [보기]·[내려받기] (2026-10-19). inc/layout.php 의
+   * bs_source_acts_html() 와 **같은 마크업**이다 — 한쪽만 고치지 말 것.
+   * s 는 bs_present_source() 모양 (has_file · viewable · parsed_len · mime · id · title).
+   */
+  function srcActsHtml(s) {
+    var h = '';
+    if (s.viewable || (s.parsed_len || 0) > 0) {
+      h += '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' + s.id + '"' +
+           ' data-mime="' + esc(s.mime || '') + '" data-file="' + (s.has_file ? '1' : '0') + '"' +
+           ' data-title="' + esc(s.title || '') + '">보기</button>';
+    }
+    if (s.has_file) {
+      h += '<a class="ba-btn ba-btn--sm" href="api/source_download.php?id=' + s.id + '">내려받기</a>';
+    }
+    return h ? '<span class="ba-src__acts">' + h + '</span>' : '';
+  }
+
   // id 대신 블록 안에서 data-src-* 로 찾는다. 서버는 목록을 **통째로** 돌려
   // 주므로, 각 블록이 자기 용도의 것만 골라 그린다 (2026-10-12).
+  //
+  // 패널의 data-src-api 로 보낼 곳을 고른다 (2026-10-19). 없으면 프로젝트.
+  // R&D 과제 수정 화면은 api/rnd.php 로 보낸다 — 같은 모양, 다른 권한 판정.
   function initSourcePanel(pid) {
     var panels = $$('[data-src-panel]');
 
@@ -428,6 +449,7 @@
                  '<span class="ba-src__parse ba-src__parse--' + esc(s.parse_status) + '">' +
                    esc(PARSE_LABEL[s.parse_status] || s.parse_status) +
                  '</span>') +
+                 srcActsHtml(s) +
                  '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="' + s.id + '">삭제</button>' +
                  '</div>';
         }).join('');
@@ -448,6 +470,7 @@
 
     panels.forEach(function (panel) {
       var purpose = panel.dataset.srcPanel;
+      var API     = (panel.dataset.srcApi || 'api/project.php') + '?act=';
       var inp = function (k) { return $('[data-src-in="' + k + '"]', panel); };
 
       // 종류 탭 — 이 블록 안에서만 바꾼다.
@@ -479,13 +502,17 @@
 
         // 삭제 — 목록이 다시 그려지므로 블록에 건다.
         if (btn.dataset.srcDel) {
-          if (!window.confirm('이 문서를 삭제합니다. 올린 파일도 함께 지워집니다.')) return;
-          api('api/project.php?act=delete_source', {
-            method: 'POST',
-            body: { source_id: parseInt(btn.dataset.srcDel, 10) }
-          }).then(afterChange).catch(function (e2) {
-            showError('#ba-form-error', e2.message);
-          });
+          askDialog({ title: '자료 삭제', ok: '삭제', danger: true,
+                      message: '이 자료를 삭제합니다. 올린 파일도 함께 지워집니다.' })
+            .then(function (v) {
+              if (v === null) return;
+              api(API + 'delete_source', {
+                method: 'POST',
+                body: { source_id: parseInt(btn.dataset.srcDel, 10) }
+              }).then(afterChange).catch(function (e2) {
+                showError('#ba-form-error', e2.message);
+              });
+            });
           return;
         }
 
@@ -501,13 +528,13 @@
           fd.append('source_type', 'file');
           fd.append('purpose', purpose);
           Array.prototype.forEach.call(input.files, function (f) { fd.append('files[]', f); });
-          send(btn, upload('api/project.php?act=upload_source', fd),
+          send(btn, upload(API + 'upload_source', fd),
                function () { input.value = ''; });
         }
         if (act === 'link') {
           var url = (inp('link-url') || {}).value || '';
           if (!url.trim()) { toast('주소를 입력하세요.', true); return; }
-          send(btn, api('api/project.php?act=upload_source', {
+          send(btn, api(API + 'upload_source', {
             method: 'POST',
             body: { project_id: pid, source_type: 'link', purpose: purpose,
                     url: url, title: (inp('link-title') || {}).value || '' }
@@ -516,7 +543,7 @@
         if (act === 'text') {
           var text = (inp('text') || {}).value || '';
           if (!text.trim()) { toast('내용을 입력하세요.', true); return; }
-          send(btn, api('api/project.php?act=upload_source', {
+          send(btn, api(API + 'upload_source', {
             method: 'POST',
             body: { project_id: pid, source_type: 'text', purpose: purpose,
                     text: text, title: (inp('text-title') || {}).value || '' }
@@ -5630,6 +5657,8 @@
     if (!root) return;
 
     var id = root.dataset.id ? parseInt(root.dataset.id, 10) : 0;
+    // 참고 자료 패널 (2026-10-19) — 프로젝트 등록 화면과 같은 것. 저장한 과제에만.
+    if (id) initSourcePanel(id);
 
     function body(status) {
       var b = {
@@ -5787,6 +5816,23 @@
       });
       close();
       return html || '<p class="ba-rt__p ba-dim">아직 적지 않았습니다.</p>';
+    }
+
+    /** 참고 자료 (2026-10-19). 올리고 지우는 것은 수정 화면에서 — 여기서는 보고 받기만. */
+    function sourcesBlock(list) {
+      if (!list.length) return '';
+      return '<article class="ba-rvc ba-rvc--src">' +
+        '<header class="ba-rvc__h">' + rvIcon('box') + '<h3>참고 자료 <span class="ba-dim">' + list.length + '건</span></h3></header>' +
+        '<div class="ba-srclist">' + list.map(function (s) {
+          var title = s.url
+            ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>'
+            : esc(s.title);
+          return '<div class="ba-src">' +
+                 '<span class="ba-src__kind">' + esc(s.kind_label) + '</span>' +
+                 '<span class="ba-src__title">' + title + '</span>' +
+                 '<span class="ba-src__meta">' + esc(s.size_label || '') + '</span>' +
+                 srcActsHtml(s) + '</div>';
+        }).join('') + '</div></article>';
     }
 
     function overview(r) {
@@ -5972,7 +6018,7 @@
       D = d;
       var r = d.rnd;
       $('#ba-rv-head').innerHTML        = head(r);
-      $('#ba-rv-overview').innerHTML    = overview(r);
+      $('#ba-rv-overview').innerHTML    = overview(r) + sourcesBlock(d.sources || []);
       $('#ba-rv-members').innerHTML     = members(d.members || [], r);
       $('#ba-rv-logs').innerHTML        = logs(d.logs || [], r);
       $('#ba-rv-outputs').innerHTML     = outputs(d.outputs || [], r);

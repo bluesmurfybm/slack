@@ -23,6 +23,8 @@
  * POST api/rnd.php?act=delete          삭제 — 삭제 상태로. 발의자는 시작 전만, 관리자는 언제든
  * POST api/rnd.php?act=restore         복구 — 관리자, 삭제 상태인 과제만
  * POST api/rnd.php?act=purge           영구삭제 — 관리자, 삭제 상태인 과제만. 되돌릴 수 없다
+ * POST api/rnd.php?act=upload_source   참고자료 — 파일(multipart) | 링크 | 직접 입력 (과제를 고칠 수 있는 사람)
+ * POST api/rnd.php?act=delete_source   참고자료 지우기
  *
  * **가시성은 RndRepo 가 쿼리에서 강제한다.** 이 파일은 그 결과를 그대로
  * 내보낸다 — 여기서 다시 거르지 않는다. 두 곳에서 거르면 언젠가 어긋난다.
@@ -41,6 +43,8 @@ require_once BS_ROOT . '/inc/repo/RndRepo.php';
 require_once BS_ROOT . '/inc/repo/MemberRepo.php';
 require_once BS_ROOT . '/inc/service/Notifier.php';
 require_once BS_ROOT . '/inc/service/RndLoadService.php';
+require_once BS_ROOT . '/inc/repo/ProjectRepo.php';       // 참고자료는 bs_project_source 를 같이 쓴다
+require_once BS_ROOT . '/inc/service/SourceUploader.php';
 
 $repo = new RndRepo(bs_db());
 
@@ -566,7 +570,86 @@ bs_route(bs_param_str('act', 'board'), [
         $what = $repo->purge($pid, $user);
         bs_json_ok(['id' => $pid, 'message' => $what . ' 과제를 영구삭제했습니다.']);
     },
+
+    // =================================================================
+    // 참고자료 (2026-10-19) — 프로젝트와 같은 표(bs_project_source)·같은 업로더.
+    // 늘 purpose='reference' 로 둔다 — R&D 는 WBS 를 뽑지 않으므로 분석할 일이 없다.
+    // 권한은 과제를 고칠 수 있는 사람(bs_rnd_can_edit).
+    // =================================================================
+
+    'upload_source' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_param_int('project_id', 0) ?: bs_param_int('id', 0);
+        if (!$pid) {
+            bs_json_error('MISSING_PARAM', '과제 번호가 없습니다.', 400);
+        }
+        bs_rnd_require_edit($repo, (int)$pid);
+
+        $sources  = new ProjectRepo(bs_db());
+        $uploader = new SourceUploader($sources);
+        $mark = static function (array $saved) use ($sources, $pid): void {
+            $sources->setSourcePurpose((int)$pid, array_column($saved, 'id'), 'reference');
+        };
+
+        switch (bs_param_str('source_type', 'file')) {
+            case 'file':
+                if (empty($_FILES['files'])) {
+                    bs_json_error('MISSING_PARAM', '선택된 파일이 없습니다.', 400);
+                }
+                $r = $uploader->storeMany((int)$pid, $_FILES['files'], $user);
+                $mark($r['saved']);
+                $msg = count($r['saved']) . '개를 등록했습니다.'
+                     . ($r['failed'] ? ' ' . count($r['failed']) . '개는 실패했습니다.' : '');
+                bs_json_ok(['saved' => $r['saved'], 'failed' => $r['failed'],
+                            'sources' => bs_rnd_sources((int)$pid), 'message' => $msg]);
+                // no break — bs_json_ok 이 exit 한다
+            case 'link':
+                $s = $uploader->storeLink((int)$pid, bs_param_str('url'), bs_param_str('title'), $user);
+                $mark([$s]);
+                bs_json_ok(['saved' => [$s], 'failed' => [], 'sources' => bs_rnd_sources((int)$pid),
+                            'message' => '링크를 등록했습니다.']);
+            case 'text':
+                $s = $uploader->storeText((int)$pid, bs_param_str('text'), bs_param_str('title'), $user);
+                $mark([$s]);
+                bs_json_ok(['saved' => [$s], 'failed' => [], 'sources' => bs_rnd_sources((int)$pid),
+                            'message' => '내용을 등록했습니다.']);
+            default:
+                bs_json_error('INVALID_ARGUMENT', '알 수 없는 출처 종류입니다.', 400);
+        }
+    },
+
+    'delete_source' => function () use ($repo): void {
+        bs_begin_write();
+        $sid = bs_param_int('source_id', 0);
+        $src = $sid ? (new ProjectRepo(bs_db()))->findSource((int)$sid) : null;
+        if (!$src) {
+            bs_json_error('NOT_FOUND', '자료를 찾을 수 없습니다.', 404);
+        }
+        // 그 자료가 속한 과제 기준으로 본다. 프로젝트 문서는 이 길로 못 지운다.
+        bs_rnd_require_edit($repo, (int)$src['project_id']);
+        (new ProjectRepo(bs_db()))->deleteSource((int)$sid);
+        bs_json_ok(['sources' => bs_rnd_sources((int)$src['project_id']), 'message' => '자료를 지웠습니다.']);
+    },
 ]);
+
+/** 과제를 고칠 수 있어야 한다 — 아니면 끊는다. 못 보는 과제는 '없다' 로. */
+function bs_rnd_require_edit(RndRepo $repo, int $pid): array
+{
+    $r = $repo->find($pid);
+    if (!$r) {
+        bs_json_error('NOT_FOUND', '과제를 찾을 수 없습니다.', 404);
+    }
+    if (!bs_rnd_can_edit($r)) {
+        bs_json_error('FORBIDDEN', '이 과제를 고칠 수 있는 사람만 자료를 올리고 지울 수 있습니다.', 403);
+    }
+    return $r;
+}
+
+/** 과제의 참고자료 목록 (화면 모양). */
+function bs_rnd_sources(int $pid): array
+{
+    return array_map('bs_present_source', (new ProjectRepo(bs_db()))->sources($pid));
+}
 
 // =====================================================================
 
@@ -610,6 +693,7 @@ function bs_rnd_detail(RndRepo $repo, int $pid): array
         ),
         'logs'    => array_map('bs_present_rnd_log', $repo->logs($pid)),
         'outputs' => array_map('bs_present_rnd_output', $repo->outputs($pid)),
+        'sources' => bs_rnd_sources($pid),
     ];
 }
 

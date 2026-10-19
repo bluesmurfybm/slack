@@ -303,3 +303,56 @@ function bs_placeholder(string $heading, string $phase, array $todo = []): void
   </section>
 <?php
 }
+
+/**
+ * 첨부 한 건의 [보기]·[내려받기] 단추 (2026-10-19). 프로젝트·R&D 가 같이 쓴다.
+ * assets/assign.js 의 srcActsHtml() 와 **같은 마크업**이다 — 한쪽만 고치지 말 것.
+ *
+ *   보기      브라우저가 그리는 형식(이미지·PDF) 이거나 뽑아 둔 본문이 있을 때
+ *   내려받기  파일로 올린 것
+ *
+ * $s 는 sources() 한 줄 (has_file · mime · parsed_len · id · title).
+ */
+function bs_source_acts_html(array $s): string
+{
+    $hasFile = !empty($s['has_file']);
+    $canSee  = ($hasFile && in_array((string)($s['mime'] ?? ''), BS_VIEWABLE_MIME, true))
+            || (int)($s['parsed_len'] ?? 0) > 0;
+    $h = '';
+    if ($canSee) {
+        $h .= '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' . (int)$s['id'] . '"'
+            . ' data-mime="' . h((string)($s['mime'] ?? '')) . '" data-file="' . ($hasFile ? '1' : '0') . '"'
+            . ' data-title="' . h((string)$s['title']) . '">보기</button>';
+    }
+    if ($hasFile) {
+        $h .= '<a class="ba-btn ba-btn--sm" href="api/source_download.php?id=' . (int)$s['id'] . '">내려받기</a>';
+    }
+    return $h === '' ? '' : '<span class="ba-src__acts">' . $h . '</span>';
+}
+
+/**
+ * 첨부 보기 창 (2026-10-19 공용으로). 이미지·PDF 는 그대로, 나머지는 뽑아 둔 본문.
+ * 외부 뷰어는 쓰지 않는다 — 업무 문서를 바깥으로 보내는 일이다.
+ * assign.js 의 initSourceViewer 가 [data-src-view] 단추와 이 창을 잇는다.
+ */
+function bs_source_viewer_html(): string
+{
+    return <<<'HTML'
+<div class="ba-drawer" id="ba-src-viewer" hidden>
+  <div class="ba-drawer__box ba-drawer__box--wide" role="dialog" aria-modal="true" aria-labelledby="ba-sv-title">
+    <div class="ba-drawer__head">
+      <h2 id="ba-sv-title">문서 보기</h2>
+      <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
+    </div>
+    <div class="ba-drawer__body ba-sv" id="ba-sv-body"></div>
+    <div class="ba-drawer__foot">
+      <span class="ba-dim" id="ba-sv-note"></span>
+      <span class="ba-spacer"></span>
+      <a class="ba-btn" id="ba-sv-dl" href="#" hidden>내려받기</a>
+      <a class="ba-btn" id="ba-sv-tab" href="#" target="_blank" rel="noopener" hidden>새 창에서 열기</a>
+      <button type="button" class="ba-btn" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+HTML;
+}

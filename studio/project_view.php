@@ -856,22 +856,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 
 <!-- 출처 문서 보기 (2026-10-15). 이미지·PDF 는 그대로, 엑셀·PPT·워드는 추출 본문.
      외부 뷰어는 쓰지 않는다 — 업무 문서를 바깥으로 보내는 일이다. -->
-<div class="ba-drawer" id="ba-src-viewer" hidden>
-  <div class="ba-drawer__box ba-drawer__box--wide" role="dialog" aria-modal="true" aria-labelledby="ba-sv-title">
-    <div class="ba-drawer__head">
-      <h2 id="ba-sv-title">문서 보기</h2>
-      <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
-    </div>
-    <div class="ba-drawer__body ba-sv" id="ba-sv-body"></div>
-    <div class="ba-drawer__foot">
-      <span class="ba-dim" id="ba-sv-note"></span>
-      <span class="ba-spacer"></span>
-      <a class="ba-btn" id="ba-sv-dl" href="#" hidden>내려받기</a>
-      <a class="ba-btn" id="ba-sv-tab" href="#" target="_blank" rel="noopener" hidden>새 창에서 열기</a>
-      <button type="button" class="ba-btn" data-close>닫기</button>
-    </div>
-  </div>
-</div>
+<?= bs_source_viewer_html() ?>
 
 <!-- 배정 근거 드로어 -->
 <div class="ba-drawer" id="ba-al-drawer" hidden>

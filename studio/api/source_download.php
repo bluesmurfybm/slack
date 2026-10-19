@@ -19,15 +19,14 @@
  * │ 추출해 둔 본문(api/project.php?act=source_text)을 보여 준다.      │
  * └──────────────────────────────────────────────────────────────────┘
  *
- * 권한: 그 프로젝트 화면(project_view.php)을 볼 수 있는 사람 — 로그인한
- * 구성원 전원. 지워진 프로젝트는 관리자만.
+ * 권한: 그 과업을 볼 수 있는 사람. 프로젝트는 로그인한 구성원 전원(지워진 것은
+ * 관리자만), R&D 과제는 공개 범위 안의 사람 (ProjectRepo::findSourceForView).
  */
 declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
 require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
 
-/** 바로 보기를 허용하는 형식. 업로드 때 내용으로 확인한 mime 이다. */
-const BS_INLINE_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+// 바로 보기를 허용하는 형식은 BS_VIEWABLE_MIME (inc/bootstrap.php) 하나로 본다.
 
 function bs_download_fail(int $status, string $msg): never
 {
@@ -58,7 +57,7 @@ if (!is_file($path) || !is_readable($path)) {
 }
 
 $mime   = (string)($src['mime'] ?? '');
-$inline = bs_param_str('inline') === '1' && in_array($mime, BS_INLINE_MIME, true);
+$inline = bs_param_str('inline') === '1' && in_array($mime, BS_VIEWABLE_MIME, true);
 
 $name  = (string)$src['title'];
 $ascii = preg_replace('/[^A-Za-z0-9._-]/', '_', $name) ?: 'file';
