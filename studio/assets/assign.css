@@ -2458,3 +2458,28 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
 .ba-rv-log.is-editing, .ba-rv-output.is-editing {
   border-color: var(--ba-brand); background: #f6fbf8;
 }
+
+/* ---- R&D 자료 영역 · 긴 글 (2026-10-19) ---------------------------------
+   산출물의 링크를 자료 영역 [링크] 탭으로 (참고 자료 패널과 같은 탭 모양).
+   목록 칸은 화면 폭에 고정하고, 긴 주소·끊을 곳 없는 글은 칸 안에서 줄바꿈 —
+   전에는 칸이 글 길이만큼 늘어 화면 오른쪽으로 끝없이 나갔다. */
+.ba-rv-att { flex: 1 1 100%; width: 100%; display: grid; gap: 8px; }
+.ba-rv-att__h { font-size: 12px; font-weight: 600; color: var(--ba-ink-soft); }
+.ba-rv-att .ba-source-tabs { margin-bottom: 0; }
+.ba-rv-att .ba-source-pane { justify-items: stretch; }
+.ba-rv-att input[type="url"] {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 7px 10px;
+  font-size: 13.5px; font-family: inherit; color: var(--ba-ink); background: var(--ba-paper);
+}
+.ba-rv-grow { flex: 1 1 260px; }
+.ba-rv-grow input { width: 100%; box-sizing: border-box; }
+.ba-rv-logs, .ba-rv-outputs { grid-template-columns: minmax(0, 1fr); }
+.ba-rv-log, .ba-rv-output { min-width: 0; }
+.ba-rv-log__content, .ba-rv-log__finding, .ba-rv-output__sum, .ba-rv-output__t,
+.ba-src__title, .ba-src__title a { overflow-wrap: anywhere; word-break: break-word; }
+.ba-rv-files .ba-src__title { white-space: normal; }
+/* 목록 칸은 화면 폭에 고정 — 안의 글이 칸을 밀어 넓히지 않게 */
+.ba-rv-files { grid-template-columns: minmax(0, 1fr); }
+.ba-rv-files .ba-src { min-width: 0; }
+.ba-src__link { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: normal; overflow-wrap: normal; }

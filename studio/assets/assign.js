@@ -5946,27 +5946,78 @@
     // │ (작성자·주도자·관리자). 수정은 그 자리에서 폼으로 바뀐다 —     │
     // │ 파일 추가와 붙인 파일 지우기(×)는 수정 중에만 한다. 보다가      │
     // │ 실수로 지우지 않게.                                            │
+    // │                                                              │
+    // │ 첨부·링크는 참고 자료 목록과 **같은 줄 모양**(.ba-src)으로 그리고,│
+    // │ 산출물의 링크는 자료 영역의 [링크] 탭에서 받는다 — 링크도 산출물 │
+    // │ 의 한 형태다(2026-10-19 사용자 요청, 참고 자료 패널과 맞춤).     │
     // └──────────────────────────────────────────────────────────────┘
     var EDITING = null;          // { type: 'log' | 'output', id: n } — 지금 고치는 한 건
 
-    /** 첨부 목록. edit 이면 × 단추를 붙인다. */
-    function fileList(files, edit) {
-      if (!files || !files.length) return '';
-      return '<div class="ba-rv-files">' + files.map(function (f) {
+    var FILE_KIND = { xlsx: '엑셀', xls: '엑셀', pptx: 'PPT', ppt: 'PPT', docx: '워드', doc: '워드',
+                      pdf: 'PDF', jpg: '이미지', jpeg: '이미지', png: '이미지', gif: '이미지', webp: '이미지' };
+    function fileKind(name) {
+      var m = /\.([a-z0-9]+)$/i.exec(name || '');
+      return (m && FILE_KIND[m[1].toLowerCase()]) || '파일';
+    }
+
+    /**
+     * 첨부·링크 목록 — 참고 자료와 같은 줄 모양. edit 이면 파일마다 × 를 붙인다.
+     * link 가 있으면 맨 위에 '링크' 줄로 둔다.
+     */
+    function attList(files, edit, link) {
+      var rows = [];
+      if (link) {
+        rows.push('<div class="ba-src">' +
+          '<span class="ba-src__kind">링크</span>' +
+          // 긴 주소는 한 줄로 줄이고 '…' — 전체는 마우스를 올리면 보인다.
+          '<span class="ba-src__title"><a class="ba-src__link" href="' + esc(link) + '" target="_blank" rel="noopener"' +
+            ' title="' + esc(link) + '">' + esc(link) + '</a></span>' +
+          '<span class="ba-src__acts"><a class="ba-btn ba-btn--sm" href="' + esc(link) + '" target="_blank" rel="noopener">열기</a></span>' +
+          '</div>');
+      }
+      (files || []).forEach(function (f) {
         var view = f.viewable
           ? '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' + f.id + '"' +
             ' data-src-url="' + esc(f.url) + '" data-mime="' + esc(f.mime || '') + '" data-file="1"' +
             ' data-title="' + esc(f.name) + '">보기</button>'
           : '';
-        return '<div class="ba-rv-file">' +
-          '<span class="ba-rv-file__n">' + esc(f.name) + '</span>' +
-          '<span class="ba-rv-file__s">' + esc(f.size_label || '') + '</span>' +
+        rows.push('<div class="ba-src">' +
+          '<span class="ba-src__kind">' + esc(fileKind(f.name)) + '</span>' +
+          '<span class="ba-src__title">' + esc(f.name) + '</span>' +
+          '<span class="ba-src__meta">' + esc(f.size_label || '') + '</span>' +
           '<span class="ba-src__acts">' + view +
             '<a class="ba-btn ba-btn--sm" href="' + esc(f.url) + '">내려받기</a>' +
             (edit ? '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-rv="file_delete"' +
                     ' data-file="' + f.id + '" data-name="' + esc(f.name) + '" title="이 파일 지우기">×</button>' : '') +
-          '</span></div>';
-      }).join('') + '</div>';
+          '</span></div>');
+      });
+      return rows.length ? '<div class="ba-srclist ba-rv-files">' + rows.join('') + '</div>' : '';
+    }
+
+    var FILE_HINT = 'xlsx · pptx · docx · pdf · 이미지 / 한 번에 여러 개';
+
+    /**
+     * 자료 영역 — 참고 자료 패널과 같은 탭 모양. 산출물은 [파일 첨부][링크], 진행 기록은 파일만.
+     * 탭은 보이는 칸만 바꾼다 — 파일과 링크를 둘 다 넣어도 둘 다 저장된다.
+     * ids: <prefix>-files · <prefix>-url
+     */
+    function attBlock(prefix, withLink, url, title) {
+      var file = '<div class="ba-source-pane" data-att-pane="file">' +
+        '<input type="file" id="' + prefix + '-files" multiple>' +
+        '<em class="ba-help">' + FILE_HINT + '</em></div>';
+      if (!withLink) {
+        return '<div class="ba-rv-att"><span class="ba-rv-att__h">' + esc(title || '첨부 (선택)') + '</span>' + file + '</div>';
+      }
+      return '<div class="ba-rv-att"><span class="ba-rv-att__h">' + esc(title || '자료 (선택)') + '</span>' +
+        '<div class="ba-source-tabs" role="tablist" aria-label="자료 종류">' +
+          '<button type="button" role="tab" data-rv="att_tab" data-pane="file" aria-selected="true">파일 첨부</button>' +
+          '<button type="button" role="tab" data-rv="att_tab" data-pane="link" aria-selected="false">링크' +
+            (url ? ' ✓' : '') + '</button>' +
+        '</div>' + file +
+        '<div class="ba-source-pane" data-att-pane="link" hidden>' +
+          '<input type="url" id="' + prefix + '-url" value="' + esc(url || '') + '" placeholder="https://">' +
+          '<em class="ba-help">저장소·문서·시연 주소. 비우면 링크를 지웁니다.</em></div>' +
+        '</div>';
     }
 
     /** 고칠 수 있는 사람에게만 [수정]·[삭제]. */
@@ -5984,7 +6035,10 @@
         : '';
     }
 
-    var FILE_HINT = 'xlsx · pptx · docx · pdf · 이미지, 여러 개 가능';
+    function formFoot(act, label, extra) {
+      return '<div class="ba-rv-form__foot">' + (extra || '') +
+        '<button type="button" class="ba-btn ba-btn--primary" data-rv="' + act + '">' + label + '</button></div>';
+    }
 
     function logs(list, r) {
       // content 와 finding 을 끝까지 나눠 보여 준다. 과제의 값어치는 대개
@@ -5999,9 +6053,8 @@
             '<textarea id="ba-rv-e-finding" rows="2">' + esc(l.finding || '') + '</textarea></label>' +
             '<label class="ba-field"><span>작업한 날</span>' +
             '<input type="date" id="ba-rv-e-date" value="' + esc(l.worked_on || '') + '"></label>' +
-            '<label class="ba-field ba-field--wide"><span>파일 추가</span>' +
-            '<input type="file" id="ba-rv-e-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
-            fileList(l.files, true) +
+            attBlock('ba-rv-e', false, '', '파일 추가') +
+            attList(l.files, true, '') +
             '<div class="ba-rv-form__foot">' +
               '<button type="button" class="ba-btn" data-rv="item_cancel">취소</button>' +
               '<button type="button" class="ba-btn ba-btn--primary" data-rv="item_save" data-type="log" data-item="' + l.id + '">저장</button>' +
@@ -6014,7 +6067,7 @@
           (l.finding
             ? '<div class="ba-rv-log__finding"><strong>발견</strong> ' + esc(l.finding) + '</div>'
             : '') +
-          fileList(l.files, false) +
+          attList(l.files, false, '') +
         '</li>';
       }).join('');
 
@@ -6026,9 +6079,8 @@
           '<textarea id="ba-rv-log-finding" rows="2" placeholder="알아낸 것 (선택)"></textarea></label>' +
           '<label class="ba-field"><span>작업한 날</span>' +
           '<input type="date" id="ba-rv-log-date"></label>' +
-          '<label class="ba-field" style="flex:1 1 260px"><span>첨부 (선택)</span>' +
-          '<input type="file" id="ba-rv-log-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
-          '<div class="ba-rv-form__foot"><button type="button" class="ba-btn ba-btn--primary" data-rv="log">기록 남기기</button></div>' +
+          attBlock('ba-rv-log', false, '', '첨부 (선택)') +
+          formFoot('log', '기록 남기기') +
           '</div>'
         : '';
 
@@ -6051,15 +6103,12 @@
           return '<li class="ba-rv-output is-editing">' +
             '<div class="ba-rv-form ba-rv-form--col">' +
             '<label class="ba-field"><span>갈래</span><select id="ba-rv-e-kind">' + kindOptions(o.kind) + '</select></label>' +
-            '<label class="ba-field" style="flex:1 1 260px"><span>제목</span>' +
+            '<label class="ba-field ba-rv-grow"><span>제목</span>' +
             '<input type="text" id="ba-rv-e-title" value="' + esc(o.title) + '"></label>' +
-            '<label class="ba-field" style="flex:1 1 260px"><span>링크</span>' +
-            '<input type="url" id="ba-rv-e-url" value="' + esc(o.url || '') + '" placeholder="https://"></label>' +
             '<label class="ba-field ba-field--wide"><span>요약</span>' +
             '<textarea id="ba-rv-e-summary" rows="2">' + esc(o.summary || '') + '</textarea></label>' +
-            '<label class="ba-field ba-field--wide"><span>파일 추가</span>' +
-            '<input type="file" id="ba-rv-e-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
-            fileList(o.files, true) +
+            attBlock('ba-rv-e', true, o.url || '', '자료 추가 · 링크') +
+            attList(o.files, true, '') +
             '<div class="ba-rv-form__foot">' +
               '<button type="button" class="ba-btn" data-rv="item_cancel">취소</button>' +
               '<button type="button" class="ba-btn ba-btn--primary" data-rv="item_save" data-type="output" data-item="' + o.id + '">저장</button>' +
@@ -6068,12 +6117,11 @@
         return '<li class="ba-rv-output">' +
           '<div class="ba-rv-output__h">' +
             '<span class="ba-badge">' + esc(o.kind_label) + '</span> ' +
-            (o.url ? '<a href="' + esc(o.url) + '" target="_blank" rel="noopener">' + esc(o.title) + '</a>'
-                   : '<strong>' + esc(o.title) + '</strong>') +
+            '<strong class="ba-rv-output__t">' + esc(o.title) + '</strong>' +
             itemActs('output', o) +
           '</div>' +
-          '<div class="ba-rv-output__sum">' + esc(o.summary || '') + '</div>' +
-          fileList(o.files, false) +
+          (o.summary ? '<div class="ba-rv-output__sum">' + esc(o.summary) + '</div>' : '') +
+          attList(o.files, false, o.url) +
           '<div class="ba-rv-log__meta">' + esc(o.created_by_name || '') +
           ' · ' + esc(o.created_at || '') + edited(o) + '</div>' +
         '</li>';
@@ -6082,15 +6130,12 @@
       var form = r.can.add_output
         ? '<div class="ba-rv-form ba-rv-form--col">' +
           '<label class="ba-field"><span>갈래</span><select id="ba-rv-out-kind">' + kindOptions('doc') + '</select></label>' +
-          '<label class="ba-field" style="flex:1 1 260px"><span>제목</span>' +
+          '<label class="ba-field ba-rv-grow"><span>제목</span>' +
           '<input type="text" id="ba-rv-out-title"></label>' +
-          '<label class="ba-field" style="flex:1 1 260px"><span>링크 (선택)</span>' +
-          '<input type="url" id="ba-rv-out-url" placeholder="https://"></label>' +
           '<label class="ba-field ba-field--wide"><span>요약</span>' +
           '<textarea id="ba-rv-out-summary" rows="2"></textarea></label>' +
-          '<label class="ba-field ba-field--wide"><span>파일 (선택)</span>' +
-          '<input type="file" id="ba-rv-out-files" multiple><em class="ba-help">' + FILE_HINT + '</em></label>' +
-          '<div class="ba-rv-form__foot"><button type="button" class="ba-btn ba-btn--primary" data-rv="output">산출물 등록</button></div>' +
+          attBlock('ba-rv-out', true, '', '자료 (선택)') +
+          formFoot('output', '산출물 등록') +
           '</div>'
         : '';
 
@@ -6134,6 +6179,12 @@
 
     /** 진행 기록·산출물 쪽 클릭. 처리했으면 true. */
     function itemClick(act, b) {
+      if (act === 'att_tab') {
+        var box = b.closest('.ba-rv-att');
+        $$('[data-rv="att_tab"]', box).forEach(function (t) { t.setAttribute('aria-selected', String(t === b)); });
+        $$('[data-att-pane]', box).forEach(function (pn) { pn.hidden = pn.dataset.attPane !== b.dataset.pane; });
+        return true;
+      }
       if (act === 'log') {
         var c = ($('#ba-rv-log-content') || {}).value || '';
         if (!c.trim()) { toast('진행 내용을 입력하세요.', true); return true; }
