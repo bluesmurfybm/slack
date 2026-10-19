@@ -6016,7 +6016,7 @@
         '</div>' + file +
         '<div class="ba-source-pane" data-att-pane="link" hidden>' +
           '<input type="url" id="' + prefix + '-url" value="' + esc(url || '') + '" placeholder="https://">' +
-          '<em class="ba-help">저장소·문서·시연 주소. 비우면 링크를 지웁니다.</em></div>' +
+          '<em class="ba-help">관련 문서·저장소 등의 주소. 비우면 링크를 지웁니다.</em></div>' +
         '</div>';
     }
 
@@ -6053,7 +6053,7 @@
             '<textarea id="ba-rv-e-finding" rows="2">' + esc(l.finding || '') + '</textarea></label>' +
             '<label class="ba-field"><span>작업한 날</span>' +
             '<input type="date" id="ba-rv-e-date" value="' + esc(l.worked_on || '') + '"></label>' +
-            attBlock('ba-rv-e', false, '', '파일 추가') +
+            attBlock('ba-rv-e', true, l.url || '', '자료 추가 · 링크') +
             attList(l.files, true, '') +
             '<div class="ba-rv-form__foot">' +
               '<button type="button" class="ba-btn" data-rv="item_cancel">취소</button>' +
@@ -6067,7 +6067,7 @@
           (l.finding
             ? '<div class="ba-rv-log__finding"><strong>발견</strong> ' + esc(l.finding) + '</div>'
             : '') +
-          attList(l.files, false, '') +
+          attList(l.files, false, l.url) +
         '</li>';
       }).join('');
 
@@ -6079,7 +6079,7 @@
           '<textarea id="ba-rv-log-finding" rows="2" placeholder="알아낸 것 (선택)"></textarea></label>' +
           '<label class="ba-field"><span>작업한 날</span>' +
           '<input type="date" id="ba-rv-log-date"></label>' +
-          attBlock('ba-rv-log', false, '', '첨부 (선택)') +
+          attBlock('ba-rv-log', true, '', '자료 (선택)') +
           formFoot('log', '기록 남기기') +
           '</div>'
         : '';
@@ -6190,7 +6190,8 @@
         if (!c.trim()) { toast('진행 내용을 입력하세요.', true); return true; }
         saveWithFiles('log', { content: c,
                                finding:   ($('#ba-rv-log-finding') || {}).value || '',
-                               worked_on: ($('#ba-rv-log-date')    || {}).value || '' },
+                               worked_on: ($('#ba-rv-log-date')    || {}).value || '',
+                               url:       ($('#ba-rv-log-url')     || {}).value || '' },
                       'log', function (d) { return d.log_id; }, $('#ba-rv-log-files'), '진행 기록을 남겼습니다.');
         return true;
       }
@@ -6221,7 +6222,8 @@
           if (!ec.trim()) { toast('진행 내용을 입력하세요.', true); return true; }
           saveWithFiles('log_update', { log_id: iid, content: ec,
                                         finding:   ($('#ba-rv-e-finding') || {}).value || '',
-                                        worked_on: ($('#ba-rv-e-date')    || {}).value || '' },
+                                        worked_on: ($('#ba-rv-e-date')    || {}).value || '',
+                                        url:       ($('#ba-rv-e-url')     || {}).value || '' },
                         'log', function () { return iid; }, input, '진행 기록을 고쳤습니다.');
         } else {
           var et = ($('#ba-rv-e-title') || {}).value || '';

@@ -1564,6 +1564,25 @@ $r = $user->req('/studio/api/rnd.php?act=upload_source', ['csrf' => true, 'json'
     'project_id' => $urlRnd, 'source_type' => 'link', 'url' => $longUrl]]);
 ok('★ 참고 자료 링크도 700자를 넘어도 된다', $r['status'] === 200, substr($r['body'], 0, 120));
 
+echo "\n[29] 진행 기록 링크 (031, 2026-10-19)\n";
+$r = $user->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $urlRnd, 'content' => '[시험] 링크 기록', 'url' => $longUrl]]);
+ok('★ 진행 기록에 링크를 붙인다(700자 넘어도)', $r['status'] === 200
+   && ($r['json']['data']['logs'][0]['url'] ?? '') === $longUrl, substr($r['body'], 0, 160));
+$luId = (int)($r['json']['data']['log_id'] ?? 0);
+$r = $user->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $urlRnd, 'content' => '[시험] 이상한 링크', 'url' => 'javascript:alert(1)']]);
+ok('http(s) 아닌 링크는 거절', $r['status'] === 400, 'status=' . $r['status']);
+$r = $user->req('/studio/api/rnd.php?act=log', ['csrf' => true, 'json' => [
+    'id' => $urlRnd, 'content' => '[시험] 너무 긴 링크', 'url' => $tooLong]]);
+ok('2000자를 넘으면 이유를 알린다', $r['status'] === 400
+   && str_contains($r['json']['error']['message'] ?? '', '2,000자'), 'status=' . $r['status']);
+$r = $user->req('/studio/api/rnd.php?act=log_update', ['csrf' => true, 'json' => [
+    'log_id' => $luId, 'content' => '[시험] 링크 기록', 'url' => '']]);
+$lg = null;
+foreach ($r['json']['data']['logs'] ?? [] as $x) { if ((int)$x['id'] === $luId) { $lg = $x; } }
+ok('고칠 때 링크를 비우면 지워진다', $r['status'] === 200 && $lg !== null && $lg['url'] === null, json_encode($lg));
+
 echo "\n[뒷정리]\n";
 $pdo->exec("DELETE FROM bs_notification WHERE ref_type = 'rnd_member'");
 $n = $pdo->exec("DELETE FROM bs_project WHERE project_type = 'rnd' AND name LIKE '[시험]%'");

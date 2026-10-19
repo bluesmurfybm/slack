@@ -481,6 +481,7 @@ bs_route(bs_param_str('act', 'board'), [
             'content'   => bs_param_str('content'),
             'finding'   => bs_param_str('finding'),
             'worked_on' => bs_param_str('worked_on'),
+            'url'       => bs_param_str('url'),
         ], $user);
 
         // log_id — 화면이 이어서 파일을 붙인다(file_upload).
@@ -650,6 +651,7 @@ bs_route(bs_param_str('act', 'board'), [
             'content'   => bs_param_str('content'),
             'finding'   => bs_param_str('finding'),
             'worked_on' => bs_param_str('worked_on'),
+            'url'       => bs_param_str('url'),
         ], $user);
         bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '진행 기록을 고쳤습니다.']);
     },

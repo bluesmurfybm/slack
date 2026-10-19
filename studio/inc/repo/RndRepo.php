@@ -744,7 +744,8 @@ final class RndRepo
         $st = $this->pdo->prepare(
             'SELECT l.id, l.member_id, l.content, l.finding, l.worked_on, l.created_at,
                     m.emp_name, m.user_id AS author_id'
-                    . ($this->hasFileTable() ? ', l.updated_at, l.updated_by_name' : '') . '
+                    . ($this->hasFileTable() ? ', l.updated_at, l.updated_by_name' : '')
+                    . ($this->hasLogUrl() ? ', l.url' : '') . '
                FROM bs_rnd_log l
                JOIN bs_member m ON m.id = l.member_id
               WHERE l.project_id = ?
@@ -776,10 +777,16 @@ final class RndRepo
             throw new InvalidArgumentException('작업한 날짜 형식이 올바르지 않습니다.');
         }
 
+        // 링크 (031, 2026-10-19) — 칸이 없는 DB 에서는 받지 않는다.
+        $url = $this->hasLogUrl() ? $this->checkUrl($data['url'] ?? null) : null;
         $this->pdo->prepare(
-            'INSERT INTO bs_rnd_log (project_id, member_id, content, finding, worked_on)
-             VALUES (?,?,?,?,?)'
-        )->execute([$projectId, $mid, $content, $this->nn($data['finding'] ?? null), $workedOn]);
+            'INSERT INTO bs_rnd_log (project_id, member_id, content, finding, worked_on'
+            . ($this->hasLogUrl() ? ', url' : '') . ')
+             VALUES (?,?,?,?,?' . ($this->hasLogUrl() ? ',?' : '') . ')'
+        )->execute(array_merge(
+            [$projectId, $mid, $content, $this->nn($data['finding'] ?? null), $workedOn],
+            $this->hasLogUrl() ? [$url] : []
+        ));
 
         return (int)$this->pdo->lastInsertId();
     }
@@ -951,12 +958,15 @@ final class RndRepo
         if ($workedOn !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$workedOn)) {
             throw new InvalidArgumentException('작업한 날짜 형식이 올바르지 않습니다.');
         }
+        $url = $this->hasLogUrl() ? $this->checkUrl($data['url'] ?? null) : null;
         $this->pdo->prepare(
             'UPDATE bs_rnd_log SET content = ?, finding = ?, worked_on = ?'
+            . ($this->hasLogUrl() ? ', url = ?' : '')
             . ($this->hasFileTable() ? ', updated_at = NOW(), updated_by_name = ?' : '')
             . ' WHERE id = ?'
         )->execute(array_merge(
             [$content, $this->nn($data['finding'] ?? null), $workedOn],
+            $this->hasLogUrl() ? [$url] : [],
             $this->hasFileTable() ? [(string)($actor['name'] ?? '')] : [],
             [$logId]
         ));
@@ -1113,6 +1123,41 @@ final class RndRepo
     {
         $f = $this->fileRow($fileId);
         return $f && $this->find((int)$f['project_id']) ? $f : null;
+    }
+
+    /**
+     * 링크 검사 — 산출물·진행 기록 공용. 비면 null.
+     * http(s) 만, BS_URL_MAX 자까지. 넘으면 DB 가 거절하기 전에 이유를 알린다.
+     */
+    private function checkUrl(mixed $raw): ?string
+    {
+        $url = $this->nn($raw);
+        if ($url === null) {
+            return null;
+        }
+        if (!preg_match('#^https?://#i', (string)$url)) {
+            throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
+        }
+        if (mb_strlen((string)$url) > BS_URL_MAX) {
+            throw new InvalidArgumentException(sprintf(
+                '주소가 너무 깁니다(%s자). %s자 이내로 넣어 주세요.',
+                number_format(mb_strlen((string)$url)), number_format(BS_URL_MAX)));
+        }
+        return (string)$url;
+    }
+
+    /** 031(진행 기록 링크 칸)이 이 DB 에 있는가. 없으면 링크만 꺼진 채로 돈다. */
+    private function hasLogUrl(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            try {
+                $has = (bool)$this->pdo->query("SHOW COLUMNS FROM bs_rnd_log LIKE 'url'")->fetch();
+            } catch (Throwable $e) {
+                $has = false;
+            }
+        }
+        return $has;
     }
 
     /** 029(첨부 표)가 이 DB 에 있는가. 없으면 첨부만 꺼진 채로 돈다 — 026 때처럼 화면이 500 이 되지 않게. */

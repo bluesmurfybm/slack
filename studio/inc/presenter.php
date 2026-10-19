@@ -389,6 +389,7 @@ function bs_present_rnd_log(array $l, ?array $rnd = null, array $files = []): ar
         'content'    => $l['content'],
         'finding'    => $l['finding'] ?? null,
         'worked_on'  => $l['worked_on'] ?? null,
+        'url'        => bs_safe_url($l['url'] ?? null),      // 031
         'created_at' => bs_date($l['created_at'] ?? null),
         'updated_at' => bs_date($l['updated_at'] ?? null, 'Y-m-d H:i'),
         'updated_by_name' => $l['updated_by_name'] ?? null,
