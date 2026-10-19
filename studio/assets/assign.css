@@ -251,6 +251,33 @@ body {
 }
 .ba-source-pane { display: grid; gap: 12px; justify-items: start; }
 .ba-source-pane[hidden] { display: none; }
+
+/* ---- 자료 올리기 탭 — 폴더 탭 + 붙은 상자 (2026-10-19) -------------------
+   탭이 아래 [올리기] 같은 실행 단추와 같은 모양이라 위계가 안 보였다. 탭은
+   폴더 탭으로, 고른 탭은 아래 상자와 이어지게(바닥선을 상자 색으로 덮는다),
+   파일 선택·주소·[올리기] 는 그 상자 안에 든다. 위 규칙을 덮어쓴다.
+   --pane-bg: 상자 배경. 흰 패널 안에서는 연회색, 회색 폼 안에서는 흰색. */
+.ba-source-tabs {
+  --pane-bg: var(--ba-surface);
+  gap: 2px; margin-bottom: -1px; position: relative; z-index: 1; flex-wrap: nowrap; overflow-x: auto;
+}
+.ba-source-tabs button {
+  border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0;
+  background: none; color: var(--ba-ink-soft); padding: 8px 16px 9px; white-space: nowrap;
+}
+.ba-source-tabs button:hover { color: var(--ba-ink); background: color-mix(in srgb, var(--pane-bg) 60%, transparent); }
+.ba-source-tabs button[aria-selected="true"] {
+  background: var(--pane-bg); border-color: var(--ba-line); color: var(--ba-brand); font-weight: 700;
+  box-shadow: inset 0 2px 0 var(--ba-brand);   /* 고른 탭 위에 브랜드 색 한 줄 */
+}
+.ba-source-pane {
+  background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 8px;
+  padding: 14px 16px 16px;
+}
+.ba-source-tabs ~ .ba-source-pane { border-top-left-radius: 0; }
+/* 회색 폼(R&D 진행 기록·산출물) 안에서는 상자를 흰색으로 */
+.ba-rv-att .ba-source-tabs { --pane-bg: var(--ba-paper); }
+.ba-rv-att .ba-source-pane { background: var(--ba-paper); }
 .ba-source-pane > label { width: 100%; }
 .ba-source-pane input[type="file"] { font-size: 13px; }
 
@@ -2465,7 +2492,7 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
    전에는 칸이 글 길이만큼 늘어 화면 오른쪽으로 끝없이 나갔다. */
 .ba-rv-att { flex: 1 1 100%; width: 100%; display: grid; gap: 8px; }
 .ba-rv-att__h { font-size: 12px; font-weight: 600; color: var(--ba-ink-soft); }
-.ba-rv-att .ba-source-tabs { margin-bottom: 0; }
+.ba-rv-att .ba-source-tabs { margin-bottom: -1px; }   /* 탭이 아래 상자에 붙게 */
 .ba-rv-att .ba-source-pane { justify-items: stretch; }
 .ba-rv-att input[type="url"] {
   width: 100%; box-sizing: border-box;
