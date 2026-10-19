@@ -2490,8 +2490,8 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
    산출물의 링크를 자료 영역 [링크] 탭으로 (참고 자료 패널과 같은 탭 모양).
    목록 칸은 화면 폭에 고정하고, 긴 주소·끊을 곳 없는 글은 칸 안에서 줄바꿈 —
    전에는 칸이 글 길이만큼 늘어 화면 오른쪽으로 끝없이 나갔다. */
-.ba-rv-att { flex: 1 1 100%; width: 100%; display: grid; gap: 8px; }
-.ba-rv-att__h { font-size: 12px; font-weight: 600; color: var(--ba-ink-soft); }
+.ba-rv-att { flex: 1 1 100%; width: 100%; display: grid; gap: 0; }   /* 간격이 탭과 상자 사이에도 들어가 둘이 떨어졌다 */
+.ba-rv-att__h { font-size: 12px; font-weight: 600; color: var(--ba-ink-soft); margin-bottom: 8px; }
 .ba-rv-att .ba-source-tabs { margin-bottom: -1px; }   /* 탭이 아래 상자에 붙게 */
 .ba-rv-att .ba-source-pane { justify-items: stretch; }
 .ba-rv-att input[type="url"] {
