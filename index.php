@@ -396,6 +396,10 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
             <input type="text" id="ev-memo" maxlength="500" placeholder="한 줄 설명 (선택)">
           </div>
 
+          <h4 class="kw-sec" style="margin-top:20px">D-day 색</h4>
+          <div class="ev-sws" id="ev-sws" role="radiogroup" aria-label="D-day 색"></div>
+          <div class="kw-note ev-sw-note" id="ev-sw-note"></div>
+
           <h4 class="kw-sec" style="margin-top:20px">축하 폭죽</h4>
           <div class="fld kw-opt">
             <label for="ev-cheer">그날 들어오면 폭죽 쏘기</label>
@@ -1583,7 +1587,7 @@ let evRows=[];
 function paintPix(i){
   const e=evRows[i], box=document.getElementById("ev-pix");
   if(!e || !box) return;
-  box.className="ev-pix k-"+e.kind.key+(e.heat==="today" ? " today" : "");
+  box.className="ev-pix k-"+(e.color||e.kind.key)+(e.heat==="today" ? " today" : "");
   box.setAttribute("aria-label", e.dday_label);
   pixRun(box, e.dday_label);
 }
@@ -2339,6 +2343,7 @@ function openEventModal(id){
   if(!evId){
     set("ev-name",""); set("ev-start",""); set("ev-end",""); set("ev-place",""); set("ev-memo","");
     set("ev-cheer","0"); set("ev-cheer-early","1"); syncEvCheer();
+    evColorPick=null; evSuggestColor();
     document.getElementById("ev-name").focus();
     return;
   }
@@ -2350,8 +2355,47 @@ function openEventModal(id){
     set("ev-place",e.place); set("ev-memo",e.memo);
     set("ev-cheer",String(e.cheer_on||0)); set("ev-cheer-early",String(e.cheer_early ?? 1));
     syncEvCheer();
+    evColorPick=e.color_kind||null; evSuggestColor();
   }).catch(e=>toast(e.message));
 }
+
+/* ---- D-day 색 ----
+   평소에는 제목·메모의 낱말로 고른 종류 색이 '자동' 으로 켜져 있다. 글을 고치면
+   따라 바뀐다. 칸을 누르면 그 색으로 굳고(evColorPick), 더는 글을 따라가지 않는다.
+   '자동으로' 를 누르면 다시 글을 따라간다. 낱말 판정은 서버가 한다. */
+let evColorPick=null, evColorAuto="etc", evColors=[], evColorSeq=0, evColorTimer=null;
+async function evSuggestColor(){
+  const seq=++evColorSeq;
+  const text=document.getElementById("ev-name").value+" "+document.getElementById("ev-memo").value;
+  try{
+    const d=await bapi("api/events.php?scope=kind&text="+encodeURIComponent(text.trim()));
+    if(seq!==evColorSeq) return;           // 늦게 온 옛 응답은 버린다
+    evColors=d.colors; evColorAuto=d.kind.key;
+  }catch(e){ if(seq!==evColorSeq) return; }
+  paintEvColors();
+}
+function evColorInput(){
+  clearTimeout(evColorTimer);
+  evColorTimer=setTimeout(evSuggestColor, 250);
+}
+function paintEvColors(){
+  const now=evColorPick||evColorAuto;
+  document.getElementById("ev-sws").innerHTML=evColors.map(c=>
+    `<button type="button" role="radio" class="ev-sw k-${c.key}${c.key===now?" on":""}"
+       aria-checked="${c.key===now}" title="${esc(c.label)}" onclick="pickEvColor('${c.key}')">
+       <i></i><span>${esc(c.label)}</span></button>`).join("");
+  const auto=evColors.find(c=>c.key===evColorAuto);
+  const name=auto?auto.label:"일정";
+  document.getElementById("ev-sw-note").innerHTML=evColorPick
+    ? `직접 고른 색입니다. <a href="javascript:void(0)" onclick="pickEvColor(null)">자동으로 (${esc(name)})</a>`
+    : `제목·메모를 보고 ‘${esc(name)}’ 색을 골랐습니다. 다른 색을 누르면 그 색으로 바뀝니다.`;
+}
+function pickEvColor(key){
+  evColorPick=key;
+  paintEvColors();
+}
+document.getElementById("ev-name").addEventListener("input", evColorInput);
+document.getElementById("ev-memo").addEventListener("input", evColorInput);
 
 /* 폭죽을 끄면 '미리 축하' 는 물어볼 것이 없다. 감추지 않고 잠그기만 한다 —
    사라지면 그런 설정이 있었다는 것도 모른다. */
@@ -2378,7 +2422,8 @@ async function saveEvent(){
       place:document.getElementById("ev-place").value.trim(),
       memo:document.getElementById("ev-memo").value.trim(),
       cheer_on:document.getElementById("ev-cheer").value,
-      cheer_early:document.getElementById("ev-cheer-early").value
+      cheer_early:document.getElementById("ev-cheer-early").value,
+      color_kind:evColorPick||""
     });
     if(evId) await bapi(`api/events.php?id=${evId}`,{method:"PUT",body});
     else     await bapi("api/events.php",{method:"POST",body});

@@ -161,6 +161,11 @@ function portal_db() {
     add_column_if_missing($pdo, "ALTER TABLE `portal_event`
         ADD COLUMN `cheer_early` TINYINT(1) NOT NULL DEFAULT 1
         COMMENT '주말·공휴일이면 그 앞 평일에 미리 쏠지' AFTER `cheer_on`");
+    /* D-day 점판 색. 평소에는 제목·메모의 낱말로 고른 종류 색을 쓰고,
+       등록하는 사람이 골라 둔 경우에만 그 값을 쓴다. NULL = 낱말 따라 자동. */
+    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
+        ADD COLUMN `color_kind` VARCHAR(20) NULL
+        COMMENT 'D-day 색으로 쓸 종류 키(BOARD_EVENT_KINDS). NULL 이면 낱말로 자동' AFTER `cheer_early`");
 
     // -----------------------------------------------------------------
     // 업무 시스템 카드 묶음

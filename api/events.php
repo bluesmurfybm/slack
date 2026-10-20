@@ -4,7 +4,9 @@
  *
  *   GET    ?scope=upcoming&limit=4   다가오는 일정 (구성원 누구나, 첫 화면용)
  *   GET    ?scope=all                지난 것까지 전부 (관리 화면용)
- *   POST                             등록  { title, starts_on, ends_on, place, memo }  관리자
+ *   GET    ?scope=kind&text=…        글에서 고른 종류와 고를 수 있는 색 (등록 창 색 칸용) 관리자
+ *   POST                             등록  { title, starts_on, ends_on, place, memo,
+ *                                            cheer_on, cheer_early, color_kind }      관리자
  *   PUT    ?id=3                     수정                                              관리자
  *   DELETE ?id=3                     삭제                                              관리자
  */
@@ -16,8 +18,20 @@ $method = $_SERVER['REQUEST_METHOD'];
 $id     = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
 try {
+    if ($method === 'GET' && (isset($_GET['scope']) ? $_GET['scope'] : '') === 'kind') {
+        // 낱말 판정은 서버 한 곳에서만 한다 — 같은 표를 JS 에 두면 언젠가 어긋난다.
+        board_require_admin($u);
+        $text = mb_substr((string)(isset($_GET['text']) ? $_GET['text'] : ''), 0, 800);
+        $kind = board_event_kind($text);
+        echo json_encode([
+            'kind'   => ['key' => $kind['key'], 'label' => $kind['label'], 'icon' => $kind['icon']],
+            'colors' => board_event_colors(),
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     if ($method === 'GET') {
-        $all = (isset($_GET['scope']) ? $_GET['scope'] : 'upcoming') === 'all';
+        $all =(isset($_GET['scope']) ? $_GET['scope'] : 'upcoming') === 'all';
         if ($all) {
             board_require_admin($u);
             $rows = board_all_events();
