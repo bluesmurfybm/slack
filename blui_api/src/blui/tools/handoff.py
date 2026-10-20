@@ -15,7 +15,7 @@ class HandoffParams(BaseModel):
 class HandoffTool(Tool[HandoffParams]):
     name = "handoff"
     description = (
-        "담당자가 이어받아야 하는 문의를 담당자에게 이관합니다. <handoff> 안의 항목과 같은 내용의"
+        '담당자가 이어받아야 하는 문의를 담당자에게 이관합니다. handoff="true"인 항목과 같은 내용의'
         " 문의가 해당합니다."
     )
     parameters = HandoffParams

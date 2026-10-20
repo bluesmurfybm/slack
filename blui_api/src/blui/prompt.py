@@ -9,20 +9,20 @@ COMMON_INSTRUCTIONS = """당신은 ㈜블루소프트의 상담 에이전트 '�
 
 판정 순서 (위에서부터 처음 맞는 것 하나만 합니다):
 1. 유저의 마지막 메시지가 assistant가 물은 요구사항이나 견적 항목에 대한 답이면 → A. 이때 matched_ids에는 직전 assistant 답이 다룬 주제의 <entry> 하나만 작성하고, content는 유저가 답한 값을 확인하는 한 문장으로 작성하세요.
-2. 같은 주제의 <entry>가 있으면 → A
-3. 문의가 <handoff> 안의 항목과 같은 주제이면 → B
+2. handoff="true"가 없는 같은 주제의 <entry>가 있으면 → A
+3. handoff="true"인 같은 주제의 <entry>가 있으면 → B
 4. 그 외 → C
 
 A. 답변
 - content: 찾은 <entry>의 answer 중 유저가 물은 내용을 간결하게 전하세요. answer에 담당자 확인이나 산정이 적혀 있으면 그 문장도 그대로 전하세요. 금액은 answer에 적힌 공개 기준가만 인용하고 "~부터, VAT 별도, 요구사항에 따라 변동"을 붙이세요.
 - matched_ids: 근거로 삼은 <entry>의 id를 모두 작성하세요. A는 항상 id가 하나 이상 있습니다. id는 matched_ids에만 작성하세요.
-- form: <service_rules>의 기준으로 선택하세요. 폼 주소는 본문 뒤에 자동으로 추가됩니다.
+- form: <service_rules>의 기준으로 선택하세요. inquiry나 request를 선택했으면 content 끝에 <forms>의 그 폼 주소에 문의를 남겨 달라고 안내하는 문장을 작성하세요.
 - handoff: 빈 문자열.
 - 후속 문의도 근거가 있는 한 같은 방식으로 계속 답하세요.
 
 B. 이관
 - handoff: 담당자에게 전달할 유저의 요청사항 요약을 작성하세요.
-- content: 같은 주제인 <handoff> 항목의 answer를 바탕으로 유저의 문의에 답하세요. matched_ids는 비우고, form은 none입니다.
+- content: 같은 주제인 handoff="true" <entry>의 answer를 바탕으로 유저의 문의에 답하고, 끝에 <forms>의 request 주소에 상담 요청을 남겨 달라고 안내하는 문장을 작성하세요. matched_ids는 비우고, form은 request입니다.
 
 C. 답변 없음
 - content, matched_ids, handoff를 모두 비우고, form은 none입니다.
@@ -116,8 +116,11 @@ def entries_for(entries: list[KnowledgeEntry], domain: Domain) -> list[Knowledge
     return [entry for entry in entries if entry.domain in (domain, *SHARED_DOMAINS)]
 
 
-def build_system(entries: list[KnowledgeEntry], domain: Domain) -> str:
-    """공통 지시문, 서비스 지시문, 지식 항목 순으로 블리의 시스템 프롬프트를 만듭니다."""
+def build_system(
+    entries: list[KnowledgeEntry], domain: Domain, inquiry_url: str, request_url: str
+) -> str:
+    """공통 지시문, 서비스 지시문, 폼 주소, 지식 항목 순으로 블리의 시스템 프롬프트를 만듭니다."""
     rules = f"<service_rules>\n{DOMAIN_INSTRUCTIONS[domain]}\n</service_rules>"
-    body = format_entries(entries)
-    return "\n\n".join(part for part in (COMMON_INSTRUCTIONS, rules, body) if part)
+    forms = f"<forms>\n- inquiry(견적문의): {inquiry_url}\n- request(상담 요청): {request_url}\n</forms>"
+    body = format_entries(entries, handoff_in_domain=True)
+    return "\n\n".join(part for part in (COMMON_INSTRUCTIONS, rules, forms, body) if part)
