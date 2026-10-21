@@ -51,7 +51,7 @@ function bl_fetch_trip(PDO $pdo, $id, $lock = false) {
 
 /**
  * 저장(새로 쓰기·고치기·승인·정산이 모두 여기로 온다). 누가 무엇을 바꿀 수 있는지:
- *  - 정산 담당: 내용 + 승인 + 정산 전부
+ *  - 정산 담당: 내용 + 정산. 승인 칸은 대표가 고른 결과를 보기만 한다(보내도 무시)
  *  - 대표 승인: 승인 칸(승인/반려·승인자·승인일)만. 새 청구는 쓰지 않는다
  *  - 직원    : 본인 청구의 내용만, 승인대기일 때만. 승인·정산 칸은 보내도 무시한다
  */
@@ -87,7 +87,7 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
             bl_apply_content($pdo, $row, $data, $me, $prev);
             if ($role === ROLE_STAFF) $row['staff_updated_at'] = $now;
         }
-        if ($role === ROLE_ADMIN || $role === ROLE_APPROVER) {
+        if ($role === ROLE_APPROVER) {
             $before = [$row['approval'], $row['approver'], $row['approved_at']];
             if (array_key_exists('approval', $data)) {
                 $a = (string)$data['approval'];

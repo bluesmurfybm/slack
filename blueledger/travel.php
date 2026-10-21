@@ -68,7 +68,8 @@ $csrf = bl_csrf_token();
 <main id="main" data-tab="dash">
   <!-- 청구서 -->
   <section class="slip" aria-label="출장여비 청구서">
-    <div class="slip-head"><h2>출장여비 청구서</h2><span class="mode" id="formMode">새 청구</span></div>
+    <div class="slip-head"><h2>출장여비 청구서</h2><span class="mode" id="formMode">새 청구</span>
+      <button type="button" class="btn mybtn" id="btnMy" aria-haspopup="dialog">내 청구<span class="cnt" id="myCount"></span></button></div>
     <form class="slip-body" id="form" autocomplete="off" onsubmit="return false">
       <fieldset id="fsInfo">
         <legend>출장 정보</legend>
@@ -82,7 +83,7 @@ $csrf = bl_csrf_token();
           </div>
           <label class="f"><span>기간</span>
             <select id="period"><option>당일</option><option>1박2일</option><option>2박3일</option><option>3박4일</option><option>4박5일</option><option>1주 이상</option></select></label>
-          <label class="f"><span class="req">출장지</span><input id="place" list="placeList" placeholder="예: 대전"></label>
+          <label class="f"><span class="req">출장지</span><input id="place" placeholder="예: 대전" autocomplete="off"></label>
           <label class="f full"><span>출장목적</span><input id="purpose" placeholder="예: 한밭대 노마드칼리지 계약 미팅"></label>
         </div>
       </fieldset>
@@ -92,9 +93,16 @@ $csrf = bl_csrf_token();
         <div class="money">
           <span class="lab">교통 수단</span>
           <select id="mode">
+            <option value="" hidden>선택</option>
             <option>자가용(휘발유)</option><option>자가용(경유)</option><option>자가용(LPG)</option>
             <option>KTX</option><option>고속버스</option><option>시외버스</option><option>지하철</option><option>택시</option><option>법인차량</option><option>기타</option>
           </select>
+          <!-- 자가용이 아니면 갈아탄 수단을 더 고른다(KTX+지하철+택시). 저장 값은 '+' 로 잇는다 -->
+          <div class="extra" id="extraBox">
+            <span class="hint">함께 이용</span>
+            <div class="chips" id="extraChips"></div>
+          </div>
+          <div class="hint legacy" id="modeLegacy" hidden></div>
           <div class="fuel" id="fuelBox">
             편도 <input id="km" inputmode="decimal" placeholder="0"> km
             <button type="button" class="btn" id="btnFuel" style="padding:5px 10px">주유비 기준 적용</button>
@@ -116,6 +124,7 @@ $csrf = bl_csrf_token();
 
       <fieldset id="fsApproval">
         <legend>승인 (대표자)</legend>
+        <div class="stline" id="stApproval"></div>
         <div class="seg2" id="approvalSeg">
           <button type="button" data-v="승인대기" class="s-wait">승인대기</button>
           <button type="button" data-v="승인" class="s-ok">승인</button>
@@ -129,6 +138,7 @@ $csrf = bl_csrf_token();
 
       <fieldset id="fsSettle">
         <legend>정산</legend>
+        <div class="stline" id="stSettle"></div>
         <div class="seg2" id="statusSeg">
           <button type="button" data-v="미처리" class="s-wait">미처리</button>
           <button type="button" data-v="처리완료" class="s-ok">처리완료</button>
@@ -235,6 +245,12 @@ $csrf = bl_csrf_token();
   </div>
 </main>
 
+<!-- 직원 전용: 본인 청구와 진행 상태. 청구서 머리의 '내 청구' 단추로 연다 -->
+<dialog id="myDlg" aria-labelledby="myDlgTitle">
+  <div class="dh" id="myDlgTitle">내 청구 <span class="hint" id="myMeta" style="font-weight:500"></span></div>
+  <div class="db mylist" id="myList"></div>
+  <div class="df"><button class="btn" id="myDlgClose">닫기</button></div>
+</dialog>
 <dialog id="dlg">
   <div class="dh">설정</div>
   <div class="db">
@@ -267,7 +283,6 @@ $csrf = bl_csrf_token();
   <div class="df"><button class="btn" id="dlgCancel">닫기</button><button class="btn primary" id="dlgSave">설정 저장</button></div>
 </dialog>
 
-<datalist id="placeList"></datalist>
 <div class="toast" id="toast" role="status"></div>
 
 <script src="static/travel.js"></script>

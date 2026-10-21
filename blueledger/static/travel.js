@@ -75,7 +75,9 @@ function presetMe(){if(isAdmin())return;const me=S.me||'';
   if(me&&staffList().includes(me)){F('traveler').value=me;renderChips()}}
 function applyRole(){
   const staff=!isAdmin();
-  F('fsApproval').disabled=staff;F('fsSettle').disabled=!isSettler();
+  F('fsApproval').disabled=S.role!=='approver';F('fsSettle').disabled=!isSettler();
+  // 대표는 승인하러 들어온다 — 승인 칸을 청구서 맨 위로 올려 스크롤 없이 보이게 한다
+  if(S.role==='approver')F('form').prepend(F('fsApproval'));
   F('queueTitle').firstChild.textContent=staff?'진행 중인 내 청구':'처리할 청구';
   refreshLock();
 }
@@ -125,7 +127,36 @@ F('compChips').addEventListener('click',e=>{const b=e.target.closest('.chip');if
 F('compExtra').addEventListener('input',updateCompCount);
 F('traveler').addEventListener('change',renderChips);
 
-function setSeg(id,val){document.querySelectorAll(`#${id} button`).forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===val))}
+function setSeg(id,val){document.querySelectorAll(`#${id} button`).forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===val));renderStatusText()}
+// 고칠 수 없는 사람에게 보이는 상태 글자. 반려된 청구는 정산도 '반려'다(지급하지 않는다).
+function statusBadges(approval,status){
+  const a=approval||'승인대기';
+  const s=a==='반려'?'반려':status==='처리완료'?'처리완료':'미처리';
+  const cls=v=>v==='승인'||v==='처리완료'?'b-ok':v==='반려'?'b-no':'b-wait';
+  return [`<span class="badge ${cls(a)}">${esc(a)}</span>`,`<span class="badge ${cls(s)}">${esc(s)}</span>`];
+}
+function renderStatusText(){
+  const [a,s]=statusBadges(S.approval,S.status);
+  F('stApproval').innerHTML=a;F('stSettle').innerHTML=s;
+}
+// 직원의 '내 청구' — 연도와 상관없이 최근 출장부터. 누르면 청구서가 열리고 승인·정산 상태가 보인다.
+function renderMyList(){
+  if(S.role!=='staff')return;
+  const list=[...S.trips].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  F('myMeta').textContent=list.length?`${list.length}건`:'';
+  F('myCount').textContent=list.length||'';
+  F('myList').innerHTML=list.length?list.map(t=>{const [a,s]=statusBadges(t.approval,t.status);
+    return `<div class="myrow${t.id===S.editingId?' sel':''}" data-id="${esc(t.id)}" tabindex="0">
+      <span class="when num">${esc(t.date)}</span>
+      <span class="what">${esc(t.place)}${t.purpose?`<small>${esc(t.purpose)}</small>`:''}</span>
+      <span class="amt num">${won(t.total)}원</span>
+      <span class="st"><span class="hint">승인</span>${a}<span class="hint">정산</span>${s}</span></div>`}).join('')
+    :'<div class="empty">아직 올린 청구가 없습니다. 청구서를 써서 제출해 보세요.</div>';
+}
+F('btnMy').addEventListener('click',()=>{renderMyList();F('myDlg').showModal()});
+F('myDlgClose').addEventListener('click',()=>F('myDlg').close());
+F('myList').addEventListener('click',e=>{const r=e.target.closest('.myrow');if(!r)return;const t=S.trips.find(x=>x.id===r.dataset.id);if(t){F('myDlg').close();fillForm(t)}});
+F('myList').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()});
 F('approvalSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.approval=b.dataset.v;setSeg('approvalSeg',S.approval);
   if(S.approval!=='승인대기'){if(!F('approver').value)F('approver').value=S.settings.approverName||'대표';if(!F('approvedAt').value)F('approvedAt').value=today()}});
 F('statusSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.status=b.dataset.v;setSeg('statusSeg',S.status);
@@ -146,7 +177,37 @@ function updateFuelInfo(){
   if(p){const km=parseNum(F('km').value);const v=km?Math.ceil(km/(S.settings.eff||10)*p*2/1000)*1000:0;
     F('fuelInfo').textContent=km?`왕복 기준 ${won(v)}원 (유가 ${won(p)}원, ${S.settings.priceBase})`:`유가 ${p}원/L · 연비 ${S.settings.eff}km/L`}
 }
-F('mode').addEventListener('change',updateFuelInfo);F('km').addEventListener('input',updateFuelInfo);
+F('mode').addEventListener('change',()=>{F('modeLegacy').hidden=true;renderExtra();updateFuelInfo()});F('km').addEventListener('input',updateFuelInfo);
+
+/* 교통 수단 — 자가용 셋은 하나만, 그 밖의 수단은 갈아탄 것을 더 고를 수 있다(KTX+지하철+택시).
+   옛 엑셀 기록의 '자가용'(유종 모름)·'-시외버스 -지하철' 같은 값은 목록에 넣지 않는다.
+   알아볼 수 있으면 나눠서 고르고, 못 알아보면 원래 값을 안내로만 보여 주고 고르지 않으면 그대로 저장한다. */
+const CAR_MODES=['자가용(휘발유)','자가용(경유)','자가용(LPG)'];
+const OTHER_MODES=[...F('mode').options].map(o=>o.value).filter(v=>v&&!CAR_MODES.includes(v));
+// 법인차량은 갈아타는 수단이 아니라 '함께 이용'에는 넣지 않는다(맨 위 교통 수단으로는 고를 수 있다)
+const EXTRA_MODES=OTHER_MODES.filter(m=>m!=='법인차량');
+S.extraModes=new Set();S.legacyMode='';
+function renderExtra(){
+  const main=F('mode').value,show=!!main&&!CAR_MODES.includes(main);
+  F('extraBox').hidden=!show;
+  S.extraModes.delete(main);
+  F('extraChips').innerHTML=show?EXTRA_MODES.filter(m=>m!==main).map(m=>`<button type="button" class="chip" aria-pressed="${S.extraModes.has(m)}" data-m="${esc(m)}">${esc(m)}</button>`).join(''):'';
+}
+F('extraChips').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;const m=b.dataset.m;S.extraModes.has(m)?S.extraModes.delete(m):S.extraModes.add(m);b.setAttribute('aria-pressed',S.extraModes.has(m))});
+function modeValue(){
+  const main=F('mode').value;
+  if(!main)return S.legacyMode;
+  if(CAR_MODES.includes(main))return main;
+  return [main,...EXTRA_MODES.filter(m=>m!==main&&S.extraModes.has(m))].join('+');
+}
+function setModeValue(v){
+  v=String(v||'').trim();S.extraModes=new Set();S.legacyMode='';F('modeLegacy').hidden=true;
+  if(!v||CAR_MODES.includes(v)){F('mode').value=v||'자가용(휘발유)';renderExtra();return}
+  const known=v.split(/[+\-,\/\s]+/).map(s=>s.trim()).filter(s=>OTHER_MODES.includes(s));
+  if(known.length){F('mode').value=known[0];known.slice(1).forEach(m=>S.extraModes.add(m))}
+  else{F('mode').value='';S.legacyMode=v;F('modeLegacy').hidden=false;F('modeLegacy').textContent=`기존 기록: ${v} — 바꾸려면 위에서 고르세요`}
+  renderExtra();
+}
 F('btnFuel').addEventListener('click',()=>{const p=fuelPrice(F('mode').value),km=parseNum(F('km').value);if(!km){F('km').focus();return}
   F('transport').value=won(Math.ceil(km/(S.settings.eff||10)*p*2/1000)*1000);updateTotal()});
 function updateMealHint(){
@@ -161,7 +222,7 @@ F('period').addEventListener('change',updateMealHint);
 
 function clearForm(){
   S.editingId=null;S.companions=new Set();S.approval='승인대기';S.status='미처리';S.receipts=emptyRc();renderThumbs();
-  F('form').reset();F('traveler').value='';F('date').value=today();F('period').value='당일';F('mode').value='자가용(휘발유)';
+  F('form').reset();F('traveler').value='';F('date').value=today();F('period').value='당일';setModeValue('자가용(휘발유)');
   ['transport','toll','meal','etc'].forEach(id=>F(id).value='');
   F('approver').value='';F('handler').value='';
   setSeg('approvalSeg',S.approval);setSeg('statusSeg',S.status);
@@ -177,7 +238,7 @@ function fillForm(t){
   S.companions=new Set(comps.filter(n=>staff.includes(n)));
   F('compExtra').value=comps.filter(n=>!staff.includes(n)).join(', ');
   F('date').value=t.date||'';F('period').value=t.period||'당일';F('place').value=t.place||'';F('purpose').value=t.purpose||'';
-  F('mode').value=t.mode||'기타';if(F('mode').value!==t.mode&&t.mode){const o=document.createElement('option');o.textContent=t.mode;F('mode').appendChild(o);F('mode').value=t.mode}
+  setModeValue(t.mode);
   F('km').value=t.km||'';
   ['transport','toll','meal','etc'].forEach(id=>F(id).value=t[id]?won(t[id]):'');
   F('etcNote').value=t.etcNote||'';
@@ -201,7 +262,7 @@ F('btnSave').addEventListener('click',async()=>{
   const data={
     traveler:F('traveler').value,companions:comps.join(', '),companionCount:comps.length||(!S.editingId?0:(prev.companionCount||0)),
     date:F('date').value,period:F('period').value,place:F('place').value.trim(),purpose:F('purpose').value.trim(),
-    mode:F('mode').value,km:parseNum(F('km').value)||0,
+    mode:modeValue(),km:parseNum(F('km').value)||0,
     transport:parseNum(F('transport').value),toll:parseNum(F('toll').value),meal:parseNum(F('meal').value),etc:parseNum(F('etc').value),etcNote:F('etcNote').value.trim(),
     approval:S.approval,approver:F('approver').value.trim(),approvedAt:F('approvedAt').value,
     status:S.status,handler:F('handler').value.trim(),processedAt:F('processedAt').value,payMethod:F('payMethod').value,note:F('note').value.trim(),
@@ -235,7 +296,6 @@ function render(){
   years.sort().reverse();
   F('yearSel').innerHTML=years.map(y=>`<option value="${y}">${y}년</option>`).join('')+'<option value="all">전체 기간</option>';
   F('yearSel').value=S.year;
-  F('placeList').innerHTML=[...new Set(S.trips.map(t=>t.place).filter(Boolean))].map(p=>`<option value="${esc(p)}">`).join('');
 
   const rows=yearTrips();
   const total=rows.reduce((a,t)=>a+(t.total||0),0);
@@ -252,6 +312,7 @@ function render(){
   renderPeople(rows);
   renderQueue(waitA,unpaid);
   renderTable(rows);
+  renderMyList();
 }
 F('kpis').addEventListener('click',e=>{const k=e.target.closest('.kpi.click');if(!k)return;S.fStatus=k.dataset.f;F('fStatus').value=S.fStatus;render();switchTab('list');F('listPanel').scrollIntoView({behavior:'smooth',block:'start'})});
 
@@ -321,7 +382,7 @@ function renderTable(rows){
   F('tfoot').innerHTML=`<tr><td colspan="8">합계</td><td class="r num">${won(s('transport'))}</td><td class="r num">${won(s('toll'))}</td><td class="r num">${won(s('meal'))}</td><td class="r num">${won(s('etc'))}</td><td class="r num">${won(s('total'))}</td><td class="num">${list.reduce((a,t)=>a+rcCount(t),0)||''}</td><td colspan="7"></td></tr>`;
   highlightRow();
 }
-function highlightRow(){document.querySelectorAll('#tbody tr').forEach(r=>r.classList.toggle('sel',r.dataset.id===S.editingId))}
+function highlightRow(){document.querySelectorAll('#tbody tr,#myList .myrow').forEach(r=>r.classList.toggle('sel',r.dataset.id===S.editingId))}
 F('tbody').addEventListener('click',e=>{const r=e.target.closest('tr[data-id]');if(!r)return;const t=S.trips.find(x=>x.id===r.dataset.id);if(t)fillForm(t)});
 F('tbody').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()});
 F('q').addEventListener('input',e=>{S.q=e.target.value;render()});
