@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../core/sqlite_compat.php';   // db_connect() — 로컬 시험(SQLite)용
 /**
  * DB 연결.
  *  - config.php 의 db 설정 사용
@@ -36,7 +37,7 @@ function db() {
 
     // 1) DB 미지정으로 접속 → DB 생성
     $dsn = "mysql:host={$d['host']};port={$d['port']};charset={$d['charset']}";
-    $pdo = new PDO($dsn, $d['user'], $d['pass'], $opt);
+    $pdo = db_connect($dsn, $d['user'], $d['pass'], $opt, $d['name']);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$d['name']}`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `{$d['name']}`");

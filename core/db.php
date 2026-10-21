@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/sqlite_compat.php';   // 로컬 시험(SQLite)일 때만 끼어든다. 운영은 new PDO 그대로
 /**
  * 포털(blue-iWorks) DB 연결.
  *  - slack 모듈과 같은 slackapi DB를 그대로 씀. 여기서는 포털 전용 테이블만 관리.
@@ -17,7 +18,7 @@ function portal_db() {
     ];
 
     $dsn = "mysql:host={$d['host']};port={$d['port']};charset={$d['charset']}";
-    $pdo = new PDO($dsn, $d['user'], $d['pass'], $opt);
+    $pdo = db_connect($dsn, $d['user'], $d['pass'], $opt, $d['name']);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$d['name']}`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `{$d['name']}`");

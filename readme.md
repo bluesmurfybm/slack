@@ -1719,6 +1719,30 @@ sudo systemctl enable --now moodle-watch-refresh.path
 
 ---
 
+## 로컬에서 포털 전체 띄우기 (MySQL 없이)
+
+MySQL 이 없는 PC 에서 포털과 모든 PHP 모듈을 SQLite 로 띄운다. **운영 코드는 그대로다** —
+DB 를 여는 일곱 곳(`core/db.php`, access·learn·slack·slackai·dti·bluecart 의 db.php)이 `new PDO` 대신
+`db_connect()`(`core/sqlite_compat.php`)를 부르고, 이 함수는 운영에서 `new PDO` 와 똑같다.
+
+- 켜지는 조건: 루트 `config.php` 의 `db.driver` 가 `'sqlite'` **이고** PHP 내장 서버(`php -S`)·명령줄일 때.
+  운영(php-fpm)에서는 config 가 어떻든 켜지지 않는다.
+- 준비물: `D:\php82` 에 PHP 8.2 (php.ini 에서 pdo_sqlite·sqlite3·mbstring·openssl·fileinfo·curl 켬).
+- 실행: 루트 `로컬_실행.bat` 더블클릭 → `dev/local_setup.php`(설정 파일 생성·스키마 적용, 여러 번 돌려도 됨) →
+  http://127.0.0.1:8780/ . 계정은 사내 13명, 처음 비밀번호 `blue$123`. 8765 는 파이썬 출장여비가 쓰고 있어 피했다.
+- 데이터: `var/localdb/<DB이름>.sqlite` (gitignore). 지우고 다시 실행하면 빈 상태로 돌아간다.
+- `local_setup.php` 가 만드는 것: SQLite 용 루트 `config.php`(이미 있으면 손대지 않고, driver 가 sqlite 가
+  아니면 멈춘다), `bluecart/config/config.php`(포털 연동 표본 복사), bluecart `sql/*.sql` 과 studio
+  `sql/apply.sh` 의 FILES 목록을 번역기로 적용(`_local_sql_applied` 에 기록).
+- 문지기: `dev/local_router.php` 가 nginx deny 와 같은 것(설정·키·DB 파일·업로드 원본·배치 소스)을 막는다.
+- 번역기 범위: 이 저장소가 쓰는 MySQL 문법만(DDL·ALTER·upsert·INSERT IGNORE·information_schema·SHOW·
+  NOW/DATE_SUB/TIMESTAMPDIFF/FIELD/GROUP_CONCAT …). 문자열 비교는 `_ci` 처럼 대소문자를 무시한다.
+  모르는 문법이 나오면 서버 창에 `[sqlite_compat]` 로 원문·번역문이 찍힌다 — 그걸 보고 규칙을 늘린다.
+  한계: `ON UPDATE CURRENT_TIMESTAMP` 무시, 문자열 안 `\t` 같은 백슬래시 이스케이프는 글자 그대로.
+- 안 되는 것: 슬랙(개인 토큰)·Gmail(IMAP)·웹훅·LLM 등 바깥 연동, book(파이썬, 따로 띄워야 함).
+- 2026-10-21 확인: 포털 로그인·공지·일정, BlueCart 요청, BlueLearn 신청, BlueStudio 프로젝트 생성, BlueLedger
+  출장여비(46건 이관), access·moodle·dti 화면과 그 화면들의 API 요청 전부 정상.
+
 ## 로컬 개발 팁
 
 - `.gitignore`가 `*.md`를 전부 막아놨다(이 `readme.md`만 예외로 풀어둠 — 다른 md 문서는 계속
