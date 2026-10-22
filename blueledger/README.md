@@ -4,6 +4,9 @@
 리조트는 `resort/README.md` 에 따로 적었다 — 로그인 · 직원 명단 · DB 는 출장여비와 같고 표만 `bl_resort_*` 이다.
 회계 장부(통장·카드·급여·정산 등, 파이썬 `app.py`)는 아직 지안 님 PC 의 파이썬 버전에 있다.
 
+화면에 보이는 이름은 시스템마다 따로다 — 출장여비는 **BlueExpense**, 리조트는 **BlueStay**. 폴더·주소(`blueledger/`)·
+업무 시스템 key(`blueledger`, `resort`)·표 이름(`bl_*`)은 그대로 둔다. 바꾸면 배포 주소·nginx 규칙·DB 를 함께 옮겨야 한다.
+
 ## 구성
 
 ```

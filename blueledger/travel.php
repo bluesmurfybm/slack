@@ -14,7 +14,7 @@ $csrf = bl_csrf_token();
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="csrf-token" content="<?= htmlspecialchars($csrf) ?>">
-<title>출장여비 · BlueLedger</title>
+<title>BlueExpense</title>
 <link rel="icon" type="image/svg+xml" href="../styles/favicons/blueledger.svg">
 <?php require_once __DIR__ . '/../core/pwa.php'; echo pwa_head_tags('../'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -37,7 +37,7 @@ $csrf = bl_csrf_token();
         </div>
         <div class="dd-menu">
           <a href="../index.php?view=profile">👤 마이페이지</a>
-          <a href="resort/">🏖️ 리조트 예약</a>
+          <a href="resort/">🏖️ BlueStay</a>
           <div class="dd-sep"></div>
           <?= work_systems_menu('../', 'blueledger') ?>
           <div class="dd-sep"></div>
@@ -48,7 +48,7 @@ $csrf = bl_csrf_token();
   </div>
 </div>
 <header class="bl">
-  <h1>출장여비 청구<small>BlueLedger</small></h1>
+  <h1>BlueExpense</h1>
   <span class="status-line" id="conn">불러오는 중…</span>
   <span class="hspace"></span>
   <select class="btn" id="yearSel" aria-label="조회 연도"></select>

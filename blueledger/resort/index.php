@@ -26,7 +26,7 @@ $h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="csrf-token" content="<?= $h($csrf) ?>">
-<title>리조트 예약 · BlueLedger</title>
+<title>BlueStay</title>
 <link rel="icon" type="image/svg+xml" href="../../styles/favicons/resort.svg">
 <?php require_once __DIR__ . '/../../core/pwa.php'; echo pwa_head_tags('../../'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -50,7 +50,7 @@ $h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
         </div>
         <div class="dd-menu">
           <a href="../../index.php?view=profile">👤 마이페이지</a>
-          <a href="../travel.php">🧾 출장여비 청구</a>
+          <a href="../travel.php">🧾 BlueExpense</a>
           <div class="dd-sep"></div>
           <?= work_systems_menu('../../', 'resort') ?>
           <div class="dd-sep"></div>
