@@ -106,8 +106,11 @@ async function reload(){
 async function initStore(){
   const ME=window.RESORT_ME||null;
   if(!ME){F('conn').textContent='로그인 정보를 확인할 수 없습니다';return}
-  S.role=ME.role==='admin'?'admin':'staff';S.uid=ME.id;S.me=ME.name;S.locked=true;
+  // 관리자도 처음엔 직원과 같은 화면(내 예약)으로 연다. [관리자 화면] 버튼으로 바꾼다
+  S.canAdmin=ME.role==='admin';
+  S.role='staff';S.uid=ME.id;S.me=ME.name;S.locked=true;
   document.body.dataset.role=S.role;
+  F('modeSeg').hidden=!S.canAdmin;
   F('conn').textContent=S.role==='admin'?'관리자 화면 · 전체 예약':'직원 화면 · 내 예약';
   assets={upload:true};downloads={save:true};
   store={
@@ -124,6 +127,15 @@ async function initStore(){
 
 function afterSettings(){renderPeriodSel();renderSelects();if(!S.editing)presetMe();renderAll();if(!F('nBase').matches(':focus'))F('nBase').value=S.settings.notice||NOTICE_DEFAULT;renderNotice()}
 
+/* 관리자 ↔ 직원 화면 전환 (관리자 계정만). 서버 권한은 그대로이고 화면만 바뀐다 */
+function setMode(mode){
+  if(!S.canAdmin||mode===S.role)return;
+  S.role=mode==='admin'?'admin':'staff';
+  document.body.dataset.role=S.role;
+  F('modeSeg').querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-selected',b.dataset.mode===S.role));
+  setView('req');setPane('req');applyRole();renderSelects();
+}
+F('modeSeg').addEventListener('click',e=>{const b=e.target.closest('[data-mode]');if(b)setMode(b.dataset.mode)});
 function applyRole(){
   const staff=!isAdmin();
   F('queueTitle').firstChild.textContent=staff?'내 예약 진행 상황':'처리할 일';

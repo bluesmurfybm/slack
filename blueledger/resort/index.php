@@ -37,7 +37,7 @@ $h = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 <link rel="stylesheet" href="assets/app.css?v=<?= $v ?>">
 <script src="assets/xlsx.full.min.js?v=0.18.5"></script>
 </head>
-<body data-role="<?= $u['role'] === 'admin' ? 'admin' : 'staff' ?>">
+<body data-role="staff"><!-- 관리자도 직원 화면으로 시작한다(app.js 의 [관리자 화면] 버튼) -->
 <div class="topbar">
   <div class="topbar-in">
     <a class="logo" href="../../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>

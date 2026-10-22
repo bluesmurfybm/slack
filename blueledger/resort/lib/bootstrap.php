@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../guard.php';   // 포털 세션, bl_db(), CSRF, BlError
 
-const RESORT_VERSION = '1.10.0';
+const RESORT_VERSION = '1.13.1';
 // 영수증 원본. 출장여비와 같이 blueledger/var 아래에 두어 웹에서 직접 열리지 않게 한다(README 의 nginx 설정).
 const RESORT_UPLOAD_DIR = __DIR__ . '/../../var/resort';
 const RESORT_MAX_UPLOAD_MB = 10;

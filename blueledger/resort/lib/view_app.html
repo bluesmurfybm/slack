@@ -10,9 +10,13 @@
   </div>
   <span class="status-line" id="conn">불러오는 중…</span>
   <span class="hspace"></span>
-  <select class="btn" id="periodSel" aria-label="이용기간"></select>
-  <button class="btn wide admin-only" id="btnXlsx">통합내역 엑셀</button>
-  <button class="btn admin-only" id="btnSettings">설정</button>
+  <select class="btn sm" id="periodSel" aria-label="이용기간"></select>
+  <div class="modeseg" id="modeSeg" role="tablist" aria-label="화면 전환" hidden>
+    <button type="button" role="tab" data-mode="staff" aria-selected="true">구성원</button>
+    <button type="button" role="tab" data-mode="admin" aria-selected="false">관리자</button>
+  </div>
+  <button class="btn sm wide admin-only" id="btnXlsx" type="button">통합내역 엑셀</button>
+  <button class="btn sm admin-only" id="btnSettings" type="button">설정</button>
 </header>
 
 <nav class="vtabs" role="tablist" aria-label="화면">
@@ -38,7 +42,7 @@
         <div class="grid">
           <label class="f"><span class="req">성명</span><select id="name"></select></label>
           <label class="f"><span>실이용자 <small>(본인이 아니면)</small></span><input id="user" placeholder="예: 가족 이름"></label>
-          <label class="f"><span>부서 / 직위</span><input id="dept" placeholder="솔루션사업 / 선임"></label>
+          <label class="f"><span>부서 / 직위</span><input id="dept" placeholder="예) 부서 / 직위 — 직접 적어 주세요"></label>
           <label class="f"><span>연락처</span><input id="phone" inputmode="tel" placeholder="010-0000-0000"></label>
           <label class="f full"><span>리조트 선택 <small>(소노호텔앤리조트)</small></span><select id="resortPick"></select></label>
           <label class="f full"><span class="req">리조트 · 객실</span><input id="resort" list="resortList" placeholder="리조트를 고른 뒤 객실 타입을 이어서 적어 주세요"></label>
@@ -154,6 +158,134 @@
       <h2>식대 사용 내역<span class="meta"><select class="btn sm" id="mealWho" aria-label="직원 선택"></select></span></h2>
       <div class="tablewrap" style="padding:8px 0 4px"><table class="mlines"><thead><tr><th>사용일</th><th>성명</th><th>사용처</th><th class="r">금액</th><th>방문 리조트</th><th class="c">영수증</th></tr></thead><tbody id="mlBody"></tbody><tfoot id="mlFoot"></tfoot></table></div>
     </div>
+    <!-- 예약 · 이용 매뉴얼 (2026-10-22 지안 님 매뉴얼을 지금 화면에 맞게 고침). 왼쪽 칸 맨 아래 -->
+    <section class="panel manual" aria-labelledby="manualTitle">
+     <h2 id="manualTitle">리조트 예약 · 이용 매뉴얼<span class="meta">(주)블루소프트 · 항목을 누르면 펼쳐집니다</span></h2>
+     <div class="mbody">
+      <details open>
+       <summary>1. 개요</summary>
+       <p>회사가 보유한 소노호텔앤리조트 회원권으로 직원 복리후생 리조트를 예약하고, 식대를 회사 법인카드로 지원합니다. 예약 신청부터 식대 정산까지 이 화면에서 처리합니다.</p>
+       <table class="mtbl"><tbody>
+        <tr><th>이용 대상</th><td>사외이사를 제외한 재직 직원 13명</td></tr>
+        <tr><th>예약 · 정산 담당</th><td>경영지원 김지안</td></tr>
+        <tr><th>관리자</th><td>김지안, 김호영</td></tr>
+        <tr><th>회원권</th><td>소노호텔앤리조트 (예약 아이디 2개, 연 60박)</td></tr>
+        <tr><th>사용 목적</th><td>임직원 복리후생</td></tr>
+       </tbody></table>
+       <p class="note">직원 화면에는 본인 예약과 본인 한도만 보입니다.</p>
+      </details>
+
+      <details open>
+       <summary>2. 이용 기준</summary>
+       <p>이용기간은 매년 <b>5월 1일 ~ 다음 해 4월 30일</b>이고, 한도는 이 기간 안에서 1인 기준으로 계산합니다. 2026년도 이용기간은 2026.05.01 ~ 2027.04.30입니다.</p>
+       <table class="mtbl"><thead><tr><th>항목</th><th>1인 연간 한도</th><th>계산 방법</th></tr></thead><tbody>
+        <tr><td>숙박일수</td><td class="num">4박</td><td>객실 수 × 박 수 (예: 2실 1박 = 2박)</td></tr>
+        <tr><td>숙박비</td><td class="num">1,500,000원</td><td>객실요금 + 숙박 추가결제</td></tr>
+        <tr><td>식대</td><td class="num">500,000원</td><td>이용 중 식대용 법인카드 사용액 합계</td></tr>
+       </tbody></table>
+       <ul>
+        <li>숙박일수 · 숙박비는 예약이 <b>확정</b>된 건만 계산합니다. 반려 · 취소된 예약은 빠집니다.</li>
+        <li>입사 시기 등에 따라 개인별 한도가 다를 수 있습니다. 본인 한도는 화면 위 <b>잔여숙박 · 잔여숙박비 · 잔여식대</b> 칸에서 봅니다.</li>
+        <li>체크인 날짜가 속한 이용기간의 한도에서 차감됩니다. 예: 2027.04.30 체크인은 2026년도 한도.</li>
+        <li>남은 한도를 넘는 신청은 정산 담당자가 확인 후 처리합니다.</li>
+       </ul>
+      </details>
+
+      <details>
+       <summary>3. 예약 신청 방법</summary>
+       <ol>
+        <li>blue-iWorks 포털에 회사 이메일로 로그인한 뒤 첫 화면의 <b>리조트 예약</b> 카드를 누릅니다. 성명은 로그인한 본인으로 자동으로 들어갑니다.</li>
+        <li>오른쪽 위 <b>[리조트 예약 신청서]</b>가 선택되어 있는지 확인합니다.</li>
+        <li>화면 위 달력에서 <b>체크인 날짜 → 체크아웃 날짜</b>를 차례로 누르면 신청서에 날짜가 들어가고 박 수가 계산됩니다. 신청서에서 직접 고를 수도 있습니다.</li>
+        <li>신청서를 채웁니다.
+         <ul>
+          <li>실이용자: 본인이 아니면 가족 등 실제 이용자 이름</li>
+          <li>부서 / 직위, 연락처</li>
+          <li>리조트 선택: 목록에서 리조트를 고른 뒤 '리조트 · 객실' 칸에 원하는 객실 타입을 이어서 적습니다 (예: 소노캄 거제 스위트 오션뷰).</li>
+          <li>객실 수, 요청사항(대체 가능 일정, 희망 객실 등)</li>
+         </ul>
+        </li>
+        <li>신청서 아래 한도 막대에서 이번 예약 후 남는 숙박일수 · 숙박비를 확인합니다.</li>
+        <li><b>[신청하기]</b>를 누릅니다. 달력에 노란색으로 표시되고, <b>잔여숙박</b> 칸을 누르면 나오는 '내 숙박내역'에 '신청' 상태로 보입니다.</li>
+       </ol>
+       <p class="note">객실 참고: <a href="https://www.sonohotelsresorts.com" target="_blank" rel="noopener">소노호텔앤리조트 홈페이지</a> (신청서의 리조트 선택 아래 링크로도 이동) · 소노예약센터 1588-4888</p>
+      </details>
+
+      <details>
+       <summary>4. 예약 확정 · 반려 · 취소</summary>
+       <p>신청한 예약은 정산 담당자가 리조트 객실과 한도를 확인한 뒤 확정하거나 반려합니다. 결과는 이 화면과 카카오톡 안내로 알려 드립니다.</p>
+       <p class="flow"><span>신청</span>→<span>확정</span>→<span>식대카드 전달</span>→<span>리조트 이용</span>→<span>식대 · 영수증 등록, 카드 반납</span>→<span>정산 완료</span></p>
+       <table class="mtbl"><thead><tr><th>상태</th><th>뜻</th><th>직원이 고칠 수 있는 것</th></tr></thead><tbody>
+        <tr><td>신청</td><td>정산 담당자 확인 대기</td><td>예약 내용 전부</td></tr>
+        <tr><td>확정</td><td>리조트 예약 완료</td><td>이용 후 식대 · 부대비용 · 영수증 (정산 전까지)</td></tr>
+        <tr><td>반려</td><td>객실 없음, 한도 초과 등으로 예약 불가. 사유가 함께 표시됨</td><td>없음 (다른 일정으로 새로 신청)</td></tr>
+        <tr><td>취소</td><td>본인 요청 등으로 예약 취소</td><td>없음</td></tr>
+       </tbody></table>
+       <p class="note">확정된 예약을 바꾸거나 취소하려면 정산 담당자에게 직접 요청합니다. 리조트 취소 규정에 따라 위약금이 생길 수 있습니다.</p>
+      </details>
+
+      <details>
+       <summary>5. 리조트 이용 (체크인)</summary>
+       <p>예약이 확정되면 카카오톡으로 예약 내역이 발송되고, 이용 당일 그 내역으로 체크인합니다.</p>
+       <ul>
+        <li>체크인 방식은 지점마다 다를 수 있으니 프런트 또는 키오스크 안내를 따릅니다.</li>
+        <li>체크인할 때 카카오톡으로 받은 예약 내역을 확인용으로 보여 줍니다.</li>
+        <li>객실 추가 인원 등으로 현장에서 숙박 요금이 더 나오면, 결제 후 영수증을 받아 정산 담당자에게 알려 주세요. 숙박비 한도에 포함됩니다.</li>
+       </ul>
+      </details>
+
+      <details>
+       <summary>6. 식대용 법인카드</summary>
+       <ol>
+        <li>전달: 이용일 전에 정산 담당자가 식대용 법인카드를 개별로 전달합니다.</li>
+        <li>사용: 리조트 이용 기간 중 <b>식사와 음료 구매에만</b> 사용합니다.</li>
+        <li>영수증: 결제할 때마다 영수증을 챙깁니다.</li>
+        <li>반납: 이용 후 영수증과 함께 법인카드를 정산 담당자에게 반납합니다.</li>
+       </ol>
+       <ul>
+        <li>영수증을 잃어버렸으면 사용한 곳과 금액만 알려 주면 됩니다.</li>
+        <li>식대 한도는 1인 연 500,000원입니다. 한도를 넘은 금액은 정산 담당자와 협의합니다.</li>
+       </ul>
+      </details>
+
+      <details>
+       <summary>7. 이용 후 지출 등록과 정산</summary>
+       <ol>
+        <li>오른쪽 위 <b>[식대 · 부대비용 지출]</b>을 누릅니다. (또는 잔여숙박 칸의 '내 숙박내역'에서 이용한 예약을 눌러 <b>[식대 · 영수증]</b>)</li>
+        <li>'리조트 예약 선택'에서 이용한 확정 예약을 고릅니다. 남은 식대 한도가 함께 보입니다.</li>
+        <li><b>[+ 식대 한 줄]</b>을 눌러 사용일 · 사용처 · 금액을 적습니다. 결제한 건마다 한 줄씩 적습니다.</li>
+        <li>줄 옆 클립 아이콘으로 영수증 사진(JPG · PNG · PDF)을 첨부합니다.</li>
+        <li>부대시설 이용료 · 기타 비용이 있으면 적고, 숙박 영수증 · 예약확인 화면이 있으면 아래에 첨부합니다.</li>
+        <li><b>[지출 저장]</b>을 누릅니다. 잔여식대 칸을 누르면 '내 사용내역'에서 확인할 수 있습니다.</li>
+        <li>법인카드와 종이 영수증을 정산 담당자에게 반납합니다.</li>
+        <li>정산 담당자가 반납과 금액을 확인하고 '정산 완료'로 바꿉니다. 이후에는 내용을 고칠 수 없습니다.</li>
+       </ol>
+       <p class="note">정산 담당자는 예약별 '리조트 사용 및 지출확인서'와 '식대사용내역서'를 엑셀로 출력해 경비 증빙으로 보관합니다.</p>
+      </details>
+
+      <details>
+       <summary>8. 자주 묻는 질문</summary>
+       <table class="mtbl faq"><tbody>
+        <tr><th>가족만 이용해도 되나요?</th><td>됩니다. 신청서 '실이용자' 칸에 이용자 이름을 적어 주세요. 한도는 신청한 직원에게서 차감됩니다.</td></tr>
+        <tr><th>신청 후 일정을 바꾸고 싶어요</th><td>'신청' 상태일 때는 직접 고칠 수 있습니다(달력의 노란 날짜를 누르면 신청서에서 열림). 확정된 뒤에는 정산 담당자에게 요청해 주세요.</td></tr>
+        <tr><th>확정된 예약을 취소하고 싶어요</th><td>정산 담당자에게 바로 알려 주세요. 리조트 취소 규정에 따라 위약금이 생길 수 있습니다.</td></tr>
+        <tr><th>객실 2개를 잡으면 박수는?</th><td>객실 수 × 박 수로 계산합니다. 2실 1박은 2박을 쓴 것으로 봅니다.</td></tr>
+        <tr><th>남은 한도는 어디서 보나요?</th><td>화면 위 잔여숙박 · 잔여숙박비 · 잔여식대 칸에서 봅니다. 칸을 누르면 내역이 펼쳐집니다.</td></tr>
+        <tr><th>영수증을 잃어버렸어요</th><td>사용한 곳과 금액을 [식대 · 부대비용 지출]에 적고 정산 담당자에게 말씀해 주세요.</td></tr>
+        <tr><th>식대카드로 기념품을 사도 되나요?</th><td>안 됩니다. 식사와 음료 구매에만 사용합니다.</td></tr>
+        <tr><th>다른 직원 예약이 안 보여요</th><td>정상입니다. 직원 화면에는 본인 예약만 보입니다.</td></tr>
+       </tbody></table>
+      </details>
+
+      <details>
+       <summary>9. 문의처</summary>
+       <table class="mtbl"><tbody>
+        <tr><th>예약 · 일정 변경 · 취소, 식대카드 전달 · 반납, 정산</th><td>경영지원 김지안</td></tr>
+        <tr><th>객실 · 리조트 시설</th><td>소노예약센터 1588-4888</td></tr>
+       </tbody></table>
+      </details>
+     </div>
+    </section>
   </div>
  </div>
 

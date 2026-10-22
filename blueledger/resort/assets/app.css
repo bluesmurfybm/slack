@@ -38,7 +38,16 @@ header.rs h1 small{font-weight:500;color:var(--sub);font-size:13px;margin-left:6
 .btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
 .btn.danger{color:var(--no)}
 .btn.sm{padding:4px 9px;font-size:12px}
+/* 구성원 | 관리자 전환(관리자 계정만): 옅은 알약 안에서 고른 쪽만 흰 바탕 · 파란 글자 */
+.modeseg{display:inline-flex;gap:2px;padding:2px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
+.modeseg[hidden]{display:none}
+.modeseg button{border:0;background:none;border-radius:999px;padding:2px 14px;font:inherit;font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;line-height:1.5}
+.modeseg button[aria-selected="true"]{background:var(--panel);color:var(--blue);box-shadow:0 1px 3px rgba(20,33,61,.12)}
 select.btn{padding-right:6px}
+/* 예시 글자는 실제 값과 헷갈리지 않게 옅게 */
+label.f input::placeholder,label.f textarea::placeholder{color:var(--sub);opacity:.6}
+/* 작은 선택 상자는 작은 버튼(.btn.sm)과 같은 높이로 — 선택 상자는 줄 높이가 더 잡혀서 높이를 못 박는다 */
+select.btn.sm{height:28px;box-sizing:border-box;padding-top:0;padding-bottom:0}
 .status-line{font-size:12px;color:var(--sub)}
 .me{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub)}
 
@@ -72,6 +81,21 @@ main{padding:12px 22px 24px;max-width:1600px;margin:0 auto}
 .view.split.form-right{grid-template-columns:1fr minmax(380px,460px)}
 .view.split.form-right>.rightcol{order:2;position:sticky;top:calc(var(--tb) + 16px);align-self:start;display:flex;flex-direction:column;gap:8px;min-width:0}
 .rightcol>.slip{position:static}
+/* 예약 · 이용 매뉴얼: 왼쪽 칸 맨 아래, 항목마다 접고 펼친다 */
+.manual{min-width:0}
+.manual .mbody{padding:4px 16px 14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:4px 24px;align-items:start}
+.manual details{border-bottom:1px solid var(--line);padding:2px 0}
+.manual summary{cursor:pointer;font-weight:700;font-size:14px;padding:9px 2px;list-style-position:inside}
+.manual summary:hover{color:var(--blue)}
+.manual p,.manual li{font-size:13px;line-height:1.7;margin:4px 0}
+.manual ol,.manual ul{margin:4px 0 8px;padding-left:20px}
+.manual .note{color:var(--sub)}
+.manual a{color:var(--blue)}
+.mtbl{margin:6px 0 10px;font-size:13px}
+.mtbl th,.mtbl td{white-space:normal;padding:6px 8px;vertical-align:top}
+.mtbl tbody th{background:var(--soft);font-weight:600;width:34%}
+.manual .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;color:var(--sub)}
+.manual .flow span{background:var(--blue-soft);color:var(--blue);border-radius:99px;padding:2px 10px;font-weight:600;font-size:12px}
 .paneseg{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px}
 .paneseg button{flex:1;border:0;background:none;border-radius:7px;padding:7px 8px;font-weight:600;color:var(--sub);cursor:pointer;white-space:nowrap}
 .paneseg button[aria-selected="true"]{background:var(--blue);color:#fff}
