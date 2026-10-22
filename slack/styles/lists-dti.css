@@ -197,19 +197,19 @@ html.dark #selInfo { color:var(--muted); }
 .row { gap:12px; padding:11px 18px; border-bottom-color:var(--line2); background:var(--card); transition:background .12s ease; }
 .row:hover { background:var(--hover); }
 .row:last-child { border-bottom:none; }
-.title { font-size:14.5px; letter-spacing:-.02em; color:var(--txt); }
-.row.unread .title { font-weight:700; }
+.title { font-size:14.5px; font-weight:400; letter-spacing:-.015em; color:var(--txt); }
+.row.unread .title { font-weight:500; }   /* 안읽음 — 굵기보다 진한 글자색·좌측 파란 띠로 구분 */
 .row.read { background:var(--card); }
 .row.read:hover { background:var(--hover); }
-.row.read .title { font-weight:500; color:#575e64; }
+.row.read .title { font-weight:400; color:#575e64; }
 html.dark .row.read .title { color:var(--muted); }
 @media (prefers-color-scheme: dark) { :root:not(.light) .row.read .title { color:var(--muted); } }
 .row.unread { box-shadow:inset 3px 0 0 var(--cos50); }
 .row.pinned, .row.pinned.unread { box-shadow:inset 3px 0 0 #ffc107; }
-.names { font-size:12.5px; font-weight:600; color:#41474b; width:104px; }
+.names { font-size:12.5px; font-weight:500; color:#41474b; width:104px; }
 html.dark .names { color:var(--muted); }
 @media (prefers-color-scheme: dark) { :root:not(.light) .names { color:var(--muted); } }
-.row.unread .names { color:var(--txt); }
+.row.unread .names { font-weight:600; color:var(--txt); }
 .snip { font-size:12.5px; color:var(--hint); }
 .date { font-size:12.5px; color:var(--hint); font-variant-numeric:tabular-nums; }
 .cmtcnt { font-size:11.5px; font-weight:600; color:var(--cos40); background:var(--cos95); border-radius:6px; padding:0 6px; }
