@@ -567,6 +567,106 @@ function push_inbox_unread(int $userId): int
     return (int)$st->fetchColumn();
 }
 
+/**
+ * 업무 시스템(sys)별 안 읽은 수 — 포털 카드 배지용.
+ *
+ * 종류(kind) → 시스템은 push_kinds.json 의 sys 로 가른다. 모듈은 자기 sys 의
+ * 종류로 push_send() 만 하면 카드 배지가 저절로 붙는다(카드에 배지를 켤지는
+ * worksystems.json 의 "badge": "inbox"). 'portal' 처럼 카드가 없는 sys 도 그대로
+ * 돌려준다 — 그리는 쪽이 카드가 있는 것만 쓴다.
+ *
+ * @return array<string,int> sys => 안 읽은 수 (0 인 sys 는 빠진다)
+ */
+function push_inbox_unread_by_sys(int $userId): array
+{
+    $st = portal_db()->prepare("SELECT kind, COUNT(*) AS n FROM portal_notification
+                                 WHERE user_id = ? AND read_at IS NULL GROUP BY kind");
+    $st->execute([$userId]);
+    $out = [];
+    foreach ($st->fetchAll() as $r) {
+        $sys = push_kind($r['kind'])['sys'] ?? 'portal';
+        $out[$sys] = ($out[$sys] ?? 0) + (int)$r['n'];
+    }
+    return $out;
+}
+
+/**
+ * 포털 카드 배지 — 카드 key => 숫자. 0 은 빠진다.
+ *
+ * worksystems.json 에서 "badge": "inbox" 를 단 카드만 센다. 다른 카드에도 붙이려면
+ * 그 줄에 같은 값을 더하면 된다 — 모듈 쪽은 자기 sys 의 종류로 push_send() 를
+ * 하고 있기만 하면 된다. 다른 방식(예: 처리 대기 건수)이 필요해지면 badge 값을
+ * 새로 정의해 여기에 갈래를 더한다.
+ *
+ * @param array $systems work_systems() 의 결과
+ * @return array<string,int>
+ */
+function push_tile_badges(int $userId, array $systems): array
+{
+    $want = [];
+    foreach ($systems as $s) {
+        if (($s['badge'] ?? '') === 'inbox') $want[$s['key']] = true;
+    }
+    if (!$want) return [];
+    try {
+        return array_intersect_key(push_inbox_unread_by_sys($userId), $want);
+    } catch (Throwable $e) {
+        // 배지는 곁가지다 — 못 세면 안 그릴 뿐 첫 화면은 떠야 한다
+        error_log('[push] 카드 배지: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * 주소별 안 읽은 수. 모듈이 자기 목록에서 "이 건에 새 소식 N" 을 그릴 때 쓴다.
+ * $kindPrefix 는 'onwatch.' 처럼 점까지 준다.
+ *
+ * @return array<string,int> url => 안 읽은 수
+ */
+function push_inbox_unread_urls(int $userId, string $kindPrefix): array
+{
+    $st = portal_db()->prepare("SELECT url, COUNT(*) AS n FROM portal_notification
+                                 WHERE user_id = ? AND read_at IS NULL AND kind LIKE ? GROUP BY url");
+    $st->execute([$userId, addcslashes($kindPrefix, '%_\\') . '%']);
+    $out = [];
+    foreach ($st->fetchAll() as $r) $out[(string)$r['url']] = (int)$r['n'];
+    return $out;
+}
+
+/**
+ * 그 건의 안 읽은 알림 중 가장 오래된 것의 시각. 없으면 null.
+ * 모듈 화면이 읽음 처리(push_inbox_mark_read_url) 직전에 불러, 그 뒤로 생긴
+ * 항목에 'NEW' 를 붙이는 데 쓴다. 주소 맞추기 규칙은 아래 함수와 같다.
+ */
+function push_inbox_oldest_unread_url(int $userId, string $kindPrefix, string $url): ?string
+{
+    $like = addcslashes($url, '%_\\');
+    $st = portal_db()->prepare("SELECT MIN(created_at) FROM portal_notification
+                                 WHERE user_id = ? AND read_at IS NULL AND kind LIKE ?
+                                   AND (url = ? OR url LIKE ? OR url LIKE ?)");
+    $st->execute([$userId, addcslashes($kindPrefix, '%_\\') . '%', $url, $like . '&%', $like . '#%']);
+    $v = $st->fetchColumn();
+    return $v ? (string)$v : null;
+}
+
+/**
+ * 모듈 화면에서 그 건을 열어 봤으면 알림함의 같은 알림도 읽음으로 바꾼다.
+ * 알림을 누르지 않고 모듈로 바로 들어가 봐도 배지가 남지 않게 하려는 것이다.
+ * 주소는 앞부분이 같으면 같은 건으로 본다('onwatch/view.php?id=3' 은 '…&f=12' 까지).
+ * 'id=3' 이 'id=31' 에 걸리지 않도록 정확히 같거나 뒤에 '&' '#' 가 오는 것만 고른다.
+ *
+ * @return int 읽음으로 바꾼 수
+ */
+function push_inbox_mark_read_url(int $userId, string $kindPrefix, string $url): int
+{
+    $like = addcslashes($url, '%_\\');
+    $st = portal_db()->prepare("UPDATE portal_notification SET read_at = NOW()
+                                 WHERE user_id = ? AND read_at IS NULL AND kind LIKE ?
+                                   AND (url = ? OR url LIKE ? OR url LIKE ?)");
+    $st->execute([$userId, addcslashes($kindPrefix, '%_\\') . '%', $url, $like . '&%', $like . '#%']);
+    return $st->rowCount();
+}
+
 /** 읽음 표시. $ids 가 null 이면 모두. 본인 것만. */
 function push_inbox_mark_read(int $userId, ?array $ids = null): int
 {

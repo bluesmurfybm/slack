@@ -15,6 +15,7 @@
   .filters { display:flex; gap:8px; align-items:center; }   /* 제목 옆 오른쪽 정렬(부모 space-between) */
   /* 다중선택 필터 드롭다운 */
   .ms { position:relative; display:inline-block; }
+  .ms[hidden] { display:none; }   /* 보드 전용 필터(접수분류)를 다른 보드 탭에서 숨김 */
   .ms-btn { height:32px; padding:0 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); font-size:13px; cursor:pointer; white-space:nowrap; }
   .ms-btn.active { border-color:var(--info); color:var(--info); background:var(--info-bg); }
   .ms-n { display:inline-block; min-width:16px; text-align:center; background:var(--info); color:#fff; border-radius:8px; font-size:11px; padding:0 5px; margin-left:2px; }

@@ -12,6 +12,7 @@ const SLACK_COL = [
     'status'   => 'Col08CPRG76J2',   // 진행상태 (등록/공수산정요청/진행중/확인요청.../완료 등)
     'priority' => 'Col08CFU29FLP',   // 우선순위 (일반/긴급)
     'team'     => 'Col08CWBVM0E7',   // 개발담당팀 (블루소프트/와이오즈/시스템개발/달빛소프트/프레임/미지정)
+    'kind'     => 'Col08CTKK6BC5',   // 접수분류 (유지보수/오류/오류-LXP/유지보수-LXP)
     'eta'      => 'Col08CPRK24VC',   // 예상처리완료일(고객안내용) - date
     'body'     => 'Col08D959GGF3',
     'lms'      => 'Col08D95DP1EV',
@@ -395,6 +396,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
             'status_id'   => isset($m[$COL['status']])   ? slackFieldSelect($m[$COL['status']])   : null,
             'priority_id' => isset($m[$COL['priority']]) ? slackFieldSelect($m[$COL['priority']]) : null,
             'team_id'     => isset($m[$COL['team']])     ? slackFieldSelect($m[$COL['team']])     : null,
+            'kind_id'     => (!empty($COL['kind']) && isset($m[$COL['kind']])) ? slackFieldSelect($m[$COL['kind']]) : null,
             'date'        => isset($m[$COL['date']]) ? slackFieldDate($m[$COL['date']]) : null,
             'done'        => isset($m[$COL['done']]) ? slackFieldDate($m[$COL['done']]) : null,
             'eta'         => isset($m[$COL['eta']])  ? slackFieldDate($m[$COL['eta']])  : null,
@@ -409,6 +411,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
     $statusMap   = $sel[$COL['status']]   ?? [];
     $priorityMap = $sel[$COL['priority']] ?? [];
     $teamMap     = $sel[$COL['team']]     ?? [];
+    $kindMap     = !empty($COL['kind']) ? ($sel[$COL['kind']] ?? []) : [];
 
     $names = slackResolveUsers($token, $userIds);
     $files = slackResolveFiles($token, $allFileIds);   // 파일ID → 메타(영구 캐시)
@@ -419,6 +422,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
         $rows[$i]['status']   = $r['status_id']   ? ($statusMap[$r['status_id']]     ?? $r['status_id'])   : '';
         $rows[$i]['priority'] = $r['priority_id'] ? ($priorityMap[$r['priority_id']] ?? $r['priority_id']) : '';
         $rows[$i]['team']     = $r['team_id']     ? ($teamMap[$r['team_id']]         ?? $r['team_id'])     : '';
+        $rows[$i]['kind']     = $r['kind_id']     ? ($kindMap[$r['kind_id']]         ?? $r['kind_id'])     : '';
         // 첨부: 파일ID → 메타 배열(존재하는 것만), JSON 저장용
         $atts = [];
         foreach ($r['_fileIds'] as $fid) { if (isset($files[$fid]) && empty($files[$fid]['gone'])) $atts[] = $files[$fid]; }
