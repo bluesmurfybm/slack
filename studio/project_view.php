@@ -685,6 +685,13 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                 title="가중치와 배정 방식·단위를 펼칩니다. 이 단추로는 산출되지 않습니다">가중치·방식 조정</button>
         <button type="button" class="ba-btn" id="ba-al-compare"
                 title="차수별 적합도·쏠림·초과를 한 표에서 견줍니다">차수 비교</button>
+        <!-- 차수 복사·삭제 (2026-10-22). 확정본을 고치려면 복사해서 새 차수로 확정한다 -->
+        <button type="button" class="ba-btn" id="ba-al-copy" disabled
+                title="고른 차수를 그대로 옮겨 새 차수를 만듭니다. 확정본은 그대로 남습니다">복사</button>
+        <button type="button" class="ba-btn" id="ba-al-del" disabled
+                title="확정본과 한 번 확정됐던 안은 지울 수 없습니다">삭제</button>
+        <button type="button" class="ba-btn" id="ba-al-purge" disabled
+                title="확정본과 확정 이력을 뺀 나머지 차수를 모두 지웁니다">초안 정리</button>
         <span class="ba-spacer"></span>
         <button type="button" class="ba-btn ba-btn--primary" id="ba-al-confirm">최종 배정 완료</button>
       </div>
