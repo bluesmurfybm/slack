@@ -12,9 +12,10 @@ require_once __DIR__ . '/../core/auth.php';   // 세션 시작 + current_portal_
 require_once __DIR__ . '/lib/http.php';
 require_once __DIR__ . '/db.php';
 
-const ROLE_ADMIN    = 'admin';      // 정산 담당 — 전체 조회·수정·삭제, 정산, 설정
-const ROLE_APPROVER = 'approver';   // 대표 승인 — 전체 조회, 승인·반려만
-const ROLE_STAFF    = 'staff';      // 직원 — 본인 청구만, 승인 전까지만 수정
+// 화면에서는 승인·정산 두 권한을 '관리자'로 통칭하고, 그 밖의 사람은 '구성원'이라 부른다.
+const ROLE_ADMIN    = 'admin';      // 관리자(정산) — 전체 조회·수정·삭제, 정산, 설정
+const ROLE_APPROVER = 'approver';   // 관리자(승인) — 전체 조회, 승인·반려 + 본인 청구는 구성원처럼
+const ROLE_STAFF    = 'staff';      // 구성원 — 본인 청구만, 승인 전까지만 수정
 const ROLES = [ROLE_ADMIN, ROLE_APPROVER, ROLE_STAFF];
 
 // 최초 기동 때 bl_travel_roles 에 심는다. 그 뒤로는 설정 화면에서 바꾼 DB 값이 원본이다.
@@ -78,7 +79,7 @@ function bl_can_see_all(array $me) {
 }
 
 function bl_require_admin(array $me, $what = '이 일') {
-    if ($me['role'] !== ROLE_ADMIN) throw new BlError("{$what}은(는) 정산 담당자만 할 수 있습니다", 403);
+    if ($me['role'] !== ROLE_ADMIN) throw new BlError("{$what}은(는) 정산 관리자만 할 수 있습니다", 403);
 }
 
 /* ---------- CSRF ----------

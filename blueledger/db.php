@@ -127,7 +127,7 @@ function bl_ddl(PDO $pdo, $table, array $def) {
         if (!$sqlite && $comment !== '') $line .= ' COMMENT ' . $pdo->quote($comment);
         $lines[] = $line;
     }
-    $lines[] = "PRIMARY KEY (`{$def['pk']}`)";
+    $lines[] = 'PRIMARY KEY (`' . implode('`,`', (array)$def['pk']) . '`)';
     $out = [];
     if ($sqlite) {
         $out[] = "CREATE TABLE IF NOT EXISTS `$table` (\n  " . implode(",\n  ", $lines) . "\n)";

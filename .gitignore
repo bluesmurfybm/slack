@@ -85,7 +85,11 @@ var/notice/
 
 # blueledger(BlueLedger 출장여비) 영수증 원본. 폴더는 blueledger/var/.htaccess(직접 접근 차단)와 함께 앱이 만든다.
 blueledger/var/receipts/
+blueledger/var/resort/
 # blueledger/README.md 는 서버에 올리는 사람이 봐야 하는 설치·운영 문서라 공유되어야 함
 !/blueledger/README.md
+# 리조트 예약(BlueStay)은 아직 올리지 않는다 — 이 PC 의 bluestay 브랜치에만 있다(2026-10-22).
+# amitoa 에서 실수로 다시 커밋되지 않게 막아 둔다. bluestay 브랜치의 파일은 이미 추적 중이라 영향 없다.
+blueledger/resort/
 # 로컬 시험(SQLite, dev/local_setup.php) 데이터 — PC 마다 다르다
 var/localdb/

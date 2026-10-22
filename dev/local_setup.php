@@ -10,6 +10,7 @@
  *  3) bluecart·studio 의 스키마 SQL 을 core/sqlite_compat.php 번역기로 적용한다.
  *     적용한 파일은 _local_sql_applied 표에 적어 두고 다시 돌리지 않는다.
  *  4) 포털·각 모듈의 DB 함수를 한 번씩 불러 자동 생성 표를 만든다.
+ *  5) 리조트 예약 기존 이용내역 16건을 넣는다(비어 있을 때만).
  *
  * 데이터는 var/localdb/*.sqlite 다. 지우면 처음부터 다시 만든다(포털 계정 초기 비번 blue$123).
  */

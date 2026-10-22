@@ -13,7 +13,10 @@ const DEFAULT_SETTINGS = [
     'fuel'         => ['gas' => 1866.16, 'diesel' => 1849.17, 'lpg' => 1103.31],
     'eff'          => 10,
     'priceBase'    => '2026년 8월 1주',
-    'mealUnit'     => 10000,
+    'mealUnit'     => 15000,   // 1인 식대 기준(2026-10-22 작성기준 개정: 10,000 → 15,000)
+    // 오피넷에서 받은 유가를 주유비 산정 기준에 바로 쓴다(2026-10-22). 끄면 예전처럼 정산 관리자가
+    // '이 가격을 산정 기준으로 적용'을 눌러야 바뀐다(작성기준은 2026-10-22 부터 '매주 최신 유가로 산정'이다).
+    'autoFuel'     => true,
 ];
 
 // 페트로넷 첫 화면 게시값(2026년 10월 1주). 오피넷 키를 넣기 전까지 보여 줄 값이다.
@@ -80,10 +83,25 @@ function bl_save_settings(PDO $pdo, array $body) {
     // 키는 다시 보여 주지 않으므로 빈칸은 '그대로 두기'다. 지우려면 clearOpinetKey 를 보낸다.
     if (trim((string)($body['opinetKey'] ?? '')) !== '') $cur['opinetKey'] = clip($body['opinetKey'], 100);
     if (!empty($body['clearOpinetKey'])) $cur['opinetKey'] = '';
+    if (array_key_exists('autoFuel', $body)) $cur['autoFuel'] = (bool)$body['autoFuel'];
     bl_setting_put($pdo, 'main', $cur);
+    bl_sync_auto_fuel($pdo);   // 자동 적용을 켰으면 지금 유가로 바로 맞춘다
 }
 
 /** 화면의 유가를 주유비 산정 기준으로 옮긴다 */
+/** 자동 적용이 켜져 있고 산정 기준이 최근 유가와 다르면 맞춘다. 화면을 열 때·유가를 받을 때 부른다. */
+function bl_sync_auto_fuel(PDO $pdo) {
+    $s = bl_settings($pdo);
+    if (empty($s['autoFuel'])) return;
+    $p = bl_prices($pdo);
+    foreach (['gas', 'diesel', 'lpg'] as $k) {
+        if (abs((float)($s['fuel'][$k] ?? 0) - (float)($p[$k] ?? 0)) > 0.001 || ($s['priceBase'] ?? '') !== ($p['label'] ?? '')) {
+            bl_apply_prices($pdo);
+            return;
+        }
+    }
+}
+
 function bl_apply_prices(PDO $pdo) {
     $p   = bl_prices($pdo);
     $cur = bl_settings($pdo);
@@ -136,6 +154,7 @@ function bl_refresh_prices(PDO $pdo) {
     }
     $cur['checkedAt'] = $now;
     bl_setting_put($pdo, 'prices', $cur);
+    bl_sync_auto_fuel($pdo);
     return $cur;
 }
 
