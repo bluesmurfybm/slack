@@ -10,6 +10,7 @@
  *  3) bluecart·studio 의 스키마 SQL 을 core/sqlite_compat.php 번역기로 적용한다.
  *     적용한 파일은 _local_sql_applied 표에 적어 두고 다시 돌리지 않는다.
  *  4) 포털·각 모듈의 DB 함수를 한 번씩 불러 자동 생성 표를 만든다.
+ *  5) 리조트 예약 기존 이용내역 16건을 넣는다(비어 있을 때만).
  *
  * 데이터는 var/localdb/*.sqlite 다. 지우면 처음부터 다시 만든다(포털 계정 초기 비번 blue$123).
  */
@@ -120,6 +121,13 @@ foreach ($touch as $name => $fn) {
         $say("  {$name} 표 만들기 실패 — 화면을 열 때 다시 시도합니다: " . $e->getMessage());
     }
 }
+
+/* ---------- 5) 리조트 기존 이용내역 ----------
+ * 리조트 예약은 엑셀에서 옮긴 16건이 있어야 화면이 비지 않는다. 이미 있으면 도구가 건너뛴다.
+ * 별도 프로세스로 돌린다 — 포털 세션·상수를 이 스크립트와 섞지 않기 위해서다.
+ */
+passthru(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/blueledger/resort/tools/import_seed.php'), $rc);
+if ($rc !== 0) $say('  리조트 기존 이용내역 넣기 실패 — 나중에 blueledger\\resort\\tools\\import_seed.php 를 직접 돌리세요.');
 
 $say('');
 $say('준비 끝. 로컬_실행.bat 을 더블클릭하거나:');

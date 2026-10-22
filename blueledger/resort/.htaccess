@@ -1,0 +1,5 @@
+# 리조트 예약 — Apache 보호 설정 (Nginx는 README의 설정 예시 참고)
+Options -Indexes
+<FilesMatch "^(config(\.sample)?\.php|.*\.sql|.*\.md|.*\.bat|.*\.sqlite.*)$">
+  Require all denied
+</FilesMatch>

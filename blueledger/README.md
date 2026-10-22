@@ -1,6 +1,7 @@
 # BlueLedger (blueledger)
 
-사내 재무회계 프로그램 BlueLedger 를 포털(blue-iWorks)로 옮기는 모듈. **지금은 출장여비만 옮겼다.**
+사내 재무회계 프로그램 BlueLedger 를 포털(blue-iWorks)로 옮기는 모듈. **지금은 출장여비와 리조트 예약 · 식대 정산(`resort/`)을 옮겼다.**
+리조트는 `resort/README.md` 에 따로 적었다 — 로그인 · 직원 명단 · DB 는 출장여비와 같고 표만 `bl_resort_*` 이다.
 회계 장부(통장·카드·급여·정산 등, 파이썬 `app.py`)는 아직 지안 님 PC 의 파이썬 버전에 있다.
 
 ## 구성
@@ -16,7 +17,8 @@ blueledger/
 ├── static/travel.js     화면 스크립트 (파이썬 버전 화면 그대로 + 서버 주소만 바꿈)
 ├── styles/travel.css
 ├── tools/import_travel.php   파이썬 travel.db → 새 DB 옮기기
-└── var/                 영수증 원본(receipts/). 웹에서 직접 열리면 안 된다
+├── resort/              리조트 예약 · 식대 정산 (resort/README.md)
+└── var/                 영수증 원본(receipts/, resort/). 웹에서 직접 열리면 안 된다
 ```
 
 ## 로그인·권한
@@ -45,6 +47,7 @@ blueledger/
    location ^~ /blueledger/var/   { deny all; }
    location ^~ /blueledger/tools/ { deny all; }
    location ^~ /blueledger/lib/   { deny all; }
+   location ~ ^/blueledger/resort/(lib|tools|data|tests)/ { deny all; }
    location = /blueledger/config.local.php { deny all; }
    ```
    영수증이 20MB 까지라 `client_max_body_size` 25m 이상, php.ini `upload_max_filesize=20M`, `post_max_size=25M`.
@@ -64,6 +67,7 @@ blueledger/
 DB 는 포털 MySQL 백업에 같이 들어간다(`bl_travel_*` 네 테이블). 영수증은 파일이라 **`blueledger/var/receipts/`
 를 따로 백업**해야 한다. 예: 매일 `mysqldump ... bl_travel_trips bl_travel_files bl_travel_roles bl_travel_settings`
 + `tar czf receipts-$(date +%F).tgz blueledger/var/receipts`.
+리조트는 `bl_resort_*` 일곱 표와 `blueledger/var/resort/` 를 같은 방법으로 백업한다.
 
 ## 로컬 시험
 

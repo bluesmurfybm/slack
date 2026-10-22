@@ -1,0 +1,275 @@
+
+<!-- 첫 줄: 리조트 예약(누르면 처음 화면) ─ 버튼들 / 둘째 줄: 이용기간 -->
+<header class="rs">
+  <h1><a href="#" id="goHome" title="처음 화면으로">리조트 예약</a><small>(주)블루소프트 복리후생</small></h1>
+  <div class="period" aria-label="이용기간">
+    <span class="lab" id="pLab"></span>
+    <span class="rng" id="pRng"></span>
+    <div class="ptrack" aria-hidden="true"><span id="pBar"></span></div>
+    <span class="left" id="pLeft"></span>
+  </div>
+  <span class="status-line" id="conn">불러오는 중…</span>
+  <span class="hspace"></span>
+  <select class="btn" id="periodSel" aria-label="이용기간"></select>
+  <button class="btn wide admin-only" id="btnXlsx">통합내역 엑셀</button>
+  <button class="btn admin-only" id="btnSettings">설정</button>
+</header>
+
+<nav class="vtabs" role="tablist" aria-label="화면">
+  <button role="tab" class="admin-only" data-v="dash" aria-selected="false">예약 현황</button>
+  <button role="tab" class="admin-only" data-v="list" aria-selected="false">예약·지출 목록</button>
+  <button role="tab" class="admin-only" data-v="merged" aria-selected="false">통합내역</button>
+  <button role="tab" class="admin-only" data-v="notice" aria-selected="false">안내문</button>
+</nav>
+
+<main id="main" data-view="req">
+ <!-- 예약 · 식대 한 화면: 왼쪽은 내 예약 · 식대 현황, 오른쪽은 누른 것에 맞춰 신청서 또는 식대 지출 -->
+ <div class="view split form-right" data-view="req">
+  <div class="rightcol">
+   <div class="paneseg" role="tablist" aria-label="오른쪽 입력란">
+    <button type="button" role="tab" data-pane-btn="req" aria-selected="true">리조트 예약 신청서</button>
+    <button type="button" role="tab" data-pane-btn="meal" aria-selected="false">식대 · 부대비용 지출</button>
+   </div>
+  <section class="slip" data-pane="req" aria-label="리조트 예약 신청서">
+    <div class="slip-head"><h2>리조트 예약 신청서</h2><span class="mode" id="formMode">새 신청</span><button class="btn sm" id="btnClear" type="button">새로 쓰기</button></div>
+    <form class="slip-body" id="form" autocomplete="off" onsubmit="return false">
+      <fieldset id="fsInfo">
+        <legend>예약 정보</legend>
+        <div class="grid">
+          <label class="f"><span class="req">성명</span><select id="name"></select></label>
+          <label class="f"><span>실이용자 <small>(본인이 아니면)</small></span><input id="user" placeholder="예: 가족 이름"></label>
+          <label class="f"><span>부서 / 직위</span><input id="dept" placeholder="솔루션사업 / 선임"></label>
+          <label class="f"><span>연락처</span><input id="phone" inputmode="tel" placeholder="010-0000-0000"></label>
+          <label class="f full"><span>리조트 선택 <small>(소노호텔앤리조트)</small></span><select id="resortPick"></select></label>
+          <label class="f full"><span class="req">리조트 · 객실</span><input id="resort" list="resortList" placeholder="리조트를 고른 뒤 객실 타입을 이어서 적어 주세요"></label>
+          <div class="full refl"><a id="resortLink" href="https://www.sonohotelsresorts.com" target="_blank" rel="noopener">소노호텔앤리조트 홈페이지에서 객실 참고하기</a><span>소노예약센터 1588-4888</span></div>
+          <label class="f"><span class="req">체크인</span><input id="ci" type="date"></label>
+          <label class="f"><span class="req">체크아웃</span><input id="co" type="date"></label>
+          <label class="f"><span>객실 수</span><input id="rooms" type="number" min="1" max="9" value="1" inputmode="numeric"></label>
+          <label class="f"><span>박 수</span><input id="nights" readonly tabindex="-1"></label>
+          <label class="f full"><span>사용 목적</span><input id="purpose" value="임직원 복리후생"></label>
+          <label class="f full"><span>요청사항</span><textarea id="wish" rows="2" placeholder="대체 가능 일정, 객실 타입 희망 등"></textarea></label>
+        </div>
+        <div class="hint" id="dateHint"></div>
+        <div class="lim" id="limBox" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset id="fsResv" class="admin-only">
+        <legend>예약 처리 · 정산 담당</legend>
+        <div class="seg2" id="statusSeg" role="group" aria-label="예약 상태">
+          <button type="button" class="s-wait" data-v="신청">신청</button>
+          <button type="button" class="s-ok" data-v="확정">예약 확정</button>
+          <button type="button" class="s-no" data-v="반려">반려</button>
+          <button type="button" class="s-none" data-v="취소">취소</button>
+        </div>
+        <label class="f" id="reasonWrap" style="margin-top:8px"><span>반려 · 취소 사유</span><input id="reason" placeholder="예: 해당 일자 만실 / 본인 요청 취소"></label>
+        <div class="grid" style="margin-top:8px">
+          <label class="f"><span>예약 아이디 (회원권)</span><select id="resvId"></select></label>
+          <label class="f"><span>결제 카드</span><select id="card"></select></label>
+          <label class="f"><span>예약일</span><input id="resvDate" type="date"></label>
+          <label class="f"><span>결제일</span><input id="payDate" type="date"></label>
+          <label class="f"><span>객실요금 (원)</span><input id="roomFee" class="r num" inputmode="numeric"></label>
+          <label class="f"><span>숙박 추가결제 (원)</span><input id="addFee" class="r num" inputmode="numeric" placeholder="인원 추가 등"></label>
+        </div>
+      </fieldset>
+
+      <p class="lockmsg" id="lockMsg" hidden></p>
+    </form>
+    <div class="slip-foot">
+      <div><div class="total-lab">숙박 합계 (객실+추가결제)</div><div class="total num" id="total">0원</div></div>
+      <div class="btns">
+        <button class="btn danger admin-only" id="btnDel" hidden>삭제</button>
+        <button class="btn" id="btnDoc" hidden>지출확인서</button>
+        <button class="btn primary" id="btnSave">신청하기</button>
+      </div>
+    </div>
+  </section>
+  <section class="slip" data-pane="meal" aria-label="식대 · 부대비용 지출" hidden>
+    <div class="slip-head"><h2>식대 · 부대비용 지출</h2><span class="mode" id="mealMode">예약 선택</span></div>
+    <form class="slip-body" id="form2" autocomplete="off" onsubmit="return false">
+      <fieldset id="fsPick">
+        <legend>리조트 예약 선택</legend>
+        <label class="f"><span>확정된 예약</span><select id="mealPick"></select></label>
+        <div class="pickbox" id="pickBox"></div>
+        <div class="lim" id="mealLim"></div>
+      </fieldset>
+      <fieldset id="fsCard" class="admin-only">
+        <legend>식대용 법인카드</legend>
+        <div class="g3">
+          <label class="f"><span>전달 카드</span><select id="mealCard"></select></label>
+          <label class="f"><span>전달일</span><input id="cardOut" type="date"></label>
+          <label class="f"><span>반납일</span><input id="cardIn" type="date"></label>
+        </div>
+      </fieldset>
+
+      <fieldset id="fsMeal">
+        <legend>식대 · 부대비용</legend>
+        <div class="mhead"><span>사용일</span><span>사용처</span><span style="text-align:right">금액</span><span></span></div>
+        <div class="meals" id="meals"></div>
+        <div class="addline">
+          <button class="btn sm" type="button" id="btnMeal">+ 식대 한 줄</button>
+          <span class="hint" id="mealSum"></span>
+        </div>
+        <div class="grid" style="margin-top:10px">
+          <label class="f"><span>부대시설 이용료 (원)</span><input id="facFee" class="r num" inputmode="numeric"></label>
+          <label class="f"><span>기타 (원)</span><input id="etcFee" class="r num" inputmode="numeric"></label>
+        </div>
+        <div class="addline">
+          <label class="att" data-k="doc"><span>숙박 영수증 · 예약확인 첨부</span><input type="file" accept="image/*,application/pdf" multiple></label>
+        </div>
+        <div class="thumbs" id="th-doc" style="margin-top:6px"></div>
+      </fieldset>
+
+      <fieldset id="fsSettle" class="admin-only">
+        <legend>경비 정산</legend>
+        <div class="seg2" id="settleSeg" role="group" aria-label="정산 상태">
+          <button type="button" class="s-wait" data-v="미정산">미정산</button>
+          <button type="button" class="s-ok" data-v="정산완료">정산 완료</button>
+        </div>
+        <div class="grid" style="margin-top:8px">
+          <label class="f"><span>정산일</span><input id="settledAt" type="date"></label>
+          <label class="f"><span>비고</span><input id="adminNote" placeholder="영수증 분실 · 카드내역 조회 등"></label>
+        </div>
+      </fieldset>
+      <p class="lockmsg" id="lockMsg2" hidden></p>
+    </form>
+    <div class="slip-foot">
+      <div><div class="total-lab">식대 + 부대 · 기타</div><div class="total num" id="mealTotal">0원</div></div>
+      <div class="btns">
+        <button class="btn" id="btnDoc2" hidden>지출확인서</button>
+        <button class="btn primary" id="btnSave2" hidden>지출 저장</button>
+      </div>
+    </div>
+  </section>
+  </div>
+  <div class="col">
+  <div class="panel"><h2 id="reqTitle">예약 신청 현황<span class="meta" id="reqMeta"></span></h2><div class="queue" id="reqList"></div></div>
+
+    <!-- 식대 지출현황 · 사용 내역: 직원 화면에서는 쓰지 않는다(관리자만). 직원 화면은 다른 내용으로 바꿀 자리 -->
+    <div class="panel admin-only">
+      <h2 id="mstatTitle">직원별 식대 지출현황<span class="meta" id="mstatMeta"></span></h2>
+      <div class="tablewrap" style="padding:8px 0 4px"><table class="mstat"><thead><tr><th>성명</th><th class="r">식대 한도</th><th class="r">사용</th><th>사용률</th><th class="r">잔여</th><th class="c">건수</th><th>식대카드</th></tr></thead><tbody id="mstatBody"></tbody><tfoot id="mstatFoot"></tfoot></table></div>
+    </div>
+    <div class="panel admin-only">
+      <h2>식대 사용 내역<span class="meta"><select class="btn sm" id="mealWho" aria-label="직원 선택"></select></span></h2>
+      <div class="tablewrap" style="padding:8px 0 4px"><table class="mlines"><thead><tr><th>사용일</th><th>성명</th><th>사용처</th><th class="r">금액</th><th>방문 리조트</th><th class="c">영수증</th></tr></thead><tbody id="mlBody"></tbody><tfoot id="mlFoot"></tfoot></table></div>
+    </div>
+  </div>
+ </div>
+
+    <!-- 현황 -->
+    <div class="view" data-view="dash" hidden>
+      <div class="kpis" id="kpis"></div>
+      <div class="panel">
+        <h2 id="boardTitle">직원별 이용 현황<span class="meta" id="boardMeta"></span></h2>
+        <div class="legend"><span><i style="background:var(--sea)"></i>확정된 숙박</span><span><i style="background:repeating-linear-gradient(135deg,var(--wait) 0 3px,var(--wait-soft) 3px 6px)"></i>신청 중</span><span><i style="background:var(--no);width:3px"></i>오늘</span></div>
+        <div class="board"><div class="brd" id="board"></div></div>
+      </div>
+      <div class="twocol">
+        <div class="panel"><h2 id="queueTitle">처리할 일<span class="meta">신청 · 카드 반납 · 정산</span></h2><div class="queue" id="queue"></div></div>
+        <div class="panel admin-only"><h2>회원권 숙박일수<span class="meta">확정 예약 기준 (객실 수 × 박 수)</span></h2><div class="acct" id="accts"></div></div>
+      </div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="panel view list" data-view="list" hidden>
+      <h2>예약 · 지출 목록<span class="meta" id="listMeta"></span></h2>
+      <div class="tools">
+        <input id="q" placeholder="성명, 리조트, 사용처 검색" aria-label="검색">
+        <select class="btn" id="fStatus" aria-label="상태">
+          <option value="all">전체 상태</option><option>신청</option><option>확정</option><option>반려</option><option>취소</option>
+        </select>
+        <select class="btn admin-only" id="fSettle" aria-label="정산">
+          <option value="all">정산 전체</option><option>미정산</option><option>정산완료</option>
+        </select>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr class="grp"><th colspan="6"></th><th colspan="5">숙박</th><th colspan="3">식대 · 부대</th><th colspan="2">예약</th><th colspan="3">카드 · 정산</th></tr>
+            <tr><th>No.</th><th>상태</th><th>성명</th><th>리조트 · 객실</th><th>체크인 ~ 체크아웃</th><th class="c">객실/박</th>
+              <th class="r">숙박일수</th><th class="r">객실요금</th><th class="r">추가결제</th><th class="r">숙박 합계</th><th>비고</th>
+              <th class="r">식대</th><th class="r">부대·기타</th><th class="c">영수증</th>
+              <th>아이디</th><th>결제</th>
+              <th>식대카드</th><th>반납</th><th>정산</th></tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+          <tfoot id="tfoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- 통합내역 -->
+    <div class="panel view" data-view="merged" hidden>
+      <h2>통합내역<span class="meta">확정 예약 기준 · 엑셀 서식과 같은 배열</span></h2>
+      <div class="sheet" id="sheet"></div>
+    </div>
+
+    <!-- 안내문 -->
+    <div class="panel view" data-view="notice" hidden>
+      <h2>안내문<span class="meta">카카오톡 · 메신저에 붙여 넣어 보내세요</span></h2>
+      <div class="notice">
+        <div>
+          <h3>예약자별 안내문 <button class="btn sm primary" id="btnCopyP" type="button">복사</button></h3>
+          <div class="opts">
+            <select id="nSel" aria-label="예약 선택"></select>
+            <select id="nKind" aria-label="안내문 종류">
+              <option value="ok">예약 확정 + 이용 · 카드 안내</option>
+              <option value="return">카드 · 영수증 반납 요청</option>
+              <option value="no">반려 · 취소 안내</option>
+            </select>
+            <label><input type="checkbox" id="nLimit" checked> 잔여 한도 포함</label>
+          </div>
+          <textarea id="nOut" aria-label="예약자별 안내문"></textarea>
+        </div>
+        <div>
+          <h3>기본 안내문 (리조트 이용 · 법인카드 반출) <button class="btn sm" id="btnCopyB" type="button">복사</button><button class="btn sm admin-only" id="btnSaveN" type="button">문구 저장</button></h3>
+          <div class="hint" style="margin-bottom:8px">여기서 고친 문구가 예약자별 안내문에도 그대로 들어갑니다.</div>
+          <textarea id="nBase" aria-label="기본 안내문"></textarea>
+        </div>
+      </div>
+    </div>
+</main>
+
+<dialog id="dlgSet">
+  <div class="dh">설정 <span class="status-line" id="setPeriodLab"></span></div>
+  <div class="db">
+    <div>
+      <div class="sec-t">직원별 연간 한도 <span class="hint">(사외이사 제외 · 선택한 이용기간에 적용)</span></div>
+      <div class="tablewrap"><table class="stbl"><thead><tr><th>성명</th><th class="r">숙박비 한도</th><th class="r">식대 한도</th><th class="r">제공 박수</th><th class="c">회사</th><th></th></tr></thead><tbody id="stBody"></tbody></table></div>
+      <div class="addline"><button class="btn sm" id="stAdd" type="button">+ 직원 추가</button><span class="hint">기본 한도: 숙박 1,500,000원 · 식대 500,000원 · 4박</span></div>
+    </div>
+    <div>
+      <div class="sec-t">회원권 (예약 아이디)</div>
+      <table class="stbl"><thead><tr><th>아이디</th><th>회원권 번호</th><th class="r">연간 숙박일수</th><th></th></tr></thead><tbody id="acBody"></tbody></table>
+      <div class="addline"><button class="btn sm" id="acAdd" type="button">+ 회원권 추가</button></div>
+    </div>
+    <div>
+      <div class="sec-t">결제 수단 <span class="hint">(지출확인서에 표시될 이름 · 끝 4자리는 목록 표시용)</span></div>
+      <table class="stbl"><thead><tr><th>끝 4자리 / 구분</th><th>표시 이름</th><th></th></tr></thead><tbody id="cdBody"></tbody></table>
+      <div class="addline"><button class="btn sm" id="cdAdd" type="button">+ 결제 수단 추가</button></div>
+    </div>
+    <div>
+      <div class="sec-t">관리자 <span class="hint">(포털 계정 그대로. 관리자는 6개 탭 전체와 확정 · 정산 · 설정을 합니다. 직원 이름은 위 한도의 성명과 같아야 본인 예약이 연결됩니다)</span></div>
+      <div class="tablewrap"><table class="stbl"><thead><tr><th>이름</th><th>이메일</th><th>권한</th></tr></thead><tbody id="usBody"></tbody></table></div>
+    </div>
+    <label class="f" style="max-width:240px"><span>정산 · 확인 담당</span><input id="sHandler"></label>
+  </div>
+  <div class="df"><button class="btn" id="setCancel" type="button">닫기</button><button class="btn primary" id="setSave" type="button">설정 저장</button></div>
+</dialog>
+
+<dialog id="dlgRec">
+  <div class="dh">예약 자세히 <span id="recBadge"></span></div>
+  <div class="db"><div class="recview" id="recBody"></div></div>
+  <div class="df"><button class="btn" id="recClose" type="button">닫기</button><button class="btn" id="recMeal" type="button">식대 · 영수증</button><button class="btn primary" id="recOpen" type="button">신청서에서 열기</button></div>
+</dialog>
+
+<dialog id="dlgDoc">
+  <div class="dh">리조트 사용 및 지출확인서</div>
+  <div class="db"><div class="doc" id="docBody"></div></div>
+  <div class="df"><button class="btn" id="docClose" type="button">닫기</button><button class="btn primary" id="docXlsx" type="button">엑셀로 저장</button></div>
+</dialog>
+
+<datalist id="resortList"></datalist>
+<div class="toast" id="toast" role="status"></div>
+

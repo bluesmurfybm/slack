@@ -37,6 +37,7 @@ $csrf = bl_csrf_token();
         </div>
         <div class="dd-menu">
           <a href="../index.php?view=profile">👤 마이페이지</a>
+          <a href="resort/">🏖️ 리조트 예약</a>
           <div class="dd-sep"></div>
           <?= work_systems_menu('../', 'blueledger') ?>
           <div class="dd-sep"></div>
