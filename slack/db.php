@@ -79,6 +79,9 @@ function db() {
     // 기존 설치본 마이그레이션: cmt_count 컬럼 없으면 추가
     add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `cmt_count` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `team`");
     add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `eta` DATE NULL AFTER `cmt_count`");
+    // 접수분류 (유비온 리스트 전용 select: 유지보수/오류/오류-LXP/유지보수-LXP)
+    add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `kind_id` VARCHAR(32) NULL AFTER `team`");
+    add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `kind` VARCHAR(40) NOT NULL DEFAULT '' COMMENT '접수분류' AFTER `kind_id`");
 
     // 담당자 다중(콤마구분) 저장 위해 컬럼 폭 확대: asg_id VARCHAR(32)→255 (1회만)
     $asgLen = $pdo->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='requests' AND COLUMN_NAME='asg_id'")->fetchColumn();

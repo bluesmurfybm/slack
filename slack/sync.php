@@ -44,20 +44,27 @@ foreach ($pdo->query("SELECT id FROM requests WHERE locked = 1") as $r) $locked[
 $insertSql = "
     INSERT INTO requests
         (id, list_id, board, title, body, momo, lms, req_id, req, asg_id, asg, status_id, status,
-         priority_id, priority, team_id, team, `eta`, `date`, `done`, attachments, created, updated, synced_at)
+         priority_id, priority, team_id, team, kind_id, kind, `eta`, `date`, `done`, attachments, created, updated, synced_at)
     VALUES
         (:id,:list_id,:board,:title,:body,:momo,:lms,:req_id,:req,:asg_id,:asg,:status_id,:status,
-         :priority_id,:priority,:team_id,:team,:eta,:date,:done,:attachments,:created,:updated,:synced_at)
+         :priority_id,:priority,:team_id,:team,:kind_id,:kind,:eta,:date,:done,:attachments,:created,:updated,:synced_at)
     ON DUPLICATE KEY UPDATE
         list_id=VALUES(list_id), board=VALUES(board), title=VALUES(title), body=VALUES(body),
         momo=VALUES(momo), lms=VALUES(lms), req_id=VALUES(req_id), req=VALUES(req),
         asg_id=VALUES(asg_id), asg=VALUES(asg), status_id=VALUES(status_id), status=VALUES(status),
         priority_id=VALUES(priority_id), priority=VALUES(priority), team_id=VALUES(team_id), team=VALUES(team),
+        kind_id=VALUES(kind_id), kind=VALUES(kind),
         `eta`=VALUES(`eta`), `date`=VALUES(`date`), `done`=VALUES(`done`),
         attachments=VALUES(attachments), updated=VALUES(updated), synced_at=VALUES(synced_at)
 ";
 $stmt     = $pdo->prepare($insertSql);
 $prevStmt = $pdo->prepare("SELECT `updated` FROM requests WHERE id = ?");
+// locked(로컬 수정) 항목도 접수분류는 로컬 편집 대상이 아니므로 Slack 값으로 갱신
+$kindStmt = $pdo->prepare("UPDATE requests SET kind_id = ?, kind = ? WHERE id = ?");
+
+// 접수분류 컬럼 신설 → 기존 행 채우기 위해 1회 전체 동기화 (증분은 변경 항목만 처리하므로)
+$kindBackfill = !$full && meta_get('kind_backfill_v1') === null;
+if ($kindBackfill) $full = true;
 
 $inserted = 0; $updated = 0; $skipped = 0; $scanned = 0; $deleted = 0; $archivedNow = 0;
 $changedIds = []; $errors = [];
@@ -81,7 +88,7 @@ foreach ($boards as $listId => $b) {
             $row['momo'] = '';
         }
 
-        if (isset($locked[$row['id']])) { $skipped++; continue; }
+        if (isset($locked[$row['id']])) { $kindStmt->execute([$row['kind_id'], $row['kind'], $row['id']]); $skipped++; continue; }
 
         $prevStmt->execute([$row['id']]);
         $prev = $prevStmt->fetchColumn();
@@ -95,6 +102,7 @@ foreach ($boards as $listId => $b) {
             ':status_id' => $row['status_id'], ':status' => $row['status'],
             ':priority_id' => $row['priority_id'], ':priority' => $row['priority'],
             ':team_id' => $row['team_id'], ':team' => $row['team'],
+            ':kind_id' => $row['kind_id'], ':kind' => $row['kind'],
             ':eta' => $row['eta'] ?: null, ':date' => $row['date'] ?: null, ':done' => $row['done'] ?: null,
             ':attachments' => $row['attachments'] ?? null,
             ':created' => $row['created'], ':updated' => $row['updated'], ':synced_at' => $now,
@@ -126,6 +134,8 @@ foreach ($boards as $listId => $b) {
     }
     if (!empty($data['maxUpdated'])) meta_set('list_updated_max_' . $listId, $data['maxUpdated']);
 }
+
+if ($kindBackfill && !$errors) meta_set('kind_backfill_v1', time());
 
 // 삭제된 항목의 사용자 상태(읽음/고정/숨김/배정) 고아 행 정리
 if ($deleted > 0) {

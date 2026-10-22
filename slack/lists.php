@@ -28,6 +28,7 @@ header('Pragma: no-cache');
 <link rel="stylesheet" href="styles/header.css">
 <link rel="stylesheet" href="styles/common.css">
 <link rel="stylesheet" href="styles/lists.css">
+<link rel="stylesheet" href="styles/lists-dti.css">   <!-- dti(BlueMagazine) 디자인 레이어 -->
 </head>
 <body>
 <?php include __DIR__ . '/header.php'; ?>
@@ -40,7 +41,7 @@ header('Pragma: no-cache');
       <button id="dueBtn" type="button" class="txtbtn dueBtn" hidden title="예상완료일 초과 항목만 보기">⚠️ 지연 <span id="dueCnt">0</span></button>
       <button id="toggleUn" type="button" class="txtbtn iconable" title="미지정 숨기기"><span class="bico">👥</span><span class="btxt">미지정 숨기기</span></button>
       <button id="toggleArch" type="button" class="txtbtn iconable" title="보관 보기"><span class="bico">🗄️</span><span class="btxt">보관 보기</span></button>
-      <button id="toggleHidden" type="button" class="tip" data-tip="숨김 보기"><span class="ico" id="hidIco">🙈</span><span class="cnt" id="hidCnt"></span></button>
+      <button id="toggleHidden" type="button" class="tip" data-tip="숨김 보기"><span class="ico hid-ico" id="hidIco"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.73 5.08A10.74 10.74 0 0 1 21.94 11.65a1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></span><span class="cnt" id="hidCnt"></span></button>
       <button id="schoolBtn" type="button" class="tip" data-tip="학교 검색">🏫</button>
       <div class="dropdown" id="recentDd">
         <button type="button" class="ddBtn tip" data-tip="최근 본 항목" id="recentBtn">🕘<span class="caret">▾</span></button>
@@ -65,6 +66,7 @@ header('Pragma: no-cache');
     <span class="search-wrap"><input id="search" type="text" placeholder="검색…"><button id="searchClear" type="button" class="search-x" hidden title="검색 지우기">✕</button></span>
     <div class="ms" id="msPriority"></div>
     <div class="ms" id="msTeam"></div>
+    <div class="ms" id="msKind"></div>
     <div class="ms" id="msStatus"></div>
     <div class="ms" id="msAsg"></div>
     <button id="reset" type="button">필터 초기화</button>
@@ -208,7 +210,7 @@ const BOARD_LABEL = { "블루소프트":"유비온", "와이오즈":"와이오�
 function boardLabel(b){ return BOARD_LABEL[b] || b; }
 // 보드별 독립 필터: 블루소프트/와이오즈 값이 달라 각자 체크·적용
 function emptyFilt(){ return {"블루소프트":new Set(), "와이오즈":new Set()}; }
-let FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+let FILT = { priority:emptyFilt(), team:emptyFilt(), kind:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
 let selected = new Set();                // 체크박스 선택 항목
 let splitOn = true;                       // 미지정 리스트 2분할 표시 여부(기본 표시)
 let cmtCache = {};                        // 레코드별 댓글 캐시(렌더 깜빡임 방지)
@@ -423,6 +425,7 @@ function matchBase(r, withStatus){   // 검색 + (보드별)우선순위/담당�
          (archivedMode || fboardTab === "all" || r.board === fboardTab) &&
          selPass('priority','priority', r) &&
          selPass('team','team', r) &&
+         selPass('kind','kind', r) &&
          (withStatus === false || selPass('status','status', r));
 }
 function visible(r){ return showHidden || !r.is_hidden; }   // 숨김 항목은 '숨김 보기'에서만
@@ -491,7 +494,7 @@ function rowHtml(r){
           ${r.lms?`<a href="${esc(r.lms)}" target="_blank" rel="noopener">LMS 링크</a>`:''}
           <a href="similar/similar.php?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">🔍 유사 이력</a>
           <button type="button" class="rdBtn" data-id="${esc(r.id)}" data-read="${r.is_read?0:1}">${r.is_read?'안읽음으로':'읽음으로'}</button>
-          <button type="button" class="doHide" data-id="${esc(r.id)}" data-hide="${r.is_hidden?0:1}">${r.is_hidden?'👁️ 숨김 해제':'🙈 숨기기'}</button>
+          <button type="button" class="doHide" data-id="${esc(r.id)}" data-hide="${r.is_hidden?0:1}">${r.is_hidden ? ICON.eye+'숨김 해제' : ICON.eyeOff+'숨기기'}</button>
           <button type="button" class="cmtToggle ${showCmts?'on':''}">💬 댓글${r.cmt_count>0?` ${r.cmt_count}`:''}${showCmts?' 닫기':''}</button>
         </div>
       </div>
@@ -636,6 +639,8 @@ const ICON = {
   doc:   '<svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
   sheet: '<svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M4 4h16v16H4V4zm2 2v3h5V6H6zm7 0v3h5V6h-5zm-7 5v3h5v-3H6zm7 0v3h5v-3h-5zm-7 5v2h5v-2H6zm7 0v2h5v-2h-5z"/></svg>',
   edit:  '<svg class="ico" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>',
+  eye:   '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg>',     // 숨김 해제 / 숨김 보는 중
+  eyeOff:'<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.73 5.08A10.74 10.74 0 0 1 21.94 11.65a1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg>',  // 숨기기 / 숨김 가려짐
   trash: '<svg class="ico" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
 };
 function fmtSize(n){ if(!n) return ""; if(n<1024) return n+"B"; if(n<1048576) return Math.round(n/1024)+"KB"; return (n/1048576).toFixed(1)+"MB"; }
@@ -1282,7 +1287,7 @@ function render(){
   const hc = DATA.filter(r=>r.is_hidden).length;   // 숨김 개수 → 토글 버튼에 표시
   document.getElementById("toggleHidden").dataset.tip = (showHidden?"숨김 가리기":"숨김 보기") + (hc?` (${hc})`:"");
   document.getElementById("hidCnt").textContent = hc || "";
-  document.getElementById("hidIco").textContent = showHidden ? "🐵" : "🙈";   // 활성 시 손 치운 원숭이
+  document.getElementById("hidIco").innerHTML = showHidden ? ICON.eye : ICON.eyeOff;   // 숨김 보는 중 = 뜬 눈
   // 탭 제목 배지: 안읽음 개수(숨김 제외)
   const uc = DATA.filter(r=>!r.is_read && !r.is_hidden).length;
   document.title = (uc>0 ? `(${uc}) ` : "") + "유지보수 요청";
@@ -1424,12 +1429,14 @@ let asgLink = false;   // 담당자 '양쪽 보드 동일 적용' — 설정(uip
 const MS = [
   { id:'msPriority', label:'우선순위', dim:'priority', field:'priority' },
   { id:'msTeam',     label:'담당팀',   dim:'team',     field:'team' },
+  { id:'msKind',     label:'접수분류', dim:'kind',     field:'kind', boards:["블루소프트"] },   // 유비온 리스트에만 있는 컬럼
   { id:'msStatus',   label:'진행상태', dim:'status',   field:'status' },
   { id:'msAsg',      label:'담당자',   dim:'asg',      field:'asg' },
 ];
 // 진행상태·우선순위는 보드별 고정 목록(기존 방식 유지), 담당팀·담당자는 데이터 기반
 const CANON = {
   priority: { "블루소프트":["긴급","일반"], "와이오즈":["긴급","중요","일반"] },
+  kind:     { "블루소프트":["유지보수","오류","오류-LXP","유지보수-LXP"] },
   status:   { "블루소프트":BLUE_STATUS,       "와이오즈":YOZ_STATUS },
 };
 function dimValues(field, board){
@@ -1450,7 +1457,9 @@ function updateMSBtn(cfg){
 function buildMS(cfg){
   const cont=document.getElementById(cfg.id); if(!cont) return;
   let menu="";
-  const boards = archivedMode ? ["블루소프트"] : ((fboardTab === "all") ? BOARDS_F : [fboardTab]);   // 보관=유비온만, 그 외 활성 탭 기준
+  const boards = (archivedMode ? ["블루소프트"] : ((fboardTab === "all") ? BOARDS_F : [fboardTab]))   // 보관=유비온만, 그 외 활성 탭 기준
+    .filter(b => !cfg.boards || cfg.boards.includes(b));                                               // 특정 보드 전용 필터
+  cont.hidden = !boards.length;   // 해당 보드가 없는 탭(예: 와이오즈)에선 버튼 숨김
   boards.forEach(board=>{
     const set=FILT[cfg.dim][board], vals=dimValues(cfg.field, board);
     menu += `<div class="ms-sec">${esc(boardLabel(board))}</div>`;
@@ -1484,7 +1493,7 @@ document.addEventListener("click", ()=>{ document.querySelectorAll(".asg-menu").
 
 /* ---------- 필터 상태 저장/복원 (새로고침에도 유지) ---------- */
 const FILTER_KEY = "slackapi_filters";   // 운영 lists.php 와 별도 키
-const _DIMS = ["priority","team","status","asg"];
+const _DIMS = ["priority","team","kind","status","asg"];
 function saveFilters(){
   const dump={}; _DIMS.forEach(d=>dump[d]={"블루소프트":[...FILT[d]["블루소프트"]], "와이오즈":[...FILT[d]["와이오즈"]]});
   const state = { filt:dump, fboardTab, search: document.getElementById("search").value, ts: Date.now() };
@@ -1951,7 +1960,7 @@ function openRecent(id){
   openId = id;
   // 현재 필터/탭/검색에 안 보이면 필터를 풀어 강제로 보이게
   if(!filteredItems().some(x=>x.id===id)){
-    FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+    FILT = { priority:emptyFilt(), team:emptyFilt(), kind:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
     fboardTab="all"; filter=""; dueOnly=false;
     document.getElementById("search").value=""; document.getElementById("searchClear").hidden=true;
     if(r.is_hidden) showHidden = true;   // 숨김 항목이면 숨김 보기 켜기
@@ -2000,7 +2009,7 @@ document.getElementById("searchClear").addEventListener("click",()=>{
   saveFilters(); openId=null; render(); s.focus();
 });
 document.getElementById("reset").addEventListener("click",()=>{
-  FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+  FILT = { priority:emptyFilt(), team:emptyFilt(), kind:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
   fboardTab = "all"; filter = "";
   document.getElementById("search").value = "";
   document.getElementById("searchClear").hidden = true;

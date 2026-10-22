@@ -18,10 +18,10 @@ $now = date('Y-m-d H:i:s');
 $ins = $pdo->prepare("
     INSERT INTO requests
         (id, list_id, board, title, body, momo, lms, req_id, req, asg_id, asg, status_id, status,
-         priority_id, priority, team_id, team, `eta`, `date`, `done`, attachments, created, updated, archived, synced_at)
+         priority_id, priority, team_id, team, kind_id, kind, `eta`, `date`, `done`, attachments, created, updated, archived, synced_at)
     VALUES
         (:id,:list_id,:board,:title,:body,:momo,:lms,:req_id,:req,:asg_id,:asg,:status_id,:status,
-         :priority_id,:priority,:team_id,:team,:eta,:date,:done,:attachments,:created,:updated,1,:synced_at)
+         :priority_id,:priority,:team_id,:team,:kind_id,:kind,:eta,:date,:done,:attachments,:created,:updated,1,:synced_at)
     ON DUPLICATE KEY UPDATE archived=1
 ");
 
@@ -35,6 +35,7 @@ foreach ($boards as $listId => $b) {
     $sampleId = array_key_first($live);
     $sel = slackSelectMaps($token, $listId, $sampleId);
     $statusMap = $sel[$COL['status']] ?? []; $priMap = $sel[$COL['priority']] ?? []; $teamMap = $sel[$COL['team']] ?? [];
+    $kindMap = !empty($COL['kind']) ? ($sel[$COL['kind']] ?? []) : [];
 
     $arch = 0; $seen = 0;
     $cand = array_values(array_filter($allRec, fn($id) => !isset($live[$id]) && !isset($dbIds[$id])));
@@ -46,7 +47,7 @@ foreach ($boards as $listId => $b) {
         $rec = $info['record'] ?? $info['item'] ?? null;
         if (!$rec || empty($rec['archived'])) continue;         // 보관 아님
         $m = slackIndexFields($rec['fields'] ?? []);
-        $g = fn($k) => ($COL[$k] !== '' && isset($m[$COL[$k]])) ? $m[$COL[$k]] : null;
+        $g = fn($k) => (($COL[$k] ?? '') !== '' && isset($m[$COL[$k]])) ? $m[$COL[$k]] : null;
         $reqId = ($f = $g('req')) ? slackFieldUser($f) : null;
         $asgId = ($f = $g('asg')) ? slackFieldUser($f) : null;
         $fileIds = ($f = $g('attach')) ? slackFieldAttach($f) : [];
@@ -59,6 +60,7 @@ foreach ($boards as $listId => $b) {
         $sId = ($f = $g('status'))   ? slackFieldSelect($f) : null;
         $pId = ($f = $g('priority')) ? slackFieldSelect($f) : null;
         $tId = ($f = $g('team'))     ? slackFieldSelect($f) : null;
+        $kId = ($f = $g('kind'))     ? slackFieldSelect($f) : null;
         $atts = []; foreach ($fileIds as $fid) { if (isset($files[$fid]) && empty($files[$fid]['gone'])) $atts[] = $files[$fid]; }
         $ins->execute([
             ':id' => $rid, ':list_id' => $listId, ':board' => $b['label'],
@@ -69,6 +71,7 @@ foreach ($boards as $listId => $b) {
             ':status_id' => $sId, ':status' => $sId ? ($statusMap[$sId] ?? $sId) : '',
             ':priority_id' => $pId, ':priority' => $pId ? ($priMap[$pId] ?? $pId) : '',
             ':team_id' => $tId, ':team' => $tId ? ($teamMap[$tId] ?? $tId) : '',
+            ':kind_id' => $kId, ':kind' => $kId ? ($kindMap[$kId] ?? $kId) : '',
             ':eta' => ($f = $g('eta')) ? (slackFieldDate($f) ?: null) : null,
             ':date' => ($f = $g('date')) ? (slackFieldDate($f) ?: null) : null,
             ':done' => ($f = $g('done')) ? (slackFieldDate($f) ?: null) : null,
