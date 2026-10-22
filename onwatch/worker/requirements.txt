@@ -1,0 +1,4 @@
+anthropic>=2.1
+pydantic-settings
+pymysql
+requests

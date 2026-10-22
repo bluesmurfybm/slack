@@ -1,7 +1,7 @@
 # blue-iWorks — 사내 업무 포털
 
 Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **BlueMagazine(dti, DTI 발표)**,
-**BlueLearn(learn)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
+**BlueLearn(learn)**, **MoodleUp?(moodle)**, **OnWatch(onwatch, 수시 감시)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
 ## 전체 구조
@@ -45,6 +45,11 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │       ├── summarizer.py        anthropic SDK → claude CLI → 요약 없음 순으로 폴백
 │       ├── var/                 state.json · snapshots/ · pages/ (gitignore)
 │       └── tests/
+│
+├── onwatch/                     OnWatch(수시 감시) — PHP 화면 + Python 배치(1분 timer). 'onwatch' 절, onwatch/README.md
+│   ├── index.php, view.php, edit.php   목록 · 상세 · 만들기/고치기/복제
+│   ├── api/, inc/, sql/, bin/   JSON API · 공용 로직 · 스키마(화면이 자동 적용) · CLI(migrate, secret)
+│   └── worker/                  run.py → 조사(Claude+웹 검색) → 판정(JSON) → 중복 거르기 → 알림
 │
 ├── access/                      Coursemos EnvHub — PHP, slack의 schools를 마스터로 씀
 │   ├── access.php               목록 + 상세 + 편집 (복사 버튼)
@@ -140,7 +145,7 @@ php.ini 에 `date.timezone` 이 없으면 PHP 는 UTC 로 돌고 MySQL 은 서�
 | `db.php` | access, dti, learn, moodle (`add_column_if_missing()` 재사용) |
 | `worksystems.php` / `.json` | index, dti, learn, moodle, slack/header, bluecart, book |
 | `board.php` | api/notices·notice_file·events·admins |
-| `push.php` / `push_kinds.json` | index, api/me·push, dti, dev/push_*, slackai 워커(dev/push_cli.php 경유) |
+| `push.php` / `push_kinds.json` | index, api/me·push·notifications, dti, onwatch, dev/push_*, slackai·onwatch 워커(dev/push_cli.php 경유) |
 | `pwa.php` | 모든 모듈의 `<head>` |
 
 모듈에서는 한 단계 위의 `core/` 를 부른다.
@@ -213,6 +218,23 @@ push_send([
   알림함은 **사람 기준**이라 기기가 없거나 발송이 실패해도 남는다. 180일이 지나면 지운다.
 - **iOS 는 공유 → '홈 화면에 추가' 한 뒤 그 아이콘으로 연 화면에서만** 알림을 받을 수 있다(16.4+).
 - https 또는 localhost 에서만 동작한다. 그 밖의 주소에서는 알림 칸이 "받을 수 없음" 으로 보인다.
+
+### 카드 배지 (업무 시스템 카드의 안 읽은 알림 수)
+
+대시보드 카드 아이콘 모서리에 **그 시스템에서 온 안 읽은 알림 수**를 붙인다. 원본은 알림함
+(`portal_notification`) 하나라 상단바 종 숫자와 늘 맞는다. OnWatch 에 먼저 붙였다.
+
+- **켜기**: `core/worksystems.json` 의 그 카드 줄에 `"badge": "inbox"` 를 더한다. 모듈은 자기 sys 의 종류로
+  `push_send()` 만 하고 있으면 된다 — 종류 → 시스템은 `push_kinds.json` 의 `sys` 로 가른다.
+- **세는 곳**: `push_tile_badges($userId, work_systems())`(core/push.php). 첫 화면은 서버가 그려 내리고
+  (`TILE_BADGES`), 알림함 숫자가 바뀌는 응답(`api/notifications.php` 의 `tiles`)마다 `paintTileBadges()` 가 갈아 끼운다.
+  다른 탭에서 돌아오면(visibilitychange) 다시 센다.
+- **모듈 화면에서 읽음 처리**: 알림을 누르지 않고 모듈로 바로 들어가 봐도 배지가 남지 않게,
+  모듈이 그 건을 열 때 `push_inbox_mark_read_url($uid, 'onwatch.', 'onwatch/view.php?id=3')` 를 부른다
+  (주소가 같거나 뒤에 `&`·`#` 가 붙은 것만 — `id=3` 이 `id=31` 에 걸리지 않는다). 읽음 처리 전에
+  `push_inbox_oldest_unread_url()` 로 시각을 받아 두면 그 뒤 항목에 NEW 를 붙일 수 있다.
+  모듈 목록의 건별 숫자는 `push_inbox_unread_urls($uid, 'onwatch.')`.
+- 다른 기준(처리 대기 건수 등)이 필요해지면 `badge` 에 새 값을 정의하고 `push_tile_badges()` 에 갈래를 더한다.
 
 ### 앱 설치 안내
 
@@ -1176,6 +1198,23 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
   로컬에서 버튼까지 써 보려면 터미널 하나에 `python run_weekly.py --serve` 를 켜 두고 화면에서 누른다.
 
 ---
+
+## onwatch (OnWatch · 수시 감시)
+
+필요할 때 켜 두는 감시. 지시문으로 "무엇을, 어디서, 어떤 경우에 알릴지" 적어 두면 정한 기간·주기로
+공개 웹을 살피고 **새 소식이 있을 때만** 알린다(포털 알림함·종·카드 배지·푸시 + 슬랙). 누구나 만들고 누구나 본다.
+자세한 구조·설정·배포·시험은 **`onwatch/README.md`**(저장소에 올라가는 문서).
+
+- **두 조각**: `onwatch/*.php`(화면·API)가 `ow_*` 표에 쓰고, `onwatch/worker/run.py`(systemd timer, 1분)가
+  때가 된 감시를 잠가 돌린다. '지금 실행' 은 `ow_watch.run_requested_at` 하나로 전한다 — 파일·소켓 없음.
+- **스키마**는 `onwatch/sql/NNN_*.sql` 이 원본이다. 화면이 처음 DB 에 붙을 때 안 된 파일을 적용한다(`ow_schema`).
+  배치는 표를 만들지 않는다.
+- **조사 두 단계**: Claude(웹 검색·읽기 서버 도구)로 조사 노트 → 도구 없이 JSON 판정. 검색 인용과 구조화
+  출력을 한 요청에 함께 쓸 수 없어서다. API 키가 없으면 claude CLI 로 돈다(검색 상한·정확한 비용은 API 만).
+- **중복 방지**: 이미 알린 목록·사람의 '중복/틀림' 평가를 모델에 주고, 코드가 fingerprint 로 한 번 더 거른다.
+- **비용**: 감시별 월 상한(화면) + 전체 월 상한(`ONWATCH_MONTHLY_BUDGET_USD`). 넘으면 건너뛰고 등록자에게 한 번 알린다.
+- **일정 계산이 두 벌**이다 — `inc/schedule.php`(화면의 '다음 실행')와 `worker/core/schedule.py`(실제 실행).
+  `tests/schedule_cases.json` 을 두 쪽 시험이 같이 읽는다.
 
 ## access (학교 접속 정보)
 
