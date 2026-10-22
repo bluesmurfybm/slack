@@ -122,13 +122,6 @@ foreach ($touch as $name => $fn) {
     }
 }
 
-/* ---------- 5) 리조트 기존 이용내역 ----------
- * 리조트 예약은 엑셀에서 옮긴 16건이 있어야 화면이 비지 않는다. 이미 있으면 도구가 건너뛴다.
- * 별도 프로세스로 돌린다 — 포털 세션·상수를 이 스크립트와 섞지 않기 위해서다.
- */
-passthru(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/blueledger/resort/tools/import_seed.php'), $rc);
-if ($rc !== 0) $say('  리조트 기존 이용내역 넣기 실패 — 나중에 blueledger\\resort\\tools\\import_seed.php 를 직접 돌리세요.');
-
 $say('');
 $say('준비 끝. 로컬_실행.bat 을 더블클릭하거나:');
 $say('  D:\\php82\\php.exe -S 127.0.0.1:8780 -t . dev\\local_router.php');

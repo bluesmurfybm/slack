@@ -37,7 +37,6 @@ $csrf = bl_csrf_token();
         </div>
         <div class="dd-menu">
           <a href="../index.php?view=profile">👤 마이페이지</a>
-          <a href="resort/">🏖️ BlueStay</a>
           <div class="dd-sep"></div>
           <?= work_systems_menu('../', 'blueledger') ?>
           <div class="dd-sep"></div>
@@ -53,7 +52,7 @@ $csrf = bl_csrf_token();
   <select class="btn" id="yearSel" aria-label="조회 연도"></select>
   <button class="btn wide" id="btnCsv">CSV 내보내기</button>
   <button class="btn admin-only" id="btnSettings" aria-label="설정">설정</button>
-  <!-- 관리자(승인·정산)만 보인다. 처음엔 구성원 화면으로 열고, 여기서 관리자 화면으로 바꾼다(BlueStay 와 같다).
+  <!-- 관리자(승인·정산)만 보인다. 처음엔 구성원 화면으로 열고, 여기서 관리자 화면으로 바꾼다.
        줄의 맨 오른쪽 — 상단바 이름 단추 바로 아래에 선다 -->
   <div class="modeseg" id="modeSeg" role="tablist" aria-label="화면 전환" hidden>
     <button type="button" role="tab" data-mode="member" aria-selected="true">구성원</button>

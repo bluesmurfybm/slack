@@ -19,8 +19,6 @@
     "desc": "개발 과업을 편성하고 진행 상황을 공유합니다.", "color": "#2B7A4B" },
   { "key": "blueledger", "emoji": "🧾", "label": "BlueExpense", "path": "blueledger/index.php",
     "desc": "출장여비를 청구하고 승인·정산 현황을 확인합니다.", "color": "#1E6FA8" },
-  { "key": "resort", "emoji": "🏖️", "label": "BlueStay", "path": "blueledger/resort/",
-    "desc": "직원 리조트를 신청하고 식대 경비를 정산합니다.", "color": "#13A3A3" },
   { "key": "onwatch", "emoji": "📡", "label": "OnWatch", "path": "onwatch/index.php",
     "desc": "정해 둔 대상을 기간 동안 주기적으로 살피고 새 소식이 있을 때만 알립니다.", "color": "#C2410C",
     "badge": "inbox" }

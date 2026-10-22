@@ -1,11 +1,10 @@
 # BlueLedger (blueledger)
 
-사내 재무회계 프로그램 BlueLedger 를 포털(blue-iWorks)로 옮기는 모듈. **지금은 출장여비와 리조트 예약 · 식대 정산(`resort/`)을 옮겼다.**
-리조트는 `resort/README.md` 에 따로 적었다 — 로그인 · 직원 명단 · DB 는 출장여비와 같고 표만 `bl_resort_*` 이다.
+사내 재무회계 프로그램 BlueLedger 를 포털(blue-iWorks)로 옮기는 모듈. **지금은 출장여비만 옮겼다.**
 회계 장부(통장·카드·급여·정산 등, 파이썬 `app.py`)는 아직 지안 님 PC 의 파이썬 버전에 있다.
 
-화면에 보이는 이름은 시스템마다 따로다 — 출장여비는 **BlueExpense**, 리조트는 **BlueStay**. 폴더·주소(`blueledger/`)·
-업무 시스템 key(`blueledger`, `resort`)·표 이름(`bl_*`)은 그대로 둔다. 바꾸면 배포 주소·nginx 규칙·DB 를 함께 옮겨야 한다.
+화면에 보이는 이름은 **BlueExpense**(출장여비)다. 폴더·주소(`blueledger/`)·
+업무 시스템 key(`blueledger`)·표 이름(`bl_*`)은 그대로 둔다. 바꾸면 배포 주소·nginx 규칙·DB 를 함께 옮겨야 한다.
 
 ## 구성
 
@@ -20,8 +19,7 @@ blueledger/
 ├── static/travel.js     화면 스크립트 (파이썬 버전 화면 그대로 + 서버 주소만 바꿈)
 ├── styles/travel.css
 ├── tools/import_travel.php   파이썬 travel.db → 새 DB 옮기기
-├── resort/              리조트 예약 · 식대 정산 (resort/README.md)
-└── var/                 영수증 원본(receipts/, resort/). 웹에서 직접 열리면 안 된다
+└── var/                 영수증 원본(receipts/). 웹에서 직접 열리면 안 된다
 ```
 
 ## 로그인·권한
@@ -30,7 +28,7 @@ blueledger/
 - 권한은 `bl_travel_roles` 에 정산 담당(admin)·대표 승인(approver)만 적는다. 나머지는 전부 직원.
   처음엔 jian=정산 담당, kimhy=대표 승인. 설정 화면에서 바꾼다(본인 정산 권한은 못 끈다).
 - 화면에서는 승인(approver)·정산(admin)을 **관리자**로 통칭하고, 나머지는 **구성원**이라 부른다.
-- 관리자도 처음엔 구성원 화면으로 열린다(BlueStay 와 같다). 머리글의 구성원/관리자 탭으로 관리자 화면에 간다.
+- 관리자도 처음엔 구성원 화면으로 열린다. 머리글의 구성원/관리자 탭으로 관리자 화면에 간다.
   구성원 화면에서는 본인 청구만 보이고 구성원과 똑같이 쓴다. 서버 권한은 화면과 상관없이 그대로다.
 - 구성원: 본인이 올렸거나 본인이 출장자인 청구만 보고, 승인대기일 때만 고친다. 승인·정산 칸은 보내도 서버가 무시한다.
 - 관리자(승인): 전체 조회 + 승인 칸(승인은 이 권한만 바꾼다). 본인 청구는 구성원처럼 쓰고 승인대기일 때 고친다.
@@ -56,7 +54,6 @@ blueledger/
    location ^~ /blueledger/var/   { deny all; }
    location ^~ /blueledger/tools/ { deny all; }
    location ^~ /blueledger/lib/   { deny all; }
-   location ~ ^/blueledger/resort/(lib|tools|data|tests)/ { deny all; }
    location = /blueledger/config.local.php { deny all; }
    ```
    영수증이 20MB 까지라 `client_max_body_size` 25m 이상, php.ini `upload_max_filesize=20M`, `post_max_size=25M`.
@@ -80,7 +77,6 @@ blueledger/
 DB 는 포털 MySQL 백업에 같이 들어간다(`bl_travel_*` 네 테이블). 영수증은 파일이라 **`blueledger/var/receipts/`
 를 따로 백업**해야 한다. 예: 매일 `mysqldump ... bl_travel_trips bl_travel_files bl_travel_roles bl_travel_settings`
 + `tar czf receipts-$(date +%F).tgz blueledger/var/receipts`.
-리조트는 `bl_resort_*` 일곱 표와 `blueledger/var/resort/` 를 같은 방법으로 백업한다.
 
 ## 로컬 시험
 

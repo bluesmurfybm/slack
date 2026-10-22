@@ -1772,8 +1772,7 @@ DB 를 여는 일곱 곳(`core/db.php`, access·learn·slack·slackai·dti·blue
 - 데이터: `var/localdb/<DB이름>.sqlite` (gitignore). 지우고 다시 실행하면 빈 상태로 돌아간다.
 - `local_setup.php` 가 만드는 것: SQLite 용 루트 `config.php`(이미 있으면 손대지 않고, driver 가 sqlite 가
   아니면 멈춘다), `bluecart/config/config.php`(포털 연동 표본 복사), bluecart `sql/*.sql` 과 studio
-  `sql/apply.sh` 의 FILES 목록을 번역기로 적용(`_local_sql_applied` 에 기록), 리조트 예약 기존 이용내역
-  16건(`blueledger/resort/tools/import_seed.php`, 비어 있을 때만).
+  `sql/apply.sh` 의 FILES 목록을 번역기로 적용(`_local_sql_applied` 에 기록).
 - 문지기: `dev/local_router.php` 가 nginx deny 와 같은 것(설정·키·DB 파일·업로드 원본·배치 소스)을 막는다.
 - 번역기 범위: 이 저장소가 쓰는 MySQL 문법만(DDL·ALTER·upsert·INSERT IGNORE·information_schema·SHOW·
   NOW/DATE_SUB/TIMESTAMPDIFF/FIELD/GROUP_CONCAT …). 문자열 비교는 `_ci` 처럼 대소문자를 무시한다.

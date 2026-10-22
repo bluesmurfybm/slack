@@ -94,135 +94,7 @@ const BL_SCHEMA = [
         ],
         'keys' => [],
     ],
-
-    /* ---------- 리조트 예약 · 식대 정산 (resort/) ----------
-     * 사람은 포털 이메일로 적는다(created_by·uploaded_by·actor). 직원 한도는 이름으로 묶는다 —
-     * 엑셀 시절부터 이름이 기준이었고 portal_users.name 과 같다.
-     */
-    'bl_resort_roles' => [
-        'comment' => '리조트 권한 — 관리자만 적는다',
-        'pk' => 'email',
-        'cols' => [
-            'email'      => ['VARCHAR(190)', false, ''],
-            'role'       => ['VARCHAR(10)',  '',    'admin'],
-            'updated_by' => ['VARCHAR(190)', '',    ''],
-            'updated_at' => ['VARCHAR(19)',  '',    ''],
-        ],
-        'keys' => [],
-    ],
-    'bl_resort_settings' => [
-        'comment' => '리조트 설정 — 담당·회원권·결제수단·안내문',
-        'pk' => 'k',
-        'cols' => [
-            'k'          => ['VARCHAR(40)',  false, 'handler / accounts / cards / notice'],
-            'v'          => ['MEDIUMTEXT',   false, 'JSON'],
-            'updated_at' => ['VARCHAR(19)',  '',    ''],
-            'updated_by' => ['VARCHAR(190)', '',    ''],
-        ],
-        'keys' => [],
-    ],
-    'bl_resort_limits' => [
-        'comment' => '리조트 연도별 직원 한도',
-        'pk' => ['period', 'name'],
-        'cols' => [
-            'period'     => ['VARCHAR(4)',  false, '이용기간 시작 연도(5월~다음 해 4월)'],
-            'name'       => ['VARCHAR(40)', false, '직원 이름 = portal_users.name'],
-            'stay_limit' => ['INT',         0,     '숙박비 한도'],
-            'meal_limit' => ['INT',         0,     '식대 한도'],
-            'nights'     => ['INT',         0,     '제공 박수'],
-            'is_company' => ['INT',         0,     '회사 공용(한도 없음)'],
-            'sort'       => ['INT',         0,     ''],
-        ],
-        'keys' => [],
-    ],
-    'bl_resort_bookings' => [
-        'comment' => '리조트 예약 — 신청 내용 + 처리 결과 + 정산',
-        'pk' => 'id',
-        'cols' => [
-            'id'         => ['VARCHAR(40)',   false, ''],
-            'period'     => ['VARCHAR(4)',    false, '체크인 날짜로 정한 이용기간'],
-            'created_by' => ['VARCHAR(190)',  null,  '올린 사람 이메일. 엑셀에서 옮긴 기록은 NULL'],
-            'name'       => ['VARCHAR(40)',   false, '직원 이름'],
-            'user_name'  => ['VARCHAR(40)',   '',    '실이용자(본인이 아니면)'],
-            'dept'       => ['VARCHAR(80)',   '',    ''],
-            'phone'      => ['VARCHAR(40)',   '',    ''],
-            'resort'     => ['VARCHAR(200)',  false, ''],
-            'ci'         => ['VARCHAR(10)',   false, '체크인 YYYY-MM-DD'],
-            'co'         => ['VARCHAR(10)',   false, '체크아웃'],
-            'rooms'      => ['INT',           1,     ''],
-            'nights'     => ['INT',           1,     ''],
-            'purpose'    => ['VARCHAR(100)',  '',    ''],
-            'wish'       => ['VARCHAR(1000)', '',    ''],
-            'status'     => ['VARCHAR(10)',   '신청', '신청/확정/반려/취소'],
-            'reason'     => ['VARCHAR(200)',  '',    ''],
-            'resv_id'    => ['VARCHAR(40)',   '',    '회원권(예약 아이디)'],
-            'card'       => ['VARCHAR(40)',   '',    '숙박 결제수단'],
-            'resv_date'  => ['VARCHAR(10)',   null,  ''],
-            'pay_date'   => ['VARCHAR(10)',   null,  ''],
-            'room_fee'   => ['INT',           0,     ''],
-            'add_fee'    => ['INT',           0,     ''],
-            'fac_fee'    => ['INT',           0,     ''],
-            'etc_fee'    => ['INT',           0,     ''],
-            'meal_card'  => ['VARCHAR(40)',   '',    '식대용 법인카드'],
-            'card_out'   => ['VARCHAR(10)',   null,  ''],
-            'card_in'    => ['VARCHAR(10)',   null,  ''],
-            'settle'     => ['VARCHAR(10)',   '미정산', '미정산/정산완료'],
-            'settled_at' => ['VARCHAR(10)',   null,  ''],
-            'admin_note' => ['VARCHAR(300)',  '',    ''],
-            'created_at' => ['VARCHAR(19)',   false, ''],
-            'updated_at' => ['VARCHAR(19)',   false, ''],
-            'decided_at' => ['VARCHAR(19)',   null,  ''],
-            'ver'        => ['INT',           1,     '동시 수정 확인용'],
-        ],
-        'keys' => ['ix_resort_period' => ['period'], 'ix_resort_name' => ['name'], 'ix_resort_creator' => ['created_by']],
-    ],
-    'bl_resort_meals' => [
-        'comment' => '리조트 예약별 식대 줄',
-        'pk' => ['booking_id', 'cid'],
-        'cols' => [
-            'booking_id' => ['VARCHAR(40)',  false, ''],
-            'cid'        => ['VARCHAR(40)',  false, '화면이 지은 줄 번호'],
-            'seq'        => ['INT',          0,     ''],
-            'use_date'   => ['VARCHAR(10)',  null,  ''],
-            'place'      => ['VARCHAR(100)', '',    ''],
-            'amount'     => ['INT',          0,     ''],
-        ],
-        'keys' => [],
-    ],
-    // 저장 전에 먼저 올라오므로 booking_id 는 비어 있을 수 있다(출장여비 영수증과 같은 이유).
-    'bl_resort_files' => [
-        'comment' => '리조트 영수증 · 예약확인 첨부',
-        'pk' => 'id',
-        'cols' => [
-            'id'          => ['VARCHAR(24)',  false, ''],
-            'booking_id'  => ['VARCHAR(40)',  null,  ''],
-            'meal_cid'    => ['VARCHAR(40)',  null,  '식대 줄에 붙은 영수증이면 그 줄'],
-            'orig_name'   => ['VARCHAR(200)', '',    ''],
-            'mime'        => ['VARCHAR(60)',  false, ''],
-            'size'        => ['INT',          0,     ''],
-            'path'        => ['VARCHAR(255)', false, 'var/resort 아래 상대 경로'],
-            'uploaded_by' => ['VARCHAR(190)', false, ''],
-            'created_at'  => ['VARCHAR(19)',  false, ''],
-        ],
-        'keys' => ['ix_rfile_booking' => ['booking_id'], 'ix_rfile_owner' => ['uploaded_by']],
-    ],
-    'bl_resort_log' => [
-        'comment' => '리조트 작업 기록',
-        'pk' => 'id',
-        'cols' => [
-            'id'     => ['VARCHAR(24)',  false, ''],
-            'at'     => ['VARCHAR(19)',  false, ''],
-            'actor'  => ['VARCHAR(190)', '',    '이메일'],
-            'action' => ['VARCHAR(20)',  false, ''],
-            'target' => ['VARCHAR(40)',  '',    ''],
-            'detail' => ['VARCHAR(500)', '',    ''],
-        ],
-        'keys' => ['ix_rlog_at' => ['at']],
-    ],
 ];
-
-// 리조트 관리자(예약 확정·정산·설정). 처음 한 번만 심고 그 뒤로는 설정 화면이 원본이다.
-const BL_RESORT_SEED_ADMINS = ['jian@bluesoft.co.kr', 'kimhy@bluesoft.co.kr'];
 
 function bl_db() {
     static $pdo = null;
@@ -318,11 +190,6 @@ function bl_seed(PDO $pdo) {
     if (!(int)$pdo->query("SELECT COUNT(*) FROM bl_travel_roles")->fetchColumn()) {
         foreach (BL_SEED_ROLES as $email => $role) {
             bl_insert_ignore($pdo, 'bl_travel_roles', ['email' => $email, 'role' => $role, 'updated_by' => 'seed', 'updated_at' => date('Y-m-d H:i:s')]);
-        }
-    }
-    if (!(int)$pdo->query("SELECT COUNT(*) FROM bl_resort_roles")->fetchColumn()) {
-        foreach (BL_RESORT_SEED_ADMINS as $email) {
-            bl_insert_ignore($pdo, 'bl_resort_roles', ['email' => $email, 'role' => 'admin', 'updated_by' => 'seed', 'updated_at' => date('Y-m-d H:i:s')]);
         }
     }
 }

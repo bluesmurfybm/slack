@@ -61,7 +61,7 @@ async function initStore(){
 }
 async function startAs(u){
   S.me=u.name;S.realRole=u.role;
-  // 관리자도 처음엔 구성원 화면으로 연다(BlueStay 와 같다). 관리자 화면은 전환 탭으로 간다
+  // 관리자도 처음엔 구성원 화면으로 연다. 관리자 화면은 전환 탭으로 간다
   if(u.role==='staff')S.view='member';
   // 팝업(?trip=)으로 열렸으면 관리자 화면 권한으로 그 청구서 한 장만 보인다
   if(TRIP_PARAM&&u.role!=='staff'){S.single=TRIP_PARAM;S.view='admin';document.body.dataset.single='1'}

@@ -28,7 +28,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 
 header.bl{background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:10px 20px;flex-wrap:wrap}
-/* 제목이 상단바 blue-iWorks 로고와 같은 세로줄에 서게 — 상단바(.topbar-in)의 최대 폭 1600px·좌우 22px 와 맞춘다(BlueStay 와 같다) */
+/* 제목이 상단바 blue-iWorks 로고와 같은 세로줄에 서게 — 상단바(.topbar-in)의 최대 폭 1600px·좌우 22px 와 맞춘다 */
 header.bl{padding-left:max(22px,calc((100% - 1600px) / 2 + 22px));padding-right:max(22px,calc((100% - 1600px) / 2 + 22px))}
 header.bl h1{font-size:18px;margin:0;font-weight:700;letter-spacing:-.02em}
 header.bl h1 small{font-weight:500;color:var(--sub);font-size:13px;margin-left:6px}
@@ -132,7 +132,7 @@ fieldset:disabled .cal-head button{visibility:hidden}
 .extra .chips{gap:4px}
 .legacy{grid-column:2/-1;margin:0}
 /* 내 청구(구성원 화면 전용) — 청구서 머리 오른쪽 끝 단추 */
-/* 구성원/관리자 전환 — BlueStay·BlueLearn 과 같은 알약, 높이 28px */
+/* 구성원/관리자 전환 — BlueLearn 과 같은 알약, 높이 28px */
 .modeseg{display:inline-flex;align-items:center;gap:2px;height:28px;padding:2px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
 .modeseg[hidden]{display:none}
 .modeseg button{height:22px;border:0;background:transparent;border-radius:999px;padding:0 14px;font:inherit;font-size:12.5px;font-weight:600;color:var(--sub);cursor:pointer;white-space:nowrap;line-height:22px;transition:background .14s ease,color .14s ease}
