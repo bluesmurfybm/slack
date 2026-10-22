@@ -49,13 +49,16 @@ $csrf = bl_csrf_token();
 </div>
 <header class="bl">
   <h1>BlueExpense</h1>
-  <span class="status-line" id="conn">불러오는 중…</span>
   <span class="hspace"></span>
   <select class="btn" id="yearSel" aria-label="조회 연도"></select>
   <button class="btn wide" id="btnCsv">CSV 내보내기</button>
   <button class="btn admin-only" id="btnSettings" aria-label="설정">설정</button>
-  <span class="status-line" id="roleTag"></span>
-  <button class="btn primary" id="btnNew">새 청구서</button>
+  <!-- 관리자(승인·정산)만 보인다. 처음엔 구성원 화면으로 열고, 여기서 관리자 화면으로 바꾼다(BlueStay 와 같다).
+       줄의 맨 오른쪽 — 상단바 이름 단추 바로 아래에 선다 -->
+  <div class="modeseg" id="modeSeg" role="tablist" aria-label="화면 전환" hidden>
+    <button type="button" role="tab" data-mode="member" aria-selected="true">구성원</button>
+    <button type="button" role="tab" data-mode="admin" aria-selected="false">관리자</button>
+  </div>
 </header>
 
 <nav class="tabs" aria-label="화면 전환">
@@ -70,13 +73,21 @@ $csrf = bl_csrf_token();
   <!-- 청구서 -->
   <section class="slip" aria-label="출장여비 청구서">
     <div class="slip-head"><h2>출장여비 청구서</h2><span class="mode" id="formMode">새 청구</span>
-      <button type="button" class="btn mybtn" id="btnMy" aria-haspopup="dialog">내 청구<span class="cnt" id="myCount"></span></button></div>
+      <button type="button" class="btn fresh" id="btnNew" hidden>새로 쓰기</button>
+      <button type="button" class="btn mybtn" id="btnMy" aria-haspopup="dialog">내 청구<span class="cnt" id="myCount"></span></button>
+      <button type="button" class="slipx" id="btnSlipClose" aria-label="이 탭 닫기" title="이 탭 닫기">×</button></div>
     <form class="slip-body" id="form" autocomplete="off" onsubmit="return false">
       <fieldset id="fsInfo">
         <legend>출장 정보</legend>
         <div class="grid">
-          <label class="f"><span class="req">출장자</span><select id="traveler"></select></label>
-          <label class="f"><span class="req">출장일</span><input type="date" id="date"></label>
+          <!-- 출장일은 달력에서 누른다. 값은 아래 숨은 칸(#date, YYYY-MM-DD)에 들어가고 저장은 그 값을 쓴다.
+               기간(1박2일 …)을 고르면 그 날들이 옅게 이어져 보인다 -->
+          <div class="full">
+            <div class="flab"><span class="req">출장일</span> <span class="calpick" id="calPick"></span></div>
+            <div class="cal" id="cal"></div>
+            <input type="hidden" id="date">
+          </div>
+          <label class="f full"><span class="req">출장자</span><select id="traveler"></select></label>
           <div class="full">
             <div class="f" style="font-size:12px;color:var(--sub);font-weight:500;margin-bottom:4px">동행자 <span id="compCount"></span></div>
             <div class="chips" id="compChips"></div>
@@ -124,7 +135,7 @@ $csrf = bl_csrf_token();
       </fieldset>
 
       <fieldset id="fsApproval">
-        <legend>승인 (대표자)</legend>
+        <legend>승인</legend>
         <div class="stline" id="stApproval"></div>
         <div class="seg2" id="approvalSeg">
           <button type="button" data-v="승인대기" class="s-wait">승인대기</button>
@@ -182,9 +193,9 @@ $csrf = bl_csrf_token();
           <div class="tablewrap"><table>
             <thead><tr><th style="width:84px">구분</th><th>내용</th><th>기준</th></tr></thead>
             <tbody>
-              <tr><td>숙박비</td><td>업무로 인한 출장지에서의 숙박비용</td><td>1박 1인 1실 40,000원 기준<br>예외사항이 없는 한 1명 이상 동행 시 5,000원씩 추가 산정</td></tr>
+              <tr><td>숙박비</td><td>업무로 인한 출장지에서의 숙박비용</td><td>1박 1실 80,000원 기준<br>예외사항이 없는 한 1명 이상 동행 시 10,000원씩 추가 산정</td></tr>
               <tr><td>주유비</td><td>출장지로의 자가용 운행에 따른 주유비용</td><td>주유비 산정기준에 따름<br>주유산정금액 안에서 비용을 산정</td></tr>
-              <tr><td>식대</td><td>업무로 인한 출장지에서의 식대비용</td><td>1인 식대 <span id="ruleMeal">10,000</span>원 기준</td></tr>
+              <tr><td>식대</td><td>업무로 인한 출장지에서의 식대비용</td><td>1인 식대 <span id="ruleMeal">15,000</span>원 기준</td></tr>
               <tr><td>기타</td><td>영수증을 첨부할 수 있는 기타비용 (고속도로 통행료, 주차비 등)</td><td>첨부된 영수증 기준</td></tr>
               <tr><td>장기 출장비</td><td>1주 이상의 업무출장에 따른 비용</td><td>프로젝트별로 회사와 협의하여 책정<br>별도 협의안이 타결되지 않으면 단기출장비로 산정된 비용 합계의 70% 기준</td></tr>
             </tbody>
@@ -246,7 +257,7 @@ $csrf = bl_csrf_token();
   </div>
 </main>
 
-<!-- 직원 전용: 본인 청구와 진행 상태. 청구서 머리의 '내 청구' 단추로 연다 -->
+<!-- 구성원 화면 전용: 본인 청구와 진행 상태. 청구서 머리의 '내 청구' 단추로 연다 -->
 <dialog id="myDlg" aria-labelledby="myDlgTitle">
   <div class="dh" id="myDlgTitle">내 청구 <span class="hint" id="myMeta" style="font-weight:500"></span></div>
   <div class="db mylist" id="myList"></div>
@@ -257,11 +268,11 @@ $csrf = bl_csrf_token();
   <div class="db">
     <div>
       <div style="font-weight:600;margin-bottom:6px">권한</div>
-      <div class="hint" style="margin-bottom:8px">정산 담당은 모든 청구를 관리하고, 대표 승인은 승인만 할 수 있습니다. 직원 명단과 비밀번호는 blue-iWorks 포털 계정을 그대로 씁니다.</div>
+      <div class="hint" style="margin-bottom:8px">관리자(정산)는 모든 청구를 관리하고 정산하며, 관리자(승인)는 승인·반려를 합니다. 두 관리자도 구성원 화면에서 본인 청구를 씁니다. 명단과 비밀번호는 blue-iWorks 포털 계정을 그대로 씁니다.</div>
       <div class="ulist" id="userList"></div>
     </div>
     <div class="grid">
-      <label class="f"><span>승인자 (대표)</span><input id="sApprover"></label>
+      <label class="f"><span>승인자</span><input id="sApprover"></label>
       <label class="f"><span>정산 처리자</span><input id="sHandler"></label>
     </div>
     <div>

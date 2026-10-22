@@ -65,7 +65,6 @@ try {
             jsend(['ok' => true]);
 
         case 'POST receipts':
-            if ($me['role'] === ROLE_APPROVER) throw new BlError('대표 승인 계정은 영수증을 올리지 않습니다', 403);
             jsend(bl_upload_receipt($pdo, $me));
 
         case 'POST settings':
@@ -112,7 +111,7 @@ function bl_set_role(PDO $pdo, array $me, array $body) {
     $role  = (string)($body['role'] ?? '');
     if (!in_array($role, ROLES, true)) throw new BlError('권한이 올바르지 않습니다', 400);
     if (!in_array($email, array_column(bl_members(), 'email'), true)) throw new BlError('포털에 없는 계정입니다', 404);
-    if ($email === $me['email'] && $role !== ROLE_ADMIN) throw new BlError('본인의 정산 담당 권한은 해제할 수 없습니다', 400);
+    if ($email === $me['email'] && $role !== ROLE_ADMIN) throw new BlError('본인의 정산 관리자 권한은 해제할 수 없습니다', 400);
 
     if ($role === ROLE_STAFF) {
         $pdo->prepare("DELETE FROM bl_travel_roles WHERE email=?")->execute([$email]);
