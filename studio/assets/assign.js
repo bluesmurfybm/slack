@@ -3729,11 +3729,55 @@
                esc(r.status_label) + (r.version === confirmedVer ? ' ✓' : '') + '</option>';
       }).join('');
       sel.disabled = rows.length === 0;
+
+      // 지울 수 있는지는 서버가 정해 내려 준다(deletable). 여기서 상태로 다시 따지지 않는다.
+      var purge = $('#ba-al-purge');
+      if (purge) {
+        var n = rows.filter(function (r) { return r.deletable; }).length;
+        purge.disabled = n === 0;
+        purge.dataset.n = String(n);
+      }
     }
 
     function syncVersionSelect() {
       var sel = $('#ba-al-ver');
       if (sel && CUR) sel.value = String(CUR.id);
+      var cp = $('#ba-al-copy'), del = $('#ba-al-del');
+      if (cp)  cp.disabled  = !CUR || !ITEMS.length;
+      if (del) del.disabled = !CUR || !CUR.deletable;
+    }
+
+    /** 고른 차수를 복사한다. 새 차수가 가장 최근이라 다시 읽으면 그게 열린다. */
+    function copyVersion() {
+      if (!CUR) return;
+      if (!confirm(CUR.version + '차를 그대로 복사해 새 차수를 만듭니다.' +
+            (CUR.status === 'confirmed'
+              ? '\n\n확정본은 그대로 남습니다. 새 차수를 확정하면 그때 바뀝니다.' : ''))) {
+        return;
+      }
+      api('api/allocate.php?act=copy', { method: 'POST', body: { allocation_id: CUR.id } })
+        .then(function (d) { toast(d.message); loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
+    }
+
+    function deleteVersion() {
+      if (!CUR || !CUR.deletable) return;
+      if (!confirm(CUR.version + '차를 지웁니다. 되돌릴 수 없습니다.')) return;
+      api('api/allocate.php?act=delete', { method: 'POST', body: { allocation_id: CUR.id } })
+        .then(function (d) { toast(d.message); CUR = null; loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
+    }
+
+    function purgeVersions() {
+      var n = parseInt(($('#ba-al-purge') || {}).dataset.n || '0', 10);
+      if (!n) return;
+      if (!confirm('차수 ' + n + '개를 지웁니다. 되돌릴 수 없습니다.\n\n' +
+            '확정본과 한 번 확정됐던 안은 남습니다.')) {
+        return;
+      }
+      api('api/allocate.php?act=purge', { method: 'POST', body: { project_id: PID } })
+        .then(function (d) { toast(d.message); CUR = null; loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
     }
 
     /**
@@ -3831,6 +3875,11 @@
         t.push(tag('방식', (M_LABEL[p.method] || p.method)
                            + (p.seed ? ' · 씨앗 ' + p.seed : ''), 'warn',
                    '적합도를 보지 않고 뽑았습니다. 표의 적합도는 대조용으로 계산한 값입니다'));
+      }
+      // 복사본의 적합도·근거는 원본 시점 판정이다. 출처가 안 보이면 오늘 숫자로 읽힌다.
+      if (p.copied_from) {
+        t.push(tag('복사', p.copied_from.version + '차에서', '',
+                   '이 차수의 항목을 그대로 옮겨 왔습니다. 적합도·근거는 원본 산출 시점 값입니다'));
       }
       if (CUR.eval_ver) {
         t.push(tag('처리량 판정', CUR.eval_ver + '회차', '',
@@ -4053,6 +4102,21 @@
       });
     })();
 
+    /**
+     * 완료·보류 태스크 표식 (2026-10-22).
+     * 엔진은 이런 태스크를 새로 배정하지 않지만, 복사한 차수에는 담당자째
+     * 따라온다 — 완료된 일의 담당자는 실제로 그 일을 한 사람이라서다.
+     */
+    function settledMark(it) {
+      if (it.task_status === 'done') {
+        return ' <span class="ba-tag-auto" title="끝난 일입니다. 담당자는 기록으로 남깁니다">완료</span>';
+      }
+      if (it.task_status === 'hold') {
+        return ' <span class="ba-tag-auto" title="세워 둔 일입니다. 풀리면 이 담당자가 이어 맡습니다">보류</span>';
+      }
+      return '';
+    }
+
     function renderTable(unassigned) {
       var tb = $('#ba-al-table').querySelector('tbody');
       if (!ITEMS.length) { renderEmpty(); return; }
@@ -4090,7 +4154,7 @@
         var it = row.v;
         return '<tr data-id="' + it.id + '"' + (it.is_manual ? ' class="is-manual"' : '') + '>' +
           '<td class="ba-al__no">' + esc(it.wbs_no || '-') + '</td>' +
-          '<td class="ba-al__t">' + esc(it.task_title) + '</td>' +
+          '<td class="ba-al__t">' + esc(it.task_title) + settledMark(it) + '</td>' +
           '<td class="ba-al__md">' + (it.est_md === null ? '-' : it.est_md) + '</td>' +
           '<td class="ba-al__df">' + (it.difficulty === null ? '-' : it.difficulty) + '</td>' +
           '<td>' + memberSelect(it, canEdit) + '</td>' +
@@ -4627,6 +4691,9 @@
       });
 
       $('#ba-al-compare').addEventListener('click', openCompare);
+      $('#ba-al-copy').addEventListener('click', copyVersion);
+      $('#ba-al-del').addEventListener('click', deleteVersion);
+      $('#ba-al-purge').addEventListener('click', purgeVersions);
 
       // 표에서 바로 그 차수를 연다. 보고 고르는 화면이니 고르면 열려야 한다.
       $('#ba-cmp-table').addEventListener('click', function (e) {
