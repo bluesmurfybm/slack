@@ -70,6 +70,13 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15p
 .tile h3{margin:0;font-size:17px;font-weight:700;color:var(--navy)}
 .tile p{margin:3px 0 0;font-size:13px;color:var(--muted);line-height:1.5}
 .tile .go{position:absolute;top:22px;right:22px;color:var(--blue-soft);opacity:0;transition:opacity .15s ease}
+/* 카드 배지 — 그 시스템에서 온 안 읽은 알림 수. 앱 아이콘 숫자처럼 아이콘 모서리에 얹는다.
+   색·모양은 상단바 종(.nf-badge)과 같게 — 같은 알림함의 숫자다. */
+.tile .ic{position:relative}
+.tile-badge{position:absolute;top:-7px;right:-9px;min-width:20px;height:20px;padding:0 6px;box-sizing:border-box;
+  border-radius:999px;background:#E5484D;color:#fff;border:2px solid var(--card);
+  font-size:11px;font-weight:700;line-height:16px;text-align:center;font-family:var(--sans)}
+.tile-badge[hidden]{display:none}
 .tile:hover .go{opacity:1}
 .tile .go svg{width:20px;height:20px}
 /* ---- 카드 끌어 옮기기 ----

@@ -57,6 +57,10 @@ $__collapsed = array_values(array_filter(array_map(
     'intval',
     explode(',', (string)($__u['tile_collapsed'] ?? ''))
 )));
+// 카드 배지(안 읽은 알림 수). 처음부터 그려야 숫자가 뒤늦게 튀어나오지 않는다.
+// 어느 카드에 붙일지는 worksystems.json 의 "badge" — core/push.php::push_tile_badges.
+require_once __DIR__ . '/core/push.php';
+$__tileBadges = $__u ? push_tile_badges((int)$__u['id'], $__systems) : [];
 // 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
 $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
@@ -544,6 +548,8 @@ let TILE_ORDERED = <?= json_encode(!empty($__u['tile_order'])) ?>;
 // 카드 묶음 [{id, name, sort_no}, …]. 위에서 아래 순.
 // **빈 배열이면 묶음을 안 쓴다는 뜻**이라 화면은 지금까지처럼 한 판에 그린다.
 let TILE_GROUPS = <?= json_encode($__tileGroups, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+// { 카드key: 안 읽은 알림 수 }. 알림함 숫자가 바뀔 때마다 paintTileBadges() 가 갈아 끼운다.
+let TILE_BADGES = <?= json_encode($__tileBadges ?: new stdClass()) ?>;
 // { 카드key: 묶음id }. 여기 없는 카드는 '기타' 로 간다.
 let TILE_ASSIGN = <?= json_encode($__tileAssign ?: new stdClass(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 // 접어 둔 묶음 id. 사람마다 다르다.
@@ -746,10 +752,11 @@ async function refreshNotifBadge(){
   if(!current) return;
   try{
     const d=await bapi("api/notifications.php?count=1");
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
   }catch(e){}
 }
-function paintNotifBadge(n){
+function paintNotifBadge(n, tiles){
+  paintTileBadges(tiles);
   const b=document.getElementById("nf-badge"), btn=document.getElementById("nfBtn");
   b.textContent = n>99 ? "99+" : String(n||0);
   b.classList.toggle("hidden", !n);
@@ -771,7 +778,7 @@ async function showNotifs(more){
     const d=await bapi(`api/notifications.php?limit=30${only}${before}`);
     nfItems=nfItems.concat(d.items);
     nfMore=d.has_more;
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
     renderNotifs();
   }catch(e){
     list.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`;
@@ -810,7 +817,7 @@ async function openNotif(id){
   const n=nfItems.find(x=>x.id===id);
   if(!n) return;
   if(!n.read_at){
-    try{ const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read:[id]})}); paintNotifBadge(d.unread); }catch(e){}
+    try{ const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read:[id]})}); paintNotifBadge(d.unread, d.tiles); }catch(e){}
     n.read_at="now";
   }
   const url=(n.url||"").trim();
@@ -823,14 +830,14 @@ async function deleteNotif(id){
   try{
     const d=await bapi("api/notifications.php",{method:"DELETE",body:JSON.stringify({ids:[id]})});
     nfItems=nfItems.filter(x=>x.id!==id);
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
     renderNotifs();
   }catch(e){ toast(e.message); }
 }
 async function readAllNotifs(){
   try{
     const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read_all:true})});
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
     showNotifs();
   }catch(e){ toast(e.message); }
 }
@@ -838,7 +845,7 @@ async function deleteReadNotifs(){
   if(!confirm("읽은 알림을 모두 지울까요?")) return;
   try{
     const d=await bapi("api/notifications.php",{method:"DELETE",body:JSON.stringify({read:true})});
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
     showNotifs();
   }catch(e){ toast(e.message); }
 }
@@ -977,9 +984,26 @@ function tileHTML(s){
     <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener"
        draggable="false" data-key="${esc(s.key)}">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}</span>
+      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}${s.badge ? tileBadgeHTML(TILE_BADGES[s.key]) : ""}</span>
       <div><h3>${esc(s.label)}</h3><p>${esc(s.desc || "")}</p></div>
     </a>`;
+}
+
+/* 카드 아이콘 오른쪽 위 숫자 — 그 시스템에서 온 안 읽은 알림 수.
+   worksystems.json 에 "badge" 를 단 카드에만 자리를 만들어 둔다. */
+function tileBadgeHTML(n){
+  n = n|0;
+  return `<span class="tile-badge"${n ? "" : " hidden"} title="안 읽은 알림 ${n}건">${n>99 ? "99+" : n}</span>`;
+}
+function paintTileBadges(tiles){
+  if(!tiles) return;
+  TILE_BADGES = tiles;
+  document.querySelectorAll(".tile[data-key] .tile-badge").forEach(b => {
+    const n = TILE_BADGES[b.closest(".tile").dataset.key] | 0;
+    b.textContent = n>99 ? "99+" : String(n);
+    b.title = `안 읽은 알림 ${n}건`;
+    b.hidden = !n;
+  });
 }
 
 const soonHTML = `
