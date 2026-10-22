@@ -22,7 +22,7 @@ $csrf = bl_csrf_token();
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="../styles/topbar.css">
-<link rel="stylesheet" href="styles/travel.css">
+<link rel="stylesheet" href="styles/travel.css?v=<?= (int)@filemtime(__DIR__ . '/styles/travel.css') ?>">
 </head>
 <body>
 <div class="topbar">
@@ -307,6 +307,7 @@ $csrf = bl_csrf_token();
 
 <div class="toast" id="toast" role="status"></div>
 
-<script src="static/travel.js"></script>
+<!-- 주소에 파일 수정 시각을 붙여, 고치고 배포하면 브라우저가 옛 사본 대신 새 파일을 받게 한다(포털 pwa.js 와 같은 방식) -->
+<script src="static/travel.js?v=<?= (int)@filemtime(__DIR__ . '/static/travel.js') ?>"></script>
 </body>
 </html>
