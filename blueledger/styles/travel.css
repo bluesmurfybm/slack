@@ -6,18 +6,19 @@
   --tb:61px;
   --bg:#EEF2F8; --panel:#FFFFFF; --ink:#14213D; --sub:#5B6782; --line:#D5DCE8; --soft:#F5F7FB;
   --blue:#2350D8; --blue-soft:#E3EAFD; --wait:#B7791F; --wait-soft:#FFF3D6; --ok:#1C7C54; --ok-soft:#DDF3E8; --no:#C0392B; --no-soft:#FBE3E0;
-  --c1:#2350D8; --c2:#4FA3E0; --c3:#E0A13A; --c4:#8A94AB;
+  /* 그래프 색(교통비·통행료·식대·기타) — 처음의 진한 파랑과 파스텔 사이 중간 톤(2026-10-22) */
+  --c1:#6F98E8; --c2:#6FC3BC; --c3:#EDB063; --c4:#A99BD6;
   --tape:#FFFDF6;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0F1524; --panel:#172036; --ink:#E6EBF5; --sub:#99A4BD; --line:#2A3654; --soft:#1C2740;
   --blue:#6E92FF; --blue-soft:#22325C; --wait:#F0B653; --wait-soft:#3A2F17; --ok:#4CC28E; --ok-soft:#16362A; --no:#F07A6C; --no-soft:#3D1D1A;
-  --c1:#6E92FF; --c2:#5FBDF0; --c3:#F0B653; --c4:#7C88A3; --tape:#1B2338; color-scheme:dark;}}
+  --c1:#7C9CE6; --c2:#6CB8B1; --c3:#DCA45F; --c4:#9C8FCC; --tape:#1B2338; color-scheme:dark;}}
 :root[data-theme="dark"]{
   --bg:#0F1524; --panel:#172036; --ink:#E6EBF5; --sub:#99A4BD; --line:#2A3654; --soft:#1C2740;
   --blue:#6E92FF; --blue-soft:#22325C; --wait:#F0B653; --wait-soft:#3A2F17; --ok:#4CC28E; --ok-soft:#16362A; --no:#F07A6C; --no-soft:#3D1D1A;
-  --c1:#6E92FF; --c2:#5FBDF0; --c3:#F0B653; --c4:#7C88A3; --tape:#1B2338; color-scheme:dark;}
+  --c1:#7C9CE6; --c2:#6CB8B1; --c3:#DCA45F; --c4:#9C8FCC; --tape:#1B2338; color-scheme:dark;}
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -53,6 +54,15 @@ main{display:grid;grid-template-columns:1fr minmax(380px,430px);gap:16px;padding
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
 .panel>h2{font-size:15px;margin:0;padding:14px 16px 0;display:flex;align-items:center;gap:8px}
 .panel>h2 .meta{margin-left:auto;font-weight:500;font-size:12px;color:var(--sub)}
+/* 청구 목록 접기 — 제목 줄 어디를 눌러도 펼치고 접는다. 처음엔 접혀 있다(작성기준 패널과 같은 모양) */
+#listPanel>h2{padding:0}
+.fold{flex:1;border:0;background:none;padding:14px 16px;font:inherit;font-weight:700;font-size:15px;color:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;text-align:left;border-radius:12px}
+.fold .meta{margin-left:auto;font-weight:500;font-size:12px;color:var(--sub)}
+.fold .foldtxt{font-weight:500;font-size:12px;color:var(--sub)}
+.fold .foldtxt::after{content:"접기"}
+.fold[aria-expanded="false"] .foldtxt::after{content:"펼치기"}
+.fold:hover .foldtxt{color:var(--ink)}
+#listPanel.folded #listBody{display:none}
 
 /* 청구서 폼 — 영수증 테이프 느낌 */
 .slip{order:2;background:var(--tape);border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:start;position:sticky;top:calc(var(--tb) + 16px)}
@@ -74,15 +84,17 @@ label.f textarea{resize:vertical;min-height:38px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{border:1px solid var(--line);border-radius:99px;padding:4px 10px;background:var(--panel);cursor:pointer;font-size:13px}
 .chip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
-/* 관리자 화면 — 현황·목록이 전체 폭을 쓰고 청구서 칸은 없다. 건을 누르면 그 청구서가 새 탭으로 열린다
+/* 관리자 화면 — 현황·목록이 전체 폭을 쓰고 청구서 칸은 없다. 건을 누르면 그 청구서가 팝업 창으로 열린다
    (travel.php?trip=<id>, body[data-single]). 구성원 화면은 지금처럼 청구서가 늘 오른쪽 칸에 있다. */
 body:not([data-role="staff"]) main{grid-template-columns:1fr}
 body:not([data-role="staff"]):not([data-single]) .slip{display:none!important}
 body:not([data-role="staff"]) .tabs [data-tab="form"]{display:none}   /* 휴대폰 '작성' 탭도 관리자 화면에서는 쓰지 않는다 */
-/* 새 탭 — 청구서 한 장만 가운데에 */
-body[data-single] main{grid-template-columns:minmax(0,560px);justify-content:center}
-body[data-single] .slip{display:block!important;position:static!important}
-body[data-single] .slip-body{max-height:none}
+/* 팝업 창 — 청구서 한 장만. 포털 상단바·제목 줄은 빼고 창을 꽉 채운다 */
+body[data-single] .topbar,body[data-single] header.bl{display:none!important}
+body[data-single] main{grid-template-columns:minmax(0,1fr);padding:0;max-width:none}
+body[data-single] .slip{border-radius:0;border-width:0}
+body[data-single] .slip{display:flex!important;flex-direction:column;position:static!important;height:100vh;height:100dvh}
+body[data-single] .slip-body{flex:1;min-height:0;max-height:none}   /* 합계·저장 줄은 창 아래에 늘 보인다 */
 body[data-single] .col.right,body[data-single] .tabs,body[data-single] header.bl>:not(h1){display:none!important}
 .slipx{display:none;margin-left:auto;border:0;background:none;font-size:24px;line-height:1;width:32px;height:32px;border-radius:8px;cursor:pointer;color:var(--sub)}
 .slipx:hover{background:var(--soft);color:var(--ink)}
@@ -178,7 +190,7 @@ details.panel[open]>summary::after{content:"접기"}
 .rules .formula{background:var(--soft);border-radius:8px;padding:8px 10px;font-weight:600;margin:4px 0}
 .rules .r{text-align:right}
 .rules a{color:var(--blue);word-break:break-all}
-body[data-role="staff"] #dashArea,body[data-role="staff"] #listPanel,body[data-role="staff"] .tabs,body[data-role="staff"] #btnCsv,body[data-role="staff"] #yearSel{display:none!important}
+body[data-role="staff"] #dashArea,body[data-role="staff"] #dashCharts,body[data-role="staff"] #listPanel,body[data-role="staff"] .tabs,body[data-role="staff"] #btnCsv,body[data-role="staff"] #yearSel{display:none!important}
 body[data-role="staff"] details#rulePanel>summary::after{content:none}
 /* 승인·정산 칸: 고칠 수 없는 사람에게는 버튼·입력칸 대신 상태 글자 하나만 보인다.
    승인은 대표만, 정산은 정산 담당만 고친다. */
@@ -294,7 +306,7 @@ dialog .df{padding:12px 18px;border-top:1px solid var(--line);display:flex;justi
   main[data-tab="form"] .col.right{display:none}
   main[data-tab="dash"] .slip,main[data-tab="list"] .slip{display:none}
   main[data-tab="dash"] #listPanel{display:none}
-  main[data-tab="list"] #dashArea,main[data-tab="list"] #infoArea{display:none}
+  main[data-tab="list"] #dashArea,main[data-tab="list"] #dashCharts,main[data-tab="list"] #infoArea{display:none}
   .charts{grid-template-columns:1fr}
   .kpis{grid-template-columns:1fr 1fr}
   header.bl{padding:10px 12px}

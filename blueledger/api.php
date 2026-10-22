@@ -37,6 +37,7 @@ try {
     switch ("$method $path") {
         case 'GET state':
             bl_maybe_refresh_prices($pdo);
+            bl_sync_auto_fuel($pdo);
             jsend([
                 'me'       => ['name' => $me['name'], 'email' => $me['email'], 'role' => $me['role'], 'color' => $me['color']],
                 'trips'    => bl_visible_trips($pdo, $me),
