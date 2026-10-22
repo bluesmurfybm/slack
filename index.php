@@ -1004,6 +1004,13 @@ function paintTileBadges(tiles){
     b.title = `안 읽은 알림 ${n}건`;
     b.hidden = !n;
   });
+  // 상단바 드롭다운의 같은 숫자(core/worksystems.php::work_systems_menu)도 같이 갈아 끼운다
+  document.querySelectorAll(".dd-menu a[data-key] .dd-badge").forEach(b => {
+    const n = TILE_BADGES[b.closest("a").dataset.key] | 0;
+    b.textContent = n>99 ? "99+" : String(n);
+    b.title = `안 읽은 알림 ${n}건`;
+    b.hidden = !n;
+  });
 }
 
 const soonHTML = `
