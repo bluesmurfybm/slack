@@ -39,10 +39,12 @@ header.rs h1 small{font-weight:500;color:var(--sub);font-size:13px;margin-left:6
 .btn.danger{color:var(--no)}
 .btn.sm{padding:4px 9px;font-size:12px}
 /* 구성원 | 관리자 전환(관리자 계정만): 옅은 알약 안에서 고른 쪽만 흰 바탕 · 파란 글자 */
-.modeseg{display:inline-flex;gap:2px;padding:2px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
+/* 구성원/관리자 전환 — BlueLearn·BlueCart 의 알약(.seg-mode)과 같은 크기·모양. 색은 이 화면의 토큰(다크 모드 대응) */
+.modeseg{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
 .modeseg[hidden]{display:none}
-.modeseg button{border:0;background:none;border-radius:999px;padding:2px 14px;font:inherit;font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;line-height:1.5}
-.modeseg button[aria-selected="true"]{background:var(--panel);color:var(--blue);box-shadow:0 1px 3px rgba(20,33,61,.12)}
+.modeseg button{border:0;background:transparent;border-radius:999px;padding:6px 18px;font:inherit;font-size:13.5px;font-weight:600;color:var(--sub);cursor:pointer;white-space:nowrap;line-height:1.4;transition:background .14s ease,color .14s ease}
+.modeseg button:hover{color:var(--ink)}
+.modeseg button[aria-selected="true"]{background:var(--panel);color:var(--blue);box-shadow:0 1px 2px rgba(16,35,90,.12)}
 select.btn{padding-right:6px}
 /* 예시 글자는 실제 값과 헷갈리지 않게 옅게 */
 label.f input::placeholder,label.f textarea::placeholder{color:var(--sub);opacity:.6}
