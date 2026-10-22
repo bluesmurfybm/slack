@@ -47,16 +47,16 @@ function ow_migrate(PDO $pdo): array
     return $applied;
 }
 
-/** '-- ' 주석 줄을 빼고 ';' 로 끝나는 줄에서 자른다. */
+/** '-- ' 주석 줄을 빼고 ';' 로 끝나는 줄에서 자른다. /u 가 빠지면 한글 COMMENT 가 깨진다(presenter.php ow_md 참고). */
 function ow_sql_statements(string $sql): array
 {
     $out = [];
     $buf = '';
-    foreach (preg_split('/\R/', $sql) as $line) {
-        if (preg_match('/^\s*--/', $line)) continue;
+    foreach (preg_split('/\R/u', $sql) as $line) {
+        if (preg_match('/^\s*--/u', $line)) continue;
         $buf .= $line . "\n";
-        if (preg_match('/;\s*$/', $line)) {
-            $stmt = trim(preg_replace('/;\s*$/', '', trim($buf)));
+        if (preg_match('/;\s*$/u', $line)) {
+            $stmt = trim(preg_replace('/;\s*$/u', '', trim($buf)));
             if ($stmt !== '') $out[] = $stmt;
             $buf = '';
         }
