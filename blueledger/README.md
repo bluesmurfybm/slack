@@ -66,7 +66,11 @@ blueledger/
    ```
    같은 id 는 건너뛰므로 여러 번 돌려도 된다. 권한·설정(오피넷 키 포함)·유가도 같이 옮긴다.
    2026-10-21 로컬에서 46건 전부 원본과 같음, 합계 899,794원 일치 확인.
-   옮긴 뒤 두 가지를 더 한다.
+   **PHP 도구 대신 SQL 파일 하나로 옮길 수도 있다(영수증 첨부가 없을 때).** 지안 님 PC 에서
+   `php blueledger/tools/export_travel_sql.php <travel.db> --out=bluexpense_migrate.sql` 로 만들고 서버에서
+   `mysql --default-character-set=utf8mb4 -u <계정> -p <DB> < bluexpense_migrate.sql` 하면 표 만들기·청구·권한·설정
+   (식대 15,000원, 엑셀 시절 7건 완료 처리 포함)이 한 번에 들어가고 끝에 건수·합계가 나온다. 이 길이면 아래 두 단계는 필요 없다.
+   PHP 도구로 옮긴 뒤에는 두 가지를 더 한다.
    - `php blueledger/tools/mark_legacy_done.php` — 엑셀 시절 기록 중 '승인대기·미처리'로 남은 7건을
      승인·처리완료로(실제로 전부 끝난 건이다. 2026-10-22 지안 님 확인). `--dry-run` 으로 먼저 본다.
    - 설정 화면에서 1인 식대를 15,000원으로(옛 설정이 10,000원으로 따라 들어온다).
