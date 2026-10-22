@@ -9,10 +9,12 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
 const parseNum=v=>{const n=Number(String(v??'').replace(/[^\d.-]/g,''));return isFinite(n)?n:0};
 
-const DEFAULT_SETTINGS={staff:[],approverName:'대표',handlerName:'김지안',fuel:{gas:1866.16,diesel:1849.17,lpg:1103.31},eff:10,priceBase:'2026년 8월 1주',mealUnit:10000};
+const DEFAULT_SETTINGS={staff:[],approverName:'대표',handlerName:'김지안',fuel:{gas:1866.16,diesel:1849.17,lpg:1103.31},eff:10,priceBase:'2026년 8월 1주',mealUnit:15000};
 const S={trips:[],settings:structuredClone(DEFAULT_SETTINGS),year:String(new Date().getFullYear()),editingId:null,q:'',fStatus:'all',companions:new Set(),approval:'승인대기',status:'미처리',receipts:emptyRc()};
 let store=null,assets=null;
-S.role='local';S.uid=null;
+// realRole: 서버가 준 권한(admin 정산·approver 승인·staff). role: 지금 화면의 권한 —
+// 관리자도 '구성원' 화면에서는 staff 와 똑같이 보고 쓴다. 서버 권한은 그대로다.
+S.role='local';S.realRole='staff';S.view='member';S.allTrips=[];S.uid=null;
 const REVIEW_KEYS=['approval','approver','approvedAt','status','handler','processedAt','payMethod','note'];
 const isAdmin=()=>S.role!=='staff';
 const isSettler=()=>S.role==='admin';
@@ -40,11 +42,10 @@ async function api(path,body){
   return j;
 }
 async function loadState(){
-  const j=await api('state');
-  if(j.me&&j.me.role!==S.role){startAs(j.me);return}
-  S.trips=j.trips||[];S.settings={...structuredClone(DEFAULT_SETTINGS),...(j.settings||{})};
+  const j=await api('state');S.lastLoad=Date.now();
+  if(j.me&&j.me.role!==S.realRole){startAs(j.me);return}
+  S.allTrips=j.trips||[];S.trips=viewTrips();S.settings={...structuredClone(DEFAULT_SETTINGS),...(j.settings||{})};
   renderStaff();if(!S.editingId&&!F('traveler').value)presetMe();updateFuelInfo();updateMealHint();render();renderInfo();if(S.editingId)refreshLock();
-  $('#conn').textContent=(S.role==='staff'?'내 청구':'전체 청구')+' · '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})+' 기준';
 }
 async function initStore(){
   assets=true;
@@ -55,17 +56,64 @@ async function initStore(){
   };
   // 로그인은 포털이 한다. 여기 왔다면 이미 로그인한 상태고, 첫 state 응답에 내 이름·권한이 온다.
   let first=null;
-  try{first=await api('state')}catch(e){$('#conn').textContent='서버에 연결할 수 없습니다. 잠시 뒤 새로고침해 주세요.';return}
+  try{first=await api('state')}catch(e){toast('서버에 연결할 수 없습니다. 잠시 뒤 새로고침해 주세요.');return}
   await startAs(first.me);
 }
 async function startAs(u){
-  S.me=u.name;S.role=u.role;document.body.dataset.role=u.role;
-  F('roleTag').textContent=u.role==='admin'?'정산 담당':u.role==='approver'?'대표 승인':'';
-  F('rulePanel').open=u.role==='staff';
-  updateAttUI();applyRole();
+  S.me=u.name;S.realRole=u.role;
+  // 관리자도 처음엔 구성원 화면으로 연다. 관리자 화면은 전환 탭으로 간다
+  if(u.role==='staff')S.view='member';
+  // 팝업(?trip=)으로 열렸으면 관리자 화면 권한으로 그 청구서 한 장만 보인다
+  if(TRIP_PARAM&&u.role!=='staff'){S.single=TRIP_PARAM;S.view='admin';document.body.dataset.single='1'}
+  F('modeSeg').hidden=u.role==='staff'||!!S.single;
+  setViewRole();
+  updateAttUI();
   await loadState().catch(e=>toast(e.message));
+  if(S.single){
+    const t=S.trips.find(x=>x.id===S.single);
+    if(t){fillForm(t);document.title=`${t.traveler} ${t.date} · BlueExpense`}else showSingleGone('청구서를 찾을 수 없습니다. 이미 삭제되었을 수 있습니다.');
+  }
   clearInterval(S.poll);S.poll=setInterval(()=>{if(!document.hidden)loadState().catch(()=>{})},20000);
 }
+/* ---------- 구성원 / 관리자 화면 전환 (관리자 계정만) ---------- */
+const isMine=t=>t.createdBy===S.me||t.traveler===S.me;
+function viewTrips(){return S.role==='staff'?S.allTrips.filter(isMine):S.allTrips}
+function setViewRole(){
+  S.role=S.view==='admin'?S.realRole:'staff';
+  document.body.dataset.role=S.role;
+  F('modeSeg').querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-selected',b.dataset.mode===S.view));
+  F('rulePanel').open=S.role==='staff';
+  applyRole();
+}
+F('modeSeg').addEventListener('click',e=>{
+  const b=e.target.closest('[data-mode]');if(!b||S.realRole==='staff'||b.dataset.mode===S.view)return;
+  S.view=b.dataset.mode;setViewRole();S.trips=viewTrips();
+  S.fStatus='all';F('fStatus').value='all';clearForm();render();renderInfo();
+  if(S.role!=='staff')switchTab('dash');
+});
+/* ---------- 관리자 화면: 청구서는 팝업 창으로 ----------
+   목록·처리할 청구에서 건을 누르면 travel.php?trip=<id> 를 청구서 크기의 팝업 창으로, 지금 창 가운데에 연다.
+   창 이름을 건마다 정해 두어 같은 건을 다시 누르면 새로 늘지 않고 그 창이 앞으로 온다.
+   팝업은 그 청구서 한 장만 보이고(S.single), 저장·삭제하면 이 창(opener)에 알려 목록을 바로 새로 받게 한다. */
+const TRIP_PARAM=new URLSearchParams(location.search).get('trip')||'';
+function openTrip(t){
+  // 화면 크기를 못 알려 주는 브라우저(0)도 있어 최소 크기를 둔다
+  const w=Math.max(420,Math.min(560,(screen.availWidth||1280)-40)),h=Math.max(600,Math.min(960,(screen.availHeight||900)-60));
+  const left=Math.max(0,Math.round(window.screenX+(window.outerWidth-w)/2)),top=Math.max(0,Math.round(window.screenY+(window.outerHeight-h)/2));
+  const win=window.open('travel.php?trip='+encodeURIComponent(t.id),'bl_trip_'+t.id,`popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+  if(win)win.focus();else toast('팝업 창을 열 수 없습니다. 브라우저의 팝업 차단을 풀어 주세요');
+}
+function tellOpener(){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({bl:'reload'},location.origin)}catch(e){}}
+window.addEventListener('message',e=>{if(e.origin===location.origin&&e.data&&e.data.bl==='reload'&&!S.single)loadState().catch(()=>{})});
+function showSingleGone(msg){
+  $('.slip').innerHTML=`<div class="gone"><b>${esc(msg)}</b><span>이 창은 닫아도 됩니다.</span><button type="button" class="btn" id="btnGoneClose">창 닫기</button></div>`;
+  F('btnGoneClose').addEventListener('click',closeSingle);
+}
+function closeSingle(){window.close();setTimeout(()=>{location.href='travel.php'},150)}   // 스크립트가 연 창이 아니면 닫히지 않는다 — 그땐 목록으로
+F('btnSlipClose').addEventListener('click',closeSingle);
+// 다른 창에서 승인·정산하고 돌아오면 목록을 바로 새로 받는다(20초 주기를 기다리지 않게)
+S.lastLoad=0;
+window.addEventListener('focus',()=>{if(!S.single&&Date.now()-S.lastLoad>2000)loadState().catch(()=>{})});
 // 상단바 사용자 메뉴
 F('hdrChip').addEventListener('click',e=>{e.stopPropagation();F('hdrUserMenu').classList.toggle('open')});
 document.addEventListener('click',e=>{if(!F('hdrUserMenu').contains(e.target))F('hdrUserMenu').classList.remove('open')});
@@ -76,8 +124,8 @@ function presetMe(){if(isAdmin())return;const me=S.me||'';
 function applyRole(){
   const staff=!isAdmin();
   F('fsApproval').disabled=S.role!=='approver';F('fsSettle').disabled=!isSettler();
-  // 대표는 승인하러 들어온다 — 승인 칸을 청구서 맨 위로 올려 스크롤 없이 보이게 한다
-  if(S.role==='approver')F('form').prepend(F('fsApproval'));
+  // 승인 관리자는 승인하러 들어온다 — 관리자 화면에서는 승인 칸을 청구서 맨 위로. 그 밖에는 원래 자리(명세 아래)
+  if(S.role==='approver')F('form').prepend(F('fsApproval'));else F('fsMoney').after(F('fsApproval'));
   F('queueTitle').firstChild.textContent=staff?'진행 중인 내 청구':'처리할 청구';
   refreshLock();
 }
@@ -87,11 +135,13 @@ function refreshLock(){
   F('fsInfo').disabled=!!locked;F('fsMoney').disabled=!!locked;
   F('btnSave').hidden=!!locked;
   F('btnDel').hidden=!S.editingId||!isSettler();
-  if(S.role==='approver'){F('btnSave').hidden=!S.editingId;F('btnSave').textContent='승인 저장';F('btnNew').hidden=true}
+  // '새로 쓰기'는 열어 둔 청구가 있을 때만. 관리자(승인) 화면은 승인만 하므로 두지 않는다
+  F('btnNew').hidden=!S.editingId||S.role!=='staff';
+  if(S.role==='approver'){F('btnSave').hidden=!S.editingId;F('btnSave').textContent='승인 저장'}
   const msg=F('lockMsg');
   if(S.role==='approver'){msg.hidden=false;msg.textContent=S.editingId?'승인 또는 반려를 고른 뒤 승인 저장을 눌러 주세요.':'목록이나 처리할 청구에서 승인할 건을 눌러 주세요.'}
-  else if(locked){msg.hidden=false;msg.textContent=t.approval==='반려'?'반려된 청구입니다. 내용을 고쳐 새 청구서로 다시 올려 주세요.':'승인된 청구는 수정할 수 없습니다. 고칠 내용이 있으면 정산 담당자에게 알려 주세요.'}
-  else if(staff){msg.hidden=false;msg.textContent='승인과 정산은 대표자와 정산 담당자가 처리합니다. 승인 전까지는 내용을 고칠 수 있습니다.'}
+  else if(locked){msg.hidden=false;msg.textContent=t.approval==='반려'?'반려된 청구입니다. 내용을 고쳐 새 청구서로 다시 올려 주세요.':'승인된 청구는 수정할 수 없습니다. 고칠 내용이 있으면 관리자에게 알려 주세요.'}
+  else if(staff){msg.hidden=false;msg.textContent='승인과 정산은 관리자가 처리합니다. 승인 전까지는 내용을 고칠 수 있습니다.'}
   else msg.hidden=true;
   document.querySelectorAll('.att').forEach(a=>a.style.visibility=locked?'hidden':'');
   document.querySelectorAll('.th .x').forEach(b=>b.hidden=!!locked);
@@ -139,11 +189,15 @@ function renderStatusText(){
   const [a,s]=statusBadges(S.approval,S.status);
   F('stApproval').innerHTML=a;F('stSettle').innerHTML=s;
 }
-// 직원의 '내 청구' — 연도와 상관없이 최근 출장부터. 누르면 청구서가 열리고 승인·정산 상태가 보인다.
+// 구성원 화면의 '내 청구' — 연도와 상관없이 최근 출장부터. 누르면 청구서가 열리고 승인·정산 상태가 보인다.
 function renderMyList(){
   if(S.role!=='staff')return;
-  const list=[...S.trips].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  F('myMeta').textContent=list.length?`${list.length}건`:'';
+  // 최근 1년 안에 청구한 건만(청구일 = 올린 날, 옛 엑셀 기록은 출장일). 진행 중이어도 1년이 지나면 숨긴다.
+  const d=new Date(),cut=ymd(d.getFullYear()-1,d.getMonth()+1,d.getDate());
+  const list=S.trips.filter(t=>String(t.createdAt||t.date).slice(0,10)>=cut)
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const hidden=S.trips.length-list.length;
+  F('myMeta').textContent=(list.length?`최근 1년 ${list.length}건`:'')+(hidden?` · 그 전 ${hidden}건은 관리자에게 문의`:'');
   F('myCount').textContent=list.length||'';
   F('myList').innerHTML=list.length?list.map(t=>{const [a,s]=statusBadges(t.approval,t.status);
     return `<div class="myrow${t.id===S.editingId?' sel':''}" data-id="${esc(t.id)}" tabindex="0">
@@ -151,7 +205,7 @@ function renderMyList(){
       <span class="what">${esc(t.place)}${t.purpose?`<small>${esc(t.purpose)}</small>`:''}</span>
       <span class="amt num">${won(t.total)}원</span>
       <span class="st"><span class="hint">승인</span>${a}<span class="hint">정산</span>${s}</span></div>`}).join('')
-    :'<div class="empty">아직 올린 청구가 없습니다. 청구서를 써서 제출해 보세요.</div>';
+    :`<div class="empty">${hidden?'최근 1년 안에 올린 청구가 없습니다.':'아직 올린 청구가 없습니다.'} 청구서를 써서 제출해 보세요.</div>`;
 }
 F('btnMy').addEventListener('click',()=>{renderMyList();F('myDlg').showModal()});
 F('myDlgClose').addEventListener('click',()=>F('myDlg').close());
@@ -211,22 +265,47 @@ function setModeValue(v){
 F('btnFuel').addEventListener('click',()=>{const p=fuelPrice(F('mode').value),km=parseNum(F('km').value);if(!km){F('km').focus();return}
   F('transport').value=won(Math.ceil(km/(S.settings.eff||10)*p*2/1000)*1000);updateTotal()});
 function updateMealHint(){
-  const people=1+companionsArr().length,days=periodDays(F('period').value),unit=S.settings.mealUnit||10000;
+  const people=1+companionsArr().length,days=periodDays(F('period').value),unit=S.settings.mealUnit||15000;
   const limit=unit*people,meal=parseNum(F('meal').value);
   const h=F('mealHint');
   h.textContent=`기준: 1인 ${won(unit)}원 × ${people}명 = ${won(limit)}원`+(days>1?' (1회 기준)':'');
   h.className='hint'+(meal>limit*days*2?' warn':'');
 }
 function periodDays(p){const m=String(p).match(/(\d)박/);return m?Number(m[1])+1:1}
-F('period').addEventListener('change',updateMealHint);
+F('period').addEventListener('change',()=>{updateMealHint();renderCal()});
 
+/* ---------- 출장일 달력 ----------
+   고른 날은 숨은 칸 #date 에 둔다. S.calMonth 는 지금 보이는 달(YYYY-MM). */
+const ymd=(y,m,d)=>`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+function setDate(v){F('date').value=v||'';S.calMonth=(v||today()).slice(0,7);renderCal()}
+function renderCal(){
+  const sel=F('date').value,[y,m]=(S.calMonth||today().slice(0,7)).split('-').map(Number);
+  const first=new Date(y,m-1,1),start=new Date(y,m-1,1-first.getDay());
+  // 기간(1박2일이면 이틀)만큼 고른 날부터 옅게 잇는다
+  const days=sel?periodDays(F('period').value):0,end=sel?new Date(new Date(sel+'T00:00').getTime()+(days-1)*864e5):null;
+  const t=today();let cells='';
+  for(let i=0;i<42;i++){
+    const d=new Date(start.getTime()+i*864e5),v=ymd(d.getFullYear(),d.getMonth()+1,d.getDate()),w=d.getDay();
+    const inRange=sel&&v>sel&&end&&d<=end;
+    cells+=`<button type="button" class="d${d.getMonth()!==m-1?' out':''}${w===0?' sun':w===6?' sat':''}${v===t?' now':''}${v===sel?' sel':''}${inRange?' range':''}" data-v="${v}" aria-label="${v}"${v===sel?' aria-pressed="true"':''}>${d.getDate()}</button>`;
+  }
+  F('cal').innerHTML=`<div class="cal-head"><button type="button" data-nav="-1" aria-label="이전 달">‹</button><b>${y}년 ${m}월</b><span><button type="button" class="today" data-nav="0">오늘</button><button type="button" data-nav="1" aria-label="다음 달">›</button></span></div>
+    <div class="cal-grid">${['일','월','화','수','목','금','토'].map((x,i)=>`<span class="wd${i===0?' sun':i===6?' sat':''}">${x}</span>`).join('')}${cells}</div>`;
+  F('calPick').textContent=sel?sel.replace(/-/g,'. ')+' ('+'일월화수목금토'[new Date(sel+'T00:00').getDay()]+')':'날짜를 눌러 주세요';
+}
+F('cal').addEventListener('click',e=>{
+  const nav=e.target.closest('[data-nav]');
+  if(nav){const n=+nav.dataset.nav;if(!n){S.calMonth=today().slice(0,7)}else{const [y,m]=S.calMonth.split('-').map(Number);const d=new Date(y,m-1+n,1);S.calMonth=ymd(d.getFullYear(),d.getMonth()+1,1).slice(0,7)}renderCal();return}
+  const b=e.target.closest('.d');if(!b)return;
+  setDate(b.dataset.v);
+});
 function clearForm(){
   S.editingId=null;S.companions=new Set();S.approval='승인대기';S.status='미처리';S.receipts=emptyRc();renderThumbs();
-  F('form').reset();F('traveler').value='';F('date').value=today();F('period').value='당일';setModeValue('자가용(휘발유)');
+  F('form').reset();F('traveler').value='';setDate(today());F('period').value='당일';setModeValue('자가용(휘발유)');
   ['transport','toll','meal','etc'].forEach(id=>F(id).value='');
   F('approver').value='';F('handler').value='';
   setSeg('approvalSeg',S.approval);setSeg('statusSeg',S.status);
-  F('formMode').textContent='새 청구';F('btnDel').hidden=true;F('btnSave').textContent='청구서 저장';
+  F('formMode').textContent='New';F('btnDel').hidden=true;F('btnSave').textContent='청구서 저장';
   presetMe();renderChips();updateFuelInfo();updateTotal();highlightRow();refreshLock();
 }
 function fillForm(t){
@@ -237,7 +316,7 @@ function fillForm(t){
   const staff=staffList();
   S.companions=new Set(comps.filter(n=>staff.includes(n)));
   F('compExtra').value=comps.filter(n=>!staff.includes(n)).join(', ');
-  F('date').value=t.date||'';F('period').value=t.period||'당일';F('place').value=t.place||'';F('purpose').value=t.purpose||'';
+  F('period').value=t.period||'당일';setDate(t.date||'');F('place').value=t.place||'';F('purpose').value=t.purpose||'';
   setModeValue(t.mode);
   F('km').value=t.km||'';
   ['transport','toll','meal','etc'].forEach(id=>F(id).value=t[id]?won(t[id]):'');
@@ -245,11 +324,11 @@ function fillForm(t){
   S.approval=t.approval||'승인대기';S.status=t.status||'미처리';setSeg('approvalSeg',S.approval);setSeg('statusSeg',S.status);
   F('approver').value=t.approver||'';F('approvedAt').value=t.approvedAt||'';
   F('handler').value=t.handler||'';F('processedAt').value=t.processedAt||'';F('payMethod').value=t.payMethod||'';F('note').value=t.note||'';
-  F('formMode').textContent='수정 중';F('btnDel').hidden=false;F('btnSave').textContent='변경 저장';
+  F('formMode').textContent='Edit';F('btnDel').hidden=false;F('btnSave').textContent='변경 저장';
   renderChips();updateFuelInfo();updateTotal();highlightRow();
   if(t.companionCount&&!comps.length)F('compCount').textContent=`· ${t.companionCount}명 (기존 기록)`;
   refreshLock();
-  switchTab('form');
+  if(S.role==='staff')switchTab('form');
 }
 F('btnNew').addEventListener('click',()=>{clearForm();switchTab('form');F('traveler').focus()});
 
@@ -274,13 +353,15 @@ F('btnSave').addEventListener('click',async()=>{
   
   const id=S.editingId||'new_';
   F('btnSave').disabled=true;
-  try{await store.save(id,data);toast(S.editingId?'변경 내용을 저장했습니다':(S.role==='staff'?'청구서를 제출했습니다. 승인·정산 결과는 정산 담당자가 안내합니다':'청구서를 저장했습니다'));S.year=data.date.slice(0,4);clearForm();render()}
+  try{await store.save(id,data);toast(S.editingId?'변경 내용을 저장했습니다':(S.role==='staff'?'청구서를 제출했습니다. 승인·정산 결과는 관리자가 안내합니다':'청구서를 저장했습니다'));S.year=data.date.slice(0,4);
+    // 팝업은 저장한 그 청구서를 계속 보여 주고, 연 창의 목록을 새로 받게 알린다
+    if(S.single){const t=S.trips.find(x=>x.id===S.single);if(t)fillForm(t);tellOpener()}else clearForm();render()}
   catch(e){toast(e.message||'저장하지 못했습니다')}
   finally{F('btnSave').disabled=false}
 });
 F('btnDel').addEventListener('click',async()=>{
   if(!S.editingId||!confirm('이 청구서를 삭제할까요? 되돌릴 수 없습니다.'))return;
-  try{await store.remove(S.editingId);toast('청구서를 삭제했습니다');clearForm()}catch(e){toast(e.message||'삭제하지 못했습니다')}
+  try{await store.remove(S.editingId);toast('청구서를 삭제했습니다');if(S.single){showSingleGone('청구서를 삭제했습니다.');tellOpener()}else clearForm()}catch(e){toast(e.message||'삭제하지 못했습니다')}
 });
 
 /* ---------- 현황/목록 ---------- */
@@ -305,7 +386,7 @@ function render(){
   F('kpis').innerHTML=`
     <div class="kpi"><div class="k">${label} 출장</div><div class="v num">${rows.length}건</div><div class="s">출장자 ${new Set(rows.map(t=>t.traveler)).size}명</div></div>
     <div class="kpi"><div class="k">${label} 청구 합계</div><div class="v num">${won(total)}원</div><div class="s">건당 평균 ${won(rows.length?total/rows.length:0)}원</div></div>
-    <div class="kpi click ${waitA.length?'alert':''}" data-f="승인대기"><div class="k">${label} 대표 승인 대기</div><div class="v num">${waitA.length}건</div><div class="s">${won(waitA.reduce((a,t)=>a+(t.total||0),0))}원</div></div>
+    <div class="kpi click ${waitA.length?'alert':''}" data-f="승인대기"><div class="k">${label} 승인 대기</div><div class="v num">${waitA.length}건</div><div class="s">${won(waitA.reduce((a,t)=>a+(t.total||0),0))}원</div></div>
     <div class="kpi click ${unpaid.length?'alert':''}" data-f="미처리"><div class="k">${label} 정산 대기</div><div class="v num">${unpaid.length}건</div><div class="s">${won(unpaid.reduce((a,t)=>a+(t.total||0),0))}원 지급 예정</div></div>`;
 
   renderMonthChart(rows);
@@ -314,7 +395,11 @@ function render(){
   renderTable(rows);
   renderMyList();
 }
-F('kpis').addEventListener('click',e=>{const k=e.target.closest('.kpi.click');if(!k)return;S.fStatus=k.dataset.f;F('fStatus').value=S.fStatus;render();switchTab('list');F('listPanel').scrollIntoView({behavior:'smooth',block:'start'})});
+// 청구 목록은 처음엔 접혀 있다. 제목 줄을 누를 때마다 펼치고 접는다
+function setListFold(folded){F('listPanel').classList.toggle('folded',folded);F('listFold').setAttribute('aria-expanded',String(!folded))}
+F('listFold').addEventListener('click',()=>setListFold(!F('listPanel').classList.contains('folded')));
+setListFold(true);
+F('kpis').addEventListener('click',e=>{const k=e.target.closest('.kpi.click');if(!k)return;setListFold(false);S.fStatus=k.dataset.f;F('fStatus').value=S.fStatus;render();switchTab('list');F('listPanel').scrollIntoView({behavior:'smooth',block:'start'})});
 
 function renderMonthChart(rows){
   const W=620,H=220,pl=46,pr=8,pt=12,pb=28;
@@ -355,7 +440,7 @@ function renderQueue(waitA,unpaid){
   if(!items.length){F('queue').innerHTML='<div class="empty">처리할 청구가 없습니다.</div>';return}
   F('queue').innerHTML=items.slice(0,6).map(({t,k})=>`<div class="qrow" data-id="${esc(t.id)}" tabindex="0"><span class="badge ${k==='승인대기'?'b-wait':'b-none'}">${k}</span><span class="who">${esc(t.traveler)}</span><span class="what">${esc(t.date)} ${esc(t.place)} · ${esc(t.purpose)}</span><span class="num">${won(t.total)}원</span></div>`).join('')+(items.length>6?`<div class="empty" style="padding:6px 8px">외 ${items.length-6}건</div>`:'');
 }
-F('queue').addEventListener('click',e=>{const r=e.target.closest('.qrow');if(r){const t=S.trips.find(x=>x.id===r.dataset.id);if(t)fillForm(t)}});
+F('queue').addEventListener('click',e=>{const r=e.target.closest('.qrow');if(r){const t=S.trips.find(x=>x.id===r.dataset.id);if(t)(S.role==='staff'?fillForm:openTrip)(t)}});
 F('queue').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()});
 
 function filtered(rows){
@@ -383,7 +468,7 @@ function renderTable(rows){
   highlightRow();
 }
 function highlightRow(){document.querySelectorAll('#tbody tr,#myList .myrow').forEach(r=>r.classList.toggle('sel',r.dataset.id===S.editingId))}
-F('tbody').addEventListener('click',e=>{const r=e.target.closest('tr[data-id]');if(!r)return;const t=S.trips.find(x=>x.id===r.dataset.id);if(t)fillForm(t)});
+F('tbody').addEventListener('click',e=>{const r=e.target.closest('tr[data-id]');if(!r)return;const t=S.trips.find(x=>x.id===r.dataset.id);if(t)(S.role==='staff'?fillForm:openTrip)(t)});
 F('tbody').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()});
 F('q').addEventListener('input',e=>{S.q=e.target.value;render()});
 F('fStatus').addEventListener('change',e=>{S.fStatus=e.target.value;render()});
@@ -402,19 +487,20 @@ function renderInfo(){
     return `<div class="pc"><div class="n">${a} (${b})</div><div class="v num">${p[k]!=null?Number(p[k]).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2}):'-'}<small>원/L</small></div>${dt}
       <div class="b">산정 기준 ${f[k]!=null?Number(f[k]).toLocaleString('ko-KR',{maximumFractionDigits:2}):'-'}원</div></div>`}).join('');
   const when=p.fetchedAt?`${p.fetchedAt.replace('T',' ').slice(0,16)} 자동 갱신`:'';
+  const auto=S.settings.autoFuel!==false;   // 켜져 있으면 받은 유가가 곧 산정 기준이다(서버가 맞춘다)
   const err=p.error?`<span class="perr">최근 갱신 실패: ${esc(p.error)}</span>`:'';
   const noKey=isSettler()&&!S.settings.hasOpinetKey?'<span class="perr">설정에 오피넷 API 키를 넣으면 자동으로 바뀝니다.</span>':'';
-  F('priceFoot').innerHTML=`<span>출처: ${esc(p.source||'')}${when?' · '+when:''}</span>${err}${noKey}
+  F('priceFoot').innerHTML=`<span>출처: ${esc(p.source||'')}${when?' · '+when:''}${auto?' · 주유비 산정 기준에 바로 적용':''}</span>${err}${noKey}
     <a href="https://www.petronet.co.kr/v4/main.jsp" target="_blank" rel="noopener">페트로넷에서 확인</a>
-    ${isSettler()?'<span class="hspace"></span><button class="btn" id="btnPriceRefresh" style="padding:4px 10px">지금 갱신</button><button class="btn" id="btnPriceApply" style="padding:4px 10px">이 가격을 산정 기준으로 적용</button>':''}`;
-  F('ruleMeal').textContent=won(S.settings.mealUnit||10000);
+    ${isSettler()?'<span class="hspace"></span><button class="btn" id="btnPriceRefresh" style="padding:4px 10px">지금 갱신</button>'+(auto?'':'<button class="btn" id="btnPriceApply" style="padding:4px 10px">이 가격을 산정 기준으로 적용</button>')+'':''}`;
+  F('ruleMeal').textContent=won(S.settings.mealUnit||15000);
   F('ruleBase').textContent=`(${S.settings.priceBase||'산정 기준'} 유가, 연비 ${S.settings.eff||10}km/L)`;
   F('fuelTable').innerHTML=FUEL_ROWS.map(([km,pl])=>`<tr><td>${km}km 이내</td><td class="r num">${won(fuelCost(km,f.gas||0))}</td><td class="r num">${won(fuelCost(km,f.diesel||0))}</td><td class="r num">${won(fuelCost(km,f.lpg||0))}</td><td>${esc(pl)}</td></tr>`).join('');
 }
 F('pricePanel').addEventListener('click',async e=>{
   if(e.target.id==='btnPriceRefresh'){e.target.disabled=true;try{await api('prices/refresh',{});await loadState();toast('유가를 새로 가져왔습니다')}catch(err){toast(err.message)}finally{if(F('btnPriceRefresh'))F('btnPriceRefresh').disabled=false}}
   if(e.target.id==='btnPriceApply'){const p=S.settings.prices||{};
-    if(!confirm(`주유비 산정 기준을 ${p.label||'현재'} 유가로 바꿀까요?\n휘발유 ${p.gas} / 경유 ${p.diesel} / LPG ${p.lpg}\n\n작성기준상 기준유가는 분기 첫 주에 다시 산정하는 것이 원칙입니다.`))return;
+    if(!confirm(`주유비 산정 기준을 ${p.label||'현재'} 유가로 바꿀까요?\n휘발유 ${p.gas} / 경유 ${p.diesel} / LPG ${p.lpg}\n\n작성기준상 기준유가는 매주 최신 유가로 산정합니다.`))return;
     try{await api('prices/apply',{});await loadState();toast('주유비 산정 기준을 바꿨습니다')}catch(err){toast(err.message)}}
 });
 
@@ -480,8 +566,8 @@ F('btnCsv').addEventListener('click',()=>{const a=document.createElement('a');a.
 
 /* ---------- 설정 ---------- */
 let users=[];
-const ROLE_LABEL={admin:'정산 담당',approver:'대표 승인',staff:'직원'};
-// 직원 추가·퇴사·비밀번호는 포털 계정에서 한다. 여기서는 출장여비 권한만 고른다.
+const ROLE_LABEL={admin:'관리자 · 정산',approver:'관리자 · 승인',staff:'구성원'};
+// 구성원 추가·퇴사·비밀번호는 포털 계정에서 한다. 여기서는 출장여비 권한만 고른다.
 async function loadUsers(){users=(await api('roles')).users;renderUsers()}
 function renderUsers(){
   F('userList').innerHTML=users.map(u=>`<div class="urow"><span>${esc(u.name)}</span>
@@ -496,15 +582,19 @@ F('btnSettings').addEventListener('click',async()=>{
   const s=S.settings;
   F('sApprover').value=s.approverName||'';F('sHandler').value=s.handlerName||'';
   F('sGas').value=s.fuel.gas;F('sDiesel').value=s.fuel.diesel;F('sLpg').value=s.fuel.lpg;F('sEff').value=s.eff;F('sBase').value=s.priceBase;F('sMeal').value=s.mealUnit;
+  F('sAutoFuel').checked=s.autoFuel!==false;syncAutoFuelInputs();
   F('sKey').value='';F('keyState').textContent=s.hasOpinetKey?'API 키가 등록되어 있습니다. 바꿀 때만 새 키를 입력하세요. 누군가 화면을 열 때 마지막 확인에서 3시간이 지났으면 유가를 새로 받아 옵니다.':'오피넷(opinet.co.kr) 회원가입 후 \'무료 API 이용 신청\'에서 키를 받아 붙여넣으세요.';
   F('userList').innerHTML='<span class="hint">불러오는 중…</span>';F('dlg').showModal();
   loadUsers().catch(e=>toast(e.message));
 });
+// 자동 적용이 켜져 있으면 유가·기준일 칸은 서버가 채우므로 손으로 고치지 못하게 흐리게 둔다
+function syncAutoFuelInputs(){['sGas','sDiesel','sLpg','sBase'].forEach(id=>F(id).disabled=F('sAutoFuel').checked)}
+F('sAutoFuel').addEventListener('change',syncAutoFuelInputs);
 F('dlgCancel').addEventListener('click',()=>F('dlg').close());
 F('dlgSave').addEventListener('click',async()=>{
   const d={opinetKey:F('sKey').value.trim(),approverName:F('sApprover').value.trim()||'대표',handlerName:F('sHandler').value.trim()||'김지안',
     fuel:{gas:parseNum(F('sGas').value),diesel:parseNum(F('sDiesel').value),lpg:parseNum(F('sLpg').value)},eff:parseNum(F('sEff').value)||10,
-    priceBase:F('sBase').value.trim(),mealUnit:parseNum(F('sMeal').value)||10000};
+    priceBase:F('sBase').value.trim(),mealUnit:parseNum(F('sMeal').value)||15000,autoFuel:F('sAutoFuel').checked};
   try{await store.saveSettings(d);if(d.opinetKey){api('prices/refresh',{}).then(loadState).catch(e=>toast(e.message))}updateFuelInfo();updateMealHint();F('dlg').close();toast('설정을 저장했습니다')}catch(e){toast(e.message||'설정을 저장하지 못했습니다')}
 });
 

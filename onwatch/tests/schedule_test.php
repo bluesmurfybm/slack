@@ -51,6 +51,16 @@ check('md javascript 링크 거부', strpos(ow_md('[x](javascript:alert(1))'), '
 check('md 목록', ow_md("- **가**\n- `나`"), '<ul><li><b>가</b></li><li><code>나</code></li></ul>');
 check('md 맨 주소', ow_md('보기 https://ex.com/a.'), '<p>보기 <a href="https://ex.com/a" target="_blank" rel="noopener noreferrer">https://ex.com/a</a>.</p>');
 
+// ---- 한글 끝 바이트 0x85('입' EC 9E 85, '업' EC 97 85) 를 줄바꿈으로 자르지 않는다 — /u 가 빠지면 깨진다
+check('md 한글 줄', ow_md("유료입니다\n대상입니다 업무"), '<p>유료입니다<br>대상입니다 업무</p>');
+check('md 한글 목록', ow_md("- **성격:** 유료입니다"), '<ul><li><b>성격:</b> 유료입니다</li></ul>');
+check('SQL 한글 COMMENT', ow_sql_statements("SELECT 'ㄱ임박입니다';"), ["SELECT 'ㄱ임박입니다'"]);
+foreach (glob(OW_ROOT . '/sql/*.sql') as $f) {
+    foreach (ow_sql_statements(file_get_contents($f)) as $st) {
+        if (!mb_check_encoding($st, 'UTF-8') || strpos($st, "\xEF\xBF\xBD") !== false) check('SQL 깨짐 ' . basename($f), false, true);
+    }
+}
+
 // ---- 출처 — http(s) 만
 check('출처 거르기', count(ow_sources('[{"url":"javascript:x"},{"url":"https://a.com","seen":true}]')), 1);
 

@@ -82,12 +82,14 @@ function ow_sources(?string $json): array
 /**
  * 아주 작은 마크다운 → HTML. 조사 노트와 소식 본문에만 쓴다.
  * 먼저 전부 이스케이프하고 나서 굵게·코드·링크·목록·제목만 살린다 — 원문 HTML 은 통과시키지 않는다.
+ * 정규식은 모두 /u 다. 빠지면 \R 이 '입'·'업'(EC 9E 85 처럼 0x85 로 끝나는 한글)의 끝 바이트를
+ * 줄바꿈(NEL)으로 보고 글자를 반으로 자른다.
  */
 function ow_md(?string $md): string
 {
     $md = (string)$md;
     if (trim($md) === '') return '';
-    $lines = preg_split('/\R/', $md);
+    $lines = preg_split('/\R/u', $md);
     $html = '';
     $inList = false;
     $para = [];
@@ -96,24 +98,24 @@ function ow_md(?string $md): string
     };
     $inline = function (string $t): string {
         $t = h($t);
-        $t = preg_replace('/`([^`]+)`/', '<code>$1</code>', $t);
-        $t = preg_replace('/\*\*([^*]+)\*\*/', '<b>$1</b>', $t);
-        $t = preg_replace_callback('/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/', function ($m) {
+        $t = preg_replace('/`([^`]+)`/u', '<code>$1</code>', $t);
+        $t = preg_replace('/\*\*([^*]+)\*\*/u', '<b>$1</b>', $t);
+        $t = preg_replace_callback('/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/u', function ($m) {
             return '<a href="' . $m[2] . '" target="_blank" rel="noopener noreferrer">' . $m[1] . '</a>';
         }, $t);
         // 맨 주소(앞이 따옴표·> 가 아닌 것)도 링크로
-        $t = preg_replace('#(?<![">=])(https?://[^\s<]+[^\s<.,)])#', '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>', $t);
+        $t = preg_replace('#(?<![">=])(https?://[^\s<]+[^\s<.,)])#u', '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>', $t);
         return $t;
     };
     foreach ($lines as $line) {
-        if (preg_match('/^\s*[-*]\s+(.*)$/', $line, $m)) {
+        if (preg_match('/^\s*[-*]\s+(.*)$/u', $line, $m)) {
             $flush();
             if (!$inList) { $html .= '<ul>'; $inList = true; }
             $html .= '<li>' . $inline($m[1]) . '</li>';
             continue;
         }
         if ($inList) { $html .= '</ul>'; $inList = false; }
-        if (preg_match('/^(#{1,4})\s+(.*)$/', $line, $m)) {
+        if (preg_match('/^(#{1,4})\s+(.*)$/u', $line, $m)) {
             $flush();
             $lv = min(4, strlen($m[1]) + 2);
             $html .= "<h$lv>" . $inline($m[2]) . "</h$lv>";

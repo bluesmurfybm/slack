@@ -14,7 +14,7 @@ $csrf = bl_csrf_token();
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="csrf-token" content="<?= htmlspecialchars($csrf) ?>">
-<title>출장여비 · BlueLedger</title>
+<title>BlueExpense</title>
 <link rel="icon" type="image/svg+xml" href="../styles/favicons/blueledger.svg">
 <?php require_once __DIR__ . '/../core/pwa.php'; echo pwa_head_tags('../'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,14 +47,17 @@ $csrf = bl_csrf_token();
   </div>
 </div>
 <header class="bl">
-  <h1>출장여비 청구<small>BlueLedger</small></h1>
-  <span class="status-line" id="conn">불러오는 중…</span>
+  <h1>BlueExpense</h1>
   <span class="hspace"></span>
   <select class="btn" id="yearSel" aria-label="조회 연도"></select>
   <button class="btn wide" id="btnCsv">CSV 내보내기</button>
   <button class="btn admin-only" id="btnSettings" aria-label="설정">설정</button>
-  <span class="status-line" id="roleTag"></span>
-  <button class="btn primary" id="btnNew">새 청구서</button>
+  <!-- 관리자(승인·정산)만 보인다. 처음엔 구성원 화면으로 열고, 여기서 관리자 화면으로 바꾼다.
+       줄의 맨 오른쪽 — 상단바 이름 단추 바로 아래에 선다 -->
+  <div class="modeseg" id="modeSeg" role="tablist" aria-label="화면 전환" hidden>
+    <button type="button" role="tab" data-mode="member" aria-selected="true">구성원</button>
+    <button type="button" role="tab" data-mode="admin" aria-selected="false">관리자</button>
+  </div>
 </header>
 
 <nav class="tabs" aria-label="화면 전환">
@@ -68,14 +71,22 @@ $csrf = bl_csrf_token();
 <main id="main" data-tab="dash">
   <!-- 청구서 -->
   <section class="slip" aria-label="출장여비 청구서">
-    <div class="slip-head"><h2>출장여비 청구서</h2><span class="mode" id="formMode">새 청구</span>
-      <button type="button" class="btn mybtn" id="btnMy" aria-haspopup="dialog">내 청구<span class="cnt" id="myCount"></span></button></div>
+    <div class="slip-head"><h2>출장여비 청구서</h2><span class="mode" id="formMode">New</span>
+      <button type="button" class="btn fresh" id="btnNew" hidden>새로 쓰기</button>
+      <button type="button" class="btn mybtn" id="btnMy" aria-haspopup="dialog">My Claims<span class="cnt" id="myCount"></span></button>
+      <button type="button" class="slipx" id="btnSlipClose" aria-label="이 창 닫기" title="이 창 닫기">×</button></div>
     <form class="slip-body" id="form" autocomplete="off" onsubmit="return false">
       <fieldset id="fsInfo">
         <legend>출장 정보</legend>
         <div class="grid">
-          <label class="f"><span class="req">출장자</span><select id="traveler"></select></label>
-          <label class="f"><span class="req">출장일</span><input type="date" id="date"></label>
+          <!-- 출장일은 달력에서 누른다. 값은 아래 숨은 칸(#date, YYYY-MM-DD)에 들어가고 저장은 그 값을 쓴다.
+               기간(1박2일 …)을 고르면 그 날들이 옅게 이어져 보인다 -->
+          <div class="full">
+            <div class="flab"><span class="req">출장일</span> <span class="calpick" id="calPick"></span></div>
+            <div class="cal" id="cal"></div>
+            <input type="hidden" id="date">
+          </div>
+          <label class="f full"><span class="req">출장자</span><select id="traveler"></select></label>
           <div class="full">
             <div class="f" style="font-size:12px;color:var(--sub);font-weight:500;margin-bottom:4px">동행자 <span id="compCount"></span></div>
             <div class="chips" id="compChips"></div>
@@ -123,7 +134,7 @@ $csrf = bl_csrf_token();
       </fieldset>
 
       <fieldset id="fsApproval">
-        <legend>승인 (대표자)</legend>
+        <legend>승인</legend>
         <div class="stline" id="stApproval"></div>
         <div class="seg2" id="approvalSeg">
           <button type="button" data-v="승인대기" class="s-wait">승인대기</button>
@@ -181,9 +192,9 @@ $csrf = bl_csrf_token();
           <div class="tablewrap"><table>
             <thead><tr><th style="width:84px">구분</th><th>내용</th><th>기준</th></tr></thead>
             <tbody>
-              <tr><td>숙박비</td><td>업무로 인한 출장지에서의 숙박비용</td><td>1박 1인 1실 40,000원 기준<br>예외사항이 없는 한 1명 이상 동행 시 5,000원씩 추가 산정</td></tr>
+              <tr><td>숙박비</td><td>업무로 인한 출장지에서의 숙박비용</td><td>1박 1실 80,000원 기준<br>예외사항이 없는 한 1명 이상 동행 시 10,000원씩 추가 산정</td></tr>
               <tr><td>주유비</td><td>출장지로의 자가용 운행에 따른 주유비용</td><td>주유비 산정기준에 따름<br>주유산정금액 안에서 비용을 산정</td></tr>
-              <tr><td>식대</td><td>업무로 인한 출장지에서의 식대비용</td><td>1인 식대 <span id="ruleMeal">10,000</span>원 기준</td></tr>
+              <tr><td>식대</td><td>업무로 인한 출장지에서의 식대비용</td><td>1인 식대 <span id="ruleMeal">15,000</span>원 기준</td></tr>
               <tr><td>기타</td><td>영수증을 첨부할 수 있는 기타비용 (고속도로 통행료, 주차비 등)</td><td>첨부된 영수증 기준</td></tr>
               <tr><td>장기 출장비</td><td>1주 이상의 업무출장에 따른 비용</td><td>프로젝트별로 회사와 협의하여 책정<br>별도 협의안이 타결되지 않으면 단기출장비로 산정된 비용 합계의 70% 기준</td></tr>
             </tbody>
@@ -195,7 +206,7 @@ $csrf = bl_csrf_token();
             <li>운행거리: 출장지까지의 편도 거리</li>
             <li>연비: 차량의 등록연비 기준</li>
             <li>유가기준: 한국석유공사 석유정보망 페트로넷(<a href="https://www.opinet.co.kr/" target="_blank" rel="noopener">opinet.co.kr</a>) / 대한LPG협회(<a href="https://www.klpg.or.kr/html/dh/board04" target="_blank" rel="noopener">klpg.or.kr</a>)의 공시유가</li>
-            <li>기준유가는 분기 첫 주에 다시 산정하는 것을 원칙으로 하며, 분기 중 변동폭이 크면 사업부장의 허가를 받아 분기 중에도 다시 산정할 수 있습니다.</li>
+            <li>기준유가는 매주 최신 유가(한국석유공사 오피넷 전국 주간 평균)로 산정하는 것으로 합니다.</li>
           </ol>
           <h3>출장 거리에 따른 주유산정비용 <span class="hint" id="ruleBase" style="font-weight:500"></span></h3>
           <div class="tablewrap"><table>
@@ -205,23 +216,15 @@ $csrf = bl_csrf_token();
         </div>
       </details>
     </div>
+    <!-- 관리자 화면 순서: 요약 숫자 → 청구 목록 → 월별 출장여비·처리할 청구. 휴대폰에서는 현황/목록 탭이 나눠 보여 준다 -->
     <div id="dashArea" class="col">
       <div class="kpis" id="kpis"></div>
-      <div class="charts">
-        <div class="panel">
-          <h2>월별 출장여비<span class="meta" id="monthMeta"></span></h2>
-          <div class="legend"><span><i style="background:var(--c1)"></i>교통비</span><span><i style="background:var(--c2)"></i>통행료</span><span><i style="background:var(--c3)"></i>식대</span><span><i style="background:var(--c4)"></i>기타</span></div>
-          <div class="chart" id="monthChart"></div>
-        </div>
-        <div class="col" style="gap:16px">
-          <div class="panel"><h2 id="queueTitle">처리할 청구<span class="meta">승인대기·미정산</span></h2><div class="queue" id="queue"></div></div>
-          <div class="panel admin-only"><h2>출장자별 합계</h2><div class="bars-h" id="byPerson"></div></div>
-        </div>
-      </div>
     </div>
 
     <div class="panel" id="listPanel">
-      <h2>청구 목록<span class="meta" id="listMeta"></span></h2>
+      <!-- 제목 줄 전체가 단추다. 처음엔 접혀 있고, 한 번 누르면 펼치고 다시 누르면 접는다(작성기준 패널과 같다) -->
+      <h2><button type="button" class="fold" id="listFold" aria-expanded="false" aria-controls="listBody">청구 목록<span class="meta" id="listMeta"></span><span class="foldtxt"></span></button></h2>
+      <div id="listBody">
       <div class="tools">
         <input id="q" placeholder="출장자, 출장지, 목적 검색" aria-label="검색">
         <select class="btn" id="fStatus" aria-label="상태 필터">
@@ -241,13 +244,28 @@ $csrf = bl_csrf_token();
           <tfoot id="tfoot"></tfoot>
         </table>
       </div>
+      </div>
+    </div>
+
+    <div id="dashCharts" class="col">
+      <div class="charts">
+        <div class="panel">
+          <h2>월별 출장여비<span class="meta" id="monthMeta"></span></h2>
+          <div class="legend"><span><i style="background:var(--c1)"></i>교통비</span><span><i style="background:var(--c2)"></i>통행료</span><span><i style="background:var(--c3)"></i>식대</span><span><i style="background:var(--c4)"></i>기타</span></div>
+          <div class="chart" id="monthChart"></div>
+        </div>
+        <div class="col" style="gap:16px">
+          <div class="panel"><h2 id="queueTitle">처리할 청구<span class="meta">승인대기·미정산</span></h2><div class="queue" id="queue"></div></div>
+          <div class="panel admin-only"><h2>출장자별 합계</h2><div class="bars-h" id="byPerson"></div></div>
+        </div>
+      </div>
     </div>
   </div>
 </main>
 
-<!-- 직원 전용: 본인 청구와 진행 상태. 청구서 머리의 '내 청구' 단추로 연다 -->
+<!-- 구성원 화면 전용: 본인 청구와 진행 상태. 청구서 머리의 '내 청구' 단추로 연다 -->
 <dialog id="myDlg" aria-labelledby="myDlgTitle">
-  <div class="dh" id="myDlgTitle">내 청구 <span class="hint" id="myMeta" style="font-weight:500"></span></div>
+  <div class="dh" id="myDlgTitle">My Claims <span class="hint" id="myMeta" style="font-weight:500"></span></div>
   <div class="db mylist" id="myList"></div>
   <div class="df"><button class="btn" id="myDlgClose">닫기</button></div>
 </dialog>
@@ -256,11 +274,11 @@ $csrf = bl_csrf_token();
   <div class="db">
     <div>
       <div style="font-weight:600;margin-bottom:6px">권한</div>
-      <div class="hint" style="margin-bottom:8px">정산 담당은 모든 청구를 관리하고, 대표 승인은 승인만 할 수 있습니다. 직원 명단과 비밀번호는 blue-iWorks 포털 계정을 그대로 씁니다.</div>
+      <div class="hint" style="margin-bottom:8px">관리자(정산)는 모든 청구를 관리하고 정산하며, 관리자(승인)는 승인·반려를 합니다. 두 관리자도 구성원 화면에서 본인 청구를 씁니다. 명단과 비밀번호는 blue-iWorks 포털 계정을 그대로 씁니다.</div>
       <div class="ulist" id="userList"></div>
     </div>
     <div class="grid">
-      <label class="f"><span>승인자 (대표)</span><input id="sApprover"></label>
+      <label class="f"><span>승인자</span><input id="sApprover"></label>
       <label class="f"><span>정산 처리자</span><input id="sHandler"></label>
     </div>
     <div>
@@ -278,6 +296,10 @@ $csrf = bl_csrf_token();
       <div style="font-weight:600;margin-bottom:6px">유가 자동 갱신 (오피넷 무료 API)</div>
       <div class="hint" style="margin-bottom:6px" id="keyState"></div>
       <label class="f"><span>오피넷 API 키</span><input id="sKey" placeholder="발급받은 키를 붙여넣기" autocomplete="off"></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:13px;cursor:pointer">
+        <input type="checkbox" id="sAutoFuel" style="margin-top:3px">
+        <span>새로 받은 유가를 주유비 산정 기준에 <b>바로 적용</b><br><span class="hint">끄면 정산 관리자가 '이 가격을 산정 기준으로 적용'을 눌러야 바뀝니다(작성기준은 매주 최신 유가로 산정). 켜 두면 위 휘발유·경유·LPG 칸은 다음 갱신 때 새 유가로 덮입니다.</span></span>
+      </label>
     </div>
   </div>
   <div class="df"><button class="btn" id="dlgCancel">닫기</button><button class="btn primary" id="dlgSave">설정 저장</button></div>

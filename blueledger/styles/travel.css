@@ -6,18 +6,19 @@
   --tb:61px;
   --bg:#EEF2F8; --panel:#FFFFFF; --ink:#14213D; --sub:#5B6782; --line:#D5DCE8; --soft:#F5F7FB;
   --blue:#2350D8; --blue-soft:#E3EAFD; --wait:#B7791F; --wait-soft:#FFF3D6; --ok:#1C7C54; --ok-soft:#DDF3E8; --no:#C0392B; --no-soft:#FBE3E0;
-  --c1:#2350D8; --c2:#4FA3E0; --c3:#E0A13A; --c4:#8A94AB;
+  /* 그래프 색(교통비·통행료·식대·기타) — 처음의 진한 파랑과 파스텔 사이 중간 톤(2026-10-22) */
+  --c1:#6F98E8; --c2:#6FC3BC; --c3:#EDB063; --c4:#A99BD6;
   --tape:#FFFDF6;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0F1524; --panel:#172036; --ink:#E6EBF5; --sub:#99A4BD; --line:#2A3654; --soft:#1C2740;
   --blue:#6E92FF; --blue-soft:#22325C; --wait:#F0B653; --wait-soft:#3A2F17; --ok:#4CC28E; --ok-soft:#16362A; --no:#F07A6C; --no-soft:#3D1D1A;
-  --c1:#6E92FF; --c2:#5FBDF0; --c3:#F0B653; --c4:#7C88A3; --tape:#1B2338; color-scheme:dark;}}
+  --c1:#7C9CE6; --c2:#6CB8B1; --c3:#DCA45F; --c4:#9C8FCC; --tape:#1B2338; color-scheme:dark;}}
 :root[data-theme="dark"]{
   --bg:#0F1524; --panel:#172036; --ink:#E6EBF5; --sub:#99A4BD; --line:#2A3654; --soft:#1C2740;
   --blue:#6E92FF; --blue-soft:#22325C; --wait:#F0B653; --wait-soft:#3A2F17; --ok:#4CC28E; --ok-soft:#16362A; --no:#F07A6C; --no-soft:#3D1D1A;
-  --c1:#6E92FF; --c2:#5FBDF0; --c3:#F0B653; --c4:#7C88A3; --tape:#1B2338; color-scheme:dark;}
+  --c1:#7C9CE6; --c2:#6CB8B1; --c3:#DCA45F; --c4:#9C8FCC; --tape:#1B2338; color-scheme:dark;}
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -27,6 +28,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 
 header.bl{background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:10px 20px;flex-wrap:wrap}
+/* 제목이 상단바 blue-iWorks 로고와 같은 세로줄에 서게 — 상단바(.topbar-in)의 최대 폭 1600px·좌우 22px 와 맞춘다 */
+header.bl{padding-left:max(22px,calc((100% - 1600px) / 2 + 22px));padding-right:max(22px,calc((100% - 1600px) / 2 + 22px))}
 header.bl h1{font-size:18px;margin:0;font-weight:700;letter-spacing:-.02em}
 header.bl h1 small{font-weight:500;color:var(--sub);font-size:13px;margin-left:6px}
 .hspace{flex:1}
@@ -36,6 +39,9 @@ header.bl h1 small{font-weight:500;color:var(--sub);font-size:13px;margin-left:6
 .btn.ghost{border-color:transparent;background:transparent;color:var(--sub)}
 .btn.danger{color:var(--no)}
 select.btn{padding-right:6px}
+/* 제목 줄의 연도·CSV 내보내기·설정 — 구성원/관리자 탭과 같은 높이 28px·글자 12.5px */
+header.bl .btn{height:28px;padding:0 12px;font-size:12.5px;line-height:26px;box-sizing:border-box}
+header.bl select.btn{padding:0 6px 0 10px}
 
 .tabs{display:none;position:sticky;top:calc(env(safe-area-inset-top,0px) + var(--tb));z-index:4;background:var(--bg);padding:8px 12px}
 .tabs .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
@@ -43,11 +49,20 @@ select.btn{padding-right:6px}
 .tabs button[aria-selected="true"]{background:var(--blue);color:#fff}
 
 /* 청구서는 오른쪽 칸. 현황·목록이 왼쪽 넓은 칸이다 */
-main{display:grid;grid-template-columns:1fr minmax(380px,430px);gap:16px;padding:16px 20px;max-width:1600px;margin:0 auto}
+main{display:grid;grid-template-columns:1fr minmax(380px,430px);gap:16px;padding:16px 22px;max-width:1600px;margin:0 auto}
 .col{display:flex;flex-direction:column;gap:16px;min-width:0}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
 .panel>h2{font-size:15px;margin:0;padding:14px 16px 0;display:flex;align-items:center;gap:8px}
 .panel>h2 .meta{margin-left:auto;font-weight:500;font-size:12px;color:var(--sub)}
+/* 청구 목록 접기 — 제목 줄 어디를 눌러도 펼치고 접는다. 처음엔 접혀 있다(작성기준 패널과 같은 모양) */
+#listPanel>h2{padding:0}
+.fold{flex:1;border:0;background:none;padding:14px 16px;font:inherit;font-weight:700;font-size:15px;color:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;text-align:left;border-radius:12px}
+.fold .meta{margin-left:auto;font-weight:500;font-size:12px;color:var(--sub)}
+.fold .foldtxt{font-weight:500;font-size:12px;color:var(--sub)}
+.fold .foldtxt::after{content:"접기"}
+.fold[aria-expanded="false"] .foldtxt::after{content:"펼치기"}
+.fold:hover .foldtxt{color:var(--ink)}
+#listPanel.folded #listBody{display:none}
 
 /* 청구서 폼 — 영수증 테이프 느낌 */
 .slip{order:2;background:var(--tape);border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:start;position:sticky;top:calc(var(--tb) + 16px)}
@@ -69,16 +84,63 @@ label.f textarea{resize:vertical;min-height:38px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{border:1px solid var(--line);border-radius:99px;padding:4px 10px;background:var(--panel);cursor:pointer;font-size:13px}
 .chip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+/* 관리자 화면 — 현황·목록이 전체 폭을 쓰고 청구서 칸은 없다. 건을 누르면 그 청구서가 팝업 창으로 열린다
+   (travel.php?trip=<id>, body[data-single]). 구성원 화면은 지금처럼 청구서가 늘 오른쪽 칸에 있다. */
+body:not([data-role="staff"]) main{grid-template-columns:1fr}
+body:not([data-role="staff"]):not([data-single]) .slip{display:none!important}
+body:not([data-role="staff"]) .tabs [data-tab="form"]{display:none}   /* 휴대폰 '작성' 탭도 관리자 화면에서는 쓰지 않는다 */
+/* 팝업 창 — 청구서 한 장만. 포털 상단바·제목 줄은 빼고 창을 꽉 채운다 */
+body[data-single] .topbar,body[data-single] header.bl{display:none!important}
+body[data-single] main{grid-template-columns:minmax(0,1fr);padding:0;max-width:none}
+body[data-single] .slip{border-radius:0;border-width:0}
+body[data-single] .slip{display:flex!important;flex-direction:column;position:static!important;height:100vh;height:100dvh}
+body[data-single] .slip-body{flex:1;min-height:0;max-height:none}   /* 합계·저장 줄은 창 아래에 늘 보인다 */
+body[data-single] .col.right,body[data-single] .tabs,body[data-single] header.bl>:not(h1){display:none!important}
+.slipx{display:none;margin-left:auto;border:0;background:none;font-size:24px;line-height:1;width:32px;height:32px;border-radius:8px;cursor:pointer;color:var(--sub)}
+.slipx:hover{background:var(--soft);color:var(--ink)}
+body[data-single] .slipx{display:inline-block}
+.gone{padding:40px 20px;text-align:center;color:var(--sub);display:flex;flex-direction:column;gap:12px;align-items:center}
+/* 출장일 달력 */
+.flab{font-size:12px;color:var(--sub);font-weight:500;margin-bottom:4px}
+.calpick{color:var(--ink);font-weight:600;margin-left:4px}
+.cal{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px 8px 6px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.cal-head b{font-size:13px}
+.cal-head button{border:0;background:none;cursor:pointer;font-size:16px;line-height:1;padding:2px 8px;border-radius:6px;color:var(--sub)}
+.cal-head button:hover{background:var(--soft);color:var(--ink)}
+.cal-head .today{font-size:11.5px;padding:3px 8px;border:1px solid var(--line)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.cal-grid .wd{font-size:11px;color:var(--sub);padding:2px 0}
+.cal-grid .wd.sun,.cal-grid .d.sun{color:var(--no)}
+.cal-grid .wd.sat,.cal-grid .d.sat{color:var(--blue)}
+.cal-grid .d{border:0;background:none;font:inherit;font-size:12.5px;height:28px;border-radius:7px;cursor:pointer;color:var(--ink);font-variant-numeric:tabular-nums}
+.cal-grid .d:hover{background:var(--soft)}
+.cal-grid .d.out{opacity:.35}
+.cal-grid .d.now{box-shadow:inset 0 0 0 1px var(--line)}
+.cal-grid .d.range{background:var(--blue-soft);border-radius:0}
+.cal-grid .d.sel{background:var(--blue);color:#fff;font-weight:700}
+.cal-grid .d:disabled{cursor:not-allowed}
+fieldset:disabled .cal-head button{visibility:hidden}
 /* 동행자 이름 단추는 13명이 한 칸에 들어가도록 작게 */
 #compChips{gap:4px}
-#compChips .chip,#extraChips .chip{font-size:11.5px;padding:2px 8px}
+#extraChips .chip{font-size:11.5px;padding:2px 8px}
+#compChips .chip{font-size:11px;line-height:1.3;padding:1px 7px}
 /* 교통 수단 — 자가용이 아닐 때 갈아탄 수단을 더 고른다 */
 .extra{grid-column:2/-1;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .extra[hidden]{display:none}
 .extra>.hint{margin:0}
 .extra .chips{gap:4px}
 .legacy{grid-column:2/-1;margin:0}
-/* 내 청구(직원 전용) — 청구서 머리 오른쪽 끝 단추 */
+/* 내 청구(구성원 화면 전용) — 청구서 머리 오른쪽 끝 단추 */
+/* 구성원/관리자 전환 — BlueLearn 과 같은 알약, 높이 28px */
+.modeseg{display:inline-flex;align-items:center;gap:2px;height:28px;padding:2px;border-radius:999px;background:var(--soft);border:1px solid var(--line)}
+.modeseg[hidden]{display:none}
+.modeseg button{height:22px;border:0;background:transparent;border-radius:999px;padding:0 14px;font:inherit;font-size:12.5px;font-weight:600;color:var(--sub);cursor:pointer;white-space:nowrap;line-height:22px;transition:background .14s ease,color .14s ease}
+.modeseg button:hover{color:var(--ink)}
+.modeseg button[aria-selected="true"]{background:var(--panel);color:var(--blue);box-shadow:0 1px 2px rgba(16,35,90,.12)}
+/* 열어 둔 청구서를 닫고 빈 청구서로 — 청구서 머리에 있다(머리글의 '새 청구서' 단추를 대신한다) */
+.fresh{padding:3px 10px;font-size:12px}
+.fresh[hidden]{display:none}
 .mybtn{display:none;margin-left:auto;padding:4px 10px;font-size:12px}
 body[data-role="staff"] .mybtn{display:inline-flex;align-items:center;gap:4px}
 .mybtn .cnt{background:var(--blue-soft);color:var(--blue);border-radius:99px;padding:0 6px;font-size:11px;font-weight:700}
@@ -128,11 +190,11 @@ details.panel[open]>summary::after{content:"접기"}
 .rules .formula{background:var(--soft);border-radius:8px;padding:8px 10px;font-weight:600;margin:4px 0}
 .rules .r{text-align:right}
 .rules a{color:var(--blue);word-break:break-all}
-body[data-role="staff"] #dashArea,body[data-role="staff"] #listPanel,body[data-role="staff"] .tabs,body[data-role="staff"] #btnCsv,body[data-role="staff"] #yearSel{display:none!important}
+body[data-role="staff"] #dashArea,body[data-role="staff"] #dashCharts,body[data-role="staff"] #listPanel,body[data-role="staff"] .tabs,body[data-role="staff"] #btnCsv,body[data-role="staff"] #yearSel{display:none!important}
 body[data-role="staff"] details#rulePanel>summary::after{content:none}
 /* 승인·정산 칸: 고칠 수 없는 사람에게는 버튼·입력칸 대신 상태 글자 하나만 보인다.
    승인은 대표만, 정산은 정산 담당만 고친다. */
-/* 내 청구(직원 전용) */
+/* 내 청구(구성원 화면 전용) */
 #myDlg{width:min(640px,94vw)}
 #myDlg .mylist{gap:2px;padding:8px 10px}
 .myrow{display:grid;grid-template-columns:92px 1fr auto auto;gap:4px 10px;align-items:center;padding:9px 8px;border-radius:8px;cursor:pointer}
@@ -244,7 +306,7 @@ dialog .df{padding:12px 18px;border-top:1px solid var(--line);display:flex;justi
   main[data-tab="form"] .col.right{display:none}
   main[data-tab="dash"] .slip,main[data-tab="list"] .slip{display:none}
   main[data-tab="dash"] #listPanel{display:none}
-  main[data-tab="list"] #dashArea,main[data-tab="list"] #infoArea{display:none}
+  main[data-tab="list"] #dashArea,main[data-tab="list"] #dashCharts,main[data-tab="list"] #infoArea{display:none}
   .charts{grid-template-columns:1fr}
   .kpis{grid-template-columns:1fr 1fr}
   header.bl{padding:10px 12px}

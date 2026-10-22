@@ -51,9 +51,10 @@ function bl_fetch_trip(PDO $pdo, $id, $lock = false) {
 
 /**
  * 저장(새로 쓰기·고치기·승인·정산이 모두 여기로 온다). 누가 무엇을 바꿀 수 있는지:
- *  - 정산 담당: 내용 + 정산. 승인 칸은 대표가 고른 결과를 보기만 한다(보내도 무시)
- *  - 대표 승인: 승인 칸(승인/반려·승인자·승인일)만. 새 청구는 쓰지 않는다
- *  - 직원    : 본인 청구의 내용만, 승인대기일 때만. 승인·정산 칸은 보내도 무시한다
+ *  - 관리자(정산): 내용 + 정산. 승인 칸은 대표가 고른 결과를 보기만 한다(보내도 무시)
+ *  - 관리자(승인): 승인 칸(승인/반려·승인자·승인일). 그리고 구성원처럼 본인 청구를 쓰고,
+ *                 승인대기일 때 고친다. 남의 청구 내용 칸은 보내도 무시한다
+ *  - 구성원     : 본인 청구의 내용만, 승인대기일 때만. 승인·정산 칸은 보내도 무시한다
  */
 function bl_save_trip(PDO $pdo, array $me, array $body) {
     $id   = trim((string)($body['id'] ?? ''));
@@ -67,7 +68,6 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
         if ($id !== '' && !$prev) throw new BlError('청구서를 찾을 수 없습니다. 이미 삭제되었을 수 있습니다', 404);
 
         if (!$prev) {
-            if ($role === ROLE_APPROVER) throw new BlError('대표 승인 계정은 청구서를 새로 쓰지 않습니다', 403);
             $row = [
                 'id' => 't' . bin2hex(random_bytes(6)), 'approval' => '승인대기', 'status' => '미처리',
                 'created_by' => $me['email'], 'created_by_name' => $me['name'], 'created_at' => $now,
@@ -79,13 +79,16 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
             $row = $prev;
             if ($role === ROLE_STAFF) {
                 if (!bl_is_mine($prev, $me)) throw new BlError('본인 청구만 고칠 수 있습니다', 403);
-                if ($prev['approval'] !== '승인대기') throw new BlError('승인된 청구는 고칠 수 없습니다. 정산 담당자에게 알려 주세요', 403);
+                if ($prev['approval'] !== '승인대기') throw new BlError('승인된 청구는 고칠 수 없습니다. 관리자에게 알려 주세요', 403);
             }
         }
 
-        if ($role === ROLE_ADMIN || $role === ROLE_STAFF) {
+        // 승인 관리자는 구성원 화면에서 본인 청구를 쓴다. 관리자 화면에서 남의 청구를 승인할 때 같이 오는
+        // 내용 칸은 무시한다(던지지 않는다 — 승인 저장이 막히면 안 된다).
+        $ownEditable = !$prev || (bl_is_mine($prev, $me) && $prev['approval'] === '승인대기');
+        if ($role === ROLE_ADMIN || $role === ROLE_STAFF || ($role === ROLE_APPROVER && $ownEditable)) {
             bl_apply_content($pdo, $row, $data, $me, $prev);
-            if ($role === ROLE_STAFF) $row['staff_updated_at'] = $now;
+            if ($role !== ROLE_ADMIN) $row['staff_updated_at'] = $now;
         }
         if ($role === ROLE_APPROVER) {
             $before = [$row['approval'], $row['approver'], $row['approved_at']];
