@@ -281,10 +281,10 @@ function lg_view_accounts(array $v, array $me) {
     <?php foreach ($accounts as $a): ?>
     <tr><td><?= h($a['kind']) ?></td><td><?= h($a['name']) ?><?php if ($a['institution']): ?><br><span class="sub-s"><?= h($a['institution']) ?></span><?php endif ?></td>
       <td><form method="post" action="<?= h(lg_url('accounts')) ?>" style="display:flex;gap:6px;align-items:center"><?= $act('opening', $a['id']) ?>
-        <input name="name" value="<?= h($a['name']) ?>" aria-label="이름" style="width:150px;min-height:36px;padding:6px 10px">
-        <input name="opening_balance" value="<?= lg_won($a['opening_balance']) ?>" aria-label="기초잔액" style="width:130px;min-height:36px;padding:6px 10px">
-        <input type="date" name="opening_date" value="<?= h($a['opening_date']) ?>" aria-label="기초일자" style="min-height:36px;padding:6px 10px">
-        <button class="btn ghost" style="min-height:36px;padding:6px 12px;font-size:13px">고치기</button></form></td>
+        <input name="name" value="<?= h($a['name']) ?>" aria-label="이름" style="width:150px">
+        <input name="opening_balance" value="<?= lg_won($a['opening_balance']) ?>" aria-label="기초잔액" style="width:130px">
+        <input type="date" name="opening_date" value="<?= h($a['opening_date']) ?>" aria-label="기초일자" >
+        <button class="btn ghost">고치기</button></form></td>
       <td class="num in"><?= lg_won($a['tin']) ?></td><td class="num out"><?= lg_won($a['tout']) ?></td>
       <td class="num"><?= $a['kind'] === '카드' ? lg_won($a['paid']) : '-' ?></td>
       <td class="num"><?php if ($a['group_of']): ?><span class="sub-s"><?= h($a['group_of']) ?>에 합산</span><?php else: ?><b><?= lg_won($a['balance']) ?></b><?php if ($a['members']): ?><br><span class="sub-s"><?= count($a['members']) + 1 ?>장 합계</span><?php endif ?><?php endif ?></td>
@@ -458,7 +458,7 @@ function lg_view_today(array $v, array $me) {
     $act = lg_url('today');
     $nav = fn($dd) => lg_url('today', ['d' => $dd, 'bank_id' => $v['bank_id'], 'lead_id' => $v['lead_id']]);
     $delForm = fn($id) => '<form method="post" action="' . h($act) . '" data-confirm="이 줄을 지울까요?"><input type="hidden" name="do" value="delete"><input type="hidden" name="id" value="' . (int)$id . '">' . $keep() . lg_csrf_field()
-                        . '<button class="btn danger" style="min-height:30px;padding:2px 8px">지우기</button></form>';
+                        . '<button class="btn danger">지우기</button></form>';
     $mmdd = lg_md($d);
     ob_start(); ?>
 <div class="box">
@@ -488,7 +488,7 @@ function lg_view_today(array $v, array $me) {
   <div class="bar">
     <h2>일일출납 (통장)</h2>
     <form method="get" class="inline" action="ledger.php"><input type="hidden" name="p" value="today"><input type="hidden" name="d" value="<?= h($d) ?>"><input type="hidden" name="lead_id" value="<?= $v['lead_id'] ?>">
-      <select name="bank_id" data-autosubmit aria-label="통장" style="min-height:38px"><?php foreach ($v['banks'] as $b): ?><option value="<?= $b['id'] ?>"<?= lg_sel($b['id'], $v['bank_id']) ?>><?= h($b['name']) ?></option><?php endforeach ?></select></form>
+      <select name="bank_id" data-autosubmit aria-label="통장"><?php foreach ($v['banks'] as $b): ?><option value="<?= $b['id'] ?>"<?= lg_sel($b['id'], $v['bank_id']) ?>><?= h($b['name']) ?></option><?php endforeach ?></select></form>
   </div>
   <div class="scroll"><table class="ledger">
     <tr><th style="width:70px">일 자</th><th>적 요</th><th>내 용</th><th class="num">입 금</th><th class="num">출 금</th><th class="num">잔 액</th><th>계정과목</th><th></th></tr>
@@ -510,7 +510,7 @@ function lg_view_today(array $v, array $me) {
       <td><input form="addBank" name="amount_out" inputmode="numeric" placeholder="출금" aria-label="출금" style="width:110px;text-align:right"></td>
       <td></td>
       <td><select form="addBank" name="category" aria-label="계정과목"><option value="">(자동)</option><?= lg_cat_options($v['options']) ?></select></td>
-      <td><button form="addBank" class="btn" style="min-height:34px;padding:4px 12px">넣기</button></td></tr><?php endif ?>
+      <td><button form="addBank" class="btn">넣기</button></td></tr><?php endif ?>
     <tr class="sum"><td colspan="3" style="text-align:center">소 계 / 잔 액</td><td class="num in"><?= lg_won($v['sum_in']) ?></td><td class="num out"><?= lg_won($v['sum_out']) ?></td><td class="num"><?= lg_won($v['close']) ?></td><td></td><td></td></tr>
   </table></div>
 </div>
@@ -519,7 +519,7 @@ function lg_view_today(array $v, array $me) {
   <div class="bar">
     <h2>법인카드 이용내역</h2>
     <?php if (count($v['leads']) > 1): ?><form method="get" class="inline" action="ledger.php"><input type="hidden" name="p" value="today"><input type="hidden" name="d" value="<?= h($d) ?>"><input type="hidden" name="bank_id" value="<?= $v['bank_id'] ?>">
-      <select name="lead_id" data-autosubmit aria-label="카드" style="min-height:38px"><?php foreach ($v['leads'] as $c): ?><option value="<?= $c['id'] ?>"<?= lg_sel($c['id'], $v['lead_id']) ?>><?= h($c['name']) ?></option><?php endforeach ?></select></form><?php endif ?>
+      <select name="lead_id" data-autosubmit aria-label="카드"><?php foreach ($v['leads'] as $c): ?><option value="<?= $c['id'] ?>"<?= lg_sel($c['id'], $v['lead_id']) ?>><?= h($c['name']) ?></option><?php endforeach ?></select></form><?php endif ?>
   </div>
   <div class="scroll"><table class="ledger">
     <tr><th>카드번호</th><th>사용일자</th><th class="num">사용금액</th><th>가맹점명</th><th>사용내용</th><th>계정과목</th><th></th></tr>
@@ -537,7 +537,7 @@ function lg_view_today(array $v, array $me) {
       <td><input form="addCard" name="content" placeholder="가맹점" aria-label="가맹점명" style="width:150px"></td>
       <td><input form="addCard" name="detail" placeholder="사용내용" aria-label="사용내용" style="width:100%;min-width:150px"></td>
       <td><select form="addCard" name="category" aria-label="계정과목"><option value="">(자동)</option><?= lg_cat_options($v['options']) ?></select></td>
-      <td><button form="addCard" class="btn" style="min-height:34px;padding:4px 12px">넣기</button></td></tr><?php endif ?>
+      <td><button form="addCard" class="btn">넣기</button></td></tr><?php endif ?>
     <tr class="sum"><td colspan="2" style="text-align:center">오늘 사용액</td><td class="num"><?= lg_won($v['card_sum']) ?></td><td colspan="4"></td></tr>
   </table></div>
 </div>

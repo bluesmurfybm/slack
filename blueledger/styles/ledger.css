@@ -116,15 +116,17 @@ h2{font-size:15px;font-weight:700}
 form.inline{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0}
 label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--sub);font-weight:600}
 label.row-l{flex-direction:row;align-items:center;gap:8px;font-size:13.5px;color:var(--ink2);font-weight:500}
-input,select{font:inherit;font-size:14px;padding:8px 11px;border:1px solid var(--input);border-radius:8px;background:var(--panel);color:var(--ink);min-height:40px;max-width:100%}
+/* 모든 입력칸·날짜·고르기·단추는 한 크기: 높이 34px, 글씨 13px (2026-10-23) */
+input,select{font:inherit;font-size:13px;padding:0 10px;border:1px solid var(--input);border-radius:8px;background:var(--panel);color:var(--ink);height:34px;min-height:34px;max-width:100%;box-sizing:border-box}
+input[type=file]{padding:5px 8px}
 input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(18,40,74,.12)}
 input:disabled,select:disabled{background:var(--soft);color:var(--sub)}
 input.chk{min-height:auto;width:17px;height:17px;padding:0;accent-color:var(--primary)}
-.btn{font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--primary);background:var(--primary);color:#fff;cursor:pointer;min-height:34px;display:inline-flex;align-items:center;white-space:nowrap;text-decoration:none}
+.btn{font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--primary);background:var(--primary);color:#fff;cursor:pointer;height:34px;min-height:34px;box-sizing:border-box;display:inline-flex;align-items:center;white-space:nowrap;text-decoration:none}
 .btn:hover{background:var(--primary-h);border-color:var(--primary-h);color:#fff;text-decoration:none}
 .btn.ghost{background:var(--panel);color:var(--ink2);border-color:var(--line)}
 .btn.ghost:hover{border-color:var(--primary);color:var(--ink2)}
-.btn.danger{background:var(--panel);color:var(--out);border-color:color-mix(in srgb,var(--out) 40%,transparent);padding:5px 11px;min-height:32px;font-size:13px}
+.btn.danger{background:var(--panel);color:var(--out);border-color:color-mix(in srgb,var(--out) 40%,transparent);padding:0 12px;font-size:13px}
 .btn.danger:hover{background:var(--err-bg)}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th,td{padding:9px 12px;border-bottom:1px solid var(--line2);text-align:left;white-space:nowrap}
@@ -140,8 +142,7 @@ th.num,td.num{text-align:right}
 .memo{color:var(--memo);font-size:12.5px}.dbk{color:var(--dbk);font-size:12.5px}
 .warn{color:var(--warn-ink)}
 .src{font-size:12px;color:var(--muted);white-space:normal;max-width:170px}
-.cell-in{min-width:260px;min-height:34px;padding:5px 9px}
-.cell-sel{min-height:34px;padding:5px 9px}
+.cell-in{min-width:260px}
 .result{display:flex;gap:12px;flex-wrap:wrap}
 .result div{flex:1 1 160px;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:12.5px;color:var(--sub);font-weight:500}
 .result strong{display:block;font-size:22px;margin-top:2px;color:var(--ink2);font-variant-numeric:tabular-nums}
@@ -152,10 +153,8 @@ th.num,td.num{text-align:right}
 
 /* 출납장 표 — 기존 출납장 엑셀처럼 머리줄을 칸마다 가운데 */
 .ledger th{background:var(--ledger-th);text-align:center;color:var(--ink2)}
-.ledger td input.t{width:100%;min-width:150px;min-height:32px;padding:3px 8px}
-.ledger td select{min-height:32px;padding:3px 6px;font-size:13px}
+.ledger td input.t{width:100%;min-width:150px}
 .addrow td{background:var(--soft)}
-.addrow input{min-height:32px;padding:4px 8px}
 tr.sum td{font-weight:700;background:var(--sum);border-top:1px solid var(--line)}
 
 /* 한 메뉴 안의 작은 탭 (거래 가져오기 / 여러 파일 / 출납장 …) */
@@ -177,7 +176,7 @@ pre.logdata{max-width:520px;max-height:260px;overflow:auto;background:var(--soft
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip-f{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 12px;font-size:13.5px;background:var(--panel)}
 .chip-f.off{opacity:.5}
-.chip-f .btn{min-height:28px;padding:2px 10px;font-size:12px;border-radius:999px}
+.chip-f .btn{border-radius:999px}
 tr.grp td{background:var(--soft);font-weight:700;font-size:13px}
 tr.grp.likely td{background:var(--warn-bg);color:var(--warn-ink)}
 

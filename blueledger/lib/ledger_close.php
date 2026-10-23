@@ -313,7 +313,7 @@ function lg_view_close(array $v, array $me) {
 <div class="box">
   <p class="help">한 달 장부를 점검하고 <b>마감</b>하면, 그 달 거래는 바뀌지 않게 잠겨요(분류·출납장 내용·나누기·삭제·새로 가져오기 모두). 고칠 게 생기면 마감을 풀고 고친 뒤 다시 마감하면 돼요. 마감할 때 그 시점의 요약을 작업 기록에 남겨요.</p>
   <div class="bar-l">
-    <?php foreach ($v['months'] as $m): ?><a class="btn <?= $m === $ym ? '' : 'ghost' ?>" href="<?= h(lg_url('close', ['ym' => $m])) ?>" style="min-height:36px;padding:6px 12px"><?= substr($m, 2, 2) ?>.<?= substr($m, 5) ?><?= isset($v['closes'][$m]) ? ' 🔒' : '' ?></a><?php endforeach ?>
+    <?php foreach ($v['months'] as $m): ?><a class="btn <?= $m === $ym ? '' : 'ghost' ?>" href="<?= h(lg_url('close', ['ym' => $m])) ?>" ><?= substr($m, 2, 2) ?>.<?= substr($m, 5) ?><?= isset($v['closes'][$m]) ? ' 🔒' : '' ?></a><?php endforeach ?>
   </div>
 </div>
 

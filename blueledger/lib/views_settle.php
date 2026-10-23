@@ -185,9 +185,9 @@ function lg_view_invoice(array $v, array $me) {
       <td class="num"><?= lg_won($c['free']) ?></td>
       <td style="font-size:12.5px"><?php if ($c['same']): ?><span class="badge b-green">금액 같음</span><?php endif ?><?php if ($c['score']): ?> <span class="badge b-blue">이름 비슷</span><?php endif ?></td>
       <td><?php if (!$ceo): ?><?= $f('link', ' class="bar-l"') ?><input type="hidden" name="tx_id" value="<?= $c['id'] ?>">
-        <input name="amount" value="<?= min($c['free'], $v['remain']) ?>" inputmode="numeric" aria-label="연결할 금액" style="width:130px;min-height:34px;padding:4px 8px;text-align:right">
+        <input name="amount" value="<?= min($c['free'], $v['remain']) ?>" inputmode="numeric" aria-label="연결할 금액" style="width:130px;text-align:right">
         <?php if ($v['partner'] && !$c['score']): ?><label class="row-l" style="font-size:12px;font-weight:400"><input type="checkbox" class="chk" name="learn" value="1" checked>이 적요 기억</label><?php endif ?>
-        <button class="btn ghost" style="min-height:34px;padding:4px 12px;font-size:13px">연결</button></form><?php endif ?></td>
+        <button class="btn ghost">연결</button></form><?php endif ?></td>
     </tr><?php endforeach ?>
   </table></div><?php else: ?><p class="help">후보가 없어요. 검색해 보거나, 다른 방법으로 정산됐다면 위에서 "연결 없이 정산 완료 처리"를 해주세요.</p><?php endif ?>
   <p class="help">"이 적요 기억"을 켜두면, 통장에 찍힌 이름을 이 거래처의 다른 이름으로 기억해서 다음부터 자동으로 연결해요.</p>
@@ -277,14 +277,14 @@ function lg_view_partners(array $v, array $me) {
       <?php endif ?>
       <tr>
         <td style="white-space:normal;min-width:180px"><input type="hidden" name="pid[]" value="<?= $p['id'] ?>"><b><?= h($p['name']) ?></b>
-          <input name="aliases_<?= $p['id'] ?>" value="<?= h($p['aliases']) ?>" placeholder="통장 표시 이름" aria-label="<?= h($p['name']) ?> 통장에 찍히는 다른 이름" style="display:block;margin-top:6px;width:100%;min-height:30px;padding:3px 8px;font-size:12.5px"<?= $dis ?>></td>
+          <input name="aliases_<?= $p['id'] ?>" value="<?= h($p['aliases']) ?>" placeholder="통장 표시 이름" aria-label="<?= h($p['name']) ?> 통장에 찍히는 다른 이름" style="display:block;margin-top:6px;width:100%"<?= $dis ?>></td>
         <td style="font-size:13px"><?= h(substr((string)$p['biz_no'], 0, 3) . '-' . substr((string)$p['biz_no'], 3, 2) . '-' . substr((string)$p['biz_no'], 5)) ?></td>
         <td style="font-size:13px;white-space:normal;max-width:110px"><?= h($p['ceo']) ?></td>
         <td class="sub-s" style="white-space:normal;min-width:200px;max-width:260px"><?= h($p['address']) ?></td>
-        <td><input name="manager_<?= $p['id'] ?>" value="<?= h($p['manager']) ?>" aria-label="<?= h($p['name']) ?> 담당자" style="width:100px;min-height:34px;padding:4px 8px"<?= $dis ?>></td>
-        <td><input name="phone_<?= $p['id'] ?>" value="<?= h($p['phone']) ?>" inputmode="tel" aria-label="<?= h($p['name']) ?> 전화" style="width:130px;min-height:34px;padding:4px 8px"<?= $dis ?>></td>
-        <td><input name="email_<?= $p['id'] ?>" value="<?= h($p['email']) ?>" type="email" aria-label="<?= h($p['name']) ?> 메일주소" style="width:210px;min-height:34px;padding:4px 8px"<?= $dis ?>></td>
-        <td><input name="memo_<?= $p['id'] ?>" value="<?= h($p['memo']) ?>" aria-label="<?= h($p['name']) ?> 메모" style="width:160px;min-height:34px;padding:4px 8px"<?= $dis ?>></td>
+        <td><input name="manager_<?= $p['id'] ?>" value="<?= h($p['manager']) ?>" aria-label="<?= h($p['name']) ?> 담당자" style="width:100px"<?= $dis ?>></td>
+        <td><input name="phone_<?= $p['id'] ?>" value="<?= h($p['phone']) ?>" inputmode="tel" aria-label="<?= h($p['name']) ?> 전화" style="width:130px"<?= $dis ?>></td>
+        <td><input name="email_<?= $p['id'] ?>" value="<?= h($p['email']) ?>" type="email" aria-label="<?= h($p['name']) ?> 메일주소" style="width:210px"<?= $dis ?>></td>
+        <td><input name="memo_<?= $p['id'] ?>" value="<?= h($p['memo']) ?>" aria-label="<?= h($p['name']) ?> 메모" style="width:160px"<?= $dis ?>></td>
       </tr>
       <?php endforeach ?>
     </table></div>

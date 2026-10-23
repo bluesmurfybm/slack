@@ -178,7 +178,7 @@ function lg_view_inbox(array $v, array $me) {
       <td><input type="checkbox" class="chk" name="use_<?= $i ?>" value="1"<?= $it['type'] !== 'unknown' ? ' checked' : ' disabled' ?> aria-label="가져오기"></td>
       <td style="font-size:13px;white-space:normal;max-width:320px"><?= h($it['name']) ?></td>
       <td><span class="badge <?= $it['type'] === 'unknown' ? 'b-gray' : 'b-blue' ?>"><?= h($it['label']) ?></span><?php if (!empty($it['error'])): ?><br><span class="warn" style="font-size:12px"><?= h($it['error']) ?></span><?php endif ?></td>
-      <td style="font-size:13px"><?php if ($it['type'] === 'bank'): ?><select name="target_<?= $i ?>" aria-label="통장" style="min-height:34px"><?php foreach ($v['banks'] as $b): ?><option value="<?= $b['id'] ?>"<?= lg_sel($b['id'], $it['target']) ?>><?= h($b['name']) ?></option><?php endforeach ?></select>
+      <td style="font-size:13px"><?php if ($it['type'] === 'bank'): ?><select name="target_<?= $i ?>" aria-label="통장" ><?php foreach ($v['banks'] as $b): ?><option value="<?= $b['id'] ?>"<?= lg_sel($b['id'], $it['target']) ?>><?= h($b['name']) ?></option><?php endforeach ?></select>
         <?php elseif ($it['type'] === 'card'): ?>법인카드 (카드번호로 나눠 넣음)<?php elseif ($it['type'] === 'invoice'): ?>증빙·정산 (거래처·자동 연결)<?php elseif ($it['type'] === 'payroll'): ?>급여대장 (아직 파이썬에서)<?php else: ?>-<?php endif ?></td>
       <td style="font-size:12.5px"><?= h(substr($it['time'], 5, 11)) ?></td></tr><?php endforeach ?>
   </table></div>

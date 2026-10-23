@@ -59,9 +59,9 @@ function lg_view_card_check(array $v, array $me) {
       <td><?php if ($done && $b['diff'] !== 0 && !$ceo): ?>
         <form method="post" action="<?= h($act) ?>" class="bar-l"><?= lg_csrf_field() ?>
           <input type="hidden" name="due" value="<?= h($b['due']) ?>"><input type="hidden" name="diff" value="<?= $b['diff'] ?>">
-          <input name="memo" placeholder="<?= $b['diff'] > 0 ? '연회비' : '환급' ?>" aria-label="무슨 금액인지" style="width:120px;min-height:34px;padding:4px 8px">
-          <select name="category" aria-label="계정과목" style="min-height:34px;padding:4px 8px"><?= lg_cat_options($v['options'], '지급수수료') ?></select>
-          <button class="btn ghost" style="min-height:34px;padding:4px 12px;font-size:13px">맞추기</button>
+          <input name="memo" placeholder="<?= $b['diff'] > 0 ? '연회비' : '환급' ?>" aria-label="무슨 금액인지" style="width:120px">
+          <select name="category" aria-label="계정과목"><?= lg_cat_options($v['options'], '지급수수료') ?></select>
+          <button class="btn ghost">맞추기</button>
         </form><?php endif ?></td>
     </tr>
     <?php endforeach ?>
