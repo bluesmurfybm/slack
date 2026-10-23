@@ -8,7 +8,6 @@
  */
 
 require_once __DIR__ . '/ledger_pages.php';
-require_once __DIR__ . '/../../core/worksystems.php';
 require_once __DIR__ . '/../../core/pwa.php';
 
 function h($s) {
@@ -43,8 +42,14 @@ function lg_cat_options(array $options, $selected = '') {
     return $o;
 }
 
-function lg_icon($name, $color = '#ffffff') {
+function lg_icon($name, $color = '#ffffff', $size = 26) {
     $paths = [
+        'home'    => '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+        'book'    => '<path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2Z"/><path d="M4 18a2 2 0 0 1 2-2h12"/><path d="M8 8h6"/><path d="M8 12h4"/>',
+        'ledger'  => '<path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2Z"/><path d="M4 18a2 2 0 0 1 2-2h12"/><path d="M8 8h6"/><path d="M8 12h4"/><path d="M18 9h2v9h-2"/>',
+        'list'    => '<path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/>',
+        'back'    => '<path d="M10 6l-6 6 6 6"/><path d="M4 12h16"/>',
+        'logout'  => '<path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>',
         'upload'  => '<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
         'tag'     => '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
         'link'    => '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
@@ -56,7 +61,7 @@ function lg_icon($name, $color = '#ffffff') {
         'users'   => '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14a6.5 6.5 0 0 1 3.5 6"/>',
         'plus'    => '<path d="M12 5v14"/><path d="M5 12h14"/>',
     ];
-    return '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="' . $color . '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    return '<svg width="' . (int)$size . '" height="' . (int)$size . '" viewBox="0 0 24 24" fill="none" stroke="' . $color . '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
          . ($paths[$name] ?? '') . '</svg>';
 }
 
@@ -66,52 +71,81 @@ function lg_flash_html(array $flashes) {
     return $o;
 }
 
-/** 화면 틀: 포털 상단바 + BlueLedger 머리말 + 본문 */
-function lg_layout($title, array $me, array $u, $body) {
+// 왼쪽 메뉴: [아이콘, 이름, 화면(p) — null 이면 아직 옮기지 않음]. 대표는 '옮기는 중' 메뉴 중 LG_CEO_MENU 만 본다.
+const LG_NAV = [
+    '장부' => [
+        ['home', '홈', 'home'],
+        ['pencil', '오늘의 출납장', 'today'],
+        ['book', '일일출납장', 'daybook'],
+        ['wallet', '잔액·자금일보', 'cashbook'],
+        ['list', '거래 목록', 'transactions'],
+        ['sliders', '기준정보', 'accounts'],
+    ],
+    'PHP 옮기는 중' => [
+        ['upload', '거래 가져오기', null],
+        ['tag', '분류', null],
+        ['link', '증빙·정산', null],
+        ['lock', '월마감', null],
+        ['chart', '보고서', null],
+        ['pencil', '수기 입력', null],
+        ['users', '급여대장', null],
+    ],
+];
+
+/** 화면 틀: 왼쪽 남색 메뉴 + 위쪽 제목 줄 + 본문. 포털 상단바 없이 장부만 화면 가득. */
+function lg_layout($p, $heading, array $me, array $u, $body) {
     $css = 'styles/ledger.css?v=' . (int)@filemtime(__DIR__ . '/../styles/ledger.css');
     $js = 'static/ledger.js?v=' . (int)@filemtime(__DIR__ . '/../static/ledger.js');
-    $role = LG_ROLE_LABEL[$me['role']] . ($me['role'] === LG_ROLE_CEO ? ' · 보기 전용' : '');
+    $ceo = $me['role'] === LG_ROLE_CEO;
+    $role = LG_ROLE_LABEL[$me['role']] . ($ceo ? ' · 보기 전용' : '');
+    $soonName = $p === 'soon' ? (string)($_GET['name'] ?? '') : '';
     ob_start(); ?>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title><?= h($title) ?> · BlueLedger</title>
-<link rel="icon" type="image/svg+xml" href="../styles/favicons/blueledger.svg">
+<title><?= h($heading) ?> · BlueLedger</title>
+<link rel="icon" type="image/svg+xml" href="../styles/favicons/ledger.svg">
 <?= pwa_head_tags('../') ?>
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../styles/topbar.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="<?= h($css) ?>">
 </head>
 <body>
-<div class="topbar"><div class="topbar-in">
-  <a class="logo" href="../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
-  <div class="top-right">
-    <div class="user-menu" id="hdrUserMenu">
-      <div class="user-chip" id="hdrChip" title="메뉴">
-        <span class="avatar" style="background:<?= h(user_color($u)) ?>"><?= h(mb_substr($u['name'], 0, 1)) ?></span>
-        <span class="nm"><?= h($u['name']) ?></span><span class="user-caret">▾</span>
-      </div>
-      <div class="dd-menu">
-        <a href="../index.php?view=profile">👤 마이페이지</a>
-        <div class="dd-sep"></div>
-        <?= work_systems_menu('../', 'blueledger') ?>
-        <div class="dd-sep"></div>
-        <a href="../api/logout.php">🚪 로그아웃</a>
-      </div>
+<div class="app">
+  <aside class="side" aria-label="BlueLedger 메뉴">
+    <a class="brand" href="<?= h(lg_url('home')) ?>">
+      <span class="mark" aria-hidden="true"><?= lg_icon('ledger', '#ffffff') ?></span>
+      <span class="brand-t">BlueLedger<small>재무·회계 장부</small></span>
+    </a>
+    <nav class="nav">
+      <?php foreach (LG_NAV as $group => $items):
+          $items = array_values(array_filter($items, fn($it) => $it[2] || !$ceo || in_array($it[1], LG_CEO_MENU, true)));
+          if (!$items) continue; ?>
+      <div class="nav-g"><?= h($group) ?></div>
+      <?php foreach ($items as [$ic, $label, $page]):
+          $on = $page ? $page === $p : $soonName === $label; ?>
+      <a class="nav-i<?= $on ? ' on' : '' ?><?= $page ? '' : ' soon' ?>" href="<?= h($page ? lg_url($page) : lg_soon_link($label)) ?>"<?= $on ? ' aria-current="page"' : '' ?>>
+        <?= lg_icon($ic, 'currentColor', 18) ?><span><?= h($label) ?></span>
+      </a>
+      <?php endforeach; endforeach ?>
+    </nav>
+    <div class="side-foot">
+      <a class="nav-i" href="../index.php"><?= lg_icon('back', 'currentColor', 18) ?><span>blue-iWorks 포털</span></a>
+      <a class="nav-i" href="../api/logout.php"><?= lg_icon('logout', 'currentColor', 18) ?><span>로그아웃</span></a>
     </div>
+  </aside>
+  <div class="main">
+    <header class="topline">
+      <h1><?= h($heading) ?></h1>
+      <div class="top-r">
+        <span class="chip num">작업일 · <?= h(lg_day_label(lg_today())) ?></span>
+        <span class="who"><span class="avatar"><?= h(mb_substr($me['name'], 0, 1)) ?></span><span><?= h($me['name']) ?><small><?= h($role) ?></small></span></span>
+      </div>
+    </header>
+    <?= $body ?>
   </div>
-</div></div>
-<header class="lg"><div class="wrap">
-  <a class="logo-lg" href="<?= h(lg_url('home')) ?>">Blue<span>Ledger</span></a>
-  <div class="right">
-    <span class="pill">작업일 · <?= h(lg_day_label(lg_today())) ?></span>
-    <span class="pill soft"><?= h($me['name']) ?> · <?= h($role) ?></span>
-  </div>
-</div></header>
-<?= $body ?>
+</div>
 <script src="<?= h($js) ?>"></script>
 </body>
 </html>
@@ -119,14 +153,11 @@ function lg_layout($title, array $me, array $u, $body) {
     return ob_get_clean();
 }
 
-/** 하위 화면 공통: [← 이전 화면] + 제목 + 알림 + 본문 (파이썬 _page.html) */
-function lg_page($heading, $prev, array $flashes, $content) {
-    $back = $prev ?: lg_url('home');
+/** 하위 화면 공통: [← 이전 화면] + 알림 + 본문 (파이썬 _page.html). 제목은 위쪽 제목 줄에 있다. */
+function lg_page($prev, array $flashes, $content) {
     $hasPrev = $prev && $prev !== lg_url('home');
-    return '<main class="wrap"><div class="page-h">'
-         . '<a class="btn ghost" href="' . h($back) . '" style="min-height:38px;padding:6px 14px">← ' . ($hasPrev ? '이전 화면' : '홈으로') . '</a>'
-         . ($hasPrev ? '<a class="back" href="' . h(lg_url('home')) . '">홈</a>' : '')
-         . '<h1>' . h($heading) . '</h1></div>'
+    return '<main class="content">'
+         . ($hasPrev ? '<div class="crumb"><a href="' . h($prev) . '">← 이전 화면</a></div>' : '')
          . lg_flash_html($flashes) . $content . '</main>';
 }
 
@@ -139,64 +170,68 @@ function lg_soon_link($title) {
 function lg_view_home(array $v, array $me, array $flashes) {
     $ti = $v['today_info'];
     $ceo = $me['role'] === LG_ROLE_CEO;
+    $md = (int)substr($ti['d'], 5, 2) . '월 ' . (int)substr($ti['d'], 8, 2) . '일 (' . lg_weekday($ti['d']) . ')';
+    $dday = fn($n) => $n > 0 ? 'D-' . $n : ($n === 0 ? 'D-DAY' : 'D+' . -$n);
     ob_start(); ?>
-<section class="hero"><div class="wrap">
-  <h1><?= h(lg_day_label(lg_today())) ?>일의 장부입니다</h1>
+<main class="content">
   <?= lg_flash_html($flashes) ?>
-  <div class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 24px">
-    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:center">
-      <div><div class="k">오늘의 출납</div><div style="font-size:20px;font-weight:700"><?= (int)substr($ti['d'], 5, 2) ?>월 <?= (int)substr($ti['d'], 8, 2) ?>일 (<?= h(lg_weekday($ti['d'])) ?>)</div></div>
-      <div><div class="k">입금</div><div class="in num" style="font-size:18px;font-weight:700"><?= lg_won($ti['in']) ?></div></div>
-      <div><div class="k">출금·사용</div><div class="out num" style="font-size:18px;font-weight:700"><?= lg_won($ti['out']) ?></div></div>
-      <div><div class="k">기록된 거래</div><div style="font-size:18px;font-weight:700"><?= $ti['n'] ?>건<?php if ($ti['nod']): ?> <span class="badge b-orange">내용 <?= $ti['nod'] ?>건 남음</span><?php endif ?></div></div>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <?php if (!$ceo): ?><a class="btn ghost" href="<?= h(lg_soon_link('거래 가져오기')) ?>">통장·카드 가져오기</a><?php endif ?>
-      <a class="btn" href="<?= h(lg_url('today', ['d' => $ti['d']])) ?>"><?= $ceo ? '오늘의 출납장 보기' : '오늘의 출납장 쓰기' ?></a>
-    </div>
-  </div>
-  <div class="row">
-    <div class="panel" style="flex:2 1 420px">
-      <div class="panel-h">이번 주 할 일 <a href="<?= h(lg_url('transactions')) ?>">거래 목록 →</a></div>
-      <a class="todo" href="<?= h(lg_soon_link('분류')) ?>"><span>미분류 거래 확인</span><span class="badge <?= $v['uncategorized'] ? 'b-blue' : 'b-green' ?>"><?= $v['uncategorized'] ?>건</span></a>
-      <a class="todo" href="<?= h(lg_url('transactions')) ?>"><span>이번 달 들어온 거래</span><span class="badge b-gray"><?= $v['month_cnt'] ?>건</span></a>
-      <a class="todo" href="<?= h(lg_soon_link('증빙·정산')) ?>"><span>미수금 · 미지급금 세금계산서<?= $v['n_check'] ? ' (확인 필요 ' . $v['n_check'] . '건)' : '' ?></span><span class="badge <?= $v['n_open'] ? 'b-orange' : 'b-green' ?>"><?= $v['n_open'] ?>건</span></a>
-      <a class="todo" href="<?= h(lg_soon_link('월마감')) ?>"><span><?= h($v['close_label']) ?></span><span class="badge <?= $v['is_closed'] ? 'b-green' : 'b-orange' ?>"><?= $v['is_closed'] ? '마감 완료' : '대기' ?></span></a>
-    </div>
-    <div class="panel" style="flex:1.3 1 300px">
-      <div class="sched-box">
-        <div style="font-weight:700;font-size:15px">다가오는 일정</div>
-        <div class="sched"><div class="dday dark"><small>D-</small><strong><?= $v['close_dday'] > 0 ? $v['close_dday'] : 'DAY' ?></strong></div>
-          <div><div class="t"><?= h($v['close_label']) ?></div><div class="s"><?= str_replace('-', '.', $v['close_due']) ?> · 월마감 (매월 10일 기준)</div></div></div>
-        <div class="sched"><div class="dday"><small>D-</small><strong><?= $v['vat_dday'] > 0 ? $v['vat_dday'] : 'DAY' ?></strong></div>
-          <div><div class="t">부가세 신고 자료 준비</div><div class="s"><?= str_replace('-', '.', $v['vat']) ?> · 신고 기한 (휴일이면 다음 영업일)</div></div></div>
-        <?php foreach ($v['card_sched'] as $c): ?>
-        <div class="sched"><div class="dday"><small>D-</small><strong><?= $c['dday'] > 0 ? $c['dday'] : 'DAY' ?></strong></div>
-          <div><div class="t"><?= h($c['name']) ?> 대금 결제</div><div class="s"><?= str_replace('-', '.', $c['due']) ?> · <?= $c['use_ym'] ? (int)substr($c['use_ym'], 5) . '월 사용분 ' : '' ?><?= lg_won($c['unpaid']) ?>원 결제 예정</div></div></div>
-        <?php endforeach ?>
-      </div>
-    </div>
-    <div class="money" style="flex:1 1 240px">
-      <div class="h">자금 현황</div>
-      <div style="font-size:13px">전체 계좌 잔액</div>
-      <div class="big num">₩ <?= lg_won($v['total']) ?></div>
-      <div class="foot"><span>계좌 <?= $v['n_bank'] ?>개 · 카드 <?= $v['n_card'] ?>장</span><a href="<?= h(lg_url('cashbook')) ?>">자금일보 →</a></div>
-    </div>
-  </div>
-</div></section>
-<main class="wrap">
-  <div class="sec-h"><h2>업무 메뉴</h2><span>왼쪽 위부터 순서대로 진행하면 한 달 마감이 끝납니다</span></div>
-  <div class="grid">
-    <?php foreach ($v['menu_view'] as [$title, $desc, $color, $ic, $page]): ?>
-    <a class="card" href="<?= h($page ? lg_url($page) : lg_soon_link($title)) ?>">
-      <?php if (!$page): ?><span class="soon">PHP 옮기는 중</span><?php endif ?>
-      <div class="ic <?= h($color) ?>"><?= lg_icon($ic) ?></div>
-      <div><div class="t"><?= h($title) ?></div><div class="d"><?= h($desc) ?></div></div>
+  <section class="kpis">
+    <a class="kpi hero" href="<?= h(lg_url('cashbook')) ?>">
+      <span class="k">자금 현황 · 전체 계좌 잔액</span>
+      <strong class="num">₩ <?= lg_won($v['total']) ?></strong>
+      <span class="s">계좌 <?= $v['n_bank'] ?>개 · 카드 <?= $v['n_card'] ?>장 · 자금일보 →</span>
     </a>
-    <?php endforeach ?>
-    <div class="card add">
-      <div class="ic c-light"><?= lg_icon('plus', '#2563EB') ?></div>
-      <div><div class="t" style="color:var(--sub)">추가 예정</div><div class="d">필요한 메뉴가 생기면 이 자리에 추가됩니다.</div></div>
+    <div class="kpi"><span class="k">오늘 입금 · <?= h($md) ?></span><strong class="num in"><?= lg_won($ti['in']) ?></strong><span class="s">원</span></div>
+    <div class="kpi"><span class="k">오늘 출금·사용</span><strong class="num out"><?= lg_won($ti['out']) ?></strong><span class="s">원</span></div>
+    <div class="kpi"><span class="k">오늘 기록된 거래</span><strong class="num"><?= $ti['n'] ?><small>건</small></strong>
+      <span class="s"><?= $ti['nod'] ? '<span class="tag warn">내용 ' . $ti['nod'] . '건 남음</span>' : '내용 모두 적음' ?></span></div>
+  </section>
+
+  <div class="actions">
+    <a class="btn primary" href="<?= h(lg_url('today', ['d' => $ti['d']])) ?>"><?= $ceo ? '오늘의 출납장 보기' : '오늘의 출납장 쓰기' ?></a>
+    <a class="btn" href="<?= h(lg_url('cashbook')) ?>">자금일보</a>
+    <a class="btn" href="<?= h(lg_url('daybook')) ?>">출납장 엑셀</a>
+    <?php if (!$ceo): ?><a class="btn ghost" href="<?= h(lg_soon_link('거래 가져오기')) ?>">통장·카드 가져오기</a><?php endif ?>
+  </div>
+
+  <div class="cols">
+    <section class="box">
+      <div class="box-h"><h2>계좌·카드 잔액</h2><a href="<?= h(lg_url('accounts')) ?>">기준정보 →</a></div>
+      <div class="scroll"><table>
+        <tr><th>구분</th><th>이름</th><th class="num">현재 잔액</th><th>최근 거래일</th></tr>
+        <?php foreach ($v['accounts'] as $a): if ($a['group_of']) continue; ?>
+        <tr><td><span class="tag<?= $a['kind'] === '카드' ? ' card' : '' ?>"><?= h($a['kind']) ?></span></td>
+          <td><?= h($a['name']) ?><?= $a['members'] ? ' <span class="sub-s">외 ' . count($a['members']) . '장</span>' : '' ?></td>
+          <td class="num"><b class="<?= $a['balance'] < 0 ? 'out' : '' ?>"><?= lg_won($a['balance']) ?></b></td>
+          <td class="sub-s"><?= h($a['last_date'] ?: '-') ?></td></tr>
+        <?php endforeach ?>
+      </table></div>
+      <p class="help">카드의 잔액은 아직 결제되지 않은 사용액이에요(마이너스 = 앞으로 낼 금액).</p>
+    </section>
+
+    <div class="stack">
+      <section class="box">
+        <div class="box-h"><h2>이번 주 할 일</h2><a href="<?= h(lg_url('transactions')) ?>">거래 목록 →</a></div>
+        <div class="todo-list">
+          <a class="todo" href="<?= h(lg_soon_link('분류')) ?>"><span>미분류 거래 확인</span><span class="tag <?= $v['uncategorized'] ? 'warn' : 'ok' ?>"><?= $v['uncategorized'] ?>건</span></a>
+          <a class="todo" href="<?= h(lg_url('transactions')) ?>"><span>이번 달 들어온 거래</span><span class="tag"><?= $v['month_cnt'] ?>건</span></a>
+          <a class="todo" href="<?= h(lg_soon_link('증빙·정산')) ?>"><span>미수금 · 미지급금 세금계산서<?= $v['n_check'] ? ' (확인 필요 ' . $v['n_check'] . '건)' : '' ?></span><span class="tag <?= $v['n_open'] ? 'warn' : 'ok' ?>"><?= $v['n_open'] ?>건</span></a>
+          <a class="todo" href="<?= h(lg_soon_link('월마감')) ?>"><span><?= h($v['close_label']) ?></span><span class="tag <?= $v['is_closed'] ? 'ok' : 'warn' ?>"><?= $v['is_closed'] ? '마감 완료' : '대기' ?></span></a>
+        </div>
+      </section>
+      <section class="box">
+        <div class="box-h"><h2>다가오는 일정</h2></div>
+        <div class="sched-list">
+          <div class="sched"><span class="dday num<?= $v['close_dday'] <= 3 ? ' near' : '' ?>"><?= $dday($v['close_dday']) ?></span>
+            <div><div class="t"><?= h($v['close_label']) ?></div><div class="s num"><?= str_replace('-', '.', $v['close_due']) ?> · 월마감 (매월 10일 기준)</div></div></div>
+          <div class="sched"><span class="dday num<?= $v['vat_dday'] <= 3 ? ' near' : '' ?>"><?= $dday($v['vat_dday']) ?></span>
+            <div><div class="t">부가세 신고 자료 준비</div><div class="s num"><?= str_replace('-', '.', $v['vat']) ?> · 신고 기한 (휴일이면 다음 영업일)</div></div></div>
+          <?php foreach ($v['card_sched'] as $c): ?>
+          <div class="sched"><span class="dday num<?= $c['dday'] <= 3 ? ' near' : '' ?>"><?= $dday($c['dday']) ?></span>
+            <div><div class="t"><?= h($c['name']) ?> 대금 결제</div><div class="s num"><?= str_replace('-', '.', $c['due']) ?> · <?= $c['use_ym'] ? (int)substr($c['use_ym'], 5) . '월 사용분 ' : '' ?><?= lg_won($c['unpaid']) ?>원</div></div></div>
+          <?php endforeach ?>
+        </div>
+      </section>
     </div>
   </div>
 </main>

@@ -14,7 +14,12 @@
 require_once __DIR__ . '/lib/ledger_views.php';
 require_once __DIR__ . '/lib/ledger_xlsx.php';
 
-$u = bl_require_page_login();
+// 포털 카드 key 는 'ledger'(출장여비 BlueExpense 가 'blueledger'). 로그인 안내에 BlueLedger 이름이 나오게 한다.
+$u = current_portal_user();
+if (!$u) {
+    header('Location: ../index.php?need_login=ledger');
+    exit;
+}
 $email = strtolower($u['email']);
 $role = lg_role_of($email);
 if (!$role) {
@@ -100,8 +105,10 @@ $prev = lg_safe_back($_SESSION['bl_ledger_bk'][$p] ?? '');
 $flashes = lg_flash_take();
 
 /* ---------- 화면 */
+$heading = LG_PAGES[$p];
 try {
     if ($p === 'home') {
+        $heading = '장부 홈';
         $body = lg_view_home(lg_page_home($_GET, $me), $me, $flashes);
     } else {
         $content = match ($p) {
@@ -117,11 +124,12 @@ try {
             'soon' => clip($_GET['name'] ?? '준비 중', 40),
             default => LG_PAGES[$p],
         };
-        $body = lg_page($heading, $prev, $flashes, $content);
+        $body = lg_page($prev, $flashes, $content);
     }
 } catch (Throwable $e) {
     error_log('[blueledger] ' . $e);
     http_response_code(500);
-    $body = lg_page('문제가 생겼어요', $prev, [['error', '화면을 만들지 못했어요: ' . $e->getMessage()]], '');
+    $heading = '문제가 생겼어요';
+    $body = lg_page($prev, [['error', '화면을 만들지 못했어요: ' . $e->getMessage()]], '');
 }
-echo lg_layout(LG_PAGES[$p] ?: 'BlueLedger', $me, $u, $body);
+echo lg_layout($p, $heading, $me, $u, $body);

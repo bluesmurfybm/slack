@@ -112,6 +112,9 @@ tools/import_ledger.php 파이썬 장부(blueledger.db 복사본) → bl_ledger_
 - 작업 기록: 저장·삭제마다 `bl_ledger_log` 에 남긴다. 거래를 지우면 지운 줄의 원래 내용(JSON)도 남긴다 —
   파이썬 버전의 '지우기 전 장부 파일 백업' 대신이다.
 - 아직 안 옮긴 메뉴는 'PHP 옮기는 중' 안내 화면으로 간다.
+- 포털 카드: `core/worksystems.json` 의 key `ledger`(BlueExpense 는 `blueledger`), 아이콘 `styles/icons/ledger.svg`·
+  `styles/favicons/ledger.svg`. `"members": "bl_ledger_roles"` 라 출입 명단에 있는 사람에게만 카드·메뉴가 보인다
+  (`core/worksystems.php::work_systems_for_viewer`). 운영에 올릴 때 이 세 파일도 함께 올린다.
 - 옮기기: `D:\php82\php.exe blueledger\tools\import_ledger.php "<장부 복사본>"` (이미 거래가 있으면 `--replace`).
   원본 장부가 아니라 반드시 복사본을 넘긴다. 파일은 읽기 전용으로 연다.
 - 대조(2026-10-23, 장부 복사본): 파이썬 화면 값과 홈·기준정보·거래 목록 10가지·출납장·오늘의 출납장 598(299일×통장 2)·
@@ -124,4 +127,5 @@ tools/import_ledger.php 파이썬 장부(blueledger.db 복사본) → bl_ledger_
 
 - 포털 로그인(`api/login.php`)에 로그인 시도 횟수 제한이 없다 — 외부 공개 전에 포털 쪽에 넣어야 한다.
 - 회계 장부 2단계부터: 거래 가져오기 → 분류 → 카드 맞춰보기 → 증빙·정산 → 급여 → 월마감·보고서·백업.
-- 장부를 포털 카드에서 여는 길(`core/worksystems.json`)은 아직 없다. 지금은 `blueledger/ledger.php` 주소로 들어간다.
+- book(파이썬)의 상단바 메뉴는 worksystems.json 을 직접 읽어 "members" 를 모른다 — 거기서는 BlueLedger 가 모두에게 보인다
+  (눌러도 출입 명단에 없으면 장부 화면이 막는다).
