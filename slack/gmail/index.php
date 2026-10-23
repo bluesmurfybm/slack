@@ -549,9 +549,9 @@ $showAll = ($nRaw === 'all');
 $perPage = $showAll ? PHP_INT_MAX
          : ((int)$nRaw > 0 ? min(2000, (int)$nRaw) : max(1, (int)($g['limit'] ?: 50)));
 $page        = max(0, (int)($_GET['p'] ?? 1) - 1);         // URL 은 1기준, 내부는 0기준
-/* 안읽음 우선: ?unread=1|0. 미지정 시 쿠키(마지막 선택값) 기억 */
+/* 안읽음 우선: ?unread=1|0. 미지정 시 쿠키(마지막 선택값) 기억 — 기록이 없으면 기본으로 켠다(직접 끈 사람만 꺼짐) */
 $unreadParam = $_GET['unread'] ?? null;
-$unreadFirst = $unreadParam !== null ? ($unreadParam == '1') : (($_COOKIE['gm_unread'] ?? '') === '1');
+$unreadFirst = $unreadParam !== null ? ($unreadParam == '1') : (($_COOKIE['gm_unread'] ?? '1') === '1');
 if ($unreadParam !== null) setcookie('gm_unread', $unreadFirst ? '1' : '0', time() + 86400 * 365, '/');
 
 $acct = gmail_owner();                                     // 사용자(=Gmail 계정)별 데이터 구분
