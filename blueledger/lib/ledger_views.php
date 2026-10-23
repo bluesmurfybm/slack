@@ -204,49 +204,46 @@ function lg_view_home(array $v, array $me, array $flashes) {
       <span class="s"><?= $ti['nod'] ? '<span class="tag warn">내용 ' . $ti['nod'] . '건 남음</span>' : '내용 모두 적음' ?></span></div>
   </section>
 
-  <div class="actions">
-    <a class="btn primary" href="<?= h(lg_url('today', ['d' => $ti['d']])) ?>"><?= $ceo ? '일일출납장 보기' : '일일출납장 쓰기' ?></a>
-    <a class="btn" href="<?= h(lg_url('cashbook')) ?>">자금일보</a>
-    <a class="btn" href="<?= h(lg_url('daybook')) ?>">출납장 엑셀</a>
-    <?php if (!$ceo): ?><a class="btn ghost" href="<?= h(lg_url('inbox')) ?>">통장·카드 가져오기</a><?php endif ?>
+  <div class="actions-row">
+    <div class="bal-chips" aria-label="계좌·카드 잔액">
+      <?php foreach ($v['accounts'] as $a): if ($a['group_of']) continue; ?>
+      <a class="bal-chip" href="<?= h(lg_url('accounts')) ?>" title="<?= h($a['name']) ?> · 최근 거래일 <?= h($a['last_date'] ?: '-') ?><?= $a['kind'] === '카드' ? ' · 아직 결제되지 않은 사용액(마이너스 = 앞으로 낼 금액)' : '' ?>">
+        <span class="tag<?= $a['kind'] === '카드' ? ' card' : '' ?>"><?= h($a['kind']) ?></span>
+        <span class="nm"><?= h($a['name']) ?><?= $a['members'] ? ' 외 ' . count($a['members']) . '장' : '' ?></span>
+        <b class="num<?= $a['balance'] < 0 ? ' out' : '' ?>"><?= lg_won($a['balance']) ?></b>
+      </a>
+      <?php endforeach ?>
+    </div>
+    <div class="actions">
+      <a class="btn primary" href="<?= h(lg_url('today', ['d' => $ti['d']])) ?>"><?= $ceo ? '일일출납장 보기' : '일일출납장 쓰기' ?></a>
+      <a class="btn" href="<?= h(lg_url('cashbook')) ?>">자금일보</a>
+      <a class="btn" href="<?= h(lg_url('daybook')) ?>">출납장 엑셀</a>
+      <?php if (!$ceo): ?><a class="btn ghost" href="<?= h(lg_url('inbox')) ?>">통장·카드 가져오기</a><?php endif ?>
+    </div>
   </div>
 
-  <section class="box">
-    <div class="box-h"><h2>다가오는 일정</h2></div>
-    <div class="sched-grid">
-      <div class="cal" data-cal data-today="<?= h(lg_today()) ?>" data-events="<?= h(json_encode($cal, JSON_UNESCAPED_UNICODE)) ?>">
-        <div class="cal-h">
-          <button type="button" class="cal-nav" data-cal-move="-1" aria-label="이전 달">‹</button>
-          <strong class="cal-t" aria-live="polite"></strong>
-          <button type="button" class="cal-nav" data-cal-move="1" aria-label="다음 달">›</button>
+  <section class="box home-box">
+    <div class="home-sched">
+      <div class="box-h"><h2>다가오는 일정</h2></div>
+      <div class="sched-grid">
+        <div class="cal" data-cal data-today="<?= h(lg_today()) ?>" data-events="<?= h(json_encode($cal, JSON_UNESCAPED_UNICODE)) ?>">
+          <div class="cal-h">
+            <button type="button" class="cal-nav" data-cal-move="-1" aria-label="이전 달">‹</button>
+            <strong class="cal-t" aria-live="polite"></strong>
+            <button type="button" class="cal-nav" data-cal-move="1" aria-label="다음 달">›</button>
+          </div>
+          <div class="cal-g"></div>
         </div>
-        <div class="cal-g"></div>
-      </div>
-      <div class="sched-list">
-        <?php foreach ($events as $e): ?>
-        <div class="sched" data-date="<?= h($e['date']) ?>"><span class="dday num<?= $e['dday'] <= 3 ? ' near' : '' ?>"><?= $dday($e['dday']) ?></span>
-          <div><div class="t"><?= h($e['title']) ?></div><div class="s num"><?= str_replace('-', '.', $e['date']) ?> · <?= h($e['sub']) ?></div></div></div>
-        <?php endforeach ?>
+        <div class="sched-list">
+          <?php foreach ($events as $e): ?>
+          <div class="sched" data-date="<?= h($e['date']) ?>"><span class="dday num<?= $e['dday'] <= 3 ? ' near' : '' ?>"><?= $dday($e['dday']) ?></span>
+            <div><div class="t"><?= h($e['title']) ?></div><div class="s num"><?= str_replace('-', '.', $e['date']) ?> · <?= h($e['sub']) ?></div></div></div>
+          <?php endforeach ?>
+        </div>
       </div>
     </div>
-  </section>
 
-  <div class="cols">
-    <section class="box">
-      <div class="box-h"><h2>계좌·카드 잔액</h2><a href="<?= h(lg_url('accounts')) ?>">기준정보 →</a></div>
-      <div class="scroll"><table>
-        <tr><th>구분</th><th>이름</th><th class="num">현재 잔액</th><th>최근 거래일</th></tr>
-        <?php foreach ($v['accounts'] as $a): if ($a['group_of']) continue; ?>
-        <tr><td><span class="tag<?= $a['kind'] === '카드' ? ' card' : '' ?>"><?= h($a['kind']) ?></span></td>
-          <td><?= h($a['name']) ?><?= $a['members'] ? ' <span class="sub-s">외 ' . count($a['members']) . '장</span>' : '' ?></td>
-          <td class="num"><b class="<?= $a['balance'] < 0 ? 'out' : '' ?>"><?= lg_won($a['balance']) ?></b></td>
-          <td class="sub-s"><?= h($a['last_date'] ?: '-') ?></td></tr>
-        <?php endforeach ?>
-      </table></div>
-      <p class="help">카드의 잔액은 아직 결제되지 않은 사용액이에요(마이너스 = 앞으로 낼 금액).</p>
-    </section>
-
-    <section class="box">
+    <div class="home-todo">
       <div class="box-h"><h2>이번 주 할 일</h2><a href="<?= h(lg_url('transactions')) ?>">거래 목록 →</a></div>
       <div class="todo-list">
         <a class="todo" href="<?= h(lg_url('classify_groups')) ?>"><span>미분류 거래 확인</span><span class="tag <?= $v['uncategorized'] ? 'warn' : 'ok' ?>"><?= $v['uncategorized'] ?>건</span></a>
@@ -254,8 +251,8 @@ function lg_view_home(array $v, array $me, array $flashes) {
         <a class="todo" href="<?= h(lg_url('settle')) ?>"><span>미수금 · 미지급금 세금계산서<?= $v['n_check'] ? ' (확인 필요 ' . $v['n_check'] . '건)' : '' ?></span><span class="tag <?= $v['n_open'] ? 'warn' : 'ok' ?>"><?= $v['n_open'] ?>건</span></a>
         <a class="todo" href="<?= h(lg_url('close', ['ym' => $v['close_ym']])) ?>"><span><?= h($v['close_label']) ?></span><span class="tag <?= $v['is_closed'] ? 'ok' : 'warn' ?>"><?= $v['is_closed'] ? '마감 완료' : '대기' ?></span></a>
       </div>
-    </section>
-  </div>
+    </div>
+  </section>
 </main>
 <?php
     return ob_get_clean();
