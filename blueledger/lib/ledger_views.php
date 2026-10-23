@@ -79,10 +79,10 @@ const LG_NAV = [
         ['book', '일일출납장', 'daybook'],
         ['wallet', '잔액·자금일보', 'cashbook'],
         ['list', '거래 목록', 'transactions'],
+        ['upload', '거래 가져오기', 'import'],
         ['sliders', '기준정보', 'accounts'],
     ],
     'PHP 옮기는 중' => [
-        ['upload', '거래 가져오기', null],
         ['tag', '분류', null],
         ['link', '증빙·정산', null],
         ['lock', '월마감', null],

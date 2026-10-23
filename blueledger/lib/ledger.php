@@ -9,6 +9,7 @@
  */
 
 require_once __DIR__ . '/../guard.php';
+require_once __DIR__ . '/ledger_read.php';
 
 const LG_CARD_PAY  = '카드대금 결제';
 const LG_CANCELLED = '결제 취소(상계)';     // 승인 후 전액 취소된 카드 결제: 승인·취소 두 줄이 서로 지워짐
@@ -166,21 +167,44 @@ function lg_add_days($d, $n) {
     return date('Y-m-d', strtotime("$d " . ($n >= 0 ? '+' : '') . "$n day"));
 }
 
-/** '12,000원', '(3,000)' 같은 값도 숫자로 (괄호는 마이너스) */
+/** '12,000원', '(3,000)' 같은 값도 숫자로 (괄호는 마이너스). 반올림은 파이썬 round() 처럼 짝수 쪽으로. */
 function lg_to_int($v) {
     if ($v === null) return 0;
-    if (is_int($v) || is_float($v)) return (int)round($v);
-    $s = str_replace([',', '원', ' '], '', trim((string)$v));
+    if (is_bool($v)) return (int)$v;
+    if (is_int($v)) return $v;
+    if (is_float($v)) return (int)round($v, 0, PHP_ROUND_HALF_EVEN);
+    $s = str_replace([',', '원', ' '], '', trim(lg_str($v)));
     if ($s === '' || $s === '-') return 0;
     $neg = str_starts_with($s, '(') && str_ends_with($s, ')');
     $s = trim($s, '()');
     if (!is_numeric($s)) return 0;
-    $n = (int)round((float)$s);
+    $n = (int)round((float)$s, 0, PHP_ROUND_HALF_EVEN);
     return $neg ? -$n : $n;
 }
 
+/** 날짜 칸 → 'YYYY-MM-DD' 또는 null. 엑셀 날짜, 일련번호(20000~80000), '2026.01.02', '2026년 1월 2일' 모두 */
+function lg_to_date($v) {
+    if ($v === null || $v === '') return null;
+    if (is_object($v) && method_exists($v, 'date')) return $v->date();
+    if ((is_int($v) || is_float($v)) && $v > 20000 && $v < 80000) {
+        return gmdate('Y-m-d', gmmktime(0, 0, 0, 12, 30, 1899) + (int)$v * 86400);
+    }
+    if (!preg_match('/^(\d{4})[.\-\/년\s]*(\d{1,2})[.\-\/월\s]*(\d{1,2})/u', trim(lg_str($v)), $m)) return null;
+    return checkdate((int)$m[2], (int)$m[3], (int)$m[1]) ? sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]) : null;
+}
+
+/** 파이썬 str() 과 같은 글자 (엑셀 숫자 1234.0 은 "1234.0", 빈칸은 "None") */
+function lg_str($v) {
+    return lg_pystr($v);
+}
+
+/** 파이썬에서 거짓으로 치는 값 (None, '', 0, 0.0, False) — `x or ""` 를 옮길 때 쓴다 */
+function lg_falsy($v) {
+    return $v === null || $v === '' || $v === 0 || $v === 0.0 || $v === false;
+}
+
 function lg_last4($v) {
-    $digits = preg_replace('/\D/', '', (string)($v ?? ''));
+    $digits = preg_replace('/\D/', '', lg_falsy($v) ? '' : lg_str($v));
     return $digits !== '' ? substr($digits, -4) : '';
 }
 

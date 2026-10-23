@@ -158,6 +158,14 @@ th.num,td.num{text-align:right}
 .addrow input{min-height:32px;padding:4px 8px}
 tr.sum td{font-weight:700;background:var(--sum);border-top:1px solid var(--line)}
 
+/* 한 메뉴 안의 작은 탭 (거래 가져오기 / 여러 파일 / 출납장 …) */
+.subtabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:-4px}
+.subtabs a{padding:8px 14px;font-size:13.5px;font-weight:600;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-1px}
+.subtabs a:hover{color:var(--ink2);text-decoration:none}
+.subtabs a.on{color:var(--ink2);border-bottom-color:var(--accent)}
+tr.grp td{background:var(--soft);font-weight:700;font-size:13px}
+tr.grp.likely td{background:var(--warn-bg);color:var(--warn-ink)}
+
 /* 출입 거절 화면(틀 없이) */
 .wrap{max-width:720px;margin:0 auto;padding:0 20px}
 

@@ -9,10 +9,13 @@
  *   - 담당자(clerk): 모든 기능
  *   - 대표(ceo): 보기만. 저장·삭제 요청은 서버가 막는다.
  *  저장 요청(POST)은 모두 CSRF 토큰(_csrf)이 맞아야 한다.
+ *
+ *  화면 목록은 lg_routes() 한 곳에 있다: p => [제목, 값 만들기, 그리기, 저장 처리, 왼쪽 메뉴에서 켤 항목].
  */
 
 require_once __DIR__ . '/lib/ledger_views.php';
 require_once __DIR__ . '/lib/ledger_xlsx.php';
+require_once __DIR__ . '/lib/views_import.php';
 
 // 포털 카드 key 는 'ledger'(출장여비 BlueExpense 가 'blueledger'). 로그인 안내에 BlueLedger 이름이 나오게 한다.
 $u = current_portal_user();
@@ -29,13 +32,34 @@ if (!$role) {
 }
 $me = ['email' => $email, 'name' => $u['name'], 'role' => $role];
 
-const LG_PAGES = [
-    'home' => '홈', 'accounts' => '기준정보 · 계좌와 카드', 'transactions' => '거래 목록', 'daybook' => '일일출납장',
-    'today' => '오늘의 출납장', 'cashbook' => '잔액·자금일보', 'soon' => '준비 중',
-    'daybook_xlsx' => '', 'cashbook_xlsx' => '',
-];
+function lg_routes() {
+    return [
+        'home'          => ['장부 홈', 'lg_page_home', null, null, 'home'],
+        'today'         => ['오늘의 출납장', 'lg_page_today', 'lg_view_today', 'lg_post_today', 'today'],
+        'daybook'       => ['일일출납장', 'lg_page_daybook', 'lg_view_daybook', 'lg_post_daybook', 'daybook'],
+        'cashbook'      => ['잔액·자금일보', 'lg_page_cashbook', 'lg_view_cashbook', null, 'cashbook'],
+        'transactions'  => ['거래 목록', 'lg_page_transactions', 'lg_view_transactions', 'lg_post_transactions', 'transactions'],
+        'accounts'      => ['기준정보 · 계좌와 카드', 'lg_page_accounts', 'lg_view_accounts', 'lg_post_accounts', 'accounts'],
+        'import'        => ['거래 가져오기', 'lg_page_import', 'lg_view_import', 'lg_post_import', 'import'],
+        'import_map'    => ['거래 가져오기 · 열 맞추기', 'lg_page_import_map', 'lg_view_import_map', 'lg_post_import_map', 'import'],
+        'import_done'   => ['거래 가져오기 · 완료', 'lg_page_import_done', 'lg_view_import_done', null, 'import'],
+        'ledger_import' => ['일일출납장 가져오기', 'lg_page_ledger_import', 'lg_view_ledger_import', 'lg_post_ledger_import', 'import'],
+        'ledger_done'   => ['일일출납장 가져오기 · 결과', 'lg_page_import_done', 'lg_view_ledger_done', null, 'import'],
+        'inbox'         => ['여러 파일 한 번에 가져오기', 'lg_page_inbox', 'lg_view_inbox', 'lg_post_inbox', 'import'],
+        'inbox_upload'  => ['여러 파일 한 번에 가져오기', null, null, 'lg_post_inbox_upload', 'import'],
+        'inbox_done'    => ['한 번에 가져오기 · 결과', 'lg_page_import_done', 'lg_view_inbox_done', null, 'import'],
+        'duplicates'    => ['중복 거래 찾기', 'lg_page_duplicates', 'lg_view_duplicates', 'lg_post_duplicates', 'import'],
+        'imports'       => ['가져온 파일별로 보기', 'lg_page_imports', 'lg_view_imports', 'lg_post_imports', 'import'],
+        'soon'          => ['준비 중', null, null, null, 'soon'],
+        'daybook_xlsx'  => ['', null, null, null, ''],
+        'cashbook_xlsx' => ['', null, null, null, ''],
+    ];
+}
+
+$routes = lg_routes();
 $p = (string)($_GET['p'] ?? 'home');
-if (!isset(LG_PAGES[$p])) $p = 'home';
+if (!isset($routes[$p])) $p = 'home';
+[$title, $pageFn, $viewFn, $postFn, $nav] = $routes[$p];
 $self = 'ledger.php' . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . $_SERVER['QUERY_STRING'] : '');
 
 function lg_flash_add(array $msgs) {
@@ -66,7 +90,7 @@ function lg_redirect($url) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $back = lg_ref_local() ?: $self;
     if (!hash_equals((string)($_SESSION['bl_csrf'] ?? ''), (string)($_POST['_csrf'] ?? ''))) {
-        lg_flash_add([['error', '화면이 오래되었습니다. 새로고침한 뒤 다시 해 주세요.']]);
+        lg_flash_add([['error', '화면이 오래되었거나 파일이 너무 커요. 새로고침한 뒤 다시 해 주세요.']]);
         lg_redirect($back);
     }
     if ($me['role'] === LG_ROLE_CEO) {
@@ -74,13 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         lg_redirect($back);
     }
     try {
-        [$msgs, $to] = match ($p) {
-            'accounts' => lg_post_accounts($_POST, $me),
-            'transactions' => lg_post_transactions($_POST, $me),
-            'daybook' => lg_post_daybook($_POST, $me, $self),
-            'today' => lg_post_today($_POST, $me),
-            default => [[['error', '이 화면에서는 저장할 수 없어요.']], $back],
-        };
+        [$msgs, $to] = $postFn ? ($p === 'daybook' ? $postFn($_POST, $me, $self) : $postFn($_POST, $me))
+                               : [[['error', '이 화면에서는 저장할 수 없어요.']], $back];
     } catch (Throwable $e) {
         error_log('[blueledger] ' . $e);
         [$msgs, $to] = [[['error', '저장하지 못했어요: ' . $e->getMessage()]], $back];
@@ -88,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     lg_flash_add($msgs);
     lg_redirect($to);
 }
+if (!$pageFn && $postFn) lg_redirect(lg_url($nav));       // 저장 전용 주소를 그냥 열면 해당 화면으로
 
 /* ---------- 엑셀 받기 */
 if ($p === 'daybook_xlsx' || $p === 'cashbook_xlsx') {
@@ -105,26 +125,17 @@ $prev = lg_safe_back($_SESSION['bl_ledger_bk'][$p] ?? '');
 $flashes = lg_flash_take();
 
 /* ---------- 화면 */
-$heading = LG_PAGES[$p];
+$heading = $title;
 try {
     if ($p === 'home') {
-        $heading = '장부 홈';
         $body = lg_view_home(lg_page_home($_GET, $me), $me, $flashes);
+    } elseif ($p === 'soon') {
+        $heading = clip($_GET['name'] ?? '준비 중', 40);
+        $body = lg_page($prev, $flashes, lg_view_soon($heading));
     } else {
-        $content = match ($p) {
-            'accounts' => lg_view_accounts(lg_page_accounts($_GET, $me), $me),
-            'transactions' => lg_view_transactions(lg_page_transactions($_GET, $me), $me),
-            'daybook' => lg_view_daybook(lg_page_daybook($_GET, $me), $me),
-            'today' => lg_view_today($v = lg_page_today($_GET, $me), $me),
-            'cashbook' => lg_view_cashbook(lg_page_cashbook($_GET, $me), $me),
-            'soon' => lg_view_soon(clip($_GET['name'] ?? '이 메뉴', 40)),
-        };
-        $heading = match ($p) {
-            'today' => '오늘의 출납장 · ' . (int)substr($v['d'], 5, 2) . '월 ' . (int)substr($v['d'], 8, 2) . '일 (' . lg_weekday($v['d']) . ')',
-            'soon' => clip($_GET['name'] ?? '준비 중', 40),
-            default => LG_PAGES[$p],
-        };
-        $body = lg_page($prev, $flashes, $content);
+        $v = $pageFn($_GET, $me);
+        if ($p === 'today') $heading = '오늘의 출납장 · ' . (int)substr($v['d'], 5, 2) . '월 ' . (int)substr($v['d'], 8, 2) . '일 (' . lg_weekday($v['d']) . ')';
+        $body = lg_page($prev, $flashes, $viewFn($v, $me));
     }
 } catch (Throwable $e) {
     error_log('[blueledger] ' . $e);
@@ -132,4 +143,4 @@ try {
     $heading = '문제가 생겼어요';
     $body = lg_page($prev, [['error', '화면을 만들지 못했어요: ' . $e->getMessage()]], '');
 }
-echo lg_layout($p, $heading, $me, $u, $body);
+echo lg_layout($p === 'soon' ? 'soon' : $nav, $heading, $me, $u, $body);
