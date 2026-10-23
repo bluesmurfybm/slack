@@ -23,7 +23,8 @@ class LgSheet {
     public array $widths = [];
     public array $heights = [];
     public ?string $freeze = null;
-    public string $orientation = 'portrait';
+    public ?string $autoFilter = null;      // 'A1:I20' — 머리줄에 거르기 단추
+    public ?string $orientation = null;    // 정하지 않으면 엑셀 기본
     public bool $fitToPage = false;
     public int $fitToWidth = 1;
     public int $fitToHeight = 1;
@@ -166,13 +167,17 @@ class LgXlsx {
             $x .= '</row>';
         }
         $x .= '</sheetData>';
+        if ($sh->autoFilter) $x .= '<autoFilter ref="' . $sh->autoFilter . '"/>';
         if ($sh->merges) {
             $x .= '<mergeCells count="' . count($sh->merges) . '">';
             foreach ($sh->merges as $m) $x .= '<mergeCell ref="' . $m . '"/>';
             $x .= '</mergeCells>';
         }
         $x .= '<pageMargins left="0.75" right="0.75" top="1" bottom="1" header="0.5" footer="0.5"/>';
-        $x .= '<pageSetup orientation="' . $sh->orientation . '"' . ($sh->fitToPage ? ' fitToWidth="' . $sh->fitToWidth . '" fitToHeight="' . $sh->fitToHeight . '"' : '') . '/>';
+        if ($sh->orientation || $sh->fitToPage) {
+            $x .= '<pageSetup' . ($sh->orientation ? ' orientation="' . $sh->orientation . '"' : '')
+                . ($sh->fitToPage ? ' fitToWidth="' . $sh->fitToWidth . '" fitToHeight="' . $sh->fitToHeight . '"' : '') . '/>';
+        }
         return $x . '</worksheet>';
     }
 
