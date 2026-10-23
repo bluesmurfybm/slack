@@ -28,6 +28,11 @@ function watch_sync($why) {
     } while (!empty($r['ok']) && ($r['backfill_remaining'] ?? 0) > 0);
 }
 
+if (!gmail_imap_ready()) {
+    // 동기화마다 같은 오류로 재시도만 반복하게 된다 — 설치부터 안내하고 끝낸다
+    wlog(GMAIL_NO_IMAP_MSG . ' (CLI: ' . PHP_BINARY . ', php -m 으로 imap 확인)');
+    exit(1);
+}
 if (!gmail_configured()) {
     // 설정 없이 돌면 빈 계정으로 로그인 실패만 반복한다
     wlog('Gmail 계정 설정이 없습니다 — --account=<이메일> 또는 config.local.php 의 gmail 설정을 확인하세요.');

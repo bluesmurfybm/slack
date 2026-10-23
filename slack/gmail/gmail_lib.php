@@ -105,8 +105,13 @@ function gmeta_get($key, $default = null) { return meta_get($key . ':' . gmail_o
 function gmeta_set($key, $value) { meta_set($key . ':' . gmail_owner(), $value); }
 
 /** IMAP 접속. [$imap, $err] 반환 (n_retries=1: 반복 실패 시 계정 잠금 방지) */
+/** PHP imap 확장 설치 여부. PHP 8.4 부터 기본 설치에서 빠져서 서버에 따로 깔아야 한다(php8.x-imap 또는 PECL). */
+const GMAIL_NO_IMAP_MSG = '서버 PHP 에 imap 확장이 없습니다 — 서버에 php-imap 을 설치하고 웹 서버(Apache/php-fpm)를 재시작하세요.';
+function gmail_imap_ready() { return function_exists('imap_open'); }
+
 function gmail_open() {
     $g = gmail_cfg();
+    if (!gmail_imap_ready()) return [null, GMAIL_NO_IMAP_MSG];   // 'Call to undefined function imap_open()' 대신 원인을 바로
     if (!gmail_configured()) {
         return [null, PHP_SAPI === 'cli'
             ? 'Gmail 계정 설정이 없습니다 (config.local.php 의 gmail 또는 --account=<이메일>).'
