@@ -19,6 +19,9 @@
     "desc": "개발 과업을 편성하고 진행 상황을 공유합니다.", "color": "#2B7A4B" },
   { "key": "blueledger", "emoji": "🧾", "label": "BlueExpense", "path": "blueledger/index.php",
     "desc": "출장여비를 청구하고 승인·정산 현황을 확인합니다.", "color": "#1E6FA8" },
+  { "key": "ledger", "emoji": "📒", "label": "BlueLedger", "path": "blueledger/ledger.php",
+    "desc": "통장·카드 거래를 한 장부에 모아 출납장·자금일보를 관리합니다.", "color": "#C026D3",
+    "members": "bl_ledger_roles" },
   { "key": "onwatch", "emoji": "📡", "label": "OnWatch", "path": "onwatch/index.php",
     "desc": "정해 둔 대상을 기간 동안 주기적으로 살피고 새 소식이 있을 때만 알립니다.", "color": "#C2410C",
     "badge": "inbox" }
