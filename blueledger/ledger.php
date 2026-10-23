@@ -16,6 +16,7 @@
 require_once __DIR__ . '/lib/ledger_views.php';
 require_once __DIR__ . '/lib/ledger_xlsx.php';
 require_once __DIR__ . '/lib/views_import.php';
+require_once __DIR__ . '/lib/views_classify.php';
 
 // 포털 카드 key 는 'ledger'(출장여비 BlueExpense 가 'blueledger'). 로그인 안내에 BlueLedger 이름이 나오게 한다.
 $u = current_portal_user();
@@ -50,6 +51,11 @@ function lg_routes() {
         'inbox_done'    => ['한 번에 가져오기 · 결과', 'lg_page_import_done', 'lg_view_inbox_done', null, 'import'],
         'duplicates'    => ['중복 거래 찾기', 'lg_page_duplicates', 'lg_view_duplicates', 'lg_post_duplicates', 'import'],
         'imports'       => ['가져온 파일별로 보기', 'lg_page_imports', 'lg_view_imports', 'lg_post_imports', 'import'],
+        'classify_groups' => ['분류 · 적요별로 묶어서', 'lg_page_classify_groups', 'lg_view_classify_groups', 'lg_post_classify_groups', 'classify_groups'],
+        'classify'      => ['분류', 'lg_page_classify', 'lg_view_classify', 'lg_post_classify', 'classify_groups'],
+        'categories'    => ['계정과목·규칙 관리', 'lg_page_categories', 'lg_view_categories', 'lg_post_categories', 'classify_groups'],
+        'split'         => ['거래 나누기', 'lg_page_split', 'lg_view_split', 'lg_post_split', 'classify_groups'],
+        'manual'        => ['수기 입력', 'lg_page_manual', 'lg_view_manual', 'lg_post_manual', 'manual'],
         'soon'          => ['준비 중', null, null, null, 'soon'],
         'daybook_xlsx'  => ['', null, null, null, ''],
         'cashbook_xlsx' => ['', null, null, null, ''],
@@ -98,8 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         lg_redirect($back);
     }
     try {
-        [$msgs, $to] = $postFn ? ($p === 'daybook' ? $postFn($_POST, $me, $self) : $postFn($_POST, $me))
-                               : [[['error', '이 화면에서는 저장할 수 없어요.']], $back];
+        [$msgs, $to] = $postFn ? $postFn($_POST, $me, $self) : [[['error', '이 화면에서는 저장할 수 없어요.']], $back];
     } catch (Throwable $e) {
         error_log('[blueledger] ' . $e);
         [$msgs, $to] = [[['error', '저장하지 못했어요: ' . $e->getMessage()]], $back];
@@ -134,6 +139,10 @@ try {
         $body = lg_page($prev, $flashes, lg_view_soon($heading));
     } else {
         $v = $pageFn($_GET, $me);
+        if (isset($v['__redirect'])) {          // 화면 함수가 다른 화면으로 보냄 (예: 나눈 조각 → 원래 거래)
+            lg_flash_add($v['__flash'] ?? []);
+            lg_redirect($v['__redirect']);
+        }
         if ($p === 'today') $heading = '오늘의 출납장 · ' . (int)substr($v['d'], 5, 2) . '월 ' . (int)substr($v['d'], 8, 2) . '일 (' . lg_weekday($v['d']) . ')';
         $body = lg_page($prev, $flashes, $viewFn($v, $me));
     }

@@ -163,6 +163,11 @@ tr.sum td{font-weight:700;background:var(--sum);border-top:1px solid var(--line)
 .subtabs a{padding:8px 14px;font-size:13.5px;font-weight:600;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-1px}
 .subtabs a:hover{color:var(--ink2);text-decoration:none}
 .subtabs a.on{color:var(--ink2);border-bottom-color:var(--accent)}
+/* 계정과목 알약 (숨기기/다시 보이기) */
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip-f{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 4px 3px 12px;font-size:13.5px;background:var(--panel)}
+.chip-f.off{opacity:.5}
+.chip-f .btn{min-height:28px;padding:2px 10px;font-size:12px;border-radius:999px}
 tr.grp td{background:var(--soft);font-weight:700;font-size:13px}
 tr.grp.likely td{background:var(--warn-bg);color:var(--warn-ink)}
 

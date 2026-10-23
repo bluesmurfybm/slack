@@ -134,7 +134,7 @@ const BL_SCHEMA = [
             'category'       => ['VARCHAR(60)',  '',    '계정과목. 빈칸이면 미분류'],
             'memo'           => ['VARCHAR(500)', '',    ''],
             'source_file'    => ['VARCHAR(200)', '',    '가져온 파일 이름 / 수기 입력 / 맞춰보기 조정'],
-            'dedup_key'      => ['VARCHAR(120)', null,  '같은 거래를 두 번 넣지 않기 위한 열쇠'],
+            'dedup_key'      => ['VARCHAR(120) COLLATE utf8mb4_bin', null,  '같은 거래를 두 번 넣지 않기 위한 열쇠(대소문자 구분)'],
             'linked_card_id' => ['INT',          null,  '카드대금 결제로 연결된 카드'],
             'card_no'        => ['VARCHAR(20)',  '',    '카드번호 끝 4자리'],
             'bill_due'       => ['VARCHAR(10)',  '',    '카드 명세서의 결제예정일'],
@@ -212,7 +212,7 @@ const BL_SCHEMA = [
             'receipt'      => ['VARCHAR(10)',  '',    '영수 / 청구'],
             'closed'       => ['VARCHAR(100)', '',    '정산 완료로 닫은 사유'],
             'source_file'  => ['VARCHAR(200)', '',    ''],
-            'dedup_key'    => ['VARCHAR(120)', null,  ''],
+            'dedup_key'    => ['VARCHAR(120) COLLATE utf8mb4_bin', null,  '같은 계산서를 두 번 넣지 않기 위한 열쇠(대소문자 구분)'],
             'created_at'   => ['VARCHAR(19)',  '',    ''],
         ],
         'keys' => ['ix_bll_inv_date' => ['write_date']],
@@ -382,7 +382,10 @@ function bl_ddl(PDO $pdo, $table, array $def) {
     $lines = [];
     foreach ($def['cols'] as $name => [$type, $default, $comment]) {
         if ($sqlite) {
-            $type = preg_match('/INT/', $type) ? 'INTEGER' : (preg_match('/DECIMAL/', $type) ? 'REAL' : 'TEXT');
+            // 대소문자를 가리는 칸(utf8mb4_bin)은 SQLite 에서도 그대로 비교되게 'BINTEXT'(글자 칸, 기본 BINARY 비교)로 —
+            // 로컬 번역기는 TEXT/VARCHAR 에만 NOCASE 를 붙이고 이 이름은 건드리지 않는다
+            $type = str_contains($type, 'utf8mb4_bin') ? 'BINTEXT'
+                  : (preg_match('/INT/', $type) ? 'INTEGER' : (preg_match('/DECIMAL/', $type) ? 'REAL' : 'TEXT'));
         }
         $line = "`$name` $type";
         if ($default === null) $line .= ' NULL';

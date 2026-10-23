@@ -80,14 +80,14 @@ const LG_NAV = [
         ['wallet', '잔액·자금일보', 'cashbook'],
         ['list', '거래 목록', 'transactions'],
         ['upload', '거래 가져오기', 'import'],
+        ['tag', '분류', 'classify_groups'],
+        ['pencil', '수기 입력', 'manual'],
         ['sliders', '기준정보', 'accounts'],
     ],
     'PHP 옮기는 중' => [
-        ['tag', '분류', null],
         ['link', '증빙·정산', null],
         ['lock', '월마감', null],
         ['chart', '보고서', null],
-        ['pencil', '수기 입력', null],
         ['users', '급여대장', null],
     ],
 ];
@@ -213,7 +213,7 @@ function lg_view_home(array $v, array $me, array $flashes) {
       <section class="box">
         <div class="box-h"><h2>이번 주 할 일</h2><a href="<?= h(lg_url('transactions')) ?>">거래 목록 →</a></div>
         <div class="todo-list">
-          <a class="todo" href="<?= h(lg_soon_link('분류')) ?>"><span>미분류 거래 확인</span><span class="tag <?= $v['uncategorized'] ? 'warn' : 'ok' ?>"><?= $v['uncategorized'] ?>건</span></a>
+          <a class="todo" href="<?= h(lg_url('classify_groups')) ?>"><span>미분류 거래 확인</span><span class="tag <?= $v['uncategorized'] ? 'warn' : 'ok' ?>"><?= $v['uncategorized'] ?>건</span></a>
           <a class="todo" href="<?= h(lg_url('transactions')) ?>"><span>이번 달 들어온 거래</span><span class="tag"><?= $v['month_cnt'] ?>건</span></a>
           <a class="todo" href="<?= h(lg_soon_link('증빙·정산')) ?>"><span>미수금 · 미지급금 세금계산서<?= $v['n_check'] ? ' (확인 필요 ' . $v['n_check'] . '건)' : '' ?></span><span class="tag <?= $v['n_open'] ? 'warn' : 'ok' ?>"><?= $v['n_open'] ?>건</span></a>
           <a class="todo" href="<?= h(lg_soon_link('월마감')) ?>"><span><?= h($v['close_label']) ?></span><span class="tag <?= $v['is_closed'] ? 'ok' : 'warn' ?>"><?= $v['is_closed'] ? '마감 완료' : '대기' ?></span></a>
@@ -253,7 +253,7 @@ function lg_view_accounts(array $v, array $me) {
     $cards = array_values(array_filter($accounts, fn($a) => $a['kind'] === '카드'));
     $act = fn($do, $aid) => '<input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="aid" value="' . (int)$aid . '">' . lg_csrf_field();
     ob_start(); ?>
-<div><a class="btn ghost" href="<?= h(lg_soon_link('계정과목·규칙 관리')) ?>">계정과목·규칙 관리 →</a></div>
+<div><a class="btn ghost" href="<?= h(lg_url('categories')) ?>">계정과목·규칙 관리 →</a></div>
 <div class="box">
   <h2>새로 등록</h2>
   <p class="help">거래를 가져오기 전에 통장과 법인카드를 먼저 등록해 주세요. 기초잔액은 엑셀 첫 거래 <b>직전</b>의 통장 잔액이에요. 카드는 0으로 두면 됩니다.</p>
@@ -364,7 +364,7 @@ function lg_view_transactions(array $v, array $me) {
       <td class="num in"><?= lg_won_or_blank($r['amount_in']) ?></td><td class="num out"><?= lg_won_or_blank($r['amount_out']) ?></td>
       <td><?= h($r['category'] ?: '미분류') ?></td>
       <td class="src"><?php if ($r['split_of']): ?>나눈 조각<?php elseif (str_starts_with($r['content'], LG_OVERSEAS_FEE)): ?>카드 해외수수료(자동)<?php elseif ($r['source_file'] === LG_ADJUST): ?>카드대금 맞춰보기 조정<?php elseif ($r['source_file'] === LG_MANUAL): ?>직접 입력<?php else: ?><?= h($r['source_file']) ?><?php endif ?></td>
-      <td><?php if (!$r['linked_card_id'] && !$ceo): ?><a href="<?= h(lg_soon_link('거래 나누기')) ?>" style="font-size:13px">나누기</a><?php endif ?></td></tr><?php endforeach ?>
+      <td><?php if (!$r['linked_card_id'] && !$ceo): ?><a href="<?= h(lg_url('split', ['tid' => $r['id']])) ?>" style="font-size:13px">나누기</a><?php endif ?></td></tr><?php endforeach ?>
   </table></div>
   <?php if (!$ceo): ?>
   <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn danger" type="submit" form="selDel">고른 거래 지우기</button>
@@ -414,7 +414,7 @@ function lg_view_daybook(array $v, array $me) {
         <td class="num out"><?= lg_won_or_blank($r['amount_out']) ?></td>
         <td><input type="hidden" name="tx_id[]" value="<?= $r['id'] ?>">
           <input name="detail_<?= $r['id'] ?>" value="<?= h($r['detail']) ?>" placeholder="예: 직원 점심외식" aria-label="내용" class="cell-in"<?= $ceo ? ' disabled' : '' ?>></td>
-        <td><?php if ((int)$r['parts']): ?><span style="font-size:13px"><?= (int)$r['parts'] + 1 ?>줄로 나눔</span>
+        <td><?php if ((int)$r['parts']): ?><a href="<?= h(lg_url('split', ['tid' => $r['id']])) ?>" style="font-size:13px"><?= (int)$r['parts'] + 1 ?>줄로 나눔</a>
           <?php elseif (in_array($r['category'], [LG_CARD_PAY, LG_CANCELLED], true)): ?><span class="sub-s"><?= h($r['category']) ?></span>
           <?php else: ?><select name="cat_<?= $r['id'] ?>" aria-label="계정과목" class="cell-sel"<?= $ceo ? ' disabled' : '' ?>><option value="">(자동)</option><?= lg_cat_options($v['options'], $r['category']) ?></select><?php endif ?></td>
       </tr>
@@ -492,7 +492,7 @@ function lg_view_today(array $v, array $me) {
       <td><?= h($r['content']) ?><?php if ($r['source_file'] === LG_MANUAL): ?> <span class="badge b-gray" style="font-size:11px">직접 입력</span><?php endif ?><?php if ($r['note']): ?><br><span class="memo">메모: <?= h($r['note']) ?></span><?php endif ?></td>
       <td><input form="saveForm" type="hidden" name="tx_id[]" value="<?= $r['id'] ?>"><input form="saveForm" class="t" name="detail_<?= $r['id'] ?>" value="<?= h($r['detail']) ?>" placeholder="예: 사무실 간식 구매" aria-label="내용"<?= $dis ?>></td>
       <td class="num in"><?= lg_won_or_blank($r['a_in']) ?></td><td class="num out"><?= lg_won_or_blank($r['a_out']) ?></td><td class="num"><?= lg_won($r['bal']) ?></td>
-      <td><?php if ((int)$r['parts']): ?><span style="font-size:12.5px"><?= (int)$r['parts'] + 1 ?>줄로 나눔</span>
+      <td><?php if ((int)$r['parts']): ?><a href="<?= h(lg_url('split', ['tid' => $r['id']])) ?>" style="font-size:12.5px"><?= (int)$r['parts'] + 1 ?>줄로 나눔</a>
         <?php elseif ($r['category'] === LG_CARD_PAY): ?><span class="sub-s"><?= h($r['category']) ?></span>
         <?php else: ?><select form="saveForm" name="cat_<?= $r['id'] ?>" aria-label="계정과목"<?= $dis ?>><option value="">(자동)</option><?= lg_cat_options($v['options'], $r['category']) ?></select><?php endif ?></td>
       <td><?= $ed && $r['source_file'] === LG_MANUAL ? $delForm($r['id']) : '' ?></td>
