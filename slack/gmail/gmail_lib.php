@@ -110,7 +110,8 @@ function gmeta_set($key, $value) { meta_set($key . ':' . gmail_owner(), $value);
 const GMAIL_NO_IMAP_MSG = '서버 PHP 에 imap 확장이 없습니다 — 서버에 php-imap 을 설치하고 웹 서버(Apache/php-fpm)를 재시작하세요.';
 function gmail_imap_ready() { return function_exists('imap_open'); }
 
-function gmail_open() {
+/** @param string|null $mailbox 열 폴더(mUTF-7 이름, 예: gmail_sent_folder()). 비우면 설정의 라벨(기본 받은편지함) */
+function gmail_open($mailbox = null) {
     $g = gmail_cfg();
     if (!gmail_imap_ready()) return [null, GMAIL_NO_IMAP_MSG];   // 'Call to undefined function imap_open()' 대신 원인을 바로
     if (!gmail_configured()) {
@@ -119,7 +120,8 @@ function gmail_open() {
             : 'Gmail 연동 정보가 없습니다. 포털 마이페이지에서 Gmail 주소와 앱 비밀번호를 등록하세요.'];
     }
     $label = $g['label'] ?: 'INBOX';
-    $mb = $g['host'] . (strtoupper($label) === 'INBOX' ? 'INBOX' : imap_utf8_to_mutf7($label));
+    $mb = $g['host'] . ($mailbox !== null && $mailbox !== '' ? $mailbox
+                       : (strtoupper($label) === 'INBOX' ? 'INBOX' : imap_utf8_to_mutf7($label)));
     $im = @imap_open($mb, $g['user'], str_replace(' ', '', (string)$g['pass']), 0, 1);
     return $im ? [$im, null] : [null, 'IMAP 접속 실패: ' . imap_last_error()];
 }

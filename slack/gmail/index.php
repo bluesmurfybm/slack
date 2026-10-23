@@ -73,7 +73,7 @@ function gmail_sent_in_thread($thrid, array $inboxMails) {
         $disp = (string)$r['sender'];
         // 이름 없이 주소만 찍힌 예전 발송분(이 화면에서 보낸 답장 등)은 내 이름을 붙여 Gmail 처럼 표시
         if ($disp !== '' && strpos($disp, '<') === false && $myName !== '') $disp = $myName . ' <' . $disp . '>';
-        $out[] = ['uid' => 0, 'subject' => $r['subject'], 'sender' => $disp, 'udate' => (int)$r['udate'], 'seen' => 1,
+        $out[] = ['uid' => 0, 'suid' => (int)$r['uid'], 'subject' => $r['subject'], 'sender' => $disp, 'udate' => (int)$r['udate'], 'seen' => 1,
                   'body' => (string)$r['body'], 'body_html' => (string)$r['body_html'], 'atts' => $r['atts']];
     }
     return $out;
@@ -85,7 +85,11 @@ if (isset($_GET['att'])) {
     $uid = (int)$_GET['att'];
     $idx = (int)($_GET['i'] ?? 0);
     $name = (string)($_GET['name'] ?? '');
-    [$im, $err] = gmail_open();
+    // &box=sent: 내가 보낸 메일(보낸편지함 사본)의 첨부 — uid 도 보낸편지함 UID 다
+    $sentBox = (($_GET['box'] ?? '') === 'sent');
+    $mbox = $sentBox ? gmail_sent_folder() : null;
+    if ($sentBox && $mbox === '') { http_response_code(404); exit('sent folder not found'); }
+    [$im, $err] = gmail_open($mbox);
     if (!$im) { http_response_code(502); exit('imap fail'); }
     $msgno = imap_msgno($im, $uid);
     if ($msgno < 1) { imap_close($im); http_response_code(404); exit('mail not found'); }
@@ -486,7 +490,7 @@ if (isset($_GET['thread'])) {
         }
         $out = ['ok' => true, 'subject' => $mails ? $mails[0]['subject'] : '', 'mails' => []];
         foreach ($mails as $m) {
-            $out['mails'][] = ['uid' => (int)$m['uid'], 'sender' => $m['sender'],
+            $out['mails'][] = ['uid' => (int)$m['uid'], 'suid' => (int)($m['suid'] ?? 0), 'sender' => $m['sender'],
                 'datef' => $m['udate'] ? date('Y-m-d H:i', $m['udate']) : '',
                 'body' => (string)$m['body'], 'html' => (string)$m['body_html'],
                 'atts' => $m['atts'] ? (json_decode($m['atts'], true) ?: []) : []];
@@ -896,6 +900,16 @@ foreach (['header.css', 'common.css', 'lists.css', 'lists-dti.css'] as $__css): 
   #glb-x { position:fixed; top:16px; right:20px; background:rgba(255,255,255,.14); color:#fff; border:none;
            width:38px; height:38px; border-radius:50%; font-size:17px; cursor:pointer; z-index:2; }
   #glb-x:hover { background:rgba(255,255,255,.3); }
+  /* 넘겨 보기(‹ ›) · 받는 중 표시 · 파일 이름/순서 — 업무 현황판 모달과 같은 구성 */
+  .glb-nav { position:fixed; top:50%; transform:translateY(-50%); z-index:2; width:52px; height:70px; border:none; border-radius:10px;
+             background:rgba(255,255,255,.12); color:#fff; font-size:34px; line-height:1; cursor:pointer; }
+  .glb-nav:hover { background:rgba(255,255,255,.26); }
+  #glb-prev { left:22px; } #glb-next { right:22px; }
+  #glb-load { position:fixed; inset:0; display:none; align-items:center; justify-content:center; color:#e8eaed; font-size:14px;
+              pointer-events:none; text-shadow:0 1px 4px rgba(0,0,0,.8); }
+  #glb-name { color:#e8eaed; font-size:12.5px; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #glb-cnt { color:#9aa0a6; font-size:12px; margin-right:6px; }
+  #glb-cnt:empty { display:none; }
   #glb-bar { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px;
              background:rgba(30,30,30,.85); border-radius:22px; padding:7px 14px; z-index:2; }
   #glb-bar button { background:rgba(255,255,255,.14); color:#fff; border:none; width:30px; height:28px;
@@ -1251,9 +1265,16 @@ function msgContent(m){
   }
   if (m.atts && m.atts.length) {
     const d = document.createElement("div"); d.className = "atts";
+    // 받은 메일 = uid(받은편지함), 내가 보낸 메일 = suid(보낸편지함). 방금 보낸 낙관적 블록은 둘 다 없음 → 링크 생략
+    const attSrc = m.uid ? "?att=" + m.uid : (m.suid ? "?att=" + m.suid + "&box=sent" : "");
+    const IMG_EXT = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
+    const attUrl = (a, i) => attSrc + "&i=" + i + "&name=" + encodeURIComponent(a);
+    // 이 메일의 이미지들 — 모달에서 ‹ › 로 넘겨 본다(업무 현황판 모달과 같게)
+    const imgs = attSrc ? m.atts.map((a, i) => ({name: a, url: attUrl(a, i)}))
+                                .filter(x => IMG_EXT.includes((x.name.split(".").pop() || "").toLowerCase())) : [];
     m.atts.forEach((a, i) => {
       const ext = (a.split(".").pop() || "").toLowerCase();
-      const isImg = ["png", "jpg", "jpeg", "gif", "webp", "bmp"].includes(ext);
+      const isImg = IMG_EXT.includes(ext);
       const p = document.createElement("a"); p.className = "att-pill";
       const ic = document.createElement("span"); ic.className = "pill-ic";
       ic.innerHTML = isImg
@@ -1261,9 +1282,12 @@ function msgContent(m){
         : '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>';
       p.appendChild(ic);
       p.appendChild(document.createTextNode(a));
-      if (m.uid) {                                         // 낙관적(방금 보낸) 블록은 uid 없음 → 링크 생략
-        const url = "?att=" + m.uid + "&i=" + i + "&name=" + encodeURIComponent(a);
-        if (isImg) { p.href = "javascript:void(0)"; p.addEventListener("click", () => glbOpen(url, a)); }   // 이미지 → 모달 확대
+      if (attSrc) {
+        const url = attUrl(a, i);
+        if (isImg) {                                                                                         // 이미지 → 모달(넘겨 보기)
+          p.href = "javascript:void(0)";
+          p.addEventListener("click", () => glbOpen(url, a, imgs, imgs.findIndex(x => x.url === url)));
+        }
         else if (ext === "pdf") { p.href = url; p.target = "_blank"; p.rel = "noopener"; }                  // pdf → 브라우저 뷰어
         else { p.href = url + "&dl=1"; }                                                                    // 기타 → 다운로드
       }
@@ -1595,8 +1619,12 @@ bulkbar.querySelectorAll("button[data-act]").forEach(b => b.addEventListener("cl
 document.body.insertAdjacentHTML("beforeend", `
 <div id="glb">
   <button id="glb-x" title="닫기 (Esc)">✕</button>
+  <button id="glb-prev" class="glb-nav" type="button" title="이전 (←)">‹</button>
+  <button id="glb-next" class="glb-nav" type="button" title="다음 (→)">›</button>
+  <div id="glb-load">불러오는 중…</div>
   <img id="glb-img" alt="">
   <div id="glb-bar">
+    <span id="glb-name"></span><span id="glb-cnt"></span>
     <button data-z="out" title="축소">−</button><span id="glb-zv">100%</span><button data-z="in" title="확대">＋</button>
     <button data-z="reset" title="원래 크기">⤢</button>
     <a id="glb-dl" href="#" download title="저장">⬇ 저장</a>
@@ -1609,18 +1637,45 @@ function glbApply(){
   document.getElementById("glb-zv").textContent = Math.round(gz * 100) + "%";
   glbImg.classList.toggle("zoomed", gz > 1);
 }
-function glbOpen(src, name){
-  gz = 1; gx = 0; gy = 0; glbApply();
-  glbImg.src = src;
+/* 여러 장이면 ‹ › / ← → 로 넘긴다(업무 현황판 모달과 같게). list = [{url, name}], 없으면 한 장만 */
+let glbList = [], glbIdx = 0;
+const glbLoad = document.getElementById("glb-load");
+function glbShow(i){
+  const it = glbList[i];
+  if (!it) return;
+  glbIdx = i; gz = 1; gx = 0; gy = 0; glbApply();
+  // 큰 이미지(첨부는 수 MB)는 받는 동안 빈 화면이라 '안 뜬다' 로 보였다 → 받는 중/실패를 보여 준다
+  glbLoad.textContent = "불러오는 중…"; glbLoad.style.display = "flex";
+  glbImg.style.visibility = "hidden";
+  glbImg.onload = () => { if (glbList[glbIdx] === it) { glbLoad.style.display = "none"; glbImg.style.visibility = ""; } };
+  glbImg.onerror = () => { if (glbList[glbIdx] === it) glbLoad.textContent = "이미지를 불러오지 못했습니다 — ⬇ 저장으로 내려받아 보세요"; };
+  glbImg.src = it.url;
   const dl = document.getElementById("glb-dl");
-  dl.href = src.startsWith("?") ? src + "&dl=1" : src;     // 첨부 URL 이면 다운로드 모드로
-  dl.setAttribute("download", name || "image");
-  glb.classList.add("open");
+  dl.href = it.url.startsWith("?") ? it.url + "&dl=1" : it.url;   // 첨부 URL 이면 다운로드 모드로
+  dl.setAttribute("download", it.name || "image");
+  document.getElementById("glb-name").textContent = it.name || "";
+  document.getElementById("glb-cnt").textContent = glbList.length > 1 ? (i + 1) + " / " + glbList.length : "";
+  const many = glbList.length > 1;
+  document.getElementById("glb-prev").style.display = many ? "" : "none";
+  document.getElementById("glb-next").style.display = many ? "" : "none";
 }
-function glbClose(){ glb.classList.remove("open"); glbImg.removeAttribute("src"); }
+function glbOpen(src, name, list, idx){
+  glbList = (list && list.length) ? list : [{url: src, name: name}];
+  glb.classList.add("open");
+  glbShow(list && list.length && idx >= 0 ? idx : 0);
+}
+function glbStep(d){ if (glbList.length > 1) glbShow((glbIdx + d + glbList.length) % glbList.length); }
+function glbClose(){ glb.classList.remove("open"); glbImg.onload = glbImg.onerror = null; glbImg.removeAttribute("src"); glbLoad.style.display = "none"; }
 glb.addEventListener("click", e => { if (e.target === glb) glbClose(); });
 document.getElementById("glb-x").addEventListener("click", glbClose);
-document.addEventListener("keydown", e => { if (e.key === "Escape") glbClose(); });
+document.getElementById("glb-prev").addEventListener("click", e => { e.stopPropagation(); glbStep(-1); });
+document.getElementById("glb-next").addEventListener("click", e => { e.stopPropagation(); glbStep(1); });
+document.addEventListener("keydown", e => {
+  if (!glb.classList.contains("open")) return;
+  if (e.key === "Escape") glbClose();
+  else if (e.key === "ArrowLeft") glbStep(-1);
+  else if (e.key === "ArrowRight") glbStep(1);
+});
 document.querySelectorAll("#glb-bar button[data-z]").forEach(b => b.addEventListener("click", () => {
   const m = b.dataset.z;
   if (m === "reset") { gz = 1; } else gz = Math.min(8, Math.max(1, gz * (m === "in" ? 1.25 : 0.8)));
