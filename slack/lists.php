@@ -3,6 +3,9 @@ $__bwCurrent = 'slack';
 require_once __DIR__ . '/auth.php';
 require_login();
 $me = current_user();
+// Gmail 탭은 마이페이지에 Gmail 주소·앱 비밀번호를 등록한 사람만 쓸 수 있다
+$__pu = current_portal_user();
+$gmailReady = $__pu && !empty($__pu['gmail_user']) && !empty($__pu['gmail_pass_enc']);
 session_release();   // 세션 잠금 즉시 해제(서브 AJAX 동시요청 경합 방지)
 $cfg = require __DIR__ . '/../config.php';
 $listUrl = $cfg['list_url'] ?? '';
@@ -25,10 +28,10 @@ header('Pragma: no-cache');
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="styles/header.css">
-<link rel="stylesheet" href="styles/common.css">
-<link rel="stylesheet" href="styles/lists.css">
-<link rel="stylesheet" href="styles/lists-dti.css">   <!-- dti(BlueMagazine) 디자인 레이어 -->
+<link rel="stylesheet" href="styles/header.css?v=<?= filemtime(__DIR__ . '/styles/header.css') ?>">
+<link rel="stylesheet" href="styles/common.css?v=<?= filemtime(__DIR__ . '/styles/common.css') ?>">
+<link rel="stylesheet" href="styles/lists.css?v=<?= filemtime(__DIR__ . '/styles/lists.css') ?>">
+<link rel="stylesheet" href="styles/lists-dti.css?v=<?= filemtime(__DIR__ . '/styles/lists-dti.css') ?>">   <!-- dti(BlueMagazine) 디자인 레이어 -->
 </head>
 <body>
 <?php include __DIR__ . '/header.php'; ?>
@@ -62,6 +65,8 @@ header('Pragma: no-cache');
   </div>
   <div class="toolbar">
     <div class="btabs" id="btabs"></div>
+    <!-- Gmail 탭: 업무 탭(전체/유비온/와이오즈)과 묶지 않은 별도 버튼. 누르면 Gmail 페이지로 -->
+    <button type="button" id="gmailTab" class="gtab<?= $gmailReady ? '' : ' off' ?>" title="<?= $gmailReady ? 'Gmail 받은편지함' : 'Gmail 미등록 — 마이페이지에서 등록' ?>"<?= $gmailReady ? '' : ' aria-disabled="true"' ?>><svg class="gtab-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Gmail</span><span class="btab-n" id="gmailCnt" hidden></span></button>
     <span class="who"><?= htmlspecialchars($me['name'], ENT_QUOTES) ?> 님</span>
     <span class="search-wrap"><input id="search" type="text" placeholder="검색…"><button id="searchClear" type="button" class="search-x" hidden title="검색 지우기">✕</button></span>
     <div class="ms" id="msPriority"></div>
@@ -169,6 +174,7 @@ header('Pragma: no-cache');
 const LIST_URL = <?= json_encode($listUrl) ?>;
 const ME = <?= json_encode($me['name']) ?>;   // 낙관적 댓글 표시용 본인 이름
 const ME_ID = <?= json_encode($me['id'] ?? '') ?>;   // 사용자별 로컬 저장 키용
+const GMAIL_READY = <?= $gmailReady ? 'true' : 'false' ?>;   // 마이페이지에 Gmail 을 등록했는지
 let SCHOOLS = null;   // schools.php(DB)에서 최초 조회 후 캐시
 const PALETTE = {
   "등록":            {bg:"#eef0f2", fg:"#555c66"},
@@ -1255,6 +1261,32 @@ function updateSelUI(items){
 }
 
 /* 상단 리스트 탭 (전체/블루소프트/와이오즈) */
+/* ===== Gmail 탭 — 업무 탭과 별개인 버튼. 누르면 Gmail 페이지(gmail/ = gmail/index.php)로 간다.
+   Gmail 페이지는 이 화면과 같은 머리말(제목·업무 탭·Gmail 탭)을 갖고, 업무 탭을 누르면 그 보드로 돌아온다(?board=).
+   예전엔 이 화면 안에 Gmail 화면을 끼워 넣었는데, 주소가 늘 lists.php 라 새로고침·뒤로가기·페이지 이동이 어긋나고
+   Gmail 만 볼 때도 업무 목록 데이터를 계속 받아서 별도 페이지로 바꿨다.
+   배지 = 안 읽은 대화 수(Gmail 받은편지함 숫자와 같은 기준). ===== */
+let gmailPollTimer = null;
+async function pollGmailUnread(){
+  clearTimeout(gmailPollTimer);
+  const el = document.getElementById("gmailCnt");
+  try{
+    const j = await (await fetch("gmail/index.php?ping=1&unread=1", {cache:"no-store"})).json();
+    const n = (j && j.ok && j.configured) ? (j.unread || 0) : 0;
+    el.textContent = n > 999 ? "999+" : String(n);
+    el.hidden = n <= 0;
+  }catch(e){ /* 배지는 부가 정보 — 실패하면 다음 주기에 */ }
+  gmailPollTimer = setTimeout(pollGmailUnread, 60000);
+}
+document.getElementById("gmailTab").addEventListener("click", ()=>{
+  if(!GMAIL_READY){
+    alert("Gmail 연동 정보가 없습니다.\n마이페이지에서 Gmail 주소와 앱 비밀번호를 등록하면 사용할 수 있습니다.\n\n확인을 누르면 마이페이지로 이동합니다.");
+    location.href = "../index.php?view=profile&focus=gmail";
+    return;
+  }
+  location.href = "gmail/";
+});
+
 function renderBTabs(){
   const box0 = document.getElementById("btabs");
   if(archivedMode){ if(box0) box0.style.display="none"; return; }   // 보관은 전부 유비온 → 탭 숨김
@@ -2361,9 +2393,15 @@ document.getElementById("smSearch").addEventListener("input", smRender);
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !document.getElementById("schoolModal").hidden) smClose(); });
 
 restoreFilters();  // 새로고침 전 필터 복원 (localStorage)
+(function(){       // Gmail 페이지의 업무 탭에서 넘어온 경우(?board=) — 그 보드를 선택하고 주소는 깔끔하게
+  const qb = new URLSearchParams(location.search).get("board");
+  if(qb && ["all","블루소프트","와이오즈"].includes(qb)){ fboardTab = qb; saveFilters(); }
+  if(qb !== null) history.replaceState(null, "", location.pathname);
+})();
 document.getElementById("searchClear").hidden = !document.getElementById("search").value;   // 복원된 검색어 있으면 ✕ 표시
 restoreView();     // 미지정 분할/숨김 보기 토글 상태 복원
 buildAllMS();      // 헤더 다중선택 필터 생성 — 복원된 선택값 반영
+if(GMAIL_READY) pollGmailUnread();   // 미등록이면 안 읽은 수를 묻지 않는다
 initPresets();     // 필터 세트(프리셋) 드롭다운 초기화
 syncFiltersFromServer();   // DB(사용자별) 필터 선택 반영 → 브라우저 바뀌어도 유지
 if(archivedMode) loadArchived(0); else load();   // 보관 보기 상태면 보관 목록으로 시작

@@ -23,8 +23,10 @@ if (!function_exists('add_column_if_missing')) {
     }
 }
 
-function db() {
+/** @param bool $reconnect 새로 접속 — 상시 도는 CLI 데몬이 MySQL 에 끊긴 연결(wait_timeout)을 버릴 때 */
+function db($reconnect = false) {
     static $pdo = null;
+    if ($reconnect) $pdo = null;
     if ($pdo) return $pdo;
 
     $cfg = require __DIR__ . '/../config.php';

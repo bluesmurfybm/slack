@@ -34,6 +34,51 @@ function expand_thread_uids($pdo, $acct, array $uids) {
     return array_values(array_unique($uids));
 }
 
+/** 대화의 보낸편지함 사본 — 내가 보낸/전달한 메일. 동기화는 받은편지함만 읽으므로 여기서 합쳐야
+ *  Gmail 대화 화면과 같아진다. 목록은 gmail_sent(동기화가 채우는 보낸편지함 캐시)에서 바로 읽고,
+ *  본문이 아직 없는 것만 Gmail 에서 받아 캐시한다 — 열 때마다 받으면 한 통에 수 초라 대화 하나에 30초가 넘었다.
+ *  받은편지함에도 있는 사본(나에게 보낸 메일·나를 참조한 메일)은 Gmail 에서 같은 메일이라 같은 대화에서 시각(초)까지 같다
+ *  → 그걸로 거른다(목록 건수 쿼리와 같은 기준).
+ *  uid=0 으로 돌려준다 → 화면은 받은편지함 uid 로 하는 동작(첨부 링크·읽음·답장 대상)을 건너뛴다. */
+function gmail_sent_in_thread($thrid, array $inboxMails) {
+    if (!$thrid) return [];
+    $pdo = db();
+    $acct = gmail_owner();
+    $q = $pdo->prepare("SELECT uid, udate, subject, sender, body, body_html, atts FROM gmail_sent
+                        WHERE account = ? AND thrid = ? ORDER BY udate DESC LIMIT 50");   // 안전 상한(비정상적으로 긴 대화)
+    $q->execute([$acct, $thrid]);
+    $rows = $q->fetchAll(PDO::FETCH_ASSOC);
+    if (!$rows) return [];
+    $inboxAt = [];
+    foreach ($inboxMails as $m) $inboxAt[(int)$m['udate']] = 1;
+    $rows = array_values(array_filter($rows, fn($r) => !isset($inboxAt[(int)$r['udate']])));
+    $need = array_filter($rows, fn($r) => $r['body_html'] === null);
+    if ($need) {                                           // 아직 본문을 안 받은 것만 — 보낸편지함 1연결로
+        $g = gmail_cfg();
+        $mb = gmail_sent_folder();
+        $im = $mb !== '' ? @imap_open($g['host'] . $mb, $g['user'], str_replace(' ', '', (string)$g['pass']), OP_READONLY, 1) : false;
+        if ($im) {
+            try {
+                foreach ($rows as &$r) if ($r['body_html'] === null) $r = array_merge($r, gmail_sent_fill($im, $pdo, $acct, $r['uid']));
+                unset($r);
+            } finally {
+                imap_close($im);
+            }
+        }
+    }
+    $myName = gmail_display_name();
+    $out = [];
+    foreach ($rows as $r) {
+        if ($r['body_html'] === null) continue;            // 이번엔 못 받았다(접속 실패) — 다음에 다시
+        $disp = (string)$r['sender'];
+        // 이름 없이 주소만 찍힌 예전 발송분(이 화면에서 보낸 답장 등)은 내 이름을 붙여 Gmail 처럼 표시
+        if ($disp !== '' && strpos($disp, '<') === false && $myName !== '') $disp = $myName . ' <' . $disp . '>';
+        $out[] = ['uid' => 0, 'subject' => $r['subject'], 'sender' => $disp, 'udate' => (int)$r['udate'], 'seen' => 1,
+                  'body' => (string)$r['body'], 'body_html' => (string)$r['body_html'], 'atts' => $r['atts']];
+    }
+    return $out;
+}
+
 /* ---------- 첨부파일 스트리밍: ?att=<uid>&i=<idx>&name=&dl=1 ----------
    첨부는 이름만 DB 에 있으므로 바이트는 IMAP 파트에서 즉시 받아 전달. */
 if (isset($_GET['att'])) {
@@ -62,6 +107,36 @@ if (isset($_GET['att'])) {
     exit;
 }
 
+/** 답장 받는사람/참조 — Gmail 과 같은 규칙. $h = imap_headerinfo() 결과, $me = 내 Gmail 주소(소문자).
+ *  - 남이 보낸 메일: 답장 = 보낸사람(Reply-To 우선) / 전체답장 = + 원본 받는사람, 원본 참조는 참조로
+ *  - 내가 보낸 메일(보낸편지함): 답장·전체답장 모두 원본 받는사람에게 — 보낸사람(나)을 빼고 나면
+ *    받는사람이 비어 버려 작성창이 '불러오는 중…' 빈칸으로 남던 문제
+ *  - 그래도 아무도 안 남으면(나에게만 보낸 메일 등) 보낸사람에게 */
+function reply_recipients($h, $me, $mode) {
+    $collect = function ($arr) {                           // 주소 객체 → 소문자 이메일
+        $out = [];
+        foreach ((array)$arr as $a) {
+            if (empty($a->mailbox) || empty($a->host)) continue;
+            $out[] = strtolower($a->mailbox . '@' . $a->host);
+        }
+        return array_values(array_unique($out));
+    };
+    $notMe = fn($list) => array_values(array_filter($list, fn($e) => $e !== $me));
+    $from   = $collect($h->from ?? []);
+    $fromMe = in_array($me, $from, true);
+    $origTo = $notMe($collect($h->to ?? []));
+    $origCc = $notMe($collect($h->cc ?? []));
+    $to = $fromMe ? $origTo : $notMe($collect(!empty($h->reply_to) ? $h->reply_to : ($h->from ?? [])));
+    $cc = [];
+    if ($mode === 'all') {
+        if (!$fromMe) $to = array_values(array_unique(array_merge($to, $origTo)));
+        $cc = array_values(array_diff($origCc, $to));
+    }
+    if (!$to && $cc) { $to = $cc; $cc = []; }
+    if (!$to) $to = $from ?: ($me !== '' ? [$me] : []);
+    return [$to, $cc];
+}
+
 /** 답장 대상 계산: 원본 헤더에서 to/cc/제목/스레드 연결 헤더 도출 */
 function reply_targets($uid, $mode) {
     [$im, $err] = gmail_open();
@@ -71,23 +146,7 @@ function reply_targets($uid, $mode) {
     $h = imap_headerinfo($im, $msgno);
     $rawH = imap_fetchheader($im, $msgno);
     imap_close($im);
-    $me = gmail_owner();
-    $collect = function ($arr) use ($me) {                 // 주소 객체 → 소문자 이메일(본인 제외)
-        $out = [];
-        foreach ((array)$arr as $a) {
-            if (empty($a->mailbox) || empty($a->host)) continue;
-            $e = strtolower($a->mailbox . '@' . $a->host);
-            if ($e !== $me) $out[] = $e;
-        }
-        return array_values(array_unique($out));
-    };
-    $to = $collect(!empty($h->reply_to) ? $h->reply_to : ($h->from ?? []));   // 답장: 보낸사람(reply-to 우선)
-    $cc = [];
-    if ($mode === 'all') {                                 // 전체답장: 원본 To 합류, Cc 유지
-        $to = array_values(array_unique(array_merge($to, $collect($h->to ?? []))));
-        $cc = array_values(array_diff($collect($h->cc ?? []), $to));
-    }
-    if (!$to && $cc) { $to = $cc; $cc = []; }
+    [$to, $cc] = reply_recipients($h, gmail_owner(), $mode);
     $subjO = gmail_dec_header($h->subject ?? '');
     $subject = preg_match('/^\s*re\s*:/i', $subjO) ? $subjO : 'Re: ' . $subjO;
     // Gmail 스레드 연결 헤더 (In-Reply-To / References)
@@ -157,11 +216,106 @@ if (isset($_GET['reply']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
 /* ---------- 실시간 ping: ?ping=1 — DB 조회만(밀리초). 감시 데몬이 갱신한 변경 마커 확인 ---------- */
 if (isset($_GET['ping'])) {
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
+    $res = [
         'ok' => true,
         'changed' => (int)gmeta_get('gmail_changed_at', 0),
         'sync_age' => time() - (int)strtotime((string)gmeta_get('gmail_last_sync', '2000-01-01')),
-    ]);
+    ];
+    // &unread=1: 안 읽은 대화 수 — 업무 현황판의 Gmail 탭 배지(Gmail 받은편지함 숫자와 같은 기준: 대화 단위)
+    if (isset($_GET['unread'])) {
+        $res['configured'] = gmail_configured();
+        $q = $pdo->prepare("SELECT COUNT(DISTINCT COALESCE(NULLIF(thrid,0), uid)) FROM gmail_mails WHERE account = ? AND seen = 0");
+        $q->execute([gmail_owner()]);
+        $res['unread'] = (int)$q->fetchColumn();
+    }
+    echo json_encode($res);
+    exit;
+}
+
+/* ---------- 보낸 사람 사진: POST ?avatars=1 {people:[{email,name}]} → {map:{email:url|''}} ----------
+   Gmail 사진은 Google 계정 프로필이라 IMAP(앱 비밀번호)으로는 못 받는다 → Slack 프로필 사진으로 대신한다.
+   찾는 순서: ① 이메일(users.lookupByEmail — Slack 앱에 users:read.email 권한이 있을 때)
+              ② 이름: 워크스페이스 사용자 목록 → 업무 리스트 요청자·담당자(Slack Connect 외부 사용자)
+   동명이인이거나 사진을 안 올린 사람은 '' → 화면은 이니셜 그대로. 결과는 서버(전원 공용)에 캐시. */
+function avatar_img($user) {                               // 직접 올린 사진만 (기본 그림은 이니셜이 낫다)
+    $p = $user['profile'] ?? [];
+    $img = (string)($p['image_72'] ?? '');
+    $custom = isset($p['is_custom_image']) ? (bool)$p['is_custom_image'] : (strpos($img, 'gravatar.com') === false);
+    return ($img !== '' && $custom) ? $img : '';
+}
+function avatar_norm($s) { return preg_replace('/\s+/u', '', mb_strtolower(trim((string)$s))); }
+/** 이름 → 사진. 사용자 목록 색인은 12시간마다 새로, 목록에 없는 이름은 업무 리스트의 Slack ID 로 한 명씩 */
+function avatar_by_name($name, $tok, array &$cache, $pdo) {
+    $n = avatar_norm($name);
+    if ($n === '') return '';
+    if (empty($cache['names']['t']) || time() - $cache['names']['t'] > 12 * 3600) {
+        $map = []; $cursor = null; $pages = 0;
+        do {
+            $p = ['limit' => 200]; if ($cursor) $p['cursor'] = $cursor;
+            $r = slackGet('users.list', $tok, $p);
+            if (empty($r['ok'])) break;
+            foreach ($r['members'] ?? [] as $m) {
+                if (!empty($m['deleted']) || !empty($m['is_bot'])) continue;
+                $img = avatar_img($m);
+                foreach (array_unique(array_filter([$m['real_name'] ?? '', $m['profile']['real_name'] ?? '', $m['profile']['display_name'] ?? ''])) as $nm) {
+                    $k = avatar_norm($nm);
+                    $map[$k] = (isset($map[$k]) && $map[$k] !== $img) ? '*' : $img;   // '*' = 동명이인
+                }
+            }
+            $cursor = $r['response_metadata']['next_cursor'] ?? null;
+        } while ($cursor && ++$pages < 20);
+        $cache['names'] = ['t' => time(), 'map' => $map];
+    }
+    $map = &$cache['names']['map'];
+    if (!array_key_exists($n, $map)) {                     // 외부(Slack Connect) 사용자는 사용자 목록에 안 나온다
+        $ids = [];
+        foreach ($pdo->query("SELECT req_id, req, asg_id, asg FROM requests") as $r) {
+            if ($r['req_id'] && avatar_norm($r['req']) === $n) $ids[$r['req_id']] = 1;
+            $ai = $r['asg_id'] ? explode(',', $r['asg_id']) : [];
+            $an = explode(',', (string)$r['asg']);
+            foreach ($ai as $k => $id) if (isset($an[$k]) && avatar_norm($an[$k]) === $n) $ids[$id] = 1;
+        }
+        $map[$n] = '';
+        if (count($ids) === 1) {
+            $u = slackGet('users.info', $tok, ['user' => array_key_first($ids)]);
+            if (!empty($u['ok'])) $map[$n] = avatar_img($u['user']);
+        } elseif (count($ids) > 1) {
+            $map[$n] = '*';
+        }
+    }
+    return $map[$n] === '*' ? '' : $map[$n];
+}
+if (isset($_GET['avatars']) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json; charset=utf-8');
+    $tok = (string)current_token();
+    $in = json_decode(file_get_contents('php://input'), true) ?: [];
+    $people = array_slice((array)($in['people'] ?? []), 0, 30);
+    $file = slack_cache_path('gmail_avatars.json');
+    $cache = is_file($file) ? (json_decode((string)file_get_contents($file), true) ?: []) : [];
+    $out = []; $dirty = false;
+    $until = microtime(true) + 6;                          // 새로 찾는 데 쓰는 시간 상한 — 못 한 건 다음에 열 때
+    foreach ($people as $p) {
+        $e = strtolower(trim((string)($p['email'] ?? '')));
+        if ($e === '' || !filter_var($e, FILTER_VALIDATE_EMAIL)) continue;
+        $c = $cache['e'][$e] ?? null;
+        if ($c && time() - (int)$c['t'] < ($c['u'] !== '' ? 86400 : 6 * 3600)) { $out[$e] = $c['u']; continue; }
+        if ($tok === '' || microtime(true) > $until) continue;
+        $url = null;                                       // null = 이메일로는 못 찾음 → 이름으로
+        if (time() - (int)($cache['noscope'] ?? 0) > 3600) {
+            $r = slackGet('users.lookupByEmail', $tok, ['email' => $e]);
+            if (!empty($r['ok'])) $url = avatar_img($r['user']);
+            elseif (($r['error'] ?? '') === 'missing_scope') $cache['noscope'] = time();   // 권한 없음 — 1시간 뒤 다시
+        }
+        if ($url === null) $url = avatar_by_name((string)($p['name'] ?? ''), $tok, $cache, $pdo);
+        $cache['e'][$e] = ['u' => $url, 't' => time()];
+        $out[$e] = $url;
+        $dirty = true;
+    }
+    if ($dirty) {
+        $tmp = $file . '.' . getmypid();
+        if (@file_put_contents($tmp, json_encode($cache, JSON_UNESCAPED_UNICODE)) !== false) @rename($tmp, $file);
+    }
+    echo json_encode(['ok' => true, 'map' => (object)$out], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -324,6 +478,12 @@ if (isset($_GET['thread'])) {
                 imap_close($im);
             } elseif ($needB) { echo json_encode(['ok' => false, 'error' => $err]); exit; }
         }
+        // 내가 보낸/전달한 메일(보낸편지함 사본)도 대화에 넣어 시간순으로 — Gmail 대화 화면과 같게
+        if ($thrid) {
+            try { $mails = array_merge($mails, gmail_sent_in_thread($thrid, $mails)); }
+            catch (Throwable $e) { /* 실패해도 받은 메일은 그대로 보여 준다 */ }
+            usort($mails, fn($a, $b) => (int)$a['udate'] <=> (int)$b['udate']);
+        }
         $out = ['ok' => true, 'subject' => $mails ? $mails[0]['subject'] : '', 'mails' => []];
         foreach ($mails as $m) {
             $out['mails'][] = ['uid' => (int)$m['uid'], 'sender' => $m['sender'],
@@ -387,7 +547,7 @@ if ($nRaw === 'def') { $nRaw = ''; setcookie('gm_n', '', time() - 3600, '/'); }
 elseif ($nRaw !== '') setcookie('gm_n', $nRaw, time() + 86400 * 365, '/');
 $showAll = ($nRaw === 'all');
 $perPage = $showAll ? PHP_INT_MAX
-         : ((int)$nRaw > 0 ? min(2000, (int)$nRaw) : max(1, (int)($g['limit'] ?: 30)));
+         : ((int)$nRaw > 0 ? min(2000, (int)$nRaw) : max(1, (int)($g['limit'] ?: 50)));
 $page        = max(0, (int)($_GET['p'] ?? 1) - 1);         // URL 은 1기준, 내부는 0기준
 /* 안읽음 우선: ?unread=1|0. 미지정 시 쿠키(마지막 선택값) 기억 */
 $unreadParam = $_GET['unread'] ?? null;
@@ -422,12 +582,16 @@ $q->execute(array_merge([$acct], $fp));
 $unreadCnt = (int)$q->fetchColumn();
 $pages     = max(1, (int)ceil($count / $perPage));
 if ($page > $pages - 1) $page = $pages - 1;
-$order = $unreadFirst ? "(x.unread > 0) DESC, x.last_udate DESC" : "x.last_udate DESC";
+// 최신 활동 = 받은 메일과 내가 보낸 답장 중 가장 늦은 것 (Gmail 은 내 답장도 대화 날짜·순서에 반영)
+$lastAct = "GREATEST(x.last_udate, COALESCE(sc.slast, 0))";
+$order = $unreadFirst ? "(x.unread > 0) DESC, $lastAct DESC" : "$lastAct DESC";
 $pdo->exec("SET SESSION group_concat_max_len = 8192");     // 참여자 목록 잘림 방지
 // 대표 = 처음 보낸 원본 메일(제목·본문), 날짜/정렬 = 대화의 최신 활동 시각 (Gmail 동일)
+// 대화 수 = 받은 메일 + 내가 보낸 메일(gmail_sent) — Gmail 대화 화면의 건수와 같게
 $st = $pdo->prepare("
-    SELECT m.uid, m.subject, m.sender, m.body, m.labels, x.cnt, x.unread, x.senders, x.has_att, x.starred,
-           x.last_udate AS udate,
+    SELECT m.uid, m.subject, m.sender, m.body, m.labels, x.cnt + COALESCE(sc.scnt, 0) AS cnt, COALESCE(sc.scnt, 0) AS scnt,
+           x.unread, x.senders, x.has_att, x.starred,
+           $lastAct AS udate,
            CASE WHEN x.unread > 0 THEN 0 ELSE 1 END AS seen
     FROM (
         SELECT $G AS g, COUNT(*) AS cnt, SUM(seen = 0) AS unread, MAX(udate) AS last_udate,
@@ -439,10 +603,21 @@ $st = $pdo->prepare("
     ) x
     JOIN gmail_mails m
       ON m.account = ? AND CONCAT(LPAD(m.udate, 10, '0'), LPAD(m.uid, 10, '0')) = x.mk
+    LEFT JOIN (SELECT s.thrid, COUNT(*) AS scnt, MAX(s.udate) AS slast
+               FROM gmail_sent s
+               WHERE s.account = ? AND s.thrid IS NOT NULL
+                 -- 나에게 보낸/나를 참조한 메일은 받은편지함에도 같은 메일(같은 대화·같은 시각)이 있다 → 두 번 세지 않게
+                 AND NOT EXISTS (SELECT 1 FROM gmail_mails i WHERE i.account = s.account AND i.thrid = s.thrid AND i.udate = s.udate)
+               GROUP BY s.thrid) sc
+      ON sc.thrid = x.g
     ORDER BY $order
     LIMIT " . (int)$perPage . " OFFSET " . (int)($page * $perPage));
-$st->execute(array_merge([$acct], $fp, [$acct]));
+$st->execute(array_merge([$acct], $fp, [$acct, $acct]));
 $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+foreach ($rows as &$r) {                                   // 내가 답장한 대화는 참여자에 '나' (Gmail: "신중혁, 나")
+    if ((int)$r['scnt'] > 0) $r['senders'] .= '||나';
+}
+unset($r);
 
 $lastSync = gmeta_get('gmail_last_sync', '없음');
 $backfillLeft = (int)gmeta_get('gmail_backfill_next', '-1');   // -1=아직 시작 안 함, 0=완료
@@ -505,9 +680,12 @@ function label_color($name) {
 }
 /** 대화 참여자 표시: 시간순 고유 이름, 3명 초과면 처음 2명 + … + 마지막 */
 function participants($senders) {
+    $me = gmail_owner();
     $names = [];
     foreach (explode('||', (string)$senders) as $s) {
-        $n = sender_name($s);
+        // 내 주소는 Gmail 처럼 '나' 로 (받은편지함의 '나에게 보낸 메일' + 보낸편지함 몫이 '유병문, 나' 로 겹치지 않게)
+        $n = (preg_match('/<\s*([^>]+?)\s*>/', $s, $em) ? strcasecmp($em[1], $me) === 0 : strcasecmp(trim($s), $me) === 0)
+            ? '나' : sender_name($s);
         if ($n !== '' && !in_array($n, $names)) $names[] = $n;
     }
     if (count($names) > 3) return implode(', ', array_slice($names, 0, 2)) . ' … ' . end($names);
@@ -563,16 +741,20 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
 }
 ?>
 <!doctype html>
-<html lang="ko"><head>
+<html lang="ko" class="light wh"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gmail 가져오기 테스트</title>
+<title>Gmail · Coursemos WorkHub</title>
 <link rel="icon" type="image/svg+xml" href="../../styles/favicons/slack.svg">
 <?php require_once __DIR__ . '/../../core/pwa.php'; echo pwa_head_tags('../../'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="../styles/header.css">
+<?php /* 업무 현황판(lists.php)과 같은 CSS — 머리말(제목·업무 탭·Gmail 탭)이 똑같이 보이게. 수정 시각으로 캐시 무효화.
+         이 페이지는 다크 모드를 아직 지원하지 않아 html.light 로 밝은 색에 고정한다. */
+foreach (['header.css', 'common.css', 'lists.css', 'lists-dti.css'] as $__css): ?>
+<link rel="stylesheet" href="../styles/<?= $__css ?>?v=<?= filemtime(__DIR__ . '/../styles/' . $__css) ?>">
+<?php endforeach; ?>
 <style>
   :root { --line:#e0e3e7; --hint:#8a9099; --bg2:#f6f8fc; --read:#f2f6fc; --ink:#1f1f1f; --sub:#5f6368; }
   * { box-sizing:border-box; }
@@ -667,6 +849,7 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
   .msg.collapsed .det-who .snippet { display:block; }
   .det-av { flex:none; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
             color:#fff; font-weight:700; font-size:13px; }
+  .det-av img { width:100%; height:100%; border-radius:50%; object-fit:cover; display:block; }   /* Slack 프로필 사진(있으면 이니셜 대신) */
   .det-who b { color:#202124; }
   .det-who .em { color:#5f6368; font-size:12px; margin-left:4px; }
   .det-date { font-size:12px; color:#5f6368; }
@@ -743,8 +926,103 @@ function rows_html($rows, $unreadFirst, $unreadCnt) {
   .pager .cur { color:#202124; background:#e8f0fe; border-color:#1a73e8; font-weight:600; }
   .pager form { display:inline-flex; gap:4px; align-items:center; }
   .pager input { width:64px; padding:5px; border:1px solid var(--line); border-radius:6px; text-align:center; }
+
+  /* ===== 업무 현황판 디자인(html.wh) — 현황판(slack/styles/lists-dti.css)과 같은 룩.
+     구조·기능은 원래 Gmail 화면 그대로, 겉모양만 맞춘다. 위의 원래 규칙을 덮어쓴다. ===== */
+  html.wh { --page:#f2f9ff; --line:#e0e3e5; --line2:#eeeff0; --line3:#d3d6d9; --hint:#899199;
+               --cos50:#0075f8; --cos45:#0069e1; --cos40:#005dc8; --cos95:#e5f1ff; --ctl-h:32px; }
+  html.wh body { font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,'Malgun Gothic',sans-serif;
+                    background:var(--page); color:#161819; letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
+  html.wh header { position:static; background:var(--page); border:none; box-shadow:none; padding:0 0 10px; gap:6px; flex-wrap:wrap; }
+  html.wh header h1 { display:none; }
+  html.wh .hsearch { flex:0 1 260px; max-width:none; }
+  html.wh .hsearch input { height:var(--ctl-h); padding:0 28px 0 30px; border:1px solid var(--line3); border-radius:8px;
+    font:12.5px/1 inherit; font-family:inherit; color:#161819;
+    background:#fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23899199' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E") no-repeat 10px center / 14px; }
+  html.wh .hsearch input:focus { border-color:var(--cos50); box-shadow:0 0 0 3px var(--cos95); background-color:#fff; }
+  /* 브라우저가 type=search 에 붙이는 지우기(✖)는 숨긴다 — 검색 해제는 오른쪽 ✕(다른 필터 유지)가 맡는다. 둘이 겹쳐 보였다 */
+  html.wh .hsearch input::-webkit-search-cancel-button { -webkit-appearance:none; appearance:none; display:none; }
+  html.wh .hsearch input::-ms-clear { display:none; }
+  html.wh .hsearch .hclear { right:9px; color:#899199; font-size:12px; }
+  html.wh .hsearch .hclear:hover { color:#161819; }
+  html.wh .hsearch .hclear[hidden] { display:none; }
+  html.wh header .meta { font-size:12.5px; color:var(--hint); margin-right:auto; }
+  html.wh header .toggle { height:var(--ctl-h); display:inline-flex; align-items:center; padding:0 10px; border:1px solid var(--line3);
+    border-radius:8px; background:#fff; color:#2c2f32; font-family:inherit; font-size:12.5px; font-weight:600; }
+  html.wh header select.toggle { appearance:none; -webkit-appearance:none; padding-right:28px; cursor:pointer;
+    background:#fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236d767e' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center / 12px; }
+  html.wh header .toggle:hover { background-color:#f5f5f5; border-color:#c4c8cc; }
+  html.wh header .toggle.on { color:var(--cos40); border-color:var(--cos50); background-color:var(--cos95); }
+  html.wh .wrap { max-width:none; padding:0 0 24px; }
+  html.wh #syncbar { margin:0 0 10px; border:1px solid #f3e2b3; border-radius:10px; }
+  /* 목록 판 = 현황판 목록 판(.listbox) */
+  html.wh .maillist { border-color:var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(22,24,25,.05); }
+  html.wh .sect { padding:11px 18px; background:#f4f7fd; color:#0f2a55; font-size:12.5px; font-weight:600; border-bottom-color:var(--line); }
+  html.wh .sect b { color:var(--cos50); }
+  html.wh .mail { border-bottom-color:var(--line2); }
+  /* 행 = 현황판 행: 흰 바탕, 안읽음은 왼쪽 파란 띠 + 진한 글자, 읽음은 회색 */
+  html.wh .mail-h { padding:11px 18px; gap:12px; background:#fff; transition:background .12s ease; }
+  html.wh .mail-h:hover { box-shadow:none; background:#fafafa; }
+  html.wh .mail.unread .mail-h { box-shadow:inset 3px 0 0 var(--cos50); }
+  html.wh .mail-h .dot { display:none; }
+  html.wh .mail-h .rchk { width:16px; height:16px; accent-color:var(--cos50); }
+  html.wh .mail-h .sender { width:170px; font-size:12.5px; font-weight:500; color:#41474b; }
+  html.wh .mail-h .sender .cnt { font-size:11.5px; color:var(--hint); }
+  html.wh .mail-h .subj { font-size:14.5px; letter-spacing:-.015em; color:#575e64; }
+  html.wh .mail-h .subj .snip { font-size:12.5px; color:var(--hint); }
+  html.wh .mail-h .date { width:80px; font-size:12.5px; color:var(--hint); }
+  html.wh .mail.unread .sender { font-weight:600; color:#161819; }
+  html.wh .mail.unread .subj { font-weight:500; color:#161819; }
+  html.wh .mail.unread .date { font-weight:600; color:#161819; }
+  html.wh .lchip { border-radius:6px; font-size:11.5px; font-weight:700; padding:2px 8px; letter-spacing:0; }
+  /* 펼친 대화 = 현황판 펼친 행 */
+  html.wh .mail.open { margin:0; border:none; border-radius:0; box-shadow:inset 3px 0 0 var(--cos50); }
+  html.wh .mail.open .mail-h { background:#f5f9ff; }
+  html.wh .mail-b { border-top-color:var(--line2); }
+  html.wh .det-subj { font-size:18px; font-weight:700; letter-spacing:-.02em; color:#161819; }
+  html.wh .exp-all, html.wh .reply-btn, html.wh .compose .c-cancel { border-radius:8px; border-color:var(--line3);
+    font-family:inherit; font-weight:600; font-size:12.5px; }
+  html.wh .exp-all:hover, html.wh .reply-btn:hover { background:var(--cos95); color:var(--cos40); border-color:var(--cos50); }
+  html.wh .compose .c-send { background:var(--cos50); border-radius:8px; font-family:inherit; font-weight:600; font-size:12.5px; }
+  html.wh .compose .c-send:hover { background:var(--cos45); }
+  html.wh .compose .c-row input, html.wh .compose textarea { font-family:inherit; border-color:var(--line3); border-radius:8px; }
+  html.wh .compose .c-row input:focus, html.wh .compose textarea:focus { border-color:var(--cos50); box-shadow:0 0 0 3px var(--cos95); }
+  html.wh .chip { border-radius:6px; background:var(--cos95); color:var(--cos40); }
+  html.wh .chip button { color:var(--cos40); }
+  html.wh .att-pill { border-radius:8px; border-color:var(--line3); }
+  html.wh .labels select { border-color:var(--line3); border-radius:6px; font-family:inherit; }
+  /* 페이저 = 현황판 버튼 */
+  html.wh .pager a, html.wh .pager span.cur, html.wh .pager .disabled { height:var(--ctl-h); display:inline-flex; align-items:center;
+    padding:0 12px; border-radius:8px; border-color:var(--line3); font-size:12.5px; font-weight:600; color:#41474b; }
+  html.wh .pager a:hover { background:var(--cos95); border-color:var(--cos50); color:var(--cos40); }
+  /* 현재 쪽: 위 규칙(span.cur 까지 묶은 글자색)보다 구체적이어야 흰 글씨가 이긴다 — 파란 바탕에 검은 글씨로 보였다 */
+  html.wh .pager span.cur { background:var(--cos50); border-color:var(--cos50); color:#fff; }
+  /* 이동할 수 없는 처음·이전·다음·끝: 버튼 모양은 그대로 두고 비활성으로만(흐린 글자·옅은 바탕) */
+  html.wh .pager span.disabled { color:#b4b9be; border:1px solid var(--line2); background:#f7f8f9; cursor:not-allowed; }
+  html.wh .empty { background:#fff; border:1px solid var(--line); border-radius:16px; color:var(--hint); }
+  /* 현황판 머리말(제목·시계·업무 탭·Gmail 탭)을 감싸는 판 — 현황판 .wrap 과 같은 폭·여백 */
+  .wh-wrap { width:100%; max-width:1600px; margin:0 auto; padding:16px 22px 60px; }
+  html.wh .wh-wrap #clock { margin-right:auto; }               /* 현황판의 동기화 점(#daemonDot) 대신 시계가 오른쪽 버튼을 민다 */
+  /* 현황판 CSS(common/lists.css)의 전역 규칙이 이 화면 요소에 번지는 것 막기 */
+  html.wh header .meta { display:block; margin:0 auto 0 0; }  /* common.css .meta(상세 메타 줄) */
+  html.wh .chip button { height:auto; padding:0; border:none; background:none; }   /* lists.css input,button{height:32px} */
+  html.wh .labels select { height:26px; padding:0 26px 0 8px; background-position:right 7px center; }
+  html.wh .atts { margin-top:0; }                              /* lists.css .atts(현황판 첨부) */
 </style></head><body>
 <?php include __DIR__ . '/../header.php'; ?>
+<?php if (!gmail_configured()): /* 사용자별 연동 — 등록 전에는 목록 대신 안내만 (공용 계정으로 대신 붙지 않음) */ ?>
+<div style="max-width:560px;margin:64px auto;padding:30px 32px;background:#fff;border:1px solid #e0e3e5;border-radius:14px;
+            text-align:center;font-size:14px;line-height:1.75;color:#41474b;box-shadow:0 1px 2px rgba(22,24,25,.05)">
+  <div style="font-size:30px;margin-bottom:6px">📧</div>
+  <div style="font-size:17px;font-weight:700;color:#161819;margin-bottom:6px">Gmail 연동이 필요합니다</div>
+  포털 마이페이지에서 <b>Gmail 주소</b>와 <b>Google 앱 비밀번호</b>를 등록하면 본인 메일함이 여기에 표시됩니다.
+  <div style="margin-top:18px">
+    <a href="<?= e($__bwBase) ?>../index.php?view=profile" target="_top"
+       style="display:inline-block;padding:10px 20px;border-radius:8px;background:#0075f8;color:#fff;font-weight:600;text-decoration:none">마이페이지에서 등록하기</a>
+  </div>
+</div>
+</body></html>
+<?php exit; endif; ?>
 <?php
 // 토글 링크 생성: 현재 필터 유지 + 일부만 변경 (p 는 1 로 리셋)
 $mkUrl = function (array $over) use ($keepArr) {
@@ -752,20 +1030,47 @@ $mkUrl = function (array $over) use ($keepArr) {
     return '?p=1' . ($qs ? '&' . http_build_query($qs) : '');
 };
 ?>
+<?php
+// 업무 현황판(lists.php)과 같은 머리말 — 업무 탭은 현황판의 그 보드로(?board=), Gmail 탭은 지금 화면.
+// 건수는 현황판 탭과 같은 기준(보관 제외 전체), Gmail 숫자 = 안 읽은 대화 수(받은편지함 숫자와 같은 기준).
+$boardCnt = ['all' => 0];
+foreach ($pdo->query("SELECT board, COUNT(*) AS n FROM requests WHERE archived = 0 GROUP BY board") as $__r) {
+    $boardCnt[$__r['board']] = (int)$__r['n'];
+    $boardCnt['all'] += (int)$__r['n'];
+}
+$__q = $pdo->prepare("SELECT COUNT(DISTINCT COALESCE(NULLIF(thrid,0), uid)) FROM gmail_mails WHERE account = ? AND seen = 0");
+$__q->execute([gmail_owner()]);
+$gmailUnread = (int)$__q->fetchColumn();
+?>
+<div class="wh-wrap">
+  <div class="head">
+    <h1>Coursemos WorkHub</h1>
+    <span id="clock" title="현재 시각"></span>
+  </div>
+  <div class="toolbar">
+    <div class="btabs">
+      <?php foreach ([['all', '전체'], ['블루소프트', '유비온'], ['와이오즈', '와이오즈']] as [$__v, $__l]): ?>
+      <a class="btab" data-b="<?= e($__v) ?>" href="../lists.php?board=<?= rawurlencode($__v) ?>"><?= e($__l) ?> <span class="btab-n"><?= (int)($boardCnt[$__v] ?? 0) ?></span></a>
+      <?php endforeach; ?>
+    </div>
+    <a id="gmailTab" class="gtab on" href="./" title="Gmail 받은편지함"><svg class="gtab-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Gmail</span><span class="btab-n" id="gmailCnt"<?= $gmailUnread > 0 ? '' : ' hidden' ?>><?= $gmailUnread > 999 ? '999+' : $gmailUnread ?></span></a>
+    <!-- 검색: 현황판처럼 탭 줄 오른쪽 (Gmail 탭이 margin-right:auto 로 밀어 준다) -->
+    <form class="hsearch" method="get">
+      <?php foreach ($keepArr as $k => $v) if ($k !== 'q') echo '<input type="hidden" name="' . e($k) . '" value="' . e($v) . '">'; ?>
+      <input type="search" name="q" value="<?= e($qF) ?>" placeholder="메일 검색 (제목·보낸사람·본문)">
+      <?php /* ✕ 는 항상 두고 글자가 있을 때만 보인다(아래 스크립트) — 검색 중이면 검색 해제(다른 필터 유지), 입력만 했으면 글자만 지움 */ ?>
+      <a class="hclear" href="<?= e($mkUrl(['q' => null])) ?>" title="검색 지우기" data-active="<?= $qF !== '' ? '1' : '0' ?>"<?= $qF !== '' ? '' : ' hidden' ?>>✕</a>
+    </form>
+  </div>
 <header>
   <h1>📧 Gmail</h1>
-  <form class="hsearch" method="get">
-    <?php foreach ($keepArr as $k => $v) if ($k !== 'q') echo '<input type="hidden" name="' . e($k) . '" value="' . e($v) . '">'; ?>
-    <input type="search" name="q" value="<?= e($qF) ?>" placeholder="메일 검색 (제목·보낸사람·본문)">
-    <?php if ($qF !== ''): ?><a class="hclear" href="<?= e($mkUrl(['q' => null])) ?>" title="검색 지우기">✕</a><?php endif; ?>
-  </form>
   <span class="meta">
     <?= number_format($count) ?>개 중 <?= number_format($from) ?>–<?= number_format($to) ?>
     · 동기화 <?= e(substr((string)$lastSync, 11, 5) ?: $lastSync) ?>
   </span>
   <select id="psel" class="toggle<?= $nRaw !== '' ? ' on' : '' ?>" title="페이지당 표시 개수">
-    <option value="">개수: 기본(<?= (int)($g['limit'] ?: 30) ?>)</option>
-    <?php foreach ([50, 100, 200, 300, 400, 500, 1000] as $nOpt): ?>
+    <option value="">개수: 기본(<?= (int)($g['limit'] ?: 50) ?>)</option>
+    <?php foreach ([100, 200, 300, 400, 500, 1000] as $nOpt): /* 50 = 기본과 같아 뺀다 */ ?>
     <option value="<?= $nOpt ?>"<?= (int)$nRaw === $nOpt ? ' selected' : '' ?>><?= $nOpt ?>개</option>
     <?php endforeach; ?>
     <option value="all"<?= $showAll ? ' selected' : '' ?>>모두</option>
@@ -797,19 +1102,84 @@ document.getElementById("psel").addEventListener("change", function(){
 <?php if (!$rows): ?>
   <div class="empty"><?= $count === 0 ? '메일 수집 전입니다 — 백그라운드 동기화가 곧 시작됩니다…' : '표시할 메일이 없습니다.' ?></div>
 <?php else: ?>
-  <?= pager_html($pg) ?>
   <div class="maillist">
   <?= rows_html($rows, $unreadFirst, $unreadCnt) ?>
   </div>
   <?= pager_html($pg) ?>
 <?php endif; ?>
 </div>
+</div><!-- /.wh-wrap -->
+<script>
+/* 현황판과 같은 머리말: 시계(1초 갱신) + Gmail 안 읽은 수(30초 — 대화를 읽으면 줄어든다) */
+(function(){
+  const p2 = n => (n < 10 ? "0" : "") + n, D = ["일","월","화","수","목","금","토"];
+  const clock = document.getElementById("clock");
+  const tick = () => {
+    const d = new Date();
+    clock.textContent = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate())
+                      + " (" + D[d.getDay()] + ") " + p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds());
+  };
+  tick(); setInterval(tick, 1000);
+  // 검색칸 ✕ — 글자가 있으면 보인다. 검색 중(data-active=1)이면 링크대로 검색 해제, 입력만 했으면 글자만 지운다
+  const sf = document.querySelector(".hsearch");
+  if (sf) {
+    const inp = sf.querySelector('input[name="q"]'), x = sf.querySelector(".hclear");
+    const sync = () => { x.hidden = inp.value === "" && x.dataset.active !== "1"; };
+    inp.addEventListener("input", sync);
+    x.addEventListener("click", e => {
+      if (x.dataset.active === "1") return;
+      e.preventDefault(); inp.value = ""; sync(); inp.focus();
+    });
+    sync();
+  }
+  const cnt = document.getElementById("gmailCnt");
+  setInterval(async () => {
+    try {
+      const j = await (await fetch("?ping=1&unread=1", {cache: "no-store"})).json();
+      if (j && j.ok) { const n = j.unread || 0; cnt.textContent = n > 999 ? "999+" : String(n); cnt.hidden = n <= 0; }
+    } catch (e) { /* 다음 주기에 */ }
+  }, 30000);
+})();
+</script>
 <script>
 /* ---- 본문 lazy 로드 (DB 캐시 → 최초 1회만 IMAP) — Gmail 식 읽기 화면 ---- */
 function avColor(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return `hsl(${h%360} 55% 55%)`; }
 function senderParts(full){
   const m = full.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>\s*$/);
   return m ? {name:(m[1].trim()||m[2]), email:m[2]} : {name:full, email:""};
+}
+/* ---- 보낸 사람 사진 — 서버(?avatars=1)가 Slack 프로필 사진을 이메일(권한 없으면 이름)로 찾아 준다.
+   대화를 먼저 그리고 나중에 이니셜 자리에 끼우므로 화면이 사진을 기다리지 않는다.
+   결과는 브라우저에도 보관(사진 있음 하루 / 없음 6시간) — 다시 열 때는 묻지 않는다. ---- */
+const AV_KEY = "gmail_avatars_v1";
+let avMem = {}; try { avMem = JSON.parse(localStorage.getItem(AV_KEY) || "{}") || {}; } catch (e) { avMem = {}; }
+let avWait = [], avTimer = null;
+function avApply(el, url){
+  if (!url) return;
+  const img = new Image(); img.alt = "";
+  img.onload = () => { el.textContent = ""; el.style.background = "none"; el.appendChild(img); };   // 못 받으면 이니셜 그대로
+  img.src = url;
+}
+function avRequest(el, email, name){
+  email = (email || "").toLowerCase();
+  if (!email) return;
+  const c = avMem[email];
+  if (c && Date.now() - c.t < (c.u ? 86400000 : 21600000)) { avApply(el, c.u); return; }
+  avWait.push({el, email, name});
+  clearTimeout(avTimer); avTimer = setTimeout(avFlush, 0);   // 한 대화의 보낸 사람들을 한 번에
+}
+async function avFlush(){
+  const batch = avWait; avWait = [];
+  const people = [...new Map(batch.map(p => [p.email, {email: p.email, name: p.name}])).values()];
+  if (!people.length) return;
+  try {
+    const j = await (await fetch("?avatars=1", {method: "POST", headers: {"Content-Type": "application/json"},
+                                                 body: JSON.stringify({people})})).json();
+    if (!j.ok) return;
+    for (const p of people) if (p.email in j.map) avMem[p.email] = {u: j.map[p.email] || "", t: Date.now()};
+    try { localStorage.setItem(AV_KEY, JSON.stringify(avMem)); } catch (e) {}
+    batch.forEach(p => { const c = avMem[p.email]; if (c) avApply(p.el, c.u); });
+  } catch (e) { /* 사진은 부가 기능 — 실패하면 이니셜 그대로 */ }
 }
 /* plain 텍스트에서 인용 시작점 찾기: ">" 줄, "...wrote:", "...님이 작성:" 등 */
 function splitQuotedText(text){
@@ -910,6 +1280,7 @@ function buildMsg(m, expanded){
   const meta = document.createElement("div"); meta.className = "det-meta";
   const av = document.createElement("span"); av.className = "det-av";
   av.style.background = avColor(sp.name); av.textContent = (sp.name || "?").charAt(0).toUpperCase();
+  avRequest(av, sp.email, sp.name);
   const who = document.createElement("div"); who.className = "det-who";
   const nm = document.createElement("b"); nm.textContent = sp.name;
   who.appendChild(nm);
@@ -953,12 +1324,19 @@ function openCompose(body, foot, lastMail, mode){
   const toInp = mkRow("받는사람", "불러오는 중…");
   const ccInp = mkRow("참조", "");
   (async () => {
+    // 성공·실패와 상관없이 '불러오는 중…' 안내는 반드시 걷어 낸다 (응답이 비어도, 안 와도)
+    let ph = "받는사람 이메일 (쉼표로 여러 명)";
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 20000);     // IMAP 이 늦어도 20초 뒤엔 직접 입력할 수 있게
     try {
-      const j = await (await fetch("?replyinfo=" + lastMail.uid + "&mode=" + mode)).json();
-      if (j.ok) { toInp.value = j.to.join(", "); ccInp.value = j.cc.join(", "); }
-      else { toInp.placeholder = "(수신자 계산 실패 — 직접 입력)"; }
-    } catch (e) { toInp.placeholder = "(수신자 계산 실패 — 직접 입력)"; }
+      const j = await (await fetch("?replyinfo=" + lastMail.uid + "&mode=" + mode, {signal: ac.signal})).json();
+      if (j.ok) { toInp.value = (j.to || []).join(", "); ccInp.value = (j.cc || []).join(", "); }
+      else ph = "(수신자 계산 실패 — 직접 입력)" + (j.error ? ": " + j.error : "");
+    } catch (e) { ph = "(수신자 계산 실패 — 직접 입력)"; }
+    clearTimeout(timer);
+    toInp.placeholder = ph; ccInp.placeholder = "참조 (선택)";
     toInp.disabled = false; ccInp.disabled = false;
+    if (!toInp.value) toInp.focus();
   })();
   const ta = document.createElement("textarea"); ta.placeholder = "답장 내용을 입력하세요…";
   c.appendChild(ta);
@@ -1039,8 +1417,9 @@ function buildThread(mail, body, j){
   }
   body.appendChild(h);
   boxes.forEach(b => body.appendChild(b));
-  // 답장/전체답장 (대상: 대화의 마지막 메일 — Gmail 동일)
-  const last = j.mails[j.mails.length - 1];
+  // 답장/전체답장 대상: 대화의 마지막 '받은' 메일. 보낸편지함 사본(uid 0)은 받은편지함에 없어 답장 헤더를 못 읽는다.
+  // 마지막이 내 답장이어도 상대에게 가는 건 같다(내 답장의 받는사람 = 그 사람).
+  const last = [...j.mails].reverse().find(m => m.uid) || j.mails[j.mails.length - 1];
   const foot = document.createElement("div"); foot.className = "reply-bar";
   const ICONS = {                                          // Gmail 스타일 reply / reply_all
     reply: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-10z"/></svg>',

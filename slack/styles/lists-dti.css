@@ -18,6 +18,7 @@
   --panel-head:#f4f7fd;      /* 판 머리말 띠 */
   --panel-ttl:#0f2a55;
   --ring:0 0 0 3px var(--cos95);
+  --ctl-h:32px;              /* 헤더(아이콘 줄·탭·검색·필터) 컨트롤 높이 — 여기 하나만 바꾸면 된다 */
   --shadow-sm:0 1px 2px rgba(22,24,25,.05);
   --shadow-pop:0 1px 2px rgba(16,35,90,.05), 0 12px 32px -14px rgba(16,35,90,.32);
   --shadow-lg:0 12px 32px rgba(22,24,25,.14);
@@ -55,7 +56,7 @@ body {
 .wrap { padding:16px 22px 80px; }
 
 /* ---------- 페이지 머리말 (dti .brand h1) ---------- */
-.head { margin-bottom:0; gap:10px; align-items:center; }
+.head { margin-bottom:0; gap:8px; align-items:center; }
 .head h1 { font-family:'Space Grotesk',Pretendard,system-ui,sans-serif; font-size:21px; font-weight:700;
            letter-spacing:-.02em; color:var(--txt); gap:10px; }
 .head h1 .badge { font-family:Pretendard,system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0;
@@ -67,7 +68,7 @@ input,button,select,textarea { border-color:var(--line3); background:var(--card)
 button { font-weight:600; transition:background .15s ease,border-color .15s ease,color .15s ease; }
 input:focus, select:focus, textarea:focus { outline:none; border-color:var(--cos50); box-shadow:var(--ring); }
 /* 높이·hover 는 툴바/헤더/선택바 컨트롤에만 — 라이트박스·댓글·칩 버튼은 각자 모양 유지 */
-.toolbar input, .toolbar select, .toolbar > button, .iconbar button { height:38px; padding:0 12px; }
+.toolbar input, .toolbar select, .toolbar > button, .iconbar button { height:var(--ctl-h); padding:0 10px; font-size:12.5px; }
 .toolbar > button, .iconbar button, .sel-actions button, .arch-bar button, .pw-row button, .links button { color:#41474b; }
 html.dark .toolbar > button, html.dark .iconbar button, html.dark .sel-actions button,
 html.dark .arch-bar button, html.dark .pw-row button, html.dark .links button { color:var(--txt); }
@@ -84,8 +85,9 @@ select { appearance:none; -webkit-appearance:none; padding-right:30px; cursor:po
   background-repeat:no-repeat; background-position:right 9px center; background-size:14px; }
 
 /* 헤더 아이콘 버튼 */
-.iconbar button, .iconbar .ddBtn { height:38px; min-width:38px; padding:0 9px; border-radius:8px; }
-.iconbar .txtbtn { padding:0 13px; font-size:13px; }
+.iconbar button, .iconbar .ddBtn { height:var(--ctl-h); min-width:var(--ctl-h); padding:0 7px; border-radius:8px; font-size:13.5px; }
+.iconbar .txtbtn { padding:0 10px; font-size:12.5px; }
+.head .filters { gap:6px; }
 .iconbar .cnt { color:var(--cos50); }
 .iconbar .primary .cnt { color:#fff; }
 .dueBtn.on { background:#fbebed !important; border-color:#f04438 !important; }
@@ -115,23 +117,23 @@ html.dark #toggleHidden:not(.primary) { color:var(--muted); }
 .ddmenu a:hover { background:var(--cos95); color:var(--cos40); }
 
 /* ---------- 툴바 ---------- */
-.toolbar { gap:8px; padding:10px 0 12px; margin-bottom:0; }
-.who { font-size:13px; font-weight:600; color:var(--muted); }
+.toolbar { gap:6px; padding:8px 0 10px; margin-bottom:0; }
+.who { font-size:12.5px; font-weight:600; color:var(--muted); }
 
 /* 리스트 탭 — 흰 묶음 안의 세그먼트. 보드마다 색을 달리해 한눈에 구분
    (전체=남색, 유비온=파랑, 와이오즈=초록 — 목록의 U/W 표식 색과 같은 계열)
    선택 탭은 연한 보드색 바탕 + 진한 글자, 강조는 숫자 배지(진한 보드색)가 맡는다 */
-.btabs { gap:3px; padding:3px; background:var(--card); border:1px solid var(--line); border-radius:11px; box-shadow:var(--shadow-sm); flex:none; }
+.btabs { gap:2px; padding:2px; background:var(--card); border:1px solid var(--line); border-radius:11px; box-shadow:var(--shadow-sm); flex:none; }
 .btab { --tab-soft:#e8eef8; --tab-ring:#cdd8ec; --tab-ink:#0f2a55; --tab-solid:#0f2a55;
-        height:34px; padding:0 13px; border:none; border-radius:8px; background:transparent; color:#41474b;
-        font-size:13.5px; font-weight:600; gap:7px; }
+        height:calc(var(--ctl-h) - 6px); padding:0 11px; border:none; border-radius:7px; background:transparent; color:#41474b;
+        font-size:12.5px; font-weight:600; gap:6px; }
 .btab[data-b="블루소프트"] { --tab-soft:#e5f1ff; --tab-ring:#c4ddff; --tab-ink:#0052af; --tab-solid:#0069e1; }
 .btab[data-b="와이오즈"]   { --tab-soft:#e4faf0; --tab-ring:#bdeed5; --tab-ink:#146b43; --tab-solid:#188351; }
 .btab:hover { background:var(--bg2); color:var(--txt); border-color:transparent; }
 .btab.on, .btab.on:hover { background:var(--tab-soft); color:var(--tab-ink); border-color:transparent;
                            box-shadow:inset 0 0 0 1px var(--tab-ring); font-weight:700; }
 /* 숫자: 평소엔 연한 보드색, 선택되면 진한 보드색으로 채움 */
-.btab-n { font-size:11px; font-weight:700; background:var(--tab-soft); color:var(--tab-ink); border-radius:999px; padding:1px 7px;
+.btab-n { font-size:10.5px; font-weight:700; background:var(--tab-soft); color:var(--tab-ink); border-radius:999px; padding:0 6px;
           font-variant-numeric:tabular-nums; }
 .btab.on .btab-n { background:var(--tab-solid); color:#fff; }
 html.dark .btab { --tab-soft:#1f2b42; --tab-ring:#2f3f60; --tab-ink:#c9dcff; --tab-solid:#3a5c9e; color:var(--muted); }
@@ -145,21 +147,43 @@ html.dark .btab.on { color:var(--tab-ink); }
   :root:not(.light) .btab.on { color:var(--tab-ink); }
 }
 
+/* ---------- Gmail 탭 — 업무 탭 묶음과 떨어진 별도 버튼(높이는 탭 묶음과 같게). 선택 = Gmail 빨강 계열 ---------- */
+.btabs { margin:0; }                                         /* lists.css 의 margin-right:auto 는 Gmail 버튼이 대신 맡는다 */
+.gtab { --tab-soft:#fdecea; --tab-ring:#f5c6c1; --tab-ink:#b3261e; --tab-solid:#d93025;
+        height:var(--ctl-h); padding:0 12px; margin:0 auto 0 4px; gap:6px; flex:none;
+        border:1px solid var(--line); border-radius:11px; background:var(--card); box-shadow:var(--shadow-sm);
+        color:#41474b; font-size:12.5px; font-weight:600; }
+.gtab .gtab-ic { flex:none; color:#d93025; }
+.gtab:hover { background:var(--bg2); }
+.gtab.on, .gtab.on:hover { background:var(--tab-soft); color:var(--tab-ink); border-color:var(--tab-ring); font-weight:700; }
+.gtab.on .btab-n { background:var(--tab-solid); color:#fff; }
+.gtab.off { opacity:.55; }                                   /* Gmail 미등록 — 누르면 마이페이지 안내 */
+.gtab.off .gtab-ic { color:var(--muted); }
+.gtab.off:hover { background:var(--card); }
+html.dark .gtab { --tab-soft:#3a1d1b; --tab-ring:#5c2a26; --tab-ink:#ffb4a9; color:var(--muted); }
+html.dark .gtab.on { color:var(--tab-ink); }
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .gtab { --tab-soft:#3a1d1b; --tab-ring:#5c2a26; --tab-ink:#ffb4a9; color:var(--muted); }
+  :root:not(.light) .gtab.on { color:var(--tab-ink); }
+}
+/* 업무 탭·Gmail 탭을 링크(<a>)로 쓰는 곳(Gmail 페이지 머리말)도 버튼과 똑같이 */
+a.btab, a.gtab { display:inline-flex; align-items:center; text-decoration:none; cursor:pointer; }
+
 /* 검색 (dti .search — 돋보기 아이콘은 배경 이미지로) */
-.search-wrap input { width:200px; height:38px; padding:0 28px 0 34px; font-size:13.5px;
+.search-wrap input { width:180px; height:var(--ctl-h); padding:0 26px 0 30px; font-size:12.5px;
   background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23899199' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E");
-  background-repeat:no-repeat; background-position:11px center; background-size:16px; }
+  background-repeat:no-repeat; background-position:10px center; background-size:14px; }
 .search-wrap input::placeholder { color:var(--hint); }
-.search-x { right:8px; width:18px; height:18px; background:#c4c8cc; color:#fff; }
+.search-x { right:7px; width:16px; height:16px; background:#c4c8cc; color:#fff; }
 
 /* 다중선택 필터 버튼 (dti .filters select 모양) */
-.ms-btn { height:38px; padding:0 12px; border-color:var(--line3); border-radius:8px; background:var(--card);
-          color:#2c2f32; font-size:13px; font-weight:600; gap:4px; }
+.ms-btn { height:var(--ctl-h); padding:0 10px; border-color:var(--line3); border-radius:8px; background:var(--card);
+          color:#2c2f32; font-size:12.5px; font-weight:600; gap:4px; }
 html.dark .ms-btn { color:var(--txt); }
 @media (prefers-color-scheme: dark) { :root:not(.light) .ms-btn { color:var(--txt); } }
 .ms-btn.active { border-color:var(--cos50); color:var(--cos40); background:var(--cos95); }
 .ms-n { background:var(--cos50); border-radius:999px; font-weight:700; padding:0 6px; }
-.ms-menu { top:44px; padding:6px; min-width:190px; }
+.ms-menu { top:calc(var(--ctl-h) + 6px); padding:6px; min-width:190px; }
 .ms-item { padding:7px 9px; border-radius:8px; }
 .ms-item:hover { background:var(--cos95); }
 .ms-item input { width:16px; height:16px; accent-color:var(--cos50); box-shadow:none; }
@@ -167,7 +191,7 @@ html.dark .ms-btn { color:var(--txt); }
 #reset { font-size:13px; color:var(--muted); }
 
 /* 설정 팝오버 */
-.preset-toggle { height:38px; width:38px; padding:0; border-radius:8px; }
+.preset-toggle { height:var(--ctl-h); width:var(--ctl-h); padding:0; border-radius:8px; }
 .preset-toggle.on { border-color:var(--cos50); color:var(--cos50); background:var(--cos95); }
 .preset-box .preset-wrap { top:calc(100% + 8px); border-color:var(--line); border-radius:14px; box-shadow:var(--shadow-pop); }
 .pw-head { background:var(--panel-head); color:var(--panel-ttl); border-bottom-color:var(--line); padding:12px 16px; }
