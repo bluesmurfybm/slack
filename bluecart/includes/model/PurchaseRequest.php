@@ -499,6 +499,7 @@ final class PurchaseRequest
                     break;
 
                 case 'cancel':
+                case 'stop':
                     bc_query(
                         'UPDATE bc_request SET status = ?, closed_at = NOW() WHERE id = ?',
                         [$to, $id]
@@ -510,7 +511,7 @@ final class PurchaseRequest
         self::log($id, $def['event'], $from, $to, $user, $comment ?: null);
 
         $updated = self::find($id);
-        Notifier::dispatch($def['event'], $updated, $user, $comment);
+        Notifier::dispatch($def['event'], $updated, $user, $comment, $from);
 
         return $updated;
     }

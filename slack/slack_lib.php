@@ -4,6 +4,31 @@
  *  - sync.php (DB 적재) 및 auth.php (로그인 검증)에서 공용으로 사용
  */
 
+/**
+ * 런타임 파일(동기화 잠금·API 캐시) 폴더 — 시스템 임시 폴더 대신 앱 안의 한 곳(slack/.cache).
+ *  웹(Apache)과 CLI(감시 데몬)가 같은 잠금·캐시를 봐야 하는데 시스템 임시 폴더는 둘이 다르다
+ *  (Windows: C:\Windows\Temp ↔ 사용자 Temp / Linux: apache 의 PrivateTmp=/tmp 격리).
+ *  다르면 잠금이 안 걸려 데몬과 브라우저 동기화가 동시에 돌고, 캐시도 따로 쌓인다.
+ *  폴더를 못 만들거나 쓸 수 없으면 예전 위치(시스템 임시 폴더)로 물러난다.
+ */
+function slack_runtime_dir() {
+    static $d = null;
+    if ($d !== null) return $d;
+    $d = __DIR__ . '/.cache';
+    if (!is_dir($d)) @mkdir($d, 0775, true);
+    if (is_dir($d) && !is_file($d . '/.htaccess')) @file_put_contents($d . '/.htaccess', "Require all denied\n");   // 웹으로 직접 못 받게
+    if (!is_dir($d) || !is_writable($d)) $d = sys_get_temp_dir();
+    return $d;
+}
+
+/** 런타임 폴더 안의 캐시 파일 경로. 예전 위치(시스템 임시 폴더)에 같은 캐시가 있으면 한 번 이어받는다. */
+function slack_cache_path($name) {
+    $p = slack_runtime_dir() . '/' . $name;
+    $old = sys_get_temp_dir() . '/' . $name;
+    if (!is_file($p) && $old !== $p && is_file($old)) @copy($old, $p);
+    return $p;
+}
+
 const SLACK_COL = [
     'title'    => 'Col084M59NZLH',
     'momo'     => 'Col08CPRJ4NTG',
@@ -12,6 +37,7 @@ const SLACK_COL = [
     'status'   => 'Col08CPRG76J2',   // 진행상태 (등록/공수산정요청/진행중/확인요청.../완료 등)
     'priority' => 'Col08CFU29FLP',   // 우선순위 (일반/긴급)
     'team'     => 'Col08CWBVM0E7',   // 개발담당팀 (블루소프트/와이오즈/시스템개발/달빛소프트/프레임/미지정)
+    'kind'     => 'Col08CTKK6BC5',   // 접수분류 (유지보수/오류/오류-LXP/유지보수-LXP)
     'eta'      => 'Col08CPRK24VC',   // 예상처리완료일(고객안내용) - date
     'body'     => 'Col08D959GGF3',
     'lms'      => 'Col08D95DP1EV',
@@ -25,7 +51,7 @@ const SLACK_COL = [
  * (옵션 라벨 하드코딩 대신 동적으로 읽어 변경에도 안전. 6시간 캐시)
  */
 function slackSelectMaps($token, $listId, $sampleRecordId) {
-    $cacheFile = sys_get_temp_dir() . '/slack_schema_' . md5($listId) . '.json';
+    $cacheFile = slack_cache_path('slack_schema_' . md5($listId) . '.json');
     if (is_file($cacheFile) && (time() - filemtime($cacheFile) < 6 * 3600)) {
         $c = json_decode(file_get_contents($cacheFile), true);
         if (is_array($c)) return $c;
@@ -58,7 +84,6 @@ function slackGet($method, $token, $params) {
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token],
             CURLOPT_TIMEOUT        => 20,
-            CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$retryAfter) {
                 if (stripos($h, 'Retry-After:') === 0) $retryAfter = (int)trim(substr($h, 12));
                 return strlen($h);
@@ -80,7 +105,6 @@ function slackPost($method, $token, $fields) {
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token, 'Content-Type: application/x-www-form-urlencoded'],
         CURLOPT_POSTFIELDS     => http_build_query($fields),
     ]);
@@ -107,7 +131,6 @@ function slackUploadFile($token, $channel, array $file, $comment = '', $threadTs
     curl_setopt_array($c, [
         CURLOPT_POST           => true,
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_TIMEOUT        => 120,
         CURLOPT_POSTFIELDS     => ['file' => new CURLFile($tmp, ($file['type'] ?: 'application/octet-stream'), $name)],
     ]);
@@ -168,7 +191,7 @@ function slackFetchItems($token, $listId) {
 }
 
 function slackResolveUsers($token, $userIds) {
-    $cacheFile = sys_get_temp_dir() . '/slack_users_cache.json';
+    $cacheFile = slack_cache_path('slack_users_cache.json');
     $cache = [];
     if (is_file($cacheFile) && (time() - filemtime($cacheFile) < 6 * 3600)) {
         $cache = json_decode(file_get_contents($cacheFile), true);
@@ -219,7 +242,7 @@ function slackFieldAttach($f) { return isset($f['attachment']) && is_array($f['a
  */
 function slackResolveFiles($token, $fileIds) {
     // v2: pdf/office/동영상 미리보기 필드(thumb_pdf/thumb_video/mp4) 추가 → 캐시 버전업으로 재해석 유도
-    $cacheFile = sys_get_temp_dir() . '/slack_files_cache_v2.json';
+    $cacheFile = slack_cache_path('slack_files_cache_v2.json');
     $cache = [];
     if (is_file($cacheFile)) { $j = json_decode(file_get_contents($cacheFile), true); if (is_array($j)) $cache = $j; }
     $missing = array_diff(array_unique(array_filter($fileIds)), array_keys($cache));
@@ -395,6 +418,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
             'status_id'   => isset($m[$COL['status']])   ? slackFieldSelect($m[$COL['status']])   : null,
             'priority_id' => isset($m[$COL['priority']]) ? slackFieldSelect($m[$COL['priority']]) : null,
             'team_id'     => isset($m[$COL['team']])     ? slackFieldSelect($m[$COL['team']])     : null,
+            'kind_id'     => (!empty($COL['kind']) && isset($m[$COL['kind']])) ? slackFieldSelect($m[$COL['kind']]) : null,
             'date'        => isset($m[$COL['date']]) ? slackFieldDate($m[$COL['date']]) : null,
             'done'        => isset($m[$COL['done']]) ? slackFieldDate($m[$COL['done']]) : null,
             'eta'         => isset($m[$COL['eta']])  ? slackFieldDate($m[$COL['eta']])  : null,
@@ -409,6 +433,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
     $statusMap   = $sel[$COL['status']]   ?? [];
     $priorityMap = $sel[$COL['priority']] ?? [];
     $teamMap     = $sel[$COL['team']]     ?? [];
+    $kindMap     = !empty($COL['kind']) ? ($sel[$COL['kind']] ?? []) : [];
 
     $names = slackResolveUsers($token, $userIds);
     $files = slackResolveFiles($token, $allFileIds);   // 파일ID → 메타(영구 캐시)
@@ -419,6 +444,7 @@ function slackFetchRows($token, $listId, $sinceUpdated = 0, $colMap = null) {
         $rows[$i]['status']   = $r['status_id']   ? ($statusMap[$r['status_id']]     ?? $r['status_id'])   : '';
         $rows[$i]['priority'] = $r['priority_id'] ? ($priorityMap[$r['priority_id']] ?? $r['priority_id']) : '';
         $rows[$i]['team']     = $r['team_id']     ? ($teamMap[$r['team_id']]         ?? $r['team_id'])     : '';
+        $rows[$i]['kind']     = $r['kind_id']     ? ($kindMap[$r['kind_id']]         ?? $r['kind_id'])     : '';
         // 첨부: 파일ID → 메타 배열(존재하는 것만), JSON 저장용
         $atts = [];
         foreach ($r['_fileIds'] as $fid) { if (isset($files[$fid]) && empty($files[$fid]['gone'])) $atts[] = $files[$fid]; }

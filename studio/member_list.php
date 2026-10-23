@@ -85,6 +85,11 @@ $options   = $repo->filterOptions();
 $me = $repo->findByUserId($user['id']);
 $myId = $me ? (int)$me['id'] : 0;
 
+// 프로젝트 등록 권한(027). 켜고 끄는 사람이 관리자뿐이라 열도 관리자에게만 그린다.
+$isAdmin  = bs_is_admin();
+$creators = $isAdmin ? $repo->projectCreatorIds() : [];
+$cols     = $isAdmin ? 8 : 7;
+
 bs_layout_head(
     $user,
     '구성원',
@@ -185,12 +190,15 @@ bs_layout_head(
           <th style="width:260px">가용도 (<?= h($from) ?> ~ <?= h($to) ?>)</th>
           <th>주로 해 온 분야</th>
           <th style="width:92px">배정</th>
+          <?php if ($isAdmin): ?>
+          <th style="width:100px" title="켜 준 사람은 프로젝트를 등록하고 그 프로젝트의 PM 이 됩니다">프로젝트 등록</th>
+          <?php endif; ?>
         </tr>
       </thead>
       <tbody>
       <?php if ($rows === []): ?>
         <tr>
-          <td colspan="7" class="ba-cell-none">
+          <td colspan="<?= $cols ?>" class="ba-cell-none">
             <?php if ($fRole !== '' || $fTeam !== '' || $fKeyword !== ''): ?>
               조건에 맞는 구성원이 없습니다.
             <?php elseif (bs_is_admin()): ?>
@@ -222,6 +230,12 @@ bs_layout_head(
               <?= h($r['emp_name']) ?>
             <?php endif; ?>
             <?= $isSelf ? '<span class="ba-badge">나</span>' : '' ?>
+            <?php if (bs_is_admin() && !$isSelf && !empty($r['user_id'])): ?>
+              <!-- 보기 전용 (2026-10-12). 저장은 서버가 막는다. -->
+              <button type="button" class="ba-mini" data-viewas="<?= h((string)$r['user_id']) ?>"
+                      data-name="<?= h($r['emp_name']) ?>"
+                      title="이 사람의 눈으로 BlueStudio 를 봅니다. 보기만 되고 저장은 막힙니다.">이 사람으로 보기</button>
+            <?php endif; ?>
           </td>
           <td><?= $r['role_label'] !== null && $r['role_label'] !== ''
                     ? h($r['role_label']) : '<span class="ba-cell-none">—</span>' ?></td>
@@ -261,6 +275,18 @@ bs_layout_head(
               <span class="ba-badge <?= $on ? 'ba-badge--ok' : '' ?>"><?= $on ? '가능' : '제외' ?></span>
             <?php endif; ?>
           </td>
+          <?php if ($isAdmin): $cc = isset($creators[$mid]); ?>
+          <td>
+            <!-- 관리자는 이 칸과 무관하게 등록할 수 있다. 끄면 새 등록만 막히고
+                 이미 등록한 프로젝트의 PM 권한은 그대로다. -->
+            <button type="button"
+                    class="ba-badge <?= $cc ? 'ba-badge--ok' : '' ?> ba-create-t"
+                    data-mid="<?= $mid ?>" data-on="<?= $cc ? '1' : '0' ?>"
+                    data-name="<?= h($r['emp_name']) ?>"
+                    title="눌러서 바꿉니다."
+                    style="cursor:pointer"><?= $cc ? '허용' : '—' ?></button>
+          </td>
+          <?php endif; ?>
         </tr>
         <?php endforeach; ?>
       <?php endif; ?>

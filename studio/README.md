@@ -103,6 +103,46 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 020_migration_workload_editor.sql   직접 등록한 점유를 누가 고쳤는가
 021_migration_aidd.sql              AIDD 고려 옵션 — 공수 계수·점유 반영률
 022_migration_project_member.sql    프로젝트별 참여 비중 — 산술이 못 담는 판단
+023_migration_source_purpose.sql    출처 용도(범위/참고) ← 빠지면 프로젝트 등록·수정 화면이 안 열림
+024_migration_candidate_mark.sql    후보 표 ★ 우선 후보·적합도 가감점
+025_migration_view_as.sql           관리자 "사용자로 보기" 기록
+026_migration_editors.sql           수정 권한 — R&D 참여자 칸 + 프로젝트 공동 편집자 표
+                                    ← 빠지면 R&D 과제 화면이 안 열림
+027_migration_project_creator.sql   프로젝트 등록 권한 — 관리자가 구성원마다 켠다
+028_migration_text_source_status.sql 직접 입력 글의 분석 상태 되돌리기 (데이터만)
+029_migration_rnd_file.sql          R&D 진행 기록·산출물 첨부 표 + 고친 기록 칸
+030_migration_url_length.sql        링크 칸 500 → 2000자 (산출물·참고 자료)
+031_migration_rnd_log_url.sql       R&D 진행 기록에 링크 칸
+```
+
+### 이미 돌고 있는 DB 에 새 번호만 더할 때
+
+`apply.sh` 는 빈 DB 에 처음부터 올리는 경로만 맡는다. 운영 중인 DB 에는
+**백업을 뜬 뒤** 아직 안 올린 번호만 순서대로 손으로 돌린다. **코드를 받기 전에**
+돌린다 — 023 이 없는 채로 새 코드가 돌면 프로젝트 등록·수정 화면이 깨진다.
+
+```sh
+sh studio/sql/dump.sh <db> -u <user> -p -o ~/backup
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/023_migration_source_purpose.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/024_migration_candidate_mark.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/025_migration_view_as.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/026_migration_editors.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/027_migration_project_creator.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/028_migration_text_source_status.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/029_migration_rnd_file.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/030_migration_url_length.sql
+mysql -u <user> -p --default-character-set=utf8mb4 <db> < studio/sql/031_migration_rnd_log_url.sql
+```
+
+어디까지 올렸는지 모르겠으면 칸·표가 있는지 본다:
+
+```sh
+mysql <db> -e "SHOW COLUMNS FROM bs_project_source LIKE 'purpose'"   # 023
+mysql <db> -e "SHOW COLUMNS FROM bs_project_member LIKE 'priority'"  # 024
+mysql <db> -e "SHOW TABLES LIKE 'bs\_view\_as\_log'"                 # 025
+mysql <db> -e "SHOW TABLES LIKE 'bs\_project\_editor'"               # 026
+mysql <db> -e "SHOW COLUMNS FROM bs_member LIKE 'can_create_project'" # 027
+mysql <db> -e "SHOW TABLES LIKE 'bs\_rnd\_file'"                   # 029
 ```
 
 ### 적용 뒤 확인

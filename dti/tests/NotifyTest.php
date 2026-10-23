@@ -101,4 +101,48 @@ final class NotifyTest extends TestCase
         $this->post(['topics', (string)$tid, 'claim'], $this->user());
         $this->assertSame([], $this->webhook->sent);
     }
+    // ---- 웹 푸시 (core/push.php) ----
+
+    public function test_선점하면_웹_푸시도_한_번_보낸다(): void
+    {
+        $tid = $this->newTopic();
+        $this->post(['topics', (string)$tid, 'claim'], $this->user(), ['planned_date' => '2026-09-01']);
+
+        $this->assertCount(1, $this->pushed);
+        $p = $this->pushed[0];
+        $this->assertSame('dti.presenter', $p['kind']);
+        $this->assertSame('dti/index.php', $p['url']);
+        $this->assertSame("dti-topic-{$tid}", $p['tag']);
+        $this->assertStringContainsString('새 주제', $p['body']);
+        $this->assertStringContainsString('유승인', $p['body']);
+        $this->assertStringContainsString('2026-09-01', $p['body']);
+    }
+
+    public function test_배정도_웹_푸시를_보낸다(): void
+    {
+        $tid = $this->newTopic();
+        $this->post(['topics', (string)$tid, 'assign'], $this->admin(), ['email' => 'siyu@bluesoft.co.kr']);
+        $this->assertCount(1, $this->pushed);
+        $this->assertSame('dti.presenter', $this->pushed[0]['kind']);
+    }
+
+    public function test_웹훅_주소가_없어도_웹_푸시는_보낸다(): void
+    {
+        $this->config = $this->makeConfig(['slackWebhook' => null]);
+        $tid = $this->newTopic();
+        $this->post(['topics', (string)$tid, 'claim'], $this->user());
+        $this->assertCount(1, $this->pushed);
+        $this->assertStringNotContainsString('(', $this->pushed[0]['body']);   // 예정일 없으면 괄호도 없다
+    }
+
+    public function test_실패한_선점과_취소는_웹_푸시를_보내지_않는다(): void
+    {
+        $tid = $this->newTopic();
+        $this->post(['topics', (string)$tid, 'claim'], $this->user());
+        $this->pushed = [];
+
+        $this->post(['topics', (string)$tid, 'claim'], $this->other());
+        $this->post(['topics', (string)$tid, 'release'], $this->user());
+        $this->assertSame([], $this->pushed);
+    }
 }

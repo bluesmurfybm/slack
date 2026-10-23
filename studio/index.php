@@ -28,18 +28,57 @@ bs_layout_head(
   <!-- ============ 뷰 전환 (P11) ============
        한 화면에 다 쌓지 않고 보는 축을 고르게 한다. 지시형 프로젝트와
        자발형 R&D 는 성격이 달라서, 섞어 놓으면 둘 다 잘 안 보인다. -->
-  <div class="ba-viewtabs" id="ba-dash-views" role="tablist" aria-label="대시보드 보기">
+  <!-- 2026-10-12 숨김 — 나눠 봐도 얻는 것이 적다는 판단. 다시 쓸 때는 hidden 만
+       떼면 된다(assign.js 의 applyView 는 그대로 있다). 숨긴 동안은 언제나 '통합'. -->
+  <div class="ba-viewtabs" id="ba-dash-views" role="tablist" aria-label="대시보드 보기" hidden>
     <button type="button" role="tab" data-view="all"     aria-selected="true">통합</button>
     <button type="button" role="tab" data-view="project" aria-selected="false">프로젝트</button>
     <button type="button" role="tab" data-view="rnd"     aria-selected="false">R&amp;D</button>
   </div>
 
-  <!-- ============ 조직 지표 ============ -->
-  <div class="ba-rnd-stats" id="ba-dash-org">
-    <div class="ba-rnd-stat"><span class="n" data-k="project_running">–</span><span class="t">진행 중 프로젝트</span></div>
-    <div class="ba-rnd-stat"><span class="n" data-k="rnd_running">–</span><span class="t">진행 중 R&amp;D 과제</span></div>
-    <div class="ba-rnd-stat"><span class="n" data-k="output_quarter">–</span><span class="t" id="ba-dash-q">이번 분기 산출물</span></div>
-  </div>
+  <!-- ============ 사내 전체 현황 ============
+       **회사 전체** 숫자다. 아래의 '내 …' 패널들과 섞여 보이면 내가 참여하는
+       것으로 읽힌다(2026-10-12 지적). 그래서 제목·뱃지로 범위를 먼저 말하고,
+       카드마다 "사내 전체" 를 다시 적는다. 숫자를 누르면 그 목록으로 간다. -->
+  <section class="ba-org" aria-labelledby="ba-org-h">
+    <div class="ba-org__head">
+      <h2 id="ba-org-h">사내 전체 현황</h2>
+      <span class="ba-org__badge">전사</span>
+      <span class="ba-org__hint">내 참여와 무관하게 회사 전체를 셉니다</span>
+    </div>
+    <div class="ba-org__cards" id="ba-dash-org">
+      <a class="ba-orgc ba-orgc--proj" href="project_list.php">
+        <span class="ba-orgc__ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 7h18v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </span>
+        <span class="ba-orgc__body">
+          <span class="ba-orgc__t">진행 중 프로젝트</span>
+          <span class="n" data-k="project_running">–</span>
+          <span class="ba-orgc__s">사내 전체 · 배정 중·확정·진행</span>
+        </span>
+      </a>
+      <a class="ba-orgc ba-orgc--rnd" href="rnd_board.php">
+        <span class="ba-orgc__ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
+        </span>
+        <span class="ba-orgc__body">
+          <span class="ba-orgc__t">진행 중 R&amp;D 과제</span>
+          <span class="n" data-k="rnd_running">–</span>
+          <span class="ba-orgc__s">사내 전체 · 승인·진행</span>
+        </span>
+      </a>
+      <a class="ba-orgc ba-orgc--out" href="rnd_board.php">
+        <span class="ba-orgc__ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4"/></svg>
+        </span>
+        <span class="ba-orgc__body">
+          <span class="ba-orgc__t">R&amp;D 산출물</span>
+          <span class="n" data-k="output_quarter">–</span>
+          <span class="ba-orgc__s" id="ba-dash-q">사내 전체 · 이번 분기</span>
+        </span>
+      </a>
+    </div>
+  </section>
 
   <!-- ============ 내 점유 구성 ============ -->
   <section class="ba-panel" id="ba-me-load-wrap">

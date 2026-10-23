@@ -13,14 +13,27 @@ require_once __DIR__ . '/SlackChannel.php';
  */
 final class Notifier
 {
-    public static function dispatch(string $event, array $request, array $actor, string $comment = ''): void
-    {
+    /** @param ?string $from 전이 전 상태. 어디서 왔는지에 따라 알릴 사람이 달라지는 이벤트가 있다. */
+    public static function dispatch(
+        string $event, array $request, array $actor, string $comment = '', ?string $from = null
+    ): void {
         if (!isset(BC_EVENT[$event])) {
             return;
         }
         $targets = BC_EVENT_TARGETS[$event] ?? [];
 
+        // 한 이벤트에서 같은 곳에 두 번 보내지 않는다.
+        //   - 슬랙 채널은 역할과 상관없이 같은 채널이라, 여러 역할에 켜 두면 같은 글이 겹친다
+        //   - 한 사람이 두 역할을 겸하면(직접 요청한 검토승인자 등) 메일·DM 이 두 통 간다
+        // 먼저 오는 역할(BC_EVENT_TARGETS 순서)의 문구로 나간다.
+        $channelPosted = false;
+        $delivered     = ['EMAIL' => [], 'SLACK_DM' => []];
+
         foreach ($targets as $role) {
+            // 검토 대기·반려 건의 철회는 구매담당자와 상관이 없다. 아직 넘어온 적이 없다.
+            if ($event === 'REQUEST_CANCELED' && $role === 'BUYER' && $from !== 'APPROVED') {
+                continue;
+            }
             $channels = Setting::enabledChannels($event, $role);
             if (!$channels) {
                 continue;
@@ -35,10 +48,26 @@ final class Notifier
             $msg = self::compose($event, $request, $actor, $comment, $role);
 
             foreach ($channels as $channel) {
+                if ($channel === 'SLACK_CHANNEL') {
+                    if ($channelPosted) {
+                        continue;
+                    }
+                    $channelPosted = true;
+                }
+                $to = $recipients;
+                if (isset($delivered[$channel])) {
+                    $to = array_values(array_filter($to, fn($r) => !isset($delivered[$channel][$r['id']])));
+                    if (!$to) {
+                        continue;
+                    }
+                    foreach ($to as $r) {
+                        $delivered[$channel][$r['id']] = true;
+                    }
+                }
                 try {
                     match ($channel) {
-                        'EMAIL'         => self::sendEmail($recipients, $msg, $request, $event, $role),
-                        'SLACK_DM'      => self::sendSlackDm($recipients, $msg, $request, $event, $role),
+                        'EMAIL'         => self::sendEmail($to, $msg, $request, $event, $role),
+                        'SLACK_DM'      => self::sendSlackDm($to, $msg, $request, $event, $role),
                         'SLACK_CHANNEL' => self::sendSlackChannel($msg, $request, $event, $role),
                         default         => null,
                     };
@@ -93,7 +122,11 @@ final class Notifier
         $lines[] = '처리자: ' . $actor['name'];
 
         if ($comment !== '') {
-            $lines[] = ($event === 'REVIEW_REJECTED' ? '반려 사유: ' : '의견: ') . $comment;
+            $lines[] = match ($event) {
+                'REVIEW_REJECTED'   => '반려 사유: ',
+                'PURCHASE_CANCELED' => '중단 사유: ',
+                default             => '의견: ',
+            } . $comment;
         }
 
         // 수신자가 다음에 무엇을 해야 하는지 한 줄로 알려준다.
@@ -118,6 +151,8 @@ final class Notifier
             $event === 'PURCHASE_ASSIGNED'   && $role === 'BUYER'     => '이 건의 구매 담당으로 지정되었습니다. 관리자 탭 > 신청 물품 관리에서 확인하세요.',
             $event === 'REVIEW_REJECTED'     && $role === 'REQUESTER' => '내용을 수정해 재요청하거나 요청을 철회할 수 있습니다.',
             $event === 'PURCHASE_DONE'       && $role === 'REQUESTER' => '물품이 입고되었습니다. 수령해 주세요.',
+            $event === 'REQUEST_CANCELED'    && $role === 'BUYER'     => '요청자가 철회했습니다. 이 건은 구매하지 않아도 됩니다.',
+            $event === 'PURCHASE_CANCELED'   && $role === 'REQUESTER' => '구매가 중단되었습니다. 계속 필요하면 새로 요청해 주세요.',
             default => null,
         };
     }

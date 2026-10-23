@@ -46,7 +46,8 @@ $roleLabels = array_map(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BlueCart · 물품 구매 요청</title>
 <?php if ($inPortal): ?>
-<link rel="icon" href="../styles/favicon.ico">
+<link rel="icon" type="image/svg+xml" href="../styles/favicons/bluecart.svg">
+<?php require_once __DIR__ . '/../core/pwa.php'; echo pwa_head_tags('../'); ?>
 <?php endif; ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

@@ -124,6 +124,41 @@ final class MemberRepo
         return $st->rowCount() > 0;
     }
 
+    /**
+     * 프로젝트 등록 권한을 켜거나 끈다 (027). 누가 언제 바꿨는지 남긴다.
+     *
+     * 끈다고 이미 등록한 프로젝트의 PM 권한이 사라지지는 않는다 —
+     * PM 은 bs_project.owner_id 로 정해진다.
+     */
+    public function setCanCreateProject(int $memberId, bool $on, string $actor): bool
+    {
+        $st = $this->pdo->prepare(
+            'UPDATE bs_member
+                SET can_create_project = ?, create_granted_by = ?, create_granted_at = NOW()
+              WHERE id = ?'
+        );
+        $st->execute([$on ? 1 : 0, $actor, $memberId]);
+        return $st->rowCount() > 0;
+    }
+
+    /**
+     * 프로젝트 등록 권한이 켜진 구성원 id 집합 (027). 목록 화면 표시용.
+     *
+     * 칸(027)이 없는 서버에서는 빈 배열 — 목록 화면이 깨지지 않게
+     * search() 의 SELECT 에 섞지 않고 따로 묻는다.
+     *
+     * @return array<int,true>
+     */
+    public function projectCreatorIds(): array
+    {
+        try {
+            $st = $this->pdo->query('SELECT id FROM bs_member WHERE can_create_project = 1');
+            return array_fill_keys(array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)), true);
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
     /** 목록 화면의 거르개에 채울 값. 있는 것만 보여 준다. */
     public function filterOptions(): array
     {

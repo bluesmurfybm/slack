@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/sqlite_compat.php';   // 로컬 시험(SQLite)일 때만 끼어든다. 운영은 new PDO 그대로
 /**
  * 포털(blue-iWorks) DB 연결.
  *  - slack 모듈과 같은 slackapi DB를 그대로 씀. 여기서는 포털 전용 테이블만 관리.
@@ -17,7 +18,7 @@ function portal_db() {
     ];
 
     $dsn = "mysql:host={$d['host']};port={$d['port']};charset={$d['charset']}";
-    $pdo = new PDO($dsn, $d['user'], $d['pass'], $opt);
+    $pdo = db_connect($dsn, $d['user'], $d['pass'], $opt, $d['name']);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$d['name']}`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `{$d['name']}`");
@@ -50,6 +51,10 @@ function portal_db() {
     // 슬랙은 협업사 도메인 계정을 쓰는 사람이 있어, 이메일로 슬랙 사용자를 찾지
     // 못하고 알림이 조용히 빠졌다. 다른 사람만 적는다 — NULL 이면 email 과 같다는 뜻.
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `slack_email` VARCHAR(190) NULL COMMENT '슬랙 계정 이메일. 로그인 이메일과 다를 때만 채운다' AFTER `slack_token_enc`");
+    // Gmail 연동(slack/gmail). 사람마다 자기 메일함을 IMAP 으로 붙인다.
+    // 비밀번호는 Google '앱 비밀번호' 이고 슬랙 토큰과 같은 enc_token()(AES-256-GCM)으로만 저장한다.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `gmail_user` VARCHAR(190) NULL COMMENT 'Gmail 연동 주소' AFTER `slack_email`");
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `gmail_pass_enc` TEXT NULL COMMENT 'AES-256-GCM 암호화된 Gmail 앱 비밀번호' AFTER `gmail_user`");
 
     // -----------------------------------------------------------------
     // 알림판 — 공지 / 중요 일정 / 포털 관리자
@@ -161,6 +166,11 @@ function portal_db() {
     add_column_if_missing($pdo, "ALTER TABLE `portal_event`
         ADD COLUMN `cheer_early` TINYINT(1) NOT NULL DEFAULT 1
         COMMENT '주말·공휴일이면 그 앞 평일에 미리 쏠지' AFTER `cheer_on`");
+    /* D-day 점판 색. 평소에는 제목·메모의 낱말로 고른 종류 색을 쓰고,
+       등록하는 사람이 골라 둔 경우에만 그 값을 쓴다. NULL = 낱말 따라 자동. */
+    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
+        ADD COLUMN `color_kind` VARCHAR(20) NULL
+        COMMENT 'D-day 색으로 쓸 종류 키(BOARD_EVENT_KINDS). NULL 이면 낱말로 자동' AFTER `cheer_early`");
 
     // -----------------------------------------------------------------
     // 업무 시스템 카드 묶음
@@ -206,6 +216,88 @@ function portal_db() {
     add_column_if_missing($pdo, "ALTER TABLE `portal_users`
         ADD COLUMN `tile_collapsed` VARCHAR(255) NULL
         COMMENT '접어 둔 카드 묶음 id(콤마로 이음). 비면 모두 펼침' AFTER `tile_order`");
+
+    // -----------------------------------------------------------------
+    // 웹 푸시 알림 — core/push.php 가 읽고 쓴다
+    //
+    // 구독은 **기기(브라우저)마다** 한 줄이다. 한 사람이 PC·휴대폰에서 각각
+    // "알림 받기" 를 누르면 두 줄이 된다. endpoint 는 길어서(수백 자) 유니크
+    // 키는 sha256 으로 건다.
+    //
+    // 종류별 켜고 끄기는 사람이 **고른 것만** 줄로 남는다. 줄이 없으면
+    // core/push_kinds.json 의 default 를 따른다 — 그래야 새 종류를 더했을 때
+    // 모든 사람에게 줄을 심어 주는 손질이 필요 없다.
+    // -----------------------------------------------------------------
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_push_subscription` (
+            `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id`       INT UNSIGNED NOT NULL COMMENT 'portal_users.id',
+            `endpoint_hash` CHAR(64)     NOT NULL COMMENT 'sha256(endpoint)',
+            `endpoint`      TEXT         NOT NULL COMMENT '푸시 서비스 주소(FCM·모질라·애플)',
+            `p256dh`        VARCHAR(120) NOT NULL COMMENT '구독 공개키 base64url(65바이트)',
+            `auth`          VARCHAR(40)  NOT NULL COMMENT '구독 인증값 base64url(16바이트)',
+            `ua`            VARCHAR(255) NULL     COMMENT '등록한 브라우저 — 기기 목록 표시용',
+            `created_at`    DATETIME     NOT NULL,
+            `last_ok_at`    DATETIME     NULL     COMMENT '마지막으로 발송에 성공한 때',
+            `fail_count`    INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '연달아 실패한 횟수(5xx·타임아웃). 성공하면 0',
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uq_push_endpoint` (`endpoint_hash`),
+            KEY `ix_push_user` (`user_id`),
+            CONSTRAINT `fk_push_user` FOREIGN KEY (`user_id`)
+                REFERENCES `portal_users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='웹 푸시 구독. 기기마다 한 줄'
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_push_pref` (
+            `user_id`    INT UNSIGNED NOT NULL,
+            `kind`       VARCHAR(40)  NOT NULL COMMENT 'core/push_kinds.json 의 key',
+            `enabled`    TINYINT(1)   NOT NULL,
+            `updated_at` DATETIME     NOT NULL,
+            PRIMARY KEY (`user_id`, `kind`),
+            CONSTRAINT `fk_pushpref_user` FOREIGN KEY (`user_id`)
+                REFERENCES `portal_users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='알림 종류별 켜고 끄기. 줄이 없으면 json 의 default'
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_push_log` (
+            `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id`     INT UNSIGNED NULL,
+            `sub_id`      INT UNSIGNED NULL COMMENT '보낸 구독. 지워졌을 수 있어 FK 를 걸지 않는다',
+            `kind`        VARCHAR(40)  NOT NULL,
+            `title`       VARCHAR(200) NOT NULL,
+            `url`         VARCHAR(500) NULL     COMMENT '알림을 누르면 열 주소',
+            `status_code` SMALLINT     NULL     COMMENT '푸시 서비스 HTTP 응답. NULL 이면 보내기 전에 실패',
+            `error`       VARCHAR(255) NULL,
+            `created_at`  DATETIME     NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `ix_pushlog_when` (`created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='웹 푸시 발송 시도 기록'
+    ");
+    // 알림함 — 사람이 받은 알림을 다시 보는 곳(포털 '알림' 화면).
+    // 위 발송 기록은 기기·시도마다 남는 운영용이라 따로 둔다. 기기가 없거나
+    // 발송이 실패해도 여기에는 남아, 놓친 알림을 찾을 수 있다.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_notification` (
+            `id`         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `user_id`    INT UNSIGNED NOT NULL COMMENT 'portal_users.id',
+            `kind`       VARCHAR(40)  NOT NULL COMMENT 'core/push_kinds.json 의 key',
+            `title`      VARCHAR(200) NOT NULL,
+            `body`       TEXT         NULL,
+            `url`        VARCHAR(500) NULL     COMMENT '누르면 열 주소(포털 루트 기준 또는 절대주소)',
+            `created_at` DATETIME     NOT NULL,
+            `read_at`    DATETIME     NULL     COMMENT 'NULL 이면 안 읽음',
+            PRIMARY KEY (`id`),
+            KEY `ix_notif_user` (`user_id`, `id`),
+            KEY `ix_notif_unread` (`user_id`, `read_at`),
+            KEY `ix_notif_when` (`created_at`),
+            CONSTRAINT `fk_notif_user` FOREIGN KEY (`user_id`)
+                REFERENCES `portal_users` (`id`) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='사람별 알림함. 180일 지나면 지운다(core/push.php)'
+    ");
 
     // 사내 인원 13명 + book 모듈에서 쓰던 개인별 고유색을 이어받되, 아바타처럼 큰 면적을 단색으로
     // 채우면 book의 원래 뱃지(연한 배경 위 작은 글자)보다 훨씬 쨍하게 보여서 채도를 낮추고

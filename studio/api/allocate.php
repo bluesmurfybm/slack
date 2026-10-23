@@ -9,6 +9,9 @@
  * POST api/allocate.php?act=update_item    담당자 수동 조정
  * POST api/allocate.php?act=add_item       지원 인원 추가
  * POST api/allocate.php?act=delete_item
+ * POST api/allocate.php?act=copy           차수 복사 (새 차수, proposed)
+ * POST api/allocate.php?act=delete         차수 삭제 (확정·확정 이력 제외)
+ * POST api/allocate.php?act=purge          지울 수 있는 차수 일괄 정리
  * POST api/allocate.php?act=confirm        확정 + 알림 적재
  *
  * ┌──────────────────────────────────────────────────────────────────┐
@@ -85,7 +88,8 @@ bs_route(bs_param_str('act', 'versions'), [
             $ratio  = (float)($p['constraints']['capacity_ratio'] ?? 1.0);
             $shares = (array)($p['shares'] ?? []);
             if ($calc !== null && !isset($availBy[(string)$load])) {
-                $availBy[(string)$load] = $calc->forMembers(array_keys($mids), $from, $to, $load);
+                $availBy[(string)$load] = $calc->forMembers(array_keys($mids), $from, $to, $load,
+                                                        $projectId);   // 자기 확정본은 빼고
             }
             $av = $availBy[(string)$load] ?? [];
 
@@ -279,6 +283,36 @@ bs_route(bs_param_str('act', 'versions'), [
             $params['pinned'] = $pinned;
         }
 
+        // 직전 안 유지 (2026-10-12). 그 차수의 담당자를 **약하게** 붙든다 —
+        // ε 점 넘게 나은 사람이 있으면 바뀐다. 가중치를 조금 고칠 때마다
+        // 담당자가 절반 넘게 뒤섞이던 것을 막는다.
+        // 목표 공수 (2026-10-14). 화면에서 막대를 끌어 정한 값 — member_id => M/D.
+        // 엔진이 이번 산출의 그릇으로만 쓴다(기울이기). 0 은 '주지 않기', 음수·숫자 아님은 버린다.
+        $targets = [];
+        foreach (bs_alloc_assoc('targets') as $tmid => $tmd) {
+            if (is_numeric($tmd) && (float)$tmd >= 0 && (float)$tmd <= 2000) {
+                $targets[(int)$tmid] = round((float)$tmd, 2);
+            }
+        }
+        if ($targets) {
+            $params['targets'] = $targets;
+        }
+
+        $stickId = bs_param_int('stick_from', 0);
+        if ($stickId) {
+            $prev = $allocs->find($stickId);
+            if (!$prev || (int)$prev['project_id'] !== $projectId) {
+                bs_json_error('NOT_FOUND', '기준으로 삼을 배정안을 찾을 수 없습니다.', 404);
+            }
+            $owners = [];
+            foreach ($allocs->items($stickId) as $it) {
+                if ($it['role'] === 'owner') {
+                    $owners[(int)$it['task_id']] = (int)$it['member_id'];
+                }
+            }
+            $params['prev_owner'] = $owners;
+        }
+
         $r = $engine->propose($projectId, $params);
 
         // 엔진이 쓴 eval_ver 를 반드시 기록한다. 나중에 "왜 이렇게 배정됐나" 를
@@ -307,6 +341,12 @@ bs_route(bs_param_str('act', 'versions'), [
             // 막대의 분모도 **그때 비중**으로 그려야 한다. 오늘 비중을 바꿨다고
             // 지난 차수의 막대가 흔들리면 그 차수를 설명할 수 없다.
             'shares'      => $r['meta']['shares'] ?? [],
+            // 어느 차수를 기준으로 붙들었는지. 같은 가중치라도 기준이 다르면
+            // 결과가 다르다 — 안 적으면 재현할 수 없다.
+            'stick_from'  => $stickId ?: null,
+            // 목표 공수 — 엔진이 실제로 받아들인 것만(후보에 없는 사람은 버려진다).
+            'targets'     => $r['meta']['targets'] ?? [],
+            'stick'       => $r['meta']['stick'] ?? null,
         ], $user);
 
         $allocs->saveItems($allocationId, $r['items']);
@@ -324,12 +364,20 @@ bs_route(bs_param_str('act', 'versions'), [
             'unassigned'    => $r['unassigned'],
             'meta'          => $r['meta'],
             'message'       => '배정안 ' . $a['version'] . '차를 만들었습니다. 검토 후 확정하세요.'
+                . (!empty($r['meta']['targets'])
+                    ? ' ' . count($r['meta']['targets']) . '명은 정해 준 목표 공수 쪽으로 기울여 나눴습니다(딱 맞지는 않습니다).'
+                    : '')
                 . ($r['meta']['level'] !== AllocationEngine::L_LEAF
                     ? ' ' . AllocationEngine::LEVEL_LABEL[$r['meta']['level']] . ' 로 묶었습니다.'
                     : '')
                 . ($r['meta']['method'] !== AllocationEngine::M_WEIGHTED
                     ? ' ' . AllocationEngine::METHOD_LABEL[$r['meta']['method']]
                       . ' 로 뽑았습니다(씨앗 ' . $r['meta']['seed'] . ').'
+                    : '')
+                . (!empty($r['meta']['stick'])
+                    ? sprintf(' 직전 안과 견준 %d건 중 %d건은 담당자를 그대로 두었습니다(%g점 넘게 나을 때만 바꿈).',
+                              $r['meta']['stick']['compared'], $r['meta']['stick']['kept'],
+                              $r['meta']['stick']['eps'])
                     : '')
                 . ($r['meta']['min_one']['moved'] ?? []
                     ? ' 0건이던 후보 ' . count($r['meta']['min_one']['moved'])
@@ -347,7 +395,7 @@ bs_route(bs_param_str('act', 'versions'), [
 
     /**
      * 담당자 수동 조정.
-     * is_manual=1 과 사유를 반드시 남긴다 — 나중에 왜 바꿨는지 알아야 한다.
+     * is_manual=1 을 남긴다. 사유는 적으면 남기고, 비워도 된다.
      */
     'update_item' => function () use ($allocs, $members, $tasks): void {
         $user = bs_begin_write();
@@ -362,15 +410,9 @@ bs_route(bs_param_str('act', 'versions'), [
         $projectId = (int)$cur['project_id'];
         bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
 
-        // 사유 없는 변경은 나중에 설명할 수 없다. 담당자를 바꿀 때는 받는다.
-        $note      = bs_param_str('manual_note');
-        $newMember = bs_has_param('member_id') ? bs_param_int('member_id', 0) : null;
-        if ($newMember !== null && $newMember !== (int)$cur['member_id'] && $note === '') {
-            bs_json_error('MISSING_PARAM',
-                '담당자를 바꾸려면 사유를 적어 주세요. 나중에 왜 바꿨는지 알아야 합니다.', 400);
-        }
-
-        $data = ['manual_note' => $note];
+        // 사유는 **선택**이다 (2026-10-12). 회사가 작고 서로 믿는다 — 비워도
+        // 바뀌고, 누가 바꿨는지(is_manual·수정자)는 그대로 남는다.
+        $data = ['manual_note' => bs_param_str('manual_note')];
         foreach (['member_id' => 'int', 'role' => 'str', 'alloc_ratio' => 'float'] as $k => $t) {
             if (!bs_has_param($k)) {
                 continue;
@@ -466,6 +508,80 @@ bs_route(bs_param_str('act', 'versions'), [
             'load'       => bs_alloc_load($allocs, $members, $tasks, $a, $items),
             'unassigned' => $allocs->tasksWithoutOwner($allocationId),
             'message'    => '배정 항목을 삭제했습니다.',
+        ]);
+    },
+
+    /**
+     * 차수 복사 (2026-10-22). 원본을 그대로 옮긴 새 차수(proposed)를 만든다.
+     * 확정본을 고칠 때의 출발점이다 — 확정본 자체는 손대지 않는다.
+     */
+    'copy' => function () use ($allocs, $members, $tasks): void {
+        $user = bs_begin_write();
+        $src  = bs_alloc_param($allocs);
+        $projectId = (int)$src['project_id'];
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        $newId = $allocs->copyVersion((int)$src['id'], $user);
+
+        $a     = $allocs->find($newId);
+        $items = $allocs->items($newId);
+
+        // 원본 이후 배정에서 빠진 사람. 지우지 않고 알린다 — 빼면 미배정이
+        // 생기고, 그 일을 누구에게 줄지는 사람이 정할 일이다.
+        $gone = [];
+        foreach ($items as $it) {
+            $m = $members->find((int)$it['member_id']);
+            if ($m && !(int)$m['is_assignable']) {
+                $gone[(int)$m['id']] = $m['emp_name'];
+            }
+        }
+        $settled = count(array_filter($items, static fn($it) =>
+            in_array($it['task_status'], BS_TASK_NOT_ASSIGNABLE_STATUS, true)));
+
+        bs_json_ok([
+            'allocation_id' => $newId,
+            'version'       => (int)$a['version'],
+            'items'         => $items,
+            'load'          => bs_alloc_load($allocs, $members, $tasks, $a, $items),
+            'unassigned'    => $allocs->tasksWithoutOwner($newId),
+            'message'       => $src['version'] . '차를 복사해 ' . $a['version'] . '차를 만들었습니다.'
+                . ($src['status'] === 'confirmed'
+                    ? ' 확정본은 그대로 두었습니다 — 이 차수를 확정하면 바뀝니다.' : '')
+                . ($settled ? ' 완료·보류 태스크 ' . $settled . '건도 담당자째 옮겼습니다.' : '')
+                . ($gone ? ' 지금은 배정에서 빠진 사람이 들어 있습니다: '
+                           . implode(', ', $gone) . '.' : ''),
+        ]);
+    },
+
+    /**
+     * 차수 삭제 (2026-10-22). 확정본과 한 번 확정됐던 안은 지우지 않는다
+     * — AllocationRepo::isDeletable().
+     */
+    'delete' => function () use ($allocs): void {
+        bs_begin_write();
+        $a = bs_alloc_param($allocs);
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, (int)$a['project_id']);
+
+        $allocs->deleteVersion((int)$a['id']);
+
+        bs_json_ok([
+            'deleted' => (int)$a['id'],
+            'message' => $a['version'] . '차를 지웠습니다.',
+        ]);
+    },
+
+    /** 지울 수 있는 차수를 한꺼번에 정리한다. 확정본·확정 이력은 남는다. */
+    'purge' => function () use ($projects, $allocs): void {
+        bs_begin_write();
+        $projectId = bs_alloc_project_param($projects);
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        $n = $allocs->purgeDrafts($projectId);
+
+        bs_json_ok([
+            'deleted' => $n,
+            'message' => $n ? '차수 ' . $n . '개를 정리했습니다. 확정본과 확정 이력은 남겼습니다.'
+                            : '정리할 차수가 없습니다.',
         ]);
     },
 
@@ -667,7 +783,9 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
     $peak = [];
     if ($from !== null && $to !== null && $from <= $to) {
         $calc = new AvailabilityCalculator($pdo);
-        foreach ($calc->forMembers($ids, $from, $to, $aiddLoad) as $mid => $a) {
+        // 이 프로젝트의 확정본이 만든 점유는 빼고 센다 — 그것을 다시 배정하는 막대다.
+        foreach ($calc->forMembers($ids, $from, $to, $aiddLoad,
+                                   (int)$allocation['project_id']) as $mid => $a) {
             $cap[$mid] = AvailabilityCalculator::capacityMd(
                 $a, $ratio, (float)($shares[$mid]['share'] ?? 1.0));
             // 가용 공수가 넉넉해도 그 공수가 **특정 달에 몰려 있을 수** 있다.
@@ -703,6 +821,9 @@ function bs_alloc_load(AllocationRepo $allocs, MemberRepo $members, TaskRepo $ta
             // 말해 주지 않으면 사람은 숫자가 틀렸다고 생각한다.
             'aidd_on'     => !empty($peak[$mid]['aidd_on']),
             'aidd_pct'    => $peak[$mid]['aidd_pct'] ?? 0,
+            // 이 차수를 산출할 때 쓴 목표 공수 (2026-10-14). 막대의 눈금(잰 가용
+            // 공수)과 **따로** 그린다 — 사람이 정한 값을 잰 값처럼 보이지 않게.
+            'target_md'   => isset($pa['targets'][$mid]) ? (float)$pa['targets'][$mid] : null,
         ];
     }
     usort($out, static fn($a, $b) => ($b['assigned_md'] <=> $a['assigned_md'])

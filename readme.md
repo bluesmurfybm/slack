@@ -1,7 +1,7 @@
 # blue-iWorks — 사내 업무 포털
 
 Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **BlueMagazine(dti, DTI 발표)**,
-**BlueLearn(learn)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
+**BlueLearn(learn)**, **MoodleUp?(moodle)**, **OnWatch(onwatch, 수시 감시)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
 ## 전체 구조
@@ -13,13 +13,20 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── auth.php                 세션·SSO·current_portal_user()
 │   ├── db.php                   portal_db() · 테이블 자동 생성
 │   ├── board.php                알림판 — 공지·중요 일정·포털 관리자
+│   ├── push.php                 웹 푸시 알림 — 암호화·발송·구독·종류별 설정 ('PWA · 웹 푸시 알림' 절)
+│   ├── push_kinds.json          알림 종류 목록의 유일한 원본
+│   ├── pwa.php                  pwa_head_tags() — 모든 모듈 <head> 에 넣는 PWA 태그
 │   └── worksystems.php/.json    상단바 "업무 시스템" 목록의 렌더러 + 유일한 원본
+├── sw.js, pwa.js                service worker(알림 수신·클릭) · 등록/구독 도우미 — 루트에 있어야 한다
+├── manifest.webmanifest         PWA 설치 정보
 ├── config.php                   접속 정보 (gitignore, 루트에 그대로 둔다)
 ├── sso_secret.key               book 과 나눠 쓰는 HMAC 키 (자동 생성, 루트)
+├── vapid.key                    웹 푸시 서명 키쌍 (자동 생성, 루트, gitignore)
 ├── .sessions/                   PHP 세션 저장 경로 (루트)
 ├── api/                         login.php, logout.php, me.php
-│                                notices.php, notice_file.php, events.php, admins.php
+│                                notices.php, notice_file.php, events.php, admins.php, push.php, notifications.php
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
+│                                icons/(카드 아이콘) · favicons/(시스템별 탭 파비콘, gen_favicons.py)
 ├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
 ├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
 │
@@ -38,6 +45,11 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │       ├── summarizer.py        anthropic SDK → claude CLI → 요약 없음 순으로 폴백
 │       ├── var/                 state.json · snapshots/ · pages/ (gitignore)
 │       └── tests/
+│
+├── onwatch/                     OnWatch(수시 감시) — PHP 화면 + Python 배치(1분 timer). 'onwatch' 절, onwatch/README.md
+│   ├── index.php, view.php, edit.php   목록 · 상세 · 만들기/고치기/복제
+│   ├── api/, inc/, sql/, bin/   JSON API · 공용 로직 · 스키마(화면이 자동 적용) · CLI(migrate, secret)
+│   └── worker/                  run.py → 조사(Claude+웹 검색) → 판정(JSON) → 중복 거르기 → 알림
 │
 ├── access/                      Coursemos EnvHub — PHP, slack의 schools를 마스터로 씀
 │   ├── access.php               목록 + 상세 + 편집 (복사 버튼)
@@ -133,6 +145,8 @@ php.ini 에 `date.timezone` 이 없으면 PHP 는 UTC 로 돌고 MySQL 은 서�
 | `db.php` | access, dti, learn, moodle (`add_column_if_missing()` 재사용) |
 | `worksystems.php` / `.json` | index, dti, learn, moodle, slack/header, bluecart, book |
 | `board.php` | api/notices·notice_file·events·admins |
+| `push.php` / `push_kinds.json` | index, api/me·push·notifications, dti, onwatch, dev/push_*, slackai·onwatch 워커(dev/push_cli.php 경유) |
+| `pwa.php` | 모든 모듈의 `<head>` |
 
 모듈에서는 한 단계 위의 `core/` 를 부른다.
 
@@ -156,6 +170,109 @@ require_once __DIR__ . '/core/worksystems.php';    // 포털 루트(index.php)�
 WORK_SYSTEMS = os.path.join(BASE, "..", "core", "worksystems.json")
 SSO_SECRET_PATH = os.path.join(BASE, "..", "sso_secret.key")   # 루트 그대로
 ```
+
+---
+
+## PWA · 웹 푸시 알림
+
+포털을 PWA 로 설치할 수 있게 하고(홈 화면·작업 표시줄 아이콘), 모듈들이 **웹 푸시 알림**을
+보낼 수 있는 공용 뼈대를 `core/push.php` 에 둔다. 알림을 내는 곳은 모듈마다 다르지만
+암호화·전송·구독 관리·종류별 켜고 끄기는 포털이 한 번만 갖는다.
+
+### 모듈에서 알림 보내기
+
+1. `core/push_kinds.json` 에 종류를 한 줄 더한다. `sys` 는 `worksystems.json` 의 key(또는 `portal`)이고,
+   마이페이지가 그 시스템 이름 아래에 묶어 보여 준다. `default` 는 사람이 고른 적 없을 때의 켜짐 여부다.
+2. 알릴 자리에서 부른다.
+
+```php
+require_once __DIR__ . '/../core/push.php';
+push_send([
+    'kind'  => 'dti.presenter',
+    'title' => 'DTI 발표자 등록',
+    'body'  => '아티클 제목 — 홍길동 (2026-09-01)',
+    'url'   => 'dti/index.php',          // 알림을 누르면 열 주소. 포털 루트 기준 또는 https:// 절대주소. 비면 포털 첫 화면
+    'tag'   => 'dti-topic-12',           // 같은 tag 는 기기에서 하나로 겹쳐진다(선택)
+    'to'    => ['a@bluesoft.co.kr'],     // 생략하면 이 종류를 켜 둔 전원
+]);
+```
+
+- **`push_send()` 는 예외를 던지지 않는다.** 결과는 `{sent, failed, pruned, skipped, recipients, detail}` 로
+  돌려주고 `portal_push_log` 에 남긴다. 본 작업(발표자 등록 등)이 알림 때문에 실패하지 않게 하려는 약속이다.
+- 시험에서는 dti 처럼 `$ctx['push']` 로 기록용 함수를 끼워 넣는다(`dti/tests/Support/TestCase.php`).
+  dti 의 실제 예는 `dti/lib/notify.php` 의 `dti_push_new_presenter()`.
+- Python(slackai 워커)은 `tools/php_cli.push()` 또는 `notify.push(ctx, ...)` 를 쓴다. 안에서
+  `php dev/push_cli.php --json-file …` 를 부른다(한글 인자가 Windows 코드페이지에서 깨지지 않게 파일로 넘긴다).
+
+### 받는 쪽
+
+- 마이페이지 **알림** 칸에서 "이 기기에서 알림 받기" 를 누르면 브라우저가 권한을 묻고 구독을 서버에
+  남긴다. 기기(브라우저)마다 한 번씩 눌러야 한다. 종류별 체크는 누르는 즉시 저장된다 —
+  다른 칸처럼 '수정/저장' 을 거치지 않는다. 권한 창이 뜨는 일은 '취소' 로 되돌릴 수 없기 때문이다.
+- 알림을 누르면 `url` 이 열린다. 상대경로는 sw.js 가 자기 scope(포털 루트)로 풀고, 같은 주소의 탭이
+  열려 있으면 그 탭을 앞으로 가져온다. 동시에 알림함에서 그 알림을 읽음으로 바꾼다.
+- 마이페이지 알림 칸에 **알림 받는 기기 목록**이 있다. 기기마다 '삭제' 로 끊을 수 있다(잃어버린 휴대폰 등).
+  지금 보고 있는 기기는 "이 기기" 로 표시되고, 이 기기를 지우면 브라우저 구독까지 끊는다.
+- **알림함**(상단바 배경 단추 옆 🔔 단추): 받은 알림을 모아 본다. 안 읽은 수가 종 단추 오른쪽 위에 숫자로 보인다.
+  누르면 읽음으로 바뀌고 그 주소로 간다. 모두 읽음·읽은 알림 지우기·하나씩 지우기가 된다.
+  알림함은 **사람 기준**이라 기기가 없거나 발송이 실패해도 남는다. 180일이 지나면 지운다.
+- **iOS 는 공유 → '홈 화면에 추가' 한 뒤 그 아이콘으로 연 화면에서만** 알림을 받을 수 있다(16.4+).
+- https 또는 localhost 에서만 동작한다. 그 밖의 주소에서는 알림 칸이 "받을 수 없음" 으로 보인다.
+
+### 카드 배지 (업무 시스템 카드의 안 읽은 알림 수)
+
+대시보드 카드 아이콘 모서리에 **그 시스템에서 온 안 읽은 알림 수**를 붙인다. 원본은 알림함
+(`portal_notification`) 하나라 상단바 종 숫자와 늘 맞는다. OnWatch 에 먼저 붙였다.
+
+- **켜기**: `core/worksystems.json` 의 그 카드 줄에 `"badge": "inbox"` 를 더한다. 모듈은 자기 sys 의 종류로
+  `push_send()` 만 하고 있으면 된다 — 종류 → 시스템은 `push_kinds.json` 의 `sys` 로 가른다.
+- **세는 곳**: `push_tile_badges($userId, work_systems())`(core/push.php). 첫 화면은 서버가 그려 내리고
+  (`TILE_BADGES`), 알림함 숫자가 바뀌는 응답(`api/notifications.php` 의 `tiles`)마다 `paintTileBadges()` 가 갈아 끼운다.
+  다른 탭에서 돌아오면(visibilitychange) 다시 센다.
+- **모듈 화면에서 읽음 처리**: 알림을 누르지 않고 모듈로 바로 들어가 봐도 배지가 남지 않게,
+  모듈이 그 건을 열 때 `push_inbox_mark_read_url($uid, 'onwatch.', 'onwatch/view.php?id=3')` 를 부른다
+  (주소가 같거나 뒤에 `&`·`#` 가 붙은 것만 — `id=3` 이 `id=31` 에 걸리지 않는다). 읽음 처리 전에
+  `push_inbox_oldest_unread_url()` 로 시각을 받아 두면 그 뒤 항목에 NEW 를 붙일 수 있다.
+  모듈 목록의 건별 숫자는 `push_inbox_unread_urls($uid, 'onwatch.')`.
+- 다른 기준(처리 대기 건수 등)이 필요해지면 `badge` 에 새 값을 정의하고 `push_tile_badges()` 에 갈래를 더한다.
+
+### 앱 설치 안내
+
+브라우저는 설치할 수 있는 사이트에도 팝업을 띄우지 않는다(주소창 아이콘뿐). 그래서 `pwa.js` 가
+직접 안내 띠를 왼쪽 아래에 띄운다. pwa.js 를 싣는 모든 페이지에서 같이 뜬다.
+
+- Chrome·Edge·Android: 브라우저가 설치 가능하다고 알려 오면(`beforeinstallprompt`) "설치 / 다음에" 띠를 띄우고,
+  "설치" 를 누르면 브라우저 설치 창이 열린다.
+- iPhone·iPad: 그런 신호가 없어 "공유 → 홈 화면에 추가" 방법을 글로 안내한다. 홈 화면에 추가해야 알림을 받을 수 있다.
+- "다음에" 를 누르면 그 브라우저에서는 14일 동안 저절로 뜨지 않는다. 포털 사용자 메뉴의 "📲 앱으로 설치" 로는 언제든 다시 부를 수 있다.
+- 이미 설치한 앱으로 열었으면 띄우지 않는다. https·localhost 가 아니면 설치 대상이 아니라 뜨지 않는다.
+
+### 시험 도구
+
+알림은 포털 사용자 전원에게 열려 있다. 받을지 말지는 사람마다 마이페이지에서 종류별로 정한다.
+
+- `dev/push_test.php` — 브라우저에서 종류·제목·본문·이동 주소를 넣고 보내 본다. 로그인한 사람은 누구나 열 수 있다.
+  - 받는 사람은 처음에 본인이 골라져 있다. 포털 관리자는 여러 사람을 골라 보낼 수 있고,
+    그 밖의 사람은 본인에게만 보낸다. 그 종류를 꺼 둔 사람은 빠진다.
+  - 결과(푸시 서비스 HTTP 응답)와 발송 기록을 보여 준다. 다른 사람의 구독 현황과 전체 기록은 관리자에게만 보인다.
+- `php dev/push_cli.php --kind test.ping --title 시험 --body 본문 --url dti/index.php --to akddd@bluesoft.co.kr`
+- `php dev/push_crypto_test.php` — 서명(ES256)·암호화(RFC 8291) 왕복과 `push_send()` 의 뒷정리 규칙. DB·네트워크를 쓰지 않는다.
+
+### 구성 요소
+
+| 무엇 | 어디 | 메모 |
+|---|---|---|
+| 서명 키쌍 | 루트 `vapid.key` | 첫 사용 때 자동 생성. **바꾸면 모든 구독이 403 으로 끊긴다** — 서버를 옮길 때 같이 옮긴다 |
+| 구독 | `portal_push_subscription` | 기기마다 한 줄. 404/410 이면 바로 지우고, 5xx·타임아웃이 연달아 5번이면 지운다 |
+| 종류별 설정 | `portal_push_pref` | 고른 것만 줄로 남는다. 없으면 json 의 default |
+| 발송 기록 | `portal_push_log` | 기기·시도마다 한 줄. 이동 주소·HTTP 응답·오류(운영용) |
+| 알림함 | `portal_notification` | 사람마다 한 줄. 읽음 여부. `api/notifications.php` |
+| 머리 태그 | `core/pwa.php` `pwa_head_tags($포털루트까지)` | 포털 `''`, 모듈 `'../'`, 하위 폴더 `'../../'`, dti `$page['base'].'../'` |
+| 아이콘 | `styles/icon-*.png`, `apple-touch-icon.png` | `python dev/gen_icons.py` — favicon 과 같은 심볼 |
+
+왜 composer 라이브러리(minishlink/web-push)를 쓰지 않았나 — 운영 서버에는 `vendor/` 를 깔지 않는다.
+필요한 것(P-256 서명·ECDH·HKDF·AES-128-GCM)은 PHP openssl 확장에 다 있다. Windows PHP 는
+`openssl.cnf` 를 못 찾으면 EC 키 생성이 실패하므로 그때만 `core/push_openssl.cnf`(빈 설정)를 넘긴다.
 
 ---
 
@@ -217,6 +334,14 @@ SSO_SECRET_PATH = os.path.join(BASE, "..", "sso_secret.key")   # 루트 그대�
   - 별도 프로세스인 book 은 PHP 를 못 쓰니 `app.py` 가 **같은 json 을 직접 읽어**
     `whoami` 로 내려주고 화면 JS(`renderWorkSystems`)가 그린다. 포털 트리가 안 보이면 목록만
     비고 화면은 정상 동작한다.
+- **카드 아이콘과 탭 파비콘**: 시스템마다 포털 카드의 색 배지(서비스 색 둥근 사각 + 흰 아이콘)를
+  그대로 줄여 탭 파비콘으로 쓴다. 시스템을 더하면 다음을 함께 한다.
+  1. `styles/icons/<key>.svg` 에 카드 아이콘을 둔다(24 격자, `stroke="currentColor"`). 포털 `ICONS` 는
+     `worksystems.php::work_system_icons()` 로 이 폴더를 읽는다.
+  2. `python dev/gen_favicons.py` 로 `styles/favicons/<key>.svg` 를 만들어 커밋한다(색은 `worksystems.json`).
+  3. 그 시스템의 모든 페이지 `<head>` 에 `<link rel="icon" type="image/svg+xml" href="<포털 루트>styles/favicons/<key>.svg">`
+     를 건다. book 은 `shared-styles/`, dti 는 `dti_asset($page, '../styles/favicons/dti.svg')`.
+  포털 루트(blue-iWorks)만 `styles/favicon.ico`(세 줄)를 그대로 쓴다.
 
 ---
 
@@ -375,6 +500,21 @@ python dev/gen_tiles.py      # tiles.css 를 만든 뒤 wxfx.css 꼬리에 붙�
   거의 직선이 된다. 갈지자는 손으로 잡았다
 - 번개 빛무리를 **파랗게** 뒀더니 보랏빛 뇌우 하늘과 따로 놀았다. 연보라로 바꿨다
 - 첫 번개까지 **15초**를 기다려야 했다. 음수 지연으로 2.5초·5.8초에 당겼다
+
+---
+
+### D-day 색
+
+점판 색은 **제목·메모의 낱말로 고른 종류**(`board_event_kind`)를 따른다. 등록 창의
+`D-day 색` 칸에 그 색이 '자동' 으로 미리 켜져 있고, 글을 고치면 따라 바뀐다.
+다른 칸을 누르면 그 색이 `portal_event.color_kind` 에 남고 더는 글을 따라가지 않는다.
+`자동으로` 를 누르면 다시 비운다(NULL).
+
+- 사람이 고르는 것은 **색뿐이다.** 그림과 폭죽 문구는 여전히 낱말로 고른 종류를
+  따른다 — 색을 경사로 바꿨다고 부고에 폭죽이 터지면 안 된다
+- 자동 색은 서버가 고른다(`GET api/events.php?scope=kind&text=…`). 낱말 표를 JS 에
+  한 벌 더 두지 않는다
+- 서버는 `color`(실제로 칠할 종류 키)와 `color_kind`(고른 값, 자동이면 null)를 함께 내려 준다
 
 ---
 
@@ -1059,6 +1199,23 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 
 ---
 
+## onwatch (OnWatch · 수시 감시)
+
+필요할 때 켜 두는 감시. 지시문으로 "무엇을, 어디서, 어떤 경우에 알릴지" 적어 두면 정한 기간·주기로
+공개 웹을 살피고 **새 소식이 있을 때만** 알린다(포털 알림함·종·카드 배지·푸시 + 슬랙). 누구나 만들고 누구나 본다.
+자세한 구조·설정·배포·시험은 **`onwatch/README.md`**(저장소에 올라가는 문서).
+
+- **두 조각**: `onwatch/*.php`(화면·API)가 `ow_*` 표에 쓰고, `onwatch/worker/run.py`(systemd timer, 1분)가
+  때가 된 감시를 잠가 돌린다. '지금 실행' 은 `ow_watch.run_requested_at` 하나로 전한다 — 파일·소켓 없음.
+- **스키마**는 `onwatch/sql/NNN_*.sql` 이 원본이다. 화면이 처음 DB 에 붙을 때 안 된 파일을 적용한다(`ow_schema`).
+  배치는 표를 만들지 않는다.
+- **조사 두 단계**: Claude(웹 검색·읽기 서버 도구)로 조사 노트 → 도구 없이 JSON 판정. 검색 인용과 구조화
+  출력을 한 요청에 함께 쓸 수 없어서다. API 키가 없으면 claude CLI 로 돈다(검색 상한·정확한 비용은 API 만).
+- **중복 방지**: 이미 알린 목록·사람의 '중복/틀림' 평가를 모델에 주고, 코드가 fingerprint 로 한 번 더 거른다.
+- **비용**: 감시별 월 상한(화면) + 전체 월 상한(`ONWATCH_MONTHLY_BUDGET_USD`). 넘으면 건너뛰고 등록자에게 한 번 알린다.
+- **일정 계산이 두 벌**이다 — `inc/schedule.php`(화면의 '다음 실행')와 `worker/core/schedule.py`(실제 실행).
+  `tests/schedule_cases.json` 을 두 쪽 시험이 같이 읽는다.
+
 ## access (학교 접속 정보)
 
 대학별 svn/git 주소 · 사이트 로그인 · 개발/운영/학사 DB · plink 터널링 · 배포 방법을 찾아
@@ -1259,6 +1416,7 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 | `slackai/worker/.env` | slackai 워커 설정(PHP 경로, Slack 앱 토큰 xapp/xoxb, 개인 xoxp 토큰, API 키, 예산) | `slackai/worker/.env.example` 복사. `config.php` 에 `'slackai'` 절도 추가 |
 | `config.local.php` (루트) | 포털 SSO 토큰 암호화 키 | **자동 생성됨**(최초 실행 시) |
 | `sso_secret.key` (루트) | book과 공유하는 SSO 서명 키 | **자동 생성됨**(최초 실행 시) |
+| `vapid.key` (루트) | 웹 푸시 서명 키쌍 | **자동 생성됨**(첫 알림 사용 시). 서버를 옮기면 같이 옮겨야 구독이 유지된다 |
 | `slack/config.local.php` | Gmail IMAP 계정 정보 | **직접 생성 필요**, 아래 형식 |
 | `book/config_local.py` | Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성 |
 | `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
@@ -1419,6 +1577,15 @@ dti·learn·moodle 은 PHP 라 프록시 블록이 필요 없다. 대신 **문�
 ```nginx
 location ^~ /moodle/watch/ { deny all; }
 location ^~ /learn/var/    { deny all; }
+```
+
+루트의 비밀 키 파일(`sso_secret.key`, `vapid.key`)도 문서루트 안에 있어 막지 않으면 URL 로 그대로
+내려받힌다. PWA 파일 두 개는 갱신이 바로 퍼지도록·형식이 맞도록 따로 적는다:
+
+```nginx
+location ~ \.key$                 { deny all; }
+location = /sw.js                 { add_header Cache-Control "no-cache"; }
+location = /manifest.webmanifest  { default_type application/manifest+json; }
 ```
 
 `learn/var/.htaccess` 가 같은 내용을 담고 있지만 **nginx 는 .htaccess 를 읽지 않는다.** 위 블록이
@@ -1590,6 +1757,30 @@ sudo systemctl enable --now moodle-watch-refresh.path
 - [ ] moodle: 요약 품질은 첫 몇 주 실제 리포트를 보고 `summarizer.py::SYSTEM` 을 손봐야 한다.
 
 ---
+
+## 로컬에서 포털 전체 띄우기 (MySQL 없이)
+
+MySQL 이 없는 PC 에서 포털과 모든 PHP 모듈을 SQLite 로 띄운다. **운영 코드는 그대로다** —
+DB 를 여는 일곱 곳(`core/db.php`, access·learn·slack·slackai·dti·bluecart 의 db.php)이 `new PDO` 대신
+`db_connect()`(`core/sqlite_compat.php`)를 부르고, 이 함수는 운영에서 `new PDO` 와 똑같다.
+
+- 켜지는 조건: 루트 `config.php` 의 `db.driver` 가 `'sqlite'` **이고** PHP 내장 서버(`php -S`)·명령줄일 때.
+  운영(php-fpm)에서는 config 가 어떻든 켜지지 않는다.
+- 준비물: `D:\php82` 에 PHP 8.2 (php.ini 에서 pdo_sqlite·sqlite3·mbstring·openssl·fileinfo·curl 켬).
+- 실행: 루트 `로컬_실행.bat` 더블클릭 → `dev/local_setup.php`(설정 파일 생성·스키마 적용, 여러 번 돌려도 됨) →
+  http://127.0.0.1:8780/ . 계정은 사내 13명, 처음 비밀번호 `blue$123`. 8765 는 파이썬 출장여비가 쓰고 있어 피했다.
+- 데이터: `var/localdb/<DB이름>.sqlite` (gitignore). 지우고 다시 실행하면 빈 상태로 돌아간다.
+- `local_setup.php` 가 만드는 것: SQLite 용 루트 `config.php`(이미 있으면 손대지 않고, driver 가 sqlite 가
+  아니면 멈춘다), `bluecart/config/config.php`(포털 연동 표본 복사), bluecart `sql/*.sql` 과 studio
+  `sql/apply.sh` 의 FILES 목록을 번역기로 적용(`_local_sql_applied` 에 기록).
+- 문지기: `dev/local_router.php` 가 nginx deny 와 같은 것(설정·키·DB 파일·업로드 원본·배치 소스)을 막는다.
+- 번역기 범위: 이 저장소가 쓰는 MySQL 문법만(DDL·ALTER·upsert·INSERT IGNORE·information_schema·SHOW·
+  NOW/DATE_SUB/TIMESTAMPDIFF/FIELD/GROUP_CONCAT …). 문자열 비교는 `_ci` 처럼 대소문자를 무시한다.
+  모르는 문법이 나오면 서버 창에 `[sqlite_compat]` 로 원문·번역문이 찍힌다 — 그걸 보고 규칙을 늘린다.
+  한계: `ON UPDATE CURRENT_TIMESTAMP` 무시, 문자열 안 `\t` 같은 백슬래시 이스케이프는 글자 그대로.
+- 안 되는 것: 슬랙(개인 토큰)·Gmail(IMAP)·웹훅·LLM 등 바깥 연동, book(파이썬, 따로 띄워야 함).
+- 2026-10-21 확인: 포털 로그인·공지·일정, BlueCart 요청, BlueLearn 신청, BlueStudio 프로젝트 생성, BlueLedger
+  출장여비(46건 이관), access·moodle·dti 화면과 그 화면들의 API 요청 전부 정상.
 
 ## 로컬 개발 팁
 

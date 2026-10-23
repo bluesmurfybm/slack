@@ -69,17 +69,22 @@ def answerable(entries: list[KnowledgeEntry]) -> list[KnowledgeEntry]:
     return [entry for entry in entries if not entry.handoff]
 
 
-def format_entries(entries: list[KnowledgeEntry]) -> str:
-    """지식 엔트리를 프롬프트에 넣을 <knowledge> XML 본문으로 만듭니다."""
+def format_entries(entries: list[KnowledgeEntry], *, handoff_in_domain: bool = False) -> str:
+    """지식 엔트리를 프롬프트에 넣을 <knowledge> XML 본문으로 만들며, handoff_in_domain이면 이관 항목도 답변과 함께 분야 안에 이관 표시를 붙여 넣습니다."""
     if not entries:
         return ""
+    if handoff_in_domain:
+        parts = [
+            _format_domain(domain, items) for domain, items in sorted(_by_domain(entries).items())
+        ]
+        return "<knowledge>\n" + "\n".join(parts) + "\n</knowledge>"
     parts = [
         _format_domain(domain, items)
         for domain, items in sorted(_by_domain(answerable(entries)).items())
     ]
     handoff = sorted((entry for entry in entries if entry.handoff), key=lambda e: e.id)
     if handoff:
-        body = "\n".join(_format_entry(entry) for entry in handoff)
+        body = "\n".join(_format_handoff_entry(entry) for entry in handoff)
         parts.append(f"<handoff>\n{body}\n</handoff>")
     return "<knowledge>\n" + "\n".join(parts) + "\n</knowledge>"
 
@@ -124,9 +129,17 @@ def _by_domain(entries: list[KnowledgeEntry]) -> dict[str, list[KnowledgeEntry]]
     return grouped
 
 
+def _format_handoff_entry(entry: KnowledgeEntry) -> str:
+    aliases = f"<aliases>{escape(' / '.join(entry.aliases))}</aliases>" if entry.aliases else ""
+    return (
+        f'<entry id="{escape(entry.id)}"><question>{escape(entry.question)}</question>'
+        f"{aliases}</entry>"
+    )
+
+
 def _format_entry(entry: KnowledgeEntry) -> str:
     lines = [
-        f'<entry id="{escape(entry.id)}">',
+        f'<entry id="{escape(entry.id)}"{' handoff="true"' if entry.handoff else ""}>',
         f"<question>{escape(entry.question)}</question>",
     ]
     if entry.aliases:

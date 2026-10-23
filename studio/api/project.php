@@ -4,16 +4,20 @@
  *
  * GET  api/project.php?act=list
  * GET  api/project.php?act=get&id=1
+ * GET  api/project.php?act=source_text&id=12   출처 문서 추출 본문 (뷰어용)
  * POST api/project.php?act=create
  * POST api/project.php?act=update
  * POST api/project.php?act=delete          소프트 삭제
  * POST api/project.php?act=restore         삭제 취소
  * POST api/project.php?act=upload_source   파일(multipart) | 링크 | 직접입력
  * POST api/project.php?act=delete_source
+ * POST api/project.php?act=add_editor      공동 편집자 지정 (PM·관리자)
+ * POST api/project.php?act=remove_editor   공동 편집자 해제 (PM·관리자)
  */
 
 declare(strict_types=1);
 require_once __DIR__ . '/_init.php';
+require_once BS_ROOT . '/inc/presenter.php';      // bs_present_source()
 require_once BS_ROOT . '/inc/repo/ProjectRepo.php';
 require_once BS_ROOT . '/inc/service/SourceUploader.php';
 
@@ -82,13 +86,46 @@ bs_route(bs_param_str('act', 'list'), [
         ]);
     },
 
+    /**
+     * 출처 문서의 추출 본문 — 화면 뷰어용 (2026-10-15).
+     *
+     * 엑셀·PPT·워드는 브라우저가 그리지 못하고, 외부 뷰어는 문서를 바깥으로
+     * 보내는 일이라 쓰지 않는다. 업로드 때 뽑아 둔 글(parsed_text)을 보여 준다.
+     * 원본 그대로가 필요하면 내려받기(api/source_download.php)를 쓴다.
+     */
+    'source_text' => function () use ($repo): void {
+        bs_require_login_api();
+
+        $sid = bs_param_int('id', 0) ?? 0;
+        $src = $sid > 0 ? $repo->findSourceForView($sid, bs_is_admin()) : null;
+        if (!$src) {
+            bs_json_error('NOT_FOUND', '문서를 찾을 수 없습니다.', 404);
+        }
+
+        // 화면이 굳지 않을 만큼만. 넘치면 잘랐다고 알린다.
+        $max  = 200000;
+        $text = (string)($src['parsed_text'] ?? '');
+        $len  = mb_strlen($text);
+
+        bs_json_ok([
+            'id'           => (int)$src['id'],
+            'title'        => $src['title'],
+            'parse_status' => $src['parse_status'],
+            'text'         => $len > $max ? mb_substr($text, 0, $max) : $text,
+            'truncated'    => $len > $max,
+            'length'       => $len,
+            'has_file'     => !empty($src['file_path']),
+        ]);
+    },
+
     // =================================================================
     // 변경 — PM/관리자만
     // =================================================================
 
     'create' => function () use ($repo): void {
         $user = bs_begin_write();
-        bs_require_cap_api(BS_CAP_PROJECT_MANAGE);
+        // 관리자 + 관리자가 등록 권한을 켜 준 사람 (027). 등록한 사람이 PM 이 된다.
+        bs_require_cap_api(BS_CAP_PROJECT_CREATE);
 
         $data = bs_read_project_input(true);
         if ($data['name'] === '') {
@@ -157,6 +194,11 @@ bs_route(bs_param_str('act', 'list'), [
             bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
         }
         bs_require_cap_api(BS_CAP_PROJECT_MANAGE, $id);
+        // 삭제는 PM·관리자만 (2026-10-14). 공동 편집자도 PROJECT_MANAGE 를
+        // 가지므로 따로 막는다 — 고칠 수 있다고 지울 수 있는 것은 아니다.
+        if (!bs_can_own_project($id)) {
+            bs_json_error('FORBIDDEN', '프로젝트 삭제는 담당 PM 과 관리자만 할 수 있습니다.', 403);
+        }
 
         // 실수로 지우는 것을 막는다. BlueCart 가 영구 삭제에 요청번호를 받는 것과 같은 장치.
         if (bs_param_str('confirm') !== $row['code']) {
@@ -212,6 +254,16 @@ bs_route(bs_param_str('act', 'list'), [
 
         $uploader = new SourceUploader($repo);
         $type     = bs_param_str('source_type', 'file');
+        // 어느 블록에서 올렸는가 (023). 참고 자료는 WBS 도출에서 빠진다.
+        $purpose  = bs_param_str('purpose', 'scope');
+        if (!isset(BS_SOURCE_PURPOSE[$purpose])) {
+            bs_json_error('INVALID_ARGUMENT', '알 수 없는 용도입니다: ' . $purpose, 400);
+        }
+        $mark = static function (array $saved) use ($repo, $projectId, $purpose): void {
+            if ($purpose !== 'scope') {
+                $repo->setSourcePurpose($projectId, array_column($saved, 'id'), $purpose);
+            }
+        };
 
         switch ($type) {
             case 'file':
@@ -219,6 +271,7 @@ bs_route(bs_param_str('act', 'list'), [
                     bs_json_error('MISSING_PARAM', '선택된 파일이 없습니다.', 400);
                 }
                 $r = $uploader->storeMany($projectId, $_FILES['files'], $user);
+                $mark($r['saved']);
 
                 $msg = count($r['saved']) . '개를 등록했습니다.';
                 if ($r['failed']) {
@@ -239,6 +292,7 @@ bs_route(bs_param_str('act', 'list'), [
                     bs_param_str('title'),
                     $user
                 );
+                $mark([$saved]);
                 bs_json_ok([
                     'saved'   => [$saved],
                     'failed'  => [],
@@ -253,6 +307,7 @@ bs_route(bs_param_str('act', 'list'), [
                     bs_param_str('title'),
                     $user
                 );
+                $mark([$saved]);
                 bs_json_ok([
                     'saved'   => [$saved],
                     'failed'  => [],
@@ -263,6 +318,37 @@ bs_route(bs_param_str('act', 'list'), [
             default:
                 bs_json_error('INVALID_ARGUMENT', '알 수 없는 출처 종류입니다: ' . $type, 400);
         }
+    },
+
+    /**
+     * 공동 편집자 지정·해제 (026, 2026-10-14). PM·관리자만.
+     *
+     * 편집자는 정보·문서·WBS·배정안 산출까지 한다. 배정 확정·삭제·편집자
+     * 지정은 하지 않는다(bs_can, bs_can_own_project).
+     */
+    'add_editor' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $id   = bs_editor_project_param($repo);
+        $uid  = trim(bs_param_str('user_id'));
+        require_once BS_ROOT . '/inc/repo/MemberRepo.php';
+        $m = $uid !== '' ? (new MemberRepo(bs_db()))->findByUserId($uid) : null;
+        if (!$m) {
+            bs_json_error('NOT_FOUND', '구성원 명단에 없는 사람입니다.', 404);
+        }
+        if (bs_is_pm($id, $uid)) {
+            bs_json_error('INVALID_ARGUMENT', '담당 PM 은 원래 고칠 수 있습니다.', 400);
+        }
+        $repo->addEditor($id, $uid, (string)$m['emp_name'], $user);
+        bs_json_ok(['editors' => $repo->editors($id),
+                    'message' => $m['emp_name'] . ' 님을 공동 편집자로 지정했습니다.']);
+    },
+
+    'remove_editor' => function () use ($repo): void {
+        bs_begin_write();
+        $id  = bs_editor_project_param($repo);
+        $uid = trim(bs_param_str('user_id'));
+        $repo->removeEditor($id, $uid);
+        bs_json_ok(['editors' => $repo->editors($id), 'message' => '공동 편집자에서 뺐습니다.']);
     },
 
     'delete_source' => function () use ($repo): void {
@@ -405,26 +491,17 @@ function bs_present_project_row(array $r): array
     ];
 }
 
-/**
- * 출처 문서.
- * file_path 는 절대 내보내지 않는다 — 서버 디렉터리 구조를 알려 줄 이유가 없다.
- */
-function bs_present_source(array $r): array
+/** add_editor / remove_editor 공통 — 프로젝트가 있고, PM·관리자인가. */
+function bs_editor_project_param(ProjectRepo $repo): int
 {
-    return [
-        'id'           => (int)$r['id'],
-        'kind'         => $r['kind'],
-        'kind_label'   => BS_SOURCE_KIND[$r['kind']] ?? $r['kind'],
-        'title'        => $r['title'],
-        'url'          => $r['url'],
-        'file_size'    => isset($r['file_size']) ? (int)$r['file_size'] : null,
-        'size_label'   => isset($r['file_size']) && $r['file_size'] !== null
-                            ? SourceUploader::humanSize((int)$r['file_size']) : null,
-        'mime'         => $r['mime'],
-        'parse_status' => $r['parse_status'],
-        'parse_error'  => $r['parse_error'],
-        'parsed_len'   => isset($r['parsed_len']) ? (int)$r['parsed_len'] : null,
-        'uploaded_by'  => $r['uploaded_by_name'] ?? null,
-        'created_at'   => bs_date($r['created_at'], 'Y-m-d H:i'),
-    ];
+    $id = bs_param_int('project_id', 0);
+    if (!$id || !$repo->find($id)) {
+        bs_json_error('NOT_FOUND', '프로젝트를 찾을 수 없습니다.', 404);
+    }
+    if (!bs_can_own_project($id)) {
+        bs_json_error('FORBIDDEN', '공동 편집자는 담당 PM 과 관리자만 지정할 수 있습니다.', 403);
+    }
+    return $id;
 }
+
+// bs_present_source() 는 inc/presenter.php 로 옮겼다 (2026-10-19 — R&D 참고자료도 쓴다).

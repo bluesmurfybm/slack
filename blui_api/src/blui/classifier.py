@@ -1,9 +1,10 @@
 from typing import Literal
 
+from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, Field
 
-from common.llm.client import LLMClient
-from common.messages import Message
+from blui import agents
+from blui.agents import Agent
 
 Domain = Literal["web", "shop", "lms", "she", "mkt", "com", "other"]
 
@@ -36,21 +37,6 @@ class ClassifierOutput(BaseModel):
     domain: Domain = Field(description="유저가 지금 문의하는 분야")
 
 
-class Classifier:
-    """대화 이력을 보고 유저가 지금 문의하는 서비스를 선택합니다."""
-
-    def __init__(self, llm_client: LLMClient) -> None:
-        self._llm_client = llm_client
-
-    def classify(self, messages: list[Message]) -> Domain | None:
-        """판정을 받지 못하면 None을 반환합니다."""
-        generated = self._llm_client.generate(
-            system=INSTRUCTIONS,
-            messages=messages,
-            output_format=ClassifierOutput,
-            tools=[],
-            temperature=0,
-        )
-        if generated.output is None:
-            return None
-        return generated.output.domain
+def build(light_model: BaseChatModel) -> Agent:
+    """대화 이력을 보고 유저가 지금 문의하는 분야를 선택하는 에이전트를 생성합니다."""
+    return agents.build(light_model, ClassifierOutput, INSTRUCTIONS)

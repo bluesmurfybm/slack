@@ -8,6 +8,20 @@
  *       │              └──철회──▶ CANCELED
  *       └──철회──▶ CANCELED
  *
+ * 요청자 철회
+ *   - 구매 진행 전(검토 대기·반려·구매 대기)이면 요청자가 직접 철회할 수 있다.
+ *   - 구매 대기 건의 철회는 요청자 본인만. 처리하는 쪽은 구매 중단을 쓴다.
+ *     관리자에게 같은 일을 하는 버튼이 둘 뜨지 않게 하려는 것.
+ *   - 구매 대기 건을 철회하면 사려고 기다리던 구매담당자에게도 알린다.
+ *
+ * 구매 중단
+ *   - 승인 뒤 구비 완료 전(구매 대기·구매 진행)에 사정이 생겨 그만둘 때 쓴다.
+ *     APPROVED / PURCHASING ──중단──▶ CANCELED
+ *   - 요청자의 철회와 결과(철회 상태)는 같지만, 이벤트를 따로 둔다. 철회는
+ *     처리하는 쪽에 알리는 것이고, 중단은 기다리던 요청자에게 알려야 한다.
+ *   - 구매 진행·구비 완료와 같은 규칙: 지정된 담당자와 관리자만, 미지정이면
+ *     구매담당자 누구나. 사유는 적을 수 있게만 하고 비워도 된다.
+ *
  * 구매 담당 지정
  *   - 구매담당자가 한 명뿐이면 지정 단계 자체가 없다. 그 사람이 바로 처리한다.
  *   - 두 명 이상일 때만 승인 시 지목할 수 있다(선택).
@@ -111,6 +125,7 @@ const BC_EVENT = [
     'PURCHASE_ASSIGNED'   => '구매 담당 지정',
     'PURCHASE_STARTED'    => '구매 진행 시작',
     'PURCHASE_DONE'       => '구비 완료',
+    'PURCHASE_CANCELED'   => '구매 중단',
 ];
 
 /**
@@ -157,6 +172,7 @@ const BC_EVENT_EMOJI = [
     'PURCHASE_ASSIGNED'   => ':bust_in_silhouette:',
     'PURCHASE_STARTED'    => ':truck:',
     'PURCHASE_DONE'       => ':package:',
+    'PURCHASE_CANCELED'   => ':no_entry:',
 ];
 
 /**
@@ -217,13 +233,18 @@ const BC_ACTIONS = [
         'role' => ['BUYER', 'ADMIN'], 'event' => 'PURCHASE_DONE',
         'comment' => false, 'label' => '구비 완료', 'assignee_only' => true,
     ],
+    'stop' => [
+        'from' => ['APPROVED', 'PURCHASING'], 'to' => 'CANCELED',
+        'role' => ['BUYER', 'ADMIN'], 'event' => 'PURCHASE_CANCELED',
+        'comment' => false, 'label' => '구매 중단', 'assignee_only' => true,
+    ],
     'resubmit' => [
         'from' => ['REJECTED'], 'to' => 'REQUESTED',
         'role' => ['OWNER'], 'event' => 'REQUEST_RESUBMITTED',
         'comment' => false, 'label' => '재요청',
     ],
     'cancel' => [
-        'from' => ['REQUESTED', 'REJECTED'], 'to' => 'CANCELED',
+        'from' => ['REQUESTED', 'REJECTED', 'APPROVED'], 'to' => 'CANCELED',
         'role' => ['OWNER', 'ADMIN'], 'event' => 'REQUEST_CANCELED',
         'comment' => false, 'label' => '철회',
     ],
@@ -233,12 +254,13 @@ const BC_ACTIONS = [
 const BC_EVENT_TARGETS = [
     'REQUEST_CREATED'     => ['REVIEWER'],
     'REQUEST_RESUBMITTED' => ['REVIEWER'],
-    'REQUEST_CANCELED'    => ['REVIEWER'],
+    'REQUEST_CANCELED'    => ['REVIEWER', 'BUYER'],   // BUYER 는 구매 대기에서 철회한 때만
     'REVIEW_APPROVED'     => ['BUYER', 'REQUESTER'],
     'REVIEW_REJECTED'     => ['REQUESTER'],
     'PURCHASE_ASSIGNED'   => ['BUYER'],
     'PURCHASE_STARTED'    => ['REQUESTER'],
     'PURCHASE_DONE'       => ['REQUESTER', 'REVIEWER'],
+    'PURCHASE_CANCELED'   => ['REQUESTER', 'REVIEWER'],
 ];
 
 function bc_status_label(string $code): string
@@ -274,6 +296,11 @@ function bc_available_actions(array $request, ?array $user = null): array
                 $allowed = true;
                 break;
             }
+        }
+
+        // 구매 대기 건의 철회는 요청 본인만. 관리자는 구매 중단을 쓴다.
+        if ($allowed && $key === 'cancel' && $request['status'] === 'APPROVED' && !$isOwner) {
+            $allowed = false;
         }
 
         // 구매담당자가 한 명뿐이면 담당을 지정할 대상이 없다.

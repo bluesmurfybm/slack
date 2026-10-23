@@ -23,7 +23,8 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>유사 요청 찾기</title>
-<link rel="icon" href="../../styles/favicon.ico">
+<link rel="icon" type="image/svg+xml" href="../../styles/favicons/slackai.svg">
+<?php require_once __DIR__ . '/../../core/pwa.php'; echo pwa_head_tags('../../'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
