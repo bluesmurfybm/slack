@@ -120,7 +120,7 @@ input,select{font:inherit;font-size:14px;padding:8px 11px;border:1px solid var(-
 input:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(18,40,74,.12)}
 input:disabled,select:disabled{background:var(--soft);color:var(--sub)}
 input.chk{min-height:auto;width:17px;height:17px;padding:0;accent-color:var(--primary)}
-.btn{font:inherit;font-size:14px;font-weight:600;padding:9px 16px;border-radius:8px;border:1px solid var(--primary);background:var(--primary);color:#fff;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;white-space:nowrap;text-decoration:none}
+.btn{font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--primary);background:var(--primary);color:#fff;cursor:pointer;min-height:34px;display:inline-flex;align-items:center;white-space:nowrap;text-decoration:none}
 .btn:hover{background:var(--primary-h);border-color:var(--primary-h);color:#fff;text-decoration:none}
 .btn.ghost{background:var(--panel);color:var(--ink2);border-color:var(--line)}
 .btn.ghost:hover{border-color:var(--primary);color:var(--ink2)}
