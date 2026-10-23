@@ -20,6 +20,7 @@ require_once __DIR__ . '/lib/views_classify.php';
 require_once __DIR__ . '/lib/ledger_cards.php';
 require_once __DIR__ . '/lib/views_settle.php';
 require_once __DIR__ . '/lib/ledger_close.php';
+require_once __DIR__ . '/lib/ledger_admin.php';
 
 // 포털 카드 key 는 'ledger'(출장여비 BlueExpense 가 'blueledger'). 로그인 안내에 BlueLedger 이름이 나오게 한다.
 $u = current_portal_user();
@@ -70,6 +71,10 @@ function lg_routes() {
         'close'         => ['월마감', 'lg_page_close', 'lg_view_close', 'lg_post_close', 'close'],
         'reports'       => ['보고서', 'lg_page_reports', 'lg_view_reports', null, 'reports'],
         'reports_xlsx'  => ['', null, null, null, ''],
+        'backup'        => ['장부 내려받기', 'lg_page_backup', 'lg_view_backup', null, 'backup'],
+        'backup_xlsx'   => ['', null, null, null, ''],
+        'members'       => ['출입 명단', 'lg_page_members', 'lg_view_members', 'lg_post_members', 'backup'],
+        'log'           => ['작업 기록', 'lg_page_log', 'lg_view_log', null, 'backup'],
         'soon'          => ['준비 중', null, null, null, 'soon'],
         'daybook_xlsx'  => ['', null, null, null, ''],
         'cashbook_xlsx' => ['', null, null, null, ''],
@@ -129,12 +134,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 if (!$pageFn && $postFn) lg_redirect(lg_url($nav));       // 저장 전용 주소를 그냥 열면 해당 화면으로
 
 /* ---------- 엑셀 받기 */
-if ($p === 'daybook_xlsx' || $p === 'cashbook_xlsx' || $p === 'reports_xlsx') {
+if (in_array($p, ['daybook_xlsx', 'cashbook_xlsx', 'reports_xlsx', 'backup_xlsx'], true)) {
     session_write_close();
     [$wb, $name] = match ($p) {
         'daybook_xlsx' => lg_daybook_book($_GET, $u['name']),
         'cashbook_xlsx' => lg_cashbook_book($_GET, $u['name']),
         'reports_xlsx' => lg_reports_book($_GET),
+        'backup_xlsx' => lg_backup_book(),
     };
     $wb->download($name);
 }

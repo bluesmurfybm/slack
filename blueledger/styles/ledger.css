@@ -163,6 +163,9 @@ tr.sum td{font-weight:700;background:var(--sum);border-top:1px solid var(--line)
 .subtabs a{padding:8px 14px;font-size:13.5px;font-weight:600;color:var(--sub);border-bottom:2px solid transparent;margin-bottom:-1px}
 .subtabs a:hover{color:var(--ink2);text-decoration:none}
 .subtabs a.on{color:var(--ink2);border-bottom-color:var(--accent)}
+/* 작업 기록: 지운 거래 원래 내용 */
+pre.logdata{max-width:520px;max-height:260px;overflow:auto;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;white-space:pre-wrap}
+
 /* 보고서: 비용 많은 순서 막대 */
 .barrow{display:flex;align-items:center;gap:10px;font-size:13.5px}
 .barrow .bn{width:150px;flex:none}

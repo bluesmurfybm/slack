@@ -49,6 +49,7 @@ function lg_icon($name, $color = '#ffffff', $size = 26) {
         'ledger'  => '<path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2Z"/><path d="M4 18a2 2 0 0 1 2-2h12"/><path d="M8 8h6"/><path d="M8 12h4"/><path d="M18 9h2v9h-2"/>',
         'list'    => '<path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/>',
         'back'    => '<path d="M10 6l-6 6 6 6"/><path d="M4 12h16"/>',
+        'download' => '<path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/>',
         'logout'  => '<path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>',
         'upload'  => '<path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
         'tag'     => '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
@@ -86,6 +87,11 @@ const LG_NAV = [
         ['chart', '보고서', 'reports'],
         ['pencil', '수기 입력', 'manual'],
         ['sliders', '기준정보', 'accounts'],
+    ],
+    '관리' => [
+        ['download', '장부 내려받기', 'backup'],
+        ['users', '출입 명단', 'members'],
+        ['list', '작업 기록', 'log'],
     ],
     'PHP 옮기는 중' => [
         ['users', '급여대장', null],
@@ -191,7 +197,7 @@ function lg_view_home(array $v, array $me, array $flashes) {
     <a class="btn primary" href="<?= h(lg_url('today', ['d' => $ti['d']])) ?>"><?= $ceo ? '오늘의 출납장 보기' : '오늘의 출납장 쓰기' ?></a>
     <a class="btn" href="<?= h(lg_url('cashbook')) ?>">자금일보</a>
     <a class="btn" href="<?= h(lg_url('daybook')) ?>">출납장 엑셀</a>
-    <?php if (!$ceo): ?><a class="btn ghost" href="<?= h(lg_soon_link('거래 가져오기')) ?>">통장·카드 가져오기</a><?php endif ?>
+    <?php if (!$ceo): ?><a class="btn ghost" href="<?= h(lg_url('inbox')) ?>">통장·카드 가져오기</a><?php endif ?>
   </div>
 
   <div class="cols">
@@ -242,8 +248,8 @@ function lg_view_home(array $v, array $me, array $flashes) {
 /* ================================================================ 준비 중 */
 
 function lg_view_soon($name) {
-    return '<div class="box"><h2>' . h($name) . '</h2><p class="help">이 메뉴는 아직 PHP 로 옮기는 중이에요. 지금은 PC 의 파이썬 BlueLedger 에서 해 주세요.<br>'
-         . '옮기는 순서: 화면 틀·권한 → 기준정보·거래 목록·출납장·자금일보 → 거래 가져오기 → 분류 → 카드 맞춰보기 → 증빙·정산 → 급여 → 월마감·보고서·백업</p></div>';
+    return '<div class="box"><h2>' . h($name) . '</h2><p class="help">이 메뉴는 아직 PHP 로 옮기지 않았어요. 지금은 PC 의 파이썬 BlueLedger 에서 해 주세요.<br>'
+         . '급여대장(항목 설정·엑셀 가져오기·4대보험 나누기·급여명세서)만 남았고, 나머지 메뉴는 모두 여기서 쓸 수 있어요.</p></div>';
 }
 
 /* ================================================================ 기준정보 */
