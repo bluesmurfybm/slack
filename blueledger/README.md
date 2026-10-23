@@ -1,7 +1,9 @@
 # BlueLedger (blueledger)
 
-사내 재무회계 프로그램 BlueLedger 를 포털(blue-iWorks)로 옮기는 모듈. **지금은 출장여비만 옮겼다.**
-회계 장부(통장·카드·급여·정산 등, 파이썬 `app.py`)는 아직 지안 님 PC 의 파이썬 버전에 있다.
+사내 재무회계 프로그램 BlueLedger 를 포털(blue-iWorks)로 옮기는 모듈. 출장여비는 다 옮겼고,
+회계 장부(파이썬 `app.py`)는 **1단계(홈·기준정보·거래 목록·일일출납장·자금일보와 그 엑셀)** 까지 옮겼다.
+나머지(거래 가져오기·분류·카드 맞춰보기·증빙·급여·월마감·보고서)는 아직 지안 님 PC 의 파이썬 버전에 있다.
+아래 '회계 장부' 절 참고.
 
 화면에 보이는 이름은 **BlueExpense**(출장여비)다. 폴더·주소(`blueledger/`)·
 업무 시스템 key(`blueledger`)·표 이름(`bl_*`)은 그대로 둔다. 바꾸면 배포 주소·nginx 규칙·DB 를 함께 옮겨야 한다.
@@ -88,7 +90,38 @@ DB 는 포털 MySQL 백업에 같이 들어간다(`bl_travel_*` 네 테이블). 
 옛 기록은 그 뒤 `D:\php82\php.exe blueledger\tools\import_travel.php <travel.db>` 로 넣는다.
 BlueLedger 의 SQL 은 MySQL/SQLite 둘 다 읽는 모양으로만 썼다(`db.php` 의 bl_upsert 등) — 번역기에 기대지 않는다.
 
+## 회계 장부 (ledger.php)
+
+출장여비와 달리 화면마다 서버가 HTML 을 만든다(파이썬 버전과 같은 방식). 표·입력칸이 많은 화면을 그대로 옮기고
+파이썬과 숫자를 칸 단위로 맞춰 보기 쉽게 하려는 것이다. 주소는 `blueledger/ledger.php?p=화면`.
+
+```
+ledger.php              입구. 출입 검사 → 저장(POST)·엑셀·화면으로 나눈다
+lib/ledger.php          계산 — 파이썬 함수를 같은 이름(lg_ 접두사)·같은 방식으로 옮김(잔액·카드 청구서·자금일보·자동 분류)
+lib/ledger_pages.php    화면별 값 만들기(lg_page_*)와 저장 처리(lg_post_*)
+lib/ledger_views.php    화면 HTML (파이썬 templates/*.html 을 같은 문구로)
+lib/ledger_xlsx.php     출납장·자금일보 엑셀. 칸 합치기·테두리·수식이 되는 작은 xlsx 작성기(composer·ZipArchive 없이)
+styles/ledger.css, static/ledger.js
+tools/import_ledger.php 파이썬 장부(blueledger.db 복사본) → bl_ledger_* 표 옮기기
+```
+
+- 표: `bl_ledger_*` 16개(`db.php` BL_SCHEMA). 파이썬 표와 컬럼이 같고, settings 의 key/value 만 k/v 로 바꿨다.
+  번호가 저절로 붙는 표는 BL_SCHEMA 의 `'auto'`, 겹치면 안 되는 칸은 `'unique'` 로 적는다(bl_ddl 이 읽음).
+- 출입: 포털 로그인 + `bl_ledger_roles` 출입 명단. 명단에 없으면 403. 처음엔 jian=담당자(clerk), kimhy=대표(ceo, 보기 전용).
+  대표의 저장 요청은 서버가 막는다. 저장 요청은 모두 `_csrf` 값이 맞아야 한다.
+- 작업 기록: 저장·삭제마다 `bl_ledger_log` 에 남긴다. 거래를 지우면 지운 줄의 원래 내용(JSON)도 남긴다 —
+  파이썬 버전의 '지우기 전 장부 파일 백업' 대신이다.
+- 아직 안 옮긴 메뉴는 'PHP 옮기는 중' 안내 화면으로 간다.
+- 옮기기: `D:\php82\php.exe blueledger\tools\import_ledger.php "<장부 복사본>"` (이미 거래가 있으면 `--replace`).
+  원본 장부가 아니라 반드시 복사본을 넘긴다. 파일은 읽기 전용으로 연다.
+- 대조(2026-10-23, 장부 복사본): 파이썬 화면 값과 홈·기준정보·거래 목록 10가지·출납장·오늘의 출납장 598(299일×통장 2)·
+  자금일보 299일을 칸마다 비교해 198,524개 모두 같음. 엑셀(출납장 1~10월·9월, 자금일보 4일)도 값·수식·서식·칸 합치기까지 같음.
+  9/30 주거래계좌 잔액 1,394,494,164원, 10/23 카드 결제 예정 10,388,318원.
+- 백업에 `bl_ledger_*` 표를 더해야 한다.
+- MariaDB 에서 `ONLY_FULL_GROUP_BY` 를 켜 두었다면 잔액 계산(`lg_balances`)의 `GROUP BY a.id` 가 거절될 수 있다 — 운영 sql_mode 확인 필요.
+
 ## 알려진 남은 일
 
 - 포털 로그인(`api/login.php`)에 로그인 시도 횟수 제한이 없다 — 외부 공개 전에 포털 쪽에 넣어야 한다.
-- 회계 장부 화면 이식.
+- 회계 장부 2단계부터: 거래 가져오기 → 분류 → 카드 맞춰보기 → 증빙·정산 → 급여 → 월마감·보고서·백업.
+- 장부를 포털 카드에서 여는 길(`core/worksystems.json`)은 아직 없다. 지금은 `blueledger/ledger.php` 주소로 들어간다.
