@@ -18,6 +18,7 @@ require_once __DIR__ . '/lib/ledger_xlsx.php';
 require_once __DIR__ . '/lib/views_import.php';
 require_once __DIR__ . '/lib/views_classify.php';
 require_once __DIR__ . '/lib/ledger_cards.php';
+require_once __DIR__ . '/lib/views_settle.php';
 
 // 포털 카드 key 는 'ledger'(출장여비 BlueExpense 가 'blueledger'). 로그인 안내에 BlueLedger 이름이 나오게 한다.
 $u = current_portal_user();
@@ -58,6 +59,13 @@ function lg_routes() {
         'split'         => ['거래 나누기', 'lg_page_split', 'lg_view_split', 'lg_post_split', 'classify_groups'],
         'manual'        => ['수기 입력', 'lg_page_manual', 'lg_view_manual', 'lg_post_manual', 'manual'],
         'card_check'    => ['카드대금 맞춰보기', 'lg_page_card_check', 'lg_view_card_check', 'lg_post_card_check', 'accounts'],
+        'settle'        => ['증빙·정산', 'lg_page_settle', 'lg_view_settle', 'lg_post_settle', 'settle'],
+        'settle_bulk'   => ['증빙·정산', null, null, 'lg_post_settle_bulk', 'settle'],
+        'invoice_import' => ['세금계산서 가져오기', 'lg_page_invoice_import', 'lg_view_invoice_import', 'lg_post_invoice_import', 'settle'],
+        'invoice_done'  => ['세금계산서 가져오기 · 결과', 'lg_page_import_done', 'lg_view_invoice_done', null, 'settle'],
+        'invoice'       => ['세금계산서', 'lg_page_invoice', 'lg_view_invoice', 'lg_post_invoice', 'settle'],
+        'prepaid'       => ['충전금으로 정산', 'lg_page_prepaid', 'lg_view_prepaid', 'lg_post_prepaid', 'settle'],
+        'partners'      => ['거래처', 'lg_page_partners', 'lg_view_partners', 'lg_post_partners', 'settle'],
         'soon'          => ['준비 중', null, null, null, 'soon'],
         'daybook_xlsx'  => ['', null, null, null, ''],
         'cashbook_xlsx' => ['', null, null, null, ''],

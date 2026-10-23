@@ -81,11 +81,11 @@ const LG_NAV = [
         ['list', '거래 목록', 'transactions'],
         ['upload', '거래 가져오기', 'import'],
         ['tag', '분류', 'classify_groups'],
+        ['link', '증빙·정산', 'settle'],
         ['pencil', '수기 입력', 'manual'],
         ['sliders', '기준정보', 'accounts'],
     ],
     'PHP 옮기는 중' => [
-        ['link', '증빙·정산', null],
         ['lock', '월마감', null],
         ['chart', '보고서', null],
         ['users', '급여대장', null],
@@ -215,7 +215,7 @@ function lg_view_home(array $v, array $me, array $flashes) {
         <div class="todo-list">
           <a class="todo" href="<?= h(lg_url('classify_groups')) ?>"><span>미분류 거래 확인</span><span class="tag <?= $v['uncategorized'] ? 'warn' : 'ok' ?>"><?= $v['uncategorized'] ?>건</span></a>
           <a class="todo" href="<?= h(lg_url('transactions')) ?>"><span>이번 달 들어온 거래</span><span class="tag"><?= $v['month_cnt'] ?>건</span></a>
-          <a class="todo" href="<?= h(lg_soon_link('증빙·정산')) ?>"><span>미수금 · 미지급금 세금계산서<?= $v['n_check'] ? ' (확인 필요 ' . $v['n_check'] . '건)' : '' ?></span><span class="tag <?= $v['n_open'] ? 'warn' : 'ok' ?>"><?= $v['n_open'] ?>건</span></a>
+          <a class="todo" href="<?= h(lg_url('settle')) ?>"><span>미수금 · 미지급금 세금계산서<?= $v['n_check'] ? ' (확인 필요 ' . $v['n_check'] . '건)' : '' ?></span><span class="tag <?= $v['n_open'] ? 'warn' : 'ok' ?>"><?= $v['n_open'] ?>건</span></a>
           <a class="todo" href="<?= h(lg_soon_link('월마감')) ?>"><span><?= h($v['close_label']) ?></span><span class="tag <?= $v['is_closed'] ? 'ok' : 'warn' ?>"><?= $v['is_closed'] ? '마감 완료' : '대기' ?></span></a>
         </div>
       </section>
