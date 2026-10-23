@@ -76,8 +76,7 @@ function lg_flash_html(array $flashes) {
 const LG_NAV = [
     '장부' => [
         ['home', '홈', 'home'],
-        ['pencil', '오늘의 출납장', 'today'],
-        ['book', '일일출납장', 'daybook'],
+        ['pencil', '일일출납장', 'today'],
         ['wallet', '잔액·자금일보', 'cashbook'],
         ['list', '거래 목록', 'transactions'],
         ['upload', '거래 가져오기', 'import'],
@@ -194,7 +193,7 @@ function lg_view_home(array $v, array $me, array $flashes) {
   </section>
 
   <div class="actions">
-    <a class="btn primary" href="<?= h(lg_url('today', ['d' => $ti['d']])) ?>"><?= $ceo ? '오늘의 출납장 보기' : '오늘의 출납장 쓰기' ?></a>
+    <a class="btn primary" href="<?= h(lg_url('today', ['d' => $ti['d']])) ?>"><?= $ceo ? '일일출납장 보기' : '일일출납장 쓰기' ?></a>
     <a class="btn" href="<?= h(lg_url('cashbook')) ?>">자금일보</a>
     <a class="btn" href="<?= h(lg_url('daybook')) ?>">출납장 엑셀</a>
     <?php if (!$ceo): ?><a class="btn ghost" href="<?= h(lg_url('inbox')) ?>">통장·카드 가져오기</a><?php endif ?>
@@ -448,7 +447,7 @@ function lg_view_daybook(array $v, array $me) {
     return ob_get_clean();
 }
 
-/* ================================================================ 오늘의 출납장 */
+/* ================================================================ 일일출납장 (하루) */
 
 function lg_view_today(array $v, array $me) {
     $d = $v['d'];

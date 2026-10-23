@@ -200,7 +200,7 @@ function lg_view_inbox_done(array $v, array $me) {
     <?php foreach ($v['report'] as [$name, $kind, $msg, $ok]): ?><tr><td style="font-size:13px;white-space:normal;max-width:320px"><?= h($name) ?></td><td><?= h($kind) ?></td><td style="white-space:normal"><?= h($msg) ?></td>
       <td><span class="badge <?= $ok ? 'b-green' : 'b-orange' ?>"><?= $ok ? '완료' : '확인 필요' ?></span></td></tr><?php endforeach ?>
   </table></div>
-  <div class="bar-l"><a class="btn" href="<?= h(lg_url('today')) ?>">오늘의 출납장으로</a><a class="btn ghost" href="<?= h(lg_url('classify_groups')) ?>">분류하러 가기</a><a class="btn ghost" href="<?= h(lg_url('inbox')) ?>">여러 파일 한 번에</a></div>
+  <div class="bar-l"><a class="btn" href="<?= h(lg_url('today')) ?>">일일출납장으로</a><a class="btn ghost" href="<?= h(lg_url('classify_groups')) ?>">분류하러 가기</a><a class="btn ghost" href="<?= h(lg_url('inbox')) ?>">여러 파일 한 번에</a></div>
 </div>
 <?php
     return ob_get_clean();

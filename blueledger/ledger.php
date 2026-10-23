@@ -40,8 +40,8 @@ $me = ['email' => $email, 'name' => $u['name'], 'role' => $role];
 function lg_routes() {
     return [
         'home'          => ['장부 홈', 'lg_page_home', null, null, 'home'],
-        'today'         => ['오늘의 출납장', 'lg_page_today', 'lg_view_today', 'lg_post_today', 'today'],
-        'daybook'       => ['일일출납장', 'lg_page_daybook', 'lg_view_daybook', 'lg_post_daybook', 'daybook'],
+        'today'         => ['일일출납장', 'lg_page_today', 'lg_view_today', 'lg_post_today', 'today'],
+        'daybook'       => ['일일출납장 · 여러 날 한꺼번에', 'lg_page_daybook', 'lg_view_daybook', 'lg_post_daybook', 'today'],
         'cashbook'      => ['잔액·자금일보', 'lg_page_cashbook', 'lg_view_cashbook', null, 'cashbook'],
         'transactions'  => ['거래 목록', 'lg_page_transactions', 'lg_view_transactions', 'lg_post_transactions', 'transactions'],
         'accounts'      => ['기준정보 · 계좌와 카드', 'lg_page_accounts', 'lg_view_accounts', 'lg_post_accounts', 'accounts'],
@@ -168,7 +168,7 @@ try {
             lg_redirect($v['__redirect']);
         }
         if (isset($v['__heading'])) $heading = $v['__heading'];
-        if ($p === 'today') $heading = '오늘의 출납장 · ' . (int)substr($v['d'], 5, 2) . '월 ' . (int)substr($v['d'], 8, 2) . '일 (' . lg_weekday($v['d']) . ')';
+        if ($p === 'today') $heading = '일일출납장 · ' . (int)substr($v['d'], 5, 2) . '월 ' . (int)substr($v['d'], 8, 2) . '일 (' . lg_weekday($v['d']) . ')';
         $body = lg_page($prev, $flashes, $viewFn($v, $me));
     }
 } catch (Throwable $e) {

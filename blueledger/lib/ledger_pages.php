@@ -264,7 +264,7 @@ function lg_post_daybook(array $p, array $me, $back) {
     return [[['ok', '저장했어요.' . ($auto ? ' 적은 내용을 보고 ' . count($auto) . '건에 계정과목을 붙였어요.' : '')]], $back];
 }
 
-/* ================================================================ 오늘의 출납장 (하루) */
+/* ================================================================ 일일출납장 (하루) */
 
 function lg_today_ctx(array $q) {
     $banks = lg_all("SELECT * FROM bl_ledger_accounts WHERE kind='계좌' ORDER BY id");
@@ -361,7 +361,7 @@ function lg_post_today(array $p, array $me) {
         $ids[] = $tid;
     }
     $auto = lg_apply_detail_words($ids);
-    lg_log($me, '오늘의 출납장 저장', "$d 거래 " . count($ids) . "건, 자동 분류 " . count($auto) . "건");
+    lg_log($me, '일일출납장 저장', "$d 거래 " . count($ids) . "건, 자동 분류 " . count($auto) . "건");
     return [[['ok', '저장했어요.' . ($auto ? ' 적은 내용으로 ' . count($auto) . '건에 계정과목을 붙였어요.' : '')]], $back];
 }
 
