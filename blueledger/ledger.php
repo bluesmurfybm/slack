@@ -17,6 +17,7 @@ require_once __DIR__ . '/lib/ledger_views.php';
 require_once __DIR__ . '/lib/ledger_xlsx.php';
 require_once __DIR__ . '/lib/views_import.php';
 require_once __DIR__ . '/lib/views_classify.php';
+require_once __DIR__ . '/lib/ledger_cards.php';
 
 // 포털 카드 key 는 'ledger'(출장여비 BlueExpense 가 'blueledger'). 로그인 안내에 BlueLedger 이름이 나오게 한다.
 $u = current_portal_user();
@@ -56,6 +57,7 @@ function lg_routes() {
         'categories'    => ['계정과목·규칙 관리', 'lg_page_categories', 'lg_view_categories', 'lg_post_categories', 'classify_groups'],
         'split'         => ['거래 나누기', 'lg_page_split', 'lg_view_split', 'lg_post_split', 'classify_groups'],
         'manual'        => ['수기 입력', 'lg_page_manual', 'lg_view_manual', 'lg_post_manual', 'manual'],
+        'card_check'    => ['카드대금 맞춰보기', 'lg_page_card_check', 'lg_view_card_check', 'lg_post_card_check', 'accounts'],
         'soon'          => ['준비 중', null, null, null, 'soon'],
         'daybook_xlsx'  => ['', null, null, null, ''],
         'cashbook_xlsx' => ['', null, null, null, ''],
@@ -143,6 +145,7 @@ try {
             lg_flash_add($v['__flash'] ?? []);
             lg_redirect($v['__redirect']);
         }
+        if (isset($v['__heading'])) $heading = $v['__heading'];
         if ($p === 'today') $heading = '오늘의 출납장 · ' . (int)substr($v['d'], 5, 2) . '월 ' . (int)substr($v['d'], 8, 2) . '일 (' . lg_weekday($v['d']) . ')';
         $body = lg_page($prev, $flashes, $viewFn($v, $me));
     }

@@ -314,7 +314,7 @@ function lg_view_accounts(array $v, array $me) {
     <label>연결 시작일<input type="date" name="pay_start" value="<?= h($c['pay_start']) ?>"></label>
     <label>연결 종료일 (비우면 계속)<input type="date" name="pay_end" value="<?= h($c['pay_end']) ?>"></label>
     <button class="btn" type="submit">저장하고 연결</button>
-    <a class="btn ghost" href="<?= h(lg_soon_link('카드대금 맞춰보기')) ?>">월별로 맞춰보기</a>
+    <a class="btn ghost" href="<?= h(lg_url('card_check', ['aid' => $c['id']])) ?>">월별로 맞춰보기</a>
     <span class="help">연결된 결제 <?= lg_won($c['paid']) ?>원 · 미결제 사용액 <?= lg_won($c['balance'] < 0 ? -$c['balance'] : 0) ?>원<?= $c['members'] ? ' (' . (count($c['members']) + 1) . '장 합계)' : '' ?></span>
   </form>
   <?php endif ?>

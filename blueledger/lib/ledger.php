@@ -203,6 +203,11 @@ function lg_falsy($v) {
     return $v === null || $v === '' || $v === 0 || $v === 0.0 || $v === false;
 }
 
+/** 파이썬 str.strip() — 유니코드 공백(전각 공백·nbsp 포함)까지 앞뒤를 자른다 */
+function lg_strip($s) {
+    return preg_replace('/^[\s\x{1c}-\x{1f}\x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+|[\s\x{1c}-\x{1f}\x{85}\x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}]+$/u', '', (string)$s);
+}
+
 function lg_last4($v) {
     $digits = preg_replace('/\D/', '', lg_falsy($v) ? '' : lg_str($v));
     return $digits !== '' ? substr($digits, -4) : '';
