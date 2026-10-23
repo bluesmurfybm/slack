@@ -162,8 +162,16 @@
   .copyTitle { flex:none; border:none; background:none; cursor:pointer; font-size:12px; padding:0 2px;
                opacity:0; transition:opacity .12s; line-height:1;
                height:15px; display:inline-flex; align-items:center; }   /* 이모지 세로 메트릭이 행 높이 못 늘리게 고정 */
-  .row:hover .copyTitle { opacity:.6; }
-  .copyTitle:hover { opacity:1 !important; }
+  @media (hover:hover) {
+    .row:hover .copyTitle { opacity:.6; }
+    .copyTitle:hover { opacity:1 !important; }
+  }
+  /* 터치 기기: 탭으로 숨은 버튼이 드러나면 iOS Safari 가 첫 탭을 hover 로만 처리해
+     행을 두 번 눌러야 열린다 → hover 로 드러내지 않고, 펼친 행에서만 보여준다 */
+  @media (hover:none) {
+    .copyTitle { pointer-events:none; }
+    .row.open .copyTitle { opacity:.6; pointer-events:auto; }
+  }
   .row.unread .names { font-weight:700; color:var(--txt); }
   .row.unread { box-shadow: inset 3px 0 0 #50b86fc4; }   /* 안읽음: 좌측 파란 띠로 구분 */
   .row.read .title { font-weight:400; color:var(--muted); }

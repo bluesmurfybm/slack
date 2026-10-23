@@ -447,7 +447,7 @@ function unassignedItems(){ return DATA.filter(r => visible(r) && matchBase(r, f
 function rowHtml(r){
   const p = pal(r.status), open = openId === r.id, unread = !r.is_read;
   const row = `
-    <div class="row${unread?' unread':' read'}${r.is_pinned?' pinned':''}${r.is_hidden?' hid':''}" data-id="${esc(r.id)}" ${open?'style="background:var(--bg2)"':''}>
+    <div class="row${unread?' unread':' read'}${r.is_pinned?' pinned':''}${r.is_hidden?' hid':''}${open?' open':''}" data-id="${esc(r.id)}" ${open?'style="background:var(--bg2)"':''}>
       <input type="checkbox" class="chk" data-id="${esc(r.id)}" ${selected.has(r.id)?'checked':''}>
       <div class="pinBtn doPin${r.is_pinned?' on':''}" data-id="${esc(r.id)}" data-pin="${r.is_pinned?0:1}" title="${r.is_pinned?'고정 해제':'상단 고정'}">📌</div>
       <div class="names">${esc(r.req||'—')}${(()=>{ const a=asgNames(r); if(!a.length) return ''; const d = a.length<=2 ? a.join(', ') : a.slice(0,2).join(', ')+'…'; return `, ${esc(d)}`; })()}</div>
