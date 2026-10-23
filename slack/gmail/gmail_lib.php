@@ -4,6 +4,7 @@
  *  - 설정 로드, IMAP 접속, gmail_mails 테이블 보장, MIME 디코딩.
  */
 require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../slack_lib.php';   // slack_runtime_dir() — 동기화 잠금을 웹·감시 데몬(CLI)이 같은 폴더에서 공유
 
 /** Gmail 접속 설정 — 사용자별.
  *  - 웹: 로그인한 포털 사용자가 마이페이지에 등록한 주소 + 앱 비밀번호

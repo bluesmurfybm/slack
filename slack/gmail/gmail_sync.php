@@ -129,6 +129,13 @@ function gmail_sync_sent($pdo, $acct) {
 function gmail_sync_pass() {
     $t0 = microtime(true);
     $out = ['ok' => false, 'added' => 0, 'flag_updated' => 0, 'backfill_remaining' => 0];
+    // 같은 계정 동기화가 겹치지 않게 — 업무 현황판(배지), Gmail 화면, 감시 데몬이 동시에 부를 수 있다.
+    // 이미 돌고 있으면 기다리지 않고 건너뛴다(그쪽 결과가 곧 DB 에 반영된다).
+    $lock = @fopen(slack_runtime_dir() . '/gmail_sync_' . md5(gmail_owner()) . '.lock', 'c');
+    if ($lock && !flock($lock, LOCK_EX | LOCK_NB)) {
+        fclose($lock);
+        return ['ok' => true, 'skipped' => 'locked', 'took' => 0] + $out;   // 앞쪽 값이 이긴다(ok=true)
+    }
     try {
         gmail_ensure_table();
         [$im, $err] = gmail_open();
@@ -347,6 +354,7 @@ function gmail_sync_pass() {
         // 계속 쓰므로, 닫지 않으면 이후 동기화가 전부 'already an active transaction' 으로 실패한다.
         try { $p = db(); if ($p->inTransaction()) $p->rollBack(); } catch (Throwable $e2) { /* 연결 자체가 끊긴 경우 */ }
     }
+    if ($lock) { flock($lock, LOCK_UN); fclose($lock); }   // 감시 데몬은 계속 살아 있으니 매번 풀어 준다
     $out['took'] = round(microtime(true) - $t0, 1);
     return $out;
 }

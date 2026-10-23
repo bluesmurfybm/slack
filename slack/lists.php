@@ -1265,18 +1265,28 @@ function updateSelUI(items){
    Gmail 페이지는 이 화면과 같은 머리말(제목·업무 탭·Gmail 탭)을 갖고, 업무 탭을 누르면 그 보드로 돌아온다(?board=).
    예전엔 이 화면 안에 Gmail 화면을 끼워 넣었는데, 주소가 늘 lists.php 라 새로고침·뒤로가기·페이지 이동이 어긋나고
    Gmail 만 볼 때도 업무 목록 데이터를 계속 받아서 별도 페이지로 바꿨다.
-   배지 = 안 읽은 대화 수(Gmail 받은편지함 숫자와 같은 기준). ===== */
-let gmailPollTimer = null;
+   배지 = 안 읽은 대화 수(Gmail 받은편지함 숫자와 같은 기준).
+   숫자는 DB 기준이라, 새 메일을 DB 에 넣는 동기화가 멈춰 있으면(Gmail 감시 데몬 없음 + Gmail 화면 안 열림)
+   이 화면에서 대신 동기화를 돌린다 — Gmail 화면의 '3분 넘게 멈추면 브라우저가 대신' 과 같은 방식.
+   여러 곳에서 동시에 돌려도 서버가 계정별로 잠가 한 번만 돈다(gmail_sync.php). ===== */
+const GMAIL_POLL_MS = 20000, GMAIL_STALE_SEC = 120;
+let gmailPollTimer = null, gmailSyncing = false;
 async function pollGmailUnread(){
   clearTimeout(gmailPollTimer);
   const el = document.getElementById("gmailCnt");
   try{
     const j = await (await fetch("gmail/index.php?ping=1&unread=1", {cache:"no-store"})).json();
-    const n = (j && j.ok && j.configured) ? (j.unread || 0) : 0;
+    const ok = j && j.ok && j.configured;
+    const n = ok ? (j.unread || 0) : 0;
     el.textContent = n > 999 ? "999+" : String(n);
     el.hidden = n <= 0;
+    if(ok && j.sync_age > GMAIL_STALE_SEC && !gmailSyncing){
+      gmailSyncing = true;
+      fetch("gmail/gmail_sync.php", {cache:"no-store"}).then(r => r.json()).catch(() => null)
+        .finally(() => { gmailSyncing = false; pollGmailUnread(); });   // 끝나면 바로 숫자 다시
+    }
   }catch(e){ /* 배지는 부가 정보 — 실패하면 다음 주기에 */ }
-  gmailPollTimer = setTimeout(pollGmailUnread, 60000);
+  gmailPollTimer = setTimeout(pollGmailUnread, GMAIL_POLL_MS);
 }
 document.getElementById("gmailTab").addEventListener("click", ()=>{
   if(!GMAIL_READY){
