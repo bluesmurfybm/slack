@@ -177,6 +177,18 @@ function lg_view_home(array $v, array $me, array $flashes) {
     $ceo = $me['role'] === LG_ROLE_CEO;
     $md = (int)substr($ti['d'], 5, 2) . '월 ' . (int)substr($ti['d'], 8, 2) . '일 (' . lg_weekday($ti['d']) . ')';
     $dday = fn($n) => $n > 0 ? 'D-' . $n : ($n === 0 ? 'D-DAY' : 'D+' . -$n);
+    // 다가오는 일정: 오른쪽 목록과 왼쪽 달력이 같은 자료를 쓴다 (날짜 => 일정 이름들)
+    $events = [
+        ['date' => $v['close_due'], 'dday' => $v['close_dday'], 'title' => $v['close_label'], 'sub' => '월마감 (매월 10일 기준)'],
+        ['date' => $v['vat'], 'dday' => $v['vat_dday'], 'title' => '부가세 신고 자료 준비', 'sub' => '신고 기한 (휴일이면 다음 영업일)'],
+    ];
+    foreach ($v['card_sched'] as $c) {
+        $events[] = ['date' => $c['due'], 'dday' => $c['dday'], 'title' => $c['name'] . ' 대금 결제',
+                     'sub' => ($c['use_ym'] ? (int)substr($c['use_ym'], 5) . '월 사용분 ' : '') . lg_won($c['unpaid']) . '원'];
+    }
+    usort($events, fn($a, $b) => strcmp($a['date'], $b['date']));
+    $cal = [];
+    foreach ($events as $e) $cal[$e['date']][] = $e['title'];
     ob_start(); ?>
 <main class="content">
   <?= lg_flash_html($flashes) ?>
@@ -199,6 +211,26 @@ function lg_view_home(array $v, array $me, array $flashes) {
     <?php if (!$ceo): ?><a class="btn ghost" href="<?= h(lg_url('inbox')) ?>">통장·카드 가져오기</a><?php endif ?>
   </div>
 
+  <section class="box">
+    <div class="box-h"><h2>다가오는 일정</h2></div>
+    <div class="sched-grid">
+      <div class="cal" data-cal data-today="<?= h(lg_today()) ?>" data-events="<?= h(json_encode($cal, JSON_UNESCAPED_UNICODE)) ?>">
+        <div class="cal-h">
+          <button type="button" class="cal-nav" data-cal-move="-1" aria-label="이전 달">‹</button>
+          <strong class="cal-t" aria-live="polite"></strong>
+          <button type="button" class="cal-nav" data-cal-move="1" aria-label="다음 달">›</button>
+        </div>
+        <div class="cal-g"></div>
+      </div>
+      <div class="sched-list">
+        <?php foreach ($events as $e): ?>
+        <div class="sched" data-date="<?= h($e['date']) ?>"><span class="dday num<?= $e['dday'] <= 3 ? ' near' : '' ?>"><?= $dday($e['dday']) ?></span>
+          <div><div class="t"><?= h($e['title']) ?></div><div class="s num"><?= str_replace('-', '.', $e['date']) ?> · <?= h($e['sub']) ?></div></div></div>
+        <?php endforeach ?>
+      </div>
+    </div>
+  </section>
+
   <div class="cols">
     <section class="box">
       <div class="box-h"><h2>계좌·카드 잔액</h2><a href="<?= h(lg_url('accounts')) ?>">기준정보 →</a></div>
@@ -214,30 +246,15 @@ function lg_view_home(array $v, array $me, array $flashes) {
       <p class="help">카드의 잔액은 아직 결제되지 않은 사용액이에요(마이너스 = 앞으로 낼 금액).</p>
     </section>
 
-    <div class="stack">
-      <section class="box">
-        <div class="box-h"><h2>이번 주 할 일</h2><a href="<?= h(lg_url('transactions')) ?>">거래 목록 →</a></div>
-        <div class="todo-list">
-          <a class="todo" href="<?= h(lg_url('classify_groups')) ?>"><span>미분류 거래 확인</span><span class="tag <?= $v['uncategorized'] ? 'warn' : 'ok' ?>"><?= $v['uncategorized'] ?>건</span></a>
-          <a class="todo" href="<?= h(lg_url('transactions')) ?>"><span>이번 달 들어온 거래</span><span class="tag"><?= $v['month_cnt'] ?>건</span></a>
-          <a class="todo" href="<?= h(lg_url('settle')) ?>"><span>미수금 · 미지급금 세금계산서<?= $v['n_check'] ? ' (확인 필요 ' . $v['n_check'] . '건)' : '' ?></span><span class="tag <?= $v['n_open'] ? 'warn' : 'ok' ?>"><?= $v['n_open'] ?>건</span></a>
-          <a class="todo" href="<?= h(lg_url('close', ['ym' => $v['close_ym']])) ?>"><span><?= h($v['close_label']) ?></span><span class="tag <?= $v['is_closed'] ? 'ok' : 'warn' ?>"><?= $v['is_closed'] ? '마감 완료' : '대기' ?></span></a>
-        </div>
-      </section>
-      <section class="box">
-        <div class="box-h"><h2>다가오는 일정</h2></div>
-        <div class="sched-list">
-          <div class="sched"><span class="dday num<?= $v['close_dday'] <= 3 ? ' near' : '' ?>"><?= $dday($v['close_dday']) ?></span>
-            <div><div class="t"><?= h($v['close_label']) ?></div><div class="s num"><?= str_replace('-', '.', $v['close_due']) ?> · 월마감 (매월 10일 기준)</div></div></div>
-          <div class="sched"><span class="dday num<?= $v['vat_dday'] <= 3 ? ' near' : '' ?>"><?= $dday($v['vat_dday']) ?></span>
-            <div><div class="t">부가세 신고 자료 준비</div><div class="s num"><?= str_replace('-', '.', $v['vat']) ?> · 신고 기한 (휴일이면 다음 영업일)</div></div></div>
-          <?php foreach ($v['card_sched'] as $c): ?>
-          <div class="sched"><span class="dday num<?= $c['dday'] <= 3 ? ' near' : '' ?>"><?= $dday($c['dday']) ?></span>
-            <div><div class="t"><?= h($c['name']) ?> 대금 결제</div><div class="s num"><?= str_replace('-', '.', $c['due']) ?> · <?= $c['use_ym'] ? (int)substr($c['use_ym'], 5) . '월 사용분 ' : '' ?><?= lg_won($c['unpaid']) ?>원</div></div></div>
-          <?php endforeach ?>
-        </div>
-      </section>
-    </div>
+    <section class="box">
+      <div class="box-h"><h2>이번 주 할 일</h2><a href="<?= h(lg_url('transactions')) ?>">거래 목록 →</a></div>
+      <div class="todo-list">
+        <a class="todo" href="<?= h(lg_url('classify_groups')) ?>"><span>미분류 거래 확인</span><span class="tag <?= $v['uncategorized'] ? 'warn' : 'ok' ?>"><?= $v['uncategorized'] ?>건</span></a>
+        <a class="todo" href="<?= h(lg_url('transactions')) ?>"><span>이번 달 들어온 거래</span><span class="tag"><?= $v['month_cnt'] ?>건</span></a>
+        <a class="todo" href="<?= h(lg_url('settle')) ?>"><span>미수금 · 미지급금 세금계산서<?= $v['n_check'] ? ' (확인 필요 ' . $v['n_check'] . '건)' : '' ?></span><span class="tag <?= $v['n_open'] ? 'warn' : 'ok' ?>"><?= $v['n_open'] ?>건</span></a>
+        <a class="todo" href="<?= h(lg_url('close', ['ym' => $v['close_ym']])) ?>"><span><?= h($v['close_label']) ?></span><span class="tag <?= $v['is_closed'] ? 'ok' : 'warn' ?>"><?= $v['is_closed'] ? '마감 완료' : '대기' ?></span></a>
+      </div>
+    </section>
   </div>
 </main>
 <?php

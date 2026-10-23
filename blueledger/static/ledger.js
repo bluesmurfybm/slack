@@ -44,4 +44,49 @@
     window.close();
     if (!window.closed) history.length > 1 ? history.back() : (location.href = 'ledger.php');
   }));
+  // 장부 홈 달력: 이번 달부터 ‹ › 로 넘겨 보고, 점 찍힌 날을 누르면 오른쪽 일정 목록에서 강조
+  document.querySelectorAll('[data-cal]').forEach((cal) => {
+    const events = JSON.parse(cal.dataset.events || '{}');
+    const today = cal.dataset.today;
+    const grid = cal.querySelector('.cal-g');
+    const title = cal.querySelector('.cal-t');
+    const list = cal.closest('.box').querySelectorAll('.sched[data-date]');
+    let y = +today.slice(0, 4), m = +today.slice(5, 7) - 1;
+    const pad = (n) => String(n).padStart(2, '0');
+    const pick = (d) => {
+      list.forEach((s) => s.classList.toggle('hit', s.dataset.date === d));
+      grid.querySelectorAll('button.cal-d').forEach((b) => b.classList.toggle('on', b.dataset.date === d));
+      const first = [...list].find((s) => s.dataset.date === d);
+      if (first) first.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    const draw = () => {
+      title.textContent = `${y}년 ${m + 1}월`;
+      const cells = ['일', '월', '화', '수', '목', '금', '토'].map((w, i) => `<div class="cal-w${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`);
+      const start = new Date(y, m, 1).getDay();
+      const days = new Date(y, m + 1, 0).getDate();
+      for (let i = 0; i < start; i++) cells.push('<div></div>');
+      for (let d = 1; d <= days; d++) {
+        const ds = `${y}-${pad(m + 1)}-${pad(d)}`;
+        const wd = (start + d - 1) % 7;
+        const cls = 'cal-d' + (wd === 0 ? ' sun' : wd === 6 ? ' sat' : '') + (ds === today ? ' today' : '');
+        const ev = events[ds];
+        cells.push(ev
+          ? `<button type="button" class="${cls}" data-date="${ds}" title="${ev.join(', ').replace(/"/g, '&quot;')}" aria-label="${m + 1}월 ${d}일 일정: ${ev.join(', ').replace(/"/g, '&quot;')}"><span>${d}</span></button>`
+          : `<div class="${cls}"${ds === today ? ' aria-current="date"' : ''}><span>${d}</span></div>`);
+      }
+      grid.innerHTML = cells.join('');
+    };
+    grid.addEventListener('click', (e) => { const b = e.target.closest('button.cal-d'); if (b) pick(b.dataset.date); });
+    list.forEach((s) => s.addEventListener('click', () => {
+      const d = s.dataset.date;
+      y = +d.slice(0, 4); m = +d.slice(5, 7) - 1;
+      draw(); pick(d);
+    }));
+    cal.querySelectorAll('[data-cal-move]').forEach((b) => b.addEventListener('click', () => {
+      m += +b.dataset.calMove;
+      if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
+      draw();
+    }));
+    draw();
+  });
 })();
