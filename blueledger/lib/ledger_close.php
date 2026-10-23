@@ -352,7 +352,7 @@ function lg_view_reports(array $v, array $me) {
     <label>시작일<input type="date" name="start" value="<?= h($v['start']) ?>"></label>
     <label>종료일<input type="date" name="end" value="<?= h($v['end']) ?>"></label>
     <button class="btn" type="submit">조회</button>
-    <a class="btn ghost" href="<?= h(lg_url('reports_xlsx', ['start' => $v['start'], 'end' => $v['end']])) ?>">세무사 전달용 엑셀</a>
+    <a class="btn ghost" href="<?= h(lg_url('print', ['kind' => 'reports', 'start' => $v['start'], 'end' => $v['end']])) ?>" data-popup>세무사 전달용 보기·인쇄</a>
   </form>
   <p class="help" style="margin:0">손익은 통장·카드에서 <b>실제로 들어오고 나간 돈 기준(부가세 포함)</b>이에요. 카드대금 결제·계좌 이체 같은 자금이동은 빠져 있어요. 세금계산서 기준 금액은 아래에 따로 보여드려요.
   <?php if ($pl['unc']): ?><br><b class="warn">미분류 거래가 있어서 손익이 정확하지 않을 수 있어요</b> (<a href="<?= h(lg_url('classify_groups')) ?>">분류하러 가기</a>).<?php endif ?></p>

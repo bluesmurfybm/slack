@@ -107,6 +107,7 @@ lib/ledger_close.php      ⑦ 월마감·보고서·세무사 전달용 엑셀
 lib/ledger_admin.php      관리: 장부 내려받기(엑셀)·출입 명단·작업 기록 (파이썬의 백업·사용자 대신)
 lib/ledger_views.php, views_*.php   화면 HTML (파이썬 templates/*.html 을 같은 문구로)
 lib/ledger_xlsx.php       엑셀 작성기(칸 합치기·테두리·수식·거르기, composer·ZipArchive 없이)
+lib/ledger_preview.php    출력 미리보기(팝업 창): 엑셀과 같은 통합문서를 표로 그리고 수식을 계산해 보여줌 → 인쇄·엑셀로 저장
 styles/ledger.css, static/ledger.js
 tools/import_ledger.php   파이썬 장부(blueledger.db 복사본) → bl_ledger_* 표 옮기기
 var/ledger_uploads/       올린 파일을 가져오는 동안만 두는 곳(1시간 지나면 지움, gitignore·웹 차단)
@@ -133,6 +134,8 @@ var/ledger_uploads/       올린 파일을 가져오는 동안만 두는 곳(1�
 - 대조(2026-10-23, ③~⑦): 같은 파일·같은 작업을 파이썬과 PHP 에 하고 표 전체를 줄 단위로 비교 —
   거래 가져오기(가짜 통장·카드·농협 파일, 출납장), 분류 16가지 작업, 카드 맞추기, 자동 정산 전체 다시 하기(연결 239줄),
   세금계산서 직접 처리·충전금·거래처, 월마감·보고서 엑셀까지 모두 같음. 옛 xls 홈택스 원본으로는 아직 대조하지 못했다.
+- 출력 미리보기(2026-10-23): 자금일보 2일·출납장 1~10월·세무사 전달용을 엑셀(Excel 프로그램 계산값)과 칸마다 비교해
+  15,019칸(수식 540개) 값·보이는 글자 모두 같음. 장부 내려받기는 미리보기 없이 바로 저장.
 - 백업에 `bl_ledger_*` 표를 더해야 한다.
 - MariaDB 에서 `ONLY_FULL_GROUP_BY` 를 켜 두었다면 잔액 계산(`lg_balances`)의 `GROUP BY a.id` 가 거절될 수 있다 — 운영 sql_mode 확인 필요.
 

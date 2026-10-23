@@ -432,15 +432,15 @@ function lg_view_daybook(array $v, array $me) {
 
 <div class="box">
   <p class="help" style="margin:0">하루 마감 확인은 <a href="<?= h(lg_url('cashbook', ['d' => $v['end']])) ?>">잔액·자금일보</a>에서 할 수 있어요. 같은 장부라서 여기서 적은 내용이 자금일보에도 그대로 나와요.</p>
-  <h2>출납장 엑셀 만들기</h2>
-  <p class="help">지금까지 쓰던 출납장과 같은 모양(왼쪽 통장, 오른쪽 카드별 사용내역, 전월이월·소계·잔액, 담당·승인란)으로 만들어요. 여러 달을 고르면 달마다 시트가 하나씩 생기고, 전월이월이 앞 시트의 잔액과 수식으로 이어져요.</p>
-  <form class="inline" method="get" action="ledger.php"><input type="hidden" name="p" value="daybook_xlsx">
+  <h2>출납장 출력 (인쇄·엑셀)</h2>
+  <p class="help">지금까지 쓰던 출납장과 같은 모양(왼쪽 통장, 오른쪽 카드별 사용내역, 전월이월·소계·잔액, 담당·승인란)으로 만들어요. 여러 달을 고르면 달마다 시트가 하나씩 생기고, 전월이월이 앞 시트의 잔액과 수식으로 이어져요. 새 창에서 먼저 보여주고, 거기서 인쇄하거나 엑셀로 저장해요.</p>
+  <form class="inline" method="get" action="ledger.php" data-popup><input type="hidden" name="p" value="print"><input type="hidden" name="kind" value="daybook">
     <label>연도<input name="year" type="number" value="<?= (int)substr($v['today'], 0, 4) ?>" style="width:110px"></label>
     <label>시작 월<select name="from"><?php for ($i = 1; $i <= 12; $i++): ?><option value="<?= $i ?>"<?= lg_sel($i, $m) ?>><?= $i ?>월</option><?php endfor ?></select></label>
     <label>끝 월<select name="to"><?php for ($i = 1; $i <= 12; $i++): ?><option value="<?= $i ?>"<?= lg_sel($i, $m) ?>><?= $i ?>월</option><?php endfor ?></select></label>
     <label>왼쪽 통장<select name="bank_id"><?php foreach ($v['banks'] as $b): ?><option value="<?= $b['id'] ?>"><?= h($b['name']) ?></option><?php endforeach ?></select></label>
     <label>오른쪽 카드<select name="lead_id"><?php foreach ($v['leads'] as $c): ?><option value="<?= $c['id'] ?>"><?= h($c['name']) ?> (묶인 카드 포함)</option><?php endforeach ?></select></label>
-    <button class="btn" type="submit">엑셀 받기</button>
+    <button class="btn" type="submit">미리보기·인쇄</button>
   </form>
 </div>
 <?php
@@ -560,7 +560,7 @@ function lg_view_cashbook(array $v, array $me) {
     </div>
     <div class="bar-l">
       <a class="btn ghost" href="<?= h(lg_url('today', ['d' => $day])) ?>">이 날 출납장 <?= $me['role'] === LG_ROLE_CEO ? '보기' : '쓰기' ?><?= $v['no_detail'] ? " ({$v['no_detail']}건 내용 남음)" : '' ?></a>
-      <a class="btn" href="<?= h(lg_url('cashbook_xlsx', ['d' => $day])) ?>">자금일보 엑셀</a>
+      <a class="btn" href="<?= h(lg_url('print', ['kind' => 'cashbook', 'd' => $day])) ?>" data-popup>자금일보 보기·인쇄</a>
     </div>
   </div>
   <p class="help" style="margin:0"><b><?= (int)substr($day, 0, 4) ?>년 <?= (int)substr($day, 5, 2) ?>월 <?= (int)substr($day, 8, 2) ?>일 (<?= h(lg_weekday($day)) ?>)</b> · 장부에 들어온 마지막 통장 거래일은 <?= h($v['last'] ?: '-') ?>이에요. 따로 쓰는 게 아니라, <b>일일출납장에 기록된 통장·카드 거래로 자동으로 만들어져요.</b> 출납장에서 줄을 넣거나 내용을 적으면 여기도 바로 바뀌어요.</p>

@@ -15,6 +15,7 @@
 
 require_once __DIR__ . '/lib/ledger_views.php';
 require_once __DIR__ . '/lib/ledger_xlsx.php';
+require_once __DIR__ . '/lib/ledger_preview.php';
 require_once __DIR__ . '/lib/views_import.php';
 require_once __DIR__ . '/lib/views_classify.php';
 require_once __DIR__ . '/lib/ledger_cards.php';
@@ -78,6 +79,7 @@ function lg_routes() {
         'soon'          => ['준비 중', null, null, null, 'soon'],
         'daybook_xlsx'  => ['', null, null, null, ''],
         'cashbook_xlsx' => ['', null, null, null, ''],
+        'print'         => ['', null, null, null, ''],
     ];
 }
 
@@ -133,16 +135,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 if (!$pageFn && $postFn) lg_redirect(lg_url($nav));       // 저장 전용 주소를 그냥 열면 해당 화면으로
 
-/* ---------- 엑셀 받기 */
-if (in_array($p, ['daybook_xlsx', 'cashbook_xlsx', 'reports_xlsx', 'backup_xlsx'], true)) {
+/* ---------- 엑셀 받기 · 출력 미리보기(팝업 창: ?p=print&kind=cashbook…, 같은 통합문서를 표로 그린다) */
+$xlsx = ['daybook_xlsx' => 'daybook', 'cashbook_xlsx' => 'cashbook', 'reports_xlsx' => 'reports', 'backup_xlsx' => 'backup'];
+if (isset($xlsx[$p]) || $p === 'print') {
     session_write_close();
-    [$wb, $name] = match ($p) {
-        'daybook_xlsx' => lg_daybook_book($_GET, $u['name']),
-        'cashbook_xlsx' => lg_cashbook_book($_GET, $u['name']),
-        'reports_xlsx' => lg_reports_book($_GET),
-        'backup_xlsx' => lg_backup_book(),
+    $kind = $xlsx[$p] ?? lg_q($_GET, 'kind');
+    [$wb, $name] = match ($kind) {
+        'daybook' => lg_daybook_book($_GET, $u['name']),
+        'cashbook' => lg_cashbook_book($_GET, $u['name']),
+        'reports' => lg_reports_book($_GET),
+        'backup' => $p === 'print' ? lg_redirect(lg_url('backup')) : lg_backup_book(),   // 장부 전체 보관용은 미리보기 없이 바로 저장
+        default => lg_redirect(lg_url('home')),
     };
-    $wb->download($name);
+    if ($p !== 'print') $wb->download($name);
+    $q = array_diff_key($_GET, ['p' => 1, 'kind' => 1]);
+    header('Cache-Control: no-store');
+    echo lg_print_page($wb, $name, lg_url($kind . '_xlsx', $q));
+    exit;
 }
 
 /* ---------- [← 이전 화면] — 다른 장부 화면에서 들어왔으면 그곳을 기억한다(같은 화면에서 저장·조회하면 처음 들어온 곳 유지) */

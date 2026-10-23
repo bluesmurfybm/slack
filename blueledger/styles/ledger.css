@@ -195,3 +195,30 @@ tr.grp.likely td{background:var(--warn-bg);color:var(--warn-ink)}
   .topline{position:static;padding:14px 16px}.content{padding:16px 16px 40px}
   .kpis{grid-template-columns:1fr}
 }
+
+/* ---------- 출력 미리보기 (팝업 창): 엑셀과 같은 모양의 종이. 종이는 어두운 화면에서도 흰색 (2026-10-23) */
+body.pv{background:var(--bg);min-height:100%}
+.pv-bar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--shadow)}
+.pv-name{font-weight:700;font-size:15px;color:var(--ink2);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pv-tabs,.pv-act{display:flex;flex-wrap:wrap;gap:6px}
+.pv-tabs .btn.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.pv-pages{padding:20px 16px 40px;display:flex;flex-direction:column;align-items:center;gap:24px}
+.pv-sheet{max-width:100%}
+.pv-sheet[hidden]{display:none}
+.pv-title{font-size:13px;font-weight:600;color:var(--sub);margin:0 0 6px}
+.pv-paper{background:#fff;color:#000;padding:24px;box-shadow:0 1px 3px rgba(15,23,42,.12),0 4px 16px rgba(15,23,42,.08);border-radius:2px;overflow-x:auto;max-width:calc(100vw - 32px);box-sizing:border-box}
+table.xl{border-collapse:collapse;table-layout:fixed;font-family:"맑은 고딕","Malgun Gothic",sans-serif;font-size:11pt;line-height:1.25;color:#000;background:#fff}
+table.xl td{padding:1px 4px;vertical-align:bottom;white-space:nowrap;overflow:visible;font-variant-numeric:tabular-nums;border:0}
+table.xl td.b{border:1px solid #A6A6A6}
+table.xl td.w{white-space:normal;word-break:keep-all}
+table.xl td.c{overflow:hidden}
+@media print{
+  body.pv{background:#fff}
+  .pv-bar,.pv-title{display:none}
+  .pv-pages{padding:0;display:block}
+  .pv-sheet.port{page:port}
+  .pv-sheet.land{page:land}
+  .pv-sheet:not([hidden]) ~ .pv-sheet:not([hidden]){break-before:page}
+  .pv-paper{padding:0;box-shadow:none;max-width:none;overflow:visible;zoom:var(--pz,1)}
+  table.xl td{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
