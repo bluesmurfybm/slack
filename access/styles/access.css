@@ -34,6 +34,10 @@ button:disabled { opacity:.5; cursor:default; }
               background:var(--bg2); color:var(--muted); font-size:12px; line-height:1; }
 .hero-clear:hover { color:var(--txt); }
 .hero-chips { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.hero-chips[hidden] { display:none; }
+/* OS 줄은 버전 줄과 구분되게 한 단계 작고 흐리게 — 두 줄이 똑같이 보이면 헷갈린다 */
+.hero-chips.os .chip { height:26px; padding:0 10px; font-size:12px; }
+.hero-chips.os .chip b { font-size:10px; }
 
 /* 툴바 */
 .tools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
