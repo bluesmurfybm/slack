@@ -15,7 +15,7 @@ declare(strict_types=1);
  * @param string $title   브라우저 탭 제목(모듈명은 함수가 붙인다)
  * @param string $eyebrow 머리말 위 작은 글씨
  * @param string $desc    머리말 설명문
- * @param string $nav     현재 위치 표시용 화면 키. bs_layout_nav() 의 키와 맞춘다
+ * @param string $nav     현재 위치 표시용 화면 키. BS_NAV_GROUPS 의 키와 맞춘다
  */
 function bs_layout_head(
     array $user,
@@ -33,7 +33,7 @@ function bs_layout_head(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= h($title) ?> · BlueStudio</title>
-<link rel="icon" href="../styles/favicon.ico">
+<link rel="icon" type="image/svg+xml" href="../styles/favicons/studio.svg">
 <?php require_once __DIR__ . '/../../core/pwa.php'; echo pwa_head_tags('../'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -59,6 +59,8 @@ function bs_layout_head(
         </div>
         <div class="dd-menu" id="hdrUserDd">
           <a href="../index.php">&#128100; 마이페이지</a>
+          <?php // 구성원 목록이 관리자 묶음으로 가서(2026-10-16) 본인 프로파일 가는 길을 여기 둔다. ?>
+          <a href="member_profile.php">&#128202; 내 프로파일</a>
           <div class="dd-sep"></div>
           <?php // core/worksystems.php — studio 가 현재 위치로 표시된다 ?>
           <?= work_systems_menu('../', BS_MODULE_KEY) ?>
@@ -91,9 +93,10 @@ function bs_layout_head(
       <?php endif; ?>
     </div>
     <div class="ba-site__aside">
-      <?= bs_layout_nav($nav) ?>
+      <?= bs_layout_mode($nav) ?>
     </div>
   </div>
+  <?= BS_SUBNAV_STYLE === 'band' ? bs_layout_subnav($nav) : '' ?>
 </header>
 
 <div class="ba" id="ba-app"
@@ -102,36 +105,99 @@ function bs_layout_head(
      data-me-name="<?= h($user['name']) ?>"
      data-is-admin="<?= bs_is_admin() ? '1' : '0' ?>"
      data-nav="<?= h($nav) ?>">
+  <?= BS_SUBNAV_STYLE === 'pill' ? bs_layout_subnav($nav) : '' ?>
 <?php
 }
 
 /**
- * 모듈 안 화면 이동 탭.
+ * 모듈 안 화면 이동 — 대메뉴 [구성원][관리자] + 서브 메뉴 (2026-10-16, BlueCart 와 같은 짜임).
  *
- * TODO(P1): 권한에 따라 감출 항목을 정한다. 지금은 전부 보여준다.
- *           (구성원 목록·프로파일은 열람 범위가 아직 미정 — spec §11-4)
+ *   머리말 오른쪽  대메뉴   구성원 | 관리자          ← 관리자에게만 보인다
+ *   탭 띠          구성원 → 홈(대시보드) · 프로젝트 · R&D 과제
+ *                  관리자 → 구성원 관리 · 설정
+ *
+ * 대시보드는 글자 대신 홈 아이콘이다(2026-10-16) — 역할이 홈이고, 다른 탭과
+ * 갈라 보이게. 프로젝트 | R&D 과제 는 본문 안 칩(.ba-typetabs)이었는데 이 띠로
+ * 올렸다. 칩은 CSS 로 숨겨 두었다.
+ *
+ * 관리자가 아니면 대메뉴 없이 구성원 서브 메뉴만 그린다. 구성원 관리 화면을
+ * 주소로 직접 열어도 막지는 않는다(지금껏 누구나 보던 화면이다) — 메뉴에서만
+ * 뺀다. 본인 프로파일은 사용자 메뉴의 '내 프로파일' 로 간다.
  */
-function bs_layout_nav(string $current = ''): string
-{
-    $items = [
-        'dashboard' => ['index.php',        '대시보드'],
+const BS_NAV_GROUPS = [
+    'member' => ['label' => '구성원', 'items' => [
+        'dashboard' => ['index.php',        '대시보드', 'home'],   // 아이콘만 그린다
         'project'   => ['project_list.php', '프로젝트'],
-        'member'    => ['member_list.php',  '구성원'],
-    ];
-    // 외부 연동은 관리자만 쓴다. 다른 사람에게는 눌러 봐야 튕기는 줄이라
-    // 아예 그리지 않는다. 막는 쪽은 settings.php 와 API 가 따로 한다.
-    if (bs_is_admin()) {
-        $items['settings'] = ['settings.php', '연동'];
-    }
+        'rnd'       => ['rnd_board.php',    'R&D 과제'],
+    ]],
+    'admin' => ['label' => '관리자', 'items' => [
+        'member'    => ['member_list.php',  '구성원 관리'],
+        'settings'  => ['settings.php',     '설정'],
+    ]],
+];
 
-    $html = '<nav class="ba-nav" aria-label="화면 이동">';
-    foreach ($items as $key => [$href, $label]) {
-        $on = $key === $current;
-        $html .= '<a href="' . h($href) . '"'
-               . ($on ? ' class="on" aria-current="page"' : '')
-               . '>' . h($label) . '</a>';
+/**
+ * 서브 메뉴 모양 (2026-10-16 시안).
+ *   'band'  머리말 아래에 붙은 전폭 띠 — 굵은 밑줄 탭 (본문 안 탭보다 한 단계 위)
+ *   'pill'  본문 맨 위 둥근 탭 — bluecart .bc-subtabs 모양 (바로 앞 버전)
+ * 되돌리려면 이 값만 'pill' 로. 정해지면 쓰지 않는 쪽을 지운다.
+ */
+const BS_SUBNAV_STYLE = 'band';
+
+/** 지금 화면이 속한 묶음. 관리자가 아니면 늘 구성원 묶음이다. */
+function bs_nav_group(string $current): string
+{
+    return bs_is_admin() && isset(BS_NAV_GROUPS['admin']['items'][$current]) ? 'admin' : 'member';
+}
+
+/** 머리말 오른쪽 대메뉴. 누르면 그 묶음의 첫 화면으로 간다. */
+function bs_layout_mode(string $current = ''): string
+{
+    if (!bs_is_admin()) {
+        return '';
+    }
+    $group = bs_nav_group($current);
+    $html  = '<nav class="ba-mode" aria-label="화면 구분">';
+    foreach (BS_NAV_GROUPS as $g => $def) {
+        $first = reset($def['items'])[0];
+        $html .= '<a href="' . h($first) . '"'
+               . ($g === $group ? ' class="on" aria-current="true"' : '')
+               . '>' . h($def['label']) . '</a>';
     }
     return $html . '</nav>';
+}
+
+/** 탭에 쓰는 아이콘. 지금은 홈 하나. */
+function bs_nav_icon(string $name): string
+{
+    return match ($name) {
+        'home'  => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+                 . '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg>',
+        default => '',
+    };
+}
+
+/** 본문 맨 위 서브 메뉴 — 고른 묶음의 화면들. */
+function bs_layout_subnav(string $current = ''): string
+{
+    $group = bs_nav_group($current);
+    $label = BS_NAV_GROUPS[$group]['label'];
+    $links = '';
+    foreach (BS_NAV_GROUPS[$group]['items'] as $key => $item) {
+        [$href, $text] = $item;
+        $icon = $item[2] ?? null;
+        $cls  = trim(($icon ? 'ba-tab--icon ' : '') . ($key === $current ? 'on' : ''));
+        $links .= '<a href="' . h($href) . '"'
+                . ($cls !== '' ? ' class="' . $cls . '"' : '')
+                . ($key === $current ? ' aria-current="page"' : '')
+                . ($icon ? ' aria-label="' . h($text) . '" title="' . h($text) . '"' : '')
+                . '>' . ($icon ? bs_nav_icon($icon) : h($text)) . '</a>';
+    }
+    if (BS_SUBNAV_STYLE === 'band') {
+        return '<div class="ba-subbar"><nav class="ba-subbar__in" aria-label="' . h($label) . ' 메뉴">'
+             . $links . '</nav></div>';
+    }
+    return '<nav class="ba-subnav" aria-label="' . h($label) . ' 메뉴">' . $links . '</nav>';
 }
 
 /**
@@ -236,4 +302,69 @@ function bs_placeholder(string $heading, string $phase, array $todo = []): void
     <?php endif; ?>
   </section>
 <?php
+}
+
+/**
+ * 첨부 한 건의 [보기]·[내려받기] 단추 (2026-10-19). 프로젝트·R&D 가 같이 쓴다.
+ * assets/assign.js 의 srcActsHtml() 와 **같은 마크업**이다 — 한쪽만 고치지 말 것.
+ *
+ *   보기      브라우저가 그리는 형식(이미지·PDF) 이거나 뽑아 둔 본문이 있을 때
+ *   내려받기  파일로 올린 것
+ *
+ * $s 는 sources() 한 줄 (has_file · mime · parsed_len · id · title).
+ */
+function bs_source_acts_html(array $s): string
+{
+    $hasFile = !empty($s['has_file']);
+    $canSee  = ($hasFile && in_array((string)($s['mime'] ?? ''), BS_VIEWABLE_MIME, true))
+            || (int)($s['parsed_len'] ?? 0) > 0;
+    $h = '';
+    if ($canSee) {
+        $h .= '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' . (int)$s['id'] . '"'
+            . ' data-mime="' . h((string)($s['mime'] ?? '')) . '" data-file="' . ($hasFile ? '1' : '0') . '"'
+            . ' data-title="' . h((string)$s['title']) . '">보기</button>';
+    }
+    if ($hasFile) {
+        $h .= '<a class="ba-btn ba-btn--sm" href="api/source_download.php?id=' . (int)$s['id'] . '">내려받기</a>';
+    }
+    return $h === '' ? '' : '<span class="ba-src__acts">' . $h . '</span>';
+}
+
+/**
+ * 첨부 보기 창 (2026-10-19 공용으로). 이미지·PDF 는 그대로, 나머지는 뽑아 둔 본문.
+ * 외부 뷰어는 쓰지 않는다 — 업무 문서를 바깥으로 보내는 일이다.
+ * assign.js 의 initSourceViewer 가 [data-src-view] 단추와 이 창을 잇는다.
+ */
+function bs_source_viewer_html(): string
+{
+    return <<<'HTML'
+<div class="ba-drawer" id="ba-src-viewer" hidden>
+  <div class="ba-drawer__box ba-drawer__box--wide" role="dialog" aria-modal="true" aria-labelledby="ba-sv-title">
+    <div class="ba-drawer__head">
+      <h2 id="ba-sv-title">문서 보기</h2>
+      <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
+    </div>
+    <div class="ba-drawer__body ba-sv" id="ba-sv-body"></div>
+    <div class="ba-drawer__foot">
+      <span class="ba-dim" id="ba-sv-note"></span>
+      <span class="ba-spacer"></span>
+      <a class="ba-btn" id="ba-sv-dl" href="#" hidden>내려받기</a>
+      <a class="ba-btn" id="ba-sv-tab" href="#" target="_blank" rel="noopener" hidden>새 창에서 열기</a>
+      <button type="button" class="ba-btn" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+HTML;
+}
+
+/**
+ * 목록으로 돌아가는 링크 (2026-10-19). 상세·등록·수정 화면 맨 위에 같은 모양으로.
+ *
+ * 목록의 조회 조건(필터·쪽)은 assign.js 가 sessionStorage 에 두었다가 목록을
+ * 다시 열 때 되살린다(listMemory) — 그래서 여기서는 주소만 건다.
+ */
+function bs_back_link(string $href, string $label): string
+{
+    return '<nav class="ba-back" aria-label="이동"><a href="' . h($href) . '">'
+         . '<span aria-hidden="true">&lsaquo;</span> ' . h($label) . '</a></nav>';
 }

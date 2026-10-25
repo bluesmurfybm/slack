@@ -158,6 +158,16 @@ final class AllocationEngine
         if (!empty($sh['priority'])) { $flags[] = 'priority'; }
         if (!empty($sh['fit_adjust'])) { $flags[] = 'fit_adjust'; }
 
+        // --- 목표 공수 쪽으로 당기기 (2026-10-14) ----------------------------
+        //
+        // 그릇을 목표로 바꾸는 것만으로는 **넘치는 쪽**만 막는다. 목표를 올린
+        // 사람은 감점이 늦게 걸릴 뿐 일을 끌어오지 못했다(82 를 줘도 45 그대로).
+        // 목표에 못 미친 만큼 점수를 더해 **양쪽으로** 기울인다. 채워 갈수록
+        // 줄어 0 이 되므로 목표를 넘겨서까지 끌어오지는 않는다. 사람이 준 값이라
+        // human 에 함께 담아 근거에 따로 적는다.
+        $pull = $this->targetPull($member, $context);
+        if ($pull > 0) { $flags[] = 'target_pull'; $human += $pull; }
+
         $fit = $base - $pOver - $pConc + $bGroup + $human;
         $fit = max(0.0, min(100.0, $fit));
 
@@ -313,6 +323,22 @@ final class AllocationEngine
             return 0.0;
         }
         return self::SOFT_PENALTY * ($ratio - self::SOFT_FROM) / (1.0 - self::SOFT_FROM);
+    }
+
+    /**
+     * 목표 공수에 못 미친 만큼의 가점 (2026-10-14). 목표가 없으면 0.
+     * 비어 있으면 최대(BS_ALLOC_TARGET_PULL), 목표를 채우면 0 — 곧게 준다.
+     */
+    private function targetPull(array $member, array $context): float
+    {
+        $mid = $member['member_id'];
+        $t   = (float)($context['targets'][$mid] ?? 0);
+        if ($t <= 0) {
+            return 0.0;
+        }
+        $used = (float)($context['assigned_md'][$mid] ?? 0);
+        $k    = (float)($context['target_pull'] ?? BS_ALLOC_TARGET_PULL);
+        return round($k * max(0.0, 1.0 - $used / $t), 2);
     }
 
     /** 한 사람에게 쏠린 만큼 감점. 명세서 §1.1 이 든 문제가 이것이다. */
@@ -501,6 +527,8 @@ final class AllocationEngine
                 // 그때 비중이 얼마였는지. 없으면 "왜 이 사람이 적게 받았나" 에
                 // 답할 수 없다. 프로젝트 설정을 나중에 바꿔도 이 차수는 설명된다.
                 'shares'        => $ctx['shares'],
+                // 목표 공수 (2026-10-14). 그 차수를 설명하려면 남아야 한다.
+                'targets'       => $ctx['targets'],
                 // 직전 안 유지 (2026-10-12). 몇 건이 그대로고 몇 건이 바뀌었는지.
                 // 바뀐 것은 ε 점 넘게 나은 사람이 있었다는 뜻이다.
                 'stick'         => $ctx['prev_owner'] ? [
@@ -1040,7 +1068,11 @@ final class AllocationEngine
 
         $best = null; $bestScore = null;
         $fallback = null; $fallbackScore = null;
+        // 목표 0 = "이번엔 주지 않기" (2026-10-14). 맨 마지막 수단으로만 남긴다 —
+        // 그 사람 말고 받을 사람이 아무도 없을 때만 간다.
+        $last = null; $lastScore = null;
         $prev = $ctx['prev_owner'][$task['id']] ?? null;
+        if ($prev !== null && $this->isExcluded($prev, $ctx)) { $prev = null; }
         $prevScore = null; $prevTop = false;
 
         foreach ($ctx['member_order'] as $mid) {
@@ -1050,6 +1082,10 @@ final class AllocationEngine
                 continue;
             }
             $s = $fit['fit_score'];
+            if ($this->isExcluded($mid, $ctx)) {
+                if ($lastScore === null || $s > $lastScore) { $lastScore = $s; $last = $mid; }
+                continue;
+            }
 
             // 난이도 4~5 는 해당 분야 상위자 우선(명세서 §6.2).
             // 상위자가 아무도 없으면 막히므로 차선을 따로 들고 간다.
@@ -1082,7 +1118,13 @@ final class AllocationEngine
                 return $prev;
             }
         }
-        return $best ?? $fallback;
+        return $best ?? $fallback ?? $last;
+    }
+
+    /** 목표 공수를 0 으로 정한 사람인가 — 이번 산출에서는 주지 않기로 했다. */
+    private function isExcluded(int $mid, array $ctx): bool
+    {
+        return isset($ctx['targets'][$mid]) && (float)$ctx['targets'][$mid] <= 0.0;
     }
 
     /** 이 태스크의 계열에서 상위권인가. 상위 기준은 top_ratio(기본 중앙값 이상). */
@@ -1159,6 +1201,11 @@ final class AllocationEngine
                     if (isset($ctx['pinned'][$a]) || isset($ctx['pinned'][$b])) {
                         continue;
                     }
+                    // 맞바꾸기로 '주지 않기' 한 사람에게 일을 넘기지 않는다.
+                    // 그 사람이 이미 든 일은 내보내는 쪽이므로 막지 않는다.
+                    if ($this->isExcluded($mb, $ctx) || $this->isExcluded($ma, $ctx)) {
+                        continue;
+                    }
 
                     $before = $this->pairScore($a, $ma, $b, $mb, $assign, $ctx)
                             + $hold($a, $ma) + $hold($b, $mb);
@@ -1230,6 +1277,10 @@ final class AllocationEngine
         foreach (($ctx['shares'] ?? []) as $mid => $sh) {
             if ((float)($sh['share'] ?? 1.0) < 1.0 - 0.0001) { $lowered[(int)$mid] = true; }
         }
+        // 목표 공수를 정한 사람도 뺀다 (2026-10-14). 목표는 사람이 그 사람
+        // 몫을 직접 정한 지시다 — 기계 규칙(보장)이 덮어쓰면 "0 으로 줬는데
+        // 왜 한 건씩 갔나" 가 된다. 실제로 그랬다.
+        foreach (array_keys($ctx['targets'] ?? []) as $mid) { $lowered[(int)$mid] = true; }
         $targets = array_values(array_filter($targets,
             static fn($mid) => !isset($lowered[$mid])));
 
@@ -1440,6 +1491,16 @@ final class AllocationEngine
                               $this->num($after))
                     : ''
             );
+            // 목표 공수(사람이 막대를 끌어 정한 값)로 그릇을 바꿨으면 밝힌다 —
+            // 위의 '가용 M/D' 가 잰 값이 아니라 사람이 정한 값이 된다.
+            if ($this->isExcluded((int)$member['member_id'], $ctx)) {
+                $lines[] = '이번 산출에서는 이 사람에게 **주지 않기로** 정했습니다(목표 0). '
+                         . '이 태스크는 받을 수 있는 다른 사람이 없어 예외로 왔습니다.';
+            } elseif (isset($ctx['targets'][$member['member_id']])) {
+                $lines[] = sprintf(
+                    '이번 산출은 사람이 정한 목표 공수 %s M/D 를 그릇으로 썼습니다 — 목표 쪽으로 기울이기만 하므로 결과는 목표와 다를 수 있습니다.',
+                    $this->num($ctx['targets'][$member['member_id']]));
+            }
         } else {
             $lines[] = '가용도를 계산하지 못했습니다(기간 정보 부족).';
         }
@@ -1458,6 +1519,7 @@ final class AllocationEngine
             $why = [];
             if (!empty($sh['priority']))   { $why[] = '★ 우선 후보 +' . $this->num(BS_ALLOC_PRIORITY_BONUS); }
             if (!empty($sh['fit_adjust'])) { $why[] = '가감점 ' . sprintf('%+d', (int)$sh['fit_adjust']); }
+            if (in_array('target_pull', $fit['flags'] ?? [], true)) { $why[] = '목표 공수까지 남은 몫'; }
             $adj[] = '사람이 준 가점 ' . sprintf('%+g', $fit['human'])
                    . ($why ? '(' . implode(', ', $why) . ')' : '');
         }
@@ -1700,6 +1762,27 @@ final class AllocationEngine
                 : 0.0;
         }
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 목표 공수 — 막대를 끌어 정한 값 (2026-10-14)                  │
+        // │                                                              │
+        // │ 이번 산출에서만 그 사람의 그릇을 목표로 바꾼다. 가용 점수     │
+        // │ (availAfter)와 과부하 감점이 그릇을 기준으로 움직이므로       │
+        // │ 결과가 목표 **쪽으로 기울 뿐** 딱 맞지는 않는다 — 사람이 그   │
+        // │ 방식을 골랐다. 적합도 식은 그대로다. 그 차수 기록에만 남고    │
+        // │ 다른 프로젝트·가용도에는 영향이 없다(참여 비중과 다르다).     │
+        // └──────────────────────────────────────────────────────────────┘
+        $targets = [];
+        foreach ((array)($params['targets'] ?? []) as $tmid => $tmd) {
+            $tmid = (int)$tmid;
+            $tmd  = round((float)$tmd, 2);
+            // 0 은 "이번엔 주지 않기" 다 (2026-10-14). 그릇은 그대로 두고
+            // isExcluded() 가 고를 때 맨 뒤로 보낸다.
+            if (isset($members[$tmid]) && $tmd >= 0) {
+                $targets[$tmid] = $tmd;
+                if ($tmd > 0) { $capacity[$tmid] = $tmd; }
+            }
+        }
+
         // --- 계열 점수와 중앙값·상위 기준선 ---
         [$catScores, $catMedians, $catCutoff] =
             $this->categoryTables($members, $evalVer, (float)($constraints['top_ratio'] ?? 0.5));
@@ -1783,6 +1866,7 @@ final class AllocationEngine
             'workdays'         => $workdays,
             'pinned'           => $pinned,
             'prev_owner'       => $prevOwner,
+            'targets'          => $targets,
             'stick_eps'        => $stickEps,
             'level'            => $level,
             // 명시적으로 고른 후보. 안 골랐으면 빈 배열이다 — '전원 대상'

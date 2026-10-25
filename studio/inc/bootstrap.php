@@ -103,7 +103,8 @@ const BS_ROLES = [
  * 화면·API 가 역할 이름을 직접 비교하지 않고 이 코드로 묻게 한다.
  * 나중에 역할 체계가 바뀌어도 bs_can() 한 곳만 고치면 된다.
  */
-const BS_CAP_PROJECT_MANAGE     = 'project.manage';      // 프로젝트 등록·수정·삭제
+const BS_CAP_PROJECT_CREATE     = 'project.create';      // 프로젝트 새로 등록 (027 — 관리자가 사람마다 켠다)
+const BS_CAP_PROJECT_MANAGE     = 'project.manage';      // 프로젝트 수정·삭제
 const BS_CAP_WBS_CONFIRM        = 'wbs.confirm';         // WBS 초안 확정(confirmed=1)
 const BS_CAP_ALLOCATION_PROPOSE = 'allocation.propose';  // 배정안 산출
 const BS_CAP_ALLOCATION_CONFIRM = 'allocation.confirm';  // 배정안 확정
@@ -616,6 +617,18 @@ const BS_ALLOC_STICK_EPS = 3.0;
  */
 const BS_ALLOC_PRIORITY_BONUS = 10.0;
 
+/**
+ * 목표 공수로 당기는 힘의 최대치 (2026-10-14). 목표가 비어 있을 때 이만큼,
+ * 채워 갈수록 0 으로 준다.
+ *
+ * 측정(인천대 개방형 LXP 106건·8명, 목표 다섯 경우의 평균 오차) —
+ *   0 → 27%   10 → 22%   15 → 22%   20 → 21%   30 → 18%
+ * 낮추는 목표는 0 이어도 잘 따라온다(그릇이 줄면 감점이 걸린다). 올리는
+ * 목표는 적합도가 낮은 사람일수록 덜 따라온다 — 82 를 줘도 45~58. 사람이
+ * '기울이기만' 을 골랐으므로 점수 차를 뒤집을 만큼 세게 당기지 않는다.
+ */
+const BS_ALLOC_TARGET_PULL = 20.0;
+
 /** bs_allocation.status */
 const BS_ALLOC_STATUS = [
     'proposed'  => '산출됨',
@@ -706,6 +719,19 @@ const BS_UPLOAD_MIME = [
     'gif'  => ['image/gif'],
     'webp' => ['image/webp'],
 ];
+
+/**
+ * 링크 칸 최대 길이 (030, 2026-10-19). 산출물·참고 자료 링크가 같이 쓴다.
+ * DB 칸(VARCHAR 2000)과 같아야 한다 — 응용이 먼저 걸러 "처리 중 오류" 대신
+ * 무엇이 문제인지 알려 준다. 문서 뷰어 주소는 700자를 쉽게 넘는다.
+ */
+const BS_URL_MAX = 2000;
+
+/**
+ * 브라우저가 바로 그리는 형식 — [보기] 를 줄지 정한다 (2026-10-19 한 곳으로).
+ * api/source_download.php · api/rnd_file.php 의 inline 허용과 같아야 한다.
+ */
+const BS_VIEWABLE_MIME = ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 
 /** 확장자 → bs_project_source.kind */
 const BS_EXT_KIND = [
@@ -888,6 +914,73 @@ function bs_is_pm(int $projectId, ?string $email = null): bool
 }
 
 /**
+ * PM 이 지정한 공동 편집자인가 (026, 2026-10-14).
+ *
+ * 프로젝트(project_type='project')에만 쓴다. R&D 과제는 bs_rnd_member.can_edit
+ * 으로 따로 본다. 표(026)가 없는 서버에서는 아무도 편집자가 아니다.
+ */
+function bs_is_project_editor(int $projectId, ?string $email = null): bool
+{
+    static $cache = [];
+
+    $email ??= bs_current_user()['id'] ?? '';
+    if ($email === '' || $projectId <= 0) {
+        return false;
+    }
+    $k = $projectId . '|' . $email;
+    if (!array_key_exists($k, $cache)) {
+        try {
+            $st = bs_db()->prepare(
+                'SELECT 1 FROM bs_project_editor WHERE project_id = ? AND user_id = ? LIMIT 1');
+            $st->execute([$projectId, $email]);
+            $cache[$k] = (bool)$st->fetchColumn();
+        } catch (Throwable $e) {
+            $cache[$k] = false;
+        }
+    }
+    return $cache[$k];
+}
+
+/**
+ * 관리자가 프로젝트 등록 권한을 켜 준 사람인가 (027, 2026-10-15).
+ *
+ * 관리자 여부는 보지 않는다 — bs_can() 이 먼저 거른다. 칸(027)이 없는
+ * 서버에서는 아무도 켜지지 않은 것으로 본다.
+ *
+ * 끈다고 이미 등록한 프로젝트의 PM 권한이 사라지지는 않는다. PM 은
+ * bs_project.owner_id 로 정해진다.
+ */
+function bs_can_create_project_flag(?string $email = null): bool
+{
+    static $cache = [];
+
+    $email ??= bs_current_user()['id'] ?? '';
+    if ($email === '') {
+        return false;
+    }
+    if (!array_key_exists($email, $cache)) {
+        try {
+            $st = bs_db()->prepare(
+                'SELECT can_create_project FROM bs_member WHERE user_id = ? LIMIT 1');
+            $st->execute([$email]);
+            $cache[$email] = (int)$st->fetchColumn() === 1;
+        } catch (Throwable $e) {
+            $cache[$email] = false;
+        }
+    }
+    return $cache[$email];
+}
+
+/**
+ * 편집자를 지정·해제하고, 프로젝트를 지울 수 있는가 — PM 과 관리자만.
+ * 편집자에게 열면 편집자가 편집자를 늘리거나 프로젝트를 지울 수 있다.
+ */
+function bs_can_own_project(int $projectId): bool
+{
+    return bs_is_admin() || bs_is_pm($projectId);
+}
+
+/**
  * 기능 권한 판정.
  *
  * $projectId 를 주면 그 프로젝트의 PM 인지까지 본다. 안 주면 관리자만 통과한다.
@@ -904,11 +997,19 @@ function bs_can(string $capability, ?int $projectId = null): bool
     }
 
     $isPm = $projectId !== null && bs_is_pm($projectId);
+    // PM 이 지정한 공동 편집자 (026, 2026-10-14).
+    $isEd = !$isPm && $projectId !== null && bs_is_project_editor($projectId);
 
     return match ($capability) {
+        // 등록은 특정 프로젝트에 매이지 않는다. 관리자가 켠 사람만 (027).
+        BS_CAP_PROJECT_CREATE     => bs_can_create_project_flag(),
+
+        // 편집자는 정보·문서·WBS·배정안 산출까지 한다.
         BS_CAP_PROJECT_MANAGE,
         BS_CAP_WBS_CONFIRM,
-        BS_CAP_ALLOCATION_PROPOSE,
+        BS_CAP_ALLOCATION_PROPOSE => $isPm || $isEd,
+
+        // 확정은 점유(bs_workload)를 만드는 결정이다 — PM 의 몫으로 남긴다.
         BS_CAP_ALLOCATION_CONFIRM => $isPm,
 
         // 남의 프로파일 열람은 PM/관리자만. 본인 것은 bs_can_view_profile() 로 따로 본다.

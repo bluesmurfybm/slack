@@ -219,6 +219,8 @@ body { margin: 0; background: #EEF3FB; }
   border: 1px solid var(--line); background: var(--paper); color: var(--ink);
 }
 .bc-btn:hover { background: var(--surface); }
+/* 링크에 단추 모양을 입힐 때 — 밑줄 없이, 단추처럼 (2026-10-16, 첨부 보기·내려받기) */
+a.bc-btn { display: inline-block; text-decoration: none; }
 .bc-btn--primary { background: var(--brand); border-color: var(--brand); color: #fff; }
 .bc-btn--primary:hover { background: var(--brand-dk); border-color: var(--brand-dk); }
 .bc-btn--danger { color: var(--stop); border-color: #e7c6c6; }
@@ -593,6 +595,7 @@ body { margin: 0; background: #EEF3FB; }
 .bc-file__name { flex: 1; word-break: break-all; }
 .bc-file__name a { color: var(--brand); }
 .bc-file__size { color: var(--ink-soft); font-size: 12px; white-space: nowrap; }
+.bc-file__acts { display: flex; gap: 4px; flex: 0 0 auto; }   /* 보기 · 내려받기 (2026-10-16) */
 .bc-file__x {
   appearance: none; border: 0; background: none; cursor: pointer;
   color: var(--ink-soft); font-size: 16px; line-height: 1; padding: 0 2px;

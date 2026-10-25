@@ -6,6 +6,7 @@
  *  - 수천 건이면 items.info 를 건당 호출하므로 오래 걸림(수~수십 분). 중단·재실행하면 이어서 진행.
  *  사용:  SLACK_TOKEN=xoxp-... php import_archived.php
  */
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }   // CLI 전용 — 웹 주소로 실행되지 않게
 require_once __DIR__ . '/slack_lib.php';
 require_once __DIR__ . '/db.php';
 $boards = require __DIR__ . '/boards.php';
@@ -18,10 +19,10 @@ $now = date('Y-m-d H:i:s');
 $ins = $pdo->prepare("
     INSERT INTO requests
         (id, list_id, board, title, body, momo, lms, req_id, req, asg_id, asg, status_id, status,
-         priority_id, priority, team_id, team, `eta`, `date`, `done`, attachments, created, updated, archived, synced_at)
+         priority_id, priority, team_id, team, kind_id, kind, `eta`, `date`, `done`, attachments, created, updated, archived, synced_at)
     VALUES
         (:id,:list_id,:board,:title,:body,:momo,:lms,:req_id,:req,:asg_id,:asg,:status_id,:status,
-         :priority_id,:priority,:team_id,:team,:eta,:date,:done,:attachments,:created,:updated,1,:synced_at)
+         :priority_id,:priority,:team_id,:team,:kind_id,:kind,:eta,:date,:done,:attachments,:created,:updated,1,:synced_at)
     ON DUPLICATE KEY UPDATE archived=1
 ");
 
@@ -35,6 +36,7 @@ foreach ($boards as $listId => $b) {
     $sampleId = array_key_first($live);
     $sel = slackSelectMaps($token, $listId, $sampleId);
     $statusMap = $sel[$COL['status']] ?? []; $priMap = $sel[$COL['priority']] ?? []; $teamMap = $sel[$COL['team']] ?? [];
+    $kindMap = !empty($COL['kind']) ? ($sel[$COL['kind']] ?? []) : [];
 
     $arch = 0; $seen = 0;
     $cand = array_values(array_filter($allRec, fn($id) => !isset($live[$id]) && !isset($dbIds[$id])));
@@ -46,7 +48,7 @@ foreach ($boards as $listId => $b) {
         $rec = $info['record'] ?? $info['item'] ?? null;
         if (!$rec || empty($rec['archived'])) continue;         // 보관 아님
         $m = slackIndexFields($rec['fields'] ?? []);
-        $g = fn($k) => ($COL[$k] !== '' && isset($m[$COL[$k]])) ? $m[$COL[$k]] : null;
+        $g = fn($k) => (($COL[$k] ?? '') !== '' && isset($m[$COL[$k]])) ? $m[$COL[$k]] : null;
         $reqId = ($f = $g('req')) ? slackFieldUser($f) : null;
         $asgId = ($f = $g('asg')) ? slackFieldUser($f) : null;
         $fileIds = ($f = $g('attach')) ? slackFieldAttach($f) : [];
@@ -59,16 +61,19 @@ foreach ($boards as $listId => $b) {
         $sId = ($f = $g('status'))   ? slackFieldSelect($f) : null;
         $pId = ($f = $g('priority')) ? slackFieldSelect($f) : null;
         $tId = ($f = $g('team'))     ? slackFieldSelect($f) : null;
+        $kId = ($f = $g('kind'))     ? slackFieldSelect($f) : null;
         $atts = []; foreach ($fileIds as $fid) { if (isset($files[$fid]) && empty($files[$fid]['gone'])) $atts[] = $files[$fid]; }
         $ins->execute([
             ':id' => $rid, ':list_id' => $listId, ':board' => $b['label'],
-            ':title' => $title, ':body' => ($f = $g('body')) ? slackFieldBody($f) : '', ':momo' => $momo,
-            ':lms' => ($f = $g('lms')) ? slackFieldText($f) : '',
-            ':req_id' => $reqId, ':req' => $reqId ? ($names[$reqId] ?? $reqId) : '—',
+            // 컬럼 폭에 맞춰 자른다 — 운영 MySQL(엄격 모드)은 긴 값을 거부해(1406) 가져오기가 중간에 멈춘다(sync.php 와 같은 이유)
+            ':title' => mb_substr($title, 0, 500), ':body' => ($f = $g('body')) ? slackFieldBody($f) : '', ':momo' => mb_substr($momo, 0, 500),
+            ':lms' => mb_substr(($f = $g('lms')) ? slackFieldText($f) : '', 0, 500),
+            ':req_id' => $reqId, ':req' => mb_substr($reqId ? ($names[$reqId] ?? $reqId) : '—', 0, 120),
             ':asg_id' => $asgId, ':asg' => $asgId ? ($names[$asgId] ?? $asgId) : '—',
             ':status_id' => $sId, ':status' => $sId ? ($statusMap[$sId] ?? $sId) : '',
             ':priority_id' => $pId, ':priority' => $pId ? ($priMap[$pId] ?? $pId) : '',
             ':team_id' => $tId, ':team' => $tId ? ($teamMap[$tId] ?? $tId) : '',
+            ':kind_id' => $kId, ':kind' => $kId ? ($kindMap[$kId] ?? $kId) : '',
             ':eta' => ($f = $g('eta')) ? (slackFieldDate($f) ?: null) : null,
             ':date' => ($f = $g('date')) ? (slackFieldDate($f) ?: null) : null,
             ':done' => ($f = $g('done')) ? (slackFieldDate($f) ?: null) : null,

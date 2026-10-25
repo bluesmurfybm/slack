@@ -938,6 +938,23 @@ function board_event_kind($text, array $words = null)
             'cheer' => ['오늘입니다', '곧 있습니다']];
 }
 
+/** D-day 색으로 고를 수 있는 종류. 등록 창의 색 칸이 이 순서대로 놓인다. */
+function board_event_colors()
+{
+    $out = [];
+    foreach (BOARD_EVENT_KINDS as $key => $def) {
+        $out[] = ['key' => $key, 'label' => $def['label'], 'icon' => $def['icon']];
+    }
+    $out[] = ['key' => 'etc', 'label' => '일정', 'icon' => '📅'];
+    return $out;
+}
+
+/** 저장된 색이 지금도 있는 종류인지. 코드에서 종류가 없어졌으면 자동으로 돌아간다. */
+function board_is_color_kind($key)
+{
+    return $key === 'etc' || isset(BOARD_EVENT_KINDS[(string)$key]);
+}
+
 /**
  * 첫 화면에 띄울 일정.
  *
@@ -1059,6 +1076,11 @@ function board_decorate_event(array $e)
 
     $e['id']       = (int)$e['id'];
     $e['kind']     = board_event_kind($e['title'] . ' ' . (string)$e['memo']);
+    // 색만 사람이 고를 수 있다. 그림·폭죽 문구는 여전히 낱말로 고른 종류를 따른다 —
+    // 색을 경사로 바꿨다고 부고에 폭죽이 터지면 안 되기 때문이다.
+    $pick = isset($e['color_kind']) ? (string)$e['color_kind'] : '';
+    $e['color_kind'] = ($pick !== '' && board_is_color_kind($pick)) ? $pick : null;
+    $e['color']      = $e['color_kind'] !== null ? $e['color_kind'] : $e['kind']['key'];
     $e['dday']     = $days;
     $e['ongoing']  = $days <= 0 && $today <= $ends;   // 시작했고 아직 안 끝남
     $e['dday_label'] = $days > 0 ? 'D-' . $days : ($days === 0 ? 'D-DAY' : 'D+' . abs($days));
@@ -1118,13 +1140,20 @@ function board_save_event($id, array $in, array $u)
     // '미리 축하' 는 켜 두는 쪽이 자연스러워서 안 보내면 1 이다.
     $cheerEarly = (isset($in['cheer_early']) && (string)$in['cheer_early'] === '0') ? 0 : 1;
 
-    $args = [$title, $start, $end ?: null, $place ?: null, $memo ?: null, $cheerOn, $cheerEarly];
+    // 색 — 비워 보내면 자동(낱말 따라). 골랐을 때만 그 값을 남긴다.
+    $color = trim((string)(isset($in['color_kind']) ? $in['color_kind'] : ''));
+    if ($color !== '' && !board_is_color_kind($color)) {
+        throw new BoardError('없는 색입니다', 422);
+    }
+
+    $args = [$title, $start, $end ?: null, $place ?: null, $memo ?: null, $cheerOn, $cheerEarly,
+             $color !== '' ? $color : null];
 
     if ($id) {
         $args[] = (int)$id;
         portal_db()->prepare(
             "UPDATE portal_event SET title = ?, starts_on = ?, ends_on = ?, place = ?, memo = ?,
-                    cheer_on = ?, cheer_early = ?, updated_at = NOW() WHERE id = ?"
+                    cheer_on = ?, cheer_early = ?, color_kind = ?, updated_at = NOW() WHERE id = ?"
         )->execute($args);
         return (int)$id;
     }
@@ -1132,8 +1161,8 @@ function board_save_event($id, array $in, array $u)
     $args[] = $u['email'];
     portal_db()->prepare(
         "INSERT INTO portal_event (title, starts_on, ends_on, place, memo,
-                                   cheer_on, cheer_early, author_email, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())"
+                                   cheer_on, cheer_early, color_kind, author_email, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())"
     )->execute($args);
     return (int)portal_db()->lastInsertId();
 }

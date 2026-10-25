@@ -33,7 +33,7 @@ function dm_latest_multi($tok, $channels) {
         foreach ($chunk as $ch) {
             $u = 'https://slack.com/api/conversations.history?' . http_build_query(['channel' => $ch, 'limit' => 1]);
             $c = curl_init($u);
-            curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok], CURLOPT_TIMEOUT => 15, CURLOPT_SSL_VERIFYPEER => false]);
+            curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok], CURLOPT_TIMEOUT => 15]);
             curl_multi_add_handle($mh, $c); $hs[$ch] = $c;
         }
         do { $st = curl_multi_exec($mh, $run); if ($run) curl_multi_select($mh, 0.5); } while ($run > 0 && $st == CURLM_OK);
@@ -49,7 +49,7 @@ function dm_latest_multi($tok, $channels) {
 }
 /* 사용자 정보(이름 + 봇/앱 여부) 병렬 조회 + 캐시 → [uid => [name, bot]] */
 function dm_user_info($tok, $uids) {
-    $cf = sys_get_temp_dir() . '/slack_userinfo_cache.json';
+    $cf = slack_cache_path('slack_userinfo_cache.json');
     $cache = is_file($cf) ? (json_decode(@file_get_contents($cf), true) ?: []) : [];
     $missing = array_values(array_unique(array_filter($uids, fn($u) => $u && !isset($cache[$u]))));
     foreach (array_chunk($missing, 20) as $chunk) {
@@ -57,7 +57,7 @@ function dm_user_info($tok, $uids) {
         foreach ($chunk as $u) {
             $url = 'https://slack.com/api/users.info?' . http_build_query(['user' => $u]);
             $c = curl_init($url);
-            curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok], CURLOPT_TIMEOUT => 15, CURLOPT_SSL_VERIFYPEER => false]);
+            curl_setopt_array($c, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $tok], CURLOPT_TIMEOUT => 15]);
             curl_multi_add_handle($mh, $c); $hs[$u] = $c;
         }
         do { $st = curl_multi_exec($mh, $run); if ($run) curl_multi_select($mh, 0.5); } while ($run > 0 && $st == CURLM_OK);

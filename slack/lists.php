@@ -3,6 +3,9 @@ $__bwCurrent = 'slack';
 require_once __DIR__ . '/auth.php';
 require_login();
 $me = current_user();
+// Gmail 탭은 마이페이지에 Gmail 주소·앱 비밀번호를 등록한 사람만 쓸 수 있다
+$__pu = current_portal_user();
+$gmailReady = $__pu && !empty($__pu['gmail_user']) && !empty($__pu['gmail_pass_enc']);
 session_release();   // 세션 잠금 즉시 해제(서브 AJAX 동시요청 경합 방지)
 $cfg = require __DIR__ . '/../config.php';
 $listUrl = $cfg['list_url'] ?? '';
@@ -19,15 +22,16 @@ header('Pragma: no-cache');
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Coursemos WorkHub</title>
 <script>(function(){var t=localStorage.getItem("ui_theme");if(t)document.documentElement.classList.add(t);})();</script>
-<link rel="icon" href="../styles/favicon.ico">
+<link rel="icon" type="image/svg+xml" href="../styles/favicons/slack.svg">
 <?php require_once __DIR__ . '/../core/pwa.php'; echo pwa_head_tags('../'); ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="styles/header.css">
-<link rel="stylesheet" href="styles/common.css">
-<link rel="stylesheet" href="styles/lists.css">
+<link rel="stylesheet" href="styles/header.css?v=<?= filemtime(__DIR__ . '/styles/header.css') ?>">
+<link rel="stylesheet" href="styles/common.css?v=<?= filemtime(__DIR__ . '/styles/common.css') ?>">
+<link rel="stylesheet" href="styles/lists.css?v=<?= filemtime(__DIR__ . '/styles/lists.css') ?>">
+<link rel="stylesheet" href="styles/lists-dti.css?v=<?= filemtime(__DIR__ . '/styles/lists-dti.css') ?>">   <!-- dti(BlueMagazine) 디자인 레이어 -->
 </head>
 <body>
 <?php include __DIR__ . '/header.php'; ?>
@@ -40,7 +44,7 @@ header('Pragma: no-cache');
       <button id="dueBtn" type="button" class="txtbtn dueBtn" hidden title="예상완료일 초과 항목만 보기">⚠️ 지연 <span id="dueCnt">0</span></button>
       <button id="toggleUn" type="button" class="txtbtn iconable" title="미지정 숨기기"><span class="bico">👥</span><span class="btxt">미지정 숨기기</span></button>
       <button id="toggleArch" type="button" class="txtbtn iconable" title="보관 보기"><span class="bico">🗄️</span><span class="btxt">보관 보기</span></button>
-      <button id="toggleHidden" type="button" class="tip" data-tip="숨김 보기"><span class="ico" id="hidIco">🙈</span><span class="cnt" id="hidCnt"></span></button>
+      <button id="toggleHidden" type="button" class="tip" data-tip="숨김 보기"><span class="ico hid-ico" id="hidIco"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.73 5.08A10.74 10.74 0 0 1 21.94 11.65a1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg></span><span class="cnt" id="hidCnt"></span></button>
       <button id="schoolBtn" type="button" class="tip" data-tip="학교 검색">🏫</button>
       <div class="dropdown" id="recentDd">
         <button type="button" class="ddBtn tip" data-tip="최근 본 항목" id="recentBtn">🕘<span class="caret">▾</span></button>
@@ -61,10 +65,13 @@ header('Pragma: no-cache');
   </div>
   <div class="toolbar">
     <div class="btabs" id="btabs"></div>
+    <!-- Gmail 탭: 업무 탭(전체/유비온/와이오즈)과 묶지 않은 별도 버튼. 누르면 Gmail 페이지로 -->
+    <button type="button" id="gmailTab" class="gtab<?= $gmailReady ? '' : ' off' ?>" title="<?= $gmailReady ? 'Gmail 받은편지함' : 'Gmail 미등록 — 마이페이지에서 등록' ?>"<?= $gmailReady ? '' : ' aria-disabled="true"' ?>><svg class="gtab-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span>Gmail</span><span class="btab-n" id="gmailCnt" hidden></span></button>
     <span class="who"><?= htmlspecialchars($me['name'], ENT_QUOTES) ?> 님</span>
     <span class="search-wrap"><input id="search" type="text" placeholder="검색…"><button id="searchClear" type="button" class="search-x" hidden title="검색 지우기">✕</button></span>
     <div class="ms" id="msPriority"></div>
     <div class="ms" id="msTeam"></div>
+    <div class="ms" id="msKind"></div>
     <div class="ms" id="msStatus"></div>
     <div class="ms" id="msAsg"></div>
     <button id="reset" type="button">필터 초기화</button>
@@ -167,6 +174,7 @@ header('Pragma: no-cache');
 const LIST_URL = <?= json_encode($listUrl) ?>;
 const ME = <?= json_encode($me['name']) ?>;   // 낙관적 댓글 표시용 본인 이름
 const ME_ID = <?= json_encode($me['id'] ?? '') ?>;   // 사용자별 로컬 저장 키용
+const GMAIL_READY = <?= $gmailReady ? 'true' : 'false' ?>;   // 마이페이지에 Gmail 을 등록했는지
 let SCHOOLS = null;   // schools.php(DB)에서 최초 조회 후 캐시
 const PALETTE = {
   "등록":            {bg:"#eef0f2", fg:"#555c66"},
@@ -208,7 +216,7 @@ const BOARD_LABEL = { "블루소프트":"유비온", "와이오즈":"와이오�
 function boardLabel(b){ return BOARD_LABEL[b] || b; }
 // 보드별 독립 필터: 블루소프트/와이오즈 값이 달라 각자 체크·적용
 function emptyFilt(){ return {"블루소프트":new Set(), "와이오즈":new Set()}; }
-let FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+let FILT = { priority:emptyFilt(), team:emptyFilt(), kind:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
 let selected = new Set();                // 체크박스 선택 항목
 let splitOn = true;                       // 미지정 리스트 2분할 표시 여부(기본 표시)
 let cmtCache = {};                        // 레코드별 댓글 캐시(렌더 깜빡임 방지)
@@ -423,6 +431,7 @@ function matchBase(r, withStatus){   // 검색 + (보드별)우선순위/담당�
          (archivedMode || fboardTab === "all" || r.board === fboardTab) &&
          selPass('priority','priority', r) &&
          selPass('team','team', r) &&
+         selPass('kind','kind', r) &&
          (withStatus === false || selPass('status','status', r));
 }
 function visible(r){ return showHidden || !r.is_hidden; }   // 숨김 항목은 '숨김 보기'에서만
@@ -444,7 +453,7 @@ function unassignedItems(){ return DATA.filter(r => visible(r) && matchBase(r, f
 function rowHtml(r){
   const p = pal(r.status), open = openId === r.id, unread = !r.is_read;
   const row = `
-    <div class="row${unread?' unread':' read'}${r.is_pinned?' pinned':''}${r.is_hidden?' hid':''}" data-id="${esc(r.id)}" ${open?'style="background:var(--bg2)"':''}>
+    <div class="row${unread?' unread':' read'}${r.is_pinned?' pinned':''}${r.is_hidden?' hid':''}${open?' open':''}" data-id="${esc(r.id)}" ${open?'style="background:var(--bg2)"':''}>
       <input type="checkbox" class="chk" data-id="${esc(r.id)}" ${selected.has(r.id)?'checked':''}>
       <div class="pinBtn doPin${r.is_pinned?' on':''}" data-id="${esc(r.id)}" data-pin="${r.is_pinned?0:1}" title="${r.is_pinned?'고정 해제':'상단 고정'}">📌</div>
       <div class="names">${esc(r.req||'—')}${(()=>{ const a=asgNames(r); if(!a.length) return ''; const d = a.length<=2 ? a.join(', ') : a.slice(0,2).join(', ')+'…'; return `, ${esc(d)}`; })()}</div>
@@ -491,7 +500,7 @@ function rowHtml(r){
           ${r.lms?`<a href="${esc(r.lms)}" target="_blank" rel="noopener">LMS 링크</a>`:''}
           <a href="similar/similar.php?id=${encodeURIComponent(r.id)}" target="_blank" rel="noopener">🔍 유사 이력</a>
           <button type="button" class="rdBtn" data-id="${esc(r.id)}" data-read="${r.is_read?0:1}">${r.is_read?'안읽음으로':'읽음으로'}</button>
-          <button type="button" class="doHide" data-id="${esc(r.id)}" data-hide="${r.is_hidden?0:1}">${r.is_hidden?'👁️ 숨김 해제':'🙈 숨기기'}</button>
+          <button type="button" class="doHide" data-id="${esc(r.id)}" data-hide="${r.is_hidden?0:1}">${r.is_hidden ? ICON.eye+'숨김 해제' : ICON.eyeOff+'숨기기'}</button>
           <button type="button" class="cmtToggle ${showCmts?'on':''}">💬 댓글${r.cmt_count>0?` ${r.cmt_count}`:''}${showCmts?' 닫기':''}</button>
         </div>
       </div>
@@ -636,6 +645,8 @@ const ICON = {
   doc:   '<svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
   sheet: '<svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M4 4h16v16H4V4zm2 2v3h5V6H6zm7 0v3h5V6h-5zm-7 5v3h5v-3H6zm7 0v3h5v-3h-5zm-7 5v2h5v-2H6zm7 0v2h5v-2h-5z"/></svg>',
   edit:  '<svg class="ico" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>',
+  eye:   '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></svg>',     // 숨김 해제 / 숨김 보는 중
+  eyeOff:'<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.73 5.08A10.74 10.74 0 0 1 21.94 11.65a1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49"/><path d="M14.08 14.16a3 3 0 0 1-4.24-4.24"/><path d="M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14"/><path d="m2 2 20 20"/></svg>',  // 숨기기 / 숨김 가려짐
   trash: '<svg class="ico" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>',
 };
 function fmtSize(n){ if(!n) return ""; if(n<1024) return n+"B"; if(n<1048576) return Math.round(n/1024)+"KB"; return (n/1048576).toFixed(1)+"MB"; }
@@ -1250,6 +1261,42 @@ function updateSelUI(items){
 }
 
 /* 상단 리스트 탭 (전체/블루소프트/와이오즈) */
+/* ===== Gmail 탭 — 업무 탭과 별개인 버튼. 누르면 Gmail 페이지(gmail/ = gmail/index.php)로 간다.
+   Gmail 페이지는 이 화면과 같은 머리말(제목·업무 탭·Gmail 탭)을 갖고, 업무 탭을 누르면 그 보드로 돌아온다(?board=).
+   예전엔 이 화면 안에 Gmail 화면을 끼워 넣었는데, 주소가 늘 lists.php 라 새로고침·뒤로가기·페이지 이동이 어긋나고
+   Gmail 만 볼 때도 업무 목록 데이터를 계속 받아서 별도 페이지로 바꿨다.
+   배지 = 안 읽은 대화 수(Gmail 받은편지함 숫자와 같은 기준).
+   숫자는 DB 기준이라, 새 메일을 DB 에 넣는 동기화가 멈춰 있으면(Gmail 감시 데몬 없음 + Gmail 화면 안 열림)
+   이 화면에서 대신 동기화를 돌린다 — Gmail 화면의 '3분 넘게 멈추면 브라우저가 대신' 과 같은 방식.
+   여러 곳에서 동시에 돌려도 서버가 계정별로 잠가 한 번만 돈다(gmail_sync.php). ===== */
+const GMAIL_POLL_MS = 20000, GMAIL_STALE_SEC = 120;
+let gmailPollTimer = null, gmailSyncing = false;
+async function pollGmailUnread(){
+  clearTimeout(gmailPollTimer);
+  const el = document.getElementById("gmailCnt");
+  try{
+    const j = await (await fetch("gmail/index.php?ping=1&unread=1", {cache:"no-store"})).json();
+    const ok = j && j.ok && j.configured;
+    const n = ok ? (j.unread || 0) : 0;
+    el.textContent = n > 999 ? "999+" : String(n);
+    el.hidden = n <= 0;
+    if(ok && j.sync_age > GMAIL_STALE_SEC && !gmailSyncing){
+      gmailSyncing = true;
+      fetch("gmail/gmail_sync.php", {cache:"no-store"}).then(r => r.json()).catch(() => null)
+        .finally(() => { gmailSyncing = false; pollGmailUnread(); });   // 끝나면 바로 숫자 다시
+    }
+  }catch(e){ /* 배지는 부가 정보 — 실패하면 다음 주기에 */ }
+  gmailPollTimer = setTimeout(pollGmailUnread, GMAIL_POLL_MS);
+}
+document.getElementById("gmailTab").addEventListener("click", ()=>{
+  if(!GMAIL_READY){
+    alert("Gmail 연동 정보가 없습니다.\n마이페이지에서 Gmail 주소와 앱 비밀번호를 등록하면 사용할 수 있습니다.\n\n확인을 누르면 마이페이지로 이동합니다.");
+    location.href = "../index.php?view=profile&focus=gmail";
+    return;
+  }
+  location.href = "gmail/";
+});
+
 function renderBTabs(){
   const box0 = document.getElementById("btabs");
   if(archivedMode){ if(box0) box0.style.display="none"; return; }   // 보관은 전부 유비온 → 탭 숨김
@@ -1282,7 +1329,7 @@ function render(){
   const hc = DATA.filter(r=>r.is_hidden).length;   // 숨김 개수 → 토글 버튼에 표시
   document.getElementById("toggleHidden").dataset.tip = (showHidden?"숨김 가리기":"숨김 보기") + (hc?` (${hc})`:"");
   document.getElementById("hidCnt").textContent = hc || "";
-  document.getElementById("hidIco").textContent = showHidden ? "🐵" : "🙈";   // 활성 시 손 치운 원숭이
+  document.getElementById("hidIco").innerHTML = showHidden ? ICON.eye : ICON.eyeOff;   // 숨김 보는 중 = 뜬 눈
   // 탭 제목 배지: 안읽음 개수(숨김 제외)
   const uc = DATA.filter(r=>!r.is_read && !r.is_hidden).length;
   document.title = (uc>0 ? `(${uc}) ` : "") + "유지보수 요청";
@@ -1424,12 +1471,14 @@ let asgLink = false;   // 담당자 '양쪽 보드 동일 적용' — 설정(uip
 const MS = [
   { id:'msPriority', label:'우선순위', dim:'priority', field:'priority' },
   { id:'msTeam',     label:'담당팀',   dim:'team',     field:'team' },
+  { id:'msKind',     label:'접수분류', dim:'kind',     field:'kind', boards:["블루소프트"] },   // 유비온 리스트에만 있는 컬럼
   { id:'msStatus',   label:'진행상태', dim:'status',   field:'status' },
   { id:'msAsg',      label:'담당자',   dim:'asg',      field:'asg' },
 ];
 // 진행상태·우선순위는 보드별 고정 목록(기존 방식 유지), 담당팀·담당자는 데이터 기반
 const CANON = {
   priority: { "블루소프트":["긴급","일반"], "와이오즈":["긴급","중요","일반"] },
+  kind:     { "블루소프트":["유지보수","오류","오류-LXP","유지보수-LXP"] },
   status:   { "블루소프트":BLUE_STATUS,       "와이오즈":YOZ_STATUS },
 };
 function dimValues(field, board){
@@ -1450,7 +1499,9 @@ function updateMSBtn(cfg){
 function buildMS(cfg){
   const cont=document.getElementById(cfg.id); if(!cont) return;
   let menu="";
-  const boards = archivedMode ? ["블루소프트"] : ((fboardTab === "all") ? BOARDS_F : [fboardTab]);   // 보관=유비온만, 그 외 활성 탭 기준
+  const boards = (archivedMode ? ["블루소프트"] : ((fboardTab === "all") ? BOARDS_F : [fboardTab]))   // 보관=유비온만, 그 외 활성 탭 기준
+    .filter(b => !cfg.boards || cfg.boards.includes(b));                                               // 특정 보드 전용 필터
+  cont.hidden = !boards.length;   // 해당 보드가 없는 탭(예: 와이오즈)에선 버튼 숨김
   boards.forEach(board=>{
     const set=FILT[cfg.dim][board], vals=dimValues(cfg.field, board);
     menu += `<div class="ms-sec">${esc(boardLabel(board))}</div>`;
@@ -1484,7 +1535,7 @@ document.addEventListener("click", ()=>{ document.querySelectorAll(".asg-menu").
 
 /* ---------- 필터 상태 저장/복원 (새로고침에도 유지) ---------- */
 const FILTER_KEY = "slackapi_filters";   // 운영 lists.php 와 별도 키
-const _DIMS = ["priority","team","status","asg"];
+const _DIMS = ["priority","team","kind","status","asg"];
 function saveFilters(){
   const dump={}; _DIMS.forEach(d=>dump[d]={"블루소프트":[...FILT[d]["블루소프트"]], "와이오즈":[...FILT[d]["와이오즈"]]});
   const state = { filt:dump, fboardTab, search: document.getElementById("search").value, ts: Date.now() };
@@ -1951,7 +2002,7 @@ function openRecent(id){
   openId = id;
   // 현재 필터/탭/검색에 안 보이면 필터를 풀어 강제로 보이게
   if(!filteredItems().some(x=>x.id===id)){
-    FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+    FILT = { priority:emptyFilt(), team:emptyFilt(), kind:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
     fboardTab="all"; filter=""; dueOnly=false;
     document.getElementById("search").value=""; document.getElementById("searchClear").hidden=true;
     if(r.is_hidden) showHidden = true;   // 숨김 항목이면 숨김 보기 켜기
@@ -2000,7 +2051,7 @@ document.getElementById("searchClear").addEventListener("click",()=>{
   saveFilters(); openId=null; render(); s.focus();
 });
 document.getElementById("reset").addEventListener("click",()=>{
-  FILT = { priority:emptyFilt(), team:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
+  FILT = { priority:emptyFilt(), team:emptyFilt(), kind:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
   fboardTab = "all"; filter = "";
   document.getElementById("search").value = "";
   document.getElementById("searchClear").hidden = true;
@@ -2352,9 +2403,15 @@ document.getElementById("smSearch").addEventListener("input", smRender);
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && !document.getElementById("schoolModal").hidden) smClose(); });
 
 restoreFilters();  // 새로고침 전 필터 복원 (localStorage)
+(function(){       // Gmail 페이지의 업무 탭에서 넘어온 경우(?board=) — 그 보드를 선택하고 주소는 깔끔하게
+  const qb = new URLSearchParams(location.search).get("board");
+  if(qb && ["all","블루소프트","와이오즈"].includes(qb)){ fboardTab = qb; saveFilters(); }
+  if(qb !== null) history.replaceState(null, "", location.pathname);
+})();
 document.getElementById("searchClear").hidden = !document.getElementById("search").value;   // 복원된 검색어 있으면 ✕ 표시
 restoreView();     // 미지정 분할/숨김 보기 토글 상태 복원
 buildAllMS();      // 헤더 다중선택 필터 생성 — 복원된 선택값 반영
+if(GMAIL_READY) pollGmailUnread();   // 미등록이면 안 읽은 수를 묻지 않는다
 initPresets();     // 필터 세트(프리셋) 드롭다운 초기화
 syncFiltersFromServer();   // DB(사용자별) 필터 선택 반영 → 브라우저 바뀌어도 유지
 if(archivedMode) loadArchived(0); else load();   // 보관 보기 상태면 보관 목록으로 시작

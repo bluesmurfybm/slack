@@ -1,0 +1,334 @@
+/* lists.php 디자인 레이어 — dti(BlueMagazine, dti/styles/style.css)의 룩을 그대로 입힌다.
+ *  - 마크업·JS는 손대지 않고 lists.css 뒤에 로드해서 같은 선택자를 덮어쓴다.
+ *    (되돌리려면 lists.php 의 <link href="styles/lists-dti.css"> 한 줄만 빼면 된다)
+ *  - 색은 lists.css 가 쓰는 토큰(--bg/--bg2/--line/--txt/--muted/--hint/--info/--info-bg)을
+ *    dti 팔레트로 바꿔 끼우는 게 기본이고, 토큰으로 안 되는 모양(높이·라운드·그림자)만 개별 규칙으로 잡는다.
+ *  - 다크 모드(🌓 토글 / OS 설정)도 같은 토큰 체계로 유지한다.
+ */
+
+/* ---------- 토큰 ---------- */
+:root, html.light {
+  color-scheme:light;
+  --cos50:#0075f8; --cos45:#0069e1; --cos40:#005dc8; --cos90:#cbe3ff; --cos93:#d9eaff; --cos95:#e5f1ff;
+  --page:#f2f9ff;            /* 페이지 바탕(연한 하늘색) */
+  --card:#fff;
+  --hover:#fafafa;           /* 행 hover(gray98) */
+  --line2:#eeeff0;           /* 카드 안 구분선(bo-primary) */
+  --line3:#d3d6d9;           /* 컨트롤 테두리(bo-tertiary) */
+  --panel-head:#f4f7fd;      /* 판 머리말 띠 */
+  --panel-ttl:#0f2a55;
+  --ring:0 0 0 3px var(--cos95);
+  --ctl-h:32px;              /* 헤더(아이콘 줄·탭·검색·필터) 컨트롤 높이 — 여기 하나만 바꾸면 된다 */
+  --shadow-sm:0 1px 2px rgba(22,24,25,.05);
+  --shadow-pop:0 1px 2px rgba(16,35,90,.05), 0 12px 32px -14px rgba(16,35,90,.32);
+  --shadow-lg:0 12px 32px rgba(22,24,25,.14);
+  /* lists.css 가 쓰는 기존 토큰 */
+  --bg:#fff; --bg2:#f5f5f5; --line:#e0e3e5; --txt:#161819; --muted:#6d767e; --hint:#899199;
+  --info:#0069e1; --info-bg:#e5f1ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    color-scheme:dark;
+    --cos50:#3d8bff; --cos45:#5c9dff; --cos40:#7db1ff; --cos90:#1d3a66; --cos93:#183156; --cos95:#132845;
+    --page:#131517; --card:#1b1e21; --hover:#202428; --line2:#26292d; --line3:#3a3e43;
+    --panel-head:#1f2329; --panel-ttl:#c9dcff;
+    --shadow-pop:0 12px 32px -12px rgba(0,0,0,.7); --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+    --bg:#1b1e21; --bg2:#202428; --line:#30343a; --txt:#e9ebed; --muted:#a0a7ae; --hint:#757d85;
+    --info:#7db1ff; --info-bg:#132845;
+  }
+}
+html.dark {
+  color-scheme:dark;
+  --cos50:#3d8bff; --cos45:#5c9dff; --cos40:#7db1ff; --cos90:#1d3a66; --cos93:#183156; --cos95:#132845;
+  --page:#131517; --card:#1b1e21; --hover:#202428; --line2:#26292d; --line3:#3a3e43;
+  --panel-head:#1f2329; --panel-ttl:#c9dcff;
+  --shadow-pop:0 12px 32px -12px rgba(0,0,0,.7); --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+  --bg:#1b1e21; --bg2:#202428; --line:#30343a; --txt:#e9ebed; --muted:#a0a7ae; --hint:#757d85;
+  --info:#7db1ff; --info-bg:#132845;
+}
+
+/* ---------- 바탕 ---------- */
+body {
+  font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,system-ui,'Malgun Gothic',sans-serif;
+  background:var(--page); color:var(--txt); font-size:14px; line-height:1.55;
+  letter-spacing:-.01em; -webkit-font-smoothing:antialiased;
+}
+.wrap { padding:16px 22px 80px; }
+
+/* ---------- 페이지 머리말 (dti .brand h1) ---------- */
+.head { margin-bottom:0; gap:8px; align-items:center; }
+.head h1 { font-family:'Space Grotesk',Pretendard,system-ui,sans-serif; font-size:21px; font-weight:700;
+           letter-spacing:-.02em; color:var(--txt); gap:10px; }
+.head h1 .badge { font-family:Pretendard,system-ui,sans-serif; font-size:12px; font-weight:700; letter-spacing:0;
+                  background:var(--cos95); color:var(--cos40); padding:3px 10px; border-radius:999px; }
+#clock { font-size:13px; color:var(--hint); margin-left:2px; }
+
+/* ---------- 컨트롤 공통 (dti .filters select / .btn-mini) ---------- */
+input,button,select,textarea { border-color:var(--line3); background:var(--card); color:var(--txt); }
+button { font-weight:600; transition:background .15s ease,border-color .15s ease,color .15s ease; }
+input:focus, select:focus, textarea:focus { outline:none; border-color:var(--cos50); box-shadow:var(--ring); }
+/* 높이·hover 는 툴바/헤더/선택바 컨트롤에만 — 라이트박스·댓글·칩 버튼은 각자 모양 유지 */
+.toolbar input, .toolbar select, .toolbar > button, .iconbar button { height:var(--ctl-h); padding:0 10px; font-size:12.5px; }
+.toolbar > button, .iconbar button, .sel-actions button, .arch-bar button, .pw-row button, .links button { color:#41474b; }
+html.dark .toolbar > button, html.dark .iconbar button, html.dark .sel-actions button,
+html.dark .arch-bar button, html.dark .pw-row button, html.dark .links button { color:var(--txt); }
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .toolbar > button, :root:not(.light) .iconbar button, :root:not(.light) .sel-actions button,
+  :root:not(.light) .arch-bar button, :root:not(.light) .pw-row button, :root:not(.light) .links button { color:var(--txt); }
+}
+.toolbar > button:hover, .iconbar button:hover, .sel-actions button:hover,
+.arch-bar button:hover, .pw-row button:hover { background:var(--bg2); border-color:#c4c8cc; }
+button.primary, .iconbar button.primary, .sel-actions button.primary { background:var(--cos50); border-color:var(--cos50); color:#fff; }
+button.primary:hover, .iconbar button.primary:hover, .sel-actions button.primary:hover { background:var(--cos45); border-color:var(--cos45); }
+select { appearance:none; -webkit-appearance:none; padding-right:30px; cursor:pointer;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236d767e' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 9px center; background-size:14px; }
+
+/* 헤더 아이콘 버튼 */
+.iconbar button, .iconbar .ddBtn { height:var(--ctl-h); min-width:var(--ctl-h); padding:0 7px; border-radius:8px; font-size:13.5px; }
+.iconbar .txtbtn { padding:0 10px; font-size:12.5px; }
+.head .filters { gap:6px; }
+.iconbar .cnt { color:var(--cos50); }
+.iconbar .primary .cnt { color:#fff; }
+.dueBtn.on { background:#fbebed !important; border-color:#f04438 !important; }
+/* 숨김 보기 — 선 아이콘(눈) + 개수 알약. 켜지면(primary) 파란 바탕에 흰 아이콘 */
+#toggleHidden { gap:5px; color:#575e64; }
+#toggleHidden:hover { color:var(--txt); }
+#toggleHidden .hid-ico { display:inline-flex; }
+#toggleHidden .hid-ico svg { display:block; }
+#toggleHidden .cnt { font-size:10.5px; font-weight:700; line-height:1.6; min-width:18px; text-align:center;
+                     background:var(--cos95); color:var(--cos40); border-radius:999px; padding:0 6px; }
+#toggleHidden .cnt:empty { display:none; }
+#toggleHidden.primary { color:#fff; }
+#toggleHidden.primary .cnt { background:rgba(255,255,255,.24); color:#fff; }
+html.dark #toggleHidden:not(.primary) { color:var(--muted); }
+@media (prefers-color-scheme: dark) { :root:not(.light) #toggleHidden:not(.primary) { color:var(--muted); } }
+/* 상세의 숨기기/숨김 해제 버튼 */
+.links .doHide { gap:6px; }
+.links .doHide .ico { color:var(--muted); }
+.links .doHide:hover .ico { color:var(--txt); }
+.tip::after { background:#161819; color:#fff; font-size:11.5px; padding:5px 9px; border-radius:6px; }
+
+/* 드롭다운 메뉴 (topbar .dd-menu 와 같은 판) */
+.ddmenu, .ms-menu, .mention-menu, .asg-menu, #rctMenu, #uprof {
+  border-color:var(--line); border-radius:12px; box-shadow:var(--shadow-pop); }
+.ddmenu { padding:6px; top:calc(100% + 8px); }
+.ddmenu a { padding:9px 11px; border-radius:8px; font-size:13.5px; }
+.ddmenu a:hover { background:var(--cos95); color:var(--cos40); }
+
+/* ---------- 툴바 ---------- */
+.toolbar { gap:6px; padding:8px 0 10px; margin-bottom:0; }
+.who { font-size:12.5px; font-weight:600; color:var(--muted); }
+
+/* 리스트 탭 — 흰 묶음 안의 세그먼트. 보드마다 색을 달리해 한눈에 구분
+   (전체=남색, 유비온=파랑, 와이오즈=초록 — 목록의 U/W 표식 색과 같은 계열)
+   선택 탭은 연한 보드색 바탕 + 진한 글자, 강조는 숫자 배지(진한 보드색)가 맡는다 */
+.btabs { gap:2px; padding:2px; background:var(--card); border:1px solid var(--line); border-radius:11px; box-shadow:var(--shadow-sm); flex:none; }
+.btab { --tab-soft:#e8eef8; --tab-ring:#cdd8ec; --tab-ink:#0f2a55; --tab-solid:#0f2a55;
+        height:calc(var(--ctl-h) - 6px); padding:0 11px; border:none; border-radius:7px; background:transparent; color:#41474b;
+        font-size:12.5px; font-weight:600; gap:6px; }
+.btab[data-b="블루소프트"] { --tab-soft:#e5f1ff; --tab-ring:#c4ddff; --tab-ink:#0052af; --tab-solid:#0069e1; }
+.btab[data-b="와이오즈"]   { --tab-soft:#e4faf0; --tab-ring:#bdeed5; --tab-ink:#146b43; --tab-solid:#188351; }
+.btab:hover { background:var(--bg2); color:var(--txt); border-color:transparent; }
+.btab.on, .btab.on:hover { background:var(--tab-soft); color:var(--tab-ink); border-color:transparent;
+                           box-shadow:inset 0 0 0 1px var(--tab-ring); font-weight:700; }
+/* 숫자: 평소엔 연한 보드색, 선택되면 진한 보드색으로 채움 */
+.btab-n { font-size:10.5px; font-weight:700; background:var(--tab-soft); color:var(--tab-ink); border-radius:999px; padding:0 6px;
+          font-variant-numeric:tabular-nums; }
+.btab.on .btab-n { background:var(--tab-solid); color:#fff; }
+html.dark .btab { --tab-soft:#1f2b42; --tab-ring:#2f3f60; --tab-ink:#c9dcff; --tab-solid:#3a5c9e; color:var(--muted); }
+html.dark .btab[data-b="블루소프트"] { --tab-soft:#132845; --tab-ring:#1f3d68; --tab-ink:#8dbbff; --tab-solid:#2f7ff0; }
+html.dark .btab[data-b="와이오즈"]   { --tab-soft:#123527; --tab-ring:#1d4d38; --tab-ink:#6fdca7; --tab-solid:#1b8f59; }
+html.dark .btab.on { color:var(--tab-ink); }
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .btab { --tab-soft:#1f2b42; --tab-ring:#2f3f60; --tab-ink:#c9dcff; --tab-solid:#3a5c9e; color:var(--muted); }
+  :root:not(.light) .btab[data-b="블루소프트"] { --tab-soft:#132845; --tab-ring:#1f3d68; --tab-ink:#8dbbff; --tab-solid:#2f7ff0; }
+  :root:not(.light) .btab[data-b="와이오즈"]   { --tab-soft:#123527; --tab-ring:#1d4d38; --tab-ink:#6fdca7; --tab-solid:#1b8f59; }
+  :root:not(.light) .btab.on { color:var(--tab-ink); }
+}
+
+/* ---------- Gmail 탭 — 업무 탭 묶음과 떨어진 별도 버튼(높이는 탭 묶음과 같게). 선택 = Gmail 빨강 계열 ---------- */
+.btabs { margin:0; }                                         /* lists.css 의 margin-right:auto 는 Gmail 버튼이 대신 맡는다 */
+.gtab { --tab-soft:#fdecea; --tab-ring:#f5c6c1; --tab-ink:#b3261e; --tab-solid:#d93025;
+        height:var(--ctl-h); padding:0 12px; margin:0 auto 0 4px; gap:6px; flex:none;
+        border:1px solid var(--line); border-radius:11px; background:var(--card); box-shadow:var(--shadow-sm);
+        color:#41474b; font-size:12.5px; font-weight:600; }
+.gtab .gtab-ic { flex:none; color:#d93025; }
+.gtab:hover { background:var(--bg2); }
+.gtab.on, .gtab.on:hover { background:var(--tab-soft); color:var(--tab-ink); border-color:var(--tab-ring); font-weight:700; }
+.gtab.on .btab-n { background:var(--tab-solid); color:#fff; }
+.gtab.off { opacity:.55; }                                   /* Gmail 미등록 — 누르면 마이페이지 안내 */
+.gtab.off .gtab-ic { color:var(--muted); }
+.gtab.off:hover { background:var(--card); }
+html.dark .gtab { --tab-soft:#3a1d1b; --tab-ring:#5c2a26; --tab-ink:#ffb4a9; color:var(--muted); }
+html.dark .gtab.on { color:var(--tab-ink); }
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .gtab { --tab-soft:#3a1d1b; --tab-ring:#5c2a26; --tab-ink:#ffb4a9; color:var(--muted); }
+  :root:not(.light) .gtab.on { color:var(--tab-ink); }
+}
+/* 업무 탭·Gmail 탭을 링크(<a>)로 쓰는 곳(Gmail 페이지 머리말)도 버튼과 똑같이 */
+a.btab, a.gtab { display:inline-flex; align-items:center; text-decoration:none; cursor:pointer; }
+
+/* 검색 (dti .search — 돋보기 아이콘은 배경 이미지로) */
+.search-wrap input { width:180px; height:var(--ctl-h); padding:0 26px 0 30px; font-size:12.5px;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23899199' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M21 21l-4.3-4.3'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:10px center; background-size:14px; }
+.search-wrap input::placeholder { color:var(--hint); }
+.search-x { right:7px; width:16px; height:16px; background:#c4c8cc; color:#fff; }
+
+/* 다중선택 필터 버튼 (dti .filters select 모양) */
+.ms-btn { height:var(--ctl-h); padding:0 10px; border-color:var(--line3); border-radius:8px; background:var(--card);
+          color:#2c2f32; font-size:12.5px; font-weight:600; gap:4px; }
+html.dark .ms-btn { color:var(--txt); }
+@media (prefers-color-scheme: dark) { :root:not(.light) .ms-btn { color:var(--txt); } }
+.ms-btn.active { border-color:var(--cos50); color:var(--cos40); background:var(--cos95); }
+.ms-n { background:var(--cos50); border-radius:999px; font-weight:700; padding:0 6px; }
+.ms-menu { top:calc(var(--ctl-h) + 6px); padding:6px; min-width:190px; }
+.ms-item { padding:7px 9px; border-radius:8px; }
+.ms-item:hover { background:var(--cos95); }
+.ms-item input { width:16px; height:16px; accent-color:var(--cos50); box-shadow:none; }
+.ms-sec { color:var(--cos50); font-size:11.5px; padding:8px 9px 3px; border-top-color:var(--line2); }
+#reset { font-size:13px; color:var(--muted); }
+
+/* 설정 팝오버 */
+.preset-toggle { height:var(--ctl-h); width:var(--ctl-h); padding:0; border-radius:8px; }
+.preset-toggle.on { border-color:var(--cos50); color:var(--cos50); background:var(--cos95); }
+.preset-box .preset-wrap { top:calc(100% + 8px); border-color:var(--line); border-radius:14px; box-shadow:var(--shadow-pop); }
+.pw-head { background:var(--panel-head); color:var(--panel-ttl); border-bottom-color:var(--line); padding:12px 16px; }
+.pw-sec { padding:14px 16px; }
+.pw-sec + .pw-sec { border-top-color:var(--line2); }
+.pw-tg { border-radius:999px; padding:4px 11px; border-color:var(--line3); background:var(--card); }
+.pw-tg.on { background:var(--cos95); color:var(--cos40); border-color:var(--cos50); }
+.pw-line select, #presetSel { height:30px; padding:0 26px 0 8px; border-radius:6px; background-position:right 7px center; }
+.pw-row button { height:30px; padding:0 10px; font-size:12px; }
+.pw-line input[type=checkbox] { accent-color:var(--cos50); height:auto; padding:0; }
+
+/* ---------- 목록 판 (dti .sch-panel + .list) ---------- */
+.cols { gap:16px; }
+.listhead { padding:11px 18px; border-color:var(--line); border-radius:16px 16px 0 0; background:var(--panel-head);
+            font-size:12.5px; color:var(--muted); gap:10px; min-height:48px; }
+.listhead b { font-family:'Space Grotesk',Pretendard,system-ui,sans-serif; font-size:14px; font-weight:600;
+              color:var(--panel-ttl); letter-spacing:.01em; }
+#uncount { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+#selInfo { font-weight:600; color:#41474b; }
+html.dark #selInfo { color:var(--muted); }
+@media (prefers-color-scheme: dark) { :root:not(.light) #selInfo { color:var(--muted); } }
+.sel-actions { border-left-color:var(--line); }
+.sel-actions button { height:28px; padding:0 11px; font-size:12.5px; border-radius:8px; }
+.listbox { border-color:var(--line); border-radius:0 0 16px 16px; background:var(--card); }
+
+/* 행 (dti .list li.row) */
+.row { gap:12px; padding:11px 18px; border-bottom-color:var(--line2); background:var(--card); transition:background .12s ease; }
+.row:hover { background:var(--hover); }
+.row:last-child { border-bottom:none; }
+.title { font-size:14.5px; font-weight:400; letter-spacing:-.015em; color:var(--txt); }
+.row.unread .title { font-weight:500; }   /* 안읽음 — 굵기보다 진한 글자색·좌측 파란 띠로 구분 */
+.row.read { background:var(--card); }
+.row.read:hover { background:var(--hover); }
+.row.read .title { font-weight:400; color:#575e64; }
+html.dark .row.read .title { color:var(--muted); }
+@media (prefers-color-scheme: dark) { :root:not(.light) .row.read .title { color:var(--muted); } }
+.row.unread { box-shadow:inset 3px 0 0 var(--cos50); }
+.row.pinned, .row.pinned.unread { box-shadow:inset 3px 0 0 #ffc107; }
+.names { font-size:12.5px; font-weight:500; color:#41474b; width:104px; }
+html.dark .names { color:var(--muted); }
+@media (prefers-color-scheme: dark) { :root:not(.light) .names { color:var(--muted); } }
+.row.unread .names { font-weight:600; color:var(--txt); }
+.snip { font-size:12.5px; color:var(--hint); }
+.date { font-size:12.5px; color:var(--hint); font-variant-numeric:tabular-nums; }
+.cmtcnt { font-size:11.5px; font-weight:600; color:var(--cos40); background:var(--cos95); border-radius:6px; padding:0 6px; }
+.lock { font-size:11px; color:var(--muted); background:var(--bg2); border-radius:6px; padding:1px 6px; }
+.due { color:#dc1e11; font-size:11.5px; }
+
+/* 상태·우선순위·팀 칩 (dti .badge — 색은 JS 팔레트 그대로) */
+.st { font-size:11.5px; font-weight:700; line-height:1.5; padding:2px 8px; border-radius:6px; letter-spacing:0; }
+
+/* 체크박스 — 초록 → 브랜드 파랑 */
+.chk { width:18px; height:18px; border-color:#c4c8cc; border-radius:5px; background:var(--card); }
+.chk:hover { border-color:var(--cos50); }
+.chk:checked { background:var(--cos50); border-color:var(--cos50); }
+
+/* 보드 표식 (U=유비온 / W=와이오즈) */
+.bdot { width:22px; height:22px; font-size:11px; border-radius:6px; }
+.bdot.b { background:var(--cos95); color:var(--cos40); }
+.bdot.w { background:#e4faf0; color:#188351; }
+html.dark .bdot.w { background:#123527; color:#5fd39b; }
+@media (prefers-color-scheme: dark) { :root:not(.light) .bdot.w { background:#123527; color:#5fd39b; } }
+
+/* 보관 페이지네이션 바 */
+.arch-bar { border-color:var(--line); border-radius:12px; background:var(--card); box-shadow:var(--shadow-sm); padding:10px 16px; }
+.arch-bar select, .arch-bar .arch-pg button { height:32px; border-radius:8px; }
+.arch-bar select { padding:0 28px 0 10px; }
+
+/* ---------- 상세 (펼침) ---------- */
+.detail { padding:18px 22px 22px; border-bottom-color:var(--line2); background:#f8f9fb; }
+html.dark .detail { background:var(--bg2); }
+@media (prefers-color-scheme: dark) { :root:not(.light) .detail { background:var(--bg2); } }
+.meta { gap:8px; }
+.mi { font-size:12.5px; border-color:var(--line); border-radius:8px; padding:5px 11px; background:var(--card); }
+.ml { color:var(--muted); font-weight:600; }
+.mi select { height:28px; padding:0 24px 0 8px; border-radius:6px; background-position:right 6px center; background-size:12px; }
+.mi input[type=date] { height:28px; padding:0 8px; border-radius:6px; }
+.body-card { font-size:14px; line-height:1.75; border-color:var(--line); border-radius:12px; padding:16px 18px; background:var(--card); }
+.body-card a, .cmt-b a { color:var(--cos45); }
+.links { gap:6px; }
+.links a, .links button { height:32px; display:inline-flex; align-items:center; padding:0 12px; font-size:12.5px; font-weight:600;
+                          color:#41474b; background:var(--card); border:1px solid var(--line3); border-radius:8px; }
+html.dark .links a, html.dark .links button { color:var(--txt); }
+@media (prefers-color-scheme: dark) { :root:not(.light) .links a, :root:not(.light) .links button { color:var(--txt); } }
+.links a:hover, .links button:hover { background:var(--bg2); border-color:#c4c8cc; }
+.links .slack-link { color:#fff; background:#4a154b; border-color:#4a154b; height:32px; padding:0 12px; }
+.links .slack-link:hover { background:#611f64; border-color:#611f64; }
+.cmtToggle.on { background:var(--cos95); color:var(--cos40); border-color:var(--cos50); }
+.atts-title, .cmts-title { font-size:12.5px; color:#41474b; }
+html.dark .atts-title, html.dark .cmts-title { color:var(--muted); }
+@media (prefers-color-scheme: dark) { :root:not(.light) .atts-title, :root:not(.light) .cmts-title { color:var(--muted); } }
+.att-img, .media-doc, .media-video, .att-file { border-radius:10px; border-color:var(--line); }
+.att-file:hover, .media-doc:hover { border-color:var(--cos50); color:var(--cos45); }
+
+/* 댓글 패널 */
+.detail-cmts { border-color:var(--line); border-radius:14px; padding:14px 16px; background:var(--card); }
+.cmts-n { background:var(--cos95); color:var(--cos40); font-weight:700; }
+.cmt { border-bottom-color:var(--line2); }
+.cmt-input { border-color:var(--line3); border-radius:8px; padding:8px 11px; font-size:13px; }
+.cmt-input:focus { border-color:var(--cos50); box-shadow:var(--ring); }
+.cmt-tb .tb { height:26px; width:28px; border-radius:6px; }
+.cmt-tb .tb:hover { border-color:var(--cos50); color:var(--cos50); }
+.cmt-send { height:32px; padding:0 16px; font-size:12.5px; background:var(--cos50); border-color:var(--cos50); color:#fff; }
+.cmt-send:hover { background:var(--cos45); border-color:var(--cos45); }
+.cme-save { background:var(--cos50); }
+.rct.me, .mention { background:var(--cos95); color:var(--cos40); }
+.rct.me { border-color:var(--cos50); }
+
+/* ---------- 모달 ---------- */
+.detail-modal { background:rgba(22,24,25,.45); }
+.detail-modal .dm-panel { border-color:var(--line2); border-radius:14px; box-shadow:var(--shadow-lg); }
+.detail-modal .dm-head { padding:18px 56px 14px 22px; border-bottom-color:var(--line2); }
+.detail-modal .dm-title { font-size:18px; font-weight:700; letter-spacing:-.02em; }
+.detail-modal .dm-body .detail { background:transparent; }
+.sm-overlay { background:rgba(22,24,25,.45); }
+.sm-box { border-color:var(--line2); border-radius:14px; box-shadow:var(--shadow-lg); }
+.sm-head { padding:18px 22px 14px; font-weight:700; font-size:17px; border-bottom-color:var(--line2); }
+.sm-tools { padding:14px 22px; border-bottom-color:var(--line2); }
+.sm-tools input { height:38px; }
+.sm-chip { height:32px; border-radius:999px; border-color:var(--line3); }
+.sm-chip.on { background:var(--cos50); border-color:var(--cos50); color:#fff; }
+.sm-row { padding:11px 22px; border-bottom-color:var(--line2); }
+.sm-row:hover { background:var(--hover); }
+.sm-ver { background:var(--cos95); color:var(--cos40); border-radius:6px; font-weight:700; }
+.sm-link { border-radius:8px; font-weight:600; }
+
+/* 다중 담당자 칩 */
+.asg-chip { background:var(--cos95); color:var(--cos40); border-radius:6px; }
+.asg-add:hover { border-color:var(--cos50); color:var(--cos50); }
+.asg-opt { padding:3px 8px; }
+.asg-opt:hover { background:var(--cos95); }
+
+#updated { font-size:12.5px; color:var(--hint); margin:12px 4px 0; }
+
+/* 좁은 화면: 검색창은 줄여서 툴바가 덜 넘치게 */
+@media (max-width: 820px) {
+  .wrap { padding:12px 16px 60px; }
+  .head h1 { font-size:19px; }
+  .search-wrap input { width:150px; }
+}

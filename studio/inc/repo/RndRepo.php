@@ -59,6 +59,7 @@ final class RndRepo
         p.proposer_id, p.proposer_name,
         p.approved_by, p.approved_by_name, p.approved_at,
         p.load_cap, p.recruiting,
+        p.deleted_at, p.deleted_by_name, p.delete_reason,
         p.created_at, p.updated_at';
 
     public function __construct(private PDO $pdo) {}
@@ -95,13 +96,20 @@ final class RndRepo
                     (SELECT rm.role FROM bs_rnd_member rm
                        JOIN bs_member mm ON mm.id = rm.member_id
                       WHERE rm.project_id = p.id AND mm.user_id = ?) AS my_role,
+                    ' . ($this->hasEditColumn()
+                        ? '(SELECT rm.can_edit FROM bs_rnd_member rm
+                             JOIN bs_member mm ON mm.id = rm.member_id
+                            WHERE rm.project_id = p.id AND mm.user_id = ?)'
+                        : '0') . ' AS my_can_edit,
                     (SELECT COUNT(*) FROM bs_rnd_interest ri
                        JOIN bs_member mi ON mi.id = ri.member_id
                       WHERE ri.project_id = p.id AND mi.user_id = ?) AS my_interest
                FROM bs_project p
               WHERE p.id = ? AND p.deleted_at IS NULL AND ' . $vis
         );
-        $st->execute(array_merge([$me, $me, $me, $id], $visParams));
+        $st->execute(array_merge(
+            $this->hasEditColumn() ? [$me, $me, $me, $me, $id] : [$me, $me, $me, $id],
+            $visParams));
         $r = $st->fetch(PDO::FETCH_ASSOC);
 
         return $r ?: null;
@@ -334,6 +342,14 @@ final class RndRepo
         if (array_key_exists('domain_ids', $data)) {
             $this->saveDomains($id, (array)$data['domain_ids']);
         }
+
+        // 승인 뒤 기간을 고치면 이미 올라간 점유의 기간도 맞춘다 (2026-10-14).
+        // 안 맞추면 가용도는 옛 기간으로 계속 깎인다. 점유량(승인된 참여율)은
+        // 그대로다 — syncWorkload 는 기간만 새로 읽는다.
+        if ((array_key_exists('dev_start', $data) || array_key_exists('dev_end', $data))
+            && in_array((string)$cur['status'], ['approved', 'running'], true)) {
+            (new RndLoadService($this->pdo))->syncWorkload($id);
+        }
     }
 
     /**
@@ -503,6 +519,9 @@ final class RndRepo
                     rm.join_reason, rm.reject_reason,
                     rm.approved_by, rm.approved_by_name, rm.approved_at,
                     rm.joined_at, rm.left_at, rm.created_at,
+                    ' . ($this->hasEditColumn()
+                        ? 'rm.can_edit, rm.edit_granted_by,'
+                        : '0 AS can_edit, NULL AS edit_granted_by,') . '
                     m.emp_name, m.user_id, m.role_label
                FROM bs_rnd_member rm
                JOIN bs_member m ON m.id = rm.member_id
@@ -628,6 +647,36 @@ final class RndRepo
         return $this->requireMemberRow($rowId);
     }
 
+    /**
+     * 참여자에게 과제 수정 권한을 켜고 끈다 (026, 2026-10-14).
+     *
+     * 주도자·관리자만. **승인된 일반 참여자**에게만 의미가 있다 — 주도자는
+     * 이 칸과 무관하게 언제나 고치고, 신청 중인 사람은 아직 팀이 아니다.
+     * 누가 켰는지 남긴다.
+     */
+    public function setMemberEdit(int $rowId, bool $on, array $actor): array
+    {
+        $row = $this->requireMemberRow($rowId);
+        $this->requireTeamAuthority((int)$row['project_id']);
+
+        if ((string)$row['status'] !== 'approved') {
+            throw new DomainException('승인된 참여자에게만 수정 권한을 줄 수 있습니다.');
+        }
+        if ((string)$row['role'] === 'lead') {
+            throw new DomainException('주도자는 원래 고칠 수 있습니다.');
+        }
+        if (!$this->hasEditColumn()) {
+            throw new DomainException('이 서버에는 수정 권한 기능이 아직 설치되지 않았습니다(026). 관리자에게 알려 주세요.');
+        }
+        $this->pdo->prepare(
+            'UPDATE bs_rnd_member
+                SET can_edit = ?, edit_granted_by = ?, edit_granted_at = NOW()
+              WHERE id = ?'
+        )->execute([$on ? 1 : 0, $actor['id'] ?? null, $rowId]);
+
+        return $this->requireMemberRow($rowId);
+    }
+
     /** 합류 반려. 사유 필수 — 왜 안 되는지 모르면 다시 신청할 수 없다. */
     public function rejectMember(int $rowId, string $reason, array $actor): array
     {
@@ -694,7 +743,9 @@ final class RndRepo
 
         $st = $this->pdo->prepare(
             'SELECT l.id, l.member_id, l.content, l.finding, l.worked_on, l.created_at,
-                    m.emp_name
+                    m.emp_name, m.user_id AS author_id'
+                    . ($this->hasFileTable() ? ', l.updated_at, l.updated_by_name' : '')
+                    . ($this->hasLogUrl() ? ', l.url' : '') . '
                FROM bs_rnd_log l
                JOIN bs_member m ON m.id = l.member_id
               WHERE l.project_id = ?
@@ -726,10 +777,16 @@ final class RndRepo
             throw new InvalidArgumentException('작업한 날짜 형식이 올바르지 않습니다.');
         }
 
+        // 링크 (031, 2026-10-19) — 칸이 없는 DB 에서는 받지 않는다.
+        $url = $this->hasLogUrl() ? $this->checkUrl($data['url'] ?? null) : null;
         $this->pdo->prepare(
-            'INSERT INTO bs_rnd_log (project_id, member_id, content, finding, worked_on)
-             VALUES (?,?,?,?,?)'
-        )->execute([$projectId, $mid, $content, $this->nn($data['finding'] ?? null), $workedOn]);
+            'INSERT INTO bs_rnd_log (project_id, member_id, content, finding, worked_on'
+            . ($this->hasLogUrl() ? ', url' : '') . ')
+             VALUES (?,?,?,?,?' . ($this->hasLogUrl() ? ',?' : '') . ')'
+        )->execute(array_merge(
+            [$projectId, $mid, $content, $this->nn($data['finding'] ?? null), $workedOn],
+            $this->hasLogUrl() ? [$url] : []
+        ));
 
         return (int)$this->pdo->lastInsertId();
     }
@@ -741,7 +798,8 @@ final class RndRepo
 
         $st = $this->pdo->prepare(
             'SELECT id, kind, title, url, file_path, summary,
-                    created_by, created_by_name, created_at
+                    created_by, created_by AS author_id, created_by_name, created_at'
+                    . ($this->hasFileTable() ? ', updated_at, updated_by_name' : '') . '
                FROM bs_rnd_output
               WHERE project_id = ?
               ORDER BY id DESC'
@@ -753,10 +811,8 @@ final class RndRepo
     /**
      * 산출물 등록. **승인된 참여자만.**
      *
-     * 파일 업로드는 아직 붙이지 않았다 — 링크와 설명만 받는다.
-     * TODO(P9-5): SourceUploader 를 써서 파일 첨부를 받는다. bs_rnd_output.file_path
-     *             칸은 이미 있다. 저장 위치는 bs_project_source 와 같은 BS_UPLOAD_DIR
-     *             아래로 하되 과제용 하위 폴더를 따로 둘지 그때 정한다.
+     * 파일은 등록한 뒤 addFiles('output', id, …) 로 붙인다 (2026-10-19, bs_rnd_file).
+     * bs_rnd_output.file_path 칸은 쓰지 않는다 — 한 건에 파일이 여럿일 수 있다.
      */
     public function addOutput(int $projectId, array $data, array $actor): int
     {
@@ -774,6 +830,12 @@ final class RndRepo
         $url = $this->nn($data['url'] ?? null);
         if ($url !== null && !preg_match('#^https?://#i', (string)$url)) {
             throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
+        }
+        if ($url !== null && mb_strlen((string)$url) > BS_URL_MAX) {
+            // 길이를 먼저 본다 — 전에는 검사가 없어 DB 가 거절했고 "처리 중 오류" 만 떴다.
+            throw new InvalidArgumentException(sprintf(
+                '주소가 너무 깁니다(%s자). %s자 이내로 넣어 주세요.',
+                number_format(mb_strlen((string)$url)), number_format(BS_URL_MAX)));
         }
 
         $this->pdo->prepare(
@@ -874,6 +936,433 @@ final class RndRepo
         )->execute([$note, $projectId]);
 
         $this->closeProject($projectId, 'dropped');
+    }
+
+    // =================================================================
+    // 진행 기록·산출물 고치기·지우기, 첨부 (2026-10-19)
+    //
+    // 고치고 지우는 사람은 **작성자·주도자·관리자**, 과제 상태와 무관하게 언제든
+    // (사용자 결정). 판정은 presenter 의 bs_rnd_can_edit_item() 한 곳 — 화면 단추와
+    // 같다. 첨부는 bs_rnd_file(029). 029 가 없는 DB 에서는 첨부만 꺼진 채로 돈다.
+    // =================================================================
+
+    /** 진행 기록 고치기. */
+    public function updateLog(int $logId, array $data, array $actor): int
+    {
+        $log = $this->requireItem('log', $logId);
+        $content = trim((string)($data['content'] ?? ''));
+        if ($content === '') {
+            throw new InvalidArgumentException('진행 내용을 입력하세요.');
+        }
+        $workedOn = $this->nn($data['worked_on'] ?? null);
+        if ($workedOn !== null && !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$workedOn)) {
+            throw new InvalidArgumentException('작업한 날짜 형식이 올바르지 않습니다.');
+        }
+        $url = $this->hasLogUrl() ? $this->checkUrl($data['url'] ?? null) : null;
+        $this->pdo->prepare(
+            'UPDATE bs_rnd_log SET content = ?, finding = ?, worked_on = ?'
+            . ($this->hasLogUrl() ? ', url = ?' : '')
+            . ($this->hasFileTable() ? ', updated_at = NOW(), updated_by_name = ?' : '')
+            . ' WHERE id = ?'
+        )->execute(array_merge(
+            [$content, $this->nn($data['finding'] ?? null), $workedOn],
+            $this->hasLogUrl() ? [$url] : [],
+            $this->hasFileTable() ? [(string)($actor['name'] ?? '')] : [],
+            [$logId]
+        ));
+        return (int)$log['project_id'];
+    }
+
+    /** 진행 기록 지우기 — 붙은 파일도 함께. */
+    public function deleteLog(int $logId, array $actor): int
+    {
+        $log = $this->requireItem('log', $logId);
+        $this->deleteFilesOf('log', $logId);
+        $this->pdo->prepare('DELETE FROM bs_rnd_log WHERE id = ?')->execute([$logId]);
+        unset($actor);
+        return (int)$log['project_id'];
+    }
+
+    /** 산출물 고치기. */
+    public function updateOutput(int $outputId, array $data, array $actor): int
+    {
+        $out = $this->requireItem('output', $outputId);
+        $title = trim((string)($data['title'] ?? ''));
+        if ($title === '') {
+            throw new InvalidArgumentException('산출물 제목을 입력하세요.');
+        }
+        $kind = (string)($data['kind'] ?? 'doc');
+        if (!isset(BS_RND_OUTPUT_KIND[$kind])) {
+            throw new InvalidArgumentException('알 수 없는 산출물 갈래입니다.');
+        }
+        $url = $this->nn($data['url'] ?? null);
+        if ($url !== null && !preg_match('#^https?://#i', (string)$url)) {
+            throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
+        }
+        if ($url !== null && mb_strlen((string)$url) > BS_URL_MAX) {
+            // 길이를 먼저 본다 — 전에는 검사가 없어 DB 가 거절했고 "처리 중 오류" 만 떴다.
+            throw new InvalidArgumentException(sprintf(
+                '주소가 너무 깁니다(%s자). %s자 이내로 넣어 주세요.',
+                number_format(mb_strlen((string)$url)), number_format(BS_URL_MAX)));
+        }
+        $this->pdo->prepare(
+            'UPDATE bs_rnd_output SET kind = ?, title = ?, url = ?, summary = ?'
+            . ($this->hasFileTable() ? ', updated_at = NOW(), updated_by_name = ?' : '')
+            . ' WHERE id = ?'
+        )->execute(array_merge(
+            [$kind, $title, $url, $this->nn($data['summary'] ?? null)],
+            $this->hasFileTable() ? [(string)($actor['name'] ?? '')] : [],
+            [$outputId]
+        ));
+        return (int)$out['project_id'];
+    }
+
+    /** 산출물 지우기 — 붙은 파일도 함께. */
+    public function deleteOutput(int $outputId, array $actor): int
+    {
+        $out = $this->requireItem('output', $outputId);
+        $this->deleteFilesOf('output', $outputId);
+        $this->pdo->prepare('DELETE FROM bs_rnd_output WHERE id = ?')->execute([$outputId]);
+        unset($actor);
+        return (int)$out['project_id'];
+    }
+
+    /**
+     * 진행 기록·산출물에 파일을 붙인다. 하나가 실패해도 나머지는 붙인다.
+     *
+     * 검사(형식·크기·내용 대조)는 프로젝트 출처와 **같은 것**을 쓴다
+     * (SourceUploader::saveFile). 저장 위치도 같은 upload_dir 아래다.
+     *
+     * @return array{project_id:int, saved:list<array>, failed:list<array>}
+     */
+    public function addFiles(string $ownerType, int $ownerId, array $files, array $actor): array
+    {
+        if (!$this->hasFileTable()) {
+            throw new DomainException('첨부 기능을 쓰려면 DB 에 029 마이그레이션을 먼저 적용해야 합니다.');
+        }
+        $item = $this->requireItem($ownerType, $ownerId);
+        $pid  = (int)$item['project_id'];
+
+        require_once __DIR__ . '/ProjectRepo.php';
+        require_once __DIR__ . '/../service/SourceUploader.php';
+        $up   = new SourceUploader(new ProjectRepo($this->pdo));
+        $list = $up->filesFrom($files);
+        if ($list === []) {
+            throw new DomainException('선택된 파일이 없습니다.');
+        }
+        if (count($list) > BS_UPLOAD_MAX_FILES) {
+            throw new DomainException('한 번에 ' . BS_UPLOAD_MAX_FILES . '개까지 올릴 수 있습니다.');
+        }
+
+        $saved = $failed = [];
+        foreach ($list as $file) {
+            try {
+                $f = $up->saveFile($pid, $file);
+                try {
+                    $this->pdo->prepare(
+                        'INSERT INTO bs_rnd_file
+                            (project_id, owner_type, owner_id, orig_name, file_path, mime, file_size,
+                             uploaded_by, uploaded_by_name)
+                         VALUES (?,?,?,?,?,?,?,?,?)'
+                    )->execute([$pid, $ownerType, $ownerId, $f['name'], $f['path'], $f['mime'], $f['size'],
+                                (string)($actor['id'] ?? ''), (string)($actor['name'] ?? '')]);
+                } catch (Throwable $e) {
+                    @unlink($f['path']);     // DB 에 못 넣었으면 파일도 남기지 않는다
+                    throw $e;
+                }
+                $saved[] = ['id' => (int)$this->pdo->lastInsertId(), 'name' => $f['name']];
+            } catch (DomainException | RuntimeException $e) {
+                $failed[] = ['name' => (string)($file['name'] ?? ''), 'message' => $e->getMessage()];
+            }
+        }
+        return ['project_id' => $pid, 'saved' => $saved, 'failed' => $failed];
+    }
+
+    /** 첨부 하나 지우기 — 그 기록·산출물을 고칠 수 있는 사람만. */
+    public function deleteFile(int $fileId, array $actor): int
+    {
+        $f = $this->fileRow($fileId);
+        if (!$f) {
+            throw new DomainException('파일을 찾을 수 없습니다.');
+        }
+        $this->requireItem((string)$f['owner_type'], (int)$f['owner_id']);
+        $this->pdo->prepare('DELETE FROM bs_rnd_file WHERE id = ?')->execute([$fileId]);
+        if (is_file((string)$f['file_path'])) {
+            @unlink((string)$f['file_path']);
+        }
+        unset($actor);
+        return (int)$f['project_id'];
+    }
+
+    /**
+     * 과제의 첨부 전부 — [owner_type][owner_id] => 목록. file_path 는 싣지 않는다.
+     * 029 가 없으면 빈 배열.
+     */
+    public function filesOf(int $projectId): array
+    {
+        if (!$this->hasFileTable()) {
+            return [];
+        }
+        $st = $this->pdo->prepare(
+            'SELECT id, owner_type, owner_id, orig_name, mime, file_size, uploaded_by_name, created_at
+               FROM bs_rnd_file WHERE project_id = ? ORDER BY id'
+        );
+        $st->execute([$projectId]);
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $out[(string)$r['owner_type']][(int)$r['owner_id']][] = $r;
+        }
+        return $out;
+    }
+
+    /**
+     * 내려받기·보기용 첨부 한 건 — **그 과제를 볼 수 있을 때만** (find() 가 공개 범위를 본다).
+     * file_path 를 포함하므로 응답에 싣지 말 것.
+     */
+    public function findFileForView(int $fileId): ?array
+    {
+        $f = $this->fileRow($fileId);
+        return $f && $this->find((int)$f['project_id']) ? $f : null;
+    }
+
+    /**
+     * 링크 검사 — 산출물·진행 기록 공용. 비면 null.
+     * http(s) 만, BS_URL_MAX 자까지. 넘으면 DB 가 거절하기 전에 이유를 알린다.
+     */
+    private function checkUrl(mixed $raw): ?string
+    {
+        $url = $this->nn($raw);
+        if ($url === null) {
+            return null;
+        }
+        if (!preg_match('#^https?://#i', (string)$url)) {
+            throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
+        }
+        if (mb_strlen((string)$url) > BS_URL_MAX) {
+            throw new InvalidArgumentException(sprintf(
+                '주소가 너무 깁니다(%s자). %s자 이내로 넣어 주세요.',
+                number_format(mb_strlen((string)$url)), number_format(BS_URL_MAX)));
+        }
+        return (string)$url;
+    }
+
+    /** 031(진행 기록 링크 칸)이 이 DB 에 있는가. 없으면 링크만 꺼진 채로 돈다. */
+    private function hasLogUrl(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            try {
+                $has = (bool)$this->pdo->query("SHOW COLUMNS FROM bs_rnd_log LIKE 'url'")->fetch();
+            } catch (Throwable $e) {
+                $has = false;
+            }
+        }
+        return $has;
+    }
+
+    /** 029(첨부 표)가 이 DB 에 있는가. 없으면 첨부만 꺼진 채로 돈다 — 026 때처럼 화면이 500 이 되지 않게. */
+    private function hasFileTable(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            try {
+                $has = (bool)$this->pdo->query("SHOW TABLES LIKE 'bs_rnd_file'")->fetch();
+            } catch (Throwable $e) {
+                $has = false;
+            }
+        }
+        return $has;
+    }
+
+    private function fileRow(int $fileId): ?array
+    {
+        if (!$this->hasFileTable()) {
+            return null;
+        }
+        $st = $this->pdo->prepare('SELECT * FROM bs_rnd_file WHERE id = ?');
+        $st->execute([$fileId]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        return $r ?: null;
+    }
+
+    /**
+     * 진행 기록·산출물 한 건 — 볼 수 있고 **고칠 수 있을 때만** 돌려준다.
+     * 고칠 수 있는가는 bs_rnd_can_edit_item() (작성자·주도자·관리자).
+     */
+    private function requireItem(string $type, int $id): array
+    {
+        if ($type === 'log') {
+            $st = $this->pdo->prepare(
+                'SELECT l.id, l.project_id, m.user_id AS author_id
+                   FROM bs_rnd_log l JOIN bs_member m ON m.id = l.member_id WHERE l.id = ?');
+        } elseif ($type === 'output') {
+            $st = $this->pdo->prepare(
+                'SELECT id, project_id, created_by AS author_id FROM bs_rnd_output WHERE id = ?');
+        } else {
+            throw new InvalidArgumentException('알 수 없는 대상입니다.');
+        }
+        $st->execute([$id]);
+        $item = $st->fetch(PDO::FETCH_ASSOC);
+        $rnd  = $item ? $this->find((int)$item['project_id']) : null;
+        if (!$item || !$rnd) {
+            throw new DomainException(($type === 'log' ? '진행 기록' : '산출물') . '을 찾을 수 없습니다.');
+        }
+        if (!bs_rnd_can_edit_item($rnd, (string)$item['author_id'])) {
+            throw new DomainException('작성한 사람과 과제 주도자, 관리자만 고치고 지울 수 있습니다.');
+        }
+        return $item;
+    }
+
+    /** 기록·산출물 하나에 붙은 파일을 행과 디스크에서 지운다. */
+    private function deleteFilesOf(string $type, int $ownerId): void
+    {
+        if (!$this->hasFileTable()) {
+            return;
+        }
+        $st = $this->pdo->prepare('SELECT file_path FROM bs_rnd_file WHERE owner_type = ? AND owner_id = ?');
+        $st->execute([$type, $ownerId]);
+        $paths = $st->fetchAll(PDO::FETCH_COLUMN);
+        $this->pdo->prepare('DELETE FROM bs_rnd_file WHERE owner_type = ? AND owner_id = ?')
+            ->execute([$type, $ownerId]);
+        foreach ($paths as $p) {
+            if (is_string($p) && is_file($p)) {
+                @unlink($p);
+            }
+        }
+    }
+
+    // =================================================================
+    // 삭제 · 복구 · 영구삭제 (2026-10-16)
+    // =================================================================
+
+    /**
+     * 삭제 — **삭제 상태로 바꾼다.** 행은 남는다.
+     *
+     * 누가 할 수 있는지는 bs_rnd_can_delete() 가 정한다(화면 단추와 같은 판정).
+     * 점유는 오늘로 닫는다 — 보드에서 사라진 과제가 가용도를 계속 깎으면 안 된다.
+     * 상태(status)·모집 여부(recruiting)는 그대로 둔다. 복구하면 그 자리로 돌아간다.
+     * 삭제된 과제는 find() 가 걸러 보드·합류에서 빠지므로 모집 표시를 끌 필요가 없다.
+     */
+    public function softDelete(int $projectId, string $reason, array $actor): void
+    {
+        $rnd = $this->find($projectId);
+        if (!$rnd) {
+            throw new DomainException('과제를 찾을 수 없습니다.');
+        }
+        if (!bs_rnd_can_delete($rnd)) {
+            throw new DomainException(
+                '삭제할 수 없습니다. 발의자는 시작 전 과제(작성 중·발의됨, 또는 다른 참여자·'
+                . '기록·산출물이 없는 과제)만 지울 수 있습니다. 진행된 과제는 [중단] 으로 끝내세요.');
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare(
+                "UPDATE bs_project
+                    SET deleted_at = NOW(), deleted_by = ?, deleted_by_name = ?,
+                        delete_reason = ?
+                  WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NULL"
+            )->execute([
+                (string)($actor['id'] ?? ''), (string)($actor['name'] ?? ''),
+                trim($reason) !== '' ? mb_substr(trim($reason), 0, 500) : null, $projectId,
+            ]);
+            $this->closeWorkloadFor($projectId, null);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * 복구 — 관리자만. 삭제 상태를 걷고, 살아 있는 과제면 점유를 다시 맞춘다.
+     *
+     * 삭제할 때 점유를 오늘로 닫았으므로, 승인·진행 중 과제는 syncWorkload()
+     * 로 참여율·기간을 다시 올린다(승인된 참여만 — §9.1 통제는 그대로).
+     */
+    public function restore(int $projectId, array $actor): void
+    {
+        $this->requireDeletedForAdmin($projectId);
+        $this->pdo->prepare(
+            "UPDATE bs_project
+                SET deleted_at = NULL, deleted_by = NULL, deleted_by_name = NULL, delete_reason = NULL
+              WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NOT NULL"
+        )->execute([$projectId]);
+        (new RndLoadService($this->pdo))->syncWorkload($projectId);
+        unset($actor);
+    }
+
+    /**
+     * 영구삭제 — 관리자만, **삭제 상태인 과제만.** 되돌릴 수 없다.
+     *
+     * 참여자·기록·산출물·관심·분야는 FK(ON DELETE CASCADE)로 함께 지워진다.
+     * 점유(bs_workload)는 FK 가 없어 직접 지운다 — 남기면 주인 없는 점유가
+     * 가용도를 계속 깎는다. 산출물 파일도 디스크에서 지운다.
+     *
+     * @return string 지운 과제의 코드·이름 (알림 문구용)
+     */
+    public function purge(int $projectId, array $actor): string
+    {
+        $row = $this->requireDeletedForAdmin($projectId);
+
+        $st = $this->pdo->prepare(
+            "SELECT file_path FROM bs_rnd_output WHERE project_id = ? AND file_path IS NOT NULL AND file_path <> ''"
+        );
+        $st->execute([$projectId]);
+        $files = $st->fetchAll(PDO::FETCH_COLUMN);
+        // 진행 기록·산출물 첨부(029)와 참고 자료 파일도. 행은 FK 로 지워지지만 파일은 남는다.
+        if ($this->hasFileTable()) {
+            $st = $this->pdo->prepare('SELECT file_path FROM bs_rnd_file WHERE project_id = ?');
+            $st->execute([$projectId]);
+            $files = array_merge($files, $st->fetchAll(PDO::FETCH_COLUMN));
+        }
+        $st = $this->pdo->prepare(
+            "SELECT file_path FROM bs_project_source WHERE project_id = ? AND file_path IS NOT NULL AND file_path <> ''"
+        );
+        $st->execute([$projectId]);
+        $files = array_merge($files, $st->fetchAll(PDO::FETCH_COLUMN));
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare("DELETE FROM bs_workload WHERE ref_type = 'rnd' AND ref_id = ?")
+                ->execute([$projectId]);
+            $this->pdo->prepare(
+                "DELETE FROM bs_project WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NOT NULL"
+            )->execute([$projectId]);
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+
+        // 파일은 DB 가 지워진 뒤에. 앞서 지우면 롤백돼도 파일은 돌아오지 않는다.
+        foreach ($files as $f) {
+            if (is_string($f) && is_file($f)) {
+                @unlink($f);
+            }
+        }
+        error_log(sprintf('[BlueStudio] R&D 과제 영구삭제 #%d %s %s by %s',
+            $projectId, (string)$row['code'], (string)$row['name'], (string)($actor['id'] ?? '')));
+
+        return trim((string)$row['code'] . ' ' . (string)$row['name']);
+    }
+
+    /** 삭제 상태인 과제 한 건 — 관리자만. 아니면 '없다' 로 끊는다. */
+    private function requireDeletedForAdmin(int $projectId): array
+    {
+        if (!bs_is_admin()) {
+            throw new DomainException('관리자만 할 수 있습니다.');
+        }
+        $st = $this->pdo->prepare(
+            "SELECT id, code, name FROM bs_project
+              WHERE id = ? AND project_type = 'rnd' AND deleted_at IS NOT NULL"
+        );
+        $st->execute([$projectId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            throw new DomainException('삭제 상태인 과제를 찾을 수 없습니다.');
+        }
+        return $row;
     }
 
     // =================================================================
@@ -996,6 +1485,26 @@ final class RndRepo
     }
 
     /** 참여 행 한 건. 볼 수 있는 과제의 것만. */
+    /**
+     * 026(참여자 수정 권한)이 이 DB 에 올라가 있는가. 요청당 한 번만 본다.
+     *
+     * 코드가 DB 보다 먼저 올라가면 칸이 없어 R&D 과제 화면 전체가 500 이
+     * 됐다(2026-10-14 운영). 칸이 없으면 수정 권한 기능만 꺼진 채로 돈다.
+     */
+    private function hasEditColumn(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            try {
+                $has = (bool)$this->pdo->query(
+                    "SHOW COLUMNS FROM bs_rnd_member LIKE 'can_edit'")->fetch();
+            } catch (Throwable $e) {
+                $has = false;
+            }
+        }
+        return $has;
+    }
+
     private function requireMemberRow(int $rowId): array
     {
         $st = $this->pdo->prepare(
@@ -1058,7 +1567,9 @@ final class RndRepo
     private function buildWhere(array $f): array
     {
         [$vis, $p] = bs_rnd_visible_sql('p');
-        $w = ['p.deleted_at IS NULL', $vis];
+        // 관리자가 [삭제 포함] 을 켜면 삭제 상태인 과제도 보인다 (2026-10-16).
+        // 복구·영구삭제는 거기서 한다. 관리자가 아니면 이 값은 무시한다.
+        $w = !empty($f['with_deleted']) && bs_is_admin() ? [$vis] : ['p.deleted_at IS NULL', $vis];
 
         if (!empty($f['category']) && isset(BS_RND_CATEGORY[$f['category']])) {
             $w[] = 'p.rnd_category = ?';

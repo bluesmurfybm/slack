@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/sqlite_compat.php';   // 로컬 시험(SQLite)일 때만 끼어든다. 운영은 new PDO 그대로
 /**
  * 포털(blue-iWorks) DB 연결.
  *  - slack 모듈과 같은 slackapi DB를 그대로 씀. 여기서는 포털 전용 테이블만 관리.
@@ -17,7 +18,7 @@ function portal_db() {
     ];
 
     $dsn = "mysql:host={$d['host']};port={$d['port']};charset={$d['charset']}";
-    $pdo = new PDO($dsn, $d['user'], $d['pass'], $opt);
+    $pdo = db_connect($dsn, $d['user'], $d['pass'], $opt, $d['name']);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$d['name']}`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `{$d['name']}`");
@@ -50,6 +51,10 @@ function portal_db() {
     // 슬랙은 협업사 도메인 계정을 쓰는 사람이 있어, 이메일로 슬랙 사용자를 찾지
     // 못하고 알림이 조용히 빠졌다. 다른 사람만 적는다 — NULL 이면 email 과 같다는 뜻.
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `slack_email` VARCHAR(190) NULL COMMENT '슬랙 계정 이메일. 로그인 이메일과 다를 때만 채운다' AFTER `slack_token_enc`");
+    // Gmail 연동(slack/gmail). 사람마다 자기 메일함을 IMAP 으로 붙인다.
+    // 비밀번호는 Google '앱 비밀번호' 이고 슬랙 토큰과 같은 enc_token()(AES-256-GCM)으로만 저장한다.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `gmail_user` VARCHAR(190) NULL COMMENT 'Gmail 연동 주소' AFTER `slack_email`");
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `gmail_pass_enc` TEXT NULL COMMENT 'AES-256-GCM 암호화된 Gmail 앱 비밀번호' AFTER `gmail_user`");
 
     // -----------------------------------------------------------------
     // 알림판 — 공지 / 중요 일정 / 포털 관리자
@@ -161,6 +166,11 @@ function portal_db() {
     add_column_if_missing($pdo, "ALTER TABLE `portal_event`
         ADD COLUMN `cheer_early` TINYINT(1) NOT NULL DEFAULT 1
         COMMENT '주말·공휴일이면 그 앞 평일에 미리 쏠지' AFTER `cheer_on`");
+    /* D-day 점판 색. 평소에는 제목·메모의 낱말로 고른 종류 색을 쓰고,
+       등록하는 사람이 골라 둔 경우에만 그 값을 쓴다. NULL = 낱말 따라 자동. */
+    add_column_if_missing($pdo, "ALTER TABLE `portal_event`
+        ADD COLUMN `color_kind` VARCHAR(20) NULL
+        COMMENT 'D-day 색으로 쓸 종류 키(BOARD_EVENT_KINDS). NULL 이면 낱말로 자동' AFTER `cheer_early`");
 
     // -----------------------------------------------------------------
     // 업무 시스템 카드 묶음

@@ -3,5 +3,7 @@
   { "key": "portal.notice", "sys": "portal",  "label": "포털 공지",        "desc": "새 공지가 올라오면",                     "default": true  },
   { "key": "dti.presenter", "sys": "dti",     "label": "DTI 발표자 등록",  "desc": "아티클 발표자가 정해지면",               "default": true  },
   { "key": "studio.alloc",  "sys": "studio",  "label": "과업 배정 확정",   "desc": "내게 배정된 과업이 확정되면",            "default": true  },
-  { "key": "slackai.job",   "sys": "slackai", "label": "WorkHub AI 작업",  "desc": "플랜·실행 작업이 끝나면",                "default": false }
+  { "key": "slackai.job",   "sys": "slackai", "label": "WorkHub AI 작업",  "desc": "플랜·실행 작업이 끝나면",                "default": false },
+  { "key": "onwatch.finding", "sys": "onwatch", "label": "OnWatch 새 소식",   "desc": "받고 있는 수시 감시에서 새 소식을 찾으면", "default": true  },
+  { "key": "onwatch.system",  "sys": "onwatch", "label": "OnWatch 감시 상태", "desc": "감시가 곧 끝나거나, 끝났거나, 계속 실패하거나 예산을 넘기면", "default": true  }
 ]

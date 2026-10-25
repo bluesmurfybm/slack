@@ -3,7 +3,7 @@
  * 알림함 — 내가 받은 알림. 본인 것만 다룬다. 원본은 portal_notification(core/push.php 가 쌓는다).
  *
  *   GET  ?before=<id>&limit=30&unread=1   최신순 목록 + 안 읽은 수
- *   GET  ?count=1                          안 읽은 수만(메뉴 표시용 — 가볍게)
+ *   GET  ?count=1                          안 읽은 수만(메뉴 표시용 — 가볍게) + 카드 배지(tiles)
  *   POST { read: [id,…] }                  읽음 표시
  *   POST { read_all: true }                모두 읽음
  *   DELETE { ids: [id,…] }                 지우기
@@ -40,10 +40,16 @@ function notif_decorate(array $rows): array
     return $rows;
 }
 
+/** 카드 배지 — 알림함 숫자가 바뀌는 응답마다 같이 내려 카드 숫자도 함께 맞춘다. 빈 값도 객체로. */
+function notif_tiles(int $uid)
+{
+    return push_tile_badges($uid, work_systems()) ?: new stdClass();
+}
+
 try {
     if ($method === 'GET') {
         if (!empty($_GET['count'])) {
-            echo json_encode(['unread' => push_inbox_unread($uid)]);
+            echo json_encode(['unread' => push_inbox_unread($uid), 'tiles' => notif_tiles($uid)]);
             exit;
         }
         $list = push_inbox_list(
@@ -56,6 +62,7 @@ try {
             'items'    => notif_decorate($list['items']),
             'has_more' => $list['has_more'],
             'unread'   => push_inbox_unread($uid),
+            'tiles'    => notif_tiles($uid),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
@@ -76,7 +83,7 @@ try {
         echo json_encode(['error' => 'method not allowed'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    echo json_encode(['ok' => true, 'unread' => push_inbox_unread($uid)]);
+    echo json_encode(['ok' => true, 'unread' => push_inbox_unread($uid), 'tiles' => notif_tiles($uid)]);
 
 } catch (BoardError $e) {
     http_response_code($e->getCode());

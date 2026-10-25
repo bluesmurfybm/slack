@@ -95,8 +95,10 @@ final class LinkAnalyzer
     public function scan(int $projectId): array
     {
         $st = $this->pdo->prepare(
+            // 참고 자료는 보관용이다 — 그 안의 링크를 따라가지 않는다 (2026-10-15).
             'SELECT id, title, parsed_text FROM bs_project_source
-              WHERE project_id = ? AND parsed_text IS NOT NULL AND parsed_text <> ""'
+              WHERE project_id = ? AND purpose = "scope"
+                AND parsed_text IS NOT NULL AND parsed_text <> ""'
         );
         $st->execute([$projectId]);
 
@@ -641,8 +643,9 @@ final class LinkAnalyzer
     {
         if (!array_key_exists($projectId, $this->srcCache)) {
             $st = $this->pdo->prepare(
+                // 참고 자료는 난이도·공수 근거로도 쓰지 않는다 — 보관용 (2026-10-15).
                 'SELECT id, title, parsed_text FROM bs_project_source
-                  WHERE project_id = ? AND parse_status = "ok"
+                  WHERE project_id = ? AND parse_status = "ok" AND purpose = "scope"
                     AND parsed_text IS NOT NULL AND parsed_text <> ""
                   ORDER BY id'
             );

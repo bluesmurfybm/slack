@@ -3,6 +3,7 @@
  * 구성원 표 관리 API.
  *
  * POST api/member.php?act=sync     포털 사용자 → 구성원 가져오기 (관리자)
+ * POST api/member.php?act=set_can_create  프로젝트 등록 권한 켜기·끄기 (관리자, 027)
  *
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ 왜 따로 있나                                                      │
@@ -116,6 +117,49 @@ bs_route(bs_param_str('act', ''), [
                     . '역량 점수는 이 설정과 무관하게 계속 산출됩니다.',
                     $target['emp_name']
                   ),
+        ]);
+    },
+
+    /**
+     * 프로젝트 등록 권한을 켜거나 끈다. **관리자만.** (027, 2026-10-15)
+     *
+     * 등록한 사람은 그 프로젝트의 PM 이 되고, PM 은 남의 점유를 고치고
+     * 후보 근거를 보고 배정을 확정한다. 그래서 모두에게 열지 않고 관리자가
+     * 사람을 골라 켠다. 끄면 새로 등록만 못 한다 — 기존 프로젝트의 PM
+     * 권한은 bs_project.owner_id 로 정해지므로 그대로다.
+     */
+    'set_can_create' => function () use ($members): void {
+        $user = bs_begin_write();
+        if (!bs_is_admin()) {
+            bs_json_error('FORBIDDEN', '관리자만 프로젝트 등록 권한을 바꿀 수 있습니다.', 403);
+        }
+
+        $memberId = bs_param_int('member_id', 0) ?? 0;
+        if ($memberId <= 0) {
+            bs_json_error('BAD_REQUEST', '구성원을 지정하세요.');
+        }
+        $target = $members->find($memberId);
+        if (!$target) {
+            bs_json_error('NOT_FOUND', '구성원을 찾을 수 없습니다.', 404);
+        }
+
+        $to = bs_param_int('can_create', -1);
+        if ($to !== 0 && $to !== 1) {
+            bs_json_error('BAD_REQUEST', 'can_create 는 0 또는 1 이어야 합니다.');
+        }
+
+        $members->setCanCreateProject($memberId, $to === 1, (string)$user['id']);
+
+        bs_json_ok([
+            'member_id'  => $memberId,
+            'emp_name'   => $target['emp_name'],
+            'can_create' => $to === 1,
+            'message'    => $to === 1
+                ? sprintf('%s 님이 프로젝트를 등록할 수 있습니다. 등록한 프로젝트의 PM 이 됩니다.',
+                          $target['emp_name'])
+                : sprintf('%s 님의 프로젝트 등록 권한을 껐습니다. '
+                          . '이미 등록한 프로젝트의 PM 권한은 그대로입니다.',
+                          $target['emp_name']),
         ]);
     },
 ]);

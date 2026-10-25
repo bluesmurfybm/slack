@@ -1,7 +1,7 @@
 <?php
 /**
  * POST api/request_action.php — 워크플로 처리
- * 본문: id, action(approve|reject|start_purchase|complete|resubmit|cancel),
+ * 본문: id, action(approve|reject|start_purchase|complete|stop|resubmit|cancel),
  *       comment, purchase_note, actual_amount
  */
 declare(strict_types=1);

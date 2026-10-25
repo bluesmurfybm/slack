@@ -21,7 +21,7 @@ $repo     = new MemberRepo(bs_db());
 $target = $memberId > 0 ? $repo->find($memberId) : $repo->findByUserId($user['id']);
 
 if (!$target) {
-    bs_layout_head($user, '프로파일', '과업 편성/현황', '', 'member');
+    bs_layout_head($user, '프로파일', '과업 편성/현황', '', $memberId > 0 ? 'member' : 'profile');
     echo '<div class="ba-alert">'
        . ($memberId > 0 ? '구성원을 찾을 수 없습니다.'
                         : '구성원으로 등록되어 있지 않아 프로파일이 없습니다.')
@@ -44,9 +44,12 @@ bs_layout_head(
     $isSelf ? '내 프로파일' : '구성원 프로파일',
     '과업 편성/현황',
     '분야별 처리량과 그 근거를 확인하고, 사실과 다르면 이의를 제기할 수 있습니다.',
-    'member'
+    // 내 것은 구성원 묶음(메뉴 강조 없음), 남의 것은 관리자 묶음의 구성원 관리 (2026-10-16)
+    $isSelf ? 'profile' : 'member'
 );
 ?>
+
+<?php if (!$isSelf): /* 남의 프로파일은 구성원 관리에서 들어온다 */ ?><?= bs_back_link('member_list.php', '구성원 관리') ?><?php endif; ?>
 
 <div class="ba-profile" id="ba-profile"
      data-member-id="<?= (int)$target['id'] ?>"

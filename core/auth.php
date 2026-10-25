@@ -128,9 +128,12 @@ function clear_sso_cookie() {
     setcookie('blueiwork_id', '', ['expires' => time() - 3600, 'path' => '/']);
 }
 
-/** current_portal_user() 호출 때마다 SSO 쿠키도 같이 슬라이딩 갱신 */
+/** current_portal_user() 호출 때마다 SSO 쿠키도 같이 슬라이딩 갱신.
+ *  상단바(slack/header.php 등)는 HTML 을 내보내는 중간에 current_portal_user() 를 다시 부른다.
+ *  그때는 이미 헤더가 나가 setcookie() 가 경고만 내므로 건너뛴다 — 같은 요청 앞쪽의
+ *  require_login()/require_portal_login() 에서 이미 한 번 갱신했다. */
 function refresh_sso_cookie($email, $name, $color = '') {
-    if (isset($_COOKIE['blueiwork_id'])) {
+    if (isset($_COOKIE['blueiwork_id']) && !headers_sent()) {
         issue_sso_cookie($email, $name, $color);
     }
 }

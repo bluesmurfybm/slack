@@ -1,7 +1,7 @@
 # blue-iWorks — 사내 업무 포털
 
 Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청)**, **BlueMagazine(dti, DTI 발표)**,
-**BlueLearn(learn)**, **MoodleUp?(moodle)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
+**BlueLearn(learn)**, **MoodleUp?(moodle)**, **OnWatch(onwatch, 수시 감시)**, **업무현황판(slack 연동)**, **Gmail 뷰어**를 오가는 구조. 이 문서는 이어받아 작업할
 개발자를 위한 현황 정리다.
 
 ## 전체 구조
@@ -26,6 +26,7 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── api/                         login.php, logout.php, me.php
 │                                notices.php, notice_file.php, events.php, admins.php, push.php, notifications.php
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
+│                                icons/(카드 아이콘) · favicons/(시스템별 탭 파비콘, gen_favicons.py)
 ├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
 ├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
 │
@@ -44,6 +45,11 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │       ├── summarizer.py        anthropic SDK → claude CLI → 요약 없음 순으로 폴백
 │       ├── var/                 state.json · snapshots/ · pages/ (gitignore)
 │       └── tests/
+│
+├── onwatch/                     OnWatch(수시 감시) — PHP 화면 + Python 배치(1분 timer). 'onwatch' 절, onwatch/README.md
+│   ├── index.php, view.php, edit.php   목록 · 상세 · 만들기/고치기/복제
+│   ├── api/, inc/, sql/, bin/   JSON API · 공용 로직 · 스키마(화면이 자동 적용) · CLI(migrate, secret)
+│   └── worker/                  run.py → 조사(Claude+웹 검색) → 판정(JSON) → 중복 거르기 → 알림
 │
 ├── access/                      Coursemos EnvHub — PHP, slack의 schools를 마스터로 씀
 │   ├── access.php               목록 + 상세 + 편집 (복사 버튼)
@@ -139,7 +145,7 @@ php.ini 에 `date.timezone` 이 없으면 PHP 는 UTC 로 돌고 MySQL 은 서�
 | `db.php` | access, dti, learn, moodle (`add_column_if_missing()` 재사용) |
 | `worksystems.php` / `.json` | index, dti, learn, moodle, slack/header, bluecart, book |
 | `board.php` | api/notices·notice_file·events·admins |
-| `push.php` / `push_kinds.json` | index, api/me·push, dti, dev/push_*, slackai 워커(dev/push_cli.php 경유) |
+| `push.php` / `push_kinds.json` | index, api/me·push·notifications, dti, onwatch, dev/push_*, slackai·onwatch 워커(dev/push_cli.php 경유) |
 | `pwa.php` | 모든 모듈의 `<head>` |
 
 모듈에서는 한 단계 위의 `core/` 를 부른다.
@@ -212,6 +218,23 @@ push_send([
   알림함은 **사람 기준**이라 기기가 없거나 발송이 실패해도 남는다. 180일이 지나면 지운다.
 - **iOS 는 공유 → '홈 화면에 추가' 한 뒤 그 아이콘으로 연 화면에서만** 알림을 받을 수 있다(16.4+).
 - https 또는 localhost 에서만 동작한다. 그 밖의 주소에서는 알림 칸이 "받을 수 없음" 으로 보인다.
+
+### 카드 배지 (업무 시스템 카드의 안 읽은 알림 수)
+
+대시보드 카드 아이콘 모서리에 **그 시스템에서 온 안 읽은 알림 수**를 붙인다. 원본은 알림함
+(`portal_notification`) 하나라 상단바 종 숫자와 늘 맞는다. OnWatch 에 먼저 붙였다.
+
+- **켜기**: `core/worksystems.json` 의 그 카드 줄에 `"badge": "inbox"` 를 더한다. 모듈은 자기 sys 의 종류로
+  `push_send()` 만 하고 있으면 된다 — 종류 → 시스템은 `push_kinds.json` 의 `sys` 로 가른다.
+- **세는 곳**: `push_tile_badges($userId, work_systems())`(core/push.php). 첫 화면은 서버가 그려 내리고
+  (`TILE_BADGES`), 알림함 숫자가 바뀌는 응답(`api/notifications.php` 의 `tiles`)마다 `paintTileBadges()` 가 갈아 끼운다.
+  다른 탭에서 돌아오면(visibilitychange) 다시 센다.
+- **모듈 화면에서 읽음 처리**: 알림을 누르지 않고 모듈로 바로 들어가 봐도 배지가 남지 않게,
+  모듈이 그 건을 열 때 `push_inbox_mark_read_url($uid, 'onwatch.', 'onwatch/view.php?id=3')` 를 부른다
+  (주소가 같거나 뒤에 `&`·`#` 가 붙은 것만 — `id=3` 이 `id=31` 에 걸리지 않는다). 읽음 처리 전에
+  `push_inbox_oldest_unread_url()` 로 시각을 받아 두면 그 뒤 항목에 NEW 를 붙일 수 있다.
+  모듈 목록의 건별 숫자는 `push_inbox_unread_urls($uid, 'onwatch.')`.
+- 다른 기준(처리 대기 건수 등)이 필요해지면 `badge` 에 새 값을 정의하고 `push_tile_badges()` 에 갈래를 더한다.
 
 ### 앱 설치 안내
 
@@ -311,6 +334,14 @@ push_send([
   - 별도 프로세스인 book 은 PHP 를 못 쓰니 `app.py` 가 **같은 json 을 직접 읽어**
     `whoami` 로 내려주고 화면 JS(`renderWorkSystems`)가 그린다. 포털 트리가 안 보이면 목록만
     비고 화면은 정상 동작한다.
+- **카드 아이콘과 탭 파비콘**: 시스템마다 포털 카드의 색 배지(서비스 색 둥근 사각 + 흰 아이콘)를
+  그대로 줄여 탭 파비콘으로 쓴다. 시스템을 더하면 다음을 함께 한다.
+  1. `styles/icons/<key>.svg` 에 카드 아이콘을 둔다(24 격자, `stroke="currentColor"`). 포털 `ICONS` 는
+     `worksystems.php::work_system_icons()` 로 이 폴더를 읽는다.
+  2. `python dev/gen_favicons.py` 로 `styles/favicons/<key>.svg` 를 만들어 커밋한다(색은 `worksystems.json`).
+  3. 그 시스템의 모든 페이지 `<head>` 에 `<link rel="icon" type="image/svg+xml" href="<포털 루트>styles/favicons/<key>.svg">`
+     를 건다. book 은 `shared-styles/`, dti 는 `dti_asset($page, '../styles/favicons/dti.svg')`.
+  포털 루트(blue-iWorks)만 `styles/favicon.ico`(세 줄)를 그대로 쓴다.
 
 ---
 
@@ -469,6 +500,21 @@ python dev/gen_tiles.py      # tiles.css 를 만든 뒤 wxfx.css 꼬리에 붙�
   거의 직선이 된다. 갈지자는 손으로 잡았다
 - 번개 빛무리를 **파랗게** 뒀더니 보랏빛 뇌우 하늘과 따로 놀았다. 연보라로 바꿨다
 - 첫 번개까지 **15초**를 기다려야 했다. 음수 지연으로 2.5초·5.8초에 당겼다
+
+---
+
+### D-day 색
+
+점판 색은 **제목·메모의 낱말로 고른 종류**(`board_event_kind`)를 따른다. 등록 창의
+`D-day 색` 칸에 그 색이 '자동' 으로 미리 켜져 있고, 글을 고치면 따라 바뀐다.
+다른 칸을 누르면 그 색이 `portal_event.color_kind` 에 남고 더는 글을 따라가지 않는다.
+`자동으로` 를 누르면 다시 비운다(NULL).
+
+- 사람이 고르는 것은 **색뿐이다.** 그림과 폭죽 문구는 여전히 낱말로 고른 종류를
+  따른다 — 색을 경사로 바꿨다고 부고에 폭죽이 터지면 안 된다
+- 자동 색은 서버가 고른다(`GET api/events.php?scope=kind&text=…`). 낱말 표를 JS 에
+  한 벌 더 두지 않는다
+- 서버는 `color`(실제로 칠할 종류 키)와 `color_kind`(고른 값, 자동이면 null)를 함께 내려 준다
 
 ---
 
@@ -1153,6 +1199,23 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 
 ---
 
+## onwatch (OnWatch · 수시 감시)
+
+필요할 때 켜 두는 감시. 지시문으로 "무엇을, 어디서, 어떤 경우에 알릴지" 적어 두면 정한 기간·주기로
+공개 웹을 살피고 **새 소식이 있을 때만** 알린다(포털 알림함·종·카드 배지·푸시 + 슬랙). 누구나 만들고 누구나 본다.
+자세한 구조·설정·배포·시험은 **`onwatch/README.md`**(저장소에 올라가는 문서).
+
+- **두 조각**: `onwatch/*.php`(화면·API)가 `ow_*` 표에 쓰고, `onwatch/worker/run.py`(systemd timer, 1분)가
+  때가 된 감시를 잠가 돌린다. '지금 실행' 은 `ow_watch.run_requested_at` 하나로 전한다 — 파일·소켓 없음.
+- **스키마**는 `onwatch/sql/NNN_*.sql` 이 원본이다. 화면이 처음 DB 에 붙을 때 안 된 파일을 적용한다(`ow_schema`).
+  배치는 표를 만들지 않는다.
+- **조사 두 단계**: Claude(웹 검색·읽기 서버 도구)로 조사 노트 → 도구 없이 JSON 판정. 검색 인용과 구조화
+  출력을 한 요청에 함께 쓸 수 없어서다. API 키가 없으면 claude CLI 로 돈다(검색 상한·정확한 비용은 API 만).
+- **중복 방지**: 이미 알린 목록·사람의 '중복/틀림' 평가를 모델에 주고, 코드가 fingerprint 로 한 번 더 거른다.
+- **비용**: 감시별 월 상한(화면) + 전체 월 상한(`ONWATCH_MONTHLY_BUDGET_USD`). 넘으면 건너뛰고 등록자에게 한 번 알린다.
+- **일정 계산이 두 벌**이다 — `inc/schedule.php`(화면의 '다음 실행')와 `worker/core/schedule.py`(실제 실행).
+  `tests/schedule_cases.json` 을 두 쪽 시험이 같이 읽는다.
+
 ## access (학교 접속 정보)
 
 대학별 svn/git 주소 · 사이트 로그인 · 개발/운영/학사 DB · plink 터널링 · 배포 방법을 찾아
@@ -1694,6 +1757,30 @@ sudo systemctl enable --now moodle-watch-refresh.path
 - [ ] moodle: 요약 품질은 첫 몇 주 실제 리포트를 보고 `summarizer.py::SYSTEM` 을 손봐야 한다.
 
 ---
+
+## 로컬에서 포털 전체 띄우기 (MySQL 없이)
+
+MySQL 이 없는 PC 에서 포털과 모든 PHP 모듈을 SQLite 로 띄운다. **운영 코드는 그대로다** —
+DB 를 여는 일곱 곳(`core/db.php`, access·learn·slack·slackai·dti·bluecart 의 db.php)이 `new PDO` 대신
+`db_connect()`(`core/sqlite_compat.php`)를 부르고, 이 함수는 운영에서 `new PDO` 와 똑같다.
+
+- 켜지는 조건: 루트 `config.php` 의 `db.driver` 가 `'sqlite'` **이고** PHP 내장 서버(`php -S`)·명령줄일 때.
+  운영(php-fpm)에서는 config 가 어떻든 켜지지 않는다.
+- 준비물: `D:\php82` 에 PHP 8.2 (php.ini 에서 pdo_sqlite·sqlite3·mbstring·openssl·fileinfo·curl 켬).
+- 실행: 루트 `로컬_실행.bat` 더블클릭 → `dev/local_setup.php`(설정 파일 생성·스키마 적용, 여러 번 돌려도 됨) →
+  http://127.0.0.1:8780/ . 계정은 사내 13명, 처음 비밀번호 `blue$123`. 8765 는 파이썬 출장여비가 쓰고 있어 피했다.
+- 데이터: `var/localdb/<DB이름>.sqlite` (gitignore). 지우고 다시 실행하면 빈 상태로 돌아간다.
+- `local_setup.php` 가 만드는 것: SQLite 용 루트 `config.php`(이미 있으면 손대지 않고, driver 가 sqlite 가
+  아니면 멈춘다), `bluecart/config/config.php`(포털 연동 표본 복사), bluecart `sql/*.sql` 과 studio
+  `sql/apply.sh` 의 FILES 목록을 번역기로 적용(`_local_sql_applied` 에 기록).
+- 문지기: `dev/local_router.php` 가 nginx deny 와 같은 것(설정·키·DB 파일·업로드 원본·배치 소스)을 막는다.
+- 번역기 범위: 이 저장소가 쓰는 MySQL 문법만(DDL·ALTER·upsert·INSERT IGNORE·information_schema·SHOW·
+  NOW/DATE_SUB/TIMESTAMPDIFF/FIELD/GROUP_CONCAT …). 문자열 비교는 `_ci` 처럼 대소문자를 무시한다.
+  모르는 문법이 나오면 서버 창에 `[sqlite_compat]` 로 원문·번역문이 찍힌다 — 그걸 보고 규칙을 늘린다.
+  한계: `ON UPDATE CURRENT_TIMESTAMP` 무시, 문자열 안 `\t` 같은 백슬래시 이스케이프는 글자 그대로.
+- 안 되는 것: 슬랙(개인 토큰)·Gmail(IMAP)·웹훅·LLM 등 바깥 연동, book(파이썬, 따로 띄워야 함).
+- 2026-10-21 확인: 포털 로그인·공지·일정, BlueCart 요청, BlueLearn 신청, BlueStudio 프로젝트 생성, BlueLedger
+  출장여비(46건 이관), access·moodle·dti 화면과 그 화면들의 API 요청 전부 정상.
 
 ## 로컬 개발 팁
 

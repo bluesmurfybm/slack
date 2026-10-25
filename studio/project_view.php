@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
 require_once __DIR__ . '/inc/repo/ProjectRepo.php';
+require_once __DIR__ . '/inc/service/SourceUploader.php';   // humanSize() — 내려받기 단추 크기 표시
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -25,6 +26,22 @@ if (!$project) {
 
 $sources   = $repo->sources($projectId);
 $canManage = bs_can(BS_CAP_PROJECT_MANAGE, $projectId);
+
+// 공동 편집자 (026, 2026-10-14). 명단은 누구나 보고, 지정은 PM·관리자만.
+$editors   = $repo->editors($projectId);
+$canOwn    = bs_can_own_project($projectId);
+$editorPick = [];
+if ($canOwn) {
+    $taken = array_flip(array_column($editors, 'user_id'));
+    foreach (bs_db()->query(
+        "SELECT user_id, emp_name FROM bs_member
+          WHERE user_id IS NOT NULL AND user_id <> '' ORDER BY emp_name"
+    )->fetchAll(PDO::FETCH_ASSOC) as $m) {
+        if (!isset($taken[$m['user_id']]) && $m['user_id'] !== ($project['owner_id'] ?? '')) {
+            $editorPick[] = $m;
+        }
+    }
+}
 
 // 2단계(참여 가능 개발자)는 **인원을 고르는 자리**다. 여러 사람의 점수를
 // 나란히 놓고 보므로, 배정을 짜는 사람에게만 연다. API 도 같은 선을 쓴다
@@ -60,6 +77,8 @@ $domains = array_values(array_filter(
 bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 ?>
 
+<?= bs_back_link('project_list.php', '프로젝트 목록') ?>
+
 <div class="ba-pv" id="ba-pv"
      data-project-id="<?= (int)$projectId ?>"
      data-has-period="<?= $hasPeriod ? '1' : '0' ?>">
@@ -82,6 +101,31 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       </p>
     </div>
     <div class="ba-spacer"></div>
+    <?php
+    // 공유 (assign.js initShare). 슬랙에 붙일 요약 — 머리에 보이는 것만 담는다.
+    // 점수·배정은 넣지 않는다. 슬랙은 볼 권한을 따지지 않는다.
+    $shareLines = array_values(array_filter([
+        implode(' · ', array_filter([
+            $project['code'],
+            BS_PROJECT_STATUS[$project['status']] ?? $project['status'],
+            !empty($project['track']) ? (BS_PROJECT_TRACK[$project['track']] ?? $project['track']) : null,
+        ])),
+        implode(' · ', array_filter([
+            !empty($project['client']) ? '고객 ' . $project['client'] : null,
+            '담당 ' . ($project['owner_name'] ?? '-'),
+        ])),
+        implode(' · ', array_filter([
+            !empty($project['dev_start']) || !empty($project['dev_end'])
+                ? '개발 ' . ($project['dev_start'] ?: '?') . ' ~ ' . ($project['dev_end'] ?: '?') : null,
+            !empty($project['deploy_date']) ? '배포 ' . $project['deploy_date'] : null,
+        ])),
+    ]));
+    ?>
+    <button type="button" class="ba-btn ba-share" aria-haspopup="menu"
+            data-share-kind="프로젝트"
+            data-share-title="<?= h($project['name']) ?>"
+            data-share-lines="<?= h(json_encode($shareLines, JSON_UNESCAPED_UNICODE)) ?>"
+            data-share-path="project_view.php?id=<?= (int)$projectId ?>">공유</button>
     <?php if ($canManage): ?>
       <a class="ba-btn" href="project_form.php?id=<?= (int)$projectId ?>">수정</a>
     <?php endif; ?>
@@ -171,6 +215,41 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       <?php endif; ?>
     </div>
 
+    <!-- 공동 편집자 (026, 2026-10-14) — PM 이 사람마다 지정한다 -->
+    <div class="ba-panel ba-editors" id="ba-editors" data-project-id="<?= (int)$projectId ?>">
+      <h2>공동 편집자 <span class="ba-dim"><?= count($editors) ?>명</span></h2>
+      <p class="ba-panel__hint">
+        담당 PM(<?= h($project['owner_name'] ?? '-') ?>) 외에 이 프로젝트를 고칠 수 있는 사람입니다.
+        정보·문서·WBS 편집과 <b>배정안 산출</b>까지 하고, <b>배정 확정과 삭제는 PM·관리자만</b> 합니다.
+      </p>
+      <div class="ba-editors__list">
+        <?php if (!$editors): ?>
+          <span class="ba-cell-none">지정된 사람이 없습니다.</span>
+        <?php endif; ?>
+        <?php foreach ($editors as $e): ?>
+          <span class="ba-editor" title="<?= h(($e['granted_by_name'] ? $e['granted_by_name'] . ' 님이 ' : '') . bs_date($e['created_at'])) ?> 지정">
+            <span class="ba-editor__av"><?= h(mb_substr((string)$e['name'], 0, 1)) ?></span>
+            <?= h($e['name']) ?>
+            <?php if ($canOwn): ?>
+              <button type="button" class="ba-editor__x" data-editor-del="<?= h($e['user_id']) ?>"
+                      aria-label="<?= h($e['name']) ?> 빼기" title="빼기">&times;</button>
+            <?php endif; ?>
+          </span>
+        <?php endforeach; ?>
+      </div>
+      <?php if ($canOwn): ?>
+        <div class="ba-editors__add">
+          <select class="ba-input" id="ba-editor-pick">
+            <option value="">구성원 고르기</option>
+            <?php foreach ($editorPick as $m): ?>
+              <option value="<?= h($m['user_id']) ?>"><?= h($m['emp_name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <button type="button" class="ba-btn ba-btn--sm ba-btn--primary" id="ba-editor-add">편집자로 지정</button>
+        </div>
+      <?php endif; ?>
+    </div>
+
     <?php if (!empty($project['summary'])): ?>
     <div class="ba-panel"><h2>개요</h2><p class="ba-pre"><?= h($project['summary']) ?></p></div>
     <?php endif; ?>
@@ -185,7 +264,7 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     <div class="ba-panel">
       <h2><?= h($plabel) ?> <span class="ba-dim"><?= count($rows) ?>건</span></h2>
       <?php if ($pk === 'reference'): ?>
-        <p class="ba-panel__hint">WBS 초안을 뽑을 때는 쓰지 않습니다. 난이도·공수 근거로만 찾아봅니다.</p>
+        <p class="ba-panel__hint">보관용 자료입니다. 분석하지 않으며 WBS·난이도·공수 판정에 쓰지 않습니다.</p>
       <?php endif; ?>
       <?php if (!$rows): ?>
         <p class="ba-empty-inline">등록된 문서가 없습니다.</p>
@@ -199,9 +278,34 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                   <a href="<?= h($s['url']) ?>" target="_blank" rel="noopener"><?= h($s['title']) ?></a>
                 <?php else: ?><?= h($s['title']) ?><?php endif; ?>
               </span>
+              <?php if ($pk !== 'reference'): /* 참고 자료는 분석하지 않는다 — 상태도 없다 */ ?>
               <span class="ba-src__parse ba-src__parse--<?= h($s['parse_status']) ?>">
                 <?= h(['pending'=>'분석 대기','ok'=>'분석 완료','fail'=>'분석 실패','skip'=>'분석 안 함'][$s['parse_status']] ?? $s['parse_status']) ?>
               </span>
+              <?php endif; ?>
+              <?php
+              // 보기·내려받기 (2026-10-15). 파일로 올린 것만 내려받는다.
+              // 보기는 파일이 있거나 추출 본문이 있을 때 — 링크만 있는 출처는 제목 링크로 연다.
+              $hasFile = !empty($s['has_file']);
+              // 브라우저가 그리는 형식(이미지·PDF)이거나 추출 본문이 있을 때만 '보기'.
+              // 참고 자료의 엑셀·PPT 는 본문을 뽑지 않으므로 내려받기만 남는다.
+              $inlineOk = $hasFile && in_array((string)$s['mime'],
+                  ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'], true);
+              $canSee  = $inlineOk || (int)($s['parsed_len'] ?? 0) > 0;
+              ?>
+              <?php if ($canSee || $hasFile): ?>
+              <span class="ba-src__acts">
+                <?php if ($canSee): ?>
+                  <button type="button" class="ba-btn ba-btn--sm" data-src-view="<?= (int)$s['id'] ?>"
+                          data-mime="<?= h((string)$s['mime']) ?>" data-file="<?= $hasFile ? '1' : '0' ?>"
+                          data-title="<?= h($s['title']) ?>">보기</button>
+                <?php endif; ?>
+                <?php if ($hasFile): ?>
+                  <a class="ba-btn ba-btn--sm" href="api/source_download.php?id=<?= (int)$s['id'] ?>"
+                     title="<?= h($s['title']) ?><?= !empty($s['file_size']) ? ' · ' . h(SourceUploader::humanSize((int)$s['file_size'])) : '' ?>">내려받기</a>
+                <?php endif; ?>
+              </span>
+              <?php endif; ?>
             </div>
           <?php endforeach; ?>
         </div>
@@ -452,6 +556,13 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <button type="button" class="ba-btn" id="ba-w-revert" hidden>되돌리기</button>
         <button type="button" class="ba-btn ba-btn--primary" id="ba-w-save">저장</button>
       </div>
+      <!-- 난이도·공수 매기기 진행 (2026-10-16). 단추가 이 칸에 있는데 진행 막대는
+           위 링크 칸에만 있어서, 누른 자리와 다른 곳이 움직였다. 이 칸에 따로 둔다. -->
+      <div class="ba-lk-prog" id="ba-sc-prog" hidden>
+        <div class="ba-lk-bar"><i id="ba-sc-fill"></i></div>
+        <span class="ba-dim" id="ba-sc-progtxt"></span>
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--danger" id="ba-sc-cancel">멈추기</button>
+      </div>
       <div id="ba-w-docs" hidden></div>
       <?php else: ?>
       <div class="ba-note ba-note--readonly">읽기 전용입니다. WBS 를 고치려면 이 프로젝트의 담당 PM 이어야 합니다.</div>
@@ -467,16 +578,19 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
            │ 표 바로 위가 제자리다 — 영향이 미치는 곳 바로 옆.             │
            └──────────────────────────────────────────────────────────────┘ -->
       <div class="ba-viewbar">
-        <!-- 단추 하나가 두 일을 한다. 지금 상태의 **반대**를 적는다 —
-             "모두 접기" 가 보이면 지금은 펼쳐져 있다는 뜻이다. -->
-        <button type="button" class="ba-btn ba-btn--sm ba-btn--ghost" id="ba-w-fold"
-                title="하위를 모두 접습니다. 대분류만 남습니다"
-                aria-pressed="false"><i class="ba-caret ba-caret--up"></i><span>모두 접기</span></button>
-        <span class="ba-spacer"></span>
         <!-- 표를 통째로 감춘다. 접기(대분류만 남김)와 달리 줄이 하나도 안 남아
-             아래 배정 표로 바로 내려갈 수 있다 (2026-10-12). 보기만 바꾼다. -->
-        <button type="button" class="ba-btn ba-btn--sm ba-btn--ghost" id="ba-w-hide"
-                aria-controls="ba-w-tablewrap" aria-expanded="true"><span>표 숨기기</span></button>
+             아래 배정 표로 바로 내려갈 수 있다 (2026-10-12). 보기만 바꾼다.
+             2026-10-14: 오른쪽 끝에 홀로 있어 단추로 안 보였다 — 맨 왼쪽에 둔다
+             (표 전체 → 표 안의 줄 순서로, 큰 것부터). -->
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--view" id="ba-w-hide"
+                aria-controls="ba-w-tablewrap" aria-expanded="true"><i class="ba-eye" aria-hidden="true"></i><span>표 숨기기</span></button>
+        <!-- 단추 하나가 두 일을 한다. 지금 상태의 **반대**를 적는다 —
+             "대분류만 보기" 가 보이면 지금은 펼쳐져 있다는 뜻이다.
+             (2026-10-14 문구 변경: 모두 접기 → 대분류만 보기, 모두 펼치기 → 모두 보기.
+              '접기' 는 무엇이 접히는지 말하지 않았다.) -->
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--view" id="ba-w-fold"
+                title="하위를 모두 접습니다. 대분류만 남습니다"
+                aria-pressed="false"><i class="ba-caret ba-caret--up"></i><span>대분류만 보기</span></button>
       </div>
       <p class="ba-panel__hint" id="ba-w-hidden-note" hidden>
         WBS 표를 숨겨 두었습니다. 자료는 그대로입니다 — [표 펼치기] 로 다시 봅니다.
@@ -571,6 +685,13 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                 title="가중치와 배정 방식·단위를 펼칩니다. 이 단추로는 산출되지 않습니다">가중치·방식 조정</button>
         <button type="button" class="ba-btn" id="ba-al-compare"
                 title="차수별 적합도·쏠림·초과를 한 표에서 견줍니다">차수 비교</button>
+        <!-- 차수 복사·삭제 (2026-10-22). 확정본을 고치려면 복사해서 새 차수로 확정한다 -->
+        <button type="button" class="ba-btn" id="ba-al-copy" disabled
+                title="고른 차수를 그대로 옮겨 새 차수를 만듭니다. 확정본은 그대로 남습니다">복사</button>
+        <button type="button" class="ba-btn" id="ba-al-del" disabled
+                title="확정본과 한 번 확정됐던 안은 지울 수 없습니다">삭제</button>
+        <button type="button" class="ba-btn" id="ba-al-purge" disabled
+                title="확정본과 확정 이력을 뺀 나머지 차수를 모두 지웁니다">초안 정리</button>
         <span class="ba-spacer"></span>
         <button type="button" class="ba-btn ba-btn--primary" id="ba-al-confirm">최종 배정 완료</button>
       </div>
@@ -741,6 +862,10 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     <div class="ba-note">대시보드는 P6 에서 구현합니다.</div>
   </section>
 </div>
+
+<!-- 출처 문서 보기 (2026-10-15). 이미지·PDF 는 그대로, 엑셀·PPT·워드는 추출 본문.
+     외부 뷰어는 쓰지 않는다 — 업무 문서를 바깥으로 보내는 일이다. -->
+<?= bs_source_viewer_html() ?>
 
 <!-- 배정 근거 드로어 -->
 <div class="ba-drawer" id="ba-al-drawer" hidden>

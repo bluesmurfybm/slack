@@ -1411,5 +1411,145 @@ $h3 = $engine->propose($pid, []);
 ok('되돌리면 원래대로', count($fitOf($h3, $low)) === ($cnt0[$low] ?? 0));
 
 // =====================================================================
+echo "\n[17] 목표 공수 — 막대를 끌어 정한 쪽으로 기울인다 (2026-10-14)\n";
+$mdOf = static function (array $r): array {
+    $o = [];
+    foreach ($r['summary']['by_member'] as $row) { $o[(int)$row['member_id']] = (float)$row['assigned_md']; }
+    return $o;
+};
+$t0  = $engine->propose($pid, []);
+$md0 = $mdOf($t0);
+arsort($md0);
+$top = (int)array_key_first($md0);
+asort($md0);
+$bot = (int)array_key_first($md0);
+
+$t1  = $engine->propose($pid, ['targets' => [$top => 0.5]]);
+$md1 = $mdOf($t1);
+ok('★ 많이 받던 사람의 목표를 낮추면 덜 받는다', $md1[$top] < $md0[$top],
+   $md0[$top] . ' → ' . $md1[$top]);
+ok('목표는 그 차수 기록에 남는다', ($t1['meta']['targets'][$top] ?? null) === 0.5,
+   json_encode($t1['meta']['targets'] ?? null));
+$line = '';
+foreach ($t1['items'] as $it) {
+    if ($it['member_id'] === $top) { $line = implode(' ', $it['reason_json']['lines'] ?? []); break; }
+}
+ok('근거에 목표 공수로 산출했다고 적는다 (받은 건이 있으면)',
+   $line === '' || str_contains($line, '목표 공수'), $line);
+
+$t2  = $engine->propose($pid, ['targets' => [$bot => 500]]);
+ok('적게 받던 사람의 목표를 크게 잡으면 줄지 않는다', $mdOf($t2)[$bot] >= $md0[$bot],
+   $md0[$bot] . ' → ' . $mdOf($t2)[$bot]);
+ok('없는 사람·음수는 버린다',
+   $engine->propose($pid, ['targets' => [999999 => 10, $top => -1]])['meta']['targets'] === []);
+
+// 목표 0 = "이번엔 주지 않기" (2026-10-14). 다른 사람이 받을 수 있으면 0건.
+$t3  = $engine->propose($pid, ['targets' => [$top => 0], 'min_one' => true]);
+$got = 0;
+foreach ($t3['items'] as $it) { if ($it['member_id'] === $top) { $got++; } }
+ok('★ 목표 0 이면 받지 않는다', $got === 0, (string)$got);
+ok('목표 0 도 기록에 남는다', ($t3['meta']['targets'][$top] ?? null) === 0.0,
+   json_encode($t3['meta']['targets'] ?? null));
+
+// 목표를 정한 사람은 최소 1건 보장에서 빠진다 — 보장이 지시를 덮어쓰지 않게.
+$mo = $t3['meta']['min_one'] ?? [];
+ok('★ 목표를 정한 사람에게는 보장이 한 건을 넘기지 않는다',
+   !in_array($top, array_column($mo['moved'] ?? [], 'member_id'), true), json_encode($mo));
+
+// 모두 0 이면 받을 사람이 없다 — 그래도 태스크를 버리지 않고 예외로 준다.
+$allZero = array_fill_keys(array_keys($md0), 0);
+$t4 = $engine->propose($pid, ['targets' => $allZero]);
+ok('모두 주지 않기면 예외로라도 나눈다(태스크를 버리지 않는다)', count($t4['unassigned']) === 0,
+   (string)count($t4['unassigned']));
+$why = '';
+foreach ($t4['items'] as $it) { $why = implode(' ', $it['reason_json']['lines'] ?? []); break; }
+ok('예외로 왔다고 적는다', str_contains($why, '주지 않기로'), $why);
+
+// =====================================================================
+echo "\n[차수 복사·삭제·정리] (2026-10-22)\n";
+// 확정본을 고칠 출발점. 확정본은 그대로, 지울 수 있는 것은 밖에 나간 적 없는 안만.
+// =====================================================================
+$itemSig = static function (int $aid) use ($allocs): array {
+    $a = array_map(static fn($it) => $it['task_id'] . ':' . $it['member_id'] . ':' . $it['role']
+        . ':' . $it['alloc_ratio'] . ':' . $it['fit_score'] . ':' . (int)$it['is_manual'],
+        $allocs->items($aid));
+    sort($a);
+    return $a;
+};
+$wlCount = static function () use ($pdo, $pid): int {
+    $st = $pdo->prepare("SELECT COUNT(*) FROM bs_workload w
+                           JOIN bs_allocation_item i ON i.id = w.ref_id
+                           JOIN bs_task t ON t.id = i.task_id
+                          WHERE w.kind = 'assigned' AND w.ref_type = 'allocation_item'
+                            AND t.project_id = ?");
+    $st->execute([$pid]);
+    return (int)$st->fetchColumn();
+};
+
+// 앞 절이 확정본을 남기지 않았을 수 있다 — 하나 만들어 확정해 둔다.
+if (!$allocs->confirmed($pid)) {
+    $rc = $engine->propose($pid, []);
+    $ac = $allocs->createVersion($pid, ['weights' => $rc['meta']['weights'],
+                                        'eval_ver' => $rc['meta']['eval_ver']], $actor);
+    $allocs->saveItems($ac, $rc['items']);
+    $allocs->confirm($ac, $actor);
+}
+$conf    = $allocs->confirmed($pid);
+$wl0     = $wlCount();
+$cpId    = $allocs->copyVersion($conf['id'], $actor);
+$cp      = $allocs->find($cpId);
+$cpP     = json_decode($cp['params_json'], true);
+
+ok('복사본은 산출됨으로 시작한다', $cp['status'] === 'proposed', $cp['status']);
+ok('복사본은 마지막 차수 다음 번호', (int)$cp['version'] === (int)$allocs->latest($pid)['version']);
+ok('★ 항목이 그대로 옮겨진다(담당·역할·비율·적합도·수동)',
+   $itemSig($cpId) === $itemSig($conf['id']));
+ok('근거도 그대로 옮겨진다',
+   array_column($allocs->items($cpId), 'reason') == array_column($allocs->items($conf['id']), 'reason'));
+ok('원본 판정 회차를 그대로 쓴다', $cp['eval_ver'] == $conf['eval_ver']);
+ok('어디서 왔는지 남긴다', ($cpP['copied_from']['id'] ?? null) === $conf['id']
+   && ($cpP['copied_from']['version'] ?? null) === $conf['version'], json_encode($cpP['copied_from'] ?? null));
+ok('★ 복사해도 확정본은 그대로다', $allocs->confirmed($pid)['id'] === $conf['id']);
+ok('복사만으로는 점유가 바뀌지 않는다', $wlCount() === $wl0);
+
+throws('확정본은 지울 수 없다', fn() => $allocs->deleteVersion($conf['id']));
+ok('확정본은 지울 수 없다고 표시된다', $allocs->confirmed($pid)['deletable'] === false);
+
+// 복사본을 고쳐 확정하면 원본은 지난 안이 되고 — 확정 이력이라 지울 수 없다.
+$allocs->confirm($cpId, $actor);
+ok('복사본을 확정하면 그게 확정본', $allocs->confirmed($pid)['id'] === $cpId);
+ok('점유를 복사본 기준으로 다시 만든다', $wlCount() === $wl0, $wl0 . ' → ' . $wlCount());
+$old = $allocs->find($conf['id']);
+ok('원본은 지난 안으로', $old['status'] === 'archived');
+throws('★ 한 번 확정됐던 지난 안은 지울 수 없다', fn() => $allocs->deleteVersion($conf['id']));
+
+// 초안은 지운다 — 항목까지 함께.
+$dId = $allocs->copyVersion($cpId, $actor);
+$allocs->deleteVersion($dId);
+ok('초안을 지운다', $allocs->find($dId) === null);
+$st = $pdo->prepare('SELECT COUNT(*) FROM bs_allocation_item WHERE allocation_id = ?');
+$st->execute([$dId]);
+ok('항목도 함께 지워진다', (int)$st->fetchColumn() === 0);
+throws('없는 차수는 지울 수 없다', fn() => $allocs->deleteVersion($dId));
+
+// 항목 없는 안은 복사하지 않는다 — 빈 차수만 늘어난다.
+$empty = $allocs->createVersion($pid, [], $actor);
+throws('항목 없는 안은 복사 거부', fn() => $allocs->copyVersion($empty, $actor));
+
+// 일괄 정리 — 확정본·확정 이력만 남는다.
+$allocs->copyVersion($cpId, $actor);
+$allocs->copyVersion($cpId, $actor);
+$before = array_filter($allocs->versions($pid), static fn($v) => $v['deletable']);
+$n      = $allocs->purgeDrafts($pid);
+$left   = $allocs->versions($pid);
+ok('지울 수 있던 차수만큼 지운다', $n === count($before), $n . ' / ' . count($before));
+ok('★ 남은 것은 확정본과 확정 이력뿐',
+   $left && !array_filter($left, static fn($v) => $v['deletable']));
+ok('확정본은 남는다', $allocs->confirmed($pid)['id'] === $cpId);
+ok('확정 이력도 남는다', $allocs->find($conf['id']) !== null);
+ok('정리 뒤 점유는 그대로', $wlCount() === $wl0);
+ok('두 번 정리하면 0', $allocs->purgeDrafts($pid) === 0);
+
+// =====================================================================
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";
 exit($fail > 0 ? 1 : 0);

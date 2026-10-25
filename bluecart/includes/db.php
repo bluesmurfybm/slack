@@ -5,6 +5,8 @@
 
 declare(strict_types=1);
 
+if (is_file(__DIR__ . '/../../core/sqlite_compat.php')) require_once __DIR__ . '/../../core/sqlite_compat.php';   // 로컬 시험(SQLite)용
+
 function bc_db(): PDO
 {
     static $pdo = null;
@@ -21,7 +23,8 @@ function bc_db(): PDO
         $cfg['charset']
     );
 
-    $pdo = new PDO($dsn, $cfg['user'], $cfg['password'], [
+    $connect = function_exists('db_connect') ? 'db_connect' : fn($dsn, $u, $p, $o) => new PDO($dsn, $u, $p, $o);
+    $pdo = $connect($dsn, $cfg['user'], $cfg['password'], [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,

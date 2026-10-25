@@ -99,8 +99,21 @@ function bs_rnd_can_edit(array $rnd): bool
     if (bs_is_admin()) {
         return true;
     }
-    return bs_rnd_is_proposer($rnd)
-        && in_array((string)$rnd['status'], ['draft', 'proposed'], true);
+    $status = (string)$rnd['status'];
+    if (bs_rnd_is_proposer($rnd) && in_array($status, ['draft', 'proposed'], true)) {
+        return true;
+    }
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 승인 뒤 — 주도자와 수정 권한을 받은 참여자 (2026-10-14)       │
+    // │                                                              │
+    // │ 기간·점유율까지 고칠 수 있다(사람이 정했다). 그래도 사람별     │
+    // │ 점유는 **승인된 참여율**로만 올라가므로 승인 통제(§9.1)는 그대로│
+    // │ 다 — 바뀐 기간은 update() 가 점유에 다시 맞춘다. 끝난 과제     │
+    // │ (done·dropped)는 기록이므로 관리자만 고친다.                    │
+    // └──────────────────────────────────────────────────────────────┘
+    return in_array($status, ['approved', 'running'], true)
+        && (string)($rnd['my_status'] ?? '') === 'approved'
+        && ((string)($rnd['my_role'] ?? '') === 'lead' || !empty($rnd['my_can_edit']));
 }
 
 /** 승인·반려할 수 있는가. 상태가 proposed 일 때만 의미가 있다. */
@@ -185,8 +198,16 @@ function bs_present_rnd(array $r, array $extra = []): array
             'add_output'   => bs_rnd_can_contribute($r),
             'finish'       => bs_rnd_can_close($r),
             'drop'         => bs_rnd_can_close($r),
-            'interest'     => true,
+            'delete'       => bs_rnd_can_delete($r),
+            'restore'      => bs_rnd_can_purge($r),
+            'purge'        => bs_rnd_can_purge($r),
+            'interest'     => !bs_rnd_is_deleted($r),
         ],
+        // 삭제 상태 (2026-10-16). 관리자가 [삭제 포함] 으로 볼 때만 이 값이 선다.
+        'deleted'         => bs_rnd_is_deleted($r),
+        'deleted_at'      => bs_date($r['deleted_at'] ?? null, 'Y-m-d H:i'),
+        'deleted_by_name' => $r['deleted_by_name'] ?? null,
+        'delete_reason'   => $r['delete_reason'] ?? null,
         'actions'         => bs_rnd_actions($r, $canEdit, $canApprove),
     ] + $extra;
 }
@@ -216,11 +237,57 @@ function bs_rnd_can_contribute(array $rnd): bool
         && in_array((string)$rnd['status'], ['approved', 'running'], true);
 }
 
-/** 종료·중단할 수 있는가. lead 이거나 관리자이고, 아직 돌아가는 과제여야 한다. */
+/**
+ * 종료·중단할 수 있는가. 발의자·lead 이거나 관리자이고, 아직 돌아가는 과제여야 한다.
+ *
+ * 발의자도 넣는다(2026-10-16) — 발의자는 발의할 때 승인된 lead 로 붙으므로
+ * 실제로는 같은 사람이다. 다만 보드 카드는 내 역할(my_role)을 싣지 않아
+ * lead 판정만으로는 카드에서 [중단] 이 안 보였다.
+ */
 function bs_rnd_can_close(array $rnd): bool
 {
-    return bs_rnd_can_manage_team($rnd)
+    return !bs_rnd_is_deleted($rnd)
+        && (bs_rnd_can_manage_team($rnd) || bs_rnd_is_proposer($rnd))
         && in_array((string)$rnd['status'], ['approved', 'running'], true);
+}
+
+/** 삭제 상태인가 (deleted_at). */
+function bs_rnd_is_deleted(array $rnd): bool
+{
+    return !empty($rnd['deleted_at']);
+}
+
+/**
+ * 삭제(삭제 상태로 바꾸기)할 수 있는가 (2026-10-16).
+ *
+ *   관리자      언제든
+ *   발의자·lead **시작 전에만** — 작성 중·발의됨이거나, 다른 참여자·진행 기록·
+ *               산출물이 하나도 없을 때. 이미 굴러간 과제는 [중단] 으로 끝낸다.
+ *               발의자가 남의 기록까지 한 번에 감추지 못하게 하려는 것이다.
+ */
+function bs_rnd_can_delete(array $rnd): bool
+{
+    if (bs_rnd_is_deleted($rnd)) {
+        return false;
+    }
+    if (bs_is_admin()) {
+        return true;
+    }
+    if (!bs_rnd_is_proposer($rnd) && !bs_rnd_is_lead($rnd)) {
+        return false;
+    }
+    if (in_array((string)$rnd['status'], ['draft', 'proposed'], true)) {
+        return true;
+    }
+    return (int)($rnd['member_count'] ?? 0) <= 1
+        && (int)($rnd['log_count'] ?? 0) === 0
+        && (int)($rnd['output_count'] ?? 0) === 0;
+}
+
+/** 복구·영구삭제 — 관리자만, 삭제 상태인 과제만. */
+function bs_rnd_can_purge(array $rnd): bool
+{
+    return bs_is_admin() && bs_rnd_is_deleted($rnd);
 }
 
 /**
@@ -264,16 +331,56 @@ function bs_present_rnd_member(array $m, bool $canManage): array
         'approved_at'   => bs_date($m['approved_at'] ?? null),
         'joined_at'     => bs_date($m['joined_at'] ?? null),
         'left_at'       => bs_date($m['left_at'] ?? null),
+        // 수정 권한 (026). 주도자는 칸과 무관하게 언제나 고친다.
+        'can_edit'      => (string)$m['role'] === 'lead' || !empty($m['can_edit']),
+        'edit_granted_by' => $m['edit_granted_by'] ?? null,
         // 신청 상태인 사람에게만 승인·반려 단추가 의미 있다.
         'can'           => [
             'approve' => $canManage && $status === 'requested',
             'reject'  => $canManage && $status === 'requested',
+            // 승인된 일반 참여자에게만 켜고 끈다. 주도자는 늘 켜져 있다.
+            'grant_edit' => $canManage && $status === 'approved' && (string)$m['role'] !== 'lead',
         ],
     ];
 }
 
-/** 진행 기록 한 건. content 와 finding 을 끝까지 나눠 둔다 (명세서 §8.3). */
-function bs_present_rnd_log(array $l): array
+/**
+ * 진행 기록·산출물을 고치고 지울 수 있는가 (2026-10-19).
+ *
+ * 작성자·주도자·관리자, **과제 상태와 무관하게 언제든** (사용자 결정).
+ * 종료된 과제의 산출물을 모두 지우면 '산출물 1건 이상' 이 깨진 채 남는다 —
+ * 화면이 지울 때 그 점을 알린다.
+ */
+function bs_rnd_can_edit_item(array $rnd, string $authorId): bool
+{
+    if (bs_is_admin() || bs_rnd_is_lead($rnd)) {
+        return true;
+    }
+    $me = bs_current_user();
+    return $me !== null && $authorId !== '' && $authorId === (string)$me['id'];
+}
+
+/** 첨부 한 건 (bs_rnd_file). file_path 는 내보내지 않는다. */
+function bs_present_rnd_file(array $f): array
+{
+    require_once BS_ROOT . '/inc/service/SourceUploader.php';   // humanSize()
+    $mime = (string)($f['mime'] ?? '');
+    return [
+        'id'         => (int)$f['id'],
+        'name'       => $f['orig_name'],
+        'mime'       => $mime,
+        'size_label' => isset($f['file_size']) ? SourceUploader::humanSize((int)$f['file_size']) : null,
+        'viewable'   => in_array($mime, BS_VIEWABLE_MIME, true),
+        'url'        => 'api/rnd_file.php?id=' . (int)$f['id'],
+        'uploaded_by_name' => $f['uploaded_by_name'] ?? null,
+    ];
+}
+
+/**
+ * 진행 기록 한 건. content 와 finding 을 끝까지 나눠 둔다 (명세서 §8.3).
+ * $rnd 를 주면 고치기·지우기 판정을, $files 를 주면 첨부를 함께 싣는다 (2026-10-19).
+ */
+function bs_present_rnd_log(array $l, ?array $rnd = null, array $files = []): array
 {
     return [
         'id'         => (int)$l['id'],
@@ -282,12 +389,17 @@ function bs_present_rnd_log(array $l): array
         'content'    => $l['content'],
         'finding'    => $l['finding'] ?? null,
         'worked_on'  => $l['worked_on'] ?? null,
+        'url'        => bs_safe_url($l['url'] ?? null),      // 031
         'created_at' => bs_date($l['created_at'] ?? null),
+        'updated_at' => bs_date($l['updated_at'] ?? null, 'Y-m-d H:i'),
+        'updated_by_name' => $l['updated_by_name'] ?? null,
+        'files'      => array_map('bs_present_rnd_file', $files),
+        'can'        => ['edit' => $rnd !== null && bs_rnd_can_edit_item($rnd, (string)($l['author_id'] ?? ''))],
     ];
 }
 
-/** 산출물 한 건. */
-function bs_present_rnd_output(array $o): array
+/** 산출물 한 건. $rnd·$files 는 진행 기록과 같다 (2026-10-19). */
+function bs_present_rnd_output(array $o, ?array $rnd = null, array $files = []): array
 {
     $kind = (string)$o['kind'];
     return [
@@ -301,6 +413,10 @@ function bs_present_rnd_output(array $o): array
         'summary'    => $o['summary'] ?? null,
         'created_by_name' => $o['created_by_name'] ?? null,
         'created_at' => bs_date($o['created_at'] ?? null),
+        'updated_at' => bs_date($o['updated_at'] ?? null, 'Y-m-d H:i'),
+        'updated_by_name' => $o['updated_by_name'] ?? null,
+        'files'      => array_map('bs_present_rnd_file', $files),
+        'can'        => ['edit' => $rnd !== null && bs_rnd_can_edit_item($rnd, (string)($o['author_id'] ?? ''))],
     ];
 }
 
@@ -319,6 +435,10 @@ function bs_present_rnd_row(array $r): array
  */
 function bs_rnd_actions(array $rnd, bool $canEdit, bool $canApprove): array
 {
+    // 삭제된 과제는 되살리거나 영구히 지우는 것 말고는 하지 않는다.
+    if (bs_rnd_is_deleted($rnd)) {
+        return bs_rnd_can_purge($rnd) ? ['restore', 'purge'] : [];
+    }
     $out = [];
     if ($canEdit)                     { $out[] = 'update'; }
     if ($canApprove)                  { $out[] = 'approve'; $out[] = 'reject'; }
@@ -326,6 +446,7 @@ function bs_rnd_actions(array $rnd, bool $canEdit, bool $canApprove): array
     if (bs_rnd_can_leave($rnd))       { $out[] = 'leave'; }
     if (bs_rnd_can_contribute($rnd))  { $out[] = 'log'; $out[] = 'output'; }
     if (bs_rnd_can_close($rnd))       { $out[] = 'finish'; $out[] = 'drop'; }
+    if (bs_rnd_can_delete($rnd))      { $out[] = 'delete'; }
     return $out;
 }
 
@@ -354,4 +475,37 @@ function bs_rnd_is_stale(array $rnd): bool
 {
     require_once __DIR__ . '/service/RndLoadService.php';
     return (new RndLoadService(bs_db()))->isStale($rnd);
+}
+
+/**
+ * 출처 문서(참고자료 포함) 한 건 → 화면 모양. 프로젝트와 R&D 과제가 같이 쓴다.
+ * file_path 는 절대 내보내지 않는다 — 서버 디렉터리 구조를 알려 줄 이유가 없다.
+ *
+ * has_file · viewable 은 화면이 [보기]·[내려받기] 를 그릴지 정하는 데 쓴다.
+ * viewable 은 브라우저가 바로 그리는 형식(이미지·PDF)인가.
+ */
+function bs_present_source(array $r): array
+{
+    require_once BS_ROOT . '/inc/service/SourceUploader.php';   // humanSize()
+    $hasFile = !empty($r['has_file']);
+    $mime    = (string)($r['mime'] ?? '');
+    return [
+        'id'           => (int)$r['id'],
+        'purpose'      => $r['purpose'] ?? 'scope',
+        'kind'         => $r['kind'],
+        'kind_label'   => BS_SOURCE_KIND[$r['kind']] ?? $r['kind'],
+        'title'        => $r['title'],
+        'url'          => $r['url'],
+        'file_size'    => isset($r['file_size']) ? (int)$r['file_size'] : null,
+        'size_label'   => isset($r['file_size']) && $r['file_size'] !== null
+                            ? SourceUploader::humanSize((int)$r['file_size']) : null,
+        'mime'         => $r['mime'],
+        'has_file'     => $hasFile,
+        'viewable'     => $hasFile && in_array($mime, BS_VIEWABLE_MIME, true),
+        'parse_status' => $r['parse_status'],
+        'parse_error'  => $r['parse_error'] ?? null,
+        'parsed_len'   => isset($r['parsed_len']) ? (int)$r['parsed_len'] : null,
+        'uploaded_by'  => $r['uploaded_by_name'] ?? null,
+        'created_at'   => bs_date($r['created_at'], 'Y-m-d H:i'),
+    ];
 }

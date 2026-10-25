@@ -40,3 +40,21 @@ html{scrollbar-gutter:stable}
 .topbar .dd-menu .dd-label{font-size:11px;color:#63719A;padding:6px 11px 2px}
 /* 지금 보고 있는 업무 시스템 — 드롭다운에서 자기 자리를 표시한다 */
 .topbar .dd-menu a.on{background:#EEF3FB;color:#1C5DE5;font-weight:600}
+/* 업무 시스템 — 메인 카드와 같은 묶음·순서(core/worksystems.php::work_systems_menu_data).
+   묶음이 늘면 메뉴가 길어지므로 이 칸만 스크롤한다. 마이페이지·로그아웃은 늘 보인다. */
+.topbar .dd-menu .dd-systems{max-height:calc(100vh - 260px);overflow-y:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:transparent transparent;transition:scrollbar-color .15s ease}
+/* 스크롤 막대는 가늘게, 평소엔 숨겼다가 메뉴에 손이 갈 때만 옅게 보인다.
+   크롬·엣지 121+ 와 파이어폭스는 위 scrollbar-* 를, 그 전 웹킷은 아래 규칙을 쓴다. */
+.topbar .dd-menu .dd-systems:hover{scrollbar-color:#CBD5E6 transparent}
+.topbar .dd-menu .dd-systems::-webkit-scrollbar{width:6px}
+.topbar .dd-menu .dd-systems::-webkit-scrollbar-button{display:none;height:0}
+.topbar .dd-menu .dd-systems::-webkit-scrollbar-track{background:transparent}
+.topbar .dd-menu .dd-systems::-webkit-scrollbar-thumb{background:transparent;border-radius:999px}
+.topbar .dd-menu .dd-systems:hover::-webkit-scrollbar-thumb{background:#CBD5E6}
+.topbar .dd-menu .dd-systems::-webkit-scrollbar-thumb:hover{background:#A9B6CF}
+.topbar .dd-menu .dd-group{font-size:11.5px;font-weight:700;color:#0E1A33;padding:7px 11px 3px}
+/* 안 읽은 알림 수 — 메인 카드 배지(.tile-badge)와 같은 색 */
+.topbar .dd-menu .dd-badge{min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;
+  border-radius:999px;background:#E5484D;color:#fff;font-size:10.5px;font-weight:700;line-height:18px;text-align:center}
+.topbar .dd-menu .dd-badge[hidden]{display:none}
