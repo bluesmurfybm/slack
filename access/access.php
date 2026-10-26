@@ -51,6 +51,7 @@ $__bwCurrent = 'access';
       <button id="searchClear" class="hero-clear" type="button" title="지우기" hidden>✕</button>
     </div>
     <div id="vers" class="hero-chips"></div>
+    <div id="oss" class="hero-chips os"></div>
   </div>
 
   <div class="tools">
@@ -125,7 +126,7 @@ const flatPw = s => (s || "").replace(/\s*\n+\s*/g, " ");
    접속정보가 있으면 그 id, 아직 없으면 학교 id 로 구분한다. */
 const rowKey = r => (r.access_id ? "a" + r.access_id : "s" + r.school_id);
 
-let DATA = [], fver = "all", fvpn = "all", openKey = "";
+let DATA = [], fver = "all", fvpn = "all", fos = "all", openKey = "";
 /* 리스트/카드 보기. 취향 문제라 이 브라우저에만 남긴다(읽기 실패해도 리스트로 동작). */
 let view = "list";
 try { if (localStorage.getItem("access_view") === "card") view = "card"; } catch (e) {}
@@ -331,6 +332,7 @@ async function load() {
   } catch (e) { DATA = []; }
   resetDetail();            // 새로 불러온 값으로 상세를 다시 만든다
   buildVers();
+  buildOsFilter();
   buildVpnFilter();
   render();
 }
@@ -344,6 +346,39 @@ function buildVers() {
     `<button type="button" class="chip${v === fver ? " on" : ""}" data-v="${escA(v)}">${esc(label)}<b>${c}</b></button>`).join("");
   $("vers").querySelectorAll(".chip").forEach(b =>
     b.addEventListener("click", () => { fver = b.dataset.v; buildVers(); render(); }));
+}
+
+/* OS 필터. 버전 칩과 같은 모양으로 검색창 아래에 둔다.
+   자유 입력이라 실제로 들어온 값만 후보가 된다(VPN 처럼 쉼표로 쪼개지 않는다).
+   아직 아무 데도 OS 를 안 적었으면 거를 게 없으므로 줄 자체를 숨긴다. */
+function buildOsFilter() {
+  const n = {};
+  let none = 0;
+  for (const r of DATA) {
+    const v = (r.os || "").trim();
+    if (!v) { none++; continue; }
+    n[v] = (n[v] || 0) + 1;
+  }
+  const names = Object.keys(n).sort();
+  const wrap = $("oss");
+  wrap.hidden = names.length === 0;
+  if (wrap.hidden) { fos = "all"; wrap.innerHTML = ""; return; }
+
+  const list = [
+    ["all", "OS 전체", DATA.length],
+    ...names.map(v => ["p:" + v, v, n[v]]),
+    ...(none ? [["none", "미입력", none]] : []),
+  ];
+  wrap.innerHTML = list.map(([v, label, c]) =>
+    `<button type="button" class="chip${v === fos ? " on" : ""}" data-v="${escA(v)}">${esc(label)}<b>${c}</b></button>`).join("");
+  wrap.querySelectorAll(".chip").forEach(b =>
+    b.addEventListener("click", () => { fos = b.dataset.v; buildOsFilter(); render(); }));
+}
+function osMatch(r) {
+  if (fos === "all") return true;
+  const v = (r.os || "").trim();
+  if (fos === "none") return v === "";
+  return v === fos.slice(2);
 }
 
 /* VPN 필터. 'FortiClient, Arcon' 처럼 두 개를 같이 쓰는 곳이 있어서 값 전체가 아니라
@@ -374,7 +409,7 @@ function vpnMatch(r) {
 
 function matches(r, q) {
   if (!q) return true;
-  return [r.name, r.ver, r.vpn, r.dev, r.ops, r.repo,
+  return [r.name, r.ver, r.os, r.vpn, r.dev, r.ops, r.repo,
           r.login_ops_id, r.login_ops, r.login_dev_id, r.login_dev,
           val(r, "note"), val(r, "dev_db"), val(r, "ops_db"), val(r, "haksa_db")]
     .some(v => (v || "").toLowerCase().includes(q));
@@ -413,6 +448,7 @@ function render() {
   const onlyMissing = $("onlyMissing").checked;
   const list = DATA.filter(r =>
     (fver === "all" || (r.ver || "") === fver) &&
+    osMatch(r) &&
     vpnMatch(r) &&
     (!onlyMissing || !r.access_id) &&
     matches(r, q));
@@ -768,7 +804,7 @@ const MASTER = [
 /* 추가 — 빈 행을 만들어 같은 폼을 띄운다. 저장하면 schools 에도 같이 들어간다. */
 function openCreate() {
   const blank = { school_id: 0, access_id: 0, name: "", ver: "", dev: "", ops: "", log: "" };
-  for (const f of ALLF) blank[f.key] = "";
+  for (const f of ALLF) blank[f.key] = f.default || "";   // OS 처럼 기본값이 정해진 칸은 미리 채운다
   openForm(blank);
 }
 

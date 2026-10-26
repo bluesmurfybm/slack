@@ -222,6 +222,7 @@ function access_import_xlsx($path, array $SHEETS) {
             }
 
             $vals['repo'] = access_strip_repo_label($vals['repo']);   // "git : https://…" → 주소만
+            if ($vals['os'] === '') $vals['os'] = ACCESS_OS_DEFAULT;   // 엑셀에 없는 칸 — 기본값으로
 
             // 엑셀에 칸이 없는 값들은 본문에서 파생시킨다(둘 다 화면에서 고칠 수 있는 초깃값)
             $loginCell = isset($def['map']['_login_info'])

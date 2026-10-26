@@ -187,7 +187,14 @@ def with_cli(settings: Settings, system: str, schema: dict, prompt: str) -> tupl
     out = subprocess.run( # noqa: S603 실행 파일은 설정값, 인자는 상수다
         [exe, "-p", "--output-format", "text"],
         input=full, capture_output=True, text=True, encoding="utf-8",
-        check=True, timeout=1800)
+        check=False, timeout=1800)
+    if out.returncode != 0:
+        # CalledProcessError 는 종료 코드만 말해 줘서 로그인 만료인지 한도 초과인지 알 수 없었다.
+        # CLI 가 stderr(없으면 stdout)에 적은 마지막 줄들을 사유로 남긴다.
+        said = (out.stderr or out.stdout or "").strip()
+        tail = " | ".join(line.strip() for line in said.splitlines()[-3:] if line.strip())
+        raise RuntimeError(f"claude CLI 종료 코드 {out.returncode}"
+                           + (f": {tail[:400]}" if tail else " (아무 출력도 없음)"))
     return out.stdout, ""
 
 

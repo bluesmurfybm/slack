@@ -16,7 +16,7 @@ $me  = current_user();
 $tok = current_token();
 $uid = $me['id'] ?? 'anon';
 
-$cacheFile = sys_get_temp_dir() . '/slack_emoji_meta_' . preg_replace('/\W/', '', $uid) . '.json';
+$cacheFile = slack_cache_path('slack_emoji_meta_' . preg_replace('/\W/', '', $uid) . '.json');
 if (is_file($cacheFile)) {
     $cached = json_decode(file_get_contents($cacheFile), true) ?: [];
     // 스코프 부족 상태는 5분만 캐시 (스코프 추가·재로그인 후 빨리 회복되게), 정상 상태는 1시간

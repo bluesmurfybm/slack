@@ -20,6 +20,8 @@ $__current = $__u ? [
     'email'       => $__u['email'],
     'has_token'   => !empty($__u['slack_token_enc']),
     'slack_email' => $__u['slack_email'] ?? null,
+    'gmail_user'  => $__u['gmail_user'] ?? null,
+    'has_gmail_pass' => !empty($__u['gmail_pass_enc']),
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
 ] : null;
@@ -506,6 +508,25 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         </div>
       </div>
 
+      <!-- Gmail 연동(slack/gmail). 앱 비밀번호도 슬랙 토큰과 같이 암호화 저장하고 다시 보여 주지 않는다. -->
+      <div class="token-note">
+        📧 <b>Gmail 연동</b>은 본인 메일함을 업무 화면에서 보기 위한 설정입니다. 비밀번호 칸에는 로그인 비밀번호가 아니라
+        <b>Google 앱 비밀번호</b>(16자리)를 넣으세요 — Google 계정 → 보안 → 2단계 인증 → 앱 비밀번호에서 만들 수 있습니다.
+        암호화해 저장하며, 저장 후에는 화면에 다시 표시되지 않습니다.
+      </div>
+      <div class="fld">
+        <label>Gmail 주소</label>
+        <input id="pf-gmail" type="email" placeholder="example@gmail.com" autocomplete="off" disabled>
+        <div class="hintline">비우고 저장하면 연동이 해제되고 저장된 앱 비밀번호도 지워집니다.</div>
+      </div>
+      <div class="fld">
+        <label>Gmail 앱 비밀번호</label>
+        <div class="pw-wrap">
+          <input id="pf-gmailpw" type="password" placeholder="abcd efgh ijkl mnop" autocomplete="new-password" disabled>
+          <button class="eye" onclick="toggleEye('pf-gmailpw',this)" title="표시/숨김"></button>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button class="btn-primary" id="pf-editbtn" style="width:auto;padding:11px 22px;margin:0" onclick="startEditProfile()">수정</button>
         <button class="btn-ghost hidden" id="pf-cancel" onclick="cancelEditProfile()">취소</button>
@@ -618,7 +639,14 @@ function enterApp(){
     return;
   }
   if(params.get("view")==="profile"){
+    const focus = params.get("focus");
     history.replaceState(null,"",location.pathname);
+    if(focus==="gmail"){                     // 업무 현황판 Gmail 탭에서 '미등록' 으로 넘어온 경우 — 바로 입력할 수 있게
+      showProfile("Gmail 주소와 앱 비밀번호를 등록해 주세요", true);
+      const g=document.getElementById("pf-gmail");
+      g.scrollIntoView({block:"center"}); g.focus();
+      return;
+    }
     showProfile();
     return;
   }
@@ -702,7 +730,7 @@ function pickSwatch(c){
    단, 초기 비번 미변경/토큰 요구 상황이면 볼 것도 없이 바로 수정 모드로 연다. */
 function setProfileMode(editing){
   profileEditing=editing;
-  ["pf-name","pf-email","pf-color","pf-pw","pf-slackmail","pf-token"].forEach(id=>{
+  ["pf-name","pf-email","pf-color","pf-pw","pf-slackmail","pf-token","pf-gmail","pf-gmailpw"].forEach(id=>{
     document.getElementById(id).disabled=!editing;
   });
   buildSwatches(document.getElementById("pf-color").value);
@@ -719,7 +747,16 @@ function cancelEditProfile(){
   document.getElementById("pf-color").value=hexOrDefault(current.color);
   document.getElementById("pf-slackmail").value=current.slack_email||"";
   document.getElementById("pf-token").value="";
+  fillGmailFields();
   setProfileMode(false);
+}
+
+/* Gmail 연동 칸: 주소는 그대로 보여 주고, 앱 비밀번호는 저장 여부만 알린다(원문은 서버도 안 내려 준다) */
+function fillGmailFields(){
+  document.getElementById("pf-gmail").value=current.gmail_user||"";
+  const pw=document.getElementById("pf-gmailpw");
+  pw.value="";
+  pw.placeholder = current.has_gmail_pass ? "저장됨 · 변경하려면 새 앱 비밀번호 입력" : "abcd efgh ijkl mnop";
 }
 
 function showProfile(alertMsg, forceEdit){
@@ -732,6 +769,7 @@ function showProfile(alertMsg, forceEdit){
   const tokenEl=document.getElementById("pf-token");
   tokenEl.value="";
   tokenEl.placeholder = current.has_token ? "저장됨 · 변경하려면 새 토큰 입력" : "xoxp-... (본인 토큰 붙여넣기)";
+  fillGmailFields();
   setProfileMode(!!(current && current.needs_setup) || !!forceEdit);
   if(alertMsg) toast(alertMsg);
   loadPushPanel();
@@ -1250,6 +1288,12 @@ async function saveProfile(){
   // 슬랙 계정 이메일은 빈칸도 보낸다. 토큰과 달리 화면에 원문이 보이므로
   // 비운 것은 '지우기' 라는 뜻이다. 회사 메일과 같으면 서버가 비워서 저장한다.
   body.slack_email=v("pf-slackmail");
+  // Gmail: 주소는 빈칸도 보낸다(= 연동 해제). 앱 비밀번호는 빈칸이면 기존 값 유지.
+  const gm=v("pf-gmail"), gp=v("pf-gmailpw");
+  const gmChanged = gm.toLowerCase() !== (current.gmail_user||"").toLowerCase();
+  if(gm && !gp && (gmChanged || !current.has_gmail_pass)){ toast("Gmail 앱 비밀번호도 입력하세요"); return; }
+  body.gmail_user=gm;
+  if(gp) body.gmail_pass=gp;
 
   const r=await fetch("api/me.php",{method:"PUT",headers:{"Content-Type":"application/json"},
     body:JSON.stringify(body)});
