@@ -63,6 +63,22 @@ main{display:grid;grid-template-columns:1fr minmax(380px,430px);gap:16px;padding
 .fold[aria-expanded="false"] .foldtxt::after{content:"펼치기"}
 .fold:hover .foldtxt{color:var(--ink)}
 #listPanel.folded #listBody{display:none}
+/* 관리자 화면(승인·정산): 승인 칸(승인대기/승인/반려)은 없고, 아래 [반려][승인] 단추로 바로 처리한다 */
+body[data-role="approver"] #fsApproval,body[data-role="admin"] #fsApproval{display:none!important}
+/* 영수증 크게 보기 창 */
+#rcDlg{width:min(980px,96vw);max-height:94vh}
+.rcdlg-head{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 18px;border-bottom:1px solid var(--line)}
+.rcdlg-head b{font-size:15px}
+.rcdlg-head a{margin-left:auto;font-size:12.5px;color:var(--blue);text-decoration:none;white-space:nowrap}
+.rcx{border:0;background:none;font-size:24px;line-height:1;width:34px;height:34px;border-radius:8px;cursor:pointer;color:var(--sub)}
+.rcx:hover{background:var(--soft);color:var(--ink)}
+.rcdlg-body{display:flex;align-items:center;gap:6px;padding:10px;background:var(--soft)}
+.rcdlg-view{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;height:min(80vh,820px)}
+.rcdlg-view img{max-width:100%;max-height:100%;object-fit:contain;background:#fff;border-radius:6px}
+.rcdlg-view iframe{width:100%;height:100%;border:0;background:#fff;border-radius:6px}
+.rcnav{flex:none;width:36px;height:56px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:24px;line-height:1;cursor:pointer;color:var(--sub)}
+.rcnav:hover{color:var(--ink);border-color:var(--blue)}
+.rcnav[hidden]{visibility:hidden;display:block}
 
 /* 청구서 폼 — 영수증 테이프 느낌 */
 .slip{order:2;background:var(--tape);border:1px solid var(--line);border-radius:12px;overflow:hidden;align-self:start;position:sticky;top:calc(var(--tb) + 16px)}
@@ -196,6 +212,13 @@ body[data-role="staff"] details#rulePanel>summary::after{content:none}
    승인은 대표만, 정산은 정산 담당만 고친다. */
 /* 내 청구(구성원 화면 전용) */
 #myDlg{width:min(640px,94vw)}
+#pendDlg{width:min(600px,94vw)}
+#pendDlg .db{gap:10px}
+.pend-kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pend-list{padding:0;border:1px solid var(--line);border-radius:10px}
+.pend-kpis .go{float:right;color:var(--blue);font-weight:600}
+.pend-kpis .kpi:not(.alert){cursor:default}.pend-kpis .kpi:not(.alert) .go{display:none}
+.slip-head .qtag{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--wait-soft);color:var(--wait);font-weight:600}
 #myDlg .mylist{gap:2px;padding:8px 10px}
 .myrow{display:grid;grid-template-columns:92px 1fr auto auto;gap:4px 10px;align-items:center;padding:9px 8px;border-radius:8px;cursor:pointer}
 .myrow:hover{background:var(--soft)}
@@ -228,6 +251,9 @@ body[data-role="approver"] #fsSettle:disabled{opacity:1}
 .money .lab{font-size:13px;font-weight:500}
 .money input:not([type=file]),.money select{border:1px solid var(--line);border-radius:7px;padding:7px 9px;background:var(--panel);text-align:right;width:100%}
 .money select{text-align:left}
+/* 명세 맨 아래 총 합계(청구 금액) */
+.money .sumlab{font-weight:700;border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
+.money .moneysum{grid-column:2/-1;text-align:right;font-size:18px;font-weight:700;color:var(--blue);border-top:1px solid var(--line);padding:10px 2px 0;margin-top:4px}
 .fuel{grid-column:1/-1;background:var(--soft);border-radius:8px;padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--sub)}
 .money .fuel input#km{width:80px;border:1px solid var(--line);border-radius:6px;padding:5px 7px;background:var(--panel);text-align:right}
 .seg2{display:flex;gap:4px;flex-wrap:wrap}

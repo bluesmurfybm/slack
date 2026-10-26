@@ -2,7 +2,9 @@
 /**
  * 파이썬 출장여비 travel.db → 운영 MySQL 에 그대로 넣을 SQL 파일 하나. 명령줄 전용.
  *
- *   php blueledger/tools/export_travel_sql.php <travel.db> [--out=<파일.sql>]
+ *   php blueledger/tools/export_travel_sql.php <travel.db> [--out=<파일.sql>] [--since=2026-01-01]
+ *
+ *   --since 를 주면 출장일이 그날 이후인 청구만 넣는다(2026-10-26 지안 님: 2026년 것만 옮긴다).
  *
  * 서버에서는 PHP 도구 없이 이 파일만 넣으면 된다.
  *   mysql --default-character-set=utf8mb4 -u <계정> -p <DB이름> < bluexpense_migrate.sql
@@ -11,6 +13,7 @@
  *  1) bl_travel_* 네 표가 없으면 만든다(db.php 의 BL_SCHEMA 와 같은 정의)
  *  2) 청구서를 넣는다 — 같은 id 가 있으면 건너뛴다(INSERT IGNORE)
  *     엑셀 시절 '승인대기·미처리'로 남은 건은 승인·처리완료로 넣는다(2026-10-22 지안 님 확인)
+ *     승인된 건의 승인자가 '대표'·빈칸이면 김호영으로 넣는다(승인자 고정, 2026-10-26)
  *  3) 권한(정산·승인 관리자)과 설정을 넣는다. 설정은 1인 식대 15,000원·유가 자동 적용 켬
  *  4) 끝에 건수·합계를 SELECT 로 보여 준다
  * 사람 이메일은 이 PC 의 명단이 아니라 서버의 portal_users 에서 이름으로 찾는다(서버 주소가 다를 수 있다).
@@ -25,12 +28,14 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 const BL_SEED_ROLES = [];
 require_once __DIR__ . '/../db.php';
 
-$src = null; $out = null;
+$src = null; $out = null; $since = '';
 foreach (array_slice($argv, 1) as $a) {
     if (str_starts_with($a, '--out=')) $out = substr($a, 6);
+    elseif (str_starts_with($a, '--since=')) $since = substr($a, 8);
     elseif ($src === null) $src = $a;
 }
-if (!$src || !is_file($src)) { fwrite(STDERR, "사용법: php export_travel_sql.php <travel.db> [--out=<파일.sql>]\n"); exit(1); }
+if (!$src || !is_file($src)) { fwrite(STDERR, "사용법: php export_travel_sql.php <travel.db> [--out=<파일.sql>] [--since=YYYY-MM-DD]\n"); exit(1); }
+if ($since !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $since)) { fwrite(STDERR, "--since 는 2026-01-01 처럼 적어 주세요\n"); exit(1); }
 $out = $out ?: dirname($src) . '/bluexpense_migrate.sql';
 
 $old = new PDO('sqlite:' . $src, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
@@ -71,9 +76,10 @@ $cols = ['id', 'traveler', 'companions', 'companion_count', 'trip_date', 'period
     'transport', 'toll', 'meal', 'etc', 'etc_note', 'total', 'receipts', 'approval', 'approver', 'approved_at',
     'status', 'handler', 'processed_at', 'pay_method', 'note', 'source', 'created_by', 'created_by_name',
     'created_at', 'updated_at', 'staff_updated_at', 'reviewed_at'];
-$inserts = []; $sum = 0; $done = 0; $now = date('Y-m-d H:i:s');
+$inserts = []; $sum = 0; $done = 0; $skipped = 0; $now = date('Y-m-d H:i:s');
 foreach ($old->query("SELECT id, data, created_by, updated_at FROM trips ORDER BY id") as $t) {
     $d = json_decode($t['data'], true) ?: [];
+    if ($since !== '' && (string)($d['date'] ?? '') < $since) { $skipped++; continue; }
     foreach (['transport', 'toll', 'meal', 'etc'] as $k) {
         if (!empty($d['receipts'][$k])) { fwrite(STDERR, "영수증 첨부가 있는 청구가 있습니다({$t['id']}). 이 도구는 영수증을 옮기지 않습니다 — import_travel.php 를 쓰세요.\n"); exit(1); }
     }
@@ -85,6 +91,9 @@ foreach ($old->query("SELECT id, data, created_by, updated_at FROM trips ORDER B
     if (($d['source'] ?? '') === '기존 엑셀' && ($approval !== '승인' || $status !== '처리완료')) {
         $approval = '승인'; $status = '처리완료'; $reviewed = $now; $done++;
     }
+    // 승인자는 김호영으로 고정(2026-10-26). 옛 기록의 '대표'·빈칸도 같은 사람이다
+    $approver = (string)($d['approver'] ?? '');
+    if ($approval !== '승인대기' && in_array($approver, ['', '대표'], true)) $approver = '김호영';
     $v = [
         q($t['id']), q((string)($d['traveler'] ?? '')), q((string)($d['companions'] ?? '')), (int)($d['companionCount'] ?? 0),
         q((string)($d['date'] ?? '')), q((string)($d['period'] ?? '') ?: '당일'), q((string)($d['place'] ?? '')), q((string)($d['purpose'] ?? '')),
@@ -92,7 +101,7 @@ foreach ($old->query("SELECT id, data, created_by, updated_at FROM trips ORDER B
         won($d['transport'] ?? 0), won($d['toll'] ?? 0), won($d['meal'] ?? 0), won($d['etc'] ?? 0), q((string)($d['etcNote'] ?? '')),
         $total = won($d['transport'] ?? 0) + won($d['toll'] ?? 0) + won($d['meal'] ?? 0) + won($d['etc'] ?? 0),
         q(json_encode(['transport' => [], 'toll' => [], 'meal' => [], 'etc' => []])),
-        q($approval), q((string)($d['approver'] ?? '')), q((string)($d['approvedAt'] ?? '')),
+        q($approval), q($approver), q((string)($d['approvedAt'] ?? '')),
         q($status), q((string)($d['handler'] ?? '')), q((string)($d['processedAt'] ?? '')), q((string)($d['payMethod'] ?? '')),
         q((string)($d['note'] ?? '')), q((string)($d['source'] ?? '')),
         email_of($by), q($by), q(stamp($d['createdAt'] ?? '')), q(stamp($t['updated_at'] ?? '')), q(stamp($d['staffUpdatedAt'] ?? '')), q($reviewed),
@@ -120,6 +129,7 @@ foreach ($old->query("SELECT key, value FROM settings WHERE key IN ('main','pric
 $n = count($inserts);
 $sql = "-- BlueExpense(출장여비) 운영 이관 — " . basename($src) . " 에서 " . date('Y-m-d H:i') . " 에 만듦\n"
     . "-- 청구 {$n}건, 합계 " . number_format($sum) . "원 (그중 엑셀 시절 미완료 {$done}건은 승인·처리완료로)\n"
+    . ($since !== '' ? "-- 출장일 {$since} 이후만 넣는다 — 그 전 {$skipped}건은 넣지 않는다\n" : '')
     . "-- 넣는 법: mysql --default-character-set=utf8mb4 -u <계정> -p <포털 DB 이름> < 이 파일\n"
     . "-- 몇 번 넣어도 같다(이미 있는 청구는 건너뛴다). 직원 이름·금액·오피넷 키가 들어 있다 — 공개된 곳에 두지 말 것.\n\n"
     . "SET NAMES utf8mb4;\nSET time_zone = '+09:00';\n\n"
@@ -134,4 +144,5 @@ $sql = "-- BlueExpense(출장여비) 운영 이관 — " . basename($src) . " �
     . "SELECT email, role FROM `bl_travel_roles`;\n";
 
 file_put_contents($out, $sql);
-printf("만들었습니다: %s\n  청구 %d건, 합계 %s원, 엑셀 시절 미완료 → 완료 %d건, 권한 %d명, 설정 %d개\n", $out, $n, number_format($sum), $done, count($roles), count($settings));
+printf("만들었습니다: %s\n  청구 %d건, 합계 %s원, 엑셀 시절 미완료 → 완료 %d건, 권한 %d명, 설정 %d개%s\n", $out, $n, number_format($sum), $done, count($roles), count($settings),
+    $since !== '' ? ", {$since} 전이라 뺀 청구 {$skipped}건" : '');

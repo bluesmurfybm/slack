@@ -9,7 +9,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const today=()=>{const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)};
 const parseNum=v=>{const n=Number(String(v??'').replace(/[^\d.-]/g,''));return isFinite(n)?n:0};
 
-const DEFAULT_SETTINGS={staff:[],approverName:'대표',handlerName:'김지안',fuel:{gas:1866.16,diesel:1849.17,lpg:1103.31},eff:10,priceBase:'2026년 8월 1주',mealUnit:15000};
+const DEFAULT_SETTINGS={staff:[],approverName:'김호영',handlerName:'김지안',fuel:{gas:1866.16,diesel:1849.17,lpg:1103.31},eff:10,priceBase:'2026년 8월 1주',mealUnit:15000};
 const S={trips:[],settings:structuredClone(DEFAULT_SETTINGS),year:String(new Date().getFullYear()),editingId:null,q:'',fStatus:'all',companions:new Set(),approval:'승인대기',status:'미처리',receipts:emptyRc()};
 let store=null,assets=null;
 // realRole: 서버가 준 권한(admin 정산·approver 승인·staff). role: 지금 화면의 권한 —
@@ -71,7 +71,7 @@ async function startAs(u){
   await loadState().catch(e=>toast(e.message));
   if(S.single){
     const t=S.trips.find(x=>x.id===S.single);
-    if(t){fillForm(t);document.title=`${t.traveler} ${t.date} · BlueExpense`}else showSingleGone('청구서를 찾을 수 없습니다. 이미 삭제되었을 수 있습니다.');
+    if(t)showSingle(t);else showSingleGone('청구서를 찾을 수 없습니다. 이미 삭제되었을 수 있습니다.');
   }
   clearInterval(S.poll);S.poll=setInterval(()=>{if(!document.hidden)loadState().catch(()=>{})},20000);
 }
@@ -89,18 +89,40 @@ F('modeSeg').addEventListener('click',e=>{
   const b=e.target.closest('[data-mode]');if(!b||S.realRole==='staff'||b.dataset.mode===S.view)return;
   S.view=b.dataset.mode;setViewRole();S.trips=viewTrips();
   S.fStatus='all';F('fStatus').value='all';clearForm();render();renderInfo();
-  if(S.role!=='staff')switchTab('dash');
+  if(S.role!=='staff'){switchTab('dash');loadState().catch(()=>{}).finally(showPending)}
 });
 /* ---------- 관리자 화면: 청구서는 팝업 창으로 ----------
    목록·처리할 청구에서 건을 누르면 travel.php?trip=<id> 를 청구서 크기의 팝업 창으로, 지금 창 가운데에 연다.
    창 이름을 건마다 정해 두어 같은 건을 다시 누르면 새로 늘지 않고 그 창이 앞으로 온다.
    팝업은 그 청구서 한 장만 보이고(S.single), 저장·삭제하면 이 창(opener)에 알려 목록을 바로 새로 받게 한다. */
 const TRIP_PARAM=new URLSearchParams(location.search).get('trip')||'';
-function openTrip(t){
+/* 대기 건 차례로 처리하기(&q=wait|settle) — 팝업의 승인 대기·정산 대기 칸을 누르면 가장 오래된 건부터 연다.
+   그 건을 처리하면(승인·반려, 정산 처리완료) 같은 창에서 다음 건으로 넘어간다 */
+const QUEUES={wait:{label:'승인 대기',has:t=>(t.approval||'승인대기')==='승인대기'},settle:{label:'정산 대기',has:t=>t.approval==='승인'&&t.status!=='처리완료'}};
+S.queue=QUEUES[new URLSearchParams(location.search).get('q')]?new URLSearchParams(location.search).get('q'):'';
+function queueTrips(q){return S.trips.filter(QUEUES[q].has).sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.id).localeCompare(String(b.id)))}
+function showSingle(t){
+  S.single=t.id;fillForm(t);document.title=`${t.traveler} ${t.date} · BlueExpense`;
+  history.replaceState(null,'','travel.php?trip='+encodeURIComponent(t.id)+(S.queue?'&q='+S.queue:''));
+  const tag=F('queueTag'),list=S.queue?queueTrips(S.queue):[],i=list.findIndex(x=>x.id===t.id);
+  tag.hidden=!S.queue;tag.textContent=S.queue?`${QUEUES[S.queue].label} ${i<0?'처리됨':`${i+1} / ${list.length}`}`:'';
+}
+// 팝업에서 저장한 뒤 — 차례로 처리하는 중이고 이 건이 처리됐으면 다음 건으로, 아니면 그 건을 다시 보여 준다
+function afterSingleSave(){
+  tellOpener();
+  const t=S.trips.find(x=>x.id===S.single);
+  if(S.queue&&t&&!QUEUES[S.queue].has(t)){
+    const next=queueTrips(S.queue)[0];
+    if(next){showSingle(next);setTimeout(()=>toast(`다음 ${QUEUES[S.queue].label} 건입니다 · 남은 ${queueTrips(S.queue).length}건`),1600);return}
+    showSingleGone(`${QUEUES[S.queue].label} 건을 모두 처리했습니다.`);return;
+  }
+  if(t)showSingle(t);
+}
+function openTrip(t,q=''){
   // 화면 크기를 못 알려 주는 브라우저(0)도 있어 최소 크기를 둔다
   const w=Math.max(420,Math.min(560,(screen.availWidth||1280)-40)),h=Math.max(600,Math.min(960,(screen.availHeight||900)-60));
   const left=Math.max(0,Math.round(window.screenX+(window.outerWidth-w)/2)),top=Math.max(0,Math.round(window.screenY+(window.outerHeight-h)/2));
-  const win=window.open('travel.php?trip='+encodeURIComponent(t.id),'bl_trip_'+t.id,`popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+  const win=window.open('travel.php?trip='+encodeURIComponent(t.id)+(q?'&q='+q:''),q?'bl_queue_'+q:'bl_trip_'+t.id,`popup=yes,width=${w},height=${h},left=${left},top=${top}`);
   if(win)win.focus();else toast('팝업 창을 열 수 없습니다. 브라우저의 팝업 차단을 풀어 주세요');
 }
 function tellOpener(){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({bl:'reload'},location.origin)}catch(e){}}
@@ -137,11 +159,19 @@ function refreshLock(){
   F('btnDel').hidden=!S.editingId||!isSettler();
   // '새로 쓰기'는 열어 둔 청구가 있을 때만. 관리자(승인) 화면은 승인만 하므로 두지 않는다
   F('btnNew').hidden=!S.editingId||S.role!=='staff';
-  if(S.role==='approver'){F('btnSave').hidden=!S.editingId;F('btnSave').textContent='승인 저장'}
+  // 관리자(승인·정산): 위쪽 승인 칸과 '변경 저장' 대신 아래 [반려][승인]만 둔다.
+  // 승인 관리자는 지금 상태와 같은 단추를 '승인됨/반려됨'으로 막는다. 정산 관리자는 [승인]으로 정산 내용도 저장하므로
+  // 이미 승인된 건에서도 [승인]을 누를 수 있다(2026-10-26 지안 님 요청: 삭제·승인·반려만)
+  const ap=isAdmin()&&!!S.editingId,cur=t?(t.approval||'승인대기'):'',lockSame=S.role==='approver';
+  if(isAdmin())F('btnSave').hidden=true;
+  F('btnApprove').hidden=F('btnReject').hidden=!ap;
+  F('btnApprove').textContent=lockSame&&cur==='승인'?'승인됨':'승인';F('btnApprove').disabled=lockSame&&cur==='승인';
+  F('btnReject').textContent=lockSame&&cur==='반려'?'반려됨':'반려';F('btnReject').disabled=lockSame&&cur==='반려';
   const msg=F('lockMsg');
-  if(S.role==='approver'){msg.hidden=false;msg.textContent=S.editingId?'승인 또는 반려를 고른 뒤 승인 저장을 눌러 주세요.':'목록이나 처리할 청구에서 승인할 건을 눌러 주세요.'}
+  if(S.role==='approver'){msg.hidden=false;msg.textContent=S.editingId?`지금 ${cur}입니다. 내용과 영수증을 확인하고 아래 승인 또는 반려를 누르면 바로 저장됩니다.`:'목록이나 처리할 청구에서 승인할 건을 눌러 주세요.'}
   else if(locked){msg.hidden=false;msg.textContent=t.approval==='반려'?'반려된 청구입니다. 내용을 고쳐 새 청구서로 다시 올려 주세요.':'승인된 청구는 수정할 수 없습니다. 고칠 내용이 있으면 관리자에게 알려 주세요.'}
   else if(staff){msg.hidden=false;msg.textContent='승인과 정산은 관리자가 처리합니다. 승인 전까지는 내용을 고칠 수 있습니다.'}
+  else if(ap){msg.hidden=false;msg.textContent=`지금 ${cur}입니다. 고친 내용과 정산 칸은 아래 승인(또는 반려)을 누를 때 함께 저장됩니다.`}
   else msg.hidden=true;
   document.querySelectorAll('.att').forEach(a=>a.style.visibility=locked?'hidden':'');
   document.querySelectorAll('.th .x').forEach(b=>b.hidden=!!locked);
@@ -177,6 +207,10 @@ F('compChips').addEventListener('click',e=>{const b=e.target.closest('.chip');if
 F('compExtra').addEventListener('input',updateCompCount);
 F('traveler').addEventListener('change',renderChips);
 
+// 승인자는 고정 — 승인 관리자(김호영) 이름이 늘 보인다. 승인 관리자가 직접 보면 본인 이름, 그 밖에는 설정의 승인자 이름.
+// 실제 저장 값은 서버가 정한다(승인·반려한 승인 관리자 본인 이름, 승인대기면 빈칸).
+function handlerName(){return S.settings.handlerName||'김지안'}
+function approverName(){return S.role==='approver'?S.me:(S.settings.approverName||'김호영')}
 function setSeg(id,val){document.querySelectorAll(`#${id} button`).forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===val));renderStatusText()}
 // 고칠 수 없는 사람에게 보이는 상태 글자. 반려된 청구는 정산도 '반려'다(지급하지 않는다).
 function statusBadges(approval,status){
@@ -187,7 +221,9 @@ function statusBadges(approval,status){
 }
 function renderStatusText(){
   const [a,s]=statusBadges(S.approval,S.status);
-  F('stApproval').innerHTML=a;F('stSettle').innerHTML=s;
+  // 승인 상태 옆에 승인자(김호영 고정)를 함께 보인다 — 정산 관리자·구성원은 승인 칸을 글자로만 본다
+  F('stApproval').innerHTML=a+` <span class="hint">승인자 ${esc(F('approver').value||approverName())}</span>`;
+  F('stSettle').innerHTML=s+` <span class="hint">처리자 ${esc(F('handler').value||handlerName())}</span>`;
 }
 // 구성원 화면의 '내 청구' — 연도와 상관없이 최근 출장부터. 누르면 청구서가 열리고 승인·정산 상태가 보인다.
 function renderMyList(){
@@ -212,9 +248,13 @@ F('myDlgClose').addEventListener('click',()=>F('myDlg').close());
 F('myList').addEventListener('click',e=>{const r=e.target.closest('.myrow');if(!r)return;const t=S.trips.find(x=>x.id===r.dataset.id);if(t){F('myDlg').close();fillForm(t)}});
 F('myList').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()});
 F('approvalSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.approval=b.dataset.v;setSeg('approvalSeg',S.approval);
-  if(S.approval!=='승인대기'){if(!F('approver').value)F('approver').value=S.settings.approverName||'대표';if(!F('approvedAt').value)F('approvedAt').value=today()}});
+  // 승인자는 고정 — 승인·반려를 누른 승인 관리자 본인 이름(서버도 같은 값으로 저장한다)
+  F('approver').value=approverName();
+  if(S.approval!=='승인대기'&&!F('approvedAt').value)F('approvedAt').value=today()});
 F('statusSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.status=b.dataset.v;setSeg('statusSeg',S.status);
-  if(S.status==='처리완료'){if(!F('handler').value)F('handler').value=S.settings.handlerName||'김지안';if(!F('processedAt').value)F('processedAt').value=today();if(!F('payMethod').value)F('payMethod').value='계좌이체'}});
+  // 처리자는 고정(김지안) — 서버도 같은 값으로 저장한다
+  F('handler').value=handlerName();
+  if(S.status==='처리완료'){if(!F('processedAt').value)F('processedAt').value=today();if(!F('payMethod').value)F('payMethod').value='계좌이체'}});
 
 ['transport','toll','meal','etc'].forEach(id=>{
   F(id).addEventListener('input',updateTotal);
@@ -222,7 +262,7 @@ F('statusSeg').addEventListener('click',e=>{const b=e.target.closest('button');i
   F(id).addEventListener('focus',()=>{const v=parseNum(F(id).value);F(id).value=v||''});
 });
 function sum(){return ['transport','toll','meal','etc'].reduce((a,id)=>a+parseNum(F(id).value),0)}
-function updateTotal(){F('total').textContent=won(sum())+'원';updateMealHint()}
+function updateTotal(){F('total').textContent=F('moneyTotal').textContent=F('settleTotal').value=won(sum())+'원';updateMealHint()}
 
 function fuelPrice(mode){const f=S.settings.fuel||{};return mode.includes('휘발유')?f.gas:mode.includes('경유')?f.diesel:mode.includes('LPG')?f.lpg:null}
 function updateFuelInfo(){
@@ -303,7 +343,7 @@ function clearForm(){
   S.editingId=null;S.companions=new Set();S.approval='승인대기';S.status='미처리';S.receipts=emptyRc();renderThumbs();
   F('form').reset();F('traveler').value='';setDate(today());F('period').value='당일';setModeValue('자가용(휘발유)');
   ['transport','toll','meal','etc'].forEach(id=>F(id).value='');
-  F('approver').value='';F('handler').value='';
+  F('approver').value=approverName();F('handler').value=handlerName();renderStatusText();
   setSeg('approvalSeg',S.approval);setSeg('statusSeg',S.status);
   F('formMode').textContent='New';F('btnDel').hidden=true;F('btnSave').textContent='청구서 저장';
   presetMe();renderChips();updateFuelInfo();updateTotal();highlightRow();refreshLock();
@@ -322,8 +362,8 @@ function fillForm(t){
   ['transport','toll','meal','etc'].forEach(id=>F(id).value=t[id]?won(t[id]):'');
   F('etcNote').value=t.etcNote||'';
   S.approval=t.approval||'승인대기';S.status=t.status||'미처리';setSeg('approvalSeg',S.approval);setSeg('statusSeg',S.status);
-  F('approver').value=t.approver||'';F('approvedAt').value=t.approvedAt||'';
-  F('handler').value=t.handler||'';F('processedAt').value=t.processedAt||'';F('payMethod').value=t.payMethod||'';F('note').value=t.note||'';
+  F('approver').value=t.approver||approverName();F('approvedAt').value=t.approvedAt||'';renderStatusText();
+  F('handler').value=t.handler||handlerName();F('processedAt').value=t.processedAt||'';F('payMethod').value=t.payMethod||'';F('note').value=t.note||'';renderStatusText();
   F('formMode').textContent='Edit';F('btnDel').hidden=false;F('btnSave').textContent='변경 저장';
   renderChips();updateFuelInfo();updateTotal();highlightRow();
   if(t.companionCount&&!comps.length)F('compCount').textContent=`· ${t.companionCount}명 (기존 기록)`;
@@ -332,7 +372,24 @@ function fillForm(t){
 }
 F('btnNew').addEventListener('click',()=>{clearForm();switchTab('form');F('traveler').focus()});
 
-F('btnSave').addEventListener('click',async()=>{
+/* [승인]·[반려] — 누르면 그 자리에서 저장한다. 승인자·승인일은 서버·오늘 날짜로 채워진다.
+   승인 관리자는 승인 상태만 보낸다. 정산 관리자는 청구서에서 고친 내용(정산 칸 포함)까지 같이 저장한다 */
+async function decide(v){
+  if(!S.editingId||!isAdmin())return;
+  if(S.role==='admin'){const cur=(S.trips.find(x=>x.id===S.editingId)||{}).approval||'승인대기';
+    return saveForm({approval:v,approvedAt:today()},cur===v?'저장했습니다':v==='승인'?'승인하고 저장했습니다':'반려하고 저장했습니다')}
+  const b=v==='승인'?F('btnApprove'):F('btnReject');b.disabled=true;
+  try{
+    await store.save(S.editingId,{approval:v,approvedAt:today()});
+    toast(v==='승인'?'승인했습니다':'반려했습니다');
+    if(S.single)afterSingleSave();else clearForm();
+    render();
+  }catch(e){toast(e.message||'처리하지 못했습니다');refreshLock()}
+}
+F('btnApprove').addEventListener('click',()=>decide('승인'));
+F('btnReject').addEventListener('click',()=>{if(confirm('이 청구를 반려할까요?'))decide('반려')});
+F('btnSave').addEventListener('click',()=>saveForm());
+async function saveForm(over={},doneMsg=''){
   const need=[['traveler','출장자'],['date','출장일'],['place','출장지']].find(([id])=>!F(id).value.trim());
   if(need){toast(`${need[1]}을(를) 입력해 주세요`);F(need[0]).focus();return}
   const comps=companionsArr();
@@ -351,14 +408,15 @@ F('btnSave').addEventListener('click',async()=>{
   if(comps.length===0&&prev.companionCount&&!prev.companions)data.companionCount=prev.companionCount;
   data.total=data.transport+data.toll+data.meal+data.etc;
   
+  Object.assign(data,over);
   const id=S.editingId||'new_';
-  F('btnSave').disabled=true;
-  try{await store.save(id,data);toast(S.editingId?'변경 내용을 저장했습니다':(S.role==='staff'?'청구서를 제출했습니다. 승인·정산 결과는 관리자가 안내합니다':'청구서를 저장했습니다'));S.year=data.date.slice(0,4);
+  F('btnSave').disabled=F('btnApprove').disabled=F('btnReject').disabled=true;
+  try{await store.save(id,data);toast(doneMsg||(S.editingId?'변경 내용을 저장했습니다':(S.role==='staff'?'청구서를 제출했습니다. 승인·정산 결과는 관리자가 안내합니다':'청구서를 저장했습니다')));S.year=data.date.slice(0,4);
     // 팝업은 저장한 그 청구서를 계속 보여 주고, 연 창의 목록을 새로 받게 알린다
-    if(S.single){const t=S.trips.find(x=>x.id===S.single);if(t)fillForm(t);tellOpener()}else clearForm();render()}
+    if(S.single)afterSingleSave();else clearForm();render()}
   catch(e){toast(e.message||'저장하지 못했습니다')}
-  finally{F('btnSave').disabled=false}
-});
+  finally{F('btnSave').disabled=false;refreshLock()}
+}
 F('btnDel').addEventListener('click',async()=>{
   if(!S.editingId||!confirm('이 청구서를 삭제할까요? 되돌릴 수 없습니다.'))return;
   try{await store.remove(S.editingId);toast('청구서를 삭제했습니다');if(S.single){showSingleGone('청구서를 삭제했습니다.');tellOpener()}else clearForm()}catch(e){toast(e.message||'삭제하지 못했습니다')}
@@ -399,7 +457,9 @@ function render(){
 function setListFold(folded){F('listPanel').classList.toggle('folded',folded);F('listFold').setAttribute('aria-expanded',String(!folded))}
 F('listFold').addEventListener('click',()=>setListFold(!F('listPanel').classList.contains('folded')));
 setListFold(true);
-F('kpis').addEventListener('click',e=>{const k=e.target.closest('.kpi.click');if(!k)return;setListFold(false);S.fStatus=k.dataset.f;F('fStatus').value=S.fStatus;render();switchTab('list');F('listPanel').scrollIntoView({behavior:'smooth',block:'start'})});
+function showList(f){setListFold(false);S.fStatus=f;F('fStatus').value=S.fStatus;render();switchTab('list');F('listPanel').scrollIntoView({behavior:'smooth',block:'start'})}
+// 관리자 화면의 승인 대기·정산 대기 칸은 '처리할 청구' 팝업을 다시 띄운다(대기 건이 없으면 목록으로)
+F('kpis').addEventListener('click',e=>{const k=e.target.closest('.kpi.click');if(k&&!showPending())showList(k.dataset.f)});
 
 function renderMonthChart(rows){
   const W=620,H=220,pl=46,pr=8,pt=12,pb=28;
@@ -438,8 +498,31 @@ function renderPeople(rows){
 function renderQueue(waitA,unpaid){
   const items=[...waitA.map(t=>({t,k:'승인대기'})),...unpaid.map(t=>({t,k:'정산대기'}))].sort((a,b)=>String(a.t.date).localeCompare(String(b.t.date)));
   if(!items.length){F('queue').innerHTML='<div class="empty">처리할 청구가 없습니다.</div>';return}
-  F('queue').innerHTML=items.slice(0,6).map(({t,k})=>`<div class="qrow" data-id="${esc(t.id)}" tabindex="0"><span class="badge ${k==='승인대기'?'b-wait':'b-none'}">${k}</span><span class="who">${esc(t.traveler)}</span><span class="what">${esc(t.date)} ${esc(t.place)} · ${esc(t.purpose)}</span><span class="num">${won(t.total)}원</span></div>`).join('')+(items.length>6?`<div class="empty" style="padding:6px 8px">외 ${items.length-6}건</div>`:'');
+  F('queue').innerHTML=items.slice(0,6).map(qrowHtml).join('')+(items.length>6?`<div class="empty" style="padding:6px 8px">외 ${items.length-6}건</div>`:'');
 }
+function qrowHtml({t,k}){return `<div class="qrow" data-id="${esc(t.id)}" tabindex="0"><span class="badge ${k==='승인대기'?'b-wait':'b-none'}">${k}</span><span class="who">${esc(t.traveler)}</span><span class="what">${esc(t.date)} ${esc(t.place)} · ${esc(t.purpose)}</span><span class="num">${won(t.total)}원</span></div>`}
+
+/* 관리자 화면으로 들어올 때, 그리고 현황의 승인 대기·정산 대기 칸을 누를 때 대기 건이 있으면 건수를 팝업으로
+   알린다(연도와 상관없이 전체). 건수를 누르면 가장 오래된 청구서 창이, 건을 누르면 그 청구서 창이 열린다.
+   띄웠으면 true */
+function showPending(){
+  if(S.role==='staff'||S.single||F('pendDlg').open)return false;
+  const waitA=S.trips.filter(t=>(t.approval||'승인대기')==='승인대기');
+  const unpaid=S.trips.filter(t=>t.approval==='승인'&&t.status!=='처리완료');
+  if(!waitA.length&&!unpaid.length)return false;
+  const sum=a=>won(a.reduce((s,t)=>s+(t.total||0),0));
+  F('pendKpis').innerHTML=`
+    <div class="kpi click ${waitA.length?'alert':''}" data-q="wait" tabindex="0" title="가장 오래된 건부터 엽니다"><div class="k">승인 대기 <span class="go">열기 ›</span></div><div class="v num">${waitA.length}건</div><div class="s">${sum(waitA)}원</div></div>
+    <div class="kpi click ${unpaid.length?'alert':''}" data-q="settle" tabindex="0" title="가장 오래된 건부터 엽니다"><div class="k">정산 대기 <span class="go">열기 ›</span></div><div class="v num">${unpaid.length}건</div><div class="s">${sum(unpaid)}원 지급 예정</div></div>`;
+  const items=[...waitA.map(t=>({t,k:'승인대기'})),...unpaid.map(t=>({t,k:'정산대기'}))].sort((a,b)=>String(a.t.date).localeCompare(String(b.t.date)));
+  F('pendList').innerHTML=items.slice(0,8).map(qrowHtml).join('')+(items.length>8?`<div class="empty" style="padding:6px 8px">외 ${items.length-8}건</div>`:'');
+  F('pendDlg').showModal();return true;
+}
+F('pendDlgClose').addEventListener('click',()=>F('pendDlg').close());
+// 칸을 누르면 그 대기 건 중 가장 오래된 청구서를 바로 연다(처리하면 같은 창에서 다음 건으로)
+F('pendKpis').addEventListener('click',e=>{const k=e.target.closest('.kpi.click');if(!k)return;const q=k.dataset.q,first=queueTrips(q)[0];if(!first)return;F('pendDlg').close();openTrip(first,q)});
+F('pendList').addEventListener('click',e=>{const r=e.target.closest('.qrow');if(!r)return;const t=S.trips.find(x=>x.id===r.dataset.id);if(t){F('pendDlg').close();openTrip(t,QUEUES.wait.has(t)?'wait':'settle')}});
+[F('pendKpis'),F('pendList')].forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()}));
 F('queue').addEventListener('click',e=>{const r=e.target.closest('.qrow');if(r){const t=S.trips.find(x=>x.id===r.dataset.id);if(t)(S.role==='staff'?fillForm:openTrip)(t)}});
 F('queue').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()});
 
@@ -519,11 +602,45 @@ function renderThumbs(){
     const box=F('th-'+k);if(!box)return;
     box.innerHTML=(S.receipts[k]||[]).map((r,i)=>{
       const href=apiUrl('receipt','id='+encodeURIComponent(r.id));
-      const inner=r.type==='application/pdf'?'PDF':`<img src="${href}" alt="${esc(r.name||'영수증')}" loading="lazy" onerror="this.replaceWith(document.createTextNode('IMG'))">`;
-      return `<div class="th" title="${esc(r.name||'')}"><a href="${href}" target="_blank" rel="noopener">${inner}</a><button type="button" class="x" data-k="${k}" data-i="${i}" aria-label="영수증 삭제">×</button></div>`;
+      // loading="lazy" 를 쓰지 않는다 — 스크롤 칸(청구서) 안에서는 브라우저가 '보이는 중'으로 치지 않아
+      // 그림이 끝내 안 뜨는 일이 있었다(특히 관리자 팝업). 청구서 한 장의 영수증은 몇 장뿐이라 바로 받는다.
+      const inner=r.type==='application/pdf'?'PDF':`<img src="${href}" alt="${esc(r.name||'영수증')}" onerror="this.replaceWith(document.createTextNode('IMG'))">`;
+      return `<div class="th" title="${esc(r.name||'')}"><a href="${href}" target="_blank" rel="noopener" data-rc="${k}:${i}">${inner}</a><button type="button" class="x" data-k="${k}" data-i="${i}" aria-label="영수증 삭제">×</button></div>`;
     }).join('');
   });
 }
+/* ---------- 영수증 크게 보기 창 ----------
+   항목 옆 미리보기의 링크(data-rc="항목:순번")를 누르면 새 탭 대신 이 창에 띄운다.
+   ‹ › 와 키보드 ←→ 로 이 청구서의 영수증을 넘겨 본다. Ctrl·가운데 단추로 누르면 예전처럼 새 탭으로 열린다. */
+const RC_LABEL={transport:'교통비',toll:'통행료',meal:'식대',etc:'기타'};
+let rcList=[],rcPos=0;
+function showReceipt(){
+  const {k,r}=rcList[rcPos],href=apiUrl('receipt','id='+encodeURIComponent(r.id));
+  F('rcDlgTitle').textContent=RC_LABEL[k]+(r.name?' · '+r.name:'');
+  F('rcDlgPos').textContent=rcList.length>1?`${rcPos+1} / ${rcList.length}`:'';
+  F('rcDlgOpen').href=href;
+  F('rcDlgView').innerHTML=r.type==='application/pdf'?`<iframe src="${href}" title="${esc(RC_LABEL[k])} 영수증"></iframe>`
+    :`<img src="${href}" alt="${esc(RC_LABEL[k])} 영수증 ${esc(r.name||'')}">`;
+  F('rcPrev').hidden=F('rcNext').hidden=rcList.length<2;
+}
+function openReceipt(k,i){
+  rcList=['transport','toll','meal','etc'].flatMap(x=>(S.receipts[x]||[]).map(r=>({k:x,r})));
+  rcPos=Math.max(0,rcList.findIndex(it=>it.k===k&&it.r===(S.receipts[k]||[])[i]));
+  if(!rcList.length)return;
+  showReceipt();if(!F('rcDlg').open)F('rcDlg').showModal();
+}
+function stepReceipt(d){if(rcList.length<2)return;rcPos=(rcPos+d+rcList.length)%rcList.length;showReceipt()}
+document.addEventListener('click',e=>{
+  const a=e.target.closest('a[data-rc]');if(!a||e.ctrlKey||e.metaKey||e.shiftKey||e.button!==0)return;
+  e.preventDefault();const [k,i]=a.dataset.rc.split(':');openReceipt(k,+i);
+});
+F('rcPrev').addEventListener('click',()=>stepReceipt(-1));
+F('rcNext').addEventListener('click',()=>stepReceipt(1));
+F('rcDlgClose').addEventListener('click',()=>F('rcDlg').close());
+F('rcDlg').addEventListener('click',e=>{if(e.target===F('rcDlg'))F('rcDlg').close()});   // 바깥(어두운 곳)을 누르면 닫힌다
+F('rcDlg').addEventListener('keydown',e=>{if(e.key==='ArrowLeft')stepReceipt(-1);if(e.key==='ArrowRight')stepReceipt(1)});
+// 닫히면 PDF·그림을 비운다. close 알림은 늦게 오므로, 그 사이 다시 열렸으면 비우지 않는다
+F('rcDlg').addEventListener('close',()=>{if(!F('rcDlg').open)F('rcDlgView').innerHTML=''});
 async function prepFile(f){
   if(f.type==='application/pdf')return {blob:f,type:'application/pdf'};
   if(!/^image\//.test(f.type))return {blob:f,type:f.type||'application/octet-stream'};
@@ -580,7 +697,6 @@ F('userList').addEventListener('change',async e=>{
 });
 F('btnSettings').addEventListener('click',async()=>{
   const s=S.settings;
-  F('sApprover').value=s.approverName||'';F('sHandler').value=s.handlerName||'';
   F('sGas').value=s.fuel.gas;F('sDiesel').value=s.fuel.diesel;F('sLpg').value=s.fuel.lpg;F('sEff').value=s.eff;F('sBase').value=s.priceBase;F('sMeal').value=s.mealUnit;
   F('sAutoFuel').checked=s.autoFuel!==false;syncAutoFuelInputs();
   F('sKey').value='';F('keyState').textContent=s.hasOpinetKey?'API 키가 등록되어 있습니다. 바꿀 때만 새 키를 입력하세요. 누군가 화면을 열 때 마지막 확인에서 3시간이 지났으면 유가를 새로 받아 옵니다.':'오피넷(opinet.co.kr) 회원가입 후 \'무료 API 이용 신청\'에서 키를 받아 붙여넣으세요.';
@@ -592,7 +708,7 @@ function syncAutoFuelInputs(){['sGas','sDiesel','sLpg','sBase'].forEach(id=>F(id
 F('sAutoFuel').addEventListener('change',syncAutoFuelInputs);
 F('dlgCancel').addEventListener('click',()=>F('dlg').close());
 F('dlgSave').addEventListener('click',async()=>{
-  const d={opinetKey:F('sKey').value.trim(),approverName:F('sApprover').value.trim()||'대표',handlerName:F('sHandler').value.trim()||'김지안',
+  const d={opinetKey:F('sKey').value.trim(),
     fuel:{gas:parseNum(F('sGas').value),diesel:parseNum(F('sDiesel').value),lpg:parseNum(F('sLpg').value)},eff:parseNum(F('sEff').value)||10,
     priceBase:F('sBase').value.trim(),mealUnit:parseNum(F('sMeal').value)||15000,autoFuel:F('sAutoFuel').checked};
   try{await store.saveSettings(d);if(d.opinetKey){api('prices/refresh',{}).then(loadState).catch(e=>toast(e.message))}updateFuelInfo();updateMealHint();F('dlg').close();toast('설정을 저장했습니다')}catch(e){toast(e.message||'설정을 저장하지 못했습니다')}
