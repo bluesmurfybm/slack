@@ -22,6 +22,9 @@ require_once __DIR__ . '/../core/db.php';   // add_column_if_missing() 재사용
 /** 서버 OS 기본값 — 새로 등록하는 학교와 가져오기에 이 값이 들어간다 */
 const ACCESS_OS_DEFAULT = 'Rocky 8';
 
+/** 테스트 서버 정보 기본값을 채웠다는 표시 — 컬럼 주석에 남긴다(access_db() 참고) */
+const ACCESS_TEST_SRV_MARK = '테스트 서버 정보(암호화) · 기본값 채움';
+
 function access_db() {
     static $pdo = null;
     if ($pdo) return $pdo;
@@ -78,6 +81,7 @@ function access_db() {
             `opened`      VARCHAR(120) NOT NULL DEFAULT '' COMMENT '사업시작/최초운영오픈년월',
             `vpn`         VARCHAR(80)  NOT NULL DEFAULT '' COMMENT 'VPN/접근제어 프로그램명. 비어 있으면 별도 실행 불필요',
             `vpn_note`    TEXT         NULL COMMENT 'VPN 접속 방법 / 판정 근거가 된 문장',
+            `test_srv`    TEXT         NULL COMMENT '테스트 서버 정보(암호화)',
             `repo`        TEXT         NULL COMMENT 'svn 또는 git 주소',
             `dev_note`    TEXT         NULL COMMENT '개발 URL 칸 원문 — URL 말고 조건이 같이 적힌 경우',
             `ops_note`    TEXT         NULL COMMENT '운영 URL 칸 원문 — 위와 동일',
@@ -160,6 +164,24 @@ function access_db() {
             }
         }
         $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `ops_web`");
+    }
+
+    // 테스트 서버 정보 — svn/git 주소 바로 다음에 적는 칸
+    if (!access_has_column($pdo, 'test_srv')) {
+        add_column_if_missing($pdo, "ALTER TABLE `school_access` ADD COLUMN `test_srv` TEXT NULL COMMENT '테스트 서버 정보(암호화)' AFTER `repo`");
+    }
+    // 배포 방법·비고에 적힌 아이피·계정으로 기본값을 한 번 채운다. 칸이 먼저 생긴 설치본도
+    // 따라잡도록 '채웠다' 표시를 컬럼 주석에 남긴다 — 한 번 돌고 나면 다시 돌지 않으므로
+    // 나중에 사람이 비워 둔 칸을 되살리지 않는다. 위의 비고·배포 방법 합치기가 끝난 뒤여야 한다.
+    if (access_col_comment($pdo, 'test_srv') !== ACCESS_TEST_SRV_MARK) {
+        access_backfill_test_srv($pdo);
+        $pdo->exec("ALTER TABLE `school_access` MODIFY `test_srv` TEXT NULL COMMENT '" . ACCESS_TEST_SRV_MARK . "'");
+    }
+
+    // 유지보수 종료는 따로 칸을 두지 않고 schools.active 를 그대로 쓴다(= slack 쪽
+    // '학교 사용 여부'와 같은 값). 잠깐 들어갔던 ended 칸은 지운다.
+    if (access_has_column($pdo, 'ended')) {
+        $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `ended`");
     }
 
     // OS 버전 칸. 대부분의 서버가 Rocky 8 이라 그걸 기본값으로 깔고 시작한다.
@@ -259,6 +281,14 @@ function access_col_default(PDO $pdo, $col) {
     return (string)$st->fetchColumn();
 }
 
+function access_col_comment(PDO $pdo, $col) {
+    $st = $pdo->prepare("SELECT COLUMN_COMMENT FROM information_schema.COLUMNS
+                         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'school_access'
+                           AND COLUMN_NAME = ? LIMIT 1");
+    $st->execute([$col]);
+    return (string)$st->fetchColumn();
+}
+
 function access_has_index(PDO $pdo, $name) {
     $st = $pdo->prepare("SELECT 1 FROM information_schema.STATISTICS
                          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'school_access'
@@ -348,10 +378,193 @@ function access_detect_vpn(array $row) {
  * 저장 형태는 'enc:v1:<base64(iv|tag|cipher)>'. 접두사가 붙은 값만 암호문으로 보고, 없으면
  * 아직 안 옮긴 평문으로 보고 그대로 돌려준다 — 마이그레이션이 멱등해진다.
  */
+/**
+ * 테스트 서버 정보 형식 검사 — 두 줄로 정해 둔 칸이다.
+ *   1줄: 아이피[:포트]       예) 10.0.0.12:2222, 10.0.0.12
+ *   2줄: 아이디 / 비밀번호   예) root / Zhtm&ahtm1
+ * 비밀번호에 '/' 가 들어갈 수 있어서 첫 '/' 에서만 가른다. 빈 값은 그대로 통과(미입력).
+ * 공백·줄바꿈을 정리한 값을 돌려주고, 형식이 틀리면 Exception.
+ */
+function access_norm_test_srv($v) {
+    $v = trim(str_replace("\r", '', (string)$v));
+    if ($v === '') return '';
+    $lines = array_values(array_filter(array_map('trim', explode("\n", $v)), 'strlen'));
+    $form  = '테스트 서버 정보는 두 줄로 적어 주세요 — 1줄: 아이피:포트(포트 생략 가능), 2줄: 아이디 / 비밀번호';
+    if (count($lines) !== 2) throw new Exception($form);
+
+    if (!preg_match('/^(\d{1,3}(?:\.\d{1,3}){3})(?:\s*:\s*(\d{1,5}))?$/', $lines[0], $m)) {
+        throw new Exception('첫 줄의 아이피 형식이 맞지 않습니다: ' . $lines[0] . ' (예: 10.0.0.12:22)');
+    }
+    foreach (explode('.', $m[1]) as $o) {
+        if ((int)$o > 255) throw new Exception('아이피 범위를 벗어났습니다: ' . $m[1]);
+    }
+    $port = $m[2] ?? '';
+    if ($port !== '' && ((int)$port < 1 || (int)$port > 65535)) {
+        throw new Exception('포트 범위를 벗어났습니다(1~65535): ' . $port);
+    }
+
+    if (!preg_match('#^([^/\s]+)\s*/\s*(.+)$#', $lines[1], $a)) {
+        throw new Exception('둘째 줄은 "아이디 / 비밀번호" 형식이어야 합니다.');
+    }
+    return $m[1] . ($port !== '' ? ':' . (int)$port : '') . "\n" . $a[1] . ' / ' . $a[2];
+}
+
+/**
+ * 배포 방법·비고 본문에서 테스트 서버 접속 정보를 찾아 기본값을 만든다.
+ * 엑셀에 자유 서술로 적힌 것이라 확실한 모양만 집는다 — 엉뚱한 서버를 넣느니 비워 두는 게 낫다.
+ *
+ *   집는 것  아이피[:포트] 줄 + 같은 줄이나 다음 줄의 "아이디 / 비밀번호"
+ *            ssh 표기(ubion@아이피 -p 포트)면 계정은 @ 앞, 비밀번호는 "/ 비번"·"(비번)"·
+ *            다음 줄 "pw : 비번" 또는 다음 줄에 비번만 적힌 것
+ *   버리는 것 URL 속 아이피(Hiware 등 웹 콘솔), 한 줄에 아이피가 여럿(plink 터널·hosts),
+ *            127.x, 3389(원격데스크톱)
+ *   미루는 것 아이피 줄이나 바로 윗줄에 VPN·게이트웨이·원격접속·운영·DB·중계·bastion·웹서버·PC
+ *            가 적힌 것(테스트 서버가 아닐 가능성이 크다). 아이피 줄 자체에 dev/개발 표시가
+ *            있으면 윗줄 말은 보지 않는다.
+ *   고르는 것 ① svn/git 주소의 호스트와 같은 아이피 — 테스트(개발) 서버에 저장소가 있는
+ *            경우가 대부분이라 가장 믿을 만하다. 이때는 위의 '미루는 것'도 받는다.
+ *            ② 개발/dev/test/형상관리/베타 표시가 붙은 것 ③ 배포 방법 → 비고 순서로 첫 번째
+ * 반환은 access_norm_test_srv() 를 거친 값, 못 찾으면 ''.
+ */
+function access_guess_test_srv($deploy, $note, $repo = '') {
+    $cands = [];
+    foreach ([$deploy, $note] as $src) {
+        foreach (access_test_srv_candidates(access_rich_text($src)) as $c) $cands[] = $c;
+    }
+    $host = access_repo_host($repo);
+    if ($host !== '') {
+        foreach ($cands as $c) if ($c['ip'] === $host) return $c['val'];
+    }
+    $ok = array_values(array_filter($cands, fn($c) => !$c['doubt']));
+    foreach ($ok as $c) if ($c['dev']) return $c['val'];
+    return $ok ? $ok[0]['val'] : '';
+}
+
+/** svn/git 주소의 호스트가 아이피면 그 아이피. 도메인이거나 127.x(plink 터널 경유)면 ''. */
+function access_repo_host($repo) {
+    if (!preg_match('#[a-z+]+://(?:[^@/\s]+@)?(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])#i', (string)$repo, $m)) return '';
+    return strncmp($m[1], '127.', 4) === 0 ? '' : $m[1];
+}
+
+/** 비어 있는 테스트 서버 정보만 채운다(이미 적어 둔 값은 그대로). 채운 건수를 돌려준다. */
+function access_backfill_test_srv(PDO $pdo) {
+    $rows = $pdo->query("SELECT id, repo, deploy, note, test_srv FROM school_access")->fetchAll();
+    if (!$rows) return 0;
+    $st = $pdo->prepare("UPDATE school_access SET test_srv=? WHERE id=?");
+    $n = 0;
+    $pdo->beginTransaction();
+    foreach ($rows as $r) {
+        if (trim(access_dec($r['test_srv'])) !== '') continue;
+        $g = access_guess_test_srv(access_dec($r['deploy']), access_dec($r['note']), $r['repo']);
+        if ($g === '') continue;
+        $st->execute([access_enc($g), $r['id']]);
+        $n++;
+    }
+    $pdo->commit();
+    return $n;
+}
+
+/** 본문 한 덩어리에서 테스트 서버 후보들을 순서대로 뽑는다 — access_guess_test_srv() 참고 */
+function access_test_srv_candidates($text) {
+    // /u 에서는 \b 가 한글도 글자로 봐서 '개발PC' 의 PC 를 못 잡는다 — 영문 경계를 직접 건다
+    $doubt = '/vpn|forti|게이트웨이|gateway|원격\s*(?:데스크|접속)|rdp|운영|(?<![a-z])(?:db|pc|url)(?![a-z])|디비|oracle|오라클|mysql|중계|bastion|웹서버/iu';
+    $isDev = '/개발|dev|test|테스트|형상관리|베타|beta/iu';
+    // 다음 줄의 "아이디 / 비번". 앞에 붙는 "- 계정 :", "계정은", "Shell 접속 :", "ssh " 같은 말은 건너뛴다
+    $pairNext = '/^[\s(\-•·*]*(?:(?:ssh|sftp)\s+)?(?:[^\x00-\x7F]+[\s:：]*)*(?:shell\s*접속\s*[:：]\s*)?'
+              . '([A-Za-z0-9_][A-Za-z0-9._@-]*)\s*\/{1,2}\s*(\S+)/iu';
+    // 아이피 바로 뒤에 같은 줄로 이어 적은 "아이디 / 비번"
+    $pairSame = '/^[\s\])(:\-]*([A-Za-z0-9_][A-Za-z0-9._@-]*)\s*\/{1,2}\s*(\S+)/u';
+    $notId = ['id', 'pw', 'ip', 'cd', 'ls', 'su', 'sudo', 'vi', 'cat', 'tail', 'sh', 'bash', 'ssh', 'scp', 'sftp', 'home'];
+
+    $lines = array_values(array_filter(array_map('trim', explode("\n", str_replace("\r", '', (string)$text))), 'strlen'));
+    $out = [];
+    foreach ($lines as $i => $ln) {
+        if (!preg_match_all('/(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])/', $ln, $m, PREG_OFFSET_CAPTURE)) continue;
+        if (count(array_unique(array_column($m[1], 0))) !== 1) continue;
+        [$ip, $at] = $m[1][0];
+        $before = substr($ln, 0, $at);
+        $after  = substr($ln, $at + strlen($ip));
+        if (strncmp($ip, '127.', 4) === 0) continue;
+        if (preg_match('#\w+://\S*$#', $before)) continue;            // URL 안의 아이피
+
+        $port = '';
+        if (preg_match('/^\s*:\s*(\d{1,5})(?!\d)/', $after, $pm)) {
+            $port  = $pm[1];
+            $after = substr($after, strlen($pm[0]));
+        } elseif (preg_match('/(?:^|\s)-[pP]\s*(\d{1,5})(?!\d)/', $ln, $pm)) {
+            $port = $pm[1];
+        }
+        if ($port === '3389') continue;
+
+        $user = preg_match('/([A-Za-z0-9_][A-Za-z0-9._-]*)@$/', $before, $um) ? $um[1] : '';
+        $next = $lines[$i + 1] ?? '';
+        $id = $pw = '';
+        if ($user !== '') {
+            if (preg_match('#^\s*(?:-[pP]\s*\d+\s*)?/\s*(\S+)#', $after, $sm)
+                || preg_match('/^\s*(?:-[pP]\s*\d+\s*)?\(\s*([^\s)]+)\s*\)/', $after, $sm)) {
+                [$id, $pw] = [$user, $sm[1]];
+            } elseif (preg_match('/^(?:pw|pass(?:word)?|비번|비밀번호)\s*[:：]\s*(\S+)/iu', $next, $sm)) {
+                [$id, $pw] = [$user, $sm[1]];
+            } elseif (preg_match($pairNext, $next, $sm)) {
+                if ($sm[1] === $user) [$id, $pw] = [$sm[1], $sm[2]];
+            } elseif (preg_match('~^[^\s\[(\-/#]\S*$~u', $next)) {
+                [$id, $pw] = [$user, $next];                          // 다음 줄에 비번만
+            }
+        } elseif (preg_match($pairSame, $after, $sm)) {
+            [$id, $pw] = [$sm[1], $sm[2]];
+        } elseif (preg_match($pairNext, $next, $sm)) {
+            [$id, $pw] = [$sm[1], $sm[2]];
+        }
+        if ($pw === '' || in_array(strtolower($id), $notId, true)) continue;
+        if (strpos($ln . $next, '(') !== false) $pw = rtrim($pw, '),');   // "( ubion / 비번 )" 의 닫는 괄호
+
+        try {
+            $val = access_norm_test_srv($ip . ($port !== '' ? ':' . $port : '') . "\n" . $id . ' / ' . $pw);
+        } catch (Exception $e) {
+            continue;
+        }
+        $head    = $lines[$i - 1] ?? '';                              // 바로 윗줄 = 머리말
+        $devLine = (bool)preg_match($isDev, $ln);
+        $out[] = [
+            'ip'    => $ip,
+            'val'   => $val,
+            'dev'   => $devLine || preg_match($isDev, $head),
+            'doubt' => preg_match($doubt, $ln) || (!$devLine && preg_match($doubt, $head)),
+        ];
+    }
+    return $out;
+}
+
+/** Editor.js 로 저장된 칸(블록 JSON)을 평문으로. JSON 이 아니면(엑셀에서 온 값) 그대로. */
+function access_rich_text($v) {
+    $v = (string)$v;
+    $j = json_decode($v, true);
+    if (!is_array($j) || !isset($j['blocks']) || !is_array($j['blocks'])) return $v;
+    $out = [];
+    $items = function ($list) use (&$items, &$out) {
+        foreach ((array)$list as $it) {
+            if (is_array($it)) {
+                $out[] = (string)($it['content'] ?? '');
+                $items($it['items'] ?? []);
+            } else {
+                $out[] = (string)$it;
+            }
+        }
+    };
+    foreach ($j['blocks'] as $b) {
+        $d = $b['data'] ?? [];
+        if (isset($d['text'])) $out[] = (string)$d['text'];
+        if (isset($d['items'])) $items($d['items']);
+    }
+    $t = preg_replace('#<br\s*/?>#i', "\n", implode("\n", $out));
+    $t = html_entity_decode(strip_tags($t), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return str_replace("\u{00A0}", ' ', $t);
+}
+
 function access_secret_cols() {
     // 비밀번호뿐 아니라 서버·DB 접속 정보가 통째로 들어가는 칸까지 모두 암호화한다.
     // 화면에 뿌릴 때 API 가 풀어서 내려보내므로 쓰는 쪽은 달라지는 게 없다.
-    return ['login_ops', 'login_dev', 'dev_db', 'ops_db', 'haksa_db', 'note', 'deploy'];
+    return ['login_ops', 'login_dev', 'dev_db', 'ops_db', 'haksa_db', 'note', 'deploy', 'test_srv'];
 }
 
 function access_key() {
@@ -532,7 +745,7 @@ function access_split_login($raw) {
 
 /** school_access 에서 사용자가 편집할 수 있는 컬럼 (school_id/sort_no 는 제외) */
 function access_cols() {
-    return ['os','opened','vpn','vpn_note','repo','deploy','note',
+    return ['os','opened','vpn','vpn_note','repo','test_srv','deploy','note',
             'login_dev_id','login_dev','dev_note','dev_db',
             'login_ops_id','login_ops','ops_note','ops_db','haksa_db'];
 }
@@ -543,6 +756,7 @@ function access_cols() {
  *
  *   type  input=한 줄, pw=가림(눈 아이콘), rich=Editor.js(굵기·색·취소선·목록)
  *   copy  1이면 값 옆에 복사 버튼
+ *   bool  켬/끔 (지금은 유지보수 여부 = schools.active)
  *   url   schools 에서 오는 값(마스터). 편집은 '학교 정보' 칸에서 한다.
  */
 function access_field_groups() {
@@ -550,7 +764,10 @@ function access_field_groups() {
         ['title' => '공통 정보', 'fields' => [
             ['key' => 'os',       'label' => 'OS 버전',        'type' => 'input', 'default' => ACCESS_OS_DEFAULT],
             ['key' => 'opened',   'label' => '최초 오픈',      'type' => 'input'],
+            ['key' => 'active',   'label' => '사용 여부',      'type' => 'bool'],
             ['key' => 'repo',     'label' => 'svn / git 주소', 'type' => 'area',  'copy' => 1],
+            ['key' => 'test_srv', 'label' => '테스트 서버 정보', 'type' => 'area',  'copy' => 1,
+             'placeholder' => "아이피:포트 (포트는 생략 가능)\n아이디 / 비밀번호"],
             ['key' => 'vpn',      'label' => 'VPN 프로그램',   'type' => 'input'],
             ['key' => 'vpn_note', 'label' => 'VPN 접속 방법',  'type' => 'rich'],
             ['key' => 'deploy',   'label' => '배포 방법',      'type' => 'rich',  'copy' => 1],

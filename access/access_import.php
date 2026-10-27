@@ -256,6 +256,9 @@ function access_import_xlsx($path, array $SHEETS) {
             $vals['vpn']      = $vp['vpn'];
             $vals['vpn_note'] = $vp['vpn_note'];
 
+            // 테스트 서버 정보는 엑셀에 전용 칸이 없다 — 위에서 합쳐 둔 배포 방법·비고에서 추정한다
+            if ($vals['test_srv'] === '') $vals['test_srv'] = access_guess_test_srv($vals['deploy'], $vals['note'], $vals['repo']);
+
             // VPN 판정까지 끝난 뒤에 암호화한다(판정이 평문을 봐야 하므로 순서가 중요)
             foreach (access_secret_cols() as $c) $vals[$c] = access_enc($vals[$c]);
 
