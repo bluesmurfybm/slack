@@ -148,11 +148,27 @@ $isLocal = str_starts_with($__h, 'localhost') || str_starts_with($__h, '127.0.0.
 $okMsg  = bs_param_str('ok');
 $errMsg = bs_param_str('err');
 
+// R&D 점유 상한 (2026-10-14). 지금 걸린 값과 마지막으로 바꾼 사람.
+$capRows = [];
+try {
+    foreach (bs_db()->query(
+        "SELECT k, updated_by_name, updated_at FROM bs_setting
+          WHERE k IN ('rnd_total_cap','rnd_per_project_cap','rnd_concurrent_max','rnd_stale_weeks')"
+    )->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $capRows[$r['k']] = $r;
+    }
+} catch (Throwable $e) { /* 011 전 — 기본값으로 보인다 */ }
+$capLast = null;
+foreach ($capRows as $r) {
+    if ($r['updated_by_name'] && ($capLast === null || $r['updated_at'] > $capLast['updated_at'])) { $capLast = $r; }
+}
+$capPct = static fn(string $k): string => rtrim(rtrim(number_format(bs_setting_ratio($k) * 100, 1, '.', ''), '0'), '.');
+
 bs_layout_head(
     $user,
-    '외부 연동',
+    '설정',
     '과업 편성/현황',
-    '구글 드라이브·피그마 링크를 서버가 직접 읽게 합니다. 관리자만 봅니다.',
+    'R&D 점유 상한과 외부 연동을 정합니다. 관리자만 봅니다.',
     'settings'
 );
 ?>
@@ -166,6 +182,46 @@ bs_layout_head(
 
 <div class="ba-list" id="ba-settings">
 
+  <!-- ============ R&D 점유 상한 (2026-10-14) ============
+       상한을 없애지 않고 여기서 고친다 — 통제 없이는 R&D 가 배정 회피 수단이
+       된다(CLAUDE.md 2항). 사실상 풀려면 100% 로 둔다. -->
+  <section class="ba-ig" id="ba-caps">
+    <div class="ba-ig__head">
+      <h3>R&amp;D 점유 상한</h3>
+      <?php if ($capLast): ?>
+        <span class="ba-dim">마지막 변경 <?= h($capLast['updated_by_name']) ?> · <?= h(bs_date($capLast['updated_at'], 'Y-m-d H:i')) ?></span>
+      <?php endif; ?>
+    </div>
+    <p class="ba-head__sub">
+      R&amp;D 참여를 승인할 때 넘지 못하게 하는 선입니다. 넘으면 <b>참여 승인·과제 승인이 막힙니다.</b>
+      과제에 <b>신고 점유율</b>을 적었으면 그 과제는 <b>과제 하나당 상한 대신 그 값</b>을 씁니다.
+      바꾸면 <b>이후의 승인부터</b> 적용되고, 이미 승인된 참여는 그대로입니다.
+      사실상 풀려면 <b>100%</b> 로 두십시오.
+    </p>
+    <div class="ba-caps">
+      <label class="ba-field"><span>1인 합계 상한</span>
+        <span class="ba-caps__in"><input type="number" id="ba-cap-total" min="5" max="100" step="5"
+               value="<?= h($capPct('rnd_total_cap')) ?>"><em>%</em></span>
+        <small>한 사람이 모든 R&amp;D 과제에 쓰는 점유율의 합</small></label>
+      <label class="ba-field"><span>과제 하나당 상한</span>
+        <span class="ba-caps__in"><input type="number" id="ba-cap-project" min="5" max="100" step="5"
+               value="<?= h($capPct('rnd_per_project_cap')) ?>"><em>%</em></span>
+        <small>과제에 신고 점유율을 안 적었을 때 쓰는 값</small></label>
+      <label class="ba-field"><span>동시 참여 과제 수</span>
+        <span class="ba-caps__in"><input type="number" id="ba-cap-conc" min="1" max="20" step="1"
+               value="<?= (int)bs_setting_int('rnd_concurrent_max') ?>"><em>건</em></span>
+        <small>승인된 참여만 셉니다</small></label>
+      <label class="ba-field"><span>정체 판정 기간</span>
+        <span class="ba-caps__in"><input type="number" id="ba-cap-stale" min="1" max="52" step="1"
+               value="<?= (int)bs_setting_int('rnd_stale_weeks') ?>"><em>주</em></span>
+        <small>진행 기록이 이만큼 없으면 '조용함'</small></label>
+    </div>
+    <div class="ba-ig__btns" style="margin-top:12px">
+      <button type="button" class="ba-btn ba-btn--primary" id="ba-cap-save">저장</button>
+    </div>
+  </section>
+
+  <h3 class="ba-settings__h">외부 연동</h3>
   <p class="ba-head__sub" style="margin-bottom:14px">
     출처 문서에 <b>구글 드라이브·피그마 링크</b>를 올리면 지금은 '분석 안 함' 으로 남습니다.
     서버가 그 문서를 열 권한이 없기 때문입니다. 아래에서 연결하면

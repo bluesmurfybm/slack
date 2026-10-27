@@ -632,6 +632,410 @@ ok('어느 배정안 때문인지 남는다',
                       WHERE ref_type='allocation' AND ref_id=$aid2")->fetchColumn() === 3);
 
 // =====================================================================
+echo "\n[4-G] 분류 줄 — 배정 표가 WBS 표와 같은 뼈대를 보인다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 말단만 보여 주면 번호가 뛴다 (2026-10-08 — 쓰는 사람이 잡아냄)    │
+// │                                                                  │
+// │ 배정 표가 `1 · 2.1 · 2.2 · 3.1` 처럼 나왔다. 바로 위 WBS 표에는   │
+// │ `2 로그인/회원가입` 이 있는데 배정 표에는 없으니 **같은 번호를    │
+// │ 두 표에서 눈으로 맞춰야** 했다.                                   │
+// │                                                                  │
+// │ 분류 줄은 **자리만** 잡아 준다 — 배정 대상이 아니다.              │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$rGrp = $engine->propose($pid, []);
+$aGrp = $allocs->createVersion($pid, ['weights' => $rGrp['meta']['weights'],
+                                      'eval_ver' => $rGrp['meta']['eval_ver']], $actor);
+$allocs->saveItems($aGrp, $rGrp['items']);
+
+$grp  = $allocs->groupRows($aGrp);
+$gNo  = array_column($grp, 'wbs_no');
+$iNo  = array_column($allocs->items($aGrp), 'wbs_no');
+
+ok('★ 배정 항목의 상위가 분류 줄로 나온다', $gNo === ['1', '2', '3'],
+   implode(',', $gNo));
+ok('★ 분류 줄은 배정 항목과 겹치지 않는다', !array_intersect($gNo, $iNo),
+   implode(',', array_intersect($gNo, $iNo)));
+
+// 공수는 **확정된 말단의 합**이다. WBS 표와 같은 규칙이어야 두 표의 숫자가
+// 갈리지 않는다 — 출석(1) = 출석부 화면 8 + 출석 통계 5 = 13.
+$byNo = [];
+foreach ($grp as $g) { $byNo[$g['wbs_no']] = $g; }
+ok('★ 분류 줄의 공수는 하위 합이다', abs($byNo['1']['est_md'] - 13.0) < 0.001,
+   (string)$byNo['1']['est_md']);
+ok('하위가 하나면 그 값 그대로', abs($byNo['2']['est_md'] - 6.0) < 0.001,
+   (string)$byNo['2']['est_md']);
+
+$sumG = 0.0; $sumI = 0.0;
+foreach ($grp as $g) { $sumG += (float)$g['est_md']; }
+foreach ($allocs->items($aGrp) as $i) { $sumI += (float)$i['est_md']; }
+ok('★ 분류 합과 항목 합이 같다(공수를 두 번 세지 않는다)', abs($sumG - $sumI) < 0.001,
+   $sumG . ' vs ' . $sumI);
+
+ok('번호 순으로 나온다', $gNo === array_column(bs_wbs_sort($grp), 'wbs_no'),
+   implode(',', array_column(bs_wbs_sort($grp), 'wbs_no')));
+
+// ★ 묶어 배정하면 상위가 곧 항목이다. 분류 줄이 또 나오면 **같은 줄이 두 번**
+//   보이고, 공수가 두 번 잡힌 것처럼 읽힌다.
+$rD1 = $engine->propose($pid, ['level' => 'd1']);
+$aD1 = $allocs->createVersion($pid, ['weights' => $rD1['meta']['weights'],
+                                     'eval_ver' => $rD1['meta']['eval_ver'],
+                                     'level' => 'd1'], $actor);
+$allocs->saveItems($aD1, $rD1['items']);
+ok('★ 묶음 배정이면 분류 줄이 없다', $allocs->groupRows($aD1) === [],
+   json_encode(array_column($allocs->groupRows($aD1), 'wbs_no')));
+
+// 배정안이 없는 번호를 주면 조용히 빈 배열. 예외를 던지면 화면이 통째로 멈춘다.
+ok('없는 배정안이면 빈 배열', $allocs->groupRows(999999) === []);
+
+// =====================================================================
+echo "\n[4-N] WBS 번호 정렬 — 10 은 2 보다 뒤다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 같은 자료가 두 화면에서 다른 순서로 보였다 (2026-10-08)           │
+// │                                                                  │
+// │ wbs_no 가 VARCHAR 라 `ORDER BY t.wbs_no` 가 **글자 순**으로 센다. │
+// │ 배정 표가 1 · 10 · 11 · 12 · … · 19.1 · 2.1 로 나왔다.           │
+// │ 바로 위 WBS 표는 트리(depth·seq)로 그리므로 순서가 갈렸다.        │
+// │                                                                  │
+// │ 다섯 자리에 흩어져 있던 같은 버그다. 한 벌(bs_wbs_cmp)로 모았다.  │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$mk = fn(array $ns) => array_map(fn($x) => ['wbs_no' => $x], $ns);
+$no = fn(array $rows) => implode(',', array_column($rows, 'wbs_no'));
+
+ok('★ 10 은 2 보다 뒤다', $no(bs_wbs_sort($mk(['10', '2', '1']))) === '1,2,10',
+   $no(bs_wbs_sort($mk(['10', '2', '1']))));
+ok('★ 1.10 은 1.9 보다 뒤다',
+   $no(bs_wbs_sort($mk(['1.10', '1.9', '1.2']))) === '1.2,1.9,1.10',
+   $no(bs_wbs_sort($mk(['1.10', '1.9', '1.2']))));
+ok('★ 2.1 은 10 보다 앞이다',
+   $no(bs_wbs_sort($mk(['10', '2.1']))) === '2.1,10',
+   $no(bs_wbs_sort($mk(['10', '2.1']))));
+ok('부모가 자식보다 앞이다',
+   $no(bs_wbs_sort($mk(['1.1', '1', '1.1.1']))) === '1,1.1,1.1.1');
+ok('세 단계가 섞여도 트리 순서다',
+   $no(bs_wbs_sort($mk(['2', '1.2', '1', '2.1', '1.1', '10', '1.10'])))
+   === '1,1.1,1.2,1.10,2,2.1,10',
+   $no(bs_wbs_sort($mk(['2', '1.2', '1', '2.1', '1.1', '10', '1.10']))));
+
+// 번호가 빈 줄은 뒤로. 맨 앞에 두면 목록의 첫인상이 그 줄이 된다.
+ok('★ 번호 없는 줄은 뒤로 간다', $no(bs_wbs_sort($mk(['2', '', '1']))) === '1,2,',
+   $no(bs_wbs_sort($mk(['2', '', '1']))));
+ok('빈 줄끼리는 들어온 순서 그대로', bs_wbs_cmp('', '') === 0);
+ok('null 도 빈 값으로 본다', bs_wbs_cmp(null, '1') > 0 && bs_wbs_cmp('1', null) < 0);
+
+// 2차 정렬을 흩지 않는다. SQL 이 매겨 둔 역할·이름 순서가 살아 있어야 한다.
+$same = [['wbs_no' => '1', 'who' => 'ㄱ'], ['wbs_no' => '1', 'who' => 'ㄴ'],
+         ['wbs_no' => '1', 'who' => 'ㄷ']];
+ok('★ 같은 번호끼리는 들어온 순서 그대로(안정 정렬)',
+   implode('', array_column(bs_wbs_sort($same), 'who')) === 'ㄱㄴㄷ',
+   implode('', array_column(bs_wbs_sort($same), 'who')));
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 두 자리 번호를 일부러 만든다                                      │
+// │                                                                  │
+// │ 픽스처 번호가 1.1~2.2 뿐이면 **글자 순과 자연 순이 같은 답**을    │
+// │ 낸다. 그 상태로 시험을 쓰면 버그를 되돌려도 통과한다 — 실제로     │
+// │ 처음에 그렇게 썼다가 되돌리기 확인에서 걸렸다.                    │
+// └──────────────────────────────────────────────────────────────────┘
+$sortPid = $projects->create([
+    'name' => '정렬 시험', 'status' => 'allocating',
+    'dev_start' => '2026-03-02', 'dev_end' => '2026-05-29',
+], $actor);
+
+$sortTree = [];
+for ($i = 1; $i <= 12; $i++) {           // 대분류 12개 → 번호가 10 을 넘는다
+    $sortTree[] = ['title' => '분류 ' . $i, 'children' => [
+        ['title' => "일 {$i}-1", 'est_md' => 1, 'difficulty' => 2,
+         'domain_ids' => [$DOM_ACTIVITY]],
+        ['title' => "일 {$i}-2", 'est_md' => 1, 'difficulty' => 2,
+         'domain_ids' => [$DOM_ACTIVITY]],
+    ]];
+}
+$tasks->saveTree($sortPid, $sortTree, $actor);
+$sortLeaf = [];
+foreach ($tasks->allByProject($sortPid) as $t) {
+    if ((int)$t['depth'] > 1) { $sortLeaf[] = (int)$t['id']; }
+}
+$tasks->confirm($sortLeaf, true, $actor);
+
+$rSort = $engine->propose($sortPid, []);
+$aSort = $allocs->createVersion($sortPid, ['weights' => $rSort['meta']['weights'],
+                                           'eval_ver' => $rSort['meta']['eval_ver']], $actor);
+$allocs->saveItems($aSort, $rSort['items']);
+$got = array_column($allocs->items($aSort), 'wbs_no');
+
+// 이 전제가 깨지면 아래 시험이 공허해진다 — 글자 순과 자연 순이 같은 답을
+// 내는 자료로는 무엇도 확인할 수 없다.
+$byText = $got;
+sort($byText, SORT_STRING);
+ok('★ 글자 순과 자연 순이 갈리는 자료다(시험 전제)', $byText !== $got,
+   implode(',', $byText));
+
+$want = $got;
+usort($want, 'bs_wbs_cmp');
+ok('★ 배정 항목이 번호 순으로 나온다', $got === $want,
+   implode(',', array_slice($got, 0, 8)) . ' … / ' . implode(',', array_slice($want, 0, 8)));
+ok('★ 10.1 이 2.1 보다 뒤에 온다',
+   array_search('10.1', $got, true) > array_search('2.1', $got, true),
+   implode(',', $got));
+
+// 담당자 없는 목록도 같은 순서여야 한다. 두 표가 다른 순서면 눈으로 못 맞춘다.
+$orphans = array_column($allocs->tasksWithoutOwner($aSort), 'wbs_no');
+$oWant = $orphans;
+usort($oWant, 'bs_wbs_cmp');
+ok('담당자 없는 목록도 번호 순', $orphans === $oWant, implode(',', $orphans));
+
+$projects->softDelete($sortPid, $actor, "시험 뒷정리");
+
+// =====================================================================
+echo "\n[4-P] 참여 비중 — 산술이 못 담는 판단\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 점수를 깎지 않고 **그릇**을 줄인다 (2026-10-08)                   │
+// │                                                                  │
+// │ 가용도·처리량·분야는 **잰 값**이다. 「요즘 컨디션이 안 좋다」      │
+// │ 「곧 다른 데로 빠진다」 는 재지지 않는다.                          │
+// │                                                                  │
+// │ 적합도에 곱하면 화면의 "적합도 47" 이 실제 47 이 아니게 된다 —    │
+// │ 최소 1건 보장을 정규화로 풀지 않은 바로 그 이유다. 가용 공수를    │
+// │ 줄이면 점수는 그대로 두고 배정량만 준다.                           │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$pdo->exec("DELETE FROM bs_workload");
+$pdo->exec("DELETE FROM bs_project_member");
+
+$capOfM = function (array $r, int $mid): array {
+    foreach ($r['summary']['by_member'] as $b) {
+        if ($b['member_id'] === $mid) { return $b; }
+    }
+    return ['capacity_md' => -1.0, 'task_count' => -1];
+};
+$fitOfM = function (array $r, int $mid): ?float {
+    foreach ($r['items'] as $it) {
+        if ($it['member_id'] === $mid) { return (float)$it['fit_score']; }
+    }
+    return null;
+};
+
+$shBefore = $engine->propose($pid, []);
+$capBefore = $capOfM($shBefore, $MEM['가개발'])['capacity_md'];
+$cntBefore = $capOfM($shBefore, $MEM['가개발'])['task_count'];
+
+$projects->setMemberShare($pid, $MEM['가개발'], 0.3, '', $actor);
+$shAfter  = $engine->propose($pid, []);
+$capAfter = $capOfM($shAfter, $MEM['가개발'])['capacity_md'];
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 식은 한 벌이어야 한다 (2026-10-08 — 운영에서 드러남)              │
+// │                                                                  │
+// │ 같은 식이 세 군데 있었다 — 배정 엔진, 부하 막대, 차수 비교.       │
+// │ 비중을 엔진에만 넣는 바람에 **배정은 맞게 됐는데 막대의 분모가    │
+// │ 틀렸다.** 비중 0.3 인 사람이 "9 / 35.78 (25%)" 로 떠서 아직       │
+// │ 여유로워 보였다. 실제로는 9 / 10.7 = 84% 였다.                    │
+// └──────────────────────────────────────────────────────────────────┘
+$capRow = ['available' => 0.5, 'available_aidd' => 0.6, 'workdays' => 100];
+ok('★ 가용 공수 식이 한 벌로 있다',
+   abs(AvailabilityCalculator::capacityMd($capRow) - 60.0) < 0.001,
+   (string)AvailabilityCalculator::capacityMd($capRow));
+ok('AIDD 보정분을 쓴다(없으면 원래 값)',
+   abs(AvailabilityCalculator::capacityMd(['available' => 0.5, 'workdays' => 100]) - 50.0) < 0.001);
+ok('★ 비중과 제약을 함께 곱한다',
+   abs(AvailabilityCalculator::capacityMd($capRow, 0.5, 0.3) - 9.0) < 0.001,
+   (string)AvailabilityCalculator::capacityMd($capRow, 0.5, 0.3));
+
+ok('★ 가용 공수가 비중만큼 줄어든다',
+   abs($capAfter - $capBefore * 0.3) < 0.02,
+   $capBefore . ' × 0.3 = ' . round($capBefore * 0.3, 2) . ' vs ' . $capAfter);
+ok('★ 배정도 따라 줄어든다',
+   $capOfM($shAfter, $MEM['가개발'])['task_count'] < $cntBefore,
+   $cntBefore . ' → ' . $capOfM($shAfter, $MEM['가개발'])['task_count']);
+
+// ★ 점수는 **한 글자도** 안 바뀐다. 이게 이 설계의 전부다.
+$sameFit = true;
+foreach ([$MEM['나개발'], $MEM['다개발']] as $m) {
+    $a = $fitOfM($shBefore, $m); $b = $fitOfM($shAfter, $m);
+    if ($a !== null && $b !== null && abs($a - $b) > 15) { $sameFit = false; }
+}
+ok('★ 남의 적합도를 흔들지 않는다', $sameFit);
+
+// 다른 사람 그릇은 그대로여야 한다. 한 사람을 낮췄는데 전원이 줄면 잘못이다.
+ok('★ 다른 사람 가용 공수는 그대로',
+   abs($capOfM($shAfter, $MEM['나개발'])['capacity_md']
+       - $capOfM($shBefore, $MEM['나개발'])['capacity_md']) < 0.01);
+
+// 그때 비중이 얼마였는지 박제한다. 없으면 "왜 적게 받았나" 에 답할 수 없다.
+ok('★ 차수에 비중을 박제한다',
+   abs((float)($shAfter['meta']['shares'][$MEM['가개발']]['share'] ?? 0) - 0.3) < 0.001,
+   json_encode($shAfter['meta']['shares'], JSON_UNESCAPED_UNICODE));
+
+// ★ 「적게 주라」 를 보장이 뒤집으면 안 된다.
+$shGuard = $engine->propose($pid, ['member_ids' => array_values($MEM)]);
+$lowered = array_filter($shGuard['meta']['min_one']['failed'],
+                        fn($f) => $f['member_id'] === $MEM['가개발']);
+ok('★ 비중을 낮춘 사람은 최소 보장 대상이 아니다', !$lowered,
+   '사람의 지시와 기계의 규칙이 맞서면 안 된다');
+
+// 사유는 **선택**이다. 회사가 작고 서로 아는 사이다.
+$projects->setMemberShare($pid, $MEM['나개발'], 0.5, '', $actor);
+$noReason = $projects->memberShares($pid)[$MEM['나개발']] ?? null;
+ok('★ 사유 없이도 저장된다', $noReason !== null && $noReason['reason'] === null,
+   json_encode($noReason, JSON_UNESCAPED_UNICODE));
+ok('누가 바꿨는지는 남는다', ($noReason['updated_by_name'] ?? '') === $actor['name'],
+   $noReason['updated_by_name'] ?? '(없음)');
+
+$projects->setMemberShare($pid, $MEM['다개발'], 0.4, '다른 과제로 곧 빠짐', $actor);
+ok('사유를 적으면 그대로 남는다',
+   ($projects->memberShares($pid)[$MEM['다개발']]['reason'] ?? '') === '다른 과제로 곧 빠짐');
+
+// 범위 — 0 은 '제외' 와 같은 말이 되므로 바닥에서 자른다.
+$projects->setMemberShare($pid, $MEM['라개발'], 0.0, '', $actor);
+ok('★ 0 은 바닥으로 자른다(제외와 길이 갈리면 안 된다)',
+   abs(($projects->memberShares($pid)[$MEM['라개발']]['share'] ?? 0) - ProjectRepo::SHARE_MIN) < 0.001,
+   (string)($projects->memberShares($pid)[$MEM['라개발']]['share'] ?? -1));
+
+// 1.0 은 '조정 없음' 이라 줄을 지운다 — 표가 안 불어나고 손댄 사람만 남는다.
+$projects->setMemberShare($pid, $MEM['라개발'], 1.0, '', $actor);
+ok('★ 1.0 이면 줄을 지운다', !isset($projects->memberShares($pid)[$MEM['라개발']]));
+$projects->setMemberShare($pid, $MEM['나개발'], null, '', $actor);
+ok('비우면 되돌아간다', !isset($projects->memberShares($pid)[$MEM['나개발']]));
+
+// 확정하면 다른 프로젝트에서도 그만큼만 잡혀야 한다. 이 프로젝트 안에서만
+// 살고 밖에서 죽으면 낮춘 뜻이 반쪽이 된다.
+$pdo->exec("DELETE FROM bs_project_member WHERE member_id <> " . $MEM['가개발']);
+$shConf = $engine->propose($pid, []);
+$aConf  = $allocs->createVersion($pid, ['weights' => $shConf['meta']['weights'],
+                                        'eval_ver' => $shConf['meta']['eval_ver']], $actor);
+$allocs->saveItems($aConf, $shConf['items']);
+$allocs->syncWorkloadFrom($aConf);
+$q = $pdo->prepare("SELECT load_ratio FROM bs_workload w
+                      JOIN bs_allocation_item i ON i.id = w.ref_id
+                     WHERE w.kind = 'assigned' AND i.member_id = ?");
+$q->execute([$MEM['가개발']]);
+$ratios = array_map('floatval', array_column($q->fetchAll(PDO::FETCH_ASSOC), 'load_ratio'));
+ok('★ 확정 점유도 비중만큼만 잡는다',
+   $ratios && !array_filter($ratios, fn($x) => abs($x - 0.3) > 0.001),
+   json_encode($ratios));
+
+$pdo->exec("DELETE FROM bs_project_member");
+$pdo->exec("DELETE FROM bs_workload");
+
+// =====================================================================
+echo "\n[4-A] AIDD 고려 — 예측을 측정값으로 읽게 두지 않는다\n";
+//
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 이 옵션이 지켜야 할 것 (2026-10-08)                               │
+// │                                                                  │
+// │ 계수는 **지어낸 값이다.** 우리 회사의 AIDD 속도 향상 실측이 없다. │
+// │ 그런 값이 조용히 섞여 들어가면 사람은 그것을 측정값으로 읽고      │
+// │ 일정을 짠다. 그래서 세 가지를 못 박는다 —                         │
+// │                                                                  │
+// │   ① 끄면 **한 글자도 안 바뀐다**                                  │
+// │   ② 가용도에 녹이지 않는다(available 은 그대로, 따로 더 준다)     │
+// │   ③ 난이도 게이트를 건드리지 않는다                               │
+// └──────────────────────────────────────────────────────────────────┘
+// =====================================================================
+$pdo->exec("DELETE FROM bs_workload");
+
+// 점유를 넣어야 돌려받을 것이 생긴다. 점유가 0 이면 AIDD 도 0 이다.
+$mkW = $pdo->prepare(
+    'INSERT INTO bs_workload (member_id, kind, label, start_date, end_date,
+                              load_ratio, confidence, source)
+     VALUES (?, "manual", "타 프로젝트", "2026-01-01", "2026-12-31", 0.40, 1.0, "manual")');
+foreach ([$MEM['가개발'], $MEM['나개발'], $MEM['다개발']] as $m) { $mkW->execute([$m]); }
+
+$aFrom = '2026-03-02'; $aTo = '2026-05-29';
+$a100 = $avail->forMembers([$MEM['가개발']], $aFrom, $aTo, 1.00)[$MEM['가개발']];
+$a95  = $avail->forMembers([$MEM['가개발']], $aFrom, $aTo, 0.95)[$MEM['가개발']];
+
+// ① 계수 1.00 은 **이 변경 전과 완전히 같은 수치**여야 한다.
+ok('★ 계수 1.00 이면 보정이 없다',
+   $a100['aidd_on'] === false && $a100['aidd_relief'] === 0.0
+   && abs($a100['available_aidd'] - $a100['available']) < 0.0001,
+   json_encode([$a100['available'], $a100['available_aidd'], $a100['aidd_relief']]));
+
+// ② available 은 **손대지 않는다.** 보정분은 따로 담긴다.
+ok('★ available 은 보정해도 그대로다',
+   abs($a95['available'] - $a100['available']) < 0.0001,
+   $a95['available'] . ' vs ' . $a100['available']);
+ok('★ 보정분은 별도 칸에 담긴다', $a95['aidd_relief'] > 0 && $a95['aidd_on'] === true,
+   json_encode([$a95['aidd_relief'], $a95['aidd_on']]));
+ok('★ 합이 맞는다 (available + relief = available_aidd)',
+   abs(($a95['available'] + $a95['aidd_relief']) - $a95['available_aidd']) < 0.0001,
+   json_encode([$a95['available'], $a95['aidd_relief'], $a95['available_aidd']]));
+
+// 점유 0.40 의 5% = 0.02 를 돌려받는다. 숫자가 바뀌면 바로 걸린다.
+ok('★ 점유의 (1-계수)만큼 돌려받는다', abs($a95['aidd_relief'] - 0.02) < 0.0005,
+   (string)$a95['aidd_relief']);
+
+// 기본 가용량을 넘길 수 없다. 일을 안 하던 사람이 AIDD 로 100% 를 넘을 수는 없다.
+$free = $avail->forMembers([$MEM['라개발']], $aFrom, $aTo, 0.50)[$MEM['라개발']];
+ok('★ 기본 가용량을 넘지 않는다',
+   $free['available_aidd'] <= $free['base_capacity'] + 0.0001,
+   json_encode([$free['available_aidd'], $free['base_capacity']]));
+
+// 달별 띠에도 같은 할인이 걸린다. 합계만 보정하고 달별을 빼면 두 화면이
+// 다른 말을 한다.
+$mo = null;
+foreach ($a95['months'] as $m) { if ($m['aidd_pct'] > 0) { $mo = $m; break; } }
+ok('★ 달별에도 보정분이 실린다', $mo !== null, json_encode($a95['months']));
+ok('넘쳤다는 사실 자체는 지우지 않는다',
+   !array_filter($a95['months'], fn($m) => $m['over'] !== ($m['confirmed_pct']
+       + $m['inferred_pct'] > (int)round($a95['base_capacity'] * 100))),
+   '보정이 over 판정을 흔들었다');
+
+// ───────────────────────────────────────────────────────────────────
+// 배정에서
+// ───────────────────────────────────────────────────────────────────
+$pdo->prepare('UPDATE bs_project SET aidd_enabled = 0 WHERE id = ?')->execute([$pid]);
+$rOff = $engine->propose($pid, []);
+$pdo->prepare('UPDATE bs_project SET aidd_enabled = 1, aidd_effort = 0.85, aidd_load = 0.95
+                WHERE id = ?')->execute([$pid]);
+$rOn  = $engine->propose($pid, []);
+
+ok('★ 끄면 meta 가 꺼졌다고 말한다', $rOff['meta']['aidd']['enabled'] === false
+   && $rOff['meta']['aidd']['load'] === 1.0, json_encode($rOff['meta']['aidd']));
+ok('★ 켜면 계수를 박제한다', $rOn['meta']['aidd']['enabled'] === true
+   && abs($rOn['meta']['aidd']['effort'] - 0.85) < 0.001, json_encode($rOn['meta']['aidd']));
+
+$capOf = function (array $r, int $mid): float {
+    foreach ($r['summary']['by_member'] as $b) {
+        if ($b['member_id'] === $mid) { return (float)$b['capacity_md']; }
+    }
+    return -1.0;
+};
+ok('★ 켜면 가용 공수가 늘어난다',
+   $capOf($rOn, $MEM['가개발']) > $capOf($rOff, $MEM['가개발']),
+   $capOf($rOff, $MEM['가개발']) . ' → ' . $capOf($rOn, $MEM['가개발']));
+
+// 차수별로 끌 수 있어야 [차수 비교] 로 켠 안과 끈 안을 견줄 수 있다.
+$rVerOff = $engine->propose($pid, ['aidd' => false]);
+ok('★ 차수별로 끌 수 있다', $rVerOff['meta']['aidd']['enabled'] === false
+   && abs($capOf($rVerOff, $MEM['가개발']) - $capOf($rOff, $MEM['가개발'])) < 0.01,
+   json_encode([$capOf($rVerOff, $MEM['가개발']), $capOf($rOff, $MEM['가개발'])]));
+
+// 차수가 프로젝트 설정을 **되살릴 수는 없다.** 프로젝트가 안 쓰기로 한
+// 것을 차수가 켜면 어느 쪽이 참인지 알 수 없게 된다.
+$pdo->prepare('UPDATE bs_project SET aidd_enabled = 0 WHERE id = ?')->execute([$pid]);
+$rForce = $engine->propose($pid, ['aidd' => true]);
+ok('★ 차수가 프로젝트 설정을 켤 수는 없다',
+   $rForce['meta']['aidd']['enabled'] === false, json_encode($rForce['meta']['aidd']));
+$pdo->prepare('UPDATE bs_project SET aidd_enabled = 1 WHERE id = ?')->execute([$pid]);
+
+// ③ 난이도 게이트는 그대로. AIDD 가 ★5 를 ★3 으로 낮추면 안 된다.
+$hard = [];
+foreach ($rOn['items'] as $it) {
+    $t = $tasks->find($it['task_id']);
+    if ((int)($t['difficulty'] ?? 0) >= 5) { $hard[] = $t['difficulty']; }
+}
+ok('★ AIDD 가 난이도를 낮추지 않는다', $hard === [5],
+   json_encode($hard) . ' — ★5 가 그대로 하나 있어야 한다');
+
+$pdo->exec("DELETE FROM bs_workload");
+
+// =====================================================================
 echo "\n[4-M] 달별 점유 — 기간 평균은 \"언제\" 를 지운다\n";
 //
 // ┌──────────────────────────────────────────────────────────────────┐
@@ -881,6 +1285,270 @@ ok('한 사람에게 29 M/D 가 몰린다', abs($sumRow['assigned_md'] - 29.0) <
    (string)$sumRow['assigned_md']);
 ok('가용 공수를 넘으면 요약이 알려 준다', $sumRow['over'] === true || $sumRow['capacity_md'] >= 29,
    json_encode($sumRow));
+
+// =====================================================================
+echo "\n[14] 유효하지 않은 배정에서 온 점유는 세지 않는다\n";
+// 배정 항목이 지워지거나, 확정본이 아니게 되거나, 프로젝트가 삭제돼도
+// bs_workload 의 기록은 남는다. 그것을 세면 일이 없는 사람이 '꽉 참' 이 된다.
+$cf    = $allocs->confirmed($pid);
+$allocs->syncWorkloadFrom((int)$cf['id']);       // [12] 에서 점유를 비웠다
+$cfIt  = $allocs->items((int)$cf['id'])[0];
+$oMem  = (int)$cfIt['member_id'];
+$win   = $pdo->query("SELECT MIN(start_date) f, MAX(end_date) t FROM bs_workload
+                       WHERE kind='assigned' AND ref_type='allocation_item'")->fetch();
+$rawOf = fn() => $avail->forMembers([$oMem], $win['f'], $win['t'])[$oMem]['confirmed_raw'];
+$before = $rawOf();
+ok('확정본의 점유는 센다', $before > 0, (string)$before);
+
+$oldItem = (int)$allocs->items($aid)[0]['id'];   // 지난(archived) 안의 항목
+$mkOrphan = $pdo->prepare(
+    "INSERT INTO bs_workload (member_id, kind, ref_type, ref_id, label,
+                              start_date, end_date, load_ratio, confidence)
+     VALUES (?, 'assigned', 'allocation_item', ?, '유령', ?, ?, 1.000, 1.000)");
+$mkOrphan->execute([$oMem, 999999999, $win['f'], $win['t']]);   // 항목이 없다
+$mkOrphan->execute([$oMem, $oldItem,  $win['f'], $win['t']]);   // 확정본이 아니다
+ok('지워진 항목·지난 안의 점유는 더해지지 않는다', abs($rawOf() - $before) < 0.00001,
+   $before . ' → ' . $rawOf());
+
+$pdo->prepare('UPDATE bs_project SET deleted_at = NOW() WHERE id = ?')->execute([$pid]);
+ok('삭제된 프로젝트의 점유는 빠진다', $rawOf() < $before, $before . ' → ' . $rawOf());
+$pdo->prepare('UPDATE bs_project SET deleted_at = NULL WHERE id = ?')->execute([$pid]);
+$pdo->exec("DELETE FROM bs_workload WHERE label = '유령'");
+
+// 같은 프로젝트를 다시 배정할 때는 그 프로젝트의 확정본을 세지 않는다 (2026-10-12).
+$exOf = fn() => $avail->forMembers([$oMem], $win['f'], $win['t'], 1.0, $pid)[$oMem]['confirmed_raw'];
+ok('★ 자기 프로젝트의 확정 점유는 뺄 수 있다', $exOf() < $before - 0.00001,
+   $before . ' → ' . $exOf());
+
+// 배정 점유는 **공수만큼**이다. 기간 전체 100% 로 세지 않는다 (2026-10-12).
+$bd = $avail->forMembers([$oMem], $win['f'], $win['t'])[$oMem]['breakdown'];
+$ok15 = true; $why15 = '';
+foreach ($bd as $b) {
+    if (($b['ref_type'] ?? '') !== 'allocation_item' || $b['est_md'] === null) { continue; }
+    $span = max(1, $avail->workdays($b['start_date'], $b['end_date']));
+    $want = $b['load_ratio'] * min(1.0, $b['est_md'] / $span);
+    if (abs($b['ratio_used'] - $want) > 0.0001) { $ok15 = false; $why15 .= json_encode($b) . ' '; }
+}
+ok('★ 배정 점유는 예상공수 ÷ 기간 영업일로 환산된다', $ok15 && $bd !== [], $why15 ?: (string)count($bd));
+
+// =====================================================================
+echo "\n[15] 직전 안 유지 — ε 점 안이면 담당자를 그대로 둔다\n";
+// 가중치를 조금만 바꿔도 담당자가 절반 넘게 바뀌던 것을 막는다 (2026-10-12).
+$own = static function (array $r): array {
+    $o = [];
+    foreach ($r['items'] as $it) { $o[$it['task_id']] = $it['member_id']; }
+    ksort($o);
+    return $o;
+};
+$sBase = $engine->propose($pid, []);
+$bOwn  = $own($sBase);
+
+// 처음 붙들 때는 바뀔 수 있다 — 그리디가 순서대로 붙이며 남긴 자국(그 자리에
+// ε 넘게 나은 사람이 있는 태스크)을 바로잡는다. 그 뒤로는 **멈춰야** 한다.
+$once  = $own($engine->propose($pid, ['prev_owner' => $bOwn]));
+$same  = $engine->propose($pid, ['prev_owner' => $once]);
+ok('★ 붙든 결과를 같은 조건으로 다시 붙들면 하나도 안 바뀐다', $own($same) === $once,
+   json_encode([$once, $own($same)]));
+ok('몇 건을 견주고 몇 건을 뒀는지 남긴다',
+   ($same['meta']['stick']['compared'] ?? 0) === count($once)
+   && ($same['meta']['stick']['kept'] ?? -1) === count($once),
+   json_encode($same['meta']['stick'] ?? null));
+ok('붙들지 않으면 stick 은 비어 있다', $sBase['meta']['stick'] === null);
+
+// 직전 담당자를 엉뚱하게 돌려 넣는다 — 모든 태스크를 한 사람에게.
+$someone = (int)array_values($bOwn)[0];
+$skew    = array_fill_keys(array_keys($bOwn), $someone);
+$loose   = $own($engine->propose($pid, ['prev_owner' => $skew, 'stick_eps' => 0.0001]));
+$tight   = $own($engine->propose($pid, ['prev_owner' => $skew, 'stick_eps' => 1000]));
+$cnt = static fn(array $o) => count(array_filter($o, static fn($m) => $m === $someone));
+ok('ε 가 크면 직전 담당자를 붙든다', $cnt($tight) > $cnt($loose),
+   'eps1000=' . $cnt($tight) . ' eps0=' . $cnt($loose));
+ok('★ ε 가 작으면 더 나은 사람에게 간다 — 고정이 아니다', $cnt($loose) < count($bOwn),
+   $cnt($loose) . '/' . count($bOwn));
+
+$ghost = $engine->propose($pid, ['prev_owner' => [999999 => $someone]]);
+ok('없는 태스크·사람은 버린다', $ghost['meta']['stick'] === null);
+
+// =====================================================================
+echo "\n[16] ★ 우선 후보·가감점이 배정에 반영된다\n";
+// 2단계에서 사람이 준 판단이 3단계 엔진에도 먹어야 한다 (2026-10-12).
+$hActor = ['id' => 'pm@x.kr', 'name' => 'PM'];
+$fitOf = static function (array $r, int $mid): array {
+    $s = []; foreach ($r['items'] as $it) { if ($it['member_id'] === $mid) { $s[] = $it; } }
+    return $s;
+};
+$h0   = $engine->propose($pid, []);
+$cnt0 = [];
+foreach ($h0['items'] as $it) { $cnt0[$it['member_id']] = ($cnt0[$it['member_id']] ?? 0) + 1; }
+// 배정 대상(엔진이 점수를 내는 사람) 중 가장 적게 받은 사람에게 ★ — 올라가는 것이 보이게.
+$low  = null;
+foreach ($h0['summary']['by_member'] as $row) {
+    $mid = (int)$row['member_id'];
+    if ($low === null || ($cnt0[$mid] ?? 0) < ($cnt0[$low] ?? 0)) { $low = $mid; }
+}
+// 이 시험 자료에서 0건인 사람은 1등보다 20~30점 낮다. ★(+10)만으로는 못 넘는
+// 것이 맞는 동작이라, ★ 과 가감점 +20 을 함께 줘서(+30) 넘어서는지 본다.
+$projects->setMemberPriority($pid, $low, true, $hActor);
+$projects->setMemberFitAdjust($pid, $low, 20, '', $hActor);
+$h1   = $engine->propose($pid, []);
+$cnt1 = count($fitOf($h1, $low));
+ok('★ 우선 후보 + 가점이면 전보다 많이 받는다', $cnt1 > ($cnt0[$low] ?? 0),
+   ($cnt0[$low] ?? 0) . ' → ' . $cnt1);
+$line = '';
+foreach ($fitOf($h1, $low) as $it) { $line = implode(' ', $it['reason_json']['lines'] ?? []); break; }
+ok('근거에 "사람이 준 가점" 을 따로 적는다', str_contains($line, '사람이 준 가점 +30')
+   && str_contains($line, '★ 우선 후보') && str_contains($line, '가감점 +20'), $line);
+ok('배정안 기록에 그때의 ★ 이 남는다', !empty($h1['meta']['shares'][$low]['priority']));
+$projects->setMemberPriority($pid, $low, false, $hActor);
+$projects->setMemberFitAdjust($pid, $low, null, '', $hActor);
+
+$projects->setMemberFitAdjust($pid, $low, -20, '', $hActor);
+$h2 = $engine->propose($pid, []);
+ok('★ 가감점 -20 이면 덜 받는다', count($fitOf($h2, $low)) <= ($cnt0[$low] ?? 0),
+   ($cnt0[$low] ?? 0) . ' → ' . count($fitOf($h2, $low)));
+$projects->setMemberFitAdjust($pid, $low, null, '', $hActor);
+$h3 = $engine->propose($pid, []);
+ok('되돌리면 원래대로', count($fitOf($h3, $low)) === ($cnt0[$low] ?? 0));
+
+// =====================================================================
+echo "\n[17] 목표 공수 — 막대를 끌어 정한 쪽으로 기울인다 (2026-10-14)\n";
+$mdOf = static function (array $r): array {
+    $o = [];
+    foreach ($r['summary']['by_member'] as $row) { $o[(int)$row['member_id']] = (float)$row['assigned_md']; }
+    return $o;
+};
+$t0  = $engine->propose($pid, []);
+$md0 = $mdOf($t0);
+arsort($md0);
+$top = (int)array_key_first($md0);
+asort($md0);
+$bot = (int)array_key_first($md0);
+
+$t1  = $engine->propose($pid, ['targets' => [$top => 0.5]]);
+$md1 = $mdOf($t1);
+ok('★ 많이 받던 사람의 목표를 낮추면 덜 받는다', $md1[$top] < $md0[$top],
+   $md0[$top] . ' → ' . $md1[$top]);
+ok('목표는 그 차수 기록에 남는다', ($t1['meta']['targets'][$top] ?? null) === 0.5,
+   json_encode($t1['meta']['targets'] ?? null));
+$line = '';
+foreach ($t1['items'] as $it) {
+    if ($it['member_id'] === $top) { $line = implode(' ', $it['reason_json']['lines'] ?? []); break; }
+}
+ok('근거에 목표 공수로 산출했다고 적는다 (받은 건이 있으면)',
+   $line === '' || str_contains($line, '목표 공수'), $line);
+
+$t2  = $engine->propose($pid, ['targets' => [$bot => 500]]);
+ok('적게 받던 사람의 목표를 크게 잡으면 줄지 않는다', $mdOf($t2)[$bot] >= $md0[$bot],
+   $md0[$bot] . ' → ' . $mdOf($t2)[$bot]);
+ok('없는 사람·음수는 버린다',
+   $engine->propose($pid, ['targets' => [999999 => 10, $top => -1]])['meta']['targets'] === []);
+
+// 목표 0 = "이번엔 주지 않기" (2026-10-14). 다른 사람이 받을 수 있으면 0건.
+$t3  = $engine->propose($pid, ['targets' => [$top => 0], 'min_one' => true]);
+$got = 0;
+foreach ($t3['items'] as $it) { if ($it['member_id'] === $top) { $got++; } }
+ok('★ 목표 0 이면 받지 않는다', $got === 0, (string)$got);
+ok('목표 0 도 기록에 남는다', ($t3['meta']['targets'][$top] ?? null) === 0.0,
+   json_encode($t3['meta']['targets'] ?? null));
+
+// 목표를 정한 사람은 최소 1건 보장에서 빠진다 — 보장이 지시를 덮어쓰지 않게.
+$mo = $t3['meta']['min_one'] ?? [];
+ok('★ 목표를 정한 사람에게는 보장이 한 건을 넘기지 않는다',
+   !in_array($top, array_column($mo['moved'] ?? [], 'member_id'), true), json_encode($mo));
+
+// 모두 0 이면 받을 사람이 없다 — 그래도 태스크를 버리지 않고 예외로 준다.
+$allZero = array_fill_keys(array_keys($md0), 0);
+$t4 = $engine->propose($pid, ['targets' => $allZero]);
+ok('모두 주지 않기면 예외로라도 나눈다(태스크를 버리지 않는다)', count($t4['unassigned']) === 0,
+   (string)count($t4['unassigned']));
+$why = '';
+foreach ($t4['items'] as $it) { $why = implode(' ', $it['reason_json']['lines'] ?? []); break; }
+ok('예외로 왔다고 적는다', str_contains($why, '주지 않기로'), $why);
+
+// =====================================================================
+echo "\n[차수 복사·삭제·정리] (2026-10-22)\n";
+// 확정본을 고칠 출발점. 확정본은 그대로, 지울 수 있는 것은 밖에 나간 적 없는 안만.
+// =====================================================================
+$itemSig = static function (int $aid) use ($allocs): array {
+    $a = array_map(static fn($it) => $it['task_id'] . ':' . $it['member_id'] . ':' . $it['role']
+        . ':' . $it['alloc_ratio'] . ':' . $it['fit_score'] . ':' . (int)$it['is_manual'],
+        $allocs->items($aid));
+    sort($a);
+    return $a;
+};
+$wlCount = static function () use ($pdo, $pid): int {
+    $st = $pdo->prepare("SELECT COUNT(*) FROM bs_workload w
+                           JOIN bs_allocation_item i ON i.id = w.ref_id
+                           JOIN bs_task t ON t.id = i.task_id
+                          WHERE w.kind = 'assigned' AND w.ref_type = 'allocation_item'
+                            AND t.project_id = ?");
+    $st->execute([$pid]);
+    return (int)$st->fetchColumn();
+};
+
+// 앞 절이 확정본을 남기지 않았을 수 있다 — 하나 만들어 확정해 둔다.
+if (!$allocs->confirmed($pid)) {
+    $rc = $engine->propose($pid, []);
+    $ac = $allocs->createVersion($pid, ['weights' => $rc['meta']['weights'],
+                                        'eval_ver' => $rc['meta']['eval_ver']], $actor);
+    $allocs->saveItems($ac, $rc['items']);
+    $allocs->confirm($ac, $actor);
+}
+$conf    = $allocs->confirmed($pid);
+$wl0     = $wlCount();
+$cpId    = $allocs->copyVersion($conf['id'], $actor);
+$cp      = $allocs->find($cpId);
+$cpP     = json_decode($cp['params_json'], true);
+
+ok('복사본은 산출됨으로 시작한다', $cp['status'] === 'proposed', $cp['status']);
+ok('복사본은 마지막 차수 다음 번호', (int)$cp['version'] === (int)$allocs->latest($pid)['version']);
+ok('★ 항목이 그대로 옮겨진다(담당·역할·비율·적합도·수동)',
+   $itemSig($cpId) === $itemSig($conf['id']));
+ok('근거도 그대로 옮겨진다',
+   array_column($allocs->items($cpId), 'reason') == array_column($allocs->items($conf['id']), 'reason'));
+ok('원본 판정 회차를 그대로 쓴다', $cp['eval_ver'] == $conf['eval_ver']);
+ok('어디서 왔는지 남긴다', ($cpP['copied_from']['id'] ?? null) === $conf['id']
+   && ($cpP['copied_from']['version'] ?? null) === $conf['version'], json_encode($cpP['copied_from'] ?? null));
+ok('★ 복사해도 확정본은 그대로다', $allocs->confirmed($pid)['id'] === $conf['id']);
+ok('복사만으로는 점유가 바뀌지 않는다', $wlCount() === $wl0);
+
+throws('확정본은 지울 수 없다', fn() => $allocs->deleteVersion($conf['id']));
+ok('확정본은 지울 수 없다고 표시된다', $allocs->confirmed($pid)['deletable'] === false);
+
+// 복사본을 고쳐 확정하면 원본은 지난 안이 되고 — 확정 이력이라 지울 수 없다.
+$allocs->confirm($cpId, $actor);
+ok('복사본을 확정하면 그게 확정본', $allocs->confirmed($pid)['id'] === $cpId);
+ok('점유를 복사본 기준으로 다시 만든다', $wlCount() === $wl0, $wl0 . ' → ' . $wlCount());
+$old = $allocs->find($conf['id']);
+ok('원본은 지난 안으로', $old['status'] === 'archived');
+throws('★ 한 번 확정됐던 지난 안은 지울 수 없다', fn() => $allocs->deleteVersion($conf['id']));
+
+// 초안은 지운다 — 항목까지 함께.
+$dId = $allocs->copyVersion($cpId, $actor);
+$allocs->deleteVersion($dId);
+ok('초안을 지운다', $allocs->find($dId) === null);
+$st = $pdo->prepare('SELECT COUNT(*) FROM bs_allocation_item WHERE allocation_id = ?');
+$st->execute([$dId]);
+ok('항목도 함께 지워진다', (int)$st->fetchColumn() === 0);
+throws('없는 차수는 지울 수 없다', fn() => $allocs->deleteVersion($dId));
+
+// 항목 없는 안은 복사하지 않는다 — 빈 차수만 늘어난다.
+$empty = $allocs->createVersion($pid, [], $actor);
+throws('항목 없는 안은 복사 거부', fn() => $allocs->copyVersion($empty, $actor));
+
+// 일괄 정리 — 확정본·확정 이력만 남는다.
+$allocs->copyVersion($cpId, $actor);
+$allocs->copyVersion($cpId, $actor);
+$before = array_filter($allocs->versions($pid), static fn($v) => $v['deletable']);
+$n      = $allocs->purgeDrafts($pid);
+$left   = $allocs->versions($pid);
+ok('지울 수 있던 차수만큼 지운다', $n === count($before), $n . ' / ' . count($before));
+ok('★ 남은 것은 확정본과 확정 이력뿐',
+   $left && !array_filter($left, static fn($v) => $v['deletable']));
+ok('확정본은 남는다', $allocs->confirmed($pid)['id'] === $cpId);
+ok('확정 이력도 남는다', $allocs->find($conf['id']) !== null);
+ok('정리 뒤 점유는 그대로', $wlCount() === $wl0);
+ok('두 번 정리하면 0', $allocs->purgeDrafts($pid) === 0);
 
 // =====================================================================
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";

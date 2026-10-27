@@ -69,6 +69,13 @@ final class Client
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_TIMEOUT        => 20,
         ]);
+        // 응답 헤더 (2026-10-15 — 내려받기 시험이 Content-Disposition 을 본다). 소문자 키.
+        $resHeaders = [];
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($c, $line) use (&$resHeaders) {
+            $kv = explode(':', $line, 2);
+            if (count($kv) === 2) { $resHeaders[strtolower(trim($kv[0]))] = trim($kv[1]); }
+            return strlen($line);
+        });
 
         $headers = [];
         if (!empty($opt['json'])) {
@@ -97,7 +104,8 @@ final class Client
         }
         $json = json_decode($body, true);
 
-        return ['status' => $status, 'body' => $body, 'json' => is_array($json) ? $json : null];
+        return ['status' => $status, 'body' => $body, 'json' => is_array($json) ? $json : null,
+                'headers' => $resHeaders];
     }
 
     /** 포털 로그인 후 BlueStudio 화면에서 CSRF 토큰을 긁어 온다. */
@@ -507,6 +515,66 @@ ok('부분 성공 — 1건 저장 / 1건 실패',
 $r = $anon->req('/studio/var/source/' . date('Y') . '/' . $pid . '/');
 ok('업로드 경로 직접 접근 404', $r['status'] === 404);
 
+// --- 내려받기 · 보기 (2026-10-15) -------------------------------------------
+// 저장 경로는 막혀 있고 api/source_download.php 만 파일을 내보낸다.
+// 그 프로젝트를 볼 수 있는 사람(로그인한 구성원)이면 받는다.
+$r = $guest->req('/studio/api/source_download.php?id=' . $srcId);
+ok('일반 사용자도 내려받는다', $r['status'] === 200, 'status=' . $r['status']);
+ok('내려받은 내용이 올린 파일과 같다', $r['body'] === file_get_contents($png));
+ok('기본은 내려받기(attachment)', str_starts_with($r['headers']['content-disposition'] ?? '', 'attachment'),
+   $r['headers']['content-disposition'] ?? '');
+ok('한글 파일명을 지킨다', str_contains($r['headers']['content-disposition'] ?? '', rawurlencode('시안.png')));
+ok('형식 추측을 막는다', ($r['headers']['x-content-type-options'] ?? '') === 'nosniff');
+
+$r = $guest->req('/studio/api/source_download.php?id=' . $srcId . '&inline=1');
+ok('이미지는 바로 보기(inline)', str_starts_with($r['headers']['content-disposition'] ?? '', 'inline')
+   && ($r['headers']['content-type'] ?? '') === 'image/png', json_encode($r['headers']));
+ok('바로 보기에도 sandbox CSP', str_contains($r['headers']['content-security-policy'] ?? '', 'sandbox'));
+
+$r = $anon->req('/studio/api/source_download.php?id=' . $srcId);
+ok('로그인 안 하면 401', $r['status'] === 401, 'status=' . $r['status']);
+$r = $guest->req('/studio/api/source_download.php?id=99999999');
+ok('없는 문서는 404', $r['status'] === 404);
+
+// ★ **볼 수 없는** R&D 과제의 출처는 이 길로 열리지 않는다 — 비공개 과제가 샌다.
+//   (2026-10-19 — R&D 에도 참고자료가 붙어, 볼 수 있는 사람에게는 열린다.
+//    그래서 남이 발의한 비공개 과제로 바꿔 놓고 본다.)
+$flipWas = (function () use ($pid) {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $was = $p->query("SELECT visibility, proposer_id FROM bs_project WHERE id = " . (int)$pid)->fetch(PDO::FETCH_ASSOC);
+    $p->prepare("UPDATE bs_project SET project_type = 'rnd', visibility = 'private',
+                        proposer_id = 'batest-nobody@bluesoft.co.kr' WHERE id = ?")->execute([$pid]);
+    return $was;
+})();
+$r = $guest->req('/studio/api/source_download.php?id=' . $srcId);
+$rt = $guest->req('/studio/api/project.php?act=source_text&id=' . $srcId);
+// 프로젝트 화면·API 도 R&D 과제 번호로는 열리지 않는다 (ProjectRepo::find, 2026-10-15).
+// 전에는 project_view.php?id=<과제> 로 비공개 과제가 그대로 보였다.
+$rv  = $guest->req('/studio/project_view.php?id=' . $pid);
+$rg  = $guest->req('/studio/api/project.php?act=get&id=' . $pid);
+$rgA = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
+$rtk = $admin->req('/studio/api/task.php?act=tree&project_id=' . $pid);
+(function () use ($pid, $flipWas) {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $p->prepare("UPDATE bs_project SET project_type = 'project', visibility = ?, proposer_id = ? WHERE id = ?")
+      ->execute([$flipWas['visibility'], $flipWas['proposer_id'], $pid]);
+})();
+ok('★ 볼 수 없는 R&D 과제의 파일은 내려받지 못한다', $r['status'] === 404, 'status=' . $r['status']);
+ok('★ 볼 수 없는 R&D 과제의 본문도 못 본다', $rt['status'] === 404, 'status=' . $rt['status']);
+ok('★ R&D 과제 번호로 프로젝트 화면이 열리지 않는다',
+   $rv['status'] === 302 && !str_contains($rv['body'], 'ba-pv__head'), 'status=' . $rv['status']);
+ok('★ R&D 과제 번호로 프로젝트 API 가 답하지 않는다', $rg['status'] === 404, 'status=' . $rg['status']);
+ok('★ 관리자라도 프로젝트 API 로는 과제를 못 연다', $rgA['status'] === 404, 'status=' . $rgA['status']);
+ok('★ 과제 번호로 WBS 경로도 막힌다', $rtk['status'] === 404, 'status=' . $rtk['status']);
+$rv = $guest->req('/studio/project_view.php?id=' . $pid);
+ok('되돌리면 프로젝트 화면이 다시 열린다', $rv['status'] === 200, 'status=' . $rv['status']);
+
 // =====================================================================
 section('[I] 출처 — 링크 / 직접 입력');
 $r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
@@ -525,10 +593,109 @@ $r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, '
 ok('직접 입력 200', $r['status'] === 200);
 ok('첫 줄을 제목으로', ($r['json']['data']['saved'][0]['title'] ?? '') === '첫 줄이 제목');
 ok('parse_status=ok', ($r['json']['data']['saved'][0]['parse_status'] ?? '') === 'ok');
+$textSrc = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+
+// 뷰어 — 파일 없는 출처는 본문만 보이고 내려받기는 없다 (2026-10-15).
+$r = $guest->req('/studio/api/project.php?act=source_text&id=' . $textSrc);
+ok('추출 본문을 일반 사용자도 본다', $r['status'] === 200
+   && str_contains($r['json']['data']['text'] ?? '', '본문 내용입니다'), substr($r['body'], 0, 160));
+ok('파일이 없다고 알려 준다', ($r['json']['data']['has_file'] ?? null) === false);
+$r = $guest->req('/studio/api/source_download.php?id=' . $textSrc);
+ok('파일 없는 출처는 내려받기 404', $r['status'] === 404, 'status=' . $r['status']);
+$page = $guest->req('/studio/project_view.php?id=' . $pid)['body'];
+ok('화면에 보기 단추', str_contains($page, 'data-src-view="' . $textSrc . '"'));
+ok('화면에 내려받기 단추', str_contains($page, 'api/source_download.php?id=' . $srcId . '"'));
+ok('파일 없는 출처엔 내려받기 단추가 없다', !str_contains($page, 'api/source_download.php?id=' . $textSrc . '"'));
 
 $r = $guest->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
     'project_id' => $pid, 'source_type' => 'text', 'text' => '권한 없음']]);
 ok('PM 아닌 사람의 출처 등록 403', $r['status'] === 403);
+
+// --- 참고 자료 (023, 2026-10-12) ------------------------------------------
+// 같은 길로 올리되 용도만 다르다. WBS 도출의 재료(parsedSources)에서 빠져야 한다.
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'text', 'purpose' => 'reference',
+    'text' => "지난 사업 산출물\n로그인 화면 개편 — 이건 할 일이 아니다"]]);
+ok('참고 자료 등록 200', $r['status'] === 200, substr($r['body'], 0, 120));
+$refId = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+$refRow = null;
+foreach ($r['json']['data']['sources'] ?? [] as $s) { if ($s['id'] === $refId) { $refRow = $s; } }
+ok('목록에 참고 자료로 표시된다', ($refRow['purpose'] ?? '') === 'reference');
+
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'text', 'purpose' => 'x', 'text' => '용도 틀림']]);
+ok('모르는 용도는 400', $r['status'] === 400, 'status=' . $r['status']);
+
+$parsedIds = (function () use ($pid) {
+    // bootstrap 는 부르지 않는다 — 세션을 열려다 경고를 낸다. parsedSources() 는
+    // 상수를 쓰지 않아 클래스만 있으면 된다.
+    require_once dirname(__DIR__) . '/inc/repo/ProjectRepo.php';
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    return array_map('intval', array_column((new ProjectRepo($p))->parsedSources($pid), 'id'));
+})();
+ok('★ 참고 자료는 WBS 도출 재료에서 빠진다', $refId > 0 && !in_array($refId, $parsedIds, true),
+   json_encode($parsedIds));
+ok('범위 문서는 그대로 재료다', count($parsedIds) > 0);
+
+// --- 참고 자료는 보관용 — 분석하지 않는다 (2026-10-15) ----------------------
+// 본문을 뽑지 않고, 그 안의 링크를 찾지 않고, 난이도·공수 근거에도 쓰지 않는다.
+$png3 = "$tmp/참고.png"; copy($png, $png3);
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'form' => [
+    'project_id' => $pid, 'source_type' => 'file', 'purpose' => 'reference',
+    'files[]' => fixture($png3),
+]]);
+$refFile = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+ok('참고 자료 파일 등록', $refFile > 0, substr($r['body'], 0, 120));
+
+// '전체 다시 분석'(all=1). 이미 읽은 것까지 다시 읽어도 참고 자료는 건드리지 않는다.
+$r = $admin->req('/studio/api/task.php?act=parse',
+                 ['csrf' => true, 'json' => ['project_id' => $pid, 'all' => 1]]);
+ok('분석을 돌려도 성공한다', $r['status'] === 200, substr($r['body'], 0, 160));
+ok('★ 분석 결과에 참고 자료가 없다',
+   !in_array($refFile, array_column($r['json']['data']['sources'] ?? [], 'id'), true));
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
+$st = null;
+foreach ($r['json']['data']['sources'] ?? [] as $s) { if ($s['id'] === $refFile) { $st = $s['parse_status']; } }
+ok('★ 참고 자료는 분석되지 않고 그대로 남는다', $st === 'pending', (string)$st);
+// ★ 전체 다시 분석이 직접 입력 글을 ok → skip 으로 덮던 버그 (2026-10-15).
+//   글은 남는데 WBS 도출·난이도 근거(ok 만 본다)에서 조용히 빠졌다.
+$st = null;
+foreach ($r['json']['data']['sources'] ?? [] as $s) { if ($s['id'] === $textSrc) { $st = $s['parse_status']; } }
+ok('★ 전체 다시 분석해도 직접 입력 글은 ok 로 남는다', $st === 'ok', (string)$st);
+
+$r = $admin->req('/studio/api/project.php?act=upload_source', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'source_type' => 'text', 'purpose' => 'reference',
+    'text' => "지난 기획서
+https://www.figma.com/file/REFONLY123/Old?node-id=1-2"]]);
+$refLinkSrc = (int)($r['json']['data']['saved'][0]['id'] ?? 0);
+$admin->req('/studio/api/analysis.php?act=scan', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$refLinks = (function () use ($refLinkSrc) {
+    $cfg = require dirname(__DIR__, 2) . '/config.php';
+    $d   = $cfg['db'];
+    $p   = new PDO("mysql:host={$d['host']};port={$d['port']};dbname={$d['name']};charset=utf8mb4",
+                   $d['user'], $d['pass'], [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $st = $p->prepare('SELECT COUNT(*) FROM bs_source_link WHERE source_id = ?');
+    $st->execute([$refLinkSrc]);
+    return (int)$st->fetchColumn();
+})();
+ok('★ 참고 자료 안의 링크는 따라가지 않는다', $refLinkSrc > 0 && $refLinks === 0, "링크 $refLinks 개");
+
+$page = $guest->req('/studio/project_view.php?id=' . $pid)['body'];
+$refPanel = preg_match('#<h2>참고 자료.*?</div>\s*</div>\s*</div>#su', $page, $mm) ? $mm[0] : '';
+ok('화면에 참고 자료 블록이 있다', $refPanel !== '');
+ok('★ 참고 자료에는 분석 상태 문구가 없다', $refPanel !== '' && !str_contains($refPanel, 'ba-src__parse'));
+ok('참고 자료 이미지는 보기·내려받기가 된다',
+   str_contains($refPanel, 'data-src-view="' . $refFile . '"')
+   && str_contains($refPanel, 'source_download.php?id=' . $refFile . '"'));
+
+foreach ([$refFile, $refLinkSrc] as $x) {
+    $admin->req('/studio/api/project.php?act=delete_source', ['csrf' => true, 'json' => ['source_id' => $x]]);
+}
+$admin->req('/studio/api/project.php?act=delete_source',
+            ['csrf' => true, 'json' => ['source_id' => $refId]]);
 
 // =====================================================================
 section('[J] 목록 필터');
@@ -629,6 +796,17 @@ ok('왜 못 보는지 알려 준다',
    str_contains($r['body'], '배정을 맡은 PM 과 관리자만 볼 수 있습니다'));
 ok('본인 프로파일로 가는 길을 함께 준다',
    str_contains($r['body'], 'member_profile.php'));
+
+// 공유 단추 (2026-10-15). 편집 권한이 없어도 보는 사람이면 공유할 수 있다.
+// 요약은 머리에 보이는 것만 — 점수·배정이 섞이면 슬랙으로 샌다.
+ok('일반 사용자에게도 공유 단추가 있다', str_contains($r['body'], 'class="ba-btn ba-share"'));
+$shareLines = preg_match('/data-share-lines="([^"]*)"/', $r['body'], $sm)
+    ? json_decode(html_entity_decode($sm[1], ENT_QUOTES), true) : null;
+ok('공유 요약이 JSON 배열로 실린다', is_array($shareLines) && $shareLines !== [], $sm[1] ?? '없음');
+ok('공유 요약에 담당이 들어간다', str_contains(implode("\n", (array)$shareLines), '담당 '));
+ok('공유 요약에 점수·적합도가 없다',
+   !preg_match('/점수|적합도|처리량|가용/u', implode("\n", (array)$shareLines)));
+ok('공유 주소는 이 프로젝트', str_contains($r['body'], 'data-share-path="project_view.php?id=' . $pid . '"'));
 
 // 프로젝트 번호 없이는 후보를 낼 수 없다 — 전역 순위를 만들지 않기 위한 방어다.
 $r = $admin->req('/studio/api/candidate.php?act=list');
@@ -1470,9 +1648,8 @@ foreach ($mlist as $m) { if ($m['id'] !== $item['member_id']) { $otherM = $m['id
 
 $r = $admin->req('/studio/api/allocate.php?act=update_item',
                  ['csrf' => true, 'json' => ['item_id' => $item['id'], 'member_id' => $otherM]]);
-ok('사유 없이 담당자 변경은 400', $r['status'] === 400
-   && str_contains($r['json']['error']['message'] ?? '', '사유'),
-   substr($r['body'], 0, 120));
+// 사유는 선택이다 (2026-10-12). 비워도 바뀌고, 누가 바꿨는지는 남는다.
+ok('사유 없이도 담당자를 바꿀 수 있다', $r['status'] === 200, substr($r['body'], 0, 120));
 
 $r = $admin->req('/studio/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
     'item_id' => $item['id'], 'member_id' => $otherM, 'manual_note' => '본인 요청']]);
@@ -1488,6 +1665,35 @@ ok('부하가 다시 계산돼 온다', count($r['json']['data']['load']) > 0);
 $r = $guest->req('/studio/api/allocate.php?act=update_item', ['csrf' => true, 'json' => [
     'item_id' => $item['id'], 'member_id' => $otherM, 'manual_note' => 'x']]);
 ok('PM 아니면 조정 403', $r['status'] === 403);
+
+// --- 보조 여러 명 (2026-10-12) ------------------------------------------
+// 화면은 고른 사람마다 add_item 을 부른다. 한 태스크에 둘 이상 붙어야 한다.
+$supIds = [];
+foreach ($mlist as $m) {
+    if ($m['id'] !== $otherM && count($supIds) < 2) { $supIds[] = $m['id']; }
+}
+$addedIds = [];
+foreach ($supIds as $sm) {
+    $r = $admin->req('/studio/api/allocate.php?act=add_item', ['csrf' => true, 'json' => [
+        'allocation_id' => $aid3, 'task_id' => $item['task_id'],
+        'member_id' => $sm, 'role' => 'support']]);
+    if ($r['status'] === 200) { $addedIds[] = $r['json']['data']['item_id']; }
+}
+$supN = 0;
+foreach ($r['json']['data']['items'] ?? [] as $x) {
+    if ($x['task_id'] === $item['task_id'] && $x['role'] === 'support') { $supN++; }
+}
+ok('한 태스크에 보조를 둘 붙일 수 있다', count($addedIds) === 2 && $supN >= 2,
+   'added=' . count($addedIds) . ' support=' . $supN);
+ok('추가하면 새 항목 번호를 돌려준다', !in_array(0, $addedIds, true), json_encode($addedIds));
+$r = $admin->req('/studio/api/allocate.php?act=add_item', ['csrf' => true, 'json' => [
+    'allocation_id' => $aid3, 'task_id' => $item['task_id'],
+    'member_id' => $supIds[0], 'role' => 'support']]);
+ok('같은 사람을 두 번 붙일 수는 없다', $r['status'] !== 200, 'status=' . $r['status']);
+foreach ($addedIds as $x) {   // 뒤 시험의 항목 수가 흔들리지 않게 되돌린다
+    $admin->req('/studio/api/allocate.php?act=delete_item',
+                ['csrf' => true, 'json' => ['item_id' => $x]]);
+}
 
 // --- 확정 --------------------------------------------------------------
 $r = $guest->req('/studio/api/allocate.php?act=confirm',
@@ -1524,12 +1730,68 @@ ok('확정본은 고칠 수 없다', $r['status'] === 400
 
 $r = $admin->req('/studio/api/allocate.php?act=confirm',
                  ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
-ok('두 번 확정 불가', $r['status'] === 400);
+ok('두 번 확정 불가', $r['status'] === 400, $r['status'] . ' ' . substr($r['body'], 0, 200));
+// 확정된 안에는 과배정 경고를 띄우지 않는다. 사람이 고칠 수 없는 것을
+// 고치라고 하면 진짜 경고까지 안 읽는다.
+ok('★ 확정된 안에는 과배정 경고 대신 상태를 말한다',
+   str_contains($r['json']['error']['message'] ?? '', '확정'),
+   substr($r['body'], 0, 200));
 
 $r = $admin->req('/studio/api/allocate.php?act=versions&project_id=' . $pid);
 $confirmedN = count(array_filter($r['json']['data']['rows'],
                                  fn($x) => $x['status'] === 'confirmed'));
 ok('확정본은 언제나 하나', $confirmedN === 1, (string)$confirmedN);
+
+// --- 차수 복사·삭제·정리 (2026-10-22) ------------------------------------
+$r = $guest->req('/studio/api/allocate.php?act=copy',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+ok('PM 아니면 복사 403', $r['status'] === 403, (string)$r['status']);
+$r = $admin->req('/studio/api/allocate.php?act=copy', ['json' => ['allocation_id' => $aid3]]);
+ok('복사도 CSRF 없으면 419', $r['status'] === 419, (string)$r['status']);
+
+$r = $admin->req('/studio/api/allocate.php?act=copy',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+ok('확정본을 복사한다', $r['status'] === 200, $r['status'] . ' ' . substr($r['body'], 0, 160));
+$cpAid = (int)($r['json']['data']['allocation_id'] ?? 0);
+ok('항목 수가 같다', count($r['json']['data']['items'] ?? []) === 2);
+ok('확정본은 그대로라고 말한다', str_contains($r['json']['data']['message'] ?? '', '확정본은 그대로'),
+   $r['json']['data']['message'] ?? '');
+ok('★ 복사해도 대시보드는 확정본 그대로',
+   ($admin->req('/studio/api/allocate.php?act=current&project_id=' . $pid)
+        ['json']['data']['allocation']['id'] ?? 0) === $aid3);
+
+$det = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $cpAid)['json']['data'];
+ok('복사본은 고칠 수 있다', ($det['can_edit'] ?? false) === true);
+ok('복사본은 지울 수 있다고 표시된다', ($det['allocation']['deletable'] ?? false) === true);
+ok('복사 출처가 보인다', ($det['allocation']['params']['copied_from']['id'] ?? 0) === $aid3);
+
+$r = $admin->req('/studio/api/allocate.php?act=delete',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+ok('★ 확정본은 지울 수 없다', $r['status'] === 400
+   && str_contains($r['json']['error']['message'] ?? '', '확정'), substr($r['body'], 0, 160));
+
+$r = $guest->req('/studio/api/allocate.php?act=delete',
+                 ['csrf' => true, 'json' => ['allocation_id' => $cpAid]]);
+ok('PM 아니면 삭제 403', $r['status'] === 403, (string)$r['status']);
+$r = $admin->req('/studio/api/allocate.php?act=delete',
+                 ['csrf' => true, 'json' => ['allocation_id' => $cpAid]]);
+ok('복사본을 지운다', $r['status'] === 200, $r['status'] . ' ' . substr($r['body'], 0, 160));
+$r = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $cpAid);
+ok('지운 차수는 없다', $r['status'] === 404, (string)$r['status']);
+
+$r = $guest->req('/studio/api/allocate.php?act=purge',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('PM 아니면 정리 403', $r['status'] === 403, (string)$r['status']);
+$r = $admin->req('/studio/api/allocate.php?act=purge',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('초안을 정리한다', $r['status'] === 200 && ($r['json']['data']['deleted'] ?? 0) > 0,
+   $r['status'] . ' ' . substr($r['body'], 0, 160));
+$rows = $admin->req('/studio/api/allocate.php?act=versions&project_id=' . $pid)['json']['data']['rows'];
+ok('★ 정리 뒤에는 지울 수 없는 차수만 남는다',
+   $rows && !array_filter($rows, fn($x) => $x['deletable']), json_encode(array_column($rows, 'status')));
+ok('정리해도 확정본은 남는다',
+   ($admin->req('/studio/api/allocate.php?act=current&project_id=' . $pid)
+        ['json']['data']['allocation']['id'] ?? 0) === $aid3);
 
 // ┌──────────────────────────────────────────────────────────────────┐
 // │ 차수 비교 (2026-10-07)                                            │
@@ -2318,6 +2580,73 @@ ok('일반 사용자에게 남의 프로파일 링크가 적다',
    '남의 프로파일 링크가 그대로 보인다');
 
 // ---------------------------------------------------------------------
+// 프로젝트 등록 권한 (027, 2026-10-15)
+//
+// 관리자만 등록하던 것을, 관리자가 켜 준 PM 도 등록하게 한다. 등록한 사람이
+// PM 이 되고 PM 은 남의 점유·근거·배정 확정에 닿으므로 모두에게 열지 않는다.
+// ---------------------------------------------------------------------
+$guestMid = (int)$pdoR->query(
+    "SELECT id FROM bs_member WHERE user_id = 'batest-user@bluesoft.co.kr'"
+)->fetchColumn();
+$pdoR->exec("UPDATE bs_member SET can_create_project = 0 WHERE id = $guestMid");
+
+ok('관리자 구성원 목록에 등록 권한 단추가 있다', str_contains($r['body'], 'ba-create-t'));
+ok('일반 사용자 구성원 목록에는 등록 권한 열이 없다', !str_contains($r3['body'], 'ba-create-t'));
+
+$rc = $guest->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => $guestMid, 'can_create' => 1]]);
+ok('일반 사용자는 등록 권한을 못 바꾼다', $rc['status'] === 403, '상태 ' . $rc['status']);
+$rc = $admin->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => $guestMid, 'can_create' => 5]]);
+ok('등록 권한: 0/1 아닌 값은 거절', $rc['status'] === 400, '상태 ' . $rc['status']);
+$rc = $admin->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => 0, 'can_create' => 1]]);
+ok('등록 권한: 구성원을 안 주면 거절', $rc['status'] === 400, '상태 ' . $rc['status']);
+
+$rc = $guest->req('/studio/api/project.php?act=create',
+    ['csrf' => true, 'json' => ['name' => '시험-등록권한 없음']]);
+ok('권한을 켜기 전에는 등록 403', $rc['status'] === 403, '상태 ' . $rc['status']);
+ok('권한을 켜기 전에는 새 프로젝트 단추가 없다',
+   !str_contains($guest->req('/studio/project_list.php')['body'], 'href="project_form.php"'));
+
+$rc = $admin->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => $guestMid, 'can_create' => 1]]);
+ok('관리자가 등록 권한을 켠다', $rc['status'] === 200, $rc['body']);
+$g = $pdoR->query("SELECT can_create_project, create_granted_by FROM bs_member WHERE id = $guestMid")->fetch();
+ok('누가 켰는지 남는다',
+   (int)$g['can_create_project'] === 1 && $g['create_granted_by'] === $ADMIN['email'], json_encode($g));
+
+ok('켜면 새 프로젝트 단추가 보인다',
+   str_contains($guest->req('/studio/project_list.php')['body'], 'href="project_form.php"'));
+// 권한이 없으면 project_list.php?err=denied 로 302 를 돌린다.
+ok('켜면 등록 화면이 열린다', $guest->req('/studio/project_form.php')['status'] === 200);
+
+$rc = $guest->req('/studio/api/project.php?act=create',
+    ['csrf' => true, 'json' => ['name' => '시험-PM 직접 등록']]);
+ok('켜면 등록된다', $rc['status'] === 200, $rc['body']);
+$gPid = (int)($rc['json']['data']['id'] ?? 0);
+$owner = $gPid ? $pdoR->query("SELECT owner_id FROM bs_project WHERE id = $gPid")->fetchColumn() : null;
+ok('등록한 사람이 PM 이 된다', $owner === $USER['email'], (string)$owner);
+
+$rc = $admin->req('/studio/api/member.php?act=set_can_create',
+    ['csrf' => true, 'json' => ['member_id' => $guestMid, 'can_create' => 0]]);
+ok('관리자가 등록 권한을 끈다', $rc['status'] === 200, $rc['body']);
+$rc = $guest->req('/studio/api/project.php?act=create',
+    ['csrf' => true, 'json' => ['name' => '시험-끈 뒤 등록']]);
+ok('끄면 새 등록은 403', $rc['status'] === 403, '상태 ' . $rc['status']);
+$rc = $guest->req('/studio/api/project.php?act=update',
+    ['csrf' => true, 'json' => ['id' => $gPid, 'name' => '시험-PM 직접 등록(수정)']]);
+ok('꺼도 이미 등록한 프로젝트는 PM 으로 고친다', $rc['status'] === 200, $rc['body']);
+
+// 뒷정리 — 시험 계정이 PM 으로 남으면 bs_can_edit_workload 가 "어느 프로젝트든
+// PM" 으로 열린다. 다음 시험을 흐리지 않게 행째 지운다.
+if ($gPid > 0) {
+    $pdoR->exec("DELETE FROM bs_project WHERE id = $gPid");
+}
+$pdoR->exec("UPDATE bs_member SET can_create_project = 0, create_granted_by = NULL, create_granted_at = NULL
+              WHERE user_id LIKE 'batest-%'");
+
+// ---------------------------------------------------------------------
 section('[U] 외부 연동 — 구글 드라이브 · 피그마');
 
 // ┌──────────────────────────────────────────────────────────────────┐
@@ -2642,6 +2971,37 @@ foreach (($d['links'] ?? []) as $l) {
     if (str_contains((string)$l['url'], 'TESTKEY1234')) { $ctx = (string)$l['context']; }
 }
 ok('그 주소가 있던 줄을 함께 담는다', str_contains($ctx, '출석부'), $ctx);
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 올린 문서도 난이도 판정의 근거가 된다 (2026-10-08)                │
+// │                                                                  │
+// │ contextFor() 가 bs_source_link **한 표만** 봤다. 올린 엑셀의      │
+// │ 「설명·비고」 가 난이도를 가늠할 가장 좋은 재료인데 parsed_text 에 │
+// │ 멀쩡히 저장되어 있으면서 한 글자도 안 읽혔다 — 링크가 0건인       │
+// │ 프로젝트에서는 **제목만 보고** 판정됐다.                          │
+// └──────────────────────────────────────────────────────────────────┘
+$an = new LinkAnalyzer($pdoR);
+
+// 링크는 아직 못 읽은 상태(status=pending)라 문서 쪽만 남는다.
+$cFile = $an->contextFor($pid, '학습 출석부');
+ok('★ 올린 문서에서 맥락을 찾는다', $cFile !== null && $cFile['kind'] === 'file',
+   json_encode($cFile, JSON_UNESCAPED_UNICODE));
+ok('★ 문서를 통째로 주지 않는다',
+   $cFile !== null && mb_strlen($cFile['text']) < mb_strlen($iaText),
+   '12,000자짜리 엑셀을 128번 주면 모델이 어느 줄인지 못 가린다');
+ok('맞은 줄이 들어 있다', $cFile !== null && str_contains($cFile['text'], '출석부'));
+ok('★ 머리글도 함께 준다(칸 이름이 없으면 값이 무엇인지 모른다)',
+   $cFile !== null && str_contains($cFile['text'], '화면명'), $cFile['text'] ?? '');
+ok('어느 문서인지 남긴다', ($cFile['title'] ?? '') === 'IA 시트');
+
+// 짧은 제목도 맞춰야 한다. 「퍼널 분석」 처럼 두 낱말짜리가 실무에 흔하다.
+$cTwo = $an->contextFor($pid, '공통 로그인');
+ok('★ 두 낱말짜리 제목도 맞춘다(둘 다 맞으면)', $cTwo !== null,
+   '늘 셋을 요구하면 짧은 제목은 영영 못 맞춘다');
+
+// 한 낱말은 안 본다. "관리" 하나로 맞히면 아무 줄이나 걸린다.
+ok('★ 한 낱말로는 맞히지 않는다', $an->contextFor($pid, '학습') === null);
+ok('없는 말이면 맥락이 없다', $an->contextFor($pid, '존재하지않는기능이름') === null);
 
 // 다시 찾아도 이미 담긴 것은 그대로다. 읽어 둔 내용이 날아가면 안 된다.
 $r = $admin->req('/studio/api/analysis.php?act=scan',
@@ -2972,6 +3332,274 @@ ok('씨앗 칸이 있다', str_contains($page, 'id="ba-al-seed"'));
 // │ 화면에 있어야** 하고, 무엇을 옮겼는지 적을 자리도 있어야 한다.    │
 // └──────────────────────────────────────────────────────────────────┘
 ok('★ 최소 1건 보장 체크가 있다', str_contains($page, 'id="ba-al-minone"'));
+// 가정이 결과를 얼마나 바꾸는지는 켠 안과 끈 안을 나란히 놓아야 보인다.
+ok('★ 차수별 AIDD 체크가 있다', str_contains($page, 'id="ba-al-aidd"'));
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 산술이 못 담는 판단을 담는 칸 (2026-10-08)                        │
+// │                                                                  │
+// │ 왼쪽 칸들은 전부 **잰 값**이다. 「요즘 컨디션이 안 좋다」 는       │
+// │ 재지지 않는다. 점수를 깎지 않고 **가용 공수**를 줄인다.           │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 후보 표에 참여 비중 칸이 있다', str_contains($page, '참여 비중')
+   && str_contains($js, 'function shareCell'));
+ok('적합도를 안 건드린다고 적는다',
+   str_contains($page, '적합도 점수는 건드리지 않습니다'));
+ok('★ 1.0 이 아닐 때만 눈에 띄게 한다',
+   str_contains($js, "(low ? ' is-low' : '')") && str_contains($css, '.ba-ct__share.is-low'));
+
+// 아무 구성원이나 하나 잡는다 — 비중은 사람을 가리지 않는다.
+$shMid = (int)$pdoR->query('SELECT id FROM bs_member ORDER BY id LIMIT 1')->fetchColumn();
+ok('비중을 줄 구성원이 있다', $shMid > 0, (string)$shMid);
+
+$r = $admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.5']]);
+ok('★ 사유 없이도 저장된다', $r['status'] === 200
+   && abs(($r['json']['data']['share'] ?? 0) - 0.5) < 0.001, $r['body']);
+$r = $admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.01']]);
+ok('★ 바닥 아래 값은 잘린다', abs(($r['json']['data']['share'] ?? 0) - 0.10) < 0.001,
+   $r['body']);
+$r = $admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '']]);
+ok('비우면 되돌아간다', abs(($r['json']['data']['share'] ?? 0) - 1.0) < 0.001, $r['body']);
+
+// --- ★ 우선 후보 · 가감점 (024, 2026-10-12) -------------------------------
+// 적합도를 덮어쓰지 않는다. 계산값(fit_score)은 그대로, 조정분과 더한 값은 따로.
+$candRow = function (int $mid) use ($admin, $pid): ?array {
+    $rows = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid)['json']['data']['rows'] ?? [];
+    foreach ($rows as $i => $x) { if ($x['member_id'] === $mid) { return $x + ['_pos' => $i]; } }
+    return null;
+};
+$scored = null;   // 점수가 있고 조건을 통과한 사람 중 맨 뒤 — 올라가는 것이 보이게
+foreach ($admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid)['json']['data']['rows'] ?? [] as $x) {
+    if ($x['fit_score'] !== null && !$x['filtered_out']) { $scored = $x; }
+}
+if ($scored === null) {
+    ok('점수 있는 후보가 없어 ★·가감점 시험을 건너뜀', true);
+} else {
+    $sm = $scored['member_id'];
+    $r = $admin->req('/studio/api/candidate.php?act=set_fit_adjust', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'adjust' => 10]]);
+    ok('가감점은 사유 없이도 저장된다', $r['status'] === 200, substr($r['body'], 0, 120));
+    $c = $candRow($sm);
+    ok('★ 계산값은 그대로다', abs(($c['fit_score'] ?? -1) - $scored['fit_score']) < 0.001,
+       json_encode([$scored['fit_score'], $c['fit_score'] ?? null]));
+    ok('조정분과 더한 값이 따로 온다', ($c['fit_adjust'] ?? null) === 10
+       && abs(($c['fit_adjusted'] ?? 0) - min(100, $scored['fit_score'] + 10)) < 0.001,
+       json_encode([$c['fit_adjust'] ?? null, $c['fit_adjusted'] ?? null]));
+    $r = $admin->req('/studio/api/candidate.php?act=set_fit_adjust', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'adjust' => 99]]);
+    ok('범위를 넘으면 자른다', ($r['json']['data']['fit_adjust'] ?? null) === 20, $r['body']);
+    $admin->req('/studio/api/candidate.php?act=set_fit_adjust', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'adjust' => 0]]);
+    ok('0 이면 지운다', ($candRow($sm)['fit_adjust'] ?? 'x') === null);
+
+    $r = $admin->req('/studio/api/candidate.php?act=set_priority', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'on' => '1']]);
+    ok('★ 켜기 200', $r['status'] === 200, substr($r['body'], 0, 120));
+    $c = $candRow($sm);
+    ok('★ 우선 후보는 맨 위로 온다', ($c['priority'] ?? false) === true && $c['_pos'] === 0,
+       'pos=' . ($c['_pos'] ?? '?'));
+    $r = $guest->req('/studio/api/candidate.php?act=set_priority', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'on' => '0']]);
+    ok('PM 아니면 ★ 못 바꾼다', $r['status'] === 403, 'status=' . $r['status']);
+    $admin->req('/studio/api/candidate.php?act=set_priority', ['csrf' => true, 'json' => [
+        'project_id' => $pid, 'member_id' => $sm, 'on' => '0']]);
+    $left = (int)$pdoR->query('SELECT COUNT(*) FROM bs_project_member WHERE project_id = ' . (int)$pid
+                              . ' AND member_id = ' . (int)$sm)->fetchColumn();
+    ok('모두 되돌리면 줄이 남지 않는다', $left === 0, (string)$left);
+}
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 막대의 분모가 엔진과 같아야 한다 (2026-10-08 — 운영에서 드러남)   │
+// │                                                                  │
+// │ 엔진은 비중을 반영해 배정했는데 막대는 안 반영한 분모로 그려,     │
+// │ 꽉 찬 사람이 여유로워 보였다. 사람은 그걸 보고 더 얹는다.         │
+// └──────────────────────────────────────────────────────────────────┘
+// 실제로 **배정을 받는** 사람이어야 막대에 줄이 생긴다.
+$r0 = $admin->req('/studio/api/allocate.php?act=propose',
+                  ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$shMid = (int)(($r0['json']['data']['load'][0]['member_id'] ?? 0));
+ok('배정을 받는 구성원을 찾았다', $shMid > 0, (string)$shMid);
+
+$admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.3', 'reason' => '다른 과제']]);
+$r = $admin->req('/studio/api/allocate.php?act=propose',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+$shAid  = $r['json']['data']['allocation_id'] ?? 0;
+$shMeta = $r['json']['data']['meta'] ?? [];
+$shLoad = $r['json']['data']['load'] ?? [];
+
+$barCap = null; $barShare = null;
+foreach ($shLoad as $l) {
+    if ((int)$l['member_id'] === $shMid) { $barCap = $l['capacity_md']; $barShare = $l['share']; }
+}
+// 비중을 반영한 분모여야 한다. 안 반영하면 꽉 찬 사람이 여유로워 보인다.
+$cap0 = null;
+foreach (($r0['json']['data']['load'] ?? []) as $l) {
+    if ((int)$l['member_id'] === $shMid) { $cap0 = $l['capacity_md']; }
+}
+ok('★ 막대의 분모가 비중만큼 줄어든다',
+   $cap0 !== null && $barCap !== null && abs($barCap - $cap0 * 0.3) < 0.05,
+   json_encode([$cap0, $barCap, $cap0 === null ? null : round($cap0 * 0.3, 2)]));
+ok('★ 막대가 비중을 함께 내려 준다', abs(($barShare ?? 0) - 0.3) < 0.001,
+   json_encode($barShare));
+
+// 같은 배정안을 detail 로 다시 읽어도 같은 분모여야 한다. 두 길이 갈리면
+// 화면을 새로 고칠 때마다 숫자가 바뀐다.
+$d = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $shAid);
+$detCap = null;
+foreach (($d['json']['data']['load'] ?? []) as $l) {
+    if ((int)$l['member_id'] === $shMid) { $detCap = $l['capacity_md']; }
+}
+ok('★ 산출 직후와 다시 읽을 때가 같다', $barCap !== null && $detCap !== null
+   && abs($barCap - $detCap) < 0.01, json_encode([$barCap, $detCap]));
+
+// 차수에 비중을 박제해야 오늘 비중을 바꿔도 지난 차수가 안 흔들린다.
+ok('★ 차수에 비중을 박제한다',
+   abs((float)($shMeta['shares'][$shMid]['share'] ?? 0) - 0.3) < 0.001,
+   json_encode($shMeta['shares'] ?? null, JSON_UNESCAPED_UNICODE));
+$admin->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '1.0']]);
+$d2 = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $shAid);
+$afterCap = null;
+foreach (($d2['json']['data']['load'] ?? []) as $l) {
+    if ((int)$l['member_id'] === $shMid) { $afterCap = $l['capacity_md']; }
+}
+ok('★ 오늘 비중을 바꿔도 지난 차수의 막대는 그대로',
+   $afterCap !== null && abs($afterCap - $detCap) < 0.01,
+   json_encode([$detCap, $afterCap]) . ' — 그 차수는 그때 숫자로 만들어진 것이다');
+$r = $guest->req('/studio/api/candidate.php?act=set_share', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'member_id' => $shMid, 'share' => '0.5']]);
+ok('★ 배정 권한이 있어야 남의 몫을 줄인다', $r['status'] === 403, (string)$r['status']);
+
+// 저장되고 보이기까지 했지만 엔진이 한 번도 안 읽던 칸. 보이는데 아무 일도
+// 안 하는 숫자는 없느니만 못하다 — 사람은 그게 먹는 줄 알고 조정한다.
+ok('★ 죽어 있던 관리자 보정을 화면에서 뺀다',
+   !str_contains($js, "'<span class=\"ba-metric__k\">관리자 보정</span>'"),
+   '참여 비중이 그 자리를 대신한다');
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 난이도 단추는 링크 전용이 아니다 (2026-10-08 — 쓰는 사람이 물었다)│
+// │                                                                  │
+// │ 대상은 확정된 태스크 전부인데 [링크 분석 시작] 바로 옆에 있어     │
+// │ "링크 전용 기능인가" 로 읽혔다. 공수·난이도 칸을 보는 자리가      │
+// │ WBS 칸이므로 그리로 옮겼다.                                       │
+// └──────────────────────────────────────────────────────────────────┘
+$lkAt = strpos($page, 'id="ba-links"');
+$wbAt = strpos($page, 'id="ba-w-extract-rule"');
+$scAt = strpos($page, 'id="ba-lk-score"');
+ok('★ 난이도 단추가 링크 칸을 떠났다', $scAt > $wbAt,
+   '링크 칸 안에 있으면 링크 전용으로 읽힌다');
+ok('다시 매기기도 함께 옮겼다',
+   strpos($page, 'id="ba-lk-rescore"') > $wbAt);
+ok('★ 링크 칸이 자기 몫을 분명히 말한다',
+   str_contains($page, '이 칸은 링크만 다룹니다'));
+ok('올린 파일을 어디서 읽는지 알려 준다',
+   str_contains($page, '[새 문서만 분석]'));
+// 누른 칸에 결과 글이 적혀야 한다 (2026-10-16 — 두 칸에 같이 적던 것을 가름).
+ok('★ 옮긴 자리에도 결과를 적는다',
+   str_contains($page, 'id="ba-lk-msg2"')
+   && str_contains($js, "$(forScore ? '#ba-lk-msg2' : '#ba-lk-msg')"));
+// ★ 진행 막대도 누른 칸에 (2026-10-16). 전에는 난이도를 매겨도 링크 칸 막대가
+//   움직이고 [링크 분석 시작] 까지 막혔다.
+$spAt = strpos($page, 'id="ba-sc-prog"');
+ok('★ 난이도 진행 막대가 WBS 칸에 있다', $spAt !== false && $spAt > $wbAt);
+ok('WBS 칸에 난이도 멈추기가 있다', str_contains($page, 'id="ba-sc-cancel"'));
+ok('멈추기는 그 종류만 멈춘다',
+   str_contains($js, "post('cancel', null, { kind: 'links' })")
+   && str_contains($js, "post('cancel', null, { kind: 'difficulty' })"));
+$st = $admin->req('/studio/api/analysis.php?act=status&project_id=' . $pid);
+ok('★ 진행을 종류별로 돌려준다',
+   is_array($st['json']['data']['jobs'] ?? null)
+   && array_key_exists('links', $st['json']['data']['jobs'])
+   && array_key_exists('difficulty', $st['json']['data']['jobs']), substr($st['body'], 0, 160));
+
+
+// 배정 표가 말단만 보여 주면 번호가 뛴다. 바로 위 WBS 표와 같은 뼈대여야
+// 같은 번호를 두 표에서 눈으로 맞추지 않는다.
+ok('★ 분류 줄을 함께 내려 준다', str_contains($js, "GROUPS = d.groups || []"));
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 칸 수가 맞아야 줄이 안 밀린다 (2026-10-08 — 쓰는 사람이 잡아냄)   │
+// │                                                                  │
+// │ 좁은 화면에서 난이도 칸을 숨기는 규칙이 nth-child(4) 였다.        │
+// │ 분류 줄은 넷째가 **병합 셀**이라 설명과 밑줄이 통째로 사라져      │
+// │ 표 가운데가 뚫려 보였다.                                          │
+// └──────────────────────────────────────────────────────────────────┘
+// 표는 8칸. 분류 줄도 1+1+1+1+colspan4 = 8 이어야 한다.
+ok('★ 분류 줄의 칸 수가 표와 같다',
+   str_contains($js, "'<td class=\"ba-al__df\"></td>' +")
+   && str_contains($js, 'colspan="4" class="ba-cell-none">분류'),
+   '칸이 모자라면 뒤 칸들이 한 자리씩 밀린다');
+ok('★ 숨기는 규칙이 자리가 아니라 칸을 가리킨다',
+   str_contains($css, '.ba-altable td.ba-al__df { display: none; }')
+   && !str_contains($css, '.ba-altable td:nth-child(4) { display: none; }'),
+   'nth-child 로 숨기면 "넷째 칸" 이면 무엇이든 사라진다');
+ok('★ 분류 줄은 담당자 칸을 비운다',
+   str_contains($js, "'분류 — 배정 대상 아님'") || str_contains($js, '분류 — 배정 대상 아님'),
+   '선택 상자를 두면 배정할 수 있는 줄처럼 보인다');
+ok('★ 항목과 분류를 번호 순으로 섞는다',
+   str_contains($js, 'rows.sort(function (x, y) { return wbsCmp(x.wbs_no, y.wbs_no); })'));
+// 서버와 **같은 규칙**이어야 한다. 한쪽만 고치면 표가 서버 순서와 어긋나는데
+// 둘 다 '번호 순' 이라고 말하므로 알아채기 어렵다.
+ok('★ 화면도 자연 정렬을 쓴다', str_contains($js, 'function wbsCmp'));
+ok('★ 끌 때만 보낸다',
+   str_contains($js, "if (ad && !ad.disabled && !ad.checked) { body.aidd = 0; }"),
+   '차수가 프로젝트 설정을 되살리면 어느 쪽이 참인지 알 수 없다');
+ok('프로젝트 계수를 패널에도 적는다',
+   (bool)preg_match('/공수 &times;0\.\d\d/', $page));
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ AIDD 는 **보인 채로** 작동해야 한다 (2026-10-08)                  │
+// │                                                                  │
+// │ 기본이 켬이라 모든 화면의 숫자가 달라지는데, 왜 달라졌는지        │
+// │ 말해 주지 않으면 사람은 숫자가 틀렸다고 생각한다. 계수도          │
+// │ 실측이 아니라 가정이므로 숨기면 안 된다.                          │
+// └──────────────────────────────────────────────────────────────────┘
+$pform = $admin->req('/studio/project_form.php?id=' . $pid)['body'];
+ok('★ 프로젝트에 AIDD 칸이 있다', str_contains($pform, 'id="ba-in-aidd"'));
+// 기본이 켬이라 모든 숫자가 보정된 값으로 나온다. 설정이 수정 화면에만
+// 있으면 **보는 사람은 왜 이 공수가 나왔는지 알 길이 없다.**
+ok('★ 개요에도 AIDD 설정이 보인다',
+   str_contains($page, 'AIDD 고려') && str_contains($page, 'ba-period--aidd'),
+   '읽는 화면에 없으면 보정된 숫자의 근거가 사라진다');
+ok('개요가 계수를 숫자로 적는다', (bool)preg_match('/공수 &times;0\.\d\d/', $page));
+ok('개요도 난이도는 안 바꾼다고 적는다',
+   str_contains($page, '난이도는 바꾸지 않습니다'));
+ok('★ 계수를 화면에 드러낸다',
+   str_contains($pform, 'id="ba-in-aidd-effort"') && str_contains($pform, 'id="ba-in-aidd-load"'),
+   '계수를 코드에 묻으면 아무도 그것이 가정인 줄 모른다');
+ok('난이도는 안 바꾼다고 적는다', str_contains($pform, '난이도는 바꾸지 않습니다'));
+ok('다시 매겨야 반영된다고 알린다', str_contains($pform, '다시'));
+ok('★ 저장할 때 세 칸을 보낸다',
+   str_contains($js, 'aidd_enabled:') && str_contains($js, 'aidd_effort:')
+   && str_contains($js, 'aidd_load:'));
+// 체크 해제를 '' 로 보내면 서버가 "안 보냈다" 로 읽어 켠 채로 둔다.
+ok('★ 체크 해제를 0 으로 못 박는다',
+   str_contains($js, "checked ? 1 : 0"), '빈 문자열로 보내면 끌 수가 없다');
+ok('★ 가용도에 녹이지 않고 따로 그린다',
+   str_contains($js, 'function aiddSlice') && str_contains($js, 'ba-aidd-tag'),
+   '예측을 측정값으로 읽게 두면 안 된다');
+ok('배정 막대도 AIDD 가 걸렸다고 말한다', str_contains($js, 'l.aidd_on && l.aidd_pct'));
+ok('차수 비교에 AIDD 가 보인다', str_contains($js, "r.aidd ? ' · AIDD '"));
+
+$r = $admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'aidd_enabled' => 0]]);
+ok('AIDD 를 끌 수 있다', $r['status'] === 200, $r['body']);
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
+ok('★ 끈 상태가 되읽힌다', ($r['json']['data']['project']['aidd_enabled'] ?? true) === false,
+   $r['body']);
+$r = $admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'aidd_enabled' => 1, 'aidd_effort' => '0.01', 'aidd_load' => '9']]);
+ok('말도 안 되는 계수도 저장은 된다(자른다)', $r['status'] === 200, $r['body']);
+$r = $admin->req('/studio/api/project.php?act=get&id=' . $pid);
+$pj = $r['json']['data']['project'] ?? [];
+ok('★ 계수를 범위로 잘라 저장한다',
+   abs(($pj['aidd_effort'] ?? 0) - 0.50) < 0.001 && abs(($pj['aidd_load'] ?? 0) - 1.00) < 0.001,
+   json_encode([$pj['aidd_effort'] ?? null, $pj['aidd_load'] ?? null]));
+$admin->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'aidd_enabled' => 1, 'aidd_effort' => '0.85', 'aidd_load' => '0.95']]);
 ok('무엇을 옮겼는지 적을 자리가 있다', str_contains($page, 'id="ba-al-minone-note"'));
 ok('★ 체크를 풀면 서버로 0 이 간다', str_contains($js, 'body.min_one = mo.checked ? 1 : 0'));
 // 산출할 때만 받는 값이라 버전을 갈아 끼우면 비워야 한다. 안 비우면
@@ -2982,6 +3610,28 @@ ok('★ 버전을 갈아 끼우면 산출 기록을 비운다',
 
 // 건수를 맨 앞에 막대와 함께 둔다. 숫자만 끝에 있으면 쏠림이 안 보인다.
 ok('★ 부하 줄이 건수 막대를 그린다', str_contains($js, 'ba-loadrow__cb'));
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 여백이 묶음을 말한다 (2026-10-08 — 쓰는 사람이 잡아냄)            │
+// │                                                                  │
+// │ 값과 비율을 따로 두니 그 사이가 막대와 값 사이보다 넓어, 셋이 한  │
+// │ 묶음인데 셋으로 흩어져 보였다. 「75 / 100 M/D (75%)」 한 덩어리.  │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 공수와 비율을 한 덩어리로 적는다',
+   str_contains($js, "' <em>(' + (l.load_pct === null ? '-' : l.load_pct + '%')")
+   && !str_contains($js, 'ba-loadrow__p'),
+   '따로 두면 칸 사이가 묶음 안보다 넓어진다');
+ok('★ 묶음 사이가 묶음 안보다 넓다',
+   (bool)preg_match('/\.ba-loadrow__bar \{[^}]*margin-left: 18px/', $css)
+   && (bool)preg_match('/\.ba-loadrow \{[^}]*gap: 10px/', $css));
+// 오른쪽에 맞추면 글이 짧은 줄일수록 막대에서 멀어진다 — 막대는 늘 같은
+// 자리에서 끝나기 때문이다.
+// 단위는 자료가 아니다. 숫자보다 작게 적어 눈이 숫자부터 읽게 한다.
+ok('★ M/D 단위를 숫자보다 작게 적는다',
+   str_contains($js, '<span class="ba-unit">M/D</span>')
+   && (bool)preg_match('/\.ba-unit \{[^}]*font-size: \.85em/', $css));
+ok('★ 공수 값은 왼쪽에 맞춘다',
+   (bool)preg_match('/\.ba-loadrow__v \{ text-align: left/', $css),
+   '오른쪽 맞춤이면 줄마다 막대와의 간격이 달라진다');
 
 // ┌──────────────────────────────────────────────────────────────────┐
 // │ 기간 평균은 "언제" 를 지운다 (2026-10-07)                         │
@@ -3007,6 +3657,12 @@ ok('★ 경고는 부하 격자를 밀지 않는다',
    (bool)preg_match('/\.ba-loadrow \.ba-mover \{[^}]*grid-column:\s*1\s*\/\s*-1/', $css),
    '경고가 칸으로 끼어들면 막대 눈금이 어긋난다');
 
+// 건수 ↔ 공수 색을 맞바꿨다(2026-10-08 요청). 둘이 **달라야** 한 축으로
+// 안 읽힌다 — 어느 쪽이 녹색인지는 취향이지만 같아지면 안 된다.
+ok('★ 건수 막대가 녹색이다',
+   (bool)preg_match('/\.ba-loadrow__cb b \{[^}]*var\(--ba-brand\)/', $css));
+ok('★ 공수 막대가 회색이다',
+   (bool)preg_match('/\.ba-loadrow__bar i \{[^}]*var\(--ba-ink-soft\)/', $css));
 ok('건수 막대는 공수 막대와 색이 다르다',
    str_contains($css, '.ba-loadrow__cb b') && str_contains($css, '.ba-loadrow__cb'));
 ok('★ 0건인 후보도 줄을 받는다', str_contains($js, "l.task_count === 0 ? ' is-zero'"));
@@ -3086,8 +3742,146 @@ ok('전체 규칙 문장을 항목 설명과 갈라 놓는다',
 // │ 쓴다. 거기서 줄을 빼면 **접어 둔 태스크가 저장에서 사라진다.**     │
 // │ 105줄짜리 WBS 를 접어 두고 저장했다가 날리는 일은 돌이킬 수 없다. │
 // └──────────────────────────────────────────────────────────────────┘
-ok('접기 단추가 있다',
-   str_contains($page, 'id="ba-w-fold"') && str_contains($page, 'id="ba-w-unfold"'));
+// 접기와 펼치기는 서로의 반대라 둘을 나란히 두면 하나는 늘 할 일이 없다.
+ok('★ 접기 단추는 하나다', str_contains($page, 'id="ba-w-fold"')
+   && !str_contains($page, 'id="ba-w-unfold"'));
+ok('★ 지금 상태의 반대를 적는다', str_contains($js, 'function syncFoldBtn')
+   && str_contains($js, "folded ? '모두 보기' : '대분류만 보기'"));
+ok('그리는 자리에서 이름을 맞춘다',
+   // 줄바꿈을 글자 그대로 넣지 않는다 — 이 파일이 CRLF 로 내려받히면
+   // 패턴이 \r\n 을 요구하게 돼 LF 인 assign.js 와 안 맞았다 (2026-10-12).
+   (bool)preg_match('/function render\(\) \{\s*(\/\/[^\r\n]*\R\s*)*syncFoldBtn\(\);/', $js),
+   '접는 길이 여럿이라 한 군데서 맞춰야 안 갈린다');
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 보기 단추는 자료 단추와 섞지 않는다 (2026-10-08)                  │
+// │                                                                  │
+// │ 위 줄은 **자료를 바꾼다**(분석·도출·매기기·저장). 접기는 자료를   │
+// │ 한 글자도 안 바꾸고 보기만 바꾼다. 같은 줄에 있으면 눌러도 되는지 │
+// │ 망설인다. 표 바로 위가 제자리다.                                  │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 접기 단추가 표 바로 위에 따로 있다',
+   str_contains($page, 'ba-viewbar')
+   && strpos($page, 'id="ba-w-fold"') > strpos($page, 'id="ba-w-save"')
+   && strpos($page, 'id="ba-w-fold"') < strpos($page, 'id="ba-w-table"'),
+   '자료를 바꾸는 단추와 섞여 있다');
+// 표의 첫 칸과 세로로 맞춘다 — 영향이 미치는 곳 바로 위다.
+// 2026-10-14: [표 숨기기] 가 맨 왼쪽, 그 오른쪽에 접기 단추 — 사이에 여백(spacer)이 없어야 한다.
+ok('왼쪽 끝에 붙는다',
+   (bool)preg_match('/ba-viewbar">\s*(<!--.*?-->\s*)?<button[^>]*id="ba-w-hide"'
+                  . '.*?<\/button>\s*(<!--.*?-->\s*)?<button[^>]*id="ba-w-fold"/s', $page),
+   '앞에 여백을 미는 자리가 있으면 오른쪽으로 밀린다');
+// 세모가 가리키는 쪽이 **누르면 가는 쪽**이다 —
+// ▲ 접기(위로 말려 올라간다) / ▼ 펼치기(아래로 펼쳐진다)
+ok('★ 세모를 함께 그린다', str_contains($page, 'ba-caret')
+   && str_contains($css, '.ba-caret--up') && str_contains($css, '.ba-caret--down'));
+ok('★ 접기는 ▲, 펼치기는 ▼',
+   str_contains($page, 'ba-caret ba-caret--up"></i><span>대분류만 보기')
+   && str_contains($js, "(folded ? 'down' : 'up')"),
+   '접혀 있으면 할 일은 펼치기라 아래쪽 세모여야 한다');
+// 접기는 보기라 읽기 전용으로 보는 사람도 써야 한다.
+ok('★ 접기는 고칠 권한 밖에서 묶는다',
+   str_contains($js, 'var foldBtn = $(\'#ba-w-fold\');'),
+   '권한 블록 안에 묶이면 읽기만 하는 사람은 긴 표를 못 지나간다');
+
+// 설명 드로어 — 가중치 다섯·감점 셋·방식 셋·단위 넷이 맞물려 돈다.
+// 화면에 다 적어 덮는 대신 부를 때 열리는 자리를 둔다.
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 이름이 겹치면 남의 격자에 끼어든다 (2026-10-08)                   │
+// │                                                                  │
+// │ 설명 글에 .ba-doc 을 썼는데 그 이름은 **이미** 링크 칸의 문서     │
+// │ 줄이 쓰고 있었다(display:grid). 설명이 통째로 격자에 끼어 들어가  │
+// │ 제목과 문단이 옆으로 늘어섰다. 글자로만 보면 멀쩡했다.            │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 설명은 남의 이름을 쓰지 않는다',
+   !(bool)preg_match('/ba-drawer__body ba-doc/', $page)
+   && str_contains($page, 'ba-drawer__body ba-guide'),
+   '.ba-doc 은 링크 칸의 문서 줄이 쓰는 이름이다');
+ok('설명 전용 이름이 CSS 에도 있다', str_contains($css, '.ba-guide {'));
+
+ok('★ 배정 설명 단추와 드로어가 있다',
+   str_contains($page, 'id="ba-al-help"') && str_contains($page, 'id="ba-al-helpd"'));
+ok('설명이 드로어 안에 있다',
+   strpos($page, 'ba-guide__lead') > strpos($page, 'id="ba-al-helpd"'));
+// 제목에 붙여 같은 색으로 두면 글자의 일부로 읽혀 아무도 누르지 않는다.
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 늘 같은 자리에 있어야 찾는다 (2026-10-08)                         │
+// │                                                                  │
+// │ 뱃지 뒤에 뒀더니 뱃지 길이("2차 · 산출됨 · 처리량 판정 264회차")  │
+// │ 에 따라 떠다녔고, 제목 옆으로 당겼더니 제목과 뱃지를 갈라 놓아    │
+// │ 어색했다. 오른쪽 끝은 **무엇이 길어져도** 안 움직인다.            │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 물음표가 제목 줄 오른쪽 끝에 있다',
+   (bool)preg_match('/<h2 class="ba-h2">배정안\s*<span class="ba-spacer">/', $page),
+   '여백을 미는 자리가 없으면 끝으로 안 간다');
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 가운뎃점으로 이은 긴 글은 하나도 안 읽힌다 (2026-10-08)           │
+// │                                                                  │
+// │ "3차 · 산출됨 · 자동 · 처리량 판정 276회차 · 엔진 v1" 은 다섯     │
+// │ 가지 서로 다른 사실이다. 제목 옆에 한 줄로 붙이면 제목이 어디서   │
+// │ 끝나는지도 안 보인다. 줄을 내리고 **사실 하나에 표식 하나.**      │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 차수 표식이 제목 밑 줄에 따로 있다',
+   strpos($page, 'id="ba-al-help"') < strpos($page, 'id="ba-al-badge"')
+   && str_contains($page, 'class="ba-tags" id="ba-al-badge"'),
+   '제목 줄에 붙어 있으면 제목이 어디서 끝나는지 안 보인다');
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 색만으로 뜻을 나르지 않는다 (2026-10-08 — 쓰는 사람이 잡아냄)     │
+// │                                                                  │
+// │ 「자동」 한 낱말만 주황으로 떠 있으니, 그 칸에 여러 값이 올 수     │
+// │ 있다는 것을 모르는 사람에게는 **색이 잘못 나온 것**으로 보였다.    │
+// │                                                                  │
+// │ 신호를 둘로 둔다 — ① 이름을 앞에 붙이고 ② 숫자를 다르게 읽어야    │
+// │ 하는 것에만 ※ 를 붙인다.                                          │
+// └──────────────────────────────────────────────────────────────────┘
+ok('★ 표식에 이름을 함께 적는다',
+   str_contains($js, "tag('단위', L_LABEL[p.level]")
+   && str_contains($js, "tag('방식', (M_LABEL[p.method]")
+   && str_contains($js, "tag('AIDD', Number(p.aidd.effort)"),
+   '값만 적으면 색이 유일한 신호가 된다');
+ok('★ 색을 준 표식에는 ※ 도 붙는다',
+   str_contains($js, "var mark = (tone === 'warn' || tone === 'bad') ? '<b>※</b> ' : '';"),
+   '색을 못 가리는 사람도 읽어야 한다');
+ok('★ 사실 하나에 표식 하나로 그린다',
+   str_contains($js, 'function tag(label, value, tone, tip)')
+   && str_contains($js, "el.innerHTML = t.join('')"));
+// 모양은 WBS 표의 '자동' 표식과 같은 결이어야 한다 — 두 꼴이 따로 놀면
+// 같은 화면에서 표식이 두 가지 말을 하는 셈이다.
+ok('표식 모양이 자동 표식과 같은 결이다',
+   str_contains($css, '.ba-tag--warn { color: var(--ba-warn);   border-color: #f0dcb8;'));
+// 색은 뜻이 있을 때만. 다 칠하면 색이 색을 가린다.
+ok('★ 회차·엔진에는 색을 안 쓴다',
+   str_contains($js, "tag('엔진', CUR.engine_ver, '')"));
+
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ 네 칸이 같은 꼴로 적는다 (2026-10-08)                             │
+// │                                                                  │
+// │ 제목 옆 요약이 칸마다 다른 모양이면, 같은 화면에서 표식이 여러    │
+// │ 가지 말을 하는 셈이다.                                            │
+// └──────────────────────────────────────────────────────────────────┘
+foreach (['ba-c-count' => '후보', 'ba-lk-sum' => '링크',
+          'ba-w-sum' => 'WBS', 'ba-al-badge' => '배정안'] as $id => $what) {
+    ok("★ $what 요약도 같은 꼴이다",
+       str_contains($page, 'class="ba-tags" id="' . $id . '"'),
+       '칸마다 다른 모양이면 표식이 여러 가지 말을 한다');
+}
+ok('표식 그리는 길이 한 벌이다',
+   substr_count($js, 'function tagsInto') === 1
+   && substr_count($js, "tagsInto('#") === 3,
+   '칸마다 따로 그리면 반드시 갈린다');
+// 손봐야 할 것에만 색을 준다.
+ok('★ 실패·미입력에만 붉은색', str_contains($js, "tag('실패', c.fail + '', 'bad'")
+   && str_contains($js, "tag('예상공수 미입력', leafNoEst + '건', 'bad'"));
+ok('★ 색을 달리해 눈에 띄게 한다',
+   (bool)preg_match('/\.ba-help \{[^}]*background: var\(--ba-brand\)/', $css)
+   && (bool)preg_match('/\.ba-h2 \{[^}]*display: flex/', $css));
+ok('★ 설명은 권한과 무관하다',
+   str_contains($js, 'var helpBtn = $(\'#ba-al-help\');'),
+   '고칠 수 없는 사람이 오히려 더 궁금하다');
+ok('용어를 다 짚는다',
+   str_contains($page, '실제로 쓴') && str_contains($page, '대조군')
+   && str_contains($page, '난이도 ★4 이상은 그 분야 상위자에게만'));
 ok('★ 접기는 그리는 자리에서만 한다',
    str_contains($js, 'visibleRows(flat(MODEL'), 'render 가 거르지 않는다');
 ok('★ 합계는 접어도 전체를 센다',
@@ -3115,6 +3909,111 @@ ok('멈출 수 있다', ($r['json']['data']['job'] ?? null) === null, $r['body']
 $worker = shell_exec(escapeshellarg(PHP_BINARY) . ' '
         . escapeshellarg(dirname(__DIR__) . '/cron/analyze.php') . ' 2>&1');
 ok('멈춘 뒤에는 워커가 집어갈 것이 없다', trim((string)$worker) === '', trim((string)$worker));
+
+// =====================================================================
+section('[ST] 직전 안 유지 — stick_from (2026-10-12)');
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'stick_from' => $shAid]]);
+ok('기준 차수를 주면 붙들고 산출한다', $r['status'] === 200
+   && ($r['json']['data']['meta']['stick']['compared'] ?? 0) > 0, substr($r['body'], 0, 160));
+ok('몇 건을 그대로 뒀는지 말해 준다', str_contains($r['json']['data']['message'] ?? '', '그대로 두었습니다'),
+   $r['json']['data']['message'] ?? '');
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'stick_from' => 999999999]]);
+ok('없는 차수는 404', $r['status'] === 404, 'status=' . $r['status']);
+
+// 목표 공수 (2026-10-14) — 막대를 끌어 정한 값을 보내면 그 차수에 남고 막대에 실린다.
+// 목표를 너무 작게 주면 그 사람이 한 건도 못 받아 막대에서 빠진다 — 60% 로.
+$tgMid = (int)($r0['json']['data']['load'][0]['member_id'] ?? 0);
+$tgVal = max(1.0, round((float)($r0['json']['data']['load'][0]['assigned_md'] ?? 2) * 0.6 * 2) / 2);
+$r = $admin->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'targets' => [$tgMid => $tgVal, 999999 => 10]]]);
+ok('목표 공수로 산출한다', $r['status'] === 200
+   && (float)($r['json']['data']['meta']['targets'][$tgMid] ?? 0) === $tgVal,
+   substr($r['body'], 0, 160));
+ok('후보에 없는 사람의 목표는 버린다', !isset($r['json']['data']['meta']['targets'][999999]));
+$tgRow = null;
+foreach ($r['json']['data']['load'] ?? [] as $l) { if ((int)$l['member_id'] === $tgMid) { $tgRow = $l; } }
+ok('막대에 그 차수의 목표가 실린다', $tgRow === null || (float)($tgRow['target_md'] ?? 0) === $tgVal,
+   json_encode([$tgVal, $tgRow['target_md'] ?? null]));
+ok('목표를 썼다고 말해 준다', str_contains($r['json']['data']['message'] ?? '', '목표 공수'));
+
+// =====================================================================
+section('[ED] 공동 편집자 — PM 이 지정, 확정·삭제는 못 한다 (2026-10-14)');
+$r = $guest->req('/studio/api/project.php?act=add_editor', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'user_id' => $USER['email']]]);
+ok('PM 이 아니면 지정할 수 없다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $guest->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'notes' => '편집자 시험']]);
+ok('지정 전에는 못 고친다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/project.php?act=add_editor', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'user_id' => $USER['email']]]);
+ok('PM·관리자는 지정한다', $r['status'] === 200
+   && in_array($USER['email'], array_column($r['json']['data']['editors'] ?? [], 'user_id'), true),
+   substr($r['body'], 0, 160));
+
+$r = $guest->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'notes' => '편집자 시험']]);
+ok('★ 편집자는 프로젝트를 고친다', $r['status'] === 200, substr($r['body'], 0, 140));
+$r = $guest->req('/studio/api/allocate.php?act=propose', ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('★ 편집자는 배정안을 산출한다', $r['status'] === 200, substr($r['body'], 0, 140));
+$edAid = (int)($r['json']['data']['allocation_id'] ?? 0);
+$r = $guest->req('/studio/api/allocate.php?act=confirm', ['csrf' => true, 'json' => [
+    'allocation_id' => $edAid, 'accept_overload' => 1]]);
+ok('★ 편집자는 배정을 확정하지 못한다', $r['status'] === 403, 'status=' . $r['status']);
+$r = $guest->req('/studio/api/project.php?act=delete', ['csrf' => true, 'json' => [
+    'id' => $pid, 'confirm' => $code]]);
+ok('★ 편집자는 프로젝트를 지우지 못한다', $r['status'] === 403, 'status=' . $r['status']);
+$r = $guest->req('/studio/api/project.php?act=add_editor', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'user_id' => $ADMIN['email']]]);
+ok('편집자는 편집자를 늘리지 못한다', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/project.php?act=remove_editor', ['csrf' => true, 'json' => [
+    'project_id' => $pid, 'user_id' => $USER['email']]]);
+ok('해제 200', $r['status'] === 200);
+$r = $guest->req('/studio/api/project.php?act=update', ['csrf' => true, 'json' => [
+    'id' => $pid, 'notes' => '편집자 시험']]);
+ok('해제하면 다시 못 고친다', $r['status'] === 403, 'status=' . $r['status']);
+
+// =====================================================================
+section('[VA] 사용자로 보기 — 보기 전용, 관리자만 (2026-10-12)');
+$r = $guest->req('/studio/api/view_as.php?act=start', ['csrf' => true, 'json' => [
+    'user_id' => $ADMIN['email']]]);
+ok('관리자가 아니면 403', $r['status'] === 403, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/view_as.php?act=start', ['csrf' => true, 'json' => [
+    'user_id' => 'nobody-' . bin2hex(random_bytes(3)) . '@x.kr']]);
+ok('명단에 없는 사람은 404', $r['status'] === 404, 'status=' . $r['status']);
+
+$r = $admin->req('/studio/api/view_as.php?act=start', ['csrf' => true, 'json' => [
+    'user_id' => $USER['email']]]);
+ok('관리자는 시작할 수 있다', $r['status'] === 200, substr($r['body'], 0, 120));
+
+$page = $admin->req('/studio/index.php')['body'];
+ok('★ 보는 동안 띠가 뜬다', str_contains($page, '님으로 보는 중') && str_contains($page, 'ba-viewas-stop'));
+
+$probe = ['csrf' => true, 'json' => ['project_id' => $pid, 'member_id' => $shMid, 'share' => '']];
+$r = $admin->req('/studio/api/candidate.php?act=set_share', $probe);
+ok('★ 보는 동안 저장은 막힌다', $r['status'] === 403
+   && ($r['json']['error']['code'] ?? '') === 'VIEW_ONLY', substr($r['body'], 0, 140));
+$r = $admin->req('/studio/api/candidate.php?act=list&project_id=' . $pid);
+ok('★ 관리자 권한도 꺼진다 — 일반 사용자는 후보 표를 못 본다', $r['status'] === 403,
+   'status=' . $r['status']);
+
+// 본문이 비면 시험 도구가 GET 으로 보낸다. 화면은 빈 객체를 POST 한다.
+$r = $admin->req('/studio/api/view_as.php?act=stop', ['csrf' => true, 'json' => ['_' => 1]]);
+ok('돌아가기 200', $r['status'] === 200, substr($r['body'], 0, 120));
+$r = $admin->req('/studio/api/candidate.php?act=set_share', $probe);
+ok('돌아오면 다시 저장된다', $r['status'] === 200, substr($r['body'], 0, 140));
+
+$log = $pdoR->prepare('SELECT target_id, ended_at FROM bs_view_as_log
+                        WHERE admin_id = ? ORDER BY id DESC LIMIT 1');
+$log->execute([$ADMIN['email']]);
+$lg = $log->fetch(PDO::FETCH_ASSOC) ?: [];
+ok('★ 누가 누구로 봤는지 남는다', ($lg['target_id'] ?? '') === $USER['email'] && !empty($lg['ended_at']),
+   json_encode($lg));
 
 // 뒷정리
 $pdoR->prepare('DELETE FROM bs_analysis_job WHERE project_id = ?')->execute([$pid]);

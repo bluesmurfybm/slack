@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "blue-iWorks",
+  "short_name": "iWorks",
+  "description": "Bluesoft 사내 업무 포털",
+  "lang": "ko",
+  "start_url": "./index.php",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1C5DE5",
+  "icons": [
+    { "src": "styles/icon-192.png",          "sizes": "192x192", "type": "image/png" },
+    { "src": "styles/icon-512.png",          "sizes": "512x512", "type": "image/png" },
+    { "src": "styles/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

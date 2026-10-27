@@ -11,6 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'email'       => $u['email'],
         'has_token'   => !empty($u['slack_token_enc']),
         'slack_email' => $u['slack_email'] ?? null,
+        'gmail_user'  => $u['gmail_user'] ?? null,
+        'has_gmail_pass' => !empty($u['gmail_pass_enc']),
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
         'bg_pref'     => board_bg_pref($u),
@@ -51,6 +53,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         // 한쪽만 바뀌었을 때 어느 쪽이 맞는지 알 수 없다.
         $fields[] = 'slack_email=?';
         $vals[]   = ($se === '' || strcasecmp($se, $base) === 0) ? null : $se;
+    }
+    // Gmail 연동. 주소는 화면에 보이는 칸이라 슬랙 계정 이메일처럼 빈칸 = '연동 해제'(비밀번호도 함께 지움),
+    // 앱 비밀번호는 슬랙 토큰처럼 다시 보여 주지 않으므로 빈칸 = '그대로 두기' 다.
+    $gmailPass = false;   // false = 손대지 않음, null = 지움, 문자열 = 새 암호문
+    $gmailAddr = (string)($u['gmail_user'] ?? '');
+    if (isset($body['gmail_user'])) {
+        $gu = strtolower(trim((string)$body['gmail_user']));
+        if ($gu !== '' && !filter_var($gu, FILTER_VALIDATE_EMAIL)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Gmail 주소 형식이 올바르지 않습니다'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $fields[] = 'gmail_user=?';
+        $vals[]   = $gu === '' ? null : $gu;
+        // 주소가 바뀌면 옛 계정의 비밀번호는 쓸모가 없다 — 새 비밀번호가 같이 오지 않으면 비운다.
+        if (strcasecmp($gu, $gmailAddr) !== 0) $gmailPass = null;
+        $gmailAddr = $gu;
+    }
+    $gp = preg_replace('/\s+/', '', (string)($body['gmail_pass'] ?? ''));   // Google 은 'abcd efgh …' 처럼 띄어 보여 준다
+    if ($gp !== '' && $gmailAddr !== '') $gmailPass = enc_token($gp);
+    if ($gmailPass !== false) {
+        $fields[] = 'gmail_pass_enc=?';
+        $vals[]   = $gmailPass;
     }
     // 대시보드 배경 설정. 화면 우상단 아이콘이 이것만 따로 보낸다.
     if (isset($body['bg_pref'])) {
@@ -113,6 +138,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
         'email'       => $u['email'],
         'has_token'   => !empty($u['slack_token_enc']),
         'slack_email' => $u['slack_email'] ?? null,
+        'gmail_user'  => $u['gmail_user'] ?? null,
+        'has_gmail_pass' => !empty($u['gmail_pass_enc']),
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
         'bg_pref'     => board_bg_pref($u),

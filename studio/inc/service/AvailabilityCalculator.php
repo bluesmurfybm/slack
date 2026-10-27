@@ -136,6 +136,32 @@ final class AvailabilityCalculator
         return $n;
     }
 
+    /**
+     * 가용 공수(M/D). **이 식은 여기 하나뿐이어야 한다.**
+     *
+     * ┌──────────────────────────────────────────────────────────────────┐
+     * │ 두 벌로 두면 반드시 갈린다 (2026-10-08 — 운영에서 드러남)         │
+     * │                                                                  │
+     * │ 같은 식이 세 군데 있었다 — 배정 엔진, 부하 막대, 차수 비교.       │
+     * │ 참여 비중을 엔진에만 넣는 바람에 **배정은 맞게 됐는데 막대의      │
+     * │ 분모가 틀렸다.** 비중 0.3 인 사람이 화면에는 "9 / 35.78 (25%)"   │
+     * │ 로 떠서 아직 여유로워 보였다. 실제로는 9 / 10.7 = 84% 였다.      │
+     * │                                                                  │
+     * │ MD_EXPR 을 한 벌로 모은 것과 같은 이유다. 늘려 쓸 자리가 생기면  │
+     * │ 여기만 고친다.                                                    │
+     * └──────────────────────────────────────────────────────────────────┘
+     *
+     * @param array $a             forMembers() 의 한 줄
+     * @param float $capacityRatio 제약 `capacity_ratio`
+     * @param float $share         그 프로젝트의 참여 비중
+     */
+    public static function capacityMd(array $a, float $capacityRatio = 1.0,
+                                      float $share = 1.0): float
+    {
+        $base = (float)($a['available_aidd'] ?? $a['available'] ?? 0);
+        return round($base * (int)($a['workdays'] ?? 0) * $capacityRatio * $share, 2);
+    }
+
     // =================================================================
     // 가용도
     // =================================================================
@@ -151,19 +177,40 @@ final class AvailabilityCalculator
      *   breakdown:array, inferred_items:array
      * }
      */
-    public function forMember(int $memberId, string $from, string $to): array
+    public function forMember(int $memberId, string $from, string $to,
+                             float $aiddLoad = 1.0, ?int $excludeProjectId = null): array
     {
-        $rows = $this->forMembers([$memberId], $from, $to);
+        $rows = $this->forMembers([$memberId], $from, $to, $aiddLoad, $excludeProjectId);
         return $rows[$memberId] ?? $this->emptyResult($memberId, $from, $to);
     }
 
     /**
      * 여러 사람을 한 번에. 후보 리스트가 N+1 질의를 내지 않도록.
      *
+     * $excludeProjectId — 그 프로젝트의 확정 배정에서 나온 점유는 **세지 않는다**
+     * (2026-10-12). 프로젝트 X 를 다시 배정할 때 X 의 확정본이 만든 점유를
+     * "다른 일로 바쁨" 으로 세면 이중이 된다 — 배정을 한 번 확정하고 나면
+     * 그 프로젝트의 후보가 모두 가용 0% 로 나왔다. 대시보드처럼 "이 기간에
+     * 얼마나 비어 있나" 를 묻는 곳은 넘기지 않는다.
+     *
      * @return array<int, array> member_id => forMember() 와 같은 모양
      */
-    public function forMembers(array $memberIds, string $from, string $to): array
+    public function forMembers(array $memberIds, string $from, string $to,
+                               float $aiddLoad = 1.0, ?int $excludeProjectId = null): array
     {
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ AIDD 여유는 **따로 담는다. 섞지 않는다** (2026-10-08)         │
+        // │                                                              │
+        // │ 확정과 추정을 한 숫자로 합치지 않는 것과 같은 이유다. AIDD    │
+        // │ 보정은 추정보다도 근거가 약한 **예측**이다 — 우리 회사의      │
+        // │ 속도 향상 실측이 없다. available 에 녹여 버리면 사람이 그것을 │
+        // │ 측정값으로 읽고 일정을 짠다.                                  │
+        // │                                                              │
+        // │ available 은 한 글자도 바꾸지 않는다. available_aidd 를 따로  │
+        // │ 더 주고, 쓰는 쪽이 어느 것을 볼지 고른다. 계수가 1.00 이면    │
+        // │ 둘이 같아서 **이 변경 전과 완전히 같은 수치**가 나온다.       │
+        // └──────────────────────────────────────────────────────────────┘
+        $aiddLoad = max(BS_AIDD_MIN, min(BS_AIDD_MAX, $aiddLoad));
         $memberIds = array_values(array_unique(array_map('intval', $memberIds)));
         if (!$memberIds) {
             return [];
@@ -188,17 +235,36 @@ final class AvailabilityCalculator
         // 그때그때 다시 계산한다. bs_workload 에 저장된 추정치를 함께 쓰면
         // 언제 갱신됐는지 모르는 값이 섞이고, refreshInferred() 를 돌린 뒤에는
         // 같은 건을 두 번 세게 된다.
+        //
+        // 배정이 만든 기록(ref_type='allocation_item')은 **지금도 확정된
+        // 배정안이고 프로젝트가 살아 있을 때만** 센다 (2026-10-12).
+        // 배정 항목이 지워지거나 프로젝트를 삭제해도 점유 기록은 남는다.
+        // 그것까지 세면 하는 일이 없는 사람이 '꽉 참' 으로 나와 배정에서
+        // 밀린다 — 대시보드에서 진행 중 프로젝트 0건인 사람이 프로젝트 92% 로 나왔다.
+        //
+        // 배정이 만든 기록은 태스크의 **예상공수(est_md)도 함께** 읽는다 —
+        // 아래에서 기간 전체 100% 를 공수만큼으로 환산한다 (2026-10-12).
         $st = $this->pdo->prepare(
-            "SELECT id, member_id, kind, label, ref_type, ref_id,
-                    source, source_url, note, created_by, created_by_name,
-                    updated_by_name,
-                    start_date, end_date, load_ratio, confidence
-               FROM bs_workload
-              WHERE member_id IN ($ph)
-                AND kind IN ('assigned', 'manual')
-                AND start_date <= ? AND end_date >= ?"
+            "SELECT w.id, w.member_id, w.kind, w.label, w.ref_type, w.ref_id,
+                    w.source, w.source_url, w.note, w.created_by, w.created_by_name,
+                    w.updated_by_name,
+                    w.start_date, w.end_date, w.load_ratio, w.confidence,
+                    t.est_md AS task_est_md
+               FROM bs_workload w
+               LEFT JOIN bs_allocation_item i
+                      ON w.ref_type = 'allocation_item' AND i.id = w.ref_id
+               LEFT JOIN bs_allocation a ON a.id = i.allocation_id
+               LEFT JOIN bs_project    p ON p.id = a.project_id
+               LEFT JOIN bs_task       t ON t.id = i.task_id
+              WHERE w.member_id IN ($ph)
+                AND w.kind IN ('assigned', 'manual')
+                AND w.start_date <= ? AND w.end_date >= ?
+                AND (w.ref_type IS NULL OR w.ref_type <> 'allocation_item'
+                     OR (a.status = 'confirmed' AND p.deleted_at IS NULL
+                         AND (? = 0 OR p.id <> ?)))"
         );
-        $st->execute(array_merge($memberIds, [$to, $from]));
+        $ex = (int)($excludeProjectId ?? 0);
+        $st->execute(array_merge($memberIds, [$to, $from, $ex, $ex]));
 
         $confirmed = array_fill_keys($memberIds, 0.0);
         $breakdown = array_fill_keys($memberIds, []);
@@ -239,9 +305,29 @@ final class AvailabilityCalculator
             if ($ov <= 0) {
                 continue;
             }
+            // ┌──────────────────────────────────────────────────────────┐
+            // │ 배정 점유는 **공수만큼**만 (2026-10-12)                   │
+            // │                                                          │
+            // │ 확정할 때 태스크마다 한 줄씩, 계획 기간이 없으면 프로젝트 │
+            // │ 기간 전체에 load_ratio 1.0 으로 적는다. 4.5 M/D 짜리가    │
+            // │ 5개월 내내 100% 가 되어, 12건을 맡은 사람은 매달 1200% 로  │
+            // │ 나왔다.                                                   │
+            // │                                                          │
+            // │ 저장된 값은 두고 **읽을 때** 환산한다 — 이미 확정된 운영   │
+            // │ 데이터도 손대지 않고 바로 맞아진다.                        │
+            // │   비율 = load_ratio × min(1, est_md ÷ 그 줄 기간의 영업일) │
+            // │ 공수를 모르는 태스크는 예전처럼 load_ratio 그대로다.       │
+            // └──────────────────────────────────────────────────────────┘
+            $ratio = (float)$w['load_ratio'];
+            if (($w['ref_type'] ?? '') === 'allocation_item'
+                && $w['task_est_md'] !== null && (float)$w['task_est_md'] > 0) {
+                $span  = max(1, $this->workdays($w['start_date'], $w['end_date']));
+                $ratio = $ratio * min(1.0, (float)$w['task_est_md'] / $span);
+            }
+
             // 프로젝트 기간 전체에 대한 실효 점유율로 환산한다.
             // 2주만 겹치는 100% 점유는 3개월 프로젝트에서 100% 가 아니다.
-            $eff = (float)$w['load_ratio'] * ($ov / $totalWorkdays);
+            $eff = $ratio * ($ov / $totalWorkdays);
             $confirmed[$mid] += $eff;
 
             if (($w['ref_type'] ?? '') === 'rnd') {
@@ -253,7 +339,7 @@ final class AvailabilityCalculator
                 $mo = $this->overlapWorkdays($sp['from'], $sp['to'],
                                              $w['start_date'], $w['end_date']);
                 if ($mo > 0) {
-                    $byMonth[$mid][$ym] += (float)$w['load_ratio'] * ($mo / $sp['workdays']);
+                    $byMonth[$mid][$ym] += $ratio * ($mo / $sp['workdays']);
                 }
             }
             $breakdown[$mid][] = [
@@ -277,6 +363,9 @@ final class AvailabilityCalculator
                 'start_date'    => $w['start_date'],
                 'end_date'      => $w['end_date'],
                 'load_ratio'    => (float)$w['load_ratio'],
+                // 공수로 환산한 비율. 저장값(load_ratio)과 다르면 환산된 것이다.
+                'ratio_used'    => round($ratio, 4),
+                'est_md'        => $w['task_est_md'] !== null ? (float)$w['task_est_md'] : null,
                 'overlap_days'  => $ov,
                 'effective'     => round($eff, 4),
                 'ref_type'      => $w['ref_type'],
@@ -302,6 +391,10 @@ final class AvailabilityCalculator
             $used = $c + $i;
             $conf = $used <= 0 ? 1.0
                   : round(($c + $i * BS_INFERRED_CONFIDENCE) / $used, 3);
+
+            // 점유를 할인해 돌려받는 몫. 기본 가용량을 넘지 않는다 —
+            // 일을 안 하던 사람이 AIDD 로 100% 를 넘을 수는 없다.
+            $relief = round(min(max(0.0, $base - $avail), ($c + $i) * (1.0 - $aiddLoad)), 4);
 
             $out[$mid] = [
                 'member_id'      => $mid,
@@ -340,7 +433,16 @@ final class AvailabilityCalculator
                 'confidence'     => $conf,
                 'breakdown'      => $breakdown[$mid],
                 'inferred_items' => $inf[$mid]['items'] ?? [],
-            ] + $this->monthView($byMonth[$mid], $spans, $base, $i);
+
+                // ── AIDD (2026-10-08) ─────────────────────────────────
+                // available 과 **합치지 않는다.** 화면이 두 숫자를 나란히
+                // 놓고, 엔진만 available_aidd 를 쓴다.
+                'aidd_on'        => $aiddLoad < 1.0 - 0.0001,
+                'aidd_factor'    => $aiddLoad,
+                'aidd_relief'    => $relief,
+                'aidd_pct'       => (int)round($relief * 100),
+                'available_aidd' => round($avail + $relief, 4),
+            ] + $this->monthView($byMonth[$mid], $spans, $base, $i, $aiddLoad);
         }
         return $out;
     }
@@ -355,7 +457,8 @@ final class AvailabilityCalculator
      * @param array<string,float> $load  'YYYY-MM' => 확정 점유 비율
      * @param array<string,array> $spans monthSpans() 결과
      */
-    private function monthView(array $load, array $spans, float $base, float $inferred): array
+    private function monthView(array $load, array $spans, float $base, float $inferred,
+                              float $aiddLoad = 1.0): array
     {
         $months = [];
         $over   = [];
@@ -363,6 +466,9 @@ final class AvailabilityCalculator
         foreach ($spans as $ym => $sp) {
             $c    = round((float)($load[$ym] ?? 0), 4);
             $used = $c + $inferred;
+            // 달별 여유도 같은 규칙으로 돌려받는다. 달마다 점유가 다르니
+            // 돌려받는 몫도 다르다 — 꽉 찬 달일수록 많이 돌려받는다.
+            $rel  = min($used, $base) * (1.0 - $aiddLoad);
             $row  = [
                 'month'         => $ym,
                 // '2026-10' 은 눈에 안 들어온다. 화면은 '10월' 로 읽는다.
@@ -378,6 +484,10 @@ final class AvailabilityCalculator
                 'available_md'  => round(max(0.0, $base - $used) * $sp['workdays'], 2),
                 'over'          => $used > $base + 0.0001,
                 'over_pct'      => (int)round(max(0.0, $used - $base) * 100),
+                // 넘친 달에도 AIDD 가 숨통을 틔워 주지만, **넘쳤다는 사실
+                // 자체는 지우지 않는다.** over 는 측정값 그대로다.
+                'aidd_pct'      => (int)round($rel * 100),
+                'aidd_md'       => round($rel * $sp['workdays'], 2),
             ];
             $peak = max($peak, (int)round($used * 100));
             if ($row['over']) {
@@ -513,6 +623,8 @@ final class AvailabilityCalculator
             'breakdown' => [], 'inferred_items' => [],
             // 모양이 다르면 화면이 undefined 를 만난다.
             'months' => [], 'over_months' => [], 'peak_pct' => 0,
+            'aidd_on' => false, 'aidd_factor' => 1.0, 'aidd_relief' => 0.0,
+            'aidd_pct' => 0, 'available_aidd' => 1.0,
         ];
     }
 }

@@ -6,6 +6,8 @@ require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
 require_once __DIR__ . '/inc/presenter.php';
 require_once __DIR__ . '/inc/repo/RndRepo.php';
+require_once __DIR__ . '/inc/repo/ProjectRepo.php';       // 참고자료는 bs_project_source 를 같이 쓴다
+require_once __DIR__ . '/inc/service/SourceUploader.php'; // humanSize()
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -30,6 +32,8 @@ if ($rndId) {
 }
 
 $isNew = $rnd === null;
+// 참고 자료 (2026-10-19). 저장한 과제에만 붙는다.
+$sources = $isNew ? [] : (new ProjectRepo(bs_db()))->sources((int)$rnd['id']);
 $v     = static fn(string $k, string $d = '') => h((string)($rnd[$k] ?? $d));
 
 bs_layout_head(
@@ -39,9 +43,11 @@ bs_layout_head(
     $isNew
         ? '하고 싶은 R&D 과제를 올립니다. 승인되면 보드에 공개됩니다.'
         : '승인 전까지 고칠 수 있습니다.',
-    'project'
+    'rnd'
 );
 ?>
+
+<?= bs_back_link($isNew ? 'rnd_board.php' : 'rnd_view.php?id=' . (int)$rnd['id'], $isNew ? 'R&D 과제 목록' : '과제 상세') ?>
 
 <div class="ba-form" id="ba-rnd-form" data-id="<?= $isNew ? '' : (int)$rnd['id'] ?>">
 
@@ -186,16 +192,98 @@ bs_layout_head(
     <span>팀원을 모집합니다</span>
   </label>
 
-  <!-- 실행 -->
-  <div class="ba-form__foot">
-    <a class="ba-btn" href="rnd_board.php">취소</a>
-    <?php if ($isNew): ?>
-      <button type="button" class="ba-btn" id="ba-r-save-draft">임시 저장</button>
-      <button type="button" class="ba-btn ba-btn--primary" id="ba-r-submit">발의하기</button>
-    <?php else: ?>
-      <button type="button" class="ba-btn ba-btn--primary" id="ba-r-submit">저장</button>
-    <?php endif; ?>
-  </div>
 </div>
+
+<!-- ============ 참고 자료 (2026-10-19) ============
+     프로젝트 등록 화면과 같은 패널이다(assign.js initSourcePanel). 보낼 곳만
+     api/rnd.php 로 다르고, 권한은 과제를 고칠 수 있는 사람이다. 보관용이라
+     분석하지 않는다 — R&D 는 WBS 를 뽑지 않는다. -->
+<div class="ba-alert" id="ba-form-error" hidden></div>
+<section class="ba-panel ba-rnd-src" data-src-panel="reference" data-src-api="api/rnd.php">
+  <h2>참고 자료</h2>
+  <p class="ba-panel__hint">기획서, 조사 자료, 화면 시안, 참고할 링크처럼 이 과제를 이해하는 데 필요한 자료입니다.
+    파일·링크·직접 입력을 섞어 넣을 수 있습니다.</p>
+
+  <?php if ($isNew): ?>
+    <div class="ba-note">과제를 먼저 저장하면 이 자리에서 자료를 올릴 수 있습니다.</div>
+  <?php else: ?>
+  <div class="ba-source-tabs" role="tablist" aria-label="자료 종류">
+    <button type="button" role="tab" data-src-tab="file" aria-selected="true">파일 올리기</button>
+    <button type="button" role="tab" data-src-tab="link" aria-selected="false">링크 등록</button>
+    <button type="button" role="tab" data-src-tab="text" aria-selected="false">직접 입력</button>
+  </div>
+
+  <div class="ba-source-pane" data-src-pane="file">
+    <label>
+      <span>파일</span>
+      <input type="file" data-src-in="files" multiple accept=".xlsx,.pptx,.docx,.pdf,.jpg,.jpeg,.png,.gif,.webp">
+      <em class="ba-help">xlsx · pptx · docx · pdf · 이미지 /
+        한 개 최대 <?= (int)round(BS_UPLOAD_MAX_BYTES / 1048576) ?>MB / 한 번에 <?= BS_UPLOAD_MAX_FILES ?>개까지</em>
+    </label>
+    <button type="button" class="ba-btn" data-src-act="file">올리기</button>
+  </div>
+
+  <div class="ba-source-pane" data-src-pane="link" hidden>
+    <div class="ba-form__row">
+      <label><span class="ba-req">주소</span>
+        <input type="url" data-src-in="link-url" placeholder="https://www.figma.com/file/..."></label>
+      <label><span>표시 이름</span>
+        <input type="text" data-src-in="link-title" maxlength="200" placeholder="비우면 주소에서 자동으로"></label>
+    </div>
+    <button type="button" class="ba-btn" data-src-act="link">등록</button>
+  </div>
+
+  <div class="ba-source-pane" data-src-pane="text" hidden>
+    <label><span>표시 이름</span>
+      <input type="text" data-src-in="text-title" maxlength="200" placeholder="비우면 첫 줄을 제목으로"></label>
+    <label><span class="ba-req">내용</span>
+      <textarea data-src-in="text" rows="6" placeholder="회의 메모, 조사 내용 등을 붙여 넣으세요."></textarea></label>
+    <button type="button" class="ba-btn" data-src-act="text">등록</button>
+  </div>
+
+  <div class="ba-srclist" data-src-list>
+    <?php if (!$sources): ?>
+      <p class="ba-empty-inline">아직 등록된 자료가 없습니다.</p>
+    <?php else: foreach ($sources as $s): ?>
+      <div class="ba-src" data-id="<?= (int)$s['id'] ?>">
+        <span class="ba-src__kind"><?= h(BS_SOURCE_KIND[$s['kind']] ?? $s['kind']) ?></span>
+        <span class="ba-src__title">
+          <?php if (!empty($s['url'])): ?>
+            <a href="<?= h($s['url']) ?>" target="_blank" rel="noopener"><?= h($s['title']) ?></a>
+          <?php else: ?><?= h($s['title']) ?><?php endif; ?>
+        </span>
+        <span class="ba-src__meta"><?= !empty($s['file_size'])
+            ? h(SourceUploader::humanSize((int)$s['file_size']))
+            : (!empty($s['parsed_len']) ? number_format((int)$s['parsed_len']) . '자' : '') ?></span>
+        <?= bs_source_acts_html($s) ?>
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="<?= (int)$s['id'] ?>">삭제</button>
+      </div>
+    <?php endforeach; endif; ?>
+  </div>
+  <?php endif; ?>
+</section>
+
+<!-- ============ 하단 단추 (2026-10-19) ============
+     프로젝트 등록 화면(.ba-formbar)과 같은 짜임 — 위 폼 안에 있으면 아래 참고 자료와
+     따로 노는 것처럼 보였다. 페이지 맨 아래 한 줄로: 왼쪽 이동, 오른쪽 실행. -->
+<div class="ba-formbar ba-rnd-formbar">
+  <a class="ba-btn" href="rnd_board.php">목록</a>
+  <?php if ($isNew): ?>
+    <span class="ba-spacer"></span>
+    <button type="button" class="ba-btn" id="ba-r-save-draft">임시 저장</button>
+    <button type="button" class="ba-btn ba-btn--primary" id="ba-r-submit">발의하기</button>
+  <?php else: ?>
+    <a class="ba-btn" href="rnd_view.php?id=<?= (int)$rnd['id'] ?>">상세 보기</a>
+    <span class="ba-spacer"></span>
+    <?php if (bs_rnd_can_delete($rnd)): ?>
+      <button type="button" class="ba-btn ba-btn--danger" id="ba-r-delete"
+              data-id="<?= (int)$rnd['id'] ?>" data-code="<?= h((string)$rnd['code']) ?>"
+              data-name="<?= h((string)$rnd['name']) ?>">삭제</button>
+    <?php endif; ?>
+    <button type="button" class="ba-btn ba-btn--primary" id="ba-r-submit">저장</button>
+  <?php endif; ?>
+</div>
+
+<?= bs_source_viewer_html() ?>
 
 <?php bs_layout_foot(); ?>

@@ -6,6 +6,7 @@
  *     clone 받은 사용자가 동일한 데이터로 자동 시딩됨.
  *   사용:  php schools_export.php
  */
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }   // CLI 전용 — 웹 주소로 실행되지 않게
 require_once __DIR__ . '/../db.php';
 
 $rows = db()->query("SELECT name, ver, dev, ops, active FROM schools ORDER BY ver+0, name")->fetchAll(PDO::FETCH_ASSOC);

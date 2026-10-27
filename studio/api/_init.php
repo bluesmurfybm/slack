@@ -66,5 +66,12 @@ function bs_begin_write(): array
     bs_require_post();
     $user = bs_require_login_api();
     bs_verify_csrf();
+    // 사용자로 보기는 **보기 전용**이다. 모든 쓰기가 여기를 지나므로 한 곳에서
+    // 막는다 — 남의 이름으로 기록이 남으면 안 된다 (2026-10-12).
+    if (!empty($user['view_as'])) {
+        bs_json_error('VIEW_ONLY',
+            $user['name'] . ' 님으로 보는 중에는 저장할 수 없습니다. 위쪽 띠의 [돌아가기] 를 누르세요.',
+            403);
+    }
     return $user;
 }

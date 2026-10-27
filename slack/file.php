@@ -22,15 +22,19 @@ if ($tok === '' || strpos($u, 'https://files.slack.com/') !== 0) {
  * 디스크 캐시: Slack 파일은 URL(파일 ID) 기준으로 내용이 불변이므로
  * 한 번 받아두면 영구 재사용 가능. 다음 요청부터는 Slack 을 거치지 않고
  * 로컬 파일에서 즉시 스트리밍 → 초기 이미지 로딩 대폭 개선.
+ * 받기·보내기 모두 디스크↔소켓으로 흘려보낸다 — 큰 동영상을 통째로 메모리에 올리면
+ * memory_limit(운영 기본 128M)을 넘겨 실패한다.
  */
 $cacheDir = __DIR__ . '/.filecache';
-if (!is_dir($cacheDir)) { @mkdir($cacheDir, 0777, true); }
+if (!is_dir($cacheDir)) @mkdir($cacheDir, 0775, true);
+// 웹 폴더 안이라 이름(sha256)만 알면 로그인 없이 받을 수 있다 — 직접 접근은 막는다(기존 폴더도 보강)
+if (is_dir($cacheDir) && !is_file($cacheDir . '/.htaccess')) @file_put_contents($cacheDir . '/.htaccess', "Require all denied\n");
 $key       = hash('sha256', $u);
 $cacheFile = $cacheDir . '/' . $key;         // 바이트
 $metaFile  = $cacheFile . '.type';           // content-type
 
-$serveFromCache = function ($data, $ctype) use ($u) {
-    $len = strlen($data);
+$serveFile = function ($path, $ctype) {
+    $len = (int)filesize($path);
     header('Content-Type: ' . ($ctype ?: 'application/octet-stream'));
     // 불변 콘텐츠 → 브라우저도 장기 캐시
     header('Cache-Control: private, max-age=604800, immutable');
@@ -40,66 +44,86 @@ $serveFromCache = function ($data, $ctype) use ($u) {
         $name = isset($_GET['name']) ? preg_replace('/[\r\n"\\\\\/]+/', '_', $_GET['name']) : 'download';
         header('Content-Disposition: attachment; filename="' . $name . '"; filename*=UTF-8\'\'' . rawurlencode($_GET['name'] ?? $name));
     }
+    $start = 0; $end = $len - 1;
     // Range 요청(동영상 seek/부분 로드) 처리 — 다운로드가 아닐 때만
     $range = $_SERVER['HTTP_RANGE'] ?? '';
     if (!$isDl && $range !== '' && preg_match('/bytes=(\d*)-(\d*)/', $range, $m)) {
-        $start = ($m[1] === '') ? 0 : (int)$m[1];
-        $end   = ($m[2] === '') ? $len - 1 : (int)$m[2];
+        if ($m[1] === '' && $m[2] !== '') {                // bytes=-N : 끝에서 N바이트
+            $start = max(0, $len - (int)$m[2]);
+        } else {
+            $start = ($m[1] === '') ? 0 : (int)$m[1];
+            $end   = ($m[2] === '') ? $len - 1 : min((int)$m[2], $len - 1);
+        }
         if ($start > $end || $start >= $len) {
             http_response_code(416);
             header('Content-Range: bytes */' . $len);
             return;
         }
-        $end = min($end, $len - 1);
         http_response_code(206);
         header('Content-Range: bytes ' . $start . '-' . $end . '/' . $len);
-        header('Content-Length: ' . ($end - $start + 1));
-        echo substr($data, $start, $end - $start + 1);
-        return;
     }
-    header('Content-Length: ' . $len);
-    echo $data;
+    header('Content-Length: ' . ($end - $start + 1));
+    $fp = fopen($path, 'rb');
+    if (!$fp) return;
+    fseek($fp, $start);
+    $left = $end - $start + 1;
+    while ($left > 0 && !feof($fp) && !connection_aborted()) {
+        $buf = fread($fp, min(1 << 16, $left));
+        if ($buf === false || $buf === '') break;
+        echo $buf;
+        $left -= strlen($buf);
+        flush();
+    }
+    fclose($fp);
 };
 
 // 캐시 적중 시 Slack 을 거치지 않고 즉시 응답
 if (is_file($cacheFile) && filesize($cacheFile) > 0) {
-    $data  = file_get_contents($cacheFile);
     $ctype = is_file($metaFile) ? trim((string)file_get_contents($metaFile)) : '';
-    $serveFromCache($data, $ctype);
+    $serveFile($cacheFile, $ctype);
     exit;
 }
 
+// 임시 파일로 바로 받는다(원자적 기록: 다 받은 뒤 rename)
+$tmp = $cacheFile . '.' . getmypid() . '.part';
+$out = @fopen($tmp, 'wb');
+if (!$out) {
+    http_response_code(500);
+    exit('cache write failed');
+}
 $ch = curl_init($u);
 curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_FILE           => $out,
     CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $tok],
-    CURLOPT_SSL_VERIFYPEER => false,
-    CURLOPT_FOLLOWLOCATION => true,
-    CURLOPT_TIMEOUT        => 20,
+    CURLOPT_FOLLOWLOCATION => true,           // 리다이렉트 대상이 다른 호스트면 curl 이 Authorization 을 떼고 따라간다
+    CURLOPT_TIMEOUT        => 120,
 ]);
-$data  = curl_exec($ch);
+$ok    = curl_exec($ch);
 $ctype = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
 $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
+fclose($out);
 
-if ($data === false || $code !== 200) {
+if ($ok === false || $code !== 200) {
+    @unlink($tmp);
     http_response_code(502);
     exit('fetch failed (http ' . $code . ')');
 }
 
 // Slack 이 파일 대신 HTML 로그인/에러 페이지를 주면 = 대개 토큰에 files:read 스코프 없음
 if (stripos((string)$ctype, 'text/html') !== false) {
+    @unlink($tmp);
     http_response_code(403);
     header('Content-Type: text/plain; charset=utf-8');
     exit("이미지를 받지 못했습니다. 로그인 토큰에 'files:read' 스코프가 없을 가능성이 큽니다.\n"
        . "Slack 앱 OAuth & Permissions → User Token Scopes 에 files:read 추가 후 재설치·재로그인 하세요.");
 }
 
-// 다음 요청부터 Slack 을 거치지 않도록 디스크에 저장(원자적 기록)
-$tmp = $cacheFile . '.' . getmypid() . '.part';
-if (@file_put_contents($tmp, $data) !== false) {
-    @rename($tmp, $cacheFile);
+// 다음 요청부터 Slack 을 거치지 않도록 캐시에 확정
+if (@rename($tmp, $cacheFile)) {
     @file_put_contents($metaFile, (string)$ctype);
+    $serveFile($cacheFile, $ctype);
+} else {
+    $serveFile($tmp, $ctype);                // 동시에 같은 파일을 받은 요청이 먼저 확정한 경우 등
+    @unlink($tmp);
 }
-
-$serveFromCache($data, $ctype);

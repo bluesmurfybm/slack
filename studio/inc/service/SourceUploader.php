@@ -80,6 +80,47 @@ final class SourceUploader
      */
     public function storeOne(int $projectId, array $file, array $actor): array
     {
+        $f = $this->saveFile($projectId, $file);
+        [$origName, $ext, $size, $mime, $stored] = [$f['name'], $f['ext'], $f['size'], $f['mime'], $f['path']];
+
+        try {
+            $sourceId = $this->projects->addSource($projectId, [
+                'kind'         => BS_EXT_KIND[$ext],
+                'title'        => $origName,
+                'file_path'    => $stored,
+                'file_size'    => $size,
+                'mime'         => $mime,
+                // 파싱은 P2 에서 한다. 여기서는 대기 상태로만 남긴다.
+                'parse_status' => 'pending',
+            ], $actor);
+        } catch (Throwable $e) {
+            // DB 에 못 넣었으면 파일도 남기지 않는다. 남기면 아무도 모르는 쓰레기가 된다.
+            @unlink($stored);
+            throw $e;
+        }
+
+        return [
+            'id'           => $sourceId,
+            'kind'         => BS_EXT_KIND[$ext],
+            'title'        => $origName,
+            'file_size'    => $size,
+            'size_label'   => self::humanSize($size),
+            'mime'         => $mime,
+            'parse_status' => 'pending',
+        ];
+    }
+
+    /**
+     * 검사하고 저장 경로로 옮기기만 한다 — DB 행은 만들지 않는다 (2026-10-19).
+     *
+     * 프로젝트 출처(storeOne)와 R&D 진행 기록·산출물 첨부(RndRepo::addFiles)가
+     * **같은 검사**를 거치게 하려고 떼어 냈다. 형식·크기·내용 대조는 여기 한 곳.
+     * DB 에 못 넣으면 부른 쪽이 @unlink($r['path']) 로 치운다.
+     *
+     * @return array{name:string, ext:string, size:int, mime:string, path:string}
+     */
+    public function saveFile(int $projectId, array $file): array
+    {
         $this->assertUploadOk($file);
 
         $origName = $this->sanitizeName((string)$file['name']);
@@ -127,31 +168,13 @@ final class SourceUploader
         $this->moveUploaded((string)$file['tmp_name'], $stored);
         @chmod($stored, 0640);
 
-        try {
-            $sourceId = $this->projects->addSource($projectId, [
-                'kind'         => BS_EXT_KIND[$ext],
-                'title'        => $origName,
-                'file_path'    => $stored,
-                'file_size'    => $size,
-                'mime'         => $mime,
-                // 파싱은 P2 에서 한다. 여기서는 대기 상태로만 남긴다.
-                'parse_status' => 'pending',
-            ], $actor);
-        } catch (Throwable $e) {
-            // DB 에 못 넣었으면 파일도 남기지 않는다. 남기면 아무도 모르는 쓰레기가 된다.
-            @unlink($stored);
-            throw $e;
-        }
+        return ['name' => $origName, 'ext' => $ext, 'size' => $size, 'mime' => $mime, 'path' => $stored];
+    }
 
-        return [
-            'id'           => $sourceId,
-            'kind'         => BS_EXT_KIND[$ext],
-            'title'        => $origName,
-            'file_size'    => $size,
-            'size_label'   => self::humanSize($size),
-            'mime'         => $mime,
-            'parse_status' => 'pending',
-        ];
+    /** $_FILES['files'] 를 한 파일씩 펼친다 (2026-10-19 공개 — R&D 첨부도 쓴다). */
+    public function filesFrom(array $f): array
+    {
+        return $this->normalizeFilesArray($f);
     }
 
     // =================================================================
@@ -182,8 +205,10 @@ final class SourceUploader
         if ($safe === null) {
             throw new InvalidArgumentException('http:// 또는 https:// 로 시작하는 주소만 등록할 수 있습니다.');
         }
-        if (mb_strlen($safe) > 500) {
-            throw new InvalidArgumentException('주소가 너무 깁니다. 500자 이내로 넣어 주세요.');
+        if (mb_strlen($safe) > BS_URL_MAX) {
+            throw new InvalidArgumentException(sprintf(
+                '주소가 너무 깁니다(%s자). %s자 이내로 넣어 주세요.',
+                number_format(mb_strlen($safe)), number_format(BS_URL_MAX)));
         }
 
         $kind  = $this->linkKind($safe);

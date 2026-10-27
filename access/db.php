@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../core/sqlite_compat.php';   // db_connect() — 로컬 시험(SQLite)용
 /**
  * access(Coursemos EnvHub) 모듈 DB.
  *
@@ -18,6 +19,9 @@
 
 require_once __DIR__ . '/../core/db.php';   // add_column_if_missing() 재사용
 
+/** 서버 OS 기본값 — 새로 등록하는 학교와 가져오기에 이 값이 들어간다 */
+const ACCESS_OS_DEFAULT = 'Rocky 8';
+
 function access_db() {
     static $pdo = null;
     if ($pdo) return $pdo;
@@ -31,7 +35,7 @@ function access_db() {
     ];
 
     $dsn = "mysql:host={$d['host']};port={$d['port']};charset={$d['charset']}";
-    $pdo = new PDO($dsn, $d['user'], $d['pass'], $opt);
+    $pdo = db_connect($dsn, $d['user'], $d['pass'], $opt, $d['name']);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$d['name']}`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `{$d['name']}`");
@@ -70,6 +74,7 @@ function access_db() {
         CREATE TABLE IF NOT EXISTS `school_access` (
             `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `school_id`   INT UNSIGNED NOT NULL COMMENT 'schools.id (마스터)',
+            `os`          VARCHAR(60)  NOT NULL DEFAULT 'Rocky 8' COMMENT '서버 OS 버전',
             `opened`      VARCHAR(120) NOT NULL DEFAULT '' COMMENT '사업시작/최초운영오픈년월',
             `vpn`         VARCHAR(80)  NOT NULL DEFAULT '' COMMENT 'VPN/접근제어 프로그램명. 비어 있으면 별도 실행 불필요',
             `vpn_note`    TEXT         NULL COMMENT 'VPN 접속 방법 / 판정 근거가 된 문장',
@@ -157,6 +162,18 @@ function access_db() {
         $pdo->exec("ALTER TABLE `school_access` DROP COLUMN `ops_web`");
     }
 
+    // OS 버전 칸. 대부분의 서버가 Rocky 8 이라 그걸 기본값으로 깔고 시작한다.
+    // 기본값 없이 먼저 만들어진 설치본도 여기서 한 번 따라잡는다 — 조건이 "기본값이
+    // 아직 Rocky 8 이 아님" 이라서, 한 번 바꾸고 나면 다시 돌지 않는다(비워 둔 칸을
+    // 매번 되살리지 않는다).
+    if (!access_has_column($pdo, 'os')) {
+        add_column_if_missing($pdo, "ALTER TABLE `school_access` ADD COLUMN `os` VARCHAR(60) NOT NULL DEFAULT '" . ACCESS_OS_DEFAULT . "' COMMENT '서버 OS 버전' AFTER `school_id`");
+        $pdo->exec("UPDATE school_access SET os='" . ACCESS_OS_DEFAULT . "' WHERE os=''");
+    } elseif (access_col_default($pdo, 'os') !== ACCESS_OS_DEFAULT) {
+        $pdo->exec("ALTER TABLE `school_access` MODIFY `os` VARCHAR(60) NOT NULL DEFAULT '" . ACCESS_OS_DEFAULT . "' COMMENT '서버 OS 버전'");
+        $pdo->exec("UPDATE school_access SET os='" . ACCESS_OS_DEFAULT . "' WHERE os=''");
+    }
+
     // 접속 정보는 DB에 평문으로 두지 않는다.
     // ※ 반드시 맨 마지막이다. 위의 통합·판정 작업들(비고로 합치기, VPN 자동판정 등)은
     //   평문을 읽고 글자를 덧붙이므로, 먼저 암호화해 버리면 암호문에 이어 붙여 깨진다.
@@ -231,6 +248,15 @@ function access_merge_note($note, $label, $value) {
     $block = "[{$label}]\n{$value}";
     $note  = trim((string)$note);
     return $note === '' ? $block : $note . "\n\n" . $block;
+}
+
+/** 컬럼의 기본값 (마이그레이션이 이미 돌았는지 판단하는 데 쓴다) */
+function access_col_default(PDO $pdo, $col) {
+    $st = $pdo->prepare("SELECT COLUMN_DEFAULT FROM information_schema.COLUMNS
+                         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'school_access'
+                           AND COLUMN_NAME = ? LIMIT 1");
+    $st->execute([$col]);
+    return (string)$st->fetchColumn();
 }
 
 function access_has_index(PDO $pdo, $name) {
@@ -506,7 +532,7 @@ function access_split_login($raw) {
 
 /** school_access 에서 사용자가 편집할 수 있는 컬럼 (school_id/sort_no 는 제외) */
 function access_cols() {
-    return ['opened','vpn','vpn_note','repo','deploy','note',
+    return ['os','opened','vpn','vpn_note','repo','deploy','note',
             'login_dev_id','login_dev','dev_note','dev_db',
             'login_ops_id','login_ops','ops_note','ops_db','haksa_db'];
 }
@@ -522,6 +548,7 @@ function access_cols() {
 function access_field_groups() {
     return [
         ['title' => '공통 정보', 'fields' => [
+            ['key' => 'os',       'label' => 'OS 버전',        'type' => 'input', 'default' => ACCESS_OS_DEFAULT],
             ['key' => 'opened',   'label' => '최초 오픈',      'type' => 'input'],
             ['key' => 'repo',     'label' => 'svn / git 주소', 'type' => 'area',  'copy' => 1],
             ['key' => 'vpn',      'label' => 'VPN 프로그램',   'type' => 'input'],

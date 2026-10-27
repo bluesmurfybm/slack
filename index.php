@@ -6,6 +6,7 @@
  *    PHP가 세션을 먼저 확인하고 처음부터 올바른 화면 상태로 HTML을 내려준다.
  */
 require_once __DIR__ . '/core/auth.php';
+require_once __DIR__ . '/core/pwa.php';
 // 로그인 상태에 따라 매번 다르게 그려지는 페이지라 브라우저/중간 캐시에 절대 남으면 안 됨.
 // 캐시된 옛 버전이 남아 있으면 "저장 후 대시보드로 안 돌아간다"/"그리드가 가끔 안 보인다" 처럼
 // 예전 코드가 실행되는 것처럼 보이는 현상이 생긴다.
@@ -19,6 +20,8 @@ $__current = $__u ? [
     'email'       => $__u['email'],
     'has_token'   => !empty($__u['slack_token_enc']),
     'slack_email' => $__u['slack_email'] ?? null,
+    'gmail_user'  => $__u['gmail_user'] ?? null,
+    'has_gmail_pass' => !empty($__u['gmail_pass_enc']),
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
 ] : null;
@@ -39,7 +42,8 @@ $__bgPref  = board_bg_pref($__u);
 // 시스템을 더해도 드롭다운에만 생기고 타일은 안 생겼다. 목록을 통째로 넘겨
 // 타일도 이 목록에서 그린다 — 이제 json 만 고치면 양쪽이 같이 늘어난다.
 // 카드 순서는 사람마다 다르다. 끌어 놓은 순서가 있으면 그대로, 없으면 제목순.
-$__systems = board_sort_tiles(work_systems(), $__u['tile_order'] ?? null);
+// 출입 명단이 있는 카드(json 의 "members")는 그 명단에 든 사람에게만 보인다.
+$__systems = board_sort_tiles(work_systems_for_viewer(work_systems()), $__u['tile_order'] ?? null);
 // 카드가 열 개를 넘기면서 한 판에 늘어놓는 것만으로 찾기 어려워졌다. 관리자가
 // 묶음을 만들어 나눠 담는다. 묶음과 소속은 전사 공통, 묶음 **안의** 순서는
 // 위에서 정한 사람별 순서를 그대로 따른다.
@@ -56,6 +60,10 @@ $__collapsed = array_values(array_filter(array_map(
     'intval',
     explode(',', (string)($__u['tile_collapsed'] ?? ''))
 )));
+// 카드 배지(안 읽은 알림 수). 처음부터 그려야 숫자가 뒤늦게 튀어나오지 않는다.
+// 어느 카드에 붙일지는 worksystems.json 의 "badge" — core/push.php::push_tile_badges.
+require_once __DIR__ . '/core/push.php';
+$__tileBadges = $__u ? push_tile_badges((int)$__u['id'], $__systems) : [];
 // 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
 $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
@@ -66,6 +74,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>blue-iWorks</title>
 <link rel="icon" href="styles/favicon.ico">
+<?= pwa_head_tags('') ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -128,6 +137,13 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         <button type="button" class="bg-btn" id="bgBtn" onclick="toggleBg()"
                 title="대시보드 배경" aria-label="대시보드 배경 바꾸기"></button>
 <?php endif; ?>
+        <!-- 알림함. 안 읽은 수는 오른쪽 위 숫자.
+             배경 단추와 달리 로그인 전에도 그려 둔다 — 로그인 직후(홈 화면 앱은 늘 이 경로) renderShell 이 보이게 한다. -->
+        <button type="button" class="bg-btn nf-btn<?= $__current ? '' : ' hidden' ?>" id="nfBtn"
+                onclick="showNotifs()" title="알림" aria-label="알림">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <span class="nf-badge hidden" id="nf-badge"></span>
+        </button>
         <div class="user-menu" id="userMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
             <span class="avatar" id="tb-avatar"></span>
@@ -143,6 +159,8 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
             <div class="dd-sep"></div>
             <?= work_systems_menu('', '', true) ?>
             <div class="dd-sep"></div>
+            <!-- 설치할 수 있을 때만 보인다(pwa.js 의 bluePwa). 안내 띠에서 '다음에' 를 눌렀어도 여기서 다시 설치할 수 있다 -->
+            <a href="javascript:void(0)" id="menu-install" class="hidden" onclick="closeUserMenu();bluePwa.install()">📲 앱으로 설치</a>
             <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
           </div>
         </div>
@@ -228,6 +246,21 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     </div>
     <div class="list-card" id="nl-list"></div>
     <div class="pager" id="nl-pager"></div>
+  </div>
+
+  <!-- 알림함 — 받은 알림. 원본은 portal_notification(core/push.php), API 는 api/notifications.php -->
+  <div id="view-notifs" class="wrap hidden">
+    <div class="page-head">
+      <h1>알림</h1>
+      <span class="nf-count" id="nf-count"></span>
+      <span style="flex:1"></span>
+      <label class="check"><input type="checkbox" id="nf-only-unread" onchange="showNotifs()"> 안 읽은 것만</label>
+      <button class="btn-sm" onclick="readAllNotifs()">모두 읽음</button>
+      <button class="btn-sm danger" onclick="deleteReadNotifs()">읽은 알림 지우기</button>
+      <button class="btn-sm" onclick="showDash()">대시보드</button>
+    </div>
+    <div class="list-card" id="nf-list"></div>
+    <div class="pager" id="nf-pager"></div>
   </div>
 
   <!-- 포털 관리 -->
@@ -370,6 +403,10 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
             <input type="text" id="ev-memo" maxlength="500" placeholder="한 줄 설명 (선택)">
           </div>
 
+          <h4 class="kw-sec" style="margin-top:20px">D-day 색</h4>
+          <div class="ev-sws" id="ev-sws" role="radiogroup" aria-label="D-day 색"></div>
+          <div class="kw-note ev-sw-note" id="ev-sw-note"></div>
+
           <h4 class="kw-sec" style="margin-top:20px">축하 폭죽</h4>
           <div class="fld kw-opt">
             <label for="ev-cheer">그날 들어오면 폭죽 쏘기</label>
@@ -443,6 +480,22 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         </div>
       </div>
 
+      <!-- 웹 푸시 알림. 위 칸들과 달리 '수정/저장' 을 거치지 않고 누르는 즉시 저장한다.
+           기기 구독은 브라우저 권한 창이 뜨는 일이라 '취소' 로 되돌릴 수 없기 때문이다.
+           종류 목록의 원본은 core/push_kinds.json, 저장은 api/push.php. -->
+      <div class="fld hidden" id="pf-push">
+        <label>알림</label>
+        <div class="push-device">
+          <button type="button" class="btn-ghost" id="pf-push-btn" onclick="togglePushDevice()">이 기기에서 알림 받기</button>
+          <span class="hintline" id="pf-push-state"></span>
+        </div>
+        <div class="push-devices" id="pf-push-devices"></div>
+        <div class="push-kinds" id="pf-push-kinds"></div>
+        <div class="hintline" id="pf-push-hint">
+          종류별 설정은 누르는 즉시 저장됩니다. 알림은 기기마다 따로 받습니다 — PC·휴대폰에서 각각 "알림 받기" 를 눌러 주세요.
+        </div>
+      </div>
+
       <div class="token-note">
         🔒 <b>슬랙 연동 토큰</b>은 민감정보입니다. 본인만 입력·수정하며, 저장 후에는 화면에 원문이 다시 표시되지 않습니다.
         토큰이 유출되면 즉시 재발급하세요.
@@ -452,6 +505,25 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         <div class="pw-wrap">
           <input id="pf-token" type="password" placeholder="xoxp-... (본인 토큰 붙여넣기)" disabled>
           <button class="eye" onclick="toggleEye('pf-token',this)" title="표시/숨김"></button>
+        </div>
+      </div>
+
+      <!-- Gmail 연동(slack/gmail). 앱 비밀번호도 슬랙 토큰과 같이 암호화 저장하고 다시 보여 주지 않는다. -->
+      <div class="token-note">
+        📧 <b>Gmail 연동</b>은 본인 메일함을 업무 화면에서 보기 위한 설정입니다. 비밀번호 칸에는 로그인 비밀번호가 아니라
+        <b>Google 앱 비밀번호</b>(16자리)를 넣으세요 — Google 계정 → 보안 → 2단계 인증 → 앱 비밀번호에서 만들 수 있습니다.
+        암호화해 저장하며, 저장 후에는 화면에 다시 표시되지 않습니다.
+      </div>
+      <div class="fld">
+        <label>Gmail 주소</label>
+        <input id="pf-gmail" type="email" placeholder="example@gmail.com" autocomplete="off" disabled>
+        <div class="hintline">비우고 저장하면 연동이 해제되고 저장된 앱 비밀번호도 지워집니다.</div>
+      </div>
+      <div class="fld">
+        <label>Gmail 앱 비밀번호</label>
+        <div class="pw-wrap">
+          <input id="pf-gmailpw" type="password" placeholder="abcd efgh ijkl mnop" autocomplete="new-password" disabled>
+          <button class="eye" onclick="toggleEye('pf-gmailpw',this)" title="표시/숨김"></button>
         </div>
       </div>
 
@@ -498,6 +570,8 @@ let TILE_ORDERED = <?= json_encode(!empty($__u['tile_order'])) ?>;
 // 카드 묶음 [{id, name, sort_no}, …]. 위에서 아래 순.
 // **빈 배열이면 묶음을 안 쓴다는 뜻**이라 화면은 지금까지처럼 한 판에 그린다.
 let TILE_GROUPS = <?= json_encode($__tileGroups, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+// { 카드key: 안 읽은 알림 수 }. 알림함 숫자가 바뀔 때마다 paintTileBadges() 가 갈아 끼운다.
+let TILE_BADGES = <?= json_encode($__tileBadges ?: new stdClass()) ?>;
 // { 카드key: 묶음id }. 여기 없는 카드는 '기타' 로 간다.
 let TILE_ASSIGN = <?= json_encode($__tileAssign ?: new stdClass(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 // 접어 둔 묶음 id. 사람마다 다르다.
@@ -565,7 +639,14 @@ function enterApp(){
     return;
   }
   if(params.get("view")==="profile"){
+    const focus = params.get("focus");
     history.replaceState(null,"",location.pathname);
+    if(focus==="gmail"){                     // 업무 현황판 Gmail 탭에서 '미등록' 으로 넘어온 경우 — 바로 입력할 수 있게
+      showProfile("Gmail 주소와 앱 비밀번호를 등록해 주세요", true);
+      const g=document.getElementById("pf-gmail");
+      g.scrollIntoView({block:"center"}); g.focus();
+      return;
+    }
     showProfile();
     return;
   }
@@ -589,6 +670,10 @@ function renderShell(){
   av.textContent=first; av.style.background=current.color||avatarColor(current.name);
   document.getElementById("tb-name").textContent=current.name;
   document.getElementById("hero-hi").textContent=`${current.name}님, 환영합니다`;
+  // 로그인 직후에도 맞게 — 서버가 그린 값은 로그인 전 상태일 수 있다
+  const nfBtn=document.getElementById("nfBtn");
+  if(nfBtn) nfBtn.classList.remove("hidden");
+  refreshNotifBadge();
 }
 
 function toggleUserMenu(e){
@@ -606,7 +691,7 @@ document.addEventListener("click",(e)=>{
 /* ---- views ---- */
 /* 화면이 늘어나면서 "이것만 보이고 나머지는 숨긴다"를 한 곳에서 처리한다.
    화면마다 서로를 숨기게 두면 하나 추가할 때마다 빠뜨리는 곳이 생긴다. */
-const VIEWS=["view-dash","view-profile","view-notices","view-manage"];
+const VIEWS=["view-dash","view-profile","view-notices","view-notifs","view-manage"];
 function showView(id){
   VIEWS.forEach(v=>{
     const el=document.getElementById(v);
@@ -645,7 +730,7 @@ function pickSwatch(c){
    단, 초기 비번 미변경/토큰 요구 상황이면 볼 것도 없이 바로 수정 모드로 연다. */
 function setProfileMode(editing){
   profileEditing=editing;
-  ["pf-name","pf-email","pf-color","pf-pw","pf-slackmail","pf-token"].forEach(id=>{
+  ["pf-name","pf-email","pf-color","pf-pw","pf-slackmail","pf-token","pf-gmail","pf-gmailpw"].forEach(id=>{
     document.getElementById(id).disabled=!editing;
   });
   buildSwatches(document.getElementById("pf-color").value);
@@ -662,7 +747,16 @@ function cancelEditProfile(){
   document.getElementById("pf-color").value=hexOrDefault(current.color);
   document.getElementById("pf-slackmail").value=current.slack_email||"";
   document.getElementById("pf-token").value="";
+  fillGmailFields();
   setProfileMode(false);
+}
+
+/* Gmail 연동 칸: 주소는 그대로 보여 주고, 앱 비밀번호는 저장 여부만 알린다(원문은 서버도 안 내려 준다) */
+function fillGmailFields(){
+  document.getElementById("pf-gmail").value=current.gmail_user||"";
+  const pw=document.getElementById("pf-gmailpw");
+  pw.value="";
+  pw.placeholder = current.has_gmail_pass ? "저장됨 · 변경하려면 새 앱 비밀번호 입력" : "abcd efgh ijkl mnop";
 }
 
 function showProfile(alertMsg, forceEdit){
@@ -675,29 +769,253 @@ function showProfile(alertMsg, forceEdit){
   const tokenEl=document.getElementById("pf-token");
   tokenEl.value="";
   tokenEl.placeholder = current.has_token ? "저장됨 · 변경하려면 새 토큰 입력" : "xoxp-... (본인 토큰 붙여넣기)";
+  fillGmailFields();
   setProfileMode(!!(current && current.needs_setup) || !!forceEdit);
   if(alertMsg) toast(alertMsg);
+  loadPushPanel();
+}
+
+/* ---- 앱 설치 메뉴 ---- 설치할 수 있게 되면(pwa.js) 사용자 메뉴에 항목을 보인다 */
+function syncInstallMenu(){
+  const el=document.getElementById("menu-install");
+  if(el) el.classList.toggle("hidden", !(window.bluePwa && bluePwa.available()));
+}
+document.addEventListener("bluepwa:change", syncInstallMenu);
+window.addEventListener("load", syncInstallMenu);
+
+/* ---- 알림함 ----
+   서버는 api/notifications.php. 알림을 눌러 열면 sw.js 가 읽음으로 바꾸고,
+   여기서 누르면 읽음으로 바꾼 뒤 그 주소로 간다. */
+let nfItems=[], nfMore=false;
+async function refreshNotifBadge(){
+  if(!current) return;
+  try{
+    const d=await bapi("api/notifications.php?count=1");
+    paintNotifBadge(d.unread, d.tiles);
+  }catch(e){}
+}
+function paintNotifBadge(n, tiles){
+  paintTileBadges(tiles);
+  const b=document.getElementById("nf-badge"), btn=document.getElementById("nfBtn");
+  b.textContent = n>99 ? "99+" : String(n||0);
+  b.classList.toggle("hidden", !n);
+  btn.classList.toggle("on", !!n);
+  btn.title = n ? `알림 — 안 읽음 ${n}` : "알림";
+  const c=document.getElementById("nf-count");
+  if(c) c.textContent = n ? `안 읽음 ${n}` : "";
+}
+// 다른 탭·앱에서 읽었거나 새 알림이 왔을 수 있다 — 돌아올 때 다시 센다
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) refreshNotifBadge(); });
+
+async function showNotifs(more){
+  if(!more){ showView("view-notifs"); nfItems=[]; }
+  const list=document.getElementById("nf-list");
+  if(!more) list.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
+  const only=document.getElementById("nf-only-unread").checked ? "&unread=1" : "";
+  const before=more && nfItems.length ? `&before=${nfItems[nfItems.length-1].id}` : "";
+  try{
+    const d=await bapi(`api/notifications.php?limit=30${only}${before}`);
+    nfItems=nfItems.concat(d.items);
+    nfMore=d.has_more;
+    paintNotifBadge(d.unread, d.tiles);
+    renderNotifs();
+  }catch(e){
+    list.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`;
+  }
+}
+function renderNotifs(){
+  const list=document.getElementById("nf-list");
+  if(!nfItems.length){
+    list.innerHTML=`<div class="panel-empty">받은 알림이 없습니다.</div>`;
+    document.getElementById("nf-pager").innerHTML="";
+    return;
+  }
+  list.innerHTML=nfItems.map(n=>`
+    <div class="nf-row${n.read_at?"":" unread"}" onclick="openNotif(${n.id})">
+      <span class="nf-ic">${esc(n.sys_emoji)||"🔔"}</span>
+      <span class="nf-main">
+        <span class="nf-meta">${esc(n.kind_label)} · ${esc(fmtNotifTime(n.created_at))}</span>
+        <span class="nf-title">${esc(n.title)}</span>
+        ${n.body?`<span class="nf-body">${esc(n.body)}</span>`:""}
+      </span>
+      <button type="button" class="nf-del" title="지우기" aria-label="지우기" onclick="event.stopPropagation();deleteNotif(${n.id})">&times;</button>
+    </div>`).join("");
+  document.getElementById("nf-pager").innerHTML = nfMore
+    ? `<button class="btn-sm" onclick="showNotifs(true)">더 보기</button>` : "";
+}
+/* 오늘이면 시각만, 아니면 날짜 */
+function fmtNotifTime(s){
+  const d=new Date((s||"").replace(" ","T"));
+  if(isNaN(d)) return s||"";
+  const now=new Date();
+  const p=n=>String(n).padStart(2,"0");
+  if(d.toDateString()===now.toDateString()) return `오늘 ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function openNotif(id){
+  const n=nfItems.find(x=>x.id===id);
+  if(!n) return;
+  if(!n.read_at){
+    try{ const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read:[id]})}); paintNotifBadge(d.unread, d.tiles); }catch(e){}
+    n.read_at="now";
+  }
+  const url=(n.url||"").trim();
+  // 주소가 없거나 포털 첫 화면이면 목록에 머문다. 다른 사이트 주소는 새 탭으로 연다
+  if(!url || url==="./" || url==="index.php"){ renderNotifs(); return; }
+  if(/^https?:\/\//i.test(url) && !url.startsWith(location.origin)) window.open(url,"_blank","noopener");
+  else location.href=url;
+}
+async function deleteNotif(id){
+  try{
+    const d=await bapi("api/notifications.php",{method:"DELETE",body:JSON.stringify({ids:[id]})});
+    nfItems=nfItems.filter(x=>x.id!==id);
+    paintNotifBadge(d.unread, d.tiles);
+    renderNotifs();
+  }catch(e){ toast(e.message); }
+}
+async function readAllNotifs(){
+  try{
+    const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read_all:true})});
+    paintNotifBadge(d.unread, d.tiles);
+    showNotifs();
+  }catch(e){ toast(e.message); }
+}
+async function deleteReadNotifs(){
+  if(!confirm("읽은 알림을 모두 지울까요?")) return;
+  try{
+    const d=await bapi("api/notifications.php",{method:"DELETE",body:JSON.stringify({read:true})});
+    paintNotifBadge(d.unread, d.tiles);
+    showNotifs();
+  }catch(e){ toast(e.message); }
+}
+
+/* ---- 웹 푸시 알림 (마이페이지) ----
+   서버는 api/push.php, 브라우저 쪽 구독은 pwa.js 의 window.bluePush. */
+let pushInfo=null;
+async function loadPushPanel(){
+  const box=document.getElementById("pf-push");
+  // pwa.js 는 defer 라 이 화면 스크립트보다 늦게 돈다. 첫 화면이 곧바로 마이페이지면
+  // (초기 비번, ?view=profile) 아직 bluePush 가 없다 — 다 불러온 뒤 다시 그린다.
+  if(!window.bluePush && document.readyState!=="complete"){
+    window.addEventListener("load", loadPushPanel, {once:true});
+    return;
+  }
+  const can=!!window.bluePush;
+  box.classList.toggle("hidden", !can);
+  if(!can) return;
+  try{
+    pushInfo=await bapi("api/push.php");
+  }catch(e){
+    document.getElementById("pf-push-state").textContent="알림 설정을 불러오지 못했습니다: "+e.message;
+    return;
+  }
+  renderPushKinds();
+  await renderPushDevice();
+}
+function renderPushKinds(){
+  const el=document.getElementById("pf-push-kinds");
+  let lastSys="";
+  el.innerHTML=pushInfo.kinds.map(k=>{
+    const head = k.sys!==lastSys ? `<div class="push-sys">${esc(k.sys_emoji)} ${esc(k.sys_label)}</div>` : "";
+    lastSys=k.sys;
+    return head+`<label class="check push-kind" title="${esc(k.desc)}">
+      <input type="checkbox" data-kind="${esc(k.key)}" ${k.enabled?"checked":""} onchange="setPushKind(this)">
+      <span>${esc(k.label)} <small>${esc(k.desc)}</small></span></label>`;
+  }).join("");
+}
+async function setPushKind(input){
+  input.disabled=true;
+  try{
+    pushInfo=await bapi("api/push.php",{method:"PUT",body:JSON.stringify({kind:input.dataset.kind,enabled:input.checked})});
+    toast(input.checked ? "알림을 켰습니다" : "알림을 껐습니다");
+  }catch(e){
+    input.checked=!input.checked;
+    toast(e.message);
+  }finally{
+    input.disabled=false;
+  }
+}
+async function renderPushDevice(){
+  const btn=document.getElementById("pf-push-btn");
+  const st=document.getElementById("pf-push-state");
+  // 이 브라우저가 알림을 못 받아도(iOS Safari 탭 등) 다른 기기를 지울 수는 있어야 한다
+  renderPushDevices(null);
+  if(!bluePush.supported()){
+    btn.disabled=true;
+    const ios=/iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone;
+    st.textContent = ios
+      ? "iOS 는 공유 → '홈 화면에 추가' 한 뒤 그 아이콘으로 열어야 알림을 받을 수 있습니다."
+      : "이 브라우저(또는 https 가 아닌 주소)에서는 알림을 받을 수 없습니다.";
+    return;
+  }
+  if(bluePush.permission()==="denied"){
+    btn.disabled=true;
+    st.textContent="브라우저에서 이 사이트 알림이 차단되어 있습니다. 주소창 왼쪽 자물쇠에서 허용으로 바꿔 주세요.";
+    return;
+  }
+  // 브라우저에 구독이 남아 있어도 서버 목록에서 지워졌으면(다른 기기에서 삭제) 받지 않는 것이다
+  let myHash=null;
+  try{ myHash=await bluePush.endpointHash(); }catch(e){}
+  const on = !!myHash && (pushInfo.device_list||[]).some(d=>d.hash===myHash);
+  btn.disabled=false;
+  btn.textContent = on ? "이 기기 알림 끄기" : "이 기기에서 알림 받기";
+  btn.dataset.on = on ? "1" : "";
+  st.textContent = on ? "이 기기에서 받는 중" : "이 기기는 받지 않음";
+  renderPushDevices(myHash);
+}
+/* 알림 받는 기기 목록. 다른 기기에서 받던 것도 여기서 끊을 수 있다(잃어버린 휴대폰 등). */
+function renderPushDevices(myHash){
+  const el=document.getElementById("pf-push-devices");
+  const list=(pushInfo && pushInfo.device_list)||[];
+  if(!list.length){ el.innerHTML=`<div class="push-dev-empty">알림을 받는 기기가 없습니다.</div>`; return; }
+  el.innerHTML=`<div class="push-sys">알림 받는 기기 ${list.length}대</div>`+list.map(d=>{
+    const mine = myHash && d.hash===myHash;
+    return `<div class="push-dev">
+      <span class="push-dev-nm">${esc(d.label)}${mine?` <span class="push-dev-me">이 기기</span>`:""}</span>
+      <span class="push-dev-dt">등록 ${fmtDateDot(d.created_at)}${d.last_ok_at?` · 마지막 수신 ${fmtDateDot(d.last_ok_at)}`:""}</span>
+      <button type="button" class="btn-sm danger" onclick="deletePushDevice(${d.id}, ${mine?"true":"false"})">삭제</button>
+    </div>`;
+  }).join("");
+}
+async function deletePushDevice(id, mine){
+  if(!confirm(mine ? "이 기기에서 알림을 그만 받을까요?" : "이 기기를 목록에서 지울까요? 그 기기로는 더 이상 알림이 가지 않습니다.")) return;
+  try{
+    if(mine){
+      // 브라우저 구독까지 끊는다. 서버 줄만 지우면 이 기기는 받는다고 착각한다
+      pushInfo=(await bluePush.unsubscribe()) || pushInfo;
+    }else{
+      pushInfo=await bapi("api/push.php",{method:"DELETE",body:JSON.stringify({id})});
+    }
+    toast("기기를 지웠습니다");
+  }catch(e){
+    toast(e.message);
+  }
+  await renderPushDevice();
+}
+async function togglePushDevice(){
+  const btn=document.getElementById("pf-push-btn");
+  btn.disabled=true;
+  try{
+    if(btn.dataset.on){
+      pushInfo=(await bluePush.unsubscribe()) || pushInfo;
+      toast("이 기기에서 알림을 끊었습니다");
+    }else{
+      pushInfo=await bluePush.subscribe(pushInfo.public_key);
+      toast("이 기기에서 알림을 받습니다");
+    }
+  }catch(e){
+    toast(e.message);
+  }
+  await renderPushDevice();
 }
 
 const arrow=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>`;
-const bookIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
-const slackIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-const dtiIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9h4"/><path d="M18 14h-8M18 18h-8M18 6h-8v4h8V6Z"/></svg>`;
-const learnIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/><path d="M22 10v6"/></svg>`;
-const accessIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.1-8.1M17 6l2.5 2.5M14.5 8.5 17 11"/></svg>`;
-const moodleIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.3 6.1-6.1 2.3 2.3-6.1z"/></svg>`;
-const studioIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11M15 9v11"/></svg>`;
-const sitehubIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 11h18"/><path d="M12 15h5"/></svg>`;
 const plusIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
-const cartIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.2l2.3 12.2a1.6 1.6 0 0 0 1.6 1.3h9.1a1.6 1.6 0 0 0 1.6-1.3L21 7H5.3"/></svg>`;
-const aiIcon=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 2h6"/><circle cx="9" cy="14" r="1.1"/><circle cx="15" cy="14" r="1.1"/><path d="M2 13v3M22 13v3"/></svg>`;
 
 
-// key → 아이콘. 그림은 코드에 두고 이름·설명·색은 worksystems.json 에 둔다.
+// key → 아이콘. 그림은 styles/icons/<key>.svg 에 두고 이름·설명·색은 worksystems.json 에 둔다.
 // 모르는 key 가 오면 plusIcon 으로 그려 타일이 통째로 사라지지는 않게 한다.
-const ICONS = { book:bookIcon, slack:slackIcon, slackai:aiIcon, dti:dtiIcon, learn:learnIcon,
-                access:accessIcon, moodle:moodleIcon, bluecart:cartIcon,
-                studio:studioIcon, sitehub:sitehubIcon };
+const ICONS = <?= json_encode(work_system_icons(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 
 /* 카드 한 장. 대시보드와 관리 화면이 같은 모양을 써야 해서 따로 뺐다. */
 function tileHTML(s){
@@ -705,9 +1023,33 @@ function tileHTML(s){
     <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener"
        draggable="false" data-key="${esc(s.key)}">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}</span>
+      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}${s.badge ? tileBadgeHTML(TILE_BADGES[s.key]) : ""}</span>
       <div><h3>${esc(s.label)}</h3><p>${esc(s.desc || "")}</p></div>
     </a>`;
+}
+
+/* 카드 아이콘 오른쪽 위 숫자 — 그 시스템에서 온 안 읽은 알림 수.
+   worksystems.json 에 "badge" 를 단 카드에만 자리를 만들어 둔다. */
+function tileBadgeHTML(n){
+  n = n|0;
+  return `<span class="tile-badge"${n ? "" : " hidden"} title="안 읽은 알림 ${n}건">${n>99 ? "99+" : n}</span>`;
+}
+function paintTileBadges(tiles){
+  if(!tiles) return;
+  TILE_BADGES = tiles;
+  document.querySelectorAll(".tile[data-key] .tile-badge").forEach(b => {
+    const n = TILE_BADGES[b.closest(".tile").dataset.key] | 0;
+    b.textContent = n>99 ? "99+" : String(n);
+    b.title = `안 읽은 알림 ${n}건`;
+    b.hidden = !n;
+  });
+  // 상단바 드롭다운의 같은 숫자(core/worksystems.php::work_systems_menu)도 같이 갈아 끼운다
+  document.querySelectorAll(".dd-menu a[data-key] .dd-badge").forEach(b => {
+    const n = TILE_BADGES[b.closest("a").dataset.key] | 0;
+    b.textContent = n>99 ? "99+" : String(n);
+    b.title = `안 읽은 알림 ${n}건`;
+    b.hidden = !n;
+  });
 }
 
 const soonHTML = `
@@ -946,6 +1288,12 @@ async function saveProfile(){
   // 슬랙 계정 이메일은 빈칸도 보낸다. 토큰과 달리 화면에 원문이 보이므로
   // 비운 것은 '지우기' 라는 뜻이다. 회사 메일과 같으면 서버가 비워서 저장한다.
   body.slack_email=v("pf-slackmail");
+  // Gmail: 주소는 빈칸도 보낸다(= 연동 해제). 앱 비밀번호는 빈칸이면 기존 값 유지.
+  const gm=v("pf-gmail"), gp=v("pf-gmailpw");
+  const gmChanged = gm.toLowerCase() !== (current.gmail_user||"").toLowerCase();
+  if(gm && !gp && (gmChanged || !current.has_gmail_pass)){ toast("Gmail 앱 비밀번호도 입력하세요"); return; }
+  body.gmail_user=gm;
+  if(gp) body.gmail_pass=gp;
 
   const r=await fetch("api/me.php",{method:"PUT",headers:{"Content-Type":"application/json"},
     body:JSON.stringify(body)});
@@ -1254,23 +1602,60 @@ function pixSkeleton(){
   return `<svg class="pix" viewBox="0 0 ${PIX_W} ${PIX_H}" aria-hidden="true">${dots}</svg>`;
 }
 
-/** 켜야 할 점의 자리(판 전체를 훑은 일련번호) */
-function pixOnMap(label){
-  const txt=pixText(label);
+/** 글자 덩어리의 가로 자리 — 가운데에 놓였을 때의 왼쪽 끝과 폭(점 칸) */
+function pixSpan(txt){
   // 글자 수가 아니라 '점 칸' 으로 가운데를 잡는다. 칸 단위로 맞추면
   // D-43 처럼 네 글자일 때 한쪽으로 한 칸 치우친다.
   const cols=txt.length*(PIX_GW+1)-1;                 // 글자 3칸 + 사이 1칸
   const x0=PIX_PAD_X+Math.round((PIX_CELLS*(PIX_GW+1)-1-cols)/2);
+  return {x0, cols};
+}
+
+/** 켜야 할 점의 자리(판 전체를 훑은 일련번호).
+    shift 만큼 가운데에서 옆으로 민다 — 판 밖으로 나간 점은 버린다. */
+function pixOnMap(label, shift=0){
+  const txt=pixText(label);
+  const {x0}=pixSpan(txt);
   const on=new Set();
   for(let c=0;c<txt.length;c++){
     const g=PIX_FONT[txt[c]]||PIX_FONT[" "];
     for(let i=0;i<PIX_GW*PIX_GH;i++){
       if(g[i]!=="1") continue;
       const x=i%PIX_GW, y=(i-x)/PIX_GW;
-      on.add((y+PIX_PAD_Y)*PIX_W + x0+c*(PIX_GW+1)+x);
+      const px=x0+c*(PIX_GW+1)+x+shift;
+      if(px<0 || px>=PIX_W) continue;
+      on.add((y+PIX_PAD_Y)*PIX_W + px);
     }
   }
   return on;
+}
+
+/* 전광판처럼 글자가 오른쪽 밖에서 흘러 들어와 가운데에 멈추고,
+   잠시 머문 뒤 왼쪽으로 빠져나갔다가 다시 들어온다.
+   한 칸씩 끊어 움직인다 — 매끄럽게 미끄러지면 점판이 아니라 그림처럼 보인다.
+   움직임을 줄여 달라고 했으면 흐르지 않고 가운데에 바로 찍는다. */
+const PIX_STEP_MS=70, PIX_HOLD_MS=3000;
+const pixCalm=window.matchMedia("(prefers-reduced-motion: reduce)");
+let pixTimer=null;
+function pixRun(box, label){
+  clearTimeout(pixTimer);
+  const rects=box.querySelectorAll("rect");
+  const draw=s=>{
+    const on=pixOnMap(label, s);
+    for(let k=0;k<rects.length;k++) rects[k].setAttribute("class", on.has(k) ? "on" : "off");
+  };
+  if(pixCalm.matches){ draw(0); return; }
+  box.classList.add("marquee");
+  const {x0, cols}=pixSpan(pixText(label));
+  const from=PIX_W-x0, to=-(x0+cols);   // 오른쪽 끝 바로 밖 → 왼쪽 끝 바로 밖
+  let s=from;
+  const step=()=>{
+    draw(s);
+    const wait = s===0 ? PIX_HOLD_MS : PIX_STEP_MS;
+    s = s===to ? from : s-1;
+    pixTimer=setTimeout(step, wait);
+  };
+  step();
 }
 
 /** 지금 보고 있는 일정에 맞춰 판을 다시 칠한다. */
@@ -1278,19 +1663,16 @@ let evRows=[];
 function paintPix(i){
   const e=evRows[i], box=document.getElementById("ev-pix");
   if(!e || !box) return;
-  box.className="ev-pix k-"+e.kind.key+(e.heat==="today" ? " today" : "");
+  box.className="ev-pix k-"+(e.color||e.kind.key)+(e.heat==="today" ? " today" : "");
   box.setAttribute("aria-label", e.dday_label);
-  const on=pixOnMap(e.dday_label);
-  const rects=box.querySelectorAll("rect");
-  for(let k=0;k<rects.length;k++){
-    rects[k].setAttribute("class", on.has(k) ? "on" : "off");
-  }
+  pixRun(box, e.dday_label);
 }
 
 function renderBoardEvents(rows){
   const box=document.getElementById("board-events");
   if(!rows.length){
     box.innerHTML=`<div class="panel-empty">다가오는 일정이 없습니다.</div>`;
+    clearTimeout(pixTimer);
     eventSlider.stop();
     return;
   }
@@ -2037,6 +2419,7 @@ function openEventModal(id){
   if(!evId){
     set("ev-name",""); set("ev-start",""); set("ev-end",""); set("ev-place",""); set("ev-memo","");
     set("ev-cheer","0"); set("ev-cheer-early","1"); syncEvCheer();
+    evColorPick=null; evSuggestColor();
     document.getElementById("ev-name").focus();
     return;
   }
@@ -2048,8 +2431,47 @@ function openEventModal(id){
     set("ev-place",e.place); set("ev-memo",e.memo);
     set("ev-cheer",String(e.cheer_on||0)); set("ev-cheer-early",String(e.cheer_early ?? 1));
     syncEvCheer();
+    evColorPick=e.color_kind||null; evSuggestColor();
   }).catch(e=>toast(e.message));
 }
+
+/* ---- D-day 색 ----
+   평소에는 제목·메모의 낱말로 고른 종류 색이 '자동' 으로 켜져 있다. 글을 고치면
+   따라 바뀐다. 칸을 누르면 그 색으로 굳고(evColorPick), 더는 글을 따라가지 않는다.
+   '자동으로' 를 누르면 다시 글을 따라간다. 낱말 판정은 서버가 한다. */
+let evColorPick=null, evColorAuto="etc", evColors=[], evColorSeq=0, evColorTimer=null;
+async function evSuggestColor(){
+  const seq=++evColorSeq;
+  const text=document.getElementById("ev-name").value+" "+document.getElementById("ev-memo").value;
+  try{
+    const d=await bapi("api/events.php?scope=kind&text="+encodeURIComponent(text.trim()));
+    if(seq!==evColorSeq) return;           // 늦게 온 옛 응답은 버린다
+    evColors=d.colors; evColorAuto=d.kind.key;
+  }catch(e){ if(seq!==evColorSeq) return; }
+  paintEvColors();
+}
+function evColorInput(){
+  clearTimeout(evColorTimer);
+  evColorTimer=setTimeout(evSuggestColor, 250);
+}
+function paintEvColors(){
+  const now=evColorPick||evColorAuto;
+  document.getElementById("ev-sws").innerHTML=evColors.map(c=>
+    `<button type="button" role="radio" class="ev-sw k-${c.key}${c.key===now?" on":""}"
+       aria-checked="${c.key===now}" title="${esc(c.label)}" onclick="pickEvColor('${c.key}')">
+       <i></i><span>${esc(c.label)}</span></button>`).join("");
+  const auto=evColors.find(c=>c.key===evColorAuto);
+  const name=auto?auto.label:"일정";
+  document.getElementById("ev-sw-note").innerHTML=evColorPick
+    ? `직접 고른 색입니다. <a href="javascript:void(0)" onclick="pickEvColor(null)">자동으로 (${esc(name)})</a>`
+    : `제목·메모를 보고 ‘${esc(name)}’ 색을 골랐습니다. 다른 색을 누르면 그 색으로 바뀝니다.`;
+}
+function pickEvColor(key){
+  evColorPick=key;
+  paintEvColors();
+}
+document.getElementById("ev-name").addEventListener("input", evColorInput);
+document.getElementById("ev-memo").addEventListener("input", evColorInput);
 
 /* 폭죽을 끄면 '미리 축하' 는 물어볼 것이 없다. 감추지 않고 잠그기만 한다 —
    사라지면 그런 설정이 있었다는 것도 모른다. */
@@ -2076,7 +2498,8 @@ async function saveEvent(){
       place:document.getElementById("ev-place").value.trim(),
       memo:document.getElementById("ev-memo").value.trim(),
       cheer_on:document.getElementById("ev-cheer").value,
-      cheer_early:document.getElementById("ev-cheer-early").value
+      cheer_early:document.getElementById("ev-cheer-early").value,
+      color_kind:evColorPick||""
     });
     if(evId) await bapi(`api/events.php?id=${evId}`,{method:"PUT",body});
     else     await bapi("api/events.php",{method:"POST",body});

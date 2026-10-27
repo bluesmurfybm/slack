@@ -47,8 +47,7 @@ body{
 }
 .wrap{max-width:1240px;margin:0 auto;padding:0 22px 80px}
 
-/* topbar 는 /shared-styles/topbar.css(포털 원본)에서 온다 — 본문과 줄을 맞추는 아래 한 줄만 예외 */
-.topbar-in{max-width:1240px}
+/* topbar 는 포털 styles/topbar.css 를 그대로 쓴다 — 폭을 따로 잡으면 포털과 오갈 때 로고·메뉴가 들썩인다 */
 
 /* ---------- 페이지 헤더 ---------- */
 header.site{background:var(--bg-page)}

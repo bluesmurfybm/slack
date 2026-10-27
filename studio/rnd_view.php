@@ -26,9 +26,11 @@ bs_layout_head(
     $rnd['name'],
     '과업 편성/현황',
     '',
-    'project'
+    'rnd'
 );
 ?>
+
+<?= bs_back_link('rnd_board.php', 'R&D 과제 목록') ?>
 
 <div class="ba-rnd-view" id="ba-rnd-view" data-id="<?= (int)$rnd['id'] ?>">
 
@@ -57,5 +59,7 @@ bs_layout_head(
   <section class="ba-rv-pane" data-pane="logs"     id="ba-rv-logs"    hidden></section>
   <section class="ba-rv-pane" data-pane="outputs"  id="ba-rv-outputs" hidden></section>
 </div>
+
+<?= bs_source_viewer_html() ?>
 
 <?php bs_layout_foot(); ?>

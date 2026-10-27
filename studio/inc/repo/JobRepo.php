@@ -236,14 +236,22 @@ final class JobRepo
     }
 
     /** 사람이 멈춘다. 워커는 다음 한 건을 끝내고 멈춘다. */
-    public function cancel(int $projectId): int
+    /**
+     * 멈춘다. $kind 를 주면 그 종류만 (2026-10-16) — 링크 칸의 [멈추기] 가
+     * 난이도 매기기까지 멈추면 안 된다. 주지 않으면 전에처럼 전부.
+     */
+    public function cancel(int $projectId, ?string $kind = null): int
     {
-        $st = $this->pdo->prepare(
-            'UPDATE bs_analysis_job SET status = "canceled", finished_at = NOW(),
-                    message = "사람이 멈췄습니다."
-              WHERE project_id = ? AND status IN ("queued","running")'
-        );
-        $st->execute([$projectId]);
+        $sql = 'UPDATE bs_analysis_job SET status = "canceled", finished_at = NOW(),
+                       message = "사람이 멈췄습니다."
+                 WHERE project_id = ? AND status IN ("queued","running")';
+        $arg = [$projectId];
+        if ($kind !== null) {
+            $sql  .= ' AND kind = ?';
+            $arg[] = $kind;
+        }
+        $st = $this->pdo->prepare($sql);
+        $st->execute($arg);
         return $st->rowCount();
     }
 

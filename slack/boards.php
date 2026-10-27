@@ -26,7 +26,7 @@ return [
             'status'=>'Col08EEGB9P9U', 'priority'=>'Col08EZRT0HEV', 'team'=>'Col08EPV33DB6',
             'eta'=>'Col08FAK8PENL', 'date'=>'Col08EZSA9F6V', 'attach'=>'Col08EZRHEZ09',
             'momo'=>'Col08EME3MQNP',   // (재활용) 고객사 캡처 → 제목 앞에 붙이고 비움
-            'lms'=>'', 'done'=>'',
+            'lms'=>'', 'done'=>'', 'kind'=>'',   // 접수분류 컬럼 없음
         ],
         'comment_channel' => 'C08EEFB15EJ',
         'init_status'     => '시작 전',

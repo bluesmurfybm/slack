@@ -95,10 +95,15 @@ final class WbsExtractor
         if (in_array($kind, ['url', 'figma'], true)) {
             return $this->parseRemote($sourceId, $src);
         }
+        // 직접 입력한 글은 **이미 글이다.** 뽑을 것이 없을 뿐 재료는 멀쩡하다.
+        // 전에는 '전체 다시 분석' 이 여기서 ok → skip 으로 덮어, 글은 남았는데
+        // WBS 도출·난이도 근거(parse_status='ok' 만 본다)에서 조용히 빠졌다
+        // (2026-10-15). 글이 있으면 ok 를 지킨다.
         if ($kind === 'text') {
-            $this->projects->updateSourceParse(
-                $sourceId, 'skip', $src['parsed_text'] ?: null, null);
-            return $this->parseResult('skip', 0, 0, null);
+            $text   = (string)($src['parsed_text'] ?? '');
+            $status = $text !== '' ? 'ok' : 'skip';
+            $this->projects->updateSourceParse($sourceId, $status, $text !== '' ? $text : null, null);
+            return $this->parseResult($status, mb_strlen($text), 0, null);
         }
         if ($kind === 'image') {
             $this->projects->updateSourceParse($sourceId, 'skip', null, null);
@@ -227,6 +232,11 @@ final class WbsExtractor
     {
         $out = [];
         foreach ($this->projects->sources($projectId) as $s) {
+            // 참고 자료는 보관용이다 — 본문을 뽑지 않는다 (2026-10-15).
+            // 용도를 업무 범위로 바꾸면 그때 pending 그대로 분석에 들어온다.
+            if (($s['purpose'] ?? 'scope') === 'reference') {
+                continue;
+            }
             if ($onlyPending && $s['parse_status'] !== 'pending') {
                 continue;
             }
@@ -268,7 +278,8 @@ final class WbsExtractor
         if (!$sources) {
             throw new DomainException(
                 '읽어 들인 문서가 없습니다. 먼저 [문서 분석] 을 눌러 출처 문서에서 '
-                . '글자를 뽑아 주세요. 링크나 직접 입력만 있으면 도출할 내용이 없습니다.'
+                . '글자를 뽑아 주세요. 링크나 직접 입력만 있으면 도출할 내용이 없습니다. '
+                . '참고 자료 칸에 올린 문서는 도출에 쓰지 않습니다.'
             );
         }
 

@@ -18,6 +18,7 @@ final class ProjectRepo
     /** 목록·상세에서 돌려주는 컬럼. parsed_text 처럼 큰 값은 여기 넣지 않는다. */
     private const COLS = 'id, code, name, summary, client, track,
         dev_start, dev_end, test_start, test_end, deploy_date,
+        aidd_enabled, aidd_effort, aidd_load,
         notes, extra, status, owner_id, owner_name,
         deleted_at, deleted_by, deleted_by_name, delete_reason,
         created_at, updated_at';
@@ -32,9 +33,18 @@ final class ProjectRepo
      * 한 건. 없으면 null.
      * @param bool $withDeleted true 면 지워진 것도 찾는다.
      */
+    /**
+     * 프로젝트 한 건. **R&D 과제는 돌려주지 않는다** (2026-10-15).
+     *
+     * 전에는 id 만 봤다. 그래서 project_view.php?id=<R&D 과제 번호> 를
+     * 직접 치면 비공개 과제도 프로젝트 화면으로 열렸고, 같은 번호로
+     * api/project·task·allocate 를 불러도 통과했다. 이 함수를 부르는 곳은
+     * 모두 프로젝트 진입점이고 R&D 는 RndRepo::find() 로 공개 범위를 본다.
+     * 진입점마다 거르지 않고 여기 한 곳에서 거른다.
+     */
     public function find(int $id, bool $withDeleted = false): ?array
     {
-        $sql = 'SELECT ' . self::COLS . ' FROM bs_project WHERE id = ?';
+        $sql = "SELECT " . self::COLS . " FROM bs_project WHERE id = ? AND project_type = 'project'";
         if (!$withDeleted) {
             $sql .= ' AND deleted_at IS NULL';
         }
@@ -206,8 +216,9 @@ final class ProjectRepo
                     'INSERT INTO bs_project
                         (code, name, summary, client, track,
                          dev_start, dev_end, test_start, test_end, deploy_date,
+                         aidd_enabled, aidd_effort, aidd_load,
                          notes, extra, status, owner_id, owner_name)
-                     VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?)'
+                     VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?,?,?)'
                 );
                 $st->execute([
                     $code,
@@ -220,6 +231,11 @@ final class ProjectRepo
                     $this->nn($data['test_start'] ?? null),
                     $this->nn($data['test_end'] ?? null),
                     $this->nn($data['deploy_date'] ?? null),
+                    // AIDD 는 **기본이 켬**이다. 안 주면 기본값으로 들어간다.
+                    array_key_exists('aidd_enabled', $data)
+                        ? (int)!empty($data['aidd_enabled']) : BS_AIDD_DEFAULT['enabled'],
+                    $this->aiddFactor($data['aidd_effort'] ?? null, BS_AIDD_DEFAULT['effort']),
+                    $this->aiddFactor($data['aidd_load']   ?? null, BS_AIDD_DEFAULT['load']),
                     $this->nn($data['notes'] ?? null),
                     $this->nn($data['extra'] ?? null),
                     $data['status'] ?? 'draft',
@@ -266,6 +282,20 @@ final class ProjectRepo
                 $params[] = $this->nn($data[$col]);
             }
         }
+
+        // AIDD 세 칸은 nn() 을 태우지 않는다 — 빈 문자열이 NULL 이 되면
+        // NOT NULL 칸에 부딪히고, 0 으로 들어가면 공수가 전부 0 이 된다.
+        if (array_key_exists('aidd_enabled', $data)) {
+            $sets[]   = '`aidd_enabled` = ?';
+            $params[] = (int)!empty($data['aidd_enabled']);
+        }
+        foreach (['aidd_effort' => BS_AIDD_DEFAULT['effort'],
+                  'aidd_load'   => BS_AIDD_DEFAULT['load']] as $col => $def) {
+            if (array_key_exists($col, $data)) {
+                $sets[]   = "`$col` = ?";
+                $params[] = $this->aiddFactor($data[$col], $def);
+            }
+        }
         if (!$sets) {
             return;     // 바꿀 게 없으면 updated_at 도 건드리지 않는다
         }
@@ -275,6 +305,180 @@ final class ProjectRepo
             'UPDATE bs_project SET ' . implode(', ', $sets) . ' WHERE id = ? AND deleted_at IS NULL'
         );
         $st->execute($params);
+    }
+
+    // =================================================================
+    // 참여 비중 (bs_project_member)
+    //
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 산술이 못 담는 판단을 담는 자리                                │
+    // │                                                              │
+    // │ 가용도·처리량·분야는 **잰 값**이다. 「요즘 컨디션이 안 좋다」 │
+    // │ 「곧 다른 데로 빠진다」 「신입이라 천천히」 는 재지지 않는다.  │
+    // │                                                              │
+    // │ 점수를 깎지 않고 **가용 공수(그릇)** 를 줄인다. 적합도를      │
+    // │ 주무르면 화면의 숫자가 거짓이 되고 근거 추적이 깨진다.         │
+    // └──────────────────────────────────────────────────────────────┘
+    // =================================================================
+
+    /** 비중을 받아들일 수 있는 값으로. 0 은 '제외' 와 같은 말이 되므로 막는다. */
+    public const SHARE_MIN = 0.10;
+    public const SHARE_MAX = 1.00;
+
+    /**
+     * 이 프로젝트에서 낮춰 둔 사람들.
+     *
+     * 1.000 인 사람은 **줄을 두지 않는다** — 그래야 표가 안 불어나고,
+     * "손댄 사람" 만 한눈에 보인다.
+     *
+     * @return array<int, array{share:float, reason:?string,
+     *                          updated_by_name:?string, updated_at:string}>
+     */
+    public function memberShares(int $projectId): array
+    {
+        try {
+            // * 로 읽는다 — 024 의 칸(priority·fit_adjust)이 아직 없는 서버에서도
+            // 비중은 읽혀야 한다. 칸을 이름으로 적으면 통째로 실패해 비중까지 잃는다.
+            $st = $this->pdo->prepare('SELECT * FROM bs_project_member WHERE project_id = ?');
+            $st->execute([$projectId]);
+        } catch (Throwable $e) {
+            return [];   // 022 를 아직 안 올린 서버에서도 배정은 돌아야 한다
+        }
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $out[(int)$r['member_id']] = [
+                'share'           => (float)$r['share'],
+                'reason'          => $r['reason'],
+                // ── 후보 표의 사람 판단 (024) ──
+                'priority'        => !empty($r['priority']),
+                'fit_adjust'      => isset($r['fit_adjust']) ? (int)$r['fit_adjust'] : null,
+                'adjust_reason'   => $r['adjust_reason'] ?? null,
+                'updated_by'      => $r['updated_by'],
+                'updated_by_name' => $r['updated_by_name'],
+                'updated_at'      => $r['updated_at'],
+            ];
+        }
+        return $out;
+    }
+
+    /** 가감점 범위. 계산값을 뒤집을 만큼 크지 않게 — 20 이면 한두 자리 순위가 바뀐다. */
+    public const FIT_ADJUST_MAX = 20;
+
+    /**
+     * ★ 우선 후보를 켜고 끈다 (024). 2단계 후보 표의 정렬에만 쓴다.
+     */
+    public function setMemberPriority(int $projectId, int $memberId, bool $on, array $actor): void
+    {
+        $this->upsertMember($projectId, $memberId, ['priority' => $on ? 1 : 0], $actor);
+    }
+
+    /**
+     * 적합도 가감점 (024). **계산값을 덮어쓰지 않는다** — 조정분만 담는다.
+     * null 이나 0 이면 지운다. 범위를 벗어나면 자른다.
+     */
+    public function setMemberFitAdjust(int $projectId, int $memberId, ?int $adjust,
+                                       string $reason, array $actor): void
+    {
+        if ($adjust !== null) {
+            $adjust = max(-self::FIT_ADJUST_MAX, min(self::FIT_ADJUST_MAX, $adjust));
+        }
+        $reason = trim($reason);
+        $this->upsertMember($projectId, $memberId, [
+            'fit_adjust'    => $adjust ?: null,
+            'adjust_reason' => ($adjust && $reason !== '') ? mb_substr($reason, 0, 500) : null,
+        ], $actor);
+    }
+
+    /**
+     * 프로젝트×사람 줄의 칸 몇 개만 바꾼다. 줄이 없으면 비중 1.000 으로 만든다.
+     * 다 바꾼 뒤 **모든 칸이 기본값이면 줄을 지운다** — 022 의 "조정 없는
+     * 사람은 줄을 두지 않는다" 를 그대로 지킨다.
+     */
+    private function upsertMember(int $projectId, int $memberId, array $set, array $actor): void
+    {
+        $cols = array_keys($set);
+        $this->pdo->prepare(
+            'INSERT INTO bs_project_member
+                (project_id, member_id, share, ' . implode(', ', $cols) . ', updated_by, updated_by_name)
+             VALUES (?, ?, 1.000, ' . implode(', ', array_fill(0, count($cols), '?')) . ', ?, ?)
+             ON DUPLICATE KEY UPDATE '
+            . implode(', ', array_map(static fn($c) => "$c = VALUES($c)", $cols))
+            . ', updated_by = VALUES(updated_by), updated_by_name = VALUES(updated_by_name)'
+        )->execute(array_merge([$projectId, $memberId], array_values($set),
+                               [$actor['id'] ?? null, $actor['name'] ?? null]));
+        $this->pruneMember($projectId, $memberId);
+    }
+
+    /** 비중 1.000 · ★ 없음 · 가감점 없음이면 지운다. */
+    private function pruneMember(int $projectId, int $memberId): void
+    {
+        try {
+            $this->pdo->prepare(
+                'DELETE FROM bs_project_member
+                  WHERE project_id = ? AND member_id = ?
+                    AND share >= 0.9999 AND priority = 0 AND fit_adjust IS NULL'
+            )->execute([$projectId, $memberId]);
+        } catch (Throwable $e) {
+            // 024 이전 서버 — priority 칸이 없다. 그때는 비중만 본다.
+            $this->pdo->prepare(
+                'DELETE FROM bs_project_member
+                  WHERE project_id = ? AND member_id = ? AND share >= 0.9999'
+            )->execute([$projectId, $memberId]);
+        }
+    }
+
+    /**
+     * 비중을 적어 둔다. `null` 이나 1.0 이면 **줄을 지운다**(되돌리기).
+     *
+     * 사유는 **선택**이다. 회사가 작고 서로 아는 사이라 강제하면 아무 말이나
+     * 적어 넣게 된다. 대신 누가 언제는 반드시 남긴다 — 그건 공짜이고,
+     * 나중에 "이 사람 왜 적게 받았지" 를 되짚을 때 물어볼 상대가 된다.
+     */
+    public function setMemberShare(int $projectId, int $memberId, ?float $share,
+                                   string $reason, array $actor): void
+    {
+        if ($share === null || $share >= self::SHARE_MAX - 0.0001) {
+            // 비중만 되돌린다. ★·가감점(024)이 남아 있으면 줄은 남긴다.
+            $this->pdo->prepare(
+                'UPDATE bs_project_member SET share = 1.000, reason = NULL,
+                        updated_by = ?, updated_by_name = ?
+                  WHERE project_id = ? AND member_id = ?'
+            )->execute([$actor['id'] ?? null, $actor['name'] ?? null, $projectId, $memberId]);
+            $this->pruneMember($projectId, $memberId);
+            return;
+        }
+        // 범위를 벗어난 값은 거절하지 않고 자른다. 숫자 하나 때문에 저장이
+        // 통째로 막히면 사람은 그 칸을 비우고 지나간다.
+        $share = round(max(self::SHARE_MIN, min(self::SHARE_MAX, $share)), 3);
+
+        $this->pdo->prepare(
+            'INSERT INTO bs_project_member
+                (project_id, member_id, share, reason, updated_by, updated_by_name)
+             VALUES (?,?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE
+                share = VALUES(share), reason = VALUES(reason),
+                updated_by = VALUES(updated_by), updated_by_name = VALUES(updated_by_name)'
+        )->execute([
+            $projectId, $memberId, $share,
+            ($reason = trim($reason)) === '' ? null : mb_substr($reason, 0, 500),
+            $actor['id'] ?? null, $actor['name'] ?? null,
+        ]);
+    }
+
+    /**
+     * AIDD 계수를 받아들일 수 있는 값으로.
+     *
+     * 범위를 벗어난 값은 **거절하지 않고 자른다.** 프로젝트 저장이 계수 하나
+     * 때문에 통째로 막히면 사람은 그 칸을 비우고 지나간다. 다만 0 쪽으로는
+     * 바닥(BS_AIDD_MIN)이 있다 — 0.1 이면 공수가 10분의 1 이 되고, 그건
+     * 옵션이 아니라 사고다.
+     */
+    private function aiddFactor(mixed $v, float $default): float
+    {
+        if ($v === null || $v === '' || !is_numeric($v)) {
+            return $default;
+        }
+        return round(max(BS_AIDD_MIN, min(BS_AIDD_MAX, (float)$v)), 2);
     }
 
     /** 상태 전이. 허용된 값인지 확인한다. */
@@ -287,6 +491,45 @@ final class ProjectRepo
             'UPDATE bs_project SET status = ? WHERE id = ? AND deleted_at IS NULL'
         );
         $st->execute([$status, $id]);
+    }
+
+    // =================================================================
+    // 공동 편집자 (026, 2026-10-14)
+    // =================================================================
+
+    /** 이 프로젝트의 편집자. 표가 없는 서버에서는 빈 배열. */
+    public function editors(int $projectId): array
+    {
+        try {
+            $st = $this->pdo->prepare(
+                'SELECT e.user_id, COALESCE(m.emp_name, e.user_name) AS name,
+                        e.granted_by_name, e.created_at
+                   FROM bs_project_editor e
+                   LEFT JOIN bs_member m ON m.user_id = e.user_id
+                  WHERE e.project_id = ?
+                  ORDER BY e.id'
+            );
+            $st->execute([$projectId]);
+            return $st->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            return [];
+        }
+    }
+
+    /** 편집자로 넣는다. 이미 있으면 그대로 둔다. 누가 넣었는지 남긴다. */
+    public function addEditor(int $projectId, string $userId, string $userName, array $actor): void
+    {
+        $this->pdo->prepare(
+            'INSERT IGNORE INTO bs_project_editor
+                (project_id, user_id, user_name, granted_by, granted_by_name)
+             VALUES (?,?,?,?,?)'
+        )->execute([$projectId, $userId, $userName, $actor['id'] ?? null, $actor['name'] ?? null]);
+    }
+
+    public function removeEditor(int $projectId, string $userId): void
+    {
+        $this->pdo->prepare('DELETE FROM bs_project_editor WHERE project_id = ? AND user_id = ?')
+                  ->execute([$projectId, $userId]);
     }
 
     /** 담당 PM 변경. */
@@ -334,13 +577,33 @@ final class ProjectRepo
     // 출처 문서 (bs_project_source)
     // =================================================================
 
+    /**
+     * 023(출처 용도)이 이 DB 에 올라가 있는가. 요청당 한 번만 본다.
+     * 코드가 DB 보다 먼저 올라가도 프로젝트 화면이 500 이 되지 않게 — 칸이
+     * 없으면 모든 문서를 범위 문서로 보고, 참고 자료 블록만 쓸 수 없다.
+     */
+    private function hasPurposeColumn(): bool
+    {
+        static $has = null;
+        if ($has === null) {
+            try {
+                $has = (bool)$this->pdo->query(
+                    "SHOW COLUMNS FROM bs_project_source LIKE 'purpose'")->fetch();
+            } catch (Throwable $e) {
+                $has = false;
+            }
+        }
+        return $has;
+    }
+
     /** 해당 프로젝트의 출처 문서 목록. parsed_text 는 크니까 빼고 길이만 준다. */
     public function sources(int $projectId): array
     {
         $st = $this->pdo->prepare(
-            'SELECT id, project_id, kind, title, url, file_size, mime,
+            'SELECT id, project_id, ' . ($this->hasPurposeColumn() ? 'purpose' : '"scope" AS purpose') . ', kind, title, url, file_size, mime,
                     parse_status, parse_error,
                     CHAR_LENGTH(COALESCE(parsed_text, "")) AS parsed_len,
+                    (file_path IS NOT NULL AND file_path <> "") AS has_file,
                     uploaded_by, uploaded_by_name, created_at
                FROM bs_project_source
               WHERE project_id = ?
@@ -358,6 +621,9 @@ final class ProjectRepo
      * 돼도 응답이 수 MB 가 된다. 본문이 필요한 곳에서만 이쪽을 쓸 것.
      *
      * file_path 는 담지 않는다 — 응답에 실릴 일이 없게.
+     *
+     * **참고 자료(purpose='reference')는 뺀다** (023). 넣으면 그 안의 내용이
+     * 할 일로 뽑힌다.
      */
     public function parsedSources(int $projectId): array
     {
@@ -365,6 +631,7 @@ final class ProjectRepo
             'SELECT id, project_id, kind, title, url, parse_status, parsed_text
                FROM bs_project_source
               WHERE project_id = ?
+                ' . ($this->hasPurposeColumn() ? 'AND purpose = "scope"' : '') . '
                 AND parse_status = "ok"
                 AND parsed_text IS NOT NULL
                 AND parsed_text <> ""
@@ -382,6 +649,41 @@ final class ProjectRepo
         $row = $st->fetch(PDO::FETCH_ASSOC);
 
         return $row === false ? null : $row;
+    }
+
+    /**
+     * 내려받기·보기용 한 건 (2026-10-15). 그 과업을 볼 수 있을 때만 돌려준다.
+     *
+     *   프로젝트  로그인한 구성원 누구나. 지워진 프로젝트는 $withDeleted(관리자) 일 때만
+     *   R&D 과제  **RndRepo::find() 로 공개 범위를 본다** (2026-10-19 — R&D 에도
+     *            참고자료가 붙었다). 비공개 과제의 파일이 번호만으로 새면 안 된다.
+     *
+     * file_path 를 포함하므로 응답에 그대로 싣지 말 것.
+     */
+    public function findSourceForView(int $sourceId, bool $withDeleted = false): ?array
+    {
+        $st = $this->pdo->prepare(
+            "SELECT s.id, s.project_id, s.kind, s.title, s.url, s.file_path, s.file_size, s.mime,
+                    s.parse_status, s.parsed_text, p.project_type, p.deleted_at
+               FROM bs_project_source s
+               JOIN bs_project p ON p.id = s.project_id
+              WHERE s.id = ?"
+        );
+        $st->execute([$sourceId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        if ($row === false) {
+            return null;
+        }
+
+        if ((string)$row['project_type'] === 'rnd') {
+            require_once __DIR__ . '/RndRepo.php';
+            // find() 가 공개 범위와 삭제 여부를 함께 본다. 못 보면 null.
+            return (new RndRepo($this->pdo))->find((int)$row['project_id']) ? $row : null;
+        }
+        if ((string)$row['project_type'] !== 'project') {
+            return null;
+        }
+        return $withDeleted || $row['deleted_at'] === null ? $row : null;
     }
 
     public function countSources(int $projectId): int
@@ -421,6 +723,25 @@ final class ProjectRepo
             $actor['name'],
         ]);
         return (int)$this->pdo->lastInsertId();
+    }
+
+    /**
+     * 방금 올린 문서들의 용도를 정한다. 올리는 길(파일·링크·직접 입력)이
+     * 셋이라 각각에 인자를 늘리지 않고, 올린 뒤 한 번에 바꾼다.
+     */
+    public function setSourcePurpose(int $projectId, array $sourceIds, string $purpose): void
+    {
+        if (!isset(BS_SOURCE_PURPOSE[$purpose])) {
+            throw new InvalidArgumentException('알 수 없는 용도입니다: ' . $purpose);
+        }
+        $ids = array_values(array_filter(array_map('intval', $sourceIds)));
+        if (!$ids || !$this->hasPurposeColumn()) {   // 023 전 서버 — 모두 범위 문서로 남는다
+            return;
+        }
+        $ph = implode(',', array_fill(0, count($ids), '?'));
+        $this->pdo->prepare(
+            "UPDATE bs_project_source SET purpose = ? WHERE project_id = ? AND id IN ($ph)"
+        )->execute(array_merge([$purpose, $projectId], $ids));
     }
 
     /** 파싱 결과 반영. P2 의 파서가 부른다. */
@@ -463,6 +784,7 @@ final class ProjectRepo
             'SELECT id, project_id, kind, file_path, url, mime
                FROM bs_project_source
               WHERE parse_status = ?
+                ' . ($this->hasPurposeColumn() ? 'AND purpose = "scope"' : '') . '
               ORDER BY id ASC
               LIMIT ?'
         );

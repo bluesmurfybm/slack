@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BlueBooks</title>
-<link rel="icon" href="styles/favicon.ico">
+<link rel="icon" type="image/svg+xml" href="shared-styles/favicons/book.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbit&display=swap" rel="stylesheet">
@@ -538,6 +538,7 @@ async function loadWhoami(){
     document.getElementById("hdrBrand").href=portalUrl||"#";
     document.getElementById("dd-mypage").href=portalUrl?`${portalUrl}/?view=profile`:"#";
     renderWorkSystems(who.work_systems, "book");
+    loadMySystems(portalUrl);
     document.getElementById("dd-logout").href=portalUrl?`${portalUrl}/bookapi/logout.php`:"#";
     document.getElementById("hdrName").textContent=me.name;
     const av=document.getElementById("hdrAvatar");
@@ -547,14 +548,40 @@ async function loadWhoami(){
 }
 
 /* 공통 상단바 드롭다운의 "업무 시스템" 목록 — 원본은 포털의 worksystems.json,
-   whoami 가 그대로 내려준 걸 그리기만 한다 */
+   whoami 가 그대로 내려준 걸 먼저 그린다. 묶음·순서·알림 수는 아래 loadMySystems 가 덮는다 */
 function renderWorkSystems(list, current){
+  renderSystemGroups([{name:null, items:list||[]}], {}, current);
+}
+
+/* 묶음 [{name|null, items}] 을 그린다. 모양은 PHP 쪽 core/worksystems.php::work_systems_menu 와 같다 */
+function renderSystemGroups(groups, badges, current){
   const box=document.getElementById("dd-systems");
   if(!box) return;
-  box.innerHTML=(list||[]).length
-    ? `<div class="dd-sep"></div><div class="dd-label">업무 시스템</div>`+list.map(s=>
-        `<a href="${s.url}"${s.key===current?' class="on" aria-current="page"':""}>${s.emoji} ${s.label}</a>`).join("")
-    : "";
+  if(!groups.some(g=>g.items.length)){ box.innerHTML=""; return; }
+  box.innerHTML=`<div class="dd-sep"></div><div class="dd-label">업무 시스템</div><div class="dd-systems">`
+    + groups.map((g,i)=>
+        (g.name!==null ? (i?`<div class="dd-sep"></div>`:"")+`<div class="dd-group">${esc(g.name)}</div>` : "")
+        + g.items.map(s=>{
+            const n=badges[s.key]|0;
+            return `<a href="${esc(s.url)}"${s.key===current?' class="on" aria-current="page"':""}>${s.emoji} ${esc(s.label)}`
+              + (s.badge?`<span class="dd-badge"${n?"":" hidden"} title="안 읽은 알림 ${n}건">${n>99?"99+":n}</span>`:"")
+              + `</a>`;
+          }).join("")
+      ).join("")
+    + `</div>`;
+}
+
+/* 메인 카드와 같은 묶음·순서·알림 수를 포털(api/my_systems.php)에서 받아 다시 그린다.
+   포털은 같은 호스트의 다른 포트라 쿠키를 실어 보낸다. 못 받으면 json 순서 목록을 그대로 둔다 */
+async function loadMySystems(portalUrl){
+  try{
+    const r=await fetch(`${portalUrl}/api/my_systems.php`, {credentials:"include"});
+    if(!r.ok) return;
+    const d=await r.json();
+    const abs=u=>/^[a-z][a-z0-9+.-]*:\/\//i.test(u) ? u : `${portalUrl}/${u}`;
+    (d.groups||[]).forEach(g=>g.items.forEach(s=>s.url=abs(s.url)));
+    renderSystemGroups(d.groups||[], d.badges||{}, "book");
+  }catch(e){}
 }
 
 function toggleUserMenu(e){

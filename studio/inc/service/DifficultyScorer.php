@@ -257,8 +257,9 @@ TXT;
      * @return array{difficulty:int, by:string, note:string, cost_micro:int}
      */
     public function score(array $task, string $context = '', string $projectName = '',
-                          array $effortTable = []): array
+                          array $effortTable = [], float $aidd = 1.0): array
     {
+        $aidd = max(BS_AIDD_MIN, min(BS_AIDD_MAX, $aidd));
         $title = (string)($task['title'] ?? '');
         $desc  = (string)($task['description'] ?? '');
         $rule  = self::byRule($title, $desc . ' ' . $context);
@@ -282,11 +283,20 @@ TXT;
             // 모델이 공수를 못 봤으면(null) 난이도에서 환산한다. 판정이
             // 통째로 비는 것보다 낫고, 어디서 나온 숫자인지 적어 둔다.
             $aiMd = $d['est_md'] ?? null;
-            $est  = is_numeric($aiMd) && (float)$aiMd > 0
-                  ? ['md' => round((float)$aiMd, 1), 'by' => 'ai',
-                     'note' => mb_substr('AI ' . round((float)$aiMd, 1) . ' M/D · '
-                                         . (string)($d['est_reason'] ?? ''), 0, 500)]
-                  : self::estFromDifficulty($lv, $effortTable, '모델이 가늠하지 못해 ');
+            if (is_numeric($aiMd) && (float)$aiMd > 0) {
+                // ★ AI 가 낸 공수는 환산표를 거치지 않는다. 여기를 빠뜨리면
+                //   **모델이 답한 날만 보정이 안 걸려** 같은 난이도의 공수가
+                //   둘로 갈린다. 모델은 AIDD 를 모르고 답한다.
+                $raw  = round((float)$aiMd, 1);
+                $adj  = round($raw * $aidd, 2);
+                $tail = $aidd < 1.0 - 0.0001
+                      ? sprintf(' · AIDD 계수 %.2f 적용(원래 %s M/D)', $aidd, self::md($raw)) : '';
+                $est = ['md' => $adj, 'by' => $aidd < 1.0 - 0.0001 ? 'aidd' : 'ai',
+                        'note' => mb_substr('AI ' . self::md($adj) . ' M/D · '
+                                            . (string)($d['est_reason'] ?? '') . $tail, 0, 500)];
+            } else {
+                $est = self::estFromDifficulty($lv, $effortTable, '모델이 가늠하지 못해 ', $aidd);
+            }
 
             return [
                 'difficulty' => $lv,
@@ -307,7 +317,7 @@ TXT;
             if (!($e instanceof LlmError)) {
                 error_log('[BlueStudio] DifficultyScorer: ' . $e);
             }
-            $est = self::estFromDifficulty((int)$rule['level'], $effortTable);
+            $est = self::estFromDifficulty((int)$rule['level'], $effortTable, '', $aidd);
             return [
                 'difficulty' => $rule['level'],
                 'by'         => 'rule',
@@ -337,28 +347,57 @@ TXT;
      * @param array<int, array{md:float, n:int}> $table TaskRepo::effortTable()
      * @return array{md:float, by:string, note:string}
      */
-    public static function estFromDifficulty(int $level, array $table = [], string $prefix = ''): array
+    public static function estFromDifficulty(int $level, array $table = [], string $prefix = '',
+                                            float $aidd = 1.0): array
     {
         $level = max(1, min(5, $level));
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ AIDD 는 **공수만** 줄인다 (2026-10-08)                        │
+        // │                                                              │
+        // │ 난이도는 그대로 둔다. 난이도는 공수 환산 말고도 ★4+ 상위자    │
+        // │ 게이트·추정 점유·실적의 재료로 쓰인다 — 낮추면 어려운 일이    │
+        // │ 못 하는 사람에게 가고 그 값이 영구히 남는다.                  │
+        // │                                                              │
+        // │ AI 는 타이핑과 뼈대를 빠르게 하지 어려운 문제를 쉽게 만들지   │
+        // │ 않는다. 그러니 ★5 는 ★5 로 두고 걸리는 날수만 줄인다.        │
+        // └──────────────────────────────────────────────────────────────┘
+        $aidd = max(BS_AIDD_MIN, min(BS_AIDD_MAX, $aidd));
+        $on   = $aidd < 1.0 - 0.0001;
+
+        // 보정했으면 'aidd' 로 적는다. effortTable() 이 사람이 적은 값만
+        // 평균에 넣으므로 자동 판정값은 어느 쪽이든 빠지지만, **화면이
+        // 무엇을 보고 있는지 말할 수 있어야** 한다.
+        $by   = $on ? 'aidd' : 'rule';
+        $tail = $on ? sprintf(' AIDD 계수 %.2f 를 곱했습니다(난이도는 그대로 ★%d).',
+                              $aidd, $level) : '';
+
         if (isset($table[$level]) && $table[$level]['md'] > 0) {
+            $raw = (float)$table[$level]['md'];
             return [
-                'md'   => (float)$table[$level]['md'],
-                'by'   => 'rule',
-                'note' => sprintf('%s난이도 ★%d 환산 %s M/D — 우리 완료 건 %d개의 평균입니다.',
-                    $prefix, $level, $table[$level]['md'], $table[$level]['n']),
+                'md'   => round($raw * $aidd, 2),
+                'by'   => $by,
+                'note' => sprintf('%s난이도 ★%d 환산 %s M/D — 우리 완료 건 %d개의 평균입니다.%s',
+                    $prefix, $level, self::md($raw * $aidd), $table[$level]['n'], $tail),
             ];
         }
 
-        $md = self::EST_DEFAULT[$level];
+        $md = self::EST_DEFAULT[$level] * $aidd;
         return [
-            'md'   => $md,
-            'by'   => 'rule',
+            'md'   => round($md, 2),
+            'by'   => $by,
             'note' => sprintf('%s난이도 ★%d 환산 %s M/D — **기본표**입니다(우리 실적이 아직 모자랍니다). '
                             . '실제와 다르면 고쳐 주세요. 사람이 고친 값은 다음 판정이 덮지 않고, '
-                            . '쌓이면 이 환산의 근거가 됩니다.',
-                $prefix, $level, $md),
+                            . '쌓이면 이 환산의 근거가 됩니다.%s',
+                $prefix, $level, self::md($md), $tail),
         ];
+    }
+
+    /** 2.0 은 '2', 1.7 은 '1.7'. 글에 2.00 M/D 라고 적으면 눈에 걸린다. */
+    private static function md(float $v): string
+    {
+        $v = round($v, 2);
+        return rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
     }
 
     /** 믿을 수 없는 글은 전부 울타리 안에 넣는다. */

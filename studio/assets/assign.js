@@ -127,6 +127,41 @@
   }
 
   /**
+   * 제목 밑에 붙는 표식 하나.
+   *
+   * ┌──────────────────────────────────────────────────────────────────┐
+   * │ 값만 적으면 색이 유일한 신호가 된다 (2026-10-08)                  │
+   * │                                                                  │
+   * │ 「자동」 한 낱말만 주황으로 떠 있으면, 그 칸에 여러 값이 올 수    │
+   * │ 있다는 것을 모르는 사람에게는 **색이 잘못 나온 것**처럼 보인다.   │
+   * │ 실제로 그렇게 읽혔다.                                             │
+   * │                                                                  │
+   * │ 그래서 신호를 둘로 둔다 —                                         │
+   * │   ① 무엇에 대한 값인지 **이름을 앞에 적는다**(`단위 자동`)        │
+   * │   ② 숫자를 다르게 읽어야 하는 것에만 `※` 를 붙이고 색을 준다     │
+   * │                                                                  │
+   * │ 색만으로 뜻을 나르지 않는다. 색을 못 가리는 사람도 읽어야 한다.   │
+   * └──────────────────────────────────────────────────────────────────┘
+   *
+   * @param {string}  label 무엇에 대한 값인가. 값만으로 분명하면 빈 문자열
+   * @param {string}  value 값
+   * @param {string}  tone  '' | 'ok' | 'warn' | 'bad' | 'off'
+   * @param {string}  tip   마우스를 올렸을 때의 한 줄
+   */
+  function tag(label, value, tone, tip) {
+    var mark = (tone === 'warn' || tone === 'bad') ? '<b>※</b> ' : '';
+    return '<span class="ba-tag' + (tone ? ' ba-tag--' + tone : '') + '"' +
+           (tip ? ' title="' + esc(tip) + '"' : '') + '>' + mark +
+           (label ? '<em>' + esc(label) + '</em>' : '') + esc(value) + '</span>';
+  }
+
+  /** 표식 묶음을 그 자리에 붙인다. 빈 것은 버린다. */
+  function tagsInto(sel, list) {
+    var el = $(sel);
+    if (el) { el.innerHTML = list.filter(Boolean).join(''); }
+  }
+
+  /**
    * 어느 달이 꽉 찼는지 한 줄로.
    *
    * ┌──────────────────────────────────────────────────────────────────┐
@@ -149,6 +184,48 @@
    * │ 모듈 둘 이상이 쓰는 도우미는 반드시 이 자리에 둔다.                │
    * └──────────────────────────────────────────────────────────────────┘
    */
+  /**
+   * AIDD 로 돌려받은 여유.
+   *
+   * ┌──────────────────────────────────────────────────────────────────┐
+   * │ 가용도와 **합치지 않는다**                                        │
+   * │                                                                  │
+   * │ 확정 점유와 추정 점유를 한 숫자로 합치지 않는 것과 같은 이유다.   │
+   * │ AIDD 보정은 추정보다도 근거가 약한 **예측**이다 — 우리 회사의     │
+   * │ 속도 향상 실측이 없고 계수는 사람이 정한 가정이다. 가용 41% 에    │
+   * │ 녹여 44% 로 적어 버리면 사람이 그것을 측정값으로 읽고 일정을      │
+   * │ 짠다.                                                            │
+   * └──────────────────────────────────────────────────────────────────┘
+   */
+  function aiddSlice(a) {
+    if (!a || !a.aidd_on || !a.aidd_pct) return '';
+    return '<span class="ba-aidd-tag" title="AIDD 로 병행 가능한 몫입니다. ' +
+           '실측이 아니라 프로젝트에 설정한 계수로 낸 값입니다">' +
+           '+AIDD ' + a.aidd_pct + '%</span>';
+  }
+
+  /**
+   * WBS 번호 비교. `2.1` 은 `10` 보다 **앞**이다.
+   *
+   * 서버의 `bs_wbs_cmp()` 와 **같은 규칙**이어야 한다. 한쪽만 고치면 표가
+   * 서버 순서와 어긋나는데, 둘 다 '번호 순' 이라고 말하므로 알아채기 어렵다.
+   * 번호가 빈 줄은 뒤로 보낸다.
+   */
+  function wbsCmp(a, b) {
+    a = (a == null ? '' : String(a)).trim();
+    b = (b == null ? '' : String(b)).trim();
+    if (a === '' || b === '') { return (a === '' ? 1 : 0) - (b === '' ? 1 : 0); }
+    var xa = a.split('.'), xb = b.split('.');
+    for (var i = 0; i < Math.max(xa.length, xb.length); i++) {
+      var na = parseInt(xa[i], 10), nb = parseInt(xb[i], 10);
+      if (isNaN(na) && isNaN(nb)) { continue; }
+      if (isNaN(na)) { return -1; }
+      if (isNaN(nb)) { return 1; }
+      if (na !== nb) { return na - nb; }
+    }
+    return 0;
+  }
+
   function overMonths(a) {
     var over = (a && a.over_months) || [];
     if (!over.length) return '';
@@ -232,7 +309,12 @@
         test_end:    P.testE  ? P.testE.value  : '',
         deploy_date: P.deploy ? P.deploy.value : '',
         notes:       ($('#ba-in-notes') || {}).value || '',
-        extra:       ($('#ba-in-extra') || {}).value || ''
+        extra:       ($('#ba-in-extra') || {}).value || '',
+        // 체크 해제를 '' 로 보내면 서버가 "안 보냈다" 로 읽어 켠 채로 둔다.
+        // 0/1 로 못 박는다.
+        aidd_enabled: ($('#ba-in-aidd') || {}).checked ? 1 : 0,
+        aidd_effort:  ($('#ba-in-aidd-effort') || {}).value || '',
+        aidd_load:    ($('#ba-in-aidd-load')   || {}).value || ''
       };
     }
 
@@ -313,43 +395,65 @@
   }
 
   // ---- 출처 패널 ------------------------------------------------------
+  //
+  // 같은 꼴의 블록이 둘이다 — 업무 내용 및 범위(scope) / 참고 자료(reference).
+  /**
+   * 첨부 한 건의 [보기]·[내려받기] (2026-10-19). inc/layout.php 의
+   * bs_source_acts_html() 와 **같은 마크업**이다 — 한쪽만 고치지 말 것.
+   * s 는 bs_present_source() 모양 (has_file · viewable · parsed_len · mime · id · title).
+   */
+  function srcActsHtml(s) {
+    var h = '';
+    if (s.viewable || (s.parsed_len || 0) > 0) {
+      h += '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' + s.id + '"' +
+           ' data-mime="' + esc(s.mime || '') + '" data-file="' + (s.has_file ? '1' : '0') + '"' +
+           ' data-title="' + esc(s.title || '') + '">보기</button>';
+    }
+    if (s.has_file) {
+      h += '<a class="ba-btn ba-btn--sm" href="api/source_download.php?id=' + s.id + '">내려받기</a>';
+    }
+    return h ? '<span class="ba-src__acts">' + h + '</span>' : '';
+  }
+
+  // id 대신 블록 안에서 data-src-* 로 찾는다. 서버는 목록을 **통째로** 돌려
+  // 주므로, 각 블록이 자기 용도의 것만 골라 그린다 (2026-10-12).
+  //
+  // 패널의 data-src-api 로 보낼 곳을 고른다 (2026-10-19). 없으면 프로젝트.
+  // R&D 과제 수정 화면은 api/rnd.php 로 보낸다 — 같은 모양, 다른 권한 판정.
   function initSourcePanel(pid) {
-    // 종류 탭
-    $$('.ba-source-tabs [data-src-tab]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var kind = btn.dataset.srcTab;
-        $$('.ba-source-tabs [data-src-tab]').forEach(function (b) {
-          b.setAttribute('aria-selected', String(b === btn));
-        });
-        $$('[data-src-pane]').forEach(function (p) {
-          p.hidden = p.dataset.srcPane !== kind;
-        });
-      });
-    });
+    var panels = $$('[data-src-panel]');
 
     function renderSources(rows) {
-      var box = $('#ba-srclist');
-      if (!box) return;
-      if (!rows || !rows.length) {
-        box.innerHTML = '<p class="ba-empty-inline">아직 등록된 문서가 없습니다.</p>';
-        return;
-      }
-      box.innerHTML = rows.map(function (s) {
-        var meta = s.size_label ? esc(s.size_label)
-                 : (s.parsed_len ? Number(s.parsed_len).toLocaleString('ko-KR') + '자' : '');
-        var title = s.url
-          ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>'
-          : esc(s.title);
-        return '<div class="ba-src" data-id="' + s.id + '">' +
-               '<span class="ba-src__kind">' + esc(s.kind_label) + '</span>' +
-               '<span class="ba-src__title">' + title + '</span>' +
-               '<span class="ba-src__meta">' + meta + '</span>' +
-               '<span class="ba-src__parse ba-src__parse--' + esc(s.parse_status) + '">' +
-                 esc(PARSE_LABEL[s.parse_status] || s.parse_status) +
-               '</span>' +
-               '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="' + s.id + '">삭제</button>' +
-               '</div>';
-      }).join('');
+      panels.forEach(function (panel) {
+        var box = $('[data-src-list]', panel);
+        if (!box) return;
+        var mine = (rows || []).filter(function (s) {
+          return (s.purpose || 'scope') === panel.dataset.srcPanel;
+        });
+        if (!mine.length) {
+          box.innerHTML = '<p class="ba-empty-inline">아직 등록된 문서가 없습니다.</p>';
+          return;
+        }
+        box.innerHTML = mine.map(function (s) {
+          var meta = s.size_label ? esc(s.size_label)
+                   : (s.parsed_len ? Number(s.parsed_len).toLocaleString('ko-KR') + '자' : '');
+          var title = s.url
+            ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>'
+            : esc(s.title);
+          return '<div class="ba-src" data-id="' + s.id + '">' +
+                 '<span class="ba-src__kind">' + esc(s.kind_label) + '</span>' +
+                 '<span class="ba-src__title">' + title + '</span>' +
+                 '<span class="ba-src__meta">' + meta + '</span>' +
+                 // 참고 자료는 분석하지 않는다 — 상태 문구도 없다 (2026-10-15).
+                 ((s.purpose || 'scope') === 'reference' ? '' :
+                 '<span class="ba-src__parse ba-src__parse--' + esc(s.parse_status) + '">' +
+                   esc(PARSE_LABEL[s.parse_status] || s.parse_status) +
+                 '</span>') +
+                 srcActsHtml(s) +
+                 '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="' + s.id + '">삭제</button>' +
+                 '</div>';
+        }).join('');
+      });
     }
 
     function afterChange(data) {
@@ -364,105 +468,135 @@
       toast(data.message || '등록했습니다.');
     }
 
-    // 파일
-    var upBtn = $('#ba-src-upload');
-    if (upBtn) {
-      upBtn.addEventListener('click', function () {
-        var input = $('#ba-in-files');
-        if (!input || !input.files || !input.files.length) {
-          toast('파일을 선택하세요.', true);
-          return;
-        }
-        var fd = new FormData();
-        fd.append('project_id', pid);
-        fd.append('source_type', 'file');
-        Array.prototype.forEach.call(input.files, function (f) { fd.append('files[]', f); });
+    panels.forEach(function (panel) {
+      var purpose = panel.dataset.srcPanel;
+      var API     = (panel.dataset.srcApi || 'api/project.php') + '?act=';
+      var inp = function (k) { return $('[data-src-in="' + k + '"]', panel); };
 
-        upBtn.disabled = true;
-        upload('api/project.php?act=upload_source', fd).then(function (data) {
-          input.value = '';
-          afterChange(data);
-        }).catch(function (e) {
-          showError('#ba-form-error', e.message);
-        }).then(function () { upBtn.disabled = false; });
-      });
-    }
-
-    // 링크
-    var linkBtn = $('#ba-src-link');
-    if (linkBtn) {
-      linkBtn.addEventListener('click', function () {
-        var url = ($('#ba-in-link-url') || {}).value || '';
-        if (!url.trim()) { toast('주소를 입력하세요.', true); return; }
-
-        linkBtn.disabled = true;
-        api('api/project.php?act=upload_source', {
-          method: 'POST',
-          body: {
-            project_id: pid, source_type: 'link',
-            url: url, title: ($('#ba-in-link-title') || {}).value || ''
-          }
-        }).then(function (data) {
-          $('#ba-in-link-url').value = '';
-          $('#ba-in-link-title').value = '';
-          afterChange(data);
-        }).catch(function (e) {
-          showError('#ba-form-error', e.message);
-        }).then(function () { linkBtn.disabled = false; });
-      });
-    }
-
-    // 직접 입력
-    var textBtn = $('#ba-src-text');
-    if (textBtn) {
-      textBtn.addEventListener('click', function () {
-        var text = ($('#ba-in-text') || {}).value || '';
-        if (!text.trim()) { toast('내용을 입력하세요.', true); return; }
-
-        textBtn.disabled = true;
-        api('api/project.php?act=upload_source', {
-          method: 'POST',
-          body: {
-            project_id: pid, source_type: 'text',
-            text: text, title: ($('#ba-in-text-title') || {}).value || ''
-          }
-        }).then(function (data) {
-          $('#ba-in-text').value = '';
-          $('#ba-in-text-title').value = '';
-          afterChange(data);
-        }).catch(function (e) {
-          showError('#ba-form-error', e.message);
-        }).then(function () { textBtn.disabled = false; });
-      });
-    }
-
-    // 삭제 — 목록이 다시 그려지므로 개별 버튼이 아니라 컨테이너에 건다.
-    var list = $('#ba-srclist');
-    if (list) {
-      list.addEventListener('click', function (e) {
-        var btn = e.target.closest ? e.target.closest('[data-src-del]') : null;
-        if (!btn) return;
-        if (!window.confirm('이 문서를 삭제합니다. 올린 파일도 함께 지워집니다.')) return;
-
-        api('api/project.php?act=delete_source', {
-          method: 'POST',
-          body: { source_id: parseInt(btn.dataset.srcDel, 10) }
-        }).then(afterChange).catch(function (e2) {
-          showError('#ba-form-error', e2.message);
+      // 종류 탭 — 이 블록 안에서만 바꾼다.
+      $$('.ba-source-tabs [data-src-tab]', panel).forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var kind = btn.dataset.srcTab;
+          $$('.ba-source-tabs [data-src-tab]', panel).forEach(function (b) {
+            b.setAttribute('aria-selected', String(b === btn));
+          });
+          $$('[data-src-pane]', panel).forEach(function (p) {
+            p.hidden = p.dataset.srcPane !== kind;
+          });
         });
       });
-    }
+
+      function send(btn, req, done) {
+        btn.disabled = true;
+        req.then(function (data) {
+          done();
+          afterChange(data);
+        }).catch(function (e) {
+          showError('#ba-form-error', e.message);
+        }).then(function () { btn.disabled = false; });
+      }
+
+      panel.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('[data-src-act], [data-src-del]') : null;
+        if (!btn) return;
+
+        // 삭제 — 목록이 다시 그려지므로 블록에 건다.
+        if (btn.dataset.srcDel) {
+          askDialog({ title: '자료 삭제', ok: '삭제', danger: true,
+                      message: '이 자료를 삭제합니다. 올린 파일도 함께 지워집니다.' })
+            .then(function (v) {
+              if (v === null) return;
+              api(API + 'delete_source', {
+                method: 'POST',
+                body: { source_id: parseInt(btn.dataset.srcDel, 10) }
+              }).then(afterChange).catch(function (e2) {
+                showError('#ba-form-error', e2.message);
+              });
+            });
+          return;
+        }
+
+        var act = btn.dataset.srcAct;
+        if (act === 'file') {
+          var input = inp('files');
+          if (!input || !input.files || !input.files.length) {
+            toast('파일을 선택하세요.', true);
+            return;
+          }
+          var fd = new FormData();
+          fd.append('project_id', pid);
+          fd.append('source_type', 'file');
+          fd.append('purpose', purpose);
+          Array.prototype.forEach.call(input.files, function (f) { fd.append('files[]', f); });
+          send(btn, upload(API + 'upload_source', fd),
+               function () { input.value = ''; });
+        }
+        if (act === 'link') {
+          var url = (inp('link-url') || {}).value || '';
+          if (!url.trim()) { toast('주소를 입력하세요.', true); return; }
+          send(btn, api(API + 'upload_source', {
+            method: 'POST',
+            body: { project_id: pid, source_type: 'link', purpose: purpose,
+                    url: url, title: (inp('link-title') || {}).value || '' }
+          }), function () { inp('link-url').value = ''; inp('link-title').value = ''; });
+        }
+        if (act === 'text') {
+          var text = (inp('text') || {}).value || '';
+          if (!text.trim()) { toast('내용을 입력하세요.', true); return; }
+          send(btn, api(API + 'upload_source', {
+            method: 'POST',
+            body: { project_id: pid, source_type: 'text', purpose: purpose,
+                    text: text, title: (inp('text-title') || {}).value || '' }
+          }), function () { inp('text').value = ''; inp('text-title').value = ''; });
+        }
+      });
+    });
   }
 
   // =====================================================================
   // 프로젝트 목록
   // =====================================================================
+  /**
+   * 목록 조회 조건 기억 (2026-10-19). 상세에서 '‹ 목록' 으로 돌아오면 보던 조건을
+   * 되살린다. 조건이 주소에 없고 JS 안에만 있어, 돌아오면 늘 처음 상태였다.
+   * sessionStorage — 이 탭에서만, 닫으면 사라진다. 막혀 있으면 그냥 기억하지 않는다.
+   */
+  function listMemory(key, ids) {
+    return {
+      restore: function (state) {
+        try {
+          var s = JSON.parse(sessionStorage.getItem(key) || 'null');
+          if (!s) return;
+          Object.keys(s.state || {}).forEach(function (k) { state[k] = s.state[k]; });
+          ids.forEach(function (id) {
+            var el = $('#' + id);
+            if (!el || !s.f || !(id in s.f)) return;
+            if (el.type === 'checkbox') el.checked = !!s.f[id]; else el.value = s.f[id];
+          });
+        } catch (e) { /* 기억 못 하면 처음 상태로 */ }
+      },
+      save: function (state) {
+        try {
+          var f = {};
+          ids.forEach(function (id) {
+            var el = $('#' + id);
+            if (el) f[id] = el.type === 'checkbox' ? el.checked : el.value;
+          });
+          sessionStorage.setItem(key, JSON.stringify({ state: state, f: f }));
+        } catch (e) { /* 저장 못 해도 목록은 돈다 */ }
+      }
+    };
+  }
+
   function initProjectList() {
     var root = $('#ba-list-app');
     if (!root) return;
 
     var state = { status: '', page: 1 };
     var debounceTimer;
+    var MEM = listMemory('bs.list.project',
+      ['ba-f-track', 'ba-f-from', 'ba-f-to', 'ba-f-keyword', 'ba-f-sort', 'ba-f-mine', 'ba-f-deleted']);
+    MEM.restore(state);
 
     function filters() {
       return {
@@ -481,6 +615,7 @@
     }
 
     function load() {
+      MEM.save(state);
       var tbody = $('#ba-list tbody');
       tbody.innerHTML = '<tr><td colspan="9" class="ba-loading">불러오는 중…</td></tr>';
 
@@ -623,6 +758,9 @@
     function loadMine() {
       api('api/dashboard.php?' + qs({ act: 'mine' })).then(function (d) {
         var box = $('#ba-mine');
+        // 맡은 태스크가 없어도 R&D 는 따로 그린다. 아래에서 return 하면
+        // '내 R&D 과제' 가 '불러오는 중…' 에 멈춘다.
+        renderMyRnd(d.rnd || []);
         if (!d.rows.length) {
           box.innerHTML = '<p class="ba-empty-inline">' +
             (d.message || '확정된 배정안에서 맡은 태스크가 없습니다.') + '</p>';
@@ -632,23 +770,49 @@
         var late = d.rows.filter(function (r) { return r.overdue; }).length;
         $('#ba-mine-sum').textContent = d.rows.length + '건' + (late ? ' · 지연 ' + late + '건' : '');
 
-        box.innerHTML = '<div class="ba-mylist">' + d.rows.map(function (r) {
-          return '<button type="button" class="ba-my' + (r.overdue ? ' is-late' : '') +
-                 '" data-task="' + r.task_id + '">' +
-            '<span class="ba-my__p">' + esc(r.project_name) + '</span>' +
-            '<span class="ba-my__t">' + esc(r.wbs_no || '') + ' ' + esc(r.title) + '</span>' +
-            '<span class="ba-my__s ba-st--' + (STATUS_CLASS[r.status] || 'todo') + '">' +
-              esc(r.status_label) + '</span>' +
-            '<span class="ba-my__b"><i style="width:' + r.progress_pct + '%"></i></span>' +
-            '<span class="ba-my__n">' + r.progress_pct + '%</span>' +
-            '<span class="ba-my__d">' + (r.plan_end ? esc(r.plan_end) : '기한 없음') +
-              (r.overdue ? ' <b>지연</b>' : '') + '</span>' +
-          '</button>';
-        }).join('') + '</div>';
-        renderMyRnd(d.rnd || []);
+        // 프로젝트별로 묶는다. 서버가 마감 순으로 주므로, 마감이 가장
+        // 급한 일을 가진 프로젝트가 위에 온다. 묶음 안도 마감 순 그대로다.
+        var groups = [], byPid = {};
+        d.rows.forEach(function (r) {
+          if (!byPid[r.project_id]) {
+            byPid[r.project_id] = { id: r.project_id, name: r.project_name,
+                                    code: r.project_code, rows: [] };
+            groups.push(byPid[r.project_id]);
+          }
+          byPid[r.project_id].rows.push(r);
+        });
+
+        box.innerHTML = groups.map(function (g) {
+          var gl = g.rows.filter(function (r) { return r.overdue; }).length;
+          return '<div class="ba-mygroup">' +
+            '<div class="ba-mygroup__h">' +
+              '<a href="project_view.php?id=' + g.id + '">' + esc(g.name) + '</a>' +
+              '<span class="ba-dim">' + esc(g.code || '') + ' · ' + g.rows.length + '건' +
+                (gl ? ' · <b class="is-late">지연 ' + gl + '</b>' : '') + '</span>' +
+            '</div>' +
+            '<div class="ba-mylist">' + g.rows.map(myRow).join('') + '</div>' +
+          '</div>';
+        }).join('');
       }).catch(function (e) {
-        $('#ba-mine').innerHTML = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
+        var msg = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
+        $('#ba-mine').innerHTML = msg;
+        var rnd = $('#ba-myrnd');
+        if (rnd) rnd.innerHTML = msg;
       });
+    }
+
+    function myRow(r) {
+      return '<button type="button" class="ba-my' + (r.overdue ? ' is-late' : '') +
+             '" data-task="' + r.task_id + '">' +
+        '<span class="ba-my__p">' + esc(r.wbs_no || '') + '</span>' +
+        '<span class="ba-my__t">' + esc(r.title) + '</span>' +
+        '<span class="ba-my__s ba-st--' + (STATUS_CLASS[r.status] || 'todo') + '">' +
+          esc(r.status_label) + '</span>' +
+        '<span class="ba-my__b"><i style="width:' + r.progress_pct + '%"></i></span>' +
+        '<span class="ba-my__n">' + r.progress_pct + '%</span>' +
+        '<span class="ba-my__d">' + (r.plan_end ? esc(r.plan_end) : '기한 없음') +
+          (r.overdue ? ' <b>지연</b>' : '') + '</span>' +
+      '</button>';
     }
 
     // ---- 내 R&D 과제 (P11) ----------------------------------------------
@@ -664,7 +828,7 @@
       $('#ba-myrnd-sum').textContent = rows.length + '건' + (quiet ? ' · 조용함 ' + quiet + '건' : '');
 
       box.innerHTML = '<div class="ba-mylist">' + rows.map(function (r) {
-        return '<a class="ba-my' + (r.stale ? ' is-quiet' : '') +
+        return '<a class="ba-my ba-my--rnd' + (r.stale ? ' is-quiet' : '') +
                '" href="rnd_view.php?id=' + r.project_id + '">' +
           '<span class="ba-my__p">' + esc(r.code) + '</span>' +
           '<span class="ba-my__t">' + esc(r.name) + '</span>' +
@@ -686,7 +850,7 @@
           el.textContent = (v === undefined || v === null) ? '–' : v;
         });
         var q = $('#ba-dash-q');
-        if (q && d.org.quarter_from) q.textContent = d.org.quarter_from + ' 이후 산출물';
+        if (q && d.org.quarter_from) q.textContent = '사내 전체 · ' + d.org.quarter_from + ' 이후 (이번 분기)';
 
         var box = $('#ba-me-load');
         if (!d.me || !d.me.donut) {
@@ -1124,13 +1288,16 @@
 
     // ---- 붙이기 -------------------------------------------------------------
     document.addEventListener('click', function (e) {
-      var card = e.target.closest('[data-project]');
+      // root(#ba-dash) 자신도 data-project 를 달고 있다. '[data-project]' 로만
+      // 찾으면 화면 어디를 눌러도 root 가 잡혀 openBoard(0) 이 나간다.
+      var card = e.target.closest('.ba-card[data-project]');
       if (card && root.contains(card)) { openBoard(parseInt(card.dataset.project, 10)); return; }
 
       var t = e.target.closest('[data-task]');
       if (t) { openTask(parseInt(t.dataset.task, 10)); return; }
 
-      var v = e.target.closest('[data-view]');
+      // 칸반·간트 토글만. 위쪽 뷰 탭(통합/프로젝트/R&D)도 data-view 를 쓴다.
+      var v = e.target.closest('.ba-bd__toggle [data-view]');
       if (v) { setView(v.dataset.view); }
     });
 
@@ -1148,7 +1315,9 @@
       });
       var saved = 'all';
       try { saved = localStorage.getItem('bs.dash.view') || 'all'; } catch (e) { /* 무시 */ }
-      applyView(saved);
+      // 탭을 숨겨 둔 동안은 언제나 '통합'이다 (2026-10-12). 예전에 '프로젝트' 를
+      // 골라 둔 브라우저는 그 기억 때문에 패널 일부가 안 보인 채 남는다.
+      applyView(views.hidden ? 'all' : saved);
     }
 
     loadOverview();
@@ -1161,6 +1330,24 @@
   // ===================================================================
   /** 2단계에서 고른 후보를 담는 자리. **2·3단계가 같은 키를 봐야 한다.** */
   var PICK_KEY = 'ba.picked.';
+
+  /**
+   * 이 탭에 담아 둔 선택. **null 과 [] 는 다른 뜻이다.**
+   *   null — 이 탭에서 아직 고른 적이 없다(새 탭·브라우저 재시작). 지난 배정안에서 되살린다
+   *   []   — [선택 해제] 로 일부러 비웠다. 되살리지 않는다
+   */
+  function readPick(pid) {
+    try {
+      var s = sessionStorage.getItem(PICK_KEY + pid);
+      return s === null ? null : JSON.parse(s);
+    } catch (e) { return null; }
+  }
+
+  /** 가장 최근 배정안이 쓴 후보. 고르지 않고 산출했으면 []. */
+  function lastPick(rows) {
+    var p = rows && rows[0] && rows[0].params;
+    return (p && p.member_ids ? p.member_ids : []).map(Number);
+  }
 
   function initProjectView() {
     var root = $('#ba-pv');
@@ -1187,6 +1374,16 @@
     });
 
     if (!HAS_PERIOD) return;
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 후보 표가 없으면 여기서 끝낸다 (2026-10-12)                   │
+    // │                                                              │
+    // │ 배정 권한이 없는 사람에게는 서버가 표를 안 그린다. 아래는 전부│
+    // │ 그 표 전용인데 $('#ba-c-table').addEventListener 가 null 에서 │
+    // │ 터지면, 진입부가 뒤이어 부르는 initWbs·initAllocation 까지    │
+    // │ 돌지 못해 **일반 사용자 화면의 WBS·배정안 표와 [?] 가 통째로  │
+    // │ 죽었다.**                                                     │
+    // └──────────────────────────────────────────────────────────────┘
+    if (!$('#ba-c-table')) return;
 
     // ---- 선택 상태 ------------------------------------------------------
     //
@@ -1194,14 +1391,31 @@
     // **DB 저장은 Step3(배정안 생성) 에서 한다** — 그때 bs_allocation.params_json
     // 에 들어간다. 여기서 저장하면 확정 전 선택이 영구 기록으로 남는다.
     function loadPicked() {
-      try {
-        return JSON.parse(sessionStorage.getItem(PICK_KEY + PID) || '[]');
-      } catch (e) { return []; }
+      return readPick(PID) || [];
     }
     function savePicked() {
       try {
         sessionStorage.setItem(PICK_KEY + PID, JSON.stringify(picked));
       } catch (e) { /* 사생활 보호 모드 등 — 그냥 둔다 */ }
+    }
+
+    // 탭 저장소는 탭을 닫으면 사라진다. 다시 들어오면 체크가 모두 풀려
+    // 있었고, 그대로 3단계를 돌리면 **전원**이 대상이 됐다 (2026-10-12).
+    // DB 에 새로 저장하지 않고, 이미 남아 있는 마지막 배정안의 명단을 쓴다.
+    if (readPick(PID) === null) {
+      api('api/allocate.php?' + qs({ act: 'versions', project_id: PID }))
+        .then(function (d) {
+          var ids = lastPick(d.rows);
+          if (!ids.length || readPick(PID) !== null) return;   // 그 사이 직접 골랐으면 두기
+          picked = ids;
+          savePicked();
+          $$('.ba-ct__pick').forEach(function (c) {
+            c.checked = picked.indexOf(parseInt(c.dataset.mid, 10)) >= 0;
+          });
+          updatePicked();
+          toast(d.rows[0].version + '차 배정안에 쓴 후보 ' + ids.length + '명을 다시 불러왔습니다.');
+        })
+        .catch(function () { /* 못 불러오면 빈 채로 둔다 */ });
     }
 
     // ---- 조건 -----------------------------------------------------------
@@ -1475,9 +1689,13 @@
           '<i class="ba-av__c" style="width:' + proj + '%"></i>' +
           (hasRnd ? '<i class="ba-av__r" style="width:' + a.rnd_pct + '%"></i>' : '') +
           '<i class="ba-av__i" style="width:' + a.inferred_pct + '%"></i>' +
+          // AIDD 몫은 점유의 **끝자락**을 덮는다. 점유에서 돌려받은
+          // 것이므로 여유 쪽이 아니라 점유 쪽에 붙어야 뜻이 맞는다.
+          (a.aidd_on && a.aidd_pct
+            ? '<i class="ba-av__a" style="width:' + a.aidd_pct + '%"></i>' : '') +
         '</div>' +
         '<div class="ba-av__txt">' +
-          '<b>가용 ' + a.available_pct + '%</b> ' +
+          '<b>가용 ' + a.available_pct + '%</b> ' + aiddSlice(a) + ' ' +
           '<span class="ba-dim">(' + parts.join(' + ') + ' 점유' +
             // 반일 근무자는 기준이 100 이 아니다. 안 적으면 남는 칸이
             // 무엇인지 알 수 없다 — 점유가 아니라 애초의 근무량이다.
@@ -1505,7 +1723,7 @@
       // 권한이 없으면 서버가 표를 아예 안 그린다(안내문만 있다).
       // 탭도 disabled 라 여기까지 올 일이 없지만, 없는 것을 건드리지 않는다.
       if (!tb) return;
-      tb.innerHTML = '<tr><td colspan="9" class="ba-loading">불러오는 중…</td></tr>';
+      tb.innerHTML = '<tr><td colspan="10" class="ba-loading">불러오는 중…</td></tr>';
       clearError('#ba-pv-error');
 
       api('api/candidate.php?' + qs(conds())).then(function (d) {
@@ -1513,7 +1731,7 @@
         renderScope(d.scope, d.message);
         render(ROWS);
       }).catch(function (e) {
-        tb.innerHTML = '<tr><td colspan="9" class="ba-empty">' + esc(e.message) + '</td></tr>';
+        tb.innerHTML = '<tr><td colspan="10" class="ba-empty">' + esc(e.message) + '</td></tr>';
       });
     }
 
@@ -1530,7 +1748,7 @@
     function render(rows) {
       var tb = $('#ba-c-table tbody');
       if (!rows.length) {
-        tb.innerHTML = '<tr><td colspan="9" class="ba-empty">조건에 맞는 후보가 없습니다.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="10" class="ba-empty">조건에 맞는 후보가 없습니다.</td></tr>';
         updatePicked();
         return;
       }
@@ -1542,7 +1760,7 @@
         // 0 점으로 깔면 영영 배정되지 않는다(scoring-design.md §5).
         if (!seenBreak && (r.fit_score === null || r.filtered_out)) {
           seenBreak = true;
-          html += '<tr class="ba-ct__break"><td colspan="9">' +
+          html += '<tr class="ba-ct__break"><td colspan="10">' +
                   '판단 보류 — 표본이 부족하거나 조건에 못 미칩니다. ' +
                   '<span class="ba-dim">처리량이 적다는 뜻도 아닙니다 — 셀 자료가 모자란 것입니다.</span></td></tr>';
         }
@@ -1550,7 +1768,13 @@
         html += '<tr class="' + (r.filtered_out ? 'is-out' : '') + '" data-mid="' + r.member_id + '">' +
           '<td><input type="checkbox" class="ba-ct__pick" data-mid="' + r.member_id + '"' +
             (on ? ' checked' : '') + ' aria-label="후보 선택"></td>' +
-          '<td class="ba-ct__name"><button type="button" class="ba-linkish" data-detail="' +
+          '<td class="ba-ct__name">' +
+            // ★ 우선 후보 (024). 표에서 위로 올리고, 3단계 엔진이 적합도에 +10 을 더한다.
+            '<button type="button" class="ba-star' + (r.priority ? ' is-on' : '') +
+              '" data-star="' + r.member_id + '" aria-pressed="' + (r.priority ? 'true' : 'false') +
+              '" title="' + (r.priority ? '우선 후보 — 배정 때 적합도 +10. 눌러서 끄기' : '우선 후보로 표시 — 배정 때 적합도 +10') + '">' +
+              (r.priority ? '★' : '☆') + '</button>' +
+            '<button type="button" class="ba-linkish" data-detail="' +
             r.member_id + '">' + esc(r.emp_name) + '</button></td>' +
           '<td>' + esc(r.role_label || '—') + '</td>' +
           '<td>' + availCell(r.availability, r.member_id) + '</td>' +
@@ -1558,16 +1782,118 @@
           '<td>' + scoreCell(r.capability, r.insufficient_data, r.evaluable) + '</td>' +
           '<td>' + scoreCell(r.breadth, r.insufficient_data, r.evaluable) + '</td>' +
           '<td class="ba-num">' + (r.active_items || 0) + '</td>' +
-          '<td>' + scoreCell(r.fit_score, r.insufficient_data, r.evaluable) +
+          '<td>' + fitCell(r) +
             (r.filter_reason ? '<br><span class="ba-cell-none">' +
               esc(r.filter_reason) + '</span>' : '') + '</td>' +
+          '<td>' + shareCell(r) + '</td>' +
           '</tr>';
       });
 
       tb.innerHTML = html;
-      $('#ba-c-count').textContent = rows.length + '명';
+      tagsInto('#ba-c-count', [tag('', rows.length + '명', '', '조건에 맞는 후보 수')]);
       updatePicked();
     }
+
+    /**
+     * 적합도 칸 (024). 계산값과 사람이 준 가감점을 **나눠** 적는다.
+     * 큰 숫자는 더한 값, 옆의 작은 글씨가 "계산 87 +5" 다. 계산값이 없으면
+     * (판단 보류) 더할 바탕이 없어 가감점 칸도 두지 않는다.
+     */
+    function fitCell(r) {
+      if (r.fit_score === null || r.fit_score === undefined) {
+        return scoreCell(r.fit_score, r.insufficient_data, r.evaluable);
+      }
+      var adj = r.fit_adjust || 0;
+      var opts = [0, 5, 10, 15, 20, -5, -10, -15, -20].map(function (x) {
+        return '<option value="' + x + '"' + (x === adj ? ' selected' : '') + '>' +
+               (x === 0 ? '±0' : (x > 0 ? '+' + x : String(x))) + '</option>';
+      }).join('');
+      var who = [r.adjust_reason].filter(Boolean).join(' · ');
+      return '<b>' + Number(r.fit_adjusted).toFixed(0) + '</b>' +
+        (adj ? ' <span class="ba-ct__adj" title="' + esc(who || '사람이 준 가감점') + '">' +
+                 '계산 ' + Number(r.fit_score).toFixed(0) + ' ' + (adj > 0 ? '+' : '') + adj + ' 수동</span>'
+             : '') +
+        '<select class="ba-input ba-ct__adjsel' + (adj ? ' is-on' : '') + '" data-adjust="' +
+          r.member_id + '" title="적합도 가감점 — 계산값은 그대로 두고 더해서 보여 주며, 배정 때도 그만큼 더합니다">' +
+          opts + '</select>';
+    }
+
+    // ★ 켜기/끄기, 가감점 — 고른 자리에서 바로 저장하고 표를 다시 받는다(순서가 바뀐다).
+    $('#ba-c-table').addEventListener('click', function (e) {
+      var s = e.target.closest ? e.target.closest('[data-star]') : null;
+      if (!s) return;
+      var on = s.getAttribute('aria-pressed') !== 'true';
+      s.disabled = true;
+      api('api/candidate.php?act=set_priority', { method: 'POST', body: {
+        project_id: PID, member_id: parseInt(s.dataset.star, 10), on: on ? '1' : '0'
+      } }).then(function (d) { toast(d.message); load(); })
+        .catch(function (err) { toast(err.message, true); s.disabled = false; });
+    });
+
+    $('#ba-c-table').addEventListener('change', function (e) {
+      var sel = e.target.closest ? e.target.closest('[data-adjust]') : null;
+      if (!sel) return;
+      var mid = parseInt(sel.dataset.adjust, 10);
+      var v   = parseInt(sel.value, 10);
+      var row = ROWS.filter(function (x) { return x.member_id === mid; })[0] || {};
+      var why = v === 0 ? '' : (prompt('적합도에 ' + (v > 0 ? '+' : '') + v + ' 점을 더해 보여 줍니다.\n'
+                        + '계산값은 그대로 남습니다. 사유는 비워 두셔도 됩니다.',
+                        row.adjust_reason || '') || '');
+      api('api/candidate.php?act=set_fit_adjust', { method: 'POST', body: {
+        project_id: PID, member_id: mid, adjust: v, reason: why
+      } }).then(function (d) { toast(d.message); load(); })
+        .catch(function (err) { toast(err.message, true); load(); });
+    });
+
+    /**
+     * 참여 비중 칸.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 잰 값과 섞어 적지 않는다                                      │
+     * │                                                              │
+     * │ 왼쪽 칸들은 전부 **잰 값**이다. 이 칸만 사람의 판단이라        │
+     * │ 1.0 이 아닐 때만 눈에 띄게 하고, 누가 왜 낮췄는지 붙여 둔다.   │
+     * │ 1.0 인 줄까지 칠하면 색이 색을 가린다.                         │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    function shareCell(r) {
+      var v = Number(r.share == null ? 1 : r.share);
+      var low = v < 0.9995;
+      var opts = [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1].map(function (x) {
+        return '<option value="' + x.toFixed(1) + '"' +
+               (Math.abs(x - v) < 0.0005 ? ' selected' : '') + '>' +
+               (x === 1 ? '1.0 (조정 없음)' : x.toFixed(1)) + '</option>';
+      }).join('');
+      var who = [r.share_by, r.share_reason].filter(Boolean).join(' · ');
+      return '<select class="ba-input ba-ct__share' + (low ? ' is-low' : '') +
+               '" data-share="' + r.member_id + '"' +
+               (who ? ' title="' + esc(who) + '"' : '') + '>' + opts + '</select>' +
+             (r.share_reason
+               ? '<span class="ba-cell-none">' + esc(r.share_reason) + '</span>' : '');
+    }
+
+    // 고른 그 자리에서 바로 저장한다. 사유는 **선택** — 비워도 저장된다.
+    $('#ba-c-table').addEventListener('change', function (e) {
+      var sel = e.target.closest ? e.target.closest('.ba-ct__share') : null;
+      if (!sel) return;
+      var mid = parseInt(sel.dataset.share, 10);
+      var val = sel.value;
+      var row = ROWS.filter(function (x) { return x.member_id === mid; })[0] || {};
+      var why = val === '1.0' ? ''
+              : (prompt('참여 비중을 ' + val + ' 로 둡니다.\n'
+                        + '사유를 적어 두면 나중에 되짚기 좋습니다. 비워 두셔도 됩니다.',
+                        row.share_reason || '') || '');
+
+      api('api/candidate.php?act=set_share', { method: 'POST', body: {
+        project_id: PID, member_id: mid, share: val, reason: why
+      } }).then(function (d) {
+        toast(d.message);
+        load();          // 가용 공수가 달라지므로 표를 다시 받는다
+      }).catch(function (err) {
+        toast(err.message, true);
+        load();
+      });
+    });
 
     // ---- 선택 -----------------------------------------------------------
     function updatePicked() {
@@ -1633,6 +1959,7 @@
               '<u style="left:' + cw + '%;width:' + iw + '%"></u></span>' +
             '<span class="ba-mb__v">' + used + '%</span>' +
             '<span class="ba-mb__m">' + (m.over ? '초과' : m.available_md + ' M/D') +
+              (m.aidd_md ? ' <span class="ba-aidd-tag">+' + m.aidd_md + '</span>' : '') +
             '</span></div>';
         }).join('') +
         '<p class="ba-cd__note">추정 점유는 끝나는 날이 없어 <b>모든 달에 고르게</b> 얹습니다. ' +
@@ -1838,14 +2165,21 @@
     function draw(d) {
       root.hidden = false;
       var c = d.count || {};
-      $('#ba-lk-sum').textContent = d.total
-        ? '전체 ' + d.total + '건 · 읽음 ' + (c.ok || 0)
-          + ' · 대기 ' + (c.pending || 0)
-          + ' · 실패 ' + (c.fail || 0)
-          + ' · 건너뜀 ' + (c.skip || 0)
-        : '아직 찾은 링크가 없습니다';
+      // 손봐야 할 것(실패)에만 색을 준다. 다 칠하면 색이 색을 가린다.
+      tagsInto('#ba-lk-sum', d.total ? [
+        tag('전체', d.total + '건', ''),
+        tag('읽음', (c.ok || 0) + '', c.ok ? 'ok' : ''),
+        (c.pending ? tag('대기', c.pending + '', '', '아직 안 읽었습니다') : ''),
+        (c.fail ? tag('실패', c.fail + '', 'bad', '읽지 못했습니다. [실패한 것만 다시] 로 되돌려 보세요') : ''),
+        (c.skip ? tag('건너뜀', c.skip + '', 'off', '안 쓰기로 한 연동입니다. 실패가 아닙니다') : '')
+      ] : [tag('', '아직 찾은 링크가 없습니다', 'off')]);
 
-      var job = d.job;
+      // 링크 읽기와 난이도 매기기는 **따로** 돈다 (2026-10-16). 전에는 무엇이 돌든
+      // 이 칸의 막대에 그려서, WBS 칸에서 [난이도·공수 매기기] 를 누르면 여기가
+      // 움직이고 [링크 분석 시작] 까지 막혔다. 옛 서버(jobs 없음)면 전처럼 job 하나.
+      var jobs  = d.jobs || { links: d.job, difficulty: null };
+      var job   = jobs.links;
+      var djob  = jobs.difficulty;
       $('#ba-lk-cancel').hidden = !job;
       $('#ba-lk-start').disabled = !!job || !(c.pending > 0);
       $('#ba-lk-retry').hidden = !(c.fail > 0) || !!job;
@@ -1886,22 +2220,13 @@
         }).join('');
       }
 
-      var prog = $('#ba-lk-prog');
-      if (job) {
-        prog.hidden = false;
-        var pct = job.total ? Math.round(job.done / job.total * 100) : 0;
-        $('#ba-lk-fill').style.width = pct + '%';
-        // 서버가 적어 둔 사유가 있으면 **그것을 보여 준다.** 전에는 여기서
-        // '대기 중입니다' 로 덮어써서, 피그마가 "2일 쉬어라" 한 사실이
-        // 화면 어디에도 안 보였다.
-        $('#ba-lk-progtxt').textContent =
-          job.status === 'queued'
-            ? (job.message || '대기 중입니다. 크론이 집어 갈 때까지 1분쯤 걸립니다.')
-            : job.done + ' / ' + job.total + ' 건'
-              + (job.failed ? ' (실패 ' + job.failed + ')' : '');
-      } else {
-        prog.hidden = true;
-      }
+      drawProg('#ba-lk-prog', '#ba-lk-fill', '#ba-lk-progtxt', job);
+      // 난이도 매기기는 WBS 칸에 그린다. 도는 동안 같은 단추를 또 누르지 않게.
+      drawProg('#ba-sc-prog', '#ba-sc-fill', '#ba-sc-progtxt', djob);
+      ['#ba-lk-score', '#ba-lk-rescore'].forEach(function (sel) {
+        var el = $(sel);
+        if (el) el.disabled = !!djob;
+      });
 
       // 목록은 드로어에서 본다. 여기서는 상태별 수만 단추로 보여 주고,
       // 누르면 그 상태만 걸러 연다 — 보통 보고 싶은 건 '실패' 뿐이다.
@@ -1910,8 +2235,26 @@
       if (!$('#ba-lk-drawer').hidden) { drawLinkRows(); }
 
       // 도는 중일 때만 되묻는다. 끝났는데 계속 물으면 서버가 공연히 바쁘다.
-      if (job && !timer) { timer = setInterval(load, 3000); }
-      if (!job && timer) { clearInterval(timer); timer = null; }
+      var busy = !!(job || djob);
+      if (busy && !timer) { timer = setInterval(load, 3000); }
+      if (!busy && timer) { clearInterval(timer); timer = null; }
+    }
+
+    /** 진행 막대 하나. 링크 칸·WBS 칸이 같은 모양을 쓴다. */
+    function drawProg(boxSel, fillSel, txtSel, j) {
+      var box = $(boxSel);
+      if (!box) return;
+      box.hidden = !j;
+      if (!j) return;
+      $(fillSel).style.width = (j.total ? Math.round(j.done / j.total * 100) : 0) + '%';
+      // 서버가 적어 둔 사유가 있으면 **그것을 보여 준다.** 전에는 여기서
+      // '대기 중입니다' 로 덮어써서, 피그마가 "2일 쉬어라" 한 사실이
+      // 화면 어디에도 안 보였다.
+      $(txtSel).textContent =
+        j.status === 'queued'
+          ? (j.message || '대기 중입니다. 크론이 집어 갈 때까지 1분쯤 걸립니다.')
+          : j.done + ' / ' + j.total + ' 건'
+            + (j.failed ? ' (실패 ' + j.failed + ')' : '');
     }
 
     function load() {
@@ -1925,7 +2268,13 @@
       if (extra) { Object.keys(extra).forEach(function (k) { body[k] = extra[k]; }); }
       return api('api/analysis.php?act=' + act, { method: 'POST', body: body })
         .then(function (d) {
-          if (d.message) { $('#ba-lk-msg').textContent = d.message; }
+          // 누른 단추가 있는 칸에만 적는다 (2026-10-16). 난이도 매기기는 WBS 칸,
+          // 나머지는 링크 칸. 두 곳에 같이 적으면 링크 칸에 엉뚱한 말이 남는다.
+          if (d.message) {
+            var forScore = act === 'score' || (extra && extra.kind === 'difficulty');
+            var el = $(forScore ? '#ba-lk-msg2' : '#ba-lk-msg');
+            if (el) el.textContent = d.message;
+          }
           draw(d);
           if (okMsg) toast(okMsg);
         })
@@ -1980,9 +2329,14 @@
                     '', '진행할까요?'].join('\n'))) return;
       post('score', null, { redo: '1' });
     });
+    // 멈추기는 그 칸의 작업만 멈춘다 — 링크 칸에서 누르면 난이도 매기기는 계속 돈다.
     $('#ba-lk-cancel').addEventListener('click', function () {
-      if (!confirm('분석을 멈춥니다. 읽던 한 건은 끝내고 멈춥니다.')) return;
-      post('cancel');
+      if (!confirm('링크 읽기를 멈춥니다. 읽던 한 건은 끝내고 멈춥니다.')) return;
+      post('cancel', null, { kind: 'links' });
+    });
+    $('#ba-sc-cancel').addEventListener('click', function () {
+      if (!confirm('난이도·공수 매기기를 멈춥니다. 매기던 한 건은 끝내고 멈춥니다.')) return;
+      post('cancel', null, { kind: 'difficulty' });
     });
 
     load();
@@ -2077,7 +2431,10 @@
     }
 
     function snapshot() { return JSON.stringify(toPayload(MODEL)); }
-    function isDirty()  { return snapshot() !== SAVED; }
+    // 불러오기 전(SAVED === '')에는 바뀐 것이 없다 (2026-10-16). WBS 는 탭을 눌러야
+    // 불러오는데, 전에는 빈 표의 '[]' 와 '' 를 견줘 늘 '바뀜' 으로 보았다 — 개요만 보고
+    // 다른 메뉴로 가도 "변경사항이 저장되지 않을 수 있습니다" 가 떴다.
+    function isDirty()  { return SAVED !== '' && snapshot() !== SAVED; }
 
     /** 평면화 — 렌더와 위치 찾기에 쓴다. */
     function flat(nodes, depth, parent, out) {
@@ -2259,6 +2616,9 @@
     }
 
     function render() {
+      // 줄 하나를 접어도 단추 이름이 따라와야 한다. 그리는 자리에서 맞춘다 —
+      // 접는 길이 여럿이라(단추·줄의 세모·되살리기) 한 군데서 맞춰야 안 갈린다.
+      syncFoldBtn();
       numbering(MODEL, '');
       var rows = visibleRows(flat(MODEL, 1, null, []));
 
@@ -2422,10 +2782,14 @@
         }
       });
 
-      var s = '전체 ' + rows.length + '건 · 확정 ' + conf + '건 · 총 예상공수 ' +
-              (est ? est.toFixed(2).replace(/\.?0+$/, '') : 0) + ' M/D';
-      if (leafNoEst) s += ' · 예상공수 미입력 ' + leafNoEst + '건';
-      $('#ba-w-sum').textContent = s;
+      tagsInto('#ba-w-sum', [
+        tag('전체', rows.length + '건', ''),
+        tag('확정', conf + '건', conf ? 'ok' : '', '확정한 태스크만 배정 대상이 됩니다'),
+        tag('총 예상공수', (est ? est.toFixed(2).replace(/\.?0+$/, '') : 0) + ' M/D', ''),
+        // 비어 있으면 그 줄은 배정 공수에 안 잡힌다. 손봐야 할 자리다.
+        (leafNoEst ? tag('예상공수 미입력', leafNoEst + '건', 'bad',
+                         '비어 있는 줄은 공수 합계에 안 잡힙니다') : '')
+      ]);
 
       var dirty = $('#ba-w-dirty');
       if (dirty) {
@@ -3127,6 +3491,71 @@
                      how + ' 문서 ' + (meta.source_count || 0) + '건 기준.</span>';
     }
 
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 접기는 **보기** 다 (2026-10-08)                               │
+    // │                                                              │
+    // │ 자료를 한 글자도 안 바꾸므로 읽기 전용으로 보는 사람도 써야    │
+    // │ 한다. 전에는 고칠 권한 블록 안에 묶여 있어, 표가 길면 읽기만   │
+    // │ 하는 사람은 밑으로 내려갈 길이 없었다.                         │
+    // │                                                              │
+    // │ 단추는 **하나**다. 접기와 펼치기는 서로의 반대라 둘을 나란히   │
+    // │ 두면 둘 중 하나는 늘 할 일이 없다. 지금 상태의 반대를 적는다 — │
+    // │ "대분류만 보기" 가 보이면 지금은 펼쳐져 있다는 뜻이다.         │
+    // └──────────────────────────────────────────────────────────────┘
+    var foldBtn = $('#ba-w-fold');
+
+    /** 접힌 것이 하나라도 있는가. 화면이 아니라 MODEL 에서 센다. */
+    function anyFolded() {
+      return Object.keys(COLLAPSED).some(function (k) { return COLLAPSED[k]; });
+    }
+
+    // render() 가 이 블록보다 **먼저** 돌 수 있다(var 는 끌어올려져도 값은
+    // 아직 없다). 그래서 단추를 여기서 다시 찾는다 — 못 찾으면 그냥 넘어간다.
+    function syncFoldBtn() {
+      var btn = $('#ba-w-fold');
+      if (!btn) { return; }
+      var folded = anyFolded();
+      var cap = btn.querySelector('span');
+      var ic  = btn.querySelector('.ba-caret');
+      if (cap) { cap.textContent = folded ? '모두 보기' : '대분류만 보기'; }
+      // 접혀 있으면 할 일은 '펼치기' 이므로 아래쪽 세모.
+      if (ic)  { ic.className = 'ba-caret ba-caret--' + (folded ? 'down' : 'up'); }
+      btn.setAttribute('aria-pressed', folded ? 'true' : 'false');
+      btn.title = folded ? '접어 둔 하위 태스크를 모두 펼칩니다'
+                         : '하위를 모두 접습니다. 대분류만 남습니다';
+    }
+
+    if (foldBtn) {
+      foldBtn.addEventListener('click', function () {
+        foldAll(!anyFolded());
+      });
+    }
+
+    // 표 통째로 숨기기. 프로젝트마다 이 브라우저에 기억한다 — 다시 들어와도
+    // 숨긴 채면 배정 표로 바로 간다. 저장소가 막혀 있으면 펼친 채로 시작한다.
+    var hideBtn = $('#ba-w-hide');
+    function setTableHidden(on, keep) {
+      var wrap = $('#ba-w-tablewrap');
+      if (!wrap || !hideBtn) { return; }
+      wrap.hidden = on;
+      $('#ba-w-hidden-note').hidden = !on;
+      hideBtn.querySelector('span').textContent = on ? '표 펼치기' : '표 숨기기';
+      hideBtn.classList.toggle('is-hidden', on);   // 눈 아이콘에 빗금
+      hideBtn.setAttribute('aria-expanded', on ? 'false' : 'true');
+      if (foldBtn) { foldBtn.disabled = on; }
+      if (keep) {
+        try { localStorage.setItem('bs.wbs.hide.' + PID, on ? '1' : '0'); } catch (e) { /* 무시 */ }
+      }
+    }
+    if (hideBtn) {
+      hideBtn.addEventListener('click', function () {
+        setTableHidden(!$('#ba-w-tablewrap').hidden, true);
+      });
+      var hid = false;
+      try { hid = localStorage.getItem('bs.wbs.hide.' + PID) === '1'; } catch (e) { /* 무시 */ }
+      setTableHidden(hid, false);
+    }
+
     // ---- 붙이기 -----------------------------------------------------------
     if (CAN_EDIT) {
       $('#ba-w-parse').addEventListener('click', function () { parseDocs(false); });
@@ -3158,9 +3587,6 @@
           setConfirm(MODEL, on, cfAll);
         });
       }
-
-      $('#ba-w-fold').addEventListener('click', function () { foldAll(true); });
-      $('#ba-w-unfold').addEventListener('click', function () { foldAll(false); });
 
       // addEventListener 가 이벤트 객체를 넘기므로 감싸서 넘긴다.
       // 그냥 extract 를 걸면 useLlm 자리에 MouseEvent 가 들어온다.
@@ -3204,8 +3630,13 @@
 
     var CUR      = null;   // 지금 보고 있는 배정안
     var ITEMS    = [];
+    var GROUPS   = [];     // 배정 대상이 아닌 상위 분류. 자리만 잡아 준다
     var MEMBERS  = [];     // 담당자 선택지
     var WEIGHTS  = null;
+    var LAST_PICK = [];    // 가장 최근 배정안이 쓴 후보
+    var TARGETS   = {};    // 막대를 끌어 정한 목표 공수 member_id => M/D (2026-10-14)
+    var LOAD      = [];    // 지금 그린 부하 줄 — 검산 줄이 다시 쓴다
+    var LOAD_MAX  = 1;     // 막대 눈금의 끝(M/D). 끈 자리를 M/D 로 바꿀 때 쓴다
     var loaded   = false;
 
     var W_LABEL = {
@@ -3230,11 +3661,18 @@
     var tabBtn = $('[data-pv-tab="wbs"]');
     if (tabBtn) tabBtn.addEventListener('click', function () { if (!loaded) load(); });
 
+    // 설명은 **권한과 무관**하다. 고칠 수 없는 사람이 오히려 더 궁금하다.
+    var helpBtn = $('#ba-al-help');
+    if (helpBtn) {
+      helpBtn.addEventListener('click', function () { openDrawer('ba-al-helpd'); });
+    }
+
     // ---- 통신 -----------------------------------------------------------
     function load() {
       loaded = true;
       api('api/allocate.php?' + qs({ act: 'versions', project_id: PID }))
         .then(function (d) {
+          LAST_PICK = lastPick(d.rows);
           renderVersions(d.rows || [], d.confirmed_version);
           if (d.rows && d.rows.length) openVersion(d.rows[0].id);
           else renderEmpty();
@@ -3243,14 +3681,17 @@
     }
 
     function openVersion(id) {
+      // 다른 차수를 열면 끌어 둔 목표는 버린다 — 그 차수의 막대가 아니다.
+      if (!CUR || CUR.id !== id) TARGETS = {};
       api('api/allocate.php?' + qs({ act: 'detail', allocation_id: id }))
         .then(apply)
         .catch(function (e) { showError('#ba-al-error', e.message); });
     }
 
     function apply(d) {
-      CUR   = d.allocation || CUR;
-      ITEMS = d.items || [];
+      CUR    = d.allocation || CUR;
+      ITEMS  = d.items || [];
+      GROUPS = d.groups || [];
       if (CUR && CUR.params && CUR.params.weights) WEIGHTS = CUR.params.weights;
       clearError('#ba-al-error');
       renderBadge();
@@ -3272,7 +3713,7 @@
 
     // ---- 그리기 ----------------------------------------------------------
     function renderEmpty() {
-      $('#ba-al-badge').textContent = '';
+      $('#ba-al-badge').innerHTML = '';   // 이제 표식 묶음이다
       $('#ba-al-load').innerHTML = '';
       $('#ba-al-table').querySelector('tbody').innerHTML =
         '<tr><td colspan="8" class="ba-empty">' +
@@ -3288,11 +3729,55 @@
                esc(r.status_label) + (r.version === confirmedVer ? ' ✓' : '') + '</option>';
       }).join('');
       sel.disabled = rows.length === 0;
+
+      // 지울 수 있는지는 서버가 정해 내려 준다(deletable). 여기서 상태로 다시 따지지 않는다.
+      var purge = $('#ba-al-purge');
+      if (purge) {
+        var n = rows.filter(function (r) { return r.deletable; }).length;
+        purge.disabled = n === 0;
+        purge.dataset.n = String(n);
+      }
     }
 
     function syncVersionSelect() {
       var sel = $('#ba-al-ver');
       if (sel && CUR) sel.value = String(CUR.id);
+      var cp = $('#ba-al-copy'), del = $('#ba-al-del');
+      if (cp)  cp.disabled  = !CUR || !ITEMS.length;
+      if (del) del.disabled = !CUR || !CUR.deletable;
+    }
+
+    /** 고른 차수를 복사한다. 새 차수가 가장 최근이라 다시 읽으면 그게 열린다. */
+    function copyVersion() {
+      if (!CUR) return;
+      if (!confirm(CUR.version + '차를 그대로 복사해 새 차수를 만듭니다.' +
+            (CUR.status === 'confirmed'
+              ? '\n\n확정본은 그대로 남습니다. 새 차수를 확정하면 그때 바뀝니다.' : ''))) {
+        return;
+      }
+      api('api/allocate.php?act=copy', { method: 'POST', body: { allocation_id: CUR.id } })
+        .then(function (d) { toast(d.message); loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
+    }
+
+    function deleteVersion() {
+      if (!CUR || !CUR.deletable) return;
+      if (!confirm(CUR.version + '차를 지웁니다. 되돌릴 수 없습니다.')) return;
+      api('api/allocate.php?act=delete', { method: 'POST', body: { allocation_id: CUR.id } })
+        .then(function (d) { toast(d.message); CUR = null; loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
+    }
+
+    function purgeVersions() {
+      var n = parseInt(($('#ba-al-purge') || {}).dataset.n || '0', 10);
+      if (!n) return;
+      if (!confirm('차수 ' + n + '개를 지웁니다. 되돌릴 수 없습니다.\n\n' +
+            '확정본과 한 번 확정됐던 안은 남습니다.')) {
+        return;
+      }
+      api('api/allocate.php?act=purge', { method: 'POST', body: { project_id: PID } })
+        .then(function (d) { toast(d.message); CUR = null; loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
     }
 
     /**
@@ -3344,27 +3829,65 @@
       box.innerHTML = h;
     }
 
+    /**
+     * 차수의 사실들을 **표식 하나에 하나씩** 적는다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 가운뎃점으로 이은 긴 글은 하나도 안 읽힌다 (2026-10-08)       │
+     * │                                                              │
+     * │ "3차 · 산출됨 · 자동 · 처리량 판정 276회차 · 엔진 v1" 은      │
+     * │ 다섯 가지 **서로 다른** 사실이다. 한 줄로 이으면 눈이 어디서  │
+     * │ 끊어야 할지 몰라 통째로 건너뛴다.                             │
+     * │                                                              │
+     * │ 색은 **뜻이 있을 때만** 쓴다. 확정·무작위·AIDD 처럼 결과를    │
+     * │ 다르게 읽어야 하는 것에만 칠하고, 나머지는 회색이다. 다 칠하면│
+     * │ 색이 색을 가린다.                                             │
+     * └──────────────────────────────────────────────────────────────┘
+     */
     function renderBadge() {
       var el = $('#ba-al-badge');
-      if (!CUR) { el.textContent = ''; return; }
-      var s = CUR.version + '차 · ' + CUR.status_label;
+      if (!el) { return; }
+      if (!CUR) { el.innerHTML = ''; return; }
+
+      var p = CUR.params || {};
+      var t = [];
+
+      t.push(tag('', CUR.version + '차', '', '이 프로젝트의 몇 번째 배정안인지'));
+      t.push(tag('', CUR.status_label,
+          CUR.status === 'confirmed' ? 'ok' : (CUR.status === 'archived' ? 'off' : ''),
+          CUR.status === 'confirmed' ? '확정된 안입니다. 대시보드에 나옵니다'
+                                     : '확정 전에는 대시보드에 나오지 않습니다'));
       // 단위가 다르면 같은 WBS 라도 다른 안이다. 안 보이면 공수 합계가
       // 왜 다른지 알 수 없다.
-      if (CUR.params && CUR.params.level && CUR.params.level !== 'leaf') {
-        s += ' · ' + (L_LABEL[CUR.params.level] || CUR.params.level);
+      if (p.level && p.level !== 'leaf') {
+        t.push(tag('단위', L_LABEL[p.level] || p.level, 'warn',
+                   '말단이 아니라 이 단위로 묶어 한 사람에게 줬습니다. '
+                   + '공수는 하위의 합이라 표의 줄 수가 WBS 보다 적습니다'));
+      }
+      // 같은 WBS 라도 AIDD 를 켜고 끄면 공수와 가용 공수가 달라진다.
+      if (p.aidd && p.aidd.enabled) {
+        t.push(tag('AIDD', Number(p.aidd.effort).toFixed(2), 'warn',
+                   '공수를 이 계수만큼 줄이고 다른 업무 점유를 덜 반영했습니다'));
       }
       // ★ 무작위로 뽑은 안을 가중치 안으로 오해하면 안 된다. 적합도 숫자가
       //   나란히 보이므로 **방식이 안 보이면 그 숫자가 근거처럼 읽힌다.**
-      var p = CUR.params || {};
       if (p.method && p.method !== 'weighted') {
-        s += ' · ' + (M_LABEL[p.method] || p.method);
-        if (p.seed) s += '(씨앗 ' + p.seed + ')';
+        t.push(tag('방식', (M_LABEL[p.method] || p.method)
+                           + (p.seed ? ' · 씨앗 ' + p.seed : ''), 'warn',
+                   '적합도를 보지 않고 뽑았습니다. 표의 적합도는 대조용으로 계산한 값입니다'));
       }
-      if (CUR.eval_ver) s += ' · 처리량 판정 ' + CUR.eval_ver + '회차';
-      if (CUR.engine_ver) s += ' · 엔진 ' + CUR.engine_ver;
-      el.textContent = s;
-      el.className = 'ba-dim ba-al__badge ba-al__badge--' + CUR.status
-                   + (p.method && p.method !== 'weighted' ? ' ba-al__badge--rand' : '');
+      // 복사본의 적합도·근거는 원본 시점 판정이다. 출처가 안 보이면 오늘 숫자로 읽힌다.
+      if (p.copied_from) {
+        t.push(tag('복사', p.copied_from.version + '차에서', '',
+                   '이 차수의 항목을 그대로 옮겨 왔습니다. 적합도·근거는 원본 산출 시점 값입니다'));
+      }
+      if (CUR.eval_ver) {
+        t.push(tag('처리량 판정', CUR.eval_ver + '회차', '',
+                   '이 역량 스냅샷을 보고 매겼습니다'));
+      }
+      if (CUR.engine_ver) { t.push(tag('엔진', CUR.engine_ver, '')); }
+
+      el.innerHTML = t.join('');
     }
 
     /**
@@ -3384,8 +3907,14 @@
       });
       if (maxCap <= 0) maxCap = 1;
       if (maxCnt <= 0) maxCnt = 1;
+      // 끌어서 목표를 크게 잡을 수 있게 눈금 끝을 조금 넉넉히 둔다.
+      maxCap = Math.ceil(maxCap * 1.15);
+      LOAD = load; LOAD_MAX = maxCap;
+      // 손잡이는 고칠 수 있는 차수에서만. 확정본·지난 안은 보기만 한다.
+      var dragOk = CAN_EDIT && CUR && CUR.status !== 'confirmed' && CUR.status !== 'archived';
 
-      box.innerHTML = '<div class="ba-loads">' + load.map(function (l) {
+      box.innerHTML = (dragOk ? '<div class="ba-tgtbar" id="ba-tgtbar"></div>' : '') +
+        '<div class="ba-loads' + (dragOk ? ' is-drag' : '') + '">' + load.map(function (l) {
         var pctOfMax = Math.min(100, l.assigned_md / maxCap * 100);
         var capMark  = Math.min(100, l.capacity_md / maxCap * 100);
         // 건수 막대는 **공수 막대와 색을 달리한다.** 같은 색이면 두 막대가
@@ -3394,24 +3923,198 @@
         var cntPct = Math.min(100, l.task_count / maxCnt * 100);
         return '<div class="ba-loadrow' + (l.over ? ' is-over' : '') +
                  (l.task_count === 0 ? ' is-zero' : '') + '">' +
-          '<span class="ba-loadrow__n">' + esc(l.emp_name) + '</span>' +
+          '<span class="ba-loadrow__n">' + esc(l.emp_name) +
+            // 비중을 낮춘 사람은 **최소 보장 대상이 아니다.** 0건이어도
+            // 조용히 0건으로 남으므로, 왜 그런지 이름 옆에 적어 둔다.
+            (l.share != null && l.share < 0.9995
+              ? ' <span class="ba-share-tag" title="' +
+                esc('참여 비중 ' + Number(l.share).toFixed(1)
+                    + (l.share_reason ? ' — ' + l.share_reason : '')
+                    + '\n가용 공수를 그만큼 줄였습니다. 최소 1건 보장에서도 빠집니다.') +
+                '">×' + Number(l.share).toFixed(1) + '</span>' : '') +
+          '</span>' +
           '<span class="ba-loadrow__c" title="배정 건수">' +
             '<i class="ba-loadrow__cb"><b style="width:' + cntPct + '%"></b></i>' +
             '<em>' + l.task_count + '건</em>' +
           '</span>' +
-          '<span class="ba-loadrow__bar">' +
+          '<span class="ba-loadrow__bar" data-mid="' + l.member_id + '">' +
             '<i style="width:' + pctOfMax + '%"></i>' +
             '<u style="left:' + capMark + '%" title="가용 공수 ' + l.capacity_md + ' M/D"></u>' +
+            // 이 차수를 산출할 때 쓴 목표 공수 — 다이아몬드로 따로 (2026-10-14)
+            (l.target_md != null
+              ? '<s class="ba-tgt-was" style="left:' + Math.min(100, l.target_md / maxCap * 100) + '%"' +
+                ' title="이 차수에 쓴 목표 공수 ' + l.target_md + ' M/D"></s>' : '') +
+            // 끌어서 목표를 정하는 손잡이. 처음 자리는 지금 맡은 양이다.
+            (dragOk
+              ? '<b class="ba-tgt' + (TARGETS[l.member_id] != null ? ' is-set' : '') + '"' +
+                ' style="left:' + Math.min(100, (TARGETS[l.member_id] != null ? TARGETS[l.member_id] : l.assigned_md) / maxCap * 100) + '%"' +
+                ' role="slider" tabindex="0" aria-label="' + esc(l.emp_name) + ' 목표 공수"' +
+                ' title="끌어서 목표 공수를 정합니다"></b>' : '') +
           '</span>' +
-          '<span class="ba-loadrow__v">' + l.assigned_md + ' / ' + l.capacity_md + ' M/D</span>' +
-          '<span class="ba-loadrow__p">' +
-            (l.load_pct === null ? '-' : l.load_pct + '%') +
-            (l.over ? ' <b>초과</b>' : '') + '</span>' +
+          // ┌──────────────────────────────────────────────────────┐
+          // │ 비율은 값에 **붙여** 적는다 (2026-10-08)              │
+          // │                                                      │
+          // │ 값과 비율을 따로 두니 칸 사이 간격이 막대와 값 사이   │
+          // │ 보다 넓어져, 셋이 한 묶음인데 셋으로 흩어져 보였다.   │
+          // │ 「75 / 100 M/D (75%)」 한 덩어리로 읽는다.            │
+          // └──────────────────────────────────────────────────────┘
+          // 단위는 자료가 아니다. 숫자보다 작게 적어 눈이 숫자부터 읽게 한다.
+          '<span class="ba-loadrow__v">' + l.assigned_md + ' / ' + l.capacity_md +
+            ' <span class="ba-unit">M/D</span>' +
+            // 가용 공수가 왜 늘었는지 말해 주지 않으면 숫자가 틀렸다고 읽는다.
+            (l.aidd_on && l.aidd_pct
+              ? ' <span class="ba-aidd-tag" title="AIDD 계수로 늘어난 몫이 들어 있습니다">' +
+                'AIDD</span>' : '') +
+            ' <em>(' + (l.load_pct === null ? '-' : l.load_pct + '%') +
+              (l.over ? ' <b>초과</b>' : '') + ')</em>' +
+            // 끌어 정한 목표 — 같은 칸 끝에 붙여 '이것이 바뀐다' 를 보인다
+            '<span class="ba-tgt-v' + (TARGETS[l.member_id] === 0 ? ' is-zero' : '') +
+              '" data-tgtv="' + l.member_id + '">' +
+              (TARGETS[l.member_id] != null ? tgtLabel(TARGETS[l.member_id]) : '') + '</span>' +
+          '</span>' +
           // 기간 합계로는 74% 라도 그 공수가 특정 달에 몰려 있으면 그 달에는
           // 못 받는다. 배정하는 자리에서 말해 줘야 늦지 않는다.
           overMonths(l) +
         '</div>';
       }).join('') + '</div>';
+      if (dragOk) renderTargetBar();
+    }
+
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 목표 공수 — 막대 끝을 끌어 정한다 (2026-10-14)                │
+    // │                                                              │
+    // │ 끈 값은 **다음 산출 한 번**의 그릇으로만 쓴다. 엔진은 목표 쪽 │
+    // │ 으로 기울일 뿐 딱 맞추지 않는다(사람이 그 방식을 골랐다).     │
+    // │ 목표 합계가 일의 총량과 다르면 누군가는 목표를 벗어날 수밖에  │
+    // │ 없으므로, 끄는 동안 검산 줄에서 바로 보여 준다.                │
+    // └──────────────────────────────────────────────────────────────┘
+    function renderTargetBar() {
+      var bar = $('#ba-tgtbar');
+      if (!bar) return;
+      var ids = Object.keys(TARGETS);
+
+      // 공수가 없는 태스크는 M/D 로 기울일 수 없다 — 누구에게 가도 막대가
+      // 안 움직인다. 먼저 알려 준다 (2026-10-14).
+      var noMd = 0, seen = {};
+      ITEMS.forEach(function (it) {
+        if (it.role !== 'owner' || seen[it.task_id]) return;
+        seen[it.task_id] = true;
+        if (it.est_md === null || it.est_md === undefined || Number(it.est_md) <= 0) noMd++;
+      });
+      var warn = noMd
+        ? '<div class="ba-tgtbar__warn">공수가 없는 태스크 <b>' + noMd + '건</b>은 목표 공수로 나눌 수 없습니다 ' +
+          '— 누구에게 가도 막대가 움직이지 않습니다. 먼저 WBS 의 [난이도·공수 매기기] 를 돌리세요.</div>'
+        : '';
+
+      if (!ids.length) {
+        bar.innerHTML = '<span class="ba-dim">막대 끝의 손잡이를 끌면 그 사람의 목표 공수를 정할 수 있습니다. ' +
+          '맨 왼쪽 끝은 <b>주지 않음</b>입니다. 정한 목표 쪽으로 기울여 다시 산출합니다.</span>' + warn;
+        return;
+      }
+      var zeros = ids.filter(function (k) { return TARGETS[k] <= 0; }).length;
+      var total = 0, planned = 0;
+      LOAD.forEach(function (l) {
+        total   += l.assigned_md;
+        planned += TARGETS[l.member_id] != null ? TARGETS[l.member_id] : l.assigned_md;
+      });
+      var gap = Math.round((planned - total) * 10) / 10;
+      bar.innerHTML =
+        '<span>목표 ' + ids.length + '명' + (zeros ? '(주지 않음 ' + zeros + '명)' : '') +
+          ' · 목표 합계 <b>' + (Math.round(planned * 10) / 10) + '</b> / ' +
+          '배정할 일 <b>' + (Math.round(total * 10) / 10) + '</b> M/D' +
+          (Math.abs(gap) >= 0.5
+            ? ' <em class="' + (gap < 0 ? 'is-short' : 'is-spare') + '">(' +
+              (gap < 0 ? -gap + ' M/D 모자람 — 누군가는 목표를 넘깁니다' : gap + ' M/D 남음') + ')</em>'
+            : ' <em class="is-ok">(맞음)</em>') +
+          '<span class="ba-dim"> · 손잡이를 안 건드린 사람은 지금 맡은 양으로 셉니다</span></span>' +
+        '<span class="ba-spacer"></span>' +
+        '<button type="button" class="ba-btn ba-btn--sm" id="ba-tgt-clear">목표 지우기</button>' +
+        '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" id="ba-tgt-run">목표 공수로 재산출</button>' + warn;
+    }
+
+    /**
+     * 막대 위 x 좌표 → M/D. 0.5 단위로 끊는다(태스크가 대개 0.5 의 배수다).
+     * 맨 왼쪽 끝은 0 — "이번엔 주지 않기" 다 (2026-10-14).
+     */
+    function mdAt(barEl, clientX) {
+      var r = barEl.getBoundingClientRect();
+      var pct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+      return Math.round(pct * LOAD_MAX * 2) / 2;
+    }
+
+    function tgtLabel(md) { return md <= 0 ? '→ 주지 않음' : '→ 목표 ' + md; }
+
+    function setTarget(mid, md) {
+      TARGETS[mid] = md;
+      var bar = $('.ba-loadrow__bar[data-mid="' + mid + '"]');
+      var h = bar && bar.querySelector('.ba-tgt');
+      if (h) {
+        h.style.left = Math.min(100, md / LOAD_MAX * 100) + '%';
+        h.classList.add('is-set');
+        h.classList.toggle('is-zero', md <= 0);
+      }
+      var v = $('[data-tgtv="' + mid + '"]');
+      if (v) { v.textContent = tgtLabel(md); v.classList.toggle('is-zero', md <= 0); }
+      renderTargetBar();
+    }
+
+    (function bindTargetDrag() {
+      var box = $('#ba-al-load');
+      if (!box) return;
+      var drag = null;
+      box.addEventListener('pointerdown', function (e) {
+        var bar = e.target.closest ? e.target.closest('.ba-loads.is-drag .ba-loadrow__bar') : null;
+        if (!bar) return;
+        e.preventDefault();
+        drag = { bar: bar, mid: parseInt(bar.dataset.mid, 10) };
+        try { bar.setPointerCapture(e.pointerId); } catch (x) { /* 오래된 브라우저 */ }
+        setTarget(drag.mid, mdAt(bar, e.clientX));
+      });
+      box.addEventListener('pointermove', function (e) {
+        if (drag) setTarget(drag.mid, mdAt(drag.bar, e.clientX));
+      });
+      ['pointerup', 'pointercancel'].forEach(function (t) {
+        box.addEventListener(t, function () { drag = null; });
+      });
+      // 키보드로도 — 손잡이에 초점을 두고 ←/→ 로 0.5 씩
+      box.addEventListener('keydown', function (e) {
+        var h = e.target.closest ? e.target.closest('.ba-tgt') : null;
+        if (!h || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+        e.preventDefault();
+        var mid = parseInt(h.parentNode.dataset.mid, 10);
+        var row = LOAD.filter(function (l) { return l.member_id === mid; })[0] || {};
+        var cur = TARGETS[mid] != null ? TARGETS[mid] : (row.assigned_md || 0);
+        setTarget(mid, Math.max(0, Math.min(LOAD_MAX, cur + (e.key === 'ArrowRight' ? 0.5 : -0.5))));
+      });
+      box.addEventListener('click', function (e) {
+        if (e.target.id === 'ba-tgt-clear') { TARGETS = {}; renderLoad(LOAD); return; }
+        if (e.target.id !== 'ba-tgt-run' || !CUR) return;
+        var p = CUR.params || {};
+        // 지금 차수의 조건을 **그대로** 두고 목표만 얹는다. 패널을 안 열어도
+        // 같은 방식·단위·가중치로 돈다. 직전 안을 기준으로 붙든다.
+        var extra = { targets: TARGETS, stick_from: CUR.id, keep_manual_from: CUR.id };
+        if (p.weights) extra.weights = p.weights;
+        if (p.method && p.method !== 'weighted') { extra.method = p.method; if (p.seed) extra.seed = p.seed; }
+        if (p.level && p.level !== 'leaf') extra.level = p.level;
+        if (p.min_one !== undefined) extra.min_one = p.min_one ? 1 : 0;
+        if (p.aidd && p.aidd.enabled === false) extra.aidd = 0;
+        propose(null, true, extra);
+      });
+    })();
+
+    /**
+     * 완료·보류 태스크 표식 (2026-10-22).
+     * 엔진은 이런 태스크를 새로 배정하지 않지만, 복사한 차수에는 담당자째
+     * 따라온다 — 완료된 일의 담당자는 실제로 그 일을 한 사람이라서다.
+     */
+    function settledMark(it) {
+      if (it.task_status === 'done') {
+        return ' <span class="ba-tag-auto" title="끝난 일입니다. 담당자는 기록으로 남깁니다">완료</span>';
+      }
+      if (it.task_status === 'hold') {
+        return ' <span class="ba-tag-auto" title="세워 둔 일입니다. 풀리면 이 담당자가 이어 맡습니다">보류</span>';
+      }
+      return '';
     }
 
     function renderTable(unassigned) {
@@ -3420,10 +4123,38 @@
 
       var canEdit = CAN_EDIT && CUR && CUR.status !== 'confirmed' && CUR.status !== 'archived';
 
-      var h = ITEMS.map(function (it) {
+      // ┌──────────────────────────────────────────────────────────┐
+      // │ 분류 줄을 **자리만** 잡아 준다 (2026-10-08)                │
+      // │                                                          │
+      // │ 말단만 보여 주면 `1 · 2.1 · 2.2 · 3.1` 처럼 뛰어서, 바로  │
+      // │ 위 WBS 표와 같은 번호를 눈으로 맞춰야 했다.               │
+      // │                                                          │
+      // │ 담당자·역할·적합도 칸은 **비운다.** 선택 상자를 두면       │
+      // │ 배정할 수 있는 줄처럼 보이고, 실제로 누르면 아무 일도      │
+      // │ 안 일어난다. 공수는 하위 합이라 **합계에 또 더하지 않게**  │
+      // │ 흐리게 적는다.                                            │
+      // └──────────────────────────────────────────────────────────┘
+      var rows = ITEMS.map(function (it) { return { k: 'item', wbs_no: it.wbs_no, v: it }; })
+        .concat(GROUPS.map(function (g) { return { k: 'group', wbs_no: g.wbs_no, v: g }; }));
+      rows.sort(function (x, y) { return wbsCmp(x.wbs_no, y.wbs_no); });
+
+      var h = rows.map(function (row) {
+        if (row.k === 'group') {
+          var g = row.v;
+          return '<tr class="ba-al__grp">' +
+            '<td class="ba-al__no">' + esc(g.wbs_no || '-') + '</td>' +
+            '<td class="ba-al__t">' + esc(g.title) + '</td>' +
+            '<td class="ba-al__md">' + (g.est_md === null ? '-' : g.est_md) + '</td>' +
+            // 난이도 칸은 **비워서라도 둔다.** 좁은 화면에서 이 칸만 숨기는
+            // 규칙이 있어, 빠지면 뒤 칸들이 한 자리씩 밀린다.
+            '<td class="ba-al__df"></td>' +
+            '<td colspan="4" class="ba-cell-none">분류 — 배정 대상 아님</td>' +
+          '</tr>';
+        }
+        var it = row.v;
         return '<tr data-id="' + it.id + '"' + (it.is_manual ? ' class="is-manual"' : '') + '>' +
           '<td class="ba-al__no">' + esc(it.wbs_no || '-') + '</td>' +
-          '<td class="ba-al__t">' + esc(it.task_title) + '</td>' +
+          '<td class="ba-al__t">' + esc(it.task_title) + settledMark(it) + '</td>' +
           '<td class="ba-al__md">' + (it.est_md === null ? '-' : it.est_md) + '</td>' +
           '<td class="ba-al__df">' + (it.difficulty === null ? '-' : it.difficulty) + '</td>' +
           '<td>' + memberSelect(it, canEdit) + '</td>' +
@@ -3433,6 +4164,9 @@
           '<td class="ba-al__act">' +
             (canEdit && it.role !== 'owner'
               ? '<button type="button" class="ba-mini ba-mini--x" data-a="del">&times;</button>' : '') +
+            // 보조는 담당 줄에서 붙인다. 한 번에 여러 명을 고른다 (2026-10-12).
+            (canEdit && it.role === 'owner'
+              ? '<button type="button" class="ba-mini" data-a="addsup" title="보조 담당자를 붙입니다">+ 보조</button>' : '') +
           '</td>' +
         '</tr>';
       }).join('');
@@ -3583,7 +4317,8 @@
     function cmpRow(r, curId) {
       var how = (M_LABEL[r.method] || r.method) +
                 (r.level && r.level !== 'leaf'
-                   ? ' · ' + (L_LABEL[r.level] || r.level) : '');
+                   ? ' · ' + (L_LABEL[r.level] || r.level) : '') +
+                (r.aidd ? ' · AIDD ' + Number(r.aidd_effort || 0).toFixed(2) : '');
       // 고른 후보가 있으면 분모를 그 수로 둔다. '8명 중 5명' 이 문제였지
       // '5명에게 갔다' 가 문제인 적은 없다.
       var who = r.picked ? r.members + ' / ' + r.picked : String(r.members);
@@ -3687,7 +4422,22 @@
     }
 
     // ---- 동작 -------------------------------------------------------------
-    function propose(weights, keepManual) {
+    function propose(weights, keepManual, extra) {
+      // 2단계에서 고른 후보. 이 탭에서 고른 적이 없으면(null) 지난 배정안의
+      // 명단을 이어 쓴다 — 2단계를 거치지 않고 바로 여기로 와도 같게.
+      var pick = readPick(PID);
+      if (pick === null) {
+        pick = LAST_PICK.slice();
+        if (pick.length) {
+          try { sessionStorage.setItem(PICK_KEY + PID, JSON.stringify(pick)); } catch (e) { /* 무시 */ }
+        }
+      }
+      // 아무도 안 고른 채 산출하면 전원이 대상이 된다. 모르고 그렇게 되지 않게 묻는다.
+      if (!pick.length && !confirm('2단계에서 고른 후보가 없습니다.\n'
+                                   + '배정 가능한 전원을 대상으로 산출합니다. 계속할까요?')) {
+        return;
+      }
+
       var btn = $('#ba-al-propose');
       btn.disabled = true;
       clearError('#ba-al-error');
@@ -3705,12 +4455,8 @@
       // │                                                          │
       // │ 아무도 안 골랐으면 안 보낸다 — 그때는 "전원"이 맞다.       │
       // └──────────────────────────────────────────────────────────┘
-      // 2단계와 3단계는 다른 함수라 loadPicked() 를 못 부른다. 저장소에서
-      // 직접 읽는다 — 키는 그쪽과 **반드시 같아야** 하므로 상수로 둔다.
-      var pick = [];
-      try {
-        pick = JSON.parse(sessionStorage.getItem(PICK_KEY + PID) || '[]');
-      } catch (e) { pick = []; }
+      // 2단계와 3단계는 다른 함수라 loadPicked() 를 못 부른다. 둘 다
+      // readPick() 으로 읽는다 — 키가 **반드시 같아야** 한다.
       if (pick.length) { body.member_ids = pick; }
 
       // ┌──────────────────────────────────────────────────────────┐
@@ -3739,10 +4485,20 @@
         // 엔진 기본은 "후보를 골랐으면 켬" 이라 끄는 길이 없어진다.
         var mo = $('#ba-al-minone');
         if (mo) body.min_one = mo.checked ? 1 : 0;
+        // 끄기만 보낸다. 프로젝트가 안 쓰기로 한 것을 차수가 되살리면
+        // 어느 쪽이 참인지 알 수 없게 된다 — 서버도 끄기만 받는다.
+        var ad = $('#ba-al-aidd');
+        if (ad && !ad.disabled && !ad.checked) { body.aidd = 0; }
+        // 지금 보고 있는 차수를 기준으로 약하게 붙든다 (2026-10-12).
+        var st = $('#ba-al-stick');
+        if (st && st.checked && CUR) { body.stick_from = CUR.id; }
       }
+      // 부르는 쪽이 통째로 정해 넘기는 값(목표 공수 재산출 등). 위 패널 값보다 앞선다.
+      if (extra) { Object.keys(extra).forEach(function (k) { body[k] = extra[k]; }); }
 
       api('api/allocate.php?act=propose', { method: 'POST', body: body })
         .then(function (d) {
+          TARGETS = {};          // 쓴 목표는 그 차수에 남았다. 손잡이는 새로 시작한다
           WEIGHTS = (d.meta && d.meta.weights) || WEIGHTS;
           // 씨앗을 칸에 되돌려 놓는다. 비우고 돌렸을 때 **방금 뽑힌 값**을
           // 알아야 같은 결과를 다시 만들 수 있다.
@@ -3777,14 +4533,74 @@
         .then(function () { btn.disabled = false; });
     }
 
+    // ---- 보조 담당자 붙이기 ------------------------------------------------
+    //
+    // 담당 줄 바로 밑에 고르는 줄을 연다. 이미 그 태스크에 들어간 사람
+    // (담당·보조)은 빼고 보여 준다 — 같은 사람을 두 번 넣을 수 없다.
+    function toggleSupPicker(tr, itemId) {
+      var next = tr.nextElementSibling;
+      if (next && next.classList.contains('ba-al__pick')) { next.remove(); return; }
+
+      var it = null;
+      ITEMS.forEach(function (x) { if (x.id === itemId) it = x; });
+      if (!it) return;
+      var inTask = {};
+      ITEMS.forEach(function (x) { if (x.task_id === it.task_id) inTask[x.member_id] = true; });
+      var cand = MEMBERS.filter(function (m) { return !inTask[m.id]; });
+
+      var row = document.createElement('tr');
+      row.className = 'ba-al__pick';
+      row.dataset.task = it.task_id;
+      row.innerHTML = '<td></td><td colspan="7">' +
+        '<div class="ba-al__pickbox">' +
+          '<span class="ba-dim">보조로 붙일 사람</span>' +
+          (cand.length
+            ? cand.map(function (m) {
+                return '<label class="ba-check"><input type="checkbox" value="' + m.id + '">' +
+                       '<span>' + esc(m.emp_name) + '</span></label>';
+              }).join('')
+            : '<span class="ba-cell-none">더 붙일 사람이 없습니다</span>') +
+          '<span class="ba-spacer"></span>' +
+          (cand.length ? '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" data-a="sup-save">보조로 추가</button>' : '') +
+          '<button type="button" class="ba-btn ba-btn--sm" data-a="sup-cancel">닫기</button>' +
+        '</div></td>';
+      tr.parentNode.insertBefore(row, tr.nextSibling);
+    }
+
+    /** 고른 사람을 한 명씩 넣는다. 중간에 실패하면 거기서 멈추고 표를 다시 받는다. */
+    function saveSupports(row, btn) {
+      var ids = $$('input:checked', row).map(function (c) { return parseInt(c.value, 10); });
+      if (!ids.length) { toast('보조로 붙일 사람을 고르세요.', true); return; }
+      var taskId = parseInt(row.dataset.task, 10);
+      btn.disabled = true;
+
+      var last = null;
+      ids.reduce(function (p, mid) {
+        return p.then(function () {
+          return api('api/allocate.php?act=add_item', { method: 'POST', body: {
+            allocation_id: CUR.id, task_id: taskId, member_id: mid, role: 'support'
+          } }).then(function (d) { last = d; });
+        });
+      }, Promise.resolve())
+        .then(function () {
+          apply(last);
+          toast('보조 ' + ids.length + '명을 붙였습니다.');
+        })
+        .catch(function (err) {
+          showError('#ba-al-error', err.message);
+          openVersion(CUR.id);
+        });
+    }
+
     function changeMember(itemId, memberId) {
       var it = null;
       ITEMS.forEach(function (x) { if (x.id === itemId) it = x; });
       if (!it) return;
 
-      // 사유를 받는다. 나중에 왜 바꿨는지 알아야 한다(서버도 요구한다).
-      var note = prompt('담당자를 ' + it.emp_name + ' 에서 바꿉니다.\n사유를 적어 주세요.', '');
-      if (note === null || !note.trim()) {
+      // 사유는 선택이다. [취소] 만 되돌리고, 비워 두고 [확인] 하면 그대로 바꾼다.
+      var note = prompt('담당자를 ' + it.emp_name + ' 에서 바꿉니다.\n'
+                        + '사유를 적어 두면 나중에 되짚기 좋습니다. 비워 두셔도 됩니다.', '');
+      if (note === null) {
         renderTable([]);   // 선택을 되돌린다
         openVersion(CUR.id);
         return;
@@ -3841,9 +4657,16 @@
       var btn = e.target.closest('[data-a]');
       if (!btn) return;
       var tr = btn.closest('tr');
-      if (!tr || !tr.dataset.id) return;
+      if (!tr) return;
+
+      // 보조 고르는 줄. 이 줄에는 data-id 가 없다.
+      if (btn.dataset.a === 'sup-cancel') { tr.remove(); return; }
+      if (btn.dataset.a === 'sup-save')   { saveSupports(tr, btn); return; }
+
+      if (!tr.dataset.id) return;
       var id = parseInt(tr.dataset.id, 10);
 
+      if (btn.dataset.a === 'addsup') { toggleSupPicker(tr, id); return; }
       if (btn.dataset.a === 'why') openWhy(id);
       if (btn.dataset.a === 'del') {
         if (!confirm('이 배정 항목을 지웁니다.')) return;
@@ -3868,6 +4691,9 @@
       });
 
       $('#ba-al-compare').addEventListener('click', openCompare);
+      $('#ba-al-copy').addEventListener('click', copyVersion);
+      $('#ba-al-del').addEventListener('click', deleteVersion);
+      $('#ba-al-purge').addEventListener('click', purgeVersions);
 
       // 표에서 바로 그 차수를 연다. 보고 고르는 화면이니 고르면 열려야 한다.
       $('#ba-cmp-table').addEventListener('click', function (e) {
@@ -3964,6 +4790,22 @@
         toast(d.message || okMsg);
         location.reload();          // 상태 뱃지와 단추가 통째로 달라진다
       }).catch(function (e) { toast(e.message, true); });
+    }
+
+    // R&D 점유 상한 (2026-10-14). 서버가 범위를 다시 본다.
+    var capSave = $('#ba-cap-save');
+    if (capSave) {
+      capSave.addEventListener('click', function () {
+        var v = function (id) { return ($('#' + id) || {}).value || ''; };
+        if (Number(v('ba-cap-total')) >= 100 || Number(v('ba-cap-project')) >= 100) {
+          if (!confirm('100% 로 두면 그 상한은 사실상 풀립니다.\n'
+                       + 'R&D 참여로 배정을 피할 수 있게 됩니다. 계속할까요?')) return;
+        }
+        send('api/setting.php?act=save_rnd_caps', {
+          total_pct: v('ba-cap-total'), project_pct: v('ba-cap-project'),
+          concurrent: v('ba-cap-conc'), stale_weeks: v('ba-cap-stale')
+        }, '저장했습니다');
+      });
     }
 
     var gsave = $('#ba-ig-gsave');
@@ -4128,6 +4970,39 @@
       });
     });
 
+    // 프로젝트 등록 권한 (027). 등록한 사람이 그 프로젝트의 PM 이 되므로
+    // 켜기 전에 무엇이 따라오는지 한 번 알린다.
+    $$('.ba-create-t').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var on   = b.dataset.on === '1';
+        var name = b.dataset.name || '이 구성원';
+        var msg  = on
+          ? [name + ' 님의 프로젝트 등록 권한을 끕니다.', '',
+             '· 새 프로젝트를 등록하지 못합니다',
+             '· 이미 등록한 프로젝트의 PM 권한은 그대로입니다',
+             '', '진행할까요?'].join('\n')
+          : [name + ' 님에게 프로젝트 등록 권한을 줍니다.', '',
+             '등록한 프로젝트의 PM 이 되어 다음을 할 수 있습니다.',
+             '· 후보 표에서 후보 전원의 근거 열람',
+             '· 배정 확정 (구성원 점유가 생깁니다)',
+             '· 구성원의 직접 등록 점유 수정',
+             '', '진행할까요?'].join('\n');
+        if (!confirm(msg)) return;
+
+        b.disabled = true;
+        api('api/member.php?act=set_can_create', {
+          method: 'POST',
+          body: { member_id: parseInt(b.dataset.mid, 10), can_create: on ? 0 : 1 }
+        }).then(function (d) {
+          toast(d.message);
+          location.reload();
+        }).catch(function (e) {
+          toast(e.message, true);
+          b.disabled = false;
+        });
+      });
+    });
+
 
     if (!btn) return;   // 관리자가 아니면 단추를 안 그린다
     btn.addEventListener('click', function () {
@@ -4269,13 +5144,20 @@
                '<span class="ba-metric__v">' + v + '</span>' +
                (it[2] ? '<span class="ba-metric__s">' + esc(it[2]) + '</span>' : '') + '</div>';
       }).join('');
-      if (m.manual_adjust) {
-        html += '<div class="ba-metric ba-metric--adj">' +
-                '<span class="ba-metric__k">관리자 보정</span>' +
-                '<span class="ba-metric__v">' + (m.manual_adjust > 0 ? '+' : '') +
-                  m.manual_adjust + '</span>' +
-                '<span class="ba-metric__s">' + esc(m.adjust_reason || '') + '</span></div>';
-      }
+      // ┌──────────────────────────────────────────────────────────┐
+      // │ '관리자 보정'(manual_adjust)을 치웠다 (2026-10-08)         │
+      // │                                                          │
+      // │ 저장되고 여기 보이기까지 했지만 **배정 엔진도 후보 적합도도│
+      // │ 한 번도 읽지 않았다.** 보이는데 아무 일도 안 하는 숫자는   │
+      // │ 없느니만 못하다 — 사람은 그게 먹는 줄 알고 조정한다.       │
+      // │                                                          │
+      // │ 하려던 일은 후보 표의 **참여 비중**이 대신한다. 그쪽은     │
+      // │ 프로젝트별이고 실제로 가용 공수를 줄인다. 이 칸은 eval_ver │
+      // │ 단위라 고치면 전 프로젝트에 동시에 걸렸다.                 │
+      // │                                                          │
+      // │ 칸과 자료는 그대로 둔다. 지난 조정 기록까지 지울 이유는    │
+      // │ 없다 — 화면에서만 뺀다.                                    │
+      // └──────────────────────────────────────────────────────────┘
       if (m.insufficient_data) {
         html += '<p class="ba-empty-inline">전체 표본이 부족합니다 (' +
                 m.total_cases + '건). 점수를 참고용으로만 보세요.</p>';
@@ -4513,12 +5395,146 @@
     running: '진행 중', done: '종료', dropped: '중단'
   };
 
+  /**
+   * 화면 안 확인·입력 창 (2026-10-16). Promise 로 입력값(문자열)을, 취소면 null 을 준다.
+   *
+   * window.prompt / confirm 을 쓰지 않는다. 브라우저가 "이 페이지의 대화 상자를
+   * 막기" 를 기억하거나 내장 브라우저에서 열리면 **아무 창도 없이 취소로** 끝나,
+   * 단추를 눌러도 반응이 없었다(R&D [중단]·[삭제]).
+   *
+   * opts: title, message(줄바꿈 \n), input(true 면 입력칸), placeholder,
+   *       required(빈 값 거절), expect(이 값과 같아야 진행 — 영구삭제 코드 확인),
+   *       ok(단추 글자), danger(빨간 단추)
+   */
+  function askDialog(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      var last = document.activeElement;
+      var wrap = document.createElement('div');
+      wrap.className = 'ba-dlg';
+      wrap.innerHTML =
+        '<div class="ba-dlg__box" role="dialog" aria-modal="true" aria-labelledby="ba-dlg-t">' +
+          '<h2 class="ba-dlg__t" id="ba-dlg-t">' + esc(opts.title || '확인') + '</h2>' +
+          (opts.message ? '<p class="ba-dlg__m">' + esc(opts.message).replace(/\n/g, '<br>') + '</p>' : '') +
+          (opts.input
+            ? '<textarea class="ba-dlg__in" rows="3" placeholder="' + esc(opts.placeholder || '') + '"></textarea>'
+            : '') +
+          '<p class="ba-dlg__err" hidden></p>' +
+          '<div class="ba-dlg__foot">' +
+            '<button type="button" class="ba-btn" data-dlg="cancel">취소</button>' +
+            '<button type="button" class="ba-btn ' + (opts.danger ? 'ba-btn--danger-fill' : 'ba-btn--primary') +
+              '" data-dlg="ok">' + esc(opts.ok || '확인') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(wrap);
+
+      var input = wrap.querySelector('.ba-dlg__in');
+      var err   = wrap.querySelector('.ba-dlg__err');
+      (input || wrap.querySelector('[data-dlg="ok"]')).focus();
+
+      function dlgClose(v) {
+        wrap.remove();
+        document.removeEventListener('keydown', onKey, true);
+        if (last && last.focus) last.focus();
+        resolve(v);
+      }
+      function dlgOk() {
+        var v = input ? input.value.trim() : '';
+        if (opts.required && v === '') {
+          err.hidden = false; err.textContent = '내용을 입력하세요.'; input.focus(); return;
+        }
+        if (opts.expect !== undefined && v !== opts.expect) {
+          err.hidden = false; err.textContent = '입력한 값이 맞지 않습니다.'; input.focus(); return;
+        }
+        dlgClose(v);
+      }
+      function onKey(e) {
+        if (e.key === 'Escape') { e.stopPropagation(); dlgClose(null); }
+        // 입력칸이 한 줄짜리 확인(코드)일 때만 Enter 로 진행한다. 사유는 여러 줄일 수 있다.
+        if (e.key === 'Enter' && (!input || opts.expect !== undefined) && !e.shiftKey) { e.preventDefault(); dlgOk(); }
+      }
+      document.addEventListener('keydown', onKey, true);
+      wrap.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-dlg]');
+        if (b) { b.dataset.dlg === 'ok' ? dlgOk() : dlgClose(null); return; }
+        if (e.target === wrap) dlgClose(null);   // 바깥을 누르면 취소
+      });
+    });
+  }
+
+  /**
+   * R&D 과제 중단·삭제·복구·영구삭제 (2026-10-16). 보드 카드와 상세 머리가 같이 쓴다.
+   * 처리했으면 true. 끝나면 after() 를 부른다(보드는 다시 읽고, 상세는 보드로 간다).
+   * 단추에는 data-id · data-code · data-name 이 있어야 한다.
+   */
+  function rndLifecycle(act, btn, after) {
+    var id   = parseInt(btn.dataset.id, 10);
+    var code = btn.dataset.code || '';
+    var name = btn.dataset.name || '';
+    var head = '[' + code + '] ' + name;
+    var send = function (a, body, okFallback) {
+      body = body || {};
+      body.id = id;
+      btn.disabled = true;
+      return api('api/rnd.php?act=' + a, { method: 'POST', body: body })
+        .then(function (d) { toast(d.message || okFallback); after(d); })
+        .catch(function (e) { btn.disabled = false; toast(e.message, true); });
+    };
+
+    if (act === 'drop') {
+      askDialog({
+        title: '과제 중단', ok: '중단', danger: true, input: true, required: true,
+        message: head + '\n\n중단한 과제는 역량 지표에 반영하지 않고, 참여자 점유는 오늘로 닫힙니다.',
+        placeholder: '중단 사유 (필수)'
+      }).then(function (why) {
+        if (why !== null) send('drop', { reason: why }, '과제를 중단했습니다.');
+      });
+      return true;
+    }
+    if (act === 'delete') {
+      askDialog({
+        title: '과제 삭제', ok: '삭제', danger: true, input: true,
+        message: head + '\n\n· 보드에서 보이지 않게 되고, 참여자 점유는 오늘로 닫힙니다\n' +
+                 '· 관리자는 [삭제 포함] 에서 복구할 수 있습니다',
+        placeholder: '삭제 사유 (비워도 됩니다)'
+      }).then(function (r) {
+        if (r !== null) send('delete', { reason: r }, '과제를 삭제했습니다.');
+      });
+      return true;
+    }
+    if (act === 'restore') {
+      askDialog({
+        title: '과제 복구', ok: '복구',
+        message: head + '\n\n승인·진행 중이던 과제면 참여자 점유도 다시 올라갑니다.'
+      }).then(function (v) {
+        if (v !== null) send('restore', {}, '과제를 복구했습니다.');
+      });
+      return true;
+    }
+    if (act === 'purge') {
+      // 되돌릴 수 없다 — 코드를 직접 쳐야 진행한다.
+      askDialog({
+        title: '영구삭제', ok: '영구삭제', danger: true, input: true, expect: code,
+        message: head + '\n\n되돌릴 수 없습니다. 참여자·진행 기록·산출물·점유 기록이 모두 지워집니다.\n' +
+                 '진행하려면 과제 코드 ' + code + ' 를 그대로 입력하세요.',
+        placeholder: code
+      }).then(function (v) {
+        if (v !== null) send('purge', {}, '영구삭제했습니다.');
+      });
+      return true;
+    }
+    return false;
+  }
+
   function initRndBoard() {
     var root = $('#ba-rnd-board');
     if (!root) return;
 
     var state = { status: '', page: 1 };
     var debounceTimer;
+    var MEM = listMemory('bs.list.rnd',
+      ['ba-r-category', 'ba-r-keyword', 'ba-r-sort', 'ba-r-recruiting', 'ba-r-mine', 'ba-r-interest', 'ba-r-deleted']);
+    MEM.restore(state);
 
     function filters() {
       return {
@@ -4529,6 +5545,8 @@
         sort:       ($('#ba-r-sort')       || {}).value || 'recent',
         recruiting: ($('#ba-r-recruiting') || {}).checked ? '1' : '',
         mine:       ($('#ba-r-mine')       || {}).checked ? '1' : '',
+        interest:   ($('#ba-r-interest')   || {}).checked ? '1' : '',
+        with_deleted: ($('#ba-r-deleted')  || {}).checked ? '1' : '',
         page:       state.page,
         size:       24
       };
@@ -4570,6 +5588,11 @@
       if (r.visibility === 'private') {
         badges += '<span class="ba-badge ba-badge--private">비공개</span>';
       }
+      if (r.deleted) {
+        badges += '<span class="ba-badge ba-badge--dropped" title="' +
+                  esc((r.deleted_at || '') + ' ' + (r.deleted_by_name || '') +
+                      (r.delete_reason ? ' — ' + r.delete_reason : '')) + '">삭제됨</span>';
+      }
 
       // 단추는 서버가 내려준 actions 에 있는 것만 그린다.
       var acts = (r.actions || []).map(function (a) {
@@ -4584,8 +5607,25 @@
           return '<button type="button" class="ba-btn ba-btn--sm"' +
                  ' data-act="reject" data-id="' + r.id + '">반려</button>';
         }
+        if (a === 'restore') {
+          return '<button type="button" class="ba-btn ba-btn--sm"' +
+                 ' data-act="restore" data-id="' + r.id + '">복구</button>';
+        }
         return '';
       }).join('');
+
+      // 중단·삭제·영구삭제는 [⋯] 안에 둔다 (2026-10-16). 되돌리기 어려운 일이라
+      // 늘 보이는 자리에 두지 않는다 — 한 번 더 열어야 누를 수 있게.
+      var MORE = { drop: '중단', 'delete': '삭제', purge: '영구삭제' };
+      var more = (r.actions || []).filter(function (a) { return MORE[a]; }).map(function (a) {
+        return '<button type="button" class="ba-more__item' + (a === 'drop' ? '' : ' is-danger') + '"' +
+               ' data-act="' + a + '" data-id="' + r.id + '" data-code="' + esc(r.code || '') + '"' +
+               ' data-name="' + esc(r.name || '') + '">' + MORE[a] + '</button>';
+      }).join('');
+      if (more) {
+        acts += '<details class="ba-more"><summary class="ba-btn ba-btn--sm" aria-label="더보기" title="더보기">⋯</summary>' +
+                '<div class="ba-more__menu">' + more + '</div></details>';
+      }
 
       return '<article class="ba-rnd-card" data-id="' + r.id + '">' +
         '<div class="ba-rnd-card__head"><span class="ba-rnd-card__code">' + esc(r.code) + '</span>' +
@@ -4626,6 +5666,7 @@
     }
 
     function load() {
+      MEM.save(state);
       api('api/rnd.php?' + qs(filters())).then(render).catch(function (e) {
         $('#ba-r-grid').innerHTML = '<div class="ba-empty">' + esc(e.message) + '</div>';
       });
@@ -4636,7 +5677,7 @@
       var el = $('#' + id);
       if (el) el.addEventListener('change', function () { state.page = 1; load(); });
     });
-    ['ba-r-recruiting', 'ba-r-mine'].forEach(function (id) {
+    ['ba-r-recruiting', 'ba-r-mine', 'ba-r-interest', 'ba-r-deleted'].forEach(function (id) {
       var el = $('#' + id);
       if (el) el.addEventListener('change', function () { state.page = 1; load(); });
     });
@@ -4653,7 +5694,7 @@
         ['ba-r-category', 'ba-r-sort', 'ba-r-keyword'].forEach(function (id) {
           var el = $('#' + id); if (el) el.value = id === 'ba-r-sort' ? 'recent' : '';
         });
-        ['ba-r-recruiting', 'ba-r-mine'].forEach(function (id) {
+        ['ba-r-recruiting', 'ba-r-mine', 'ba-r-interest', 'ba-r-deleted'].forEach(function (id) {
           var el = $('#' + id); if (el) el.checked = false;
         });
         state = { status: '', page: 1 };
@@ -4674,6 +5715,11 @@
       load();
     });
 
+    // [⋯] 메뉴는 바깥을 누르면 닫는다.
+    document.addEventListener('click', function (e) {
+      $$('.ba-more[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });
+    });
+
     // 승인·반려
     $('#ba-r-grid').addEventListener('click', function (e) {
       var b = e.target.closest('[data-act]');
@@ -4681,24 +5727,32 @@
       var id  = parseInt(b.dataset.id, 10);
       var act = b.dataset.act;
 
+      // 중단·삭제·복구·영구삭제 (2026-10-16)
+      if (rndLifecycle(act, b, load)) return;
+
       if (act === 'reject') {
-        var reason = window.prompt('반려 사유를 적어 주세요. 발의자가 고쳐서 다시 낼 수 있습니다.');
-        if (reason === null) return;
-        if (!reason.trim()) { toast('반려 사유를 입력하세요.', true); return; }
-        b.disabled = true;
-        api('api/rnd.php?act=reject', { method: 'POST', body: { id: id, reason: reason } })
-          .then(function (d) { toast(d.message); load(); })
-          .catch(function (err) { b.disabled = false; toast(err.message, true); });
+        askDialog({ title: '과제 반려', ok: '반려', input: true, required: true,
+                    message: '발의자가 고쳐서 다시 낼 수 있습니다.', placeholder: '반려 사유 (필수)' })
+          .then(function (reason) {
+            if (reason === null) return;
+            b.disabled = true;
+            api('api/rnd.php?act=reject', { method: 'POST', body: { id: id, reason: reason } })
+              .then(function (d) { toast(d.message); load(); })
+              .catch(function (err) { b.disabled = false; toast(err.message, true); });
+          });
         return;
       }
 
       if (act === 'approve') {
-        if (!window.confirm('이 과제를 승인합니다.\n\n승인은 과제를 열어 줄 뿐이며, ' +
-                            '가용도는 사람이 합류해야 바뀝니다.')) return;
-        b.disabled = true;
-        api('api/rnd.php?act=approve', { method: 'POST', body: { id: id } })
-          .then(function (d) { toast(d.message); load(); })
-          .catch(function (err) { b.disabled = false; toast(err.message, true); });
+        askDialog({ title: '과제 승인', ok: '승인',
+                    message: '승인은 과제를 열어 줄 뿐이며, 가용도는 사람이 합류해야 바뀝니다.' })
+          .then(function (v) {
+            if (v === null) return;
+            b.disabled = true;
+            api('api/rnd.php?act=approve', { method: 'POST', body: { id: id } })
+              .then(function (d) { toast(d.message); load(); })
+              .catch(function (err) { b.disabled = false; toast(err.message, true); });
+          });
       }
     });
 
@@ -4710,6 +5764,8 @@
     if (!root) return;
 
     var id = root.dataset.id ? parseInt(root.dataset.id, 10) : 0;
+    // 참고 자료 패널 (2026-10-19) — 프로젝트 등록 화면과 같은 것. 저장한 과제에만.
+    if (id) initSourcePanel(id);
 
     function body(status) {
       var b = {
@@ -4751,6 +5807,12 @@
 
     var draft = $('#ba-r-save-draft');
     if (draft) draft.addEventListener('click', function () { save('draft', draft); });
+
+    // 하단 [삭제] (2026-10-19) — 보드·상세와 같은 확인을 거친다.
+    var del = $('#ba-r-delete');
+    if (del) del.addEventListener('click', function () {
+      rndLifecycle('delete', del, function () { location.href = 'rnd_board.php'; });
+    });
   }
 
   // =====================================================================
@@ -4802,6 +5864,23 @@
       if (r.can.reject)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="reject">과제 반려</button>');
       if (r.can.finish)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="finish">종료</button>');
       if (r.can.drop)    acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="drop">중단</button>');
+      // 삭제 (2026-10-16). 처리는 rndLifecycle — 보드 카드와 같은 확인을 거친다.
+      if (r.can['delete']) {
+        acts.push('<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-rv="delete"' +
+                  ' data-id="' + r.id + '" data-code="' + esc(r.code || '') + '" data-name="' + esc(r.name || '') + '">삭제</button>');
+      }
+
+      // 공유 (initShare). 볼 수 있는 사람에게만 이 화면이 열리므로 단추는 늘 둔다.
+      var shareLines = [
+        [r.code, r.status_label, r.category_label].filter(Boolean).join(' · '),
+        '발의 ' + (r.proposer_name || '-') + ' · 참여 ' + (r.member_count || 0) + '명',
+        r.dev_start || r.dev_end ? '기간 ' + (r.dev_start || '?') + ' ~ ' + (r.dev_end || '?') : ''
+      ];
+      acts.push('<button type="button" class="ba-btn ba-btn--sm ba-share" aria-haspopup="menu"' +
+                ' data-share-kind="R&amp;D 과제" data-share-title="' + esc(r.name) + '"' +
+                ' data-share-lines="' + esc(JSON.stringify(shareLines)) + '"' +
+                ' data-share-path="rnd_view.php?id=' + r.id + '"' +
+                ' data-share-private="' + (r.visibility === 'private' ? '1' : '0') + '">공유</button>');
 
       return '<div class="ba-rnd-head__top"><span class="ba-rnd-card__code">' + esc(r.code) + '</span>' +
              b + '</div>' +
@@ -4813,19 +5892,121 @@
              '<div class="ba-rnd-head__acts">' + acts.join('') + '</div>';
     }
 
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 개요 (2026-10-12 다시 꾸밈)                                    │
+    // │                                                              │
+    // │ 위: 아이콘이 붙은 사실 카드 다섯. 아래: 제목 띠가 있는 글 카드 │
+    // │ 둘. 글은 사람이 적은 그대로 두되 [소제목] · "- " 점 목록 ·      │
+    // │ "1. " 번호 목록만 알아보게 바꾼다 — 마크다운 전체를 받지 않는다.│
+    // │ **먼저 이스케이프하고** 줄 단위로만 감싸므로 HTML 이 새지 않는다.│
+    // └──────────────────────────────────────────────────────────────┘
+    var RV_ICON = {
+      eye:   '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+      tag:   '<path d="M20 12l-8 8-9-9V3h8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+      cal:   '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+      gauge: '<path d="M12 14l4-4"/><path d="M3.5 18a9 9 0 1 1 17 0"/>',
+      users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+      goal:  '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+      box:   '<path d="M21 8l-9-5-9 5 9 5zM3 8v8l9 5 9-5V8M12 13v8"/>'
+    };
+    function rvIcon(k) {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true">' + RV_ICON[k] + '</svg>';
+    }
+
+    /** 사람이 적은 글 → 읽기 좋은 블록. 이스케이프가 먼저다. */
+    function richText(src) {
+      var lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
+      var html = '', list = null;
+      function close() { if (list) { html += '</' + list + '>'; list = null; } }
+      function open(tag) { if (list !== tag) { close(); html += '<' + tag + ' class="ba-rt__' + tag + '">'; list = tag; } }
+      lines.forEach(function (raw) {
+        var t = raw.trim(), m;
+        if (!t) { close(); return; }
+        if ((m = /^\[(.+)\]$/.exec(t))) { close(); html += '<h4 class="ba-rt__h">' + esc(m[1]) + '</h4>'; return; }
+        if ((m = /^[-·•*]\s+(.*)$/.exec(t))) { open('ul'); html += '<li>' + esc(m[1]) + '</li>'; return; }
+        if ((m = /^(\d+)[.)]\s+(.*)$/.exec(t))) { open('ol'); html += '<li value="' + m[1] + '">' + esc(m[2]) + '</li>'; return; }
+        close(); html += '<p class="ba-rt__p">' + esc(t) + '</p>';
+      });
+      close();
+      return html || '<p class="ba-rt__p ba-dim">아직 적지 않았습니다.</p>';
+    }
+
+    /** 참고 자료 (2026-10-19). 올리고 지우는 것은 수정 화면에서 — 여기서는 보고 받기만. */
+    function sourcesBlock(list) {
+      if (!list.length) return '';
+      return '<article class="ba-rvc ba-rvc--src">' +
+        '<header class="ba-rvc__h">' + rvIcon('box') + '<h3>참고 자료 <span class="ba-dim">' + list.length + '건</span></h3></header>' +
+        '<div class="ba-srclist">' + list.map(function (s) {
+          var title = s.url
+            ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>'
+            : esc(s.title);
+          return '<div class="ba-src">' +
+                 '<span class="ba-src__kind">' + esc(s.kind_label) + '</span>' +
+                 '<span class="ba-src__title">' + title + '</span>' +
+                 '<span class="ba-src__meta">' + esc(s.size_label || '') + '</span>' +
+                 srcActsHtml(s) + '</div>';
+        }).join('') + '</div></article>';
+    }
+
     function overview(r) {
-      function row(k, v) {
-        return '<div class="ba-kv"><dt>' + esc(k) + '</dt><dd>' + (v || '—') + '</dd></div>';
+      function fact(icon, k, v, sub) {
+        return '<div class="ba-rvf">' +
+          '<span class="ba-rvf__ic">' + rvIcon(icon) + '</span>' +
+          '<span class="ba-rvf__b"><span class="ba-rvf__k">' + esc(k) + '</span>' +
+          '<span class="ba-rvf__v">' + (v || '—') + '</span>' +
+          (sub ? '<span class="ba-rvf__s">' + sub + '</span>' : '') + '</span></div>';
       }
-      return '<dl class="ba-kvs">' +
-        row('공개 범위', esc(r.visibility_label)) +
-        row('갈래', esc(r.category_label || '')) +
-        row('예상 기간', esc((r.dev_start || '') + (r.dev_end ? ' ~ ' + r.dev_end : ''))) +
-        row('신고 점유율', r.load_cap == null ? '' : esc(String(r.load_cap))) +
-        row('참여', (r.member_count || 0) + '명') +
-        '</dl>' +
-        '<h3 class="ba-rv-h">배경 · 목적</h3><p class="ba-rv-text">' + esc(r.summary || '—') + '</p>' +
-        '<h3 class="ba-rv-h">검토 범위 · 기대 산출물</h3><p class="ba-rv-text">' + esc(r.notes || '—') + '</p>';
+      // 기간은 날짜 둘과 함께 **며칠짜리인지**도 적는다.
+      var days = '';
+      if (r.dev_start && r.dev_end) {
+        var dd = Math.round((new Date(r.dev_end) - new Date(r.dev_start)) / 86400000) + 1;
+        if (dd > 0) days = dd + '일';
+      }
+      // 같은 해면 끝 날짜의 연도를 뺀다 — 칸이 좁아 잘렸다.
+      var endShown = r.dev_end && r.dev_start && r.dev_end.slice(0, 4) === r.dev_start.slice(0, 4)
+        ? r.dev_end.slice(5) : r.dev_end;
+      var period = r.dev_start || r.dev_end
+        ? esc((r.dev_start || '?') + ' ~ ' + (endShown || '?')) : '';
+      // 비어 있으면 '없다' 가 아니라 전역 설정값을 따른다는 뜻이다(010).
+      var cap = r.load_cap == null ? '기본값' : Math.round(Number(r.load_cap) * 100) + '%';
+
+      return '<div class="ba-rvfs">' +
+          fact('eye',   '공개 범위', esc(r.visibility_label)) +
+          fact('tag',   '갈래', esc(r.category_label || '')) +
+          fact('cal',   '예상 기간', period, days) +
+          fact('gauge', '신고 점유율', cap, r.load_cap == null ? '전역 설정을 따름' : '1인 기준 상한') +
+          fact('users', '참여', (r.member_count || 0) + '명') +
+        '</div>' +
+        '<div class="ba-rvcards">' +
+          '<article class="ba-rvc ba-rvc--goal">' +
+            '<header class="ba-rvc__h">' + rvIcon('goal') + '<h3>배경 · 목적</h3></header>' +
+            '<div class="ba-rvc__b">' + richText(r.summary) + '</div>' +
+          '</article>' +
+          '<article class="ba-rvc ba-rvc--scope">' +
+            '<header class="ba-rvc__h">' + rvIcon('box') + '<h3>검토 범위 · 기대 산출물</h3></header>' +
+            '<div class="ba-rvc__b">' + richText(r.notes) + '</div>' +
+          '</article>' +
+        '</div>';
+    }
+
+    /**
+     * 수정 권한 칸 (026, 2026-10-14). 주도자는 늘 '주도자' 로 고칠 수 있고,
+     * 승인된 참여자는 주도자·관리자가 켜고 끈다. 권한이 없는 사람에게는
+     * 켜졌는지만 보인다.
+     */
+    function editCell(m) {
+      if (m.role === 'lead') {
+        return '<span class="ba-badge ba-badge--ok" title="주도자는 언제나 고칠 수 있습니다">주도자</span>';
+      }
+      if (m.can.grant_edit) {
+        return '<button type="button" class="ba-edit-t' + (m.can_edit ? ' is-on' : '') + '"' +
+               ' data-rv="member_edit" data-row="' + m.id + '" data-on="' + (m.can_edit ? '0' : '1') + '"' +
+               ' aria-pressed="' + (m.can_edit ? 'true' : 'false') + '"' +
+               ' title="' + (m.can_edit ? '눌러서 권한을 거둡니다' : '눌러서 과제 수정 권한을 줍니다') + '">' +
+               '<i></i>' + (m.can_edit ? '허용' : '없음') + '</button>';
+      }
+      return m.can_edit ? '<span class="ba-badge ba-badge--ok">허용</span>'
+                        : '<span class="ba-cell-none">—</span>';
     }
 
     function members(list, r) {
@@ -4844,6 +6025,7 @@
           '<td>' + esc(m.role_name) + '</td>' +
           '<td>' + esc(String(m.load_ratio)) + '</td>' +
           '<td><span class="ba-badge">' + esc(m.status_label) + '</span></td>' +
+          '<td>' + editCell(m) + '</td>' +
           '<td class="ba-rv-reason">' + esc(m.join_reason || '') +
             (m.reject_reason ? '<em>반려: ' + esc(m.reject_reason) + '</em>' : '') + '</td>' +
           '<td>' + acts + '</td>' +
@@ -4862,23 +6044,143 @@
 
       return join + '<div class="ba-table-wrap"><table class="ba-table"><thead><tr>' +
         '<th>이름</th><th style="width:70px">역할</th><th style="width:80px">점유율</th>' +
-        '<th style="width:90px">상태</th><th>사유</th><th style="width:130px"></th>' +
+        '<th style="width:90px">상태</th>' +
+        '<th style="width:110px" title="과제 정보를 고칠 수 있는가. 주도자·관리자가 사람마다 켭니다">수정 권한</th>' +
+        '<th>사유</th><th style="width:130px"></th>' +
         '</tr></thead><tbody>' +
-        (rows || '<tr><td colspan="6" class="ba-empty">아직 참여자가 없습니다.</td></tr>') +
+        (rows || '<tr><td colspan="7" class="ba-empty">아직 참여자가 없습니다.</td></tr>') +
         '</tbody></table></div>';
+    }
+
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ 진행 기록 · 산출물 (2026-10-19 — 첨부, 고치기·지우기)           │
+    // │                                                              │
+    // │ 고치기·지우기 단추는 서버가 내려준 can.edit 로만 그린다        │
+    // │ (작성자·주도자·관리자). 수정은 그 자리에서 폼으로 바뀐다 —     │
+    // │ 파일 추가와 붙인 파일 지우기(×)는 수정 중에만 한다. 보다가      │
+    // │ 실수로 지우지 않게.                                            │
+    // │                                                              │
+    // │ 첨부·링크는 참고 자료 목록과 **같은 줄 모양**(.ba-src)으로 그리고,│
+    // │ 산출물의 링크는 자료 영역의 [링크] 탭에서 받는다 — 링크도 산출물 │
+    // │ 의 한 형태다(2026-10-19 사용자 요청, 참고 자료 패널과 맞춤).     │
+    // └──────────────────────────────────────────────────────────────┘
+    var EDITING = null;          // { type: 'log' | 'output', id: n } — 지금 고치는 한 건
+
+    var FILE_KIND = { xlsx: '엑셀', xls: '엑셀', pptx: 'PPT', ppt: 'PPT', docx: '워드', doc: '워드',
+                      pdf: 'PDF', jpg: '이미지', jpeg: '이미지', png: '이미지', gif: '이미지', webp: '이미지' };
+    function fileKind(name) {
+      var m = /\.([a-z0-9]+)$/i.exec(name || '');
+      return (m && FILE_KIND[m[1].toLowerCase()]) || '파일';
+    }
+
+    /**
+     * 첨부·링크 목록 — 참고 자료와 같은 줄 모양. edit 이면 파일마다 × 를 붙인다.
+     * link 가 있으면 맨 위에 '링크' 줄로 둔다.
+     */
+    function attList(files, edit, link) {
+      var rows = [];
+      if (link) {
+        rows.push('<div class="ba-src">' +
+          '<span class="ba-src__kind">링크</span>' +
+          // 긴 주소는 한 줄로 줄이고 '…' — 전체는 마우스를 올리면 보인다.
+          '<span class="ba-src__title"><a class="ba-src__link" href="' + esc(link) + '" target="_blank" rel="noopener"' +
+            ' title="' + esc(link) + '">' + esc(link) + '</a></span>' +
+          '<span class="ba-src__acts"><a class="ba-btn ba-btn--sm" href="' + esc(link) + '" target="_blank" rel="noopener">열기</a></span>' +
+          '</div>');
+      }
+      (files || []).forEach(function (f) {
+        var view = f.viewable
+          ? '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' + f.id + '"' +
+            ' data-src-url="' + esc(f.url) + '" data-mime="' + esc(f.mime || '') + '" data-file="1"' +
+            ' data-title="' + esc(f.name) + '">보기</button>'
+          : '';
+        rows.push('<div class="ba-src">' +
+          '<span class="ba-src__kind">' + esc(fileKind(f.name)) + '</span>' +
+          '<span class="ba-src__title">' + esc(f.name) + '</span>' +
+          '<span class="ba-src__meta">' + esc(f.size_label || '') + '</span>' +
+          '<span class="ba-src__acts">' + view +
+            '<a class="ba-btn ba-btn--sm" href="' + esc(f.url) + '">내려받기</a>' +
+            (edit ? '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-rv="file_delete"' +
+                    ' data-file="' + f.id + '" data-name="' + esc(f.name) + '" title="이 파일 지우기">×</button>' : '') +
+          '</span></div>');
+      });
+      return rows.length ? '<div class="ba-srclist ba-rv-files">' + rows.join('') + '</div>' : '';
+    }
+
+    var FILE_HINT = 'xlsx · pptx · docx · pdf · 이미지 / 한 번에 여러 개';
+
+    /**
+     * 자료 영역 — 참고 자료 패널과 같은 탭 모양. 산출물은 [파일 첨부][링크], 진행 기록은 파일만.
+     * 탭은 보이는 칸만 바꾼다 — 파일과 링크를 둘 다 넣어도 둘 다 저장된다.
+     * ids: <prefix>-files · <prefix>-url
+     */
+    function attBlock(prefix, withLink, url, title) {
+      var file = '<div class="ba-source-pane" data-att-pane="file">' +
+        '<input type="file" id="' + prefix + '-files" multiple>' +
+        '<em class="ba-help">' + FILE_HINT + '</em></div>';
+      if (!withLink) {
+        return '<div class="ba-rv-att"><span class="ba-rv-att__h">' + esc(title || '첨부 (선택)') + '</span>' + file + '</div>';
+      }
+      return '<div class="ba-rv-att"><span class="ba-rv-att__h">' + esc(title || '자료 (선택)') + '</span>' +
+        '<div class="ba-source-tabs" role="tablist" aria-label="자료 종류">' +
+          '<button type="button" role="tab" data-rv="att_tab" data-pane="file" aria-selected="true">파일 첨부</button>' +
+          '<button type="button" role="tab" data-rv="att_tab" data-pane="link" aria-selected="false">링크' +
+            (url ? ' ✓' : '') + '</button>' +
+        '</div>' + file +
+        '<div class="ba-source-pane" data-att-pane="link" hidden>' +
+          '<input type="url" id="' + prefix + '-url" value="' + esc(url || '') + '" placeholder="https://">' +
+          '<em class="ba-help">관련 문서·저장소 등의 주소. 비우면 링크를 지웁니다.</em></div>' +
+        '</div>';
+    }
+
+    /** 고칠 수 있는 사람에게만 [수정]·[삭제]. */
+    function itemActs(type, it) {
+      if (!it.can || !it.can.edit) return '';
+      return '<span class="ba-rv-item__acts">' +
+        '<button type="button" class="ba-btn ba-btn--sm" data-rv="item_edit" data-type="' + type + '" data-item="' + it.id + '">수정</button>' +
+        '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-rv="item_delete" data-type="' + type + '" data-item="' + it.id + '">삭제</button>' +
+        '</span>';
+    }
+
+    function edited(it) {
+      return it.updated_at
+        ? ' <span class="ba-dim" title="' + esc((it.updated_by_name || '') + ' ' + it.updated_at) + '">· 고침</span>'
+        : '';
+    }
+
+    function formFoot(act, label, extra) {
+      return '<div class="ba-rv-form__foot">' + (extra || '') +
+        '<button type="button" class="ba-btn ba-btn--primary" data-rv="' + act + '">' + label + '</button></div>';
     }
 
     function logs(list, r) {
       // content 와 finding 을 끝까지 나눠 보여 준다. 과제의 값어치는 대개
       // '무엇을 했다' 가 아니라 '무엇을 알아냈다' 에 쌓인다 (명세서 §8.3).
       var items = list.map(function (l) {
+        if (EDITING && EDITING.type === 'log' && EDITING.id === l.id) {
+          return '<li class="ba-rv-log is-editing">' +
+            '<div class="ba-rv-form ba-rv-form--col">' +
+            '<label class="ba-field ba-field--wide"><span>진행 내용</span>' +
+            '<textarea id="ba-rv-e-content" rows="3">' + esc(l.content) + '</textarea></label>' +
+            '<label class="ba-field ba-field--wide"><span>발견사항</span>' +
+            '<textarea id="ba-rv-e-finding" rows="2">' + esc(l.finding || '') + '</textarea></label>' +
+            '<label class="ba-field"><span>작업한 날</span>' +
+            '<input type="date" id="ba-rv-e-date" value="' + esc(l.worked_on || '') + '"></label>' +
+            attBlock('ba-rv-e', true, l.url || '', '자료 추가 · 링크') +
+            attList(l.files, true, '') +
+            '<div class="ba-rv-form__foot">' +
+              '<button type="button" class="ba-btn" data-rv="item_cancel">취소</button>' +
+              '<button type="button" class="ba-btn ba-btn--primary" data-rv="item_save" data-type="log" data-item="' + l.id + '">저장</button>' +
+            '</div></div></li>';
+        }
         return '<li class="ba-rv-log">' +
           '<div class="ba-rv-log__meta">' + esc(l.emp_name) +
-          ' · ' + esc(l.worked_on || l.created_at || '') + '</div>' +
+          ' · ' + esc(l.worked_on || l.created_at || '') + edited(l) + itemActs('log', l) + '</div>' +
           '<div class="ba-rv-log__content">' + esc(l.content) + '</div>' +
           (l.finding
             ? '<div class="ba-rv-log__finding"><strong>발견</strong> ' + esc(l.finding) + '</div>'
             : '') +
+          attList(l.files, false, l.url) +
         '</li>';
       }).join('');
 
@@ -4890,7 +6192,8 @@
           '<textarea id="ba-rv-log-finding" rows="2" placeholder="알아낸 것 (선택)"></textarea></label>' +
           '<label class="ba-field"><span>작업한 날</span>' +
           '<input type="date" id="ba-rv-log-date"></label>' +
-          '<button type="button" class="ba-btn ba-btn--primary" data-rv="log">기록 남기기</button>' +
+          attBlock('ba-rv-log', true, '', '자료 (선택)') +
+          formFoot('log', '기록 남기기') +
           '</div>'
         : '';
 
@@ -4898,39 +6201,177 @@
         (items || '<li class="ba-empty">아직 진행 기록이 없습니다.</li>') + '</ul>';
     }
 
+    var OUT_KINDS = ['doc', 'repo', 'demo', 'report', 'module', 'slide'];
+    var OUT_LABEL = { doc: '문서', repo: '저장소', demo: '시연', report: '보고서',
+                      module: '모듈', slide: '발표자료' };
+    function kindOptions(sel) {
+      return OUT_KINDS.map(function (k) {
+        return '<option value="' + k + '"' + (k === sel ? ' selected' : '') + '>' + OUT_LABEL[k] + '</option>';
+      }).join('');
+    }
+
     function outputs(list, r) {
       var items = list.map(function (o) {
+        if (EDITING && EDITING.type === 'output' && EDITING.id === o.id) {
+          return '<li class="ba-rv-output is-editing">' +
+            '<div class="ba-rv-form ba-rv-form--col">' +
+            '<label class="ba-field"><span>갈래</span><select id="ba-rv-e-kind">' + kindOptions(o.kind) + '</select></label>' +
+            '<label class="ba-field ba-rv-grow"><span>제목</span>' +
+            '<input type="text" id="ba-rv-e-title" value="' + esc(o.title) + '"></label>' +
+            '<label class="ba-field ba-field--wide"><span>요약</span>' +
+            '<textarea id="ba-rv-e-summary" rows="2">' + esc(o.summary || '') + '</textarea></label>' +
+            attBlock('ba-rv-e', true, o.url || '', '자료 추가 · 링크') +
+            attList(o.files, true, '') +
+            '<div class="ba-rv-form__foot">' +
+              '<button type="button" class="ba-btn" data-rv="item_cancel">취소</button>' +
+              '<button type="button" class="ba-btn ba-btn--primary" data-rv="item_save" data-type="output" data-item="' + o.id + '">저장</button>' +
+            '</div></div></li>';
+        }
         return '<li class="ba-rv-output">' +
-          '<span class="ba-badge">' + esc(o.kind_label) + '</span> ' +
-          (o.url ? '<a href="' + esc(o.url) + '" target="_blank" rel="noopener">' + esc(o.title) + '</a>'
-                 : '<strong>' + esc(o.title) + '</strong>') +
-          '<div class="ba-rv-output__sum">' + esc(o.summary || '') + '</div>' +
+          '<div class="ba-rv-output__h">' +
+            '<span class="ba-badge">' + esc(o.kind_label) + '</span> ' +
+            '<strong class="ba-rv-output__t">' + esc(o.title) + '</strong>' +
+            itemActs('output', o) +
+          '</div>' +
+          (o.summary ? '<div class="ba-rv-output__sum">' + esc(o.summary) + '</div>' : '') +
+          attList(o.files, false, o.url) +
           '<div class="ba-rv-log__meta">' + esc(o.created_by_name || '') +
-          ' · ' + esc(o.created_at || '') + '</div>' +
+          ' · ' + esc(o.created_at || '') + edited(o) + '</div>' +
         '</li>';
       }).join('');
 
-      var kinds = ['doc', 'repo', 'demo', 'report', 'module', 'slide'];
-      var kindLabel = { doc: '문서', repo: '저장소', demo: '시연', report: '보고서',
-                        module: '모듈', slide: '발표자료' };
       var form = r.can.add_output
         ? '<div class="ba-rv-form ba-rv-form--col">' +
-          '<label class="ba-field"><span>갈래</span><select id="ba-rv-out-kind">' +
-          kinds.map(function (k) { return '<option value="' + k + '">' + kindLabel[k] + '</option>'; }).join('') +
-          '</select></label>' +
-          '<label class="ba-field" style="flex:1 1 260px"><span>제목</span>' +
+          '<label class="ba-field"><span>갈래</span><select id="ba-rv-out-kind">' + kindOptions('doc') + '</select></label>' +
+          '<label class="ba-field ba-rv-grow"><span>제목</span>' +
           '<input type="text" id="ba-rv-out-title"></label>' +
-          '<label class="ba-field" style="flex:1 1 260px"><span>링크</span>' +
-          '<input type="url" id="ba-rv-out-url" placeholder="https://"></label>' +
           '<label class="ba-field ba-field--wide"><span>요약</span>' +
           '<textarea id="ba-rv-out-summary" rows="2"></textarea></label>' +
-          '<button type="button" class="ba-btn ba-btn--primary" data-rv="output">산출물 등록</button>' +
+          attBlock('ba-rv-out', true, '', '자료 (선택)') +
+          formFoot('output', '산출물 등록') +
           '</div>'
         : '';
 
       return form + '<ul class="ba-rv-outputs">' +
         (items || '<li class="ba-empty">아직 산출물이 없습니다. ' +
                   '종료하려면 한 건 이상 있어야 합니다.</li>') + '</ul>';
+    }
+
+    /**
+     * 등록·저장 뒤 고른 파일을 이어 붙인다. 파일이 없으면 받은 상세를 그대로 그린다.
+     * 붙이다 일부가 실패하면 무엇이 왜 안 됐는지 알린다 — 글은 이미 저장됐다.
+     */
+    function attachThen(d, type, ownerId, input) {
+      if (!input || !input.files || !input.files.length || !ownerId) { paint(d); return Promise.resolve(); }
+      var fd = new FormData();
+      fd.append('owner_type', type);
+      fd.append('owner_id', ownerId);
+      Array.prototype.forEach.call(input.files, function (f) { fd.append('files[]', f); });
+      return upload('api/rnd.php?act=file_upload', fd).then(function (d2) {
+        paint(d2);
+        if (d2.failed && d2.failed.length) {
+          toast('일부 파일을 붙이지 못했습니다 — ' +
+                d2.failed.map(function (f) { return f.name + ': ' + f.message; }).join(' / '), true);
+        }
+      }).catch(function (e) {
+        paint(d);
+        toast('글은 저장했지만 파일을 붙이지 못했습니다 — ' + e.message, true);
+      });
+    }
+
+    /** 등록·저장 — 서버에 보낸 뒤 파일을 이어 붙인다. */
+    function saveWithFiles(act, body, type, idOf, input, okMsg) {
+      body.id = ID;
+      return api('api/rnd.php?act=' + act, { method: 'POST', body: body })
+        .then(function (d) {
+          EDITING = null;
+          return attachThen(d, type, idOf(d), input).then(function () { toast(okMsg); });
+        })
+        .catch(function (e) { toast(e.message, true); });
+    }
+
+    /** 진행 기록·산출물 쪽 클릭. 처리했으면 true. */
+    function itemClick(act, b) {
+      if (act === 'att_tab') {
+        var box = b.closest('.ba-rv-att');
+        $$('[data-rv="att_tab"]', box).forEach(function (t) { t.setAttribute('aria-selected', String(t === b)); });
+        $$('[data-att-pane]', box).forEach(function (pn) { pn.hidden = pn.dataset.attPane !== b.dataset.pane; });
+        return true;
+      }
+      if (act === 'log') {
+        var c = ($('#ba-rv-log-content') || {}).value || '';
+        if (!c.trim()) { toast('진행 내용을 입력하세요.', true); return true; }
+        saveWithFiles('log', { content: c,
+                               finding:   ($('#ba-rv-log-finding') || {}).value || '',
+                               worked_on: ($('#ba-rv-log-date')    || {}).value || '',
+                               url:       ($('#ba-rv-log-url')     || {}).value || '' },
+                      'log', function (d) { return d.log_id; }, $('#ba-rv-log-files'), '진행 기록을 남겼습니다.');
+        return true;
+      }
+      if (act === 'output') {
+        var t = ($('#ba-rv-out-title') || {}).value || '';
+        if (!t.trim()) { toast('산출물 제목을 입력하세요.', true); return true; }
+        saveWithFiles('output', { title: t,
+                                  kind:    ($('#ba-rv-out-kind')    || {}).value || 'doc',
+                                  url:     ($('#ba-rv-out-url')     || {}).value || '',
+                                  summary: ($('#ba-rv-out-summary') || {}).value || '' },
+                      'output', function (d) { return d.output_id; }, $('#ba-rv-out-files'), '산출물을 등록했습니다.');
+        return true;
+      }
+      if (act === 'item_edit') {
+        EDITING = { type: b.dataset.type, id: parseInt(b.dataset.item, 10) };
+        paint(D);
+        return true;
+      }
+      if (act === 'item_cancel') {
+        EDITING = null;
+        paint(D);
+        return true;
+      }
+      if (act === 'item_save') {
+        var type = b.dataset.type, iid = parseInt(b.dataset.item, 10), input = $('#ba-rv-e-files');
+        if (type === 'log') {
+          var ec = ($('#ba-rv-e-content') || {}).value || '';
+          if (!ec.trim()) { toast('진행 내용을 입력하세요.', true); return true; }
+          saveWithFiles('log_update', { log_id: iid, content: ec,
+                                        finding:   ($('#ba-rv-e-finding') || {}).value || '',
+                                        worked_on: ($('#ba-rv-e-date')    || {}).value || '',
+                                        url:       ($('#ba-rv-e-url')     || {}).value || '' },
+                        'log', function () { return iid; }, input, '진행 기록을 고쳤습니다.');
+        } else {
+          var et = ($('#ba-rv-e-title') || {}).value || '';
+          if (!et.trim()) { toast('산출물 제목을 입력하세요.', true); return true; }
+          saveWithFiles('output_update', { output_id: iid, title: et,
+                                           kind:    ($('#ba-rv-e-kind')    || {}).value || 'doc',
+                                           url:     ($('#ba-rv-e-url')     || {}).value || '',
+                                           summary: ($('#ba-rv-e-summary') || {}).value || '' },
+                        'output', function () { return iid; }, input, '산출물을 고쳤습니다.');
+        }
+        return true;
+      }
+      if (act === 'item_delete') {
+        var dt = b.dataset.type, did = parseInt(b.dataset.item, 10);
+        var msg = dt === 'log' ? '이 진행 기록을 지웁니다. 붙인 파일도 함께 지워집니다.'
+                               : '이 산출물을 지웁니다. 붙인 파일도 함께 지워집니다.';
+        // 종료된 과제의 마지막 산출물이면 '산출물 1건 이상' 이 깨진다 — 알리고 지운다.
+        if (dt === 'output' && D && D.rnd.status === 'done' && (D.outputs || []).length === 1) {
+          msg += '\n\n종료된 과제의 마지막 산출물입니다. 지우면 산출물 없이 종료된 상태로 남습니다.';
+        }
+        askDialog({ title: dt === 'log' ? '진행 기록 삭제' : '산출물 삭제', ok: '삭제', danger: true, message: msg })
+          .then(function (v) {
+            if (v === null) return;
+            var body = dt === 'log' ? { log_id: did } : { output_id: did };
+            post(dt === 'log' ? 'log_delete' : 'output_delete', body);
+          });
+        return true;
+      }
+      if (act === 'file_delete') {
+        askDialog({ title: '파일 삭제', ok: '삭제', danger: true,
+                    message: (b.dataset.name || '이 파일') + ' 을(를) 지웁니다.' })
+          .then(function (v) { if (v !== null) post('file_delete', { file_id: parseInt(b.dataset.file, 10) }); });
+        return true;
+      }
+      return false;
     }
 
     function showTab(name) {
@@ -4947,7 +6388,7 @@
       D = d;
       var r = d.rnd;
       $('#ba-rv-head').innerHTML        = head(r);
-      $('#ba-rv-overview').innerHTML    = overview(r);
+      $('#ba-rv-overview').innerHTML    = overview(r) + sourcesBlock(d.sources || []);
       $('#ba-rv-members').innerHTML     = members(d.members || [], r);
       $('#ba-rv-logs').innerHTML        = logs(d.logs || [], r);
       $('#ba-rv-outputs').innerHTML     = outputs(d.outputs || [], r);
@@ -4967,6 +6408,12 @@
       if (!b) return;
       var act = b.dataset.rv;
 
+      // 삭제하면 이 화면에 머물 이유가 없다 — 보드로 간다.
+      if (act === 'delete') {
+        rndLifecycle('delete', b, function () { location.href = 'rnd_board.php'; });
+        return;
+      }
+
       if (act === 'join') {
         var reason = ($('#ba-rv-join-reason') || {}).value || '';
         var ratio  = ($('#ba-rv-join-ratio')  || {}).value || '';
@@ -4975,48 +6422,49 @@
         return;
       }
       if (act === 'leave') {
-        if (!window.confirm('이 과제에서 나갑니다.')) return;
-        post('leave'); return;
+        askDialog({ title: '과제에서 나가기', ok: '나가기', message: '이 과제에서 나갑니다.' })
+          .then(function (v) { if (v !== null) post('leave'); });
+        return;
       }
       if (act === 'interest') { post('interest'); return; }
       if (act === 'approve')  { post('approve'); return; }
 
+      // 중단·반려는 화면 안 창으로 사유를 받는다 (2026-10-16 — window.prompt 가 막혀
+      // 단추가 반응하지 않았다).
       if (act === 'reject' || act === 'drop') {
         var what = act === 'reject' ? '반려' : '중단';
-        var why  = window.prompt(what + ' 사유를 적어 주세요.');
-        if (why === null) return;
-        if (!why.trim()) { toast(what + ' 사유를 입력하세요.', true); return; }
-        post(act, { reason: why });
+        askDialog({
+          title: '과제 ' + what, ok: what, danger: act === 'drop', input: true, required: true,
+          message: act === 'drop'
+            ? '중단한 과제는 역량 지표에 반영하지 않고, 참여자 점유는 오늘로 닫힙니다.'
+            : '발의자가 고쳐서 다시 낼 수 있습니다.',
+          placeholder: what + ' 사유 (필수)'
+        }).then(function (why) {
+          if (why !== null) post(act, { reason: why });
+        });
         return;
       }
       if (act === 'finish') {
-        if (!window.confirm('과제를 종료합니다.\n\n산출물이 한 건도 없으면 종료할 수 없습니다.')) return;
-        post('finish'); return;
+        askDialog({ title: '과제 종료', ok: '종료',
+                    message: '산출물이 한 건도 없으면 종료할 수 없습니다. 남길 것이 없다면 [중단] 으로 끝냅니다.' })
+          .then(function (v) { if (v !== null) post('finish'); });
+        return;
       }
       if (act === 'approve_member') { post('approve_member', { member_row_id: +b.dataset.row }); return; }
+      if (act === 'member_edit') {
+        post('member_edit', { member_row_id: +b.dataset.row, on: b.dataset.on });
+        return;
+      }
       if (act === 'reject_member') {
-        var r2 = window.prompt('반려 사유를 적어 주세요.');
-        if (r2 === null) return;
-        if (!r2.trim()) { toast('반려 사유를 입력하세요.', true); return; }
-        post('reject_member', { member_row_id: +b.dataset.row, reason: r2 });
+        askDialog({ title: '합류 반려', ok: '반려', input: true, required: true,
+                    placeholder: '반려 사유 (필수)' })
+          .then(function (r2) {
+            if (r2 !== null) post('reject_member', { member_row_id: +b.dataset.row, reason: r2 });
+          });
         return;
       }
-      if (act === 'log') {
-        var c = ($('#ba-rv-log-content') || {}).value || '';
-        if (!c.trim()) { toast('진행 내용을 입력하세요.', true); return; }
-        post('log', { content: c,
-                      finding:   ($('#ba-rv-log-finding') || {}).value || '',
-                      worked_on: ($('#ba-rv-log-date')    || {}).value || '' });
-        return;
-      }
-      if (act === 'output') {
-        var t = ($('#ba-rv-out-title') || {}).value || '';
-        if (!t.trim()) { toast('산출물 제목을 입력하세요.', true); return; }
-        post('output', { title: t,
-                         kind:    ($('#ba-rv-out-kind')    || {}).value || 'doc',
-                         url:     ($('#ba-rv-out-url')     || {}).value || '',
-                         summary: ($('#ba-rv-out-summary') || {}).value || '' });
-      }
+      // 진행 기록·산출물 — 등록·고치기·지우기·첨부 (2026-10-19)
+      itemClick(act, b);
     });
 
     api('api/rnd.php?act=get&id=' + ID).then(paint).catch(function (e) {
@@ -5155,17 +6603,258 @@
     });
   }
 
+  // ---- 공동 편집자 (026, 2026-10-14) ----------------------------------
+  //
+  // 지정·해제 뒤에는 화면을 새로 그린다 — 권한이 바뀌면 단추가 달라진다.
+  function initEditors() {
+    var box = $('#ba-editors');
+    if (!box) return;
+    var pid = parseInt(box.dataset.projectId, 10);
+    box.addEventListener('click', function (e) {
+      var add = e.target.closest ? e.target.closest('#ba-editor-add') : null;
+      var del = e.target.closest ? e.target.closest('[data-editor-del]') : null;
+      if (add) {
+        var uid = ($('#ba-editor-pick') || {}).value || '';
+        if (!uid) { toast('편집자로 지정할 사람을 고르세요.', true); return; }
+        add.disabled = true;
+        api('api/project.php?act=add_editor', { method: 'POST', body: { project_id: pid, user_id: uid } })
+          .then(function (d) { toast(d.message); location.reload(); })
+          .catch(function (err) { toast(err.message, true); add.disabled = false; });
+      }
+      if (del) {
+        if (!confirm('공동 편집자에서 뺍니다. 그 사람은 이 프로젝트를 더 고칠 수 없습니다.')) return;
+        api('api/project.php?act=remove_editor', { method: 'POST',
+              body: { project_id: pid, user_id: del.dataset.editorDel } })
+          .then(function (d) { toast(d.message); location.reload(); })
+          .catch(function (err) { toast(err.message, true); });
+      }
+    });
+  }
+
+  // ---- 사용자로 보기 (2026-10-12) -------------------------------------
+  //
+  // 보기 전용이다. 시작은 구성원 목록의 [이 사람으로 보기], 끝은 위쪽 띠의
+  // [돌아가기]. 둘 다 끝나면 화면을 새로 그린다 — 권한이 통째로 바뀐다.
+  function initViewAs() {
+    document.addEventListener('click', function (e) {
+      var go = e.target.closest ? e.target.closest('[data-viewas]') : null;
+      if (go) {
+        if (!confirm(go.dataset.name + ' 님의 눈으로 BlueStudio 를 봅니다.\n\n'
+                     + '· 보기만 되고 저장은 막힙니다\n'
+                     + '· 관리자 권한은 보는 동안 꺼집니다\n'
+                     + '· 누가 언제 누구로 봤는지 기록이 남습니다')) return;
+        api('api/view_as.php?act=start', { method: 'POST', body: { user_id: go.dataset.viewas } })
+          .then(function () { location.href = 'index.php'; })
+          .catch(function (err) { toast(err.message, true); });
+        return;
+      }
+      if (e.target.closest && e.target.closest('#ba-viewas-stop')) {
+        api('api/view_as.php?act=stop', { method: 'POST', body: {} })
+          .then(function () { location.reload(); })
+          .catch(function (err) { toast(err.message, true); });
+      }
+    });
+  }
+
+  // ===================================================================
+  // 공유 단추 (2026-10-15) — 프로젝트·R&D 과제 상세 머리
+  //
+  // 슬랙에 **직접 보내지 않는다.** 바깥으로 나가는 경로가 없고(알림도
+  // 발송 경로가 없다), 만들면 그것부터 승인받아야 한다. 대신 붙여 넣기
+  // 좋은 글을 클립보드에 담는다 — 무엇을 어디에 붙일지는 사람이 정한다.
+  //
+  // 단추가 들고 오는 것: data-share-kind / -title / -lines(JSON 배열) /
+  // -path(이 화면 주소, 상대) / -private(1 이면 안내 한 줄).
+  // 요약에 점수·배정을 넣지 않는다 — 슬랙은 볼 권한을 따지지 않는다.
+  // ===================================================================
+  function copyText(t) {
+    // 사내 운영이 http 일 수 있다. clipboard API 는 보안 출처에서만 열린다.
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(t);
+    }
+    return new Promise(function (ok, no) {
+      var ta = document.createElement('textarea');
+      ta.value = t;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.top = '-1000px';
+      document.body.appendChild(ta);
+      ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      document.body.removeChild(ta);
+      done ? ok() : no(new Error('copy'));
+    });
+  }
+
+  function initShare() {
+    var menu = null;
+
+    function close() {
+      if (menu) { menu.remove(); menu = null; }
+    }
+
+    function data(btn) {
+      var lines = [];
+      try { lines = JSON.parse(btn.dataset.shareLines || '[]'); } catch (e) { lines = []; }
+      return {
+        kind:  btn.dataset.shareKind || '',
+        title: btn.dataset.shareTitle || document.title,
+        lines: lines.filter(Boolean),
+        url:   new URL(btn.dataset.sharePath || location.href, location.href).href,
+        priv:  btn.dataset.sharePrivate === '1'
+      };
+    }
+
+    function slackText(d) {
+      // 슬랙 입력창은 *굵게* 를 알아본다. 링크는 맨 끝 줄에 맨몸으로 둔다
+      // — 슬랙이 미리보기를 붙인다.
+      return ['*' + (d.kind ? '[' + d.kind + '] ' : '') + d.title + '*']
+        .concat(d.lines, [d.url]).join('\n');
+    }
+
+    function copied(p, what) {
+      p.then(function () { toast(what + '을(를) 복사했습니다'); })
+       .catch(function () { toast('복사하지 못했습니다. 주소창에서 직접 복사하세요.', true); });
+      close();
+    }
+
+    function open(btn) {
+      close();
+      var d = data(btn);
+      menu = document.createElement('div');
+      menu.className = 'ba-share-menu';
+      menu.setAttribute('role', 'menu');
+      menu.innerHTML =
+        '<button type="button" role="menuitem" data-sh="link">링크 복사</button>' +
+        '<button type="button" role="menuitem" data-sh="slack">슬랙용 요약 복사</button>' +
+        (navigator.share ? '<button type="button" role="menuitem" data-sh="native">다른 앱으로 공유…</button>' : '') +
+        (d.priv ? '<p class="ba-share-menu__note">비공개 과제입니다. 볼 권한이 없는 사람은 링크를 열 수 없습니다.</p>' : '');
+      document.body.appendChild(menu);
+
+      var r = btn.getBoundingClientRect();
+      var left = Math.min(r.left + window.scrollX,
+                          window.scrollX + document.documentElement.clientWidth - menu.offsetWidth - 8);
+      menu.style.top  = (r.bottom + window.scrollY + 4) + 'px';
+      menu.style.left = Math.max(8, left) + 'px';
+
+      menu.addEventListener('click', function (e) {
+        var it = e.target.closest('[data-sh]');
+        if (!it) return;
+        if (it.dataset.sh === 'link')  return copied(copyText(d.url), '링크');
+        if (it.dataset.sh === 'slack') return copied(copyText(slackText(d)), '요약');
+        if (it.dataset.sh === 'native') {
+          navigator.share({ title: d.title, text: [d.title].concat(d.lines).join('\n'), url: d.url })
+            .catch(function () { /* 사용자가 닫은 것 — 알릴 일 없음 */ });
+          close();
+        }
+      });
+      var first = menu.querySelector('button');
+      if (first) first.focus();
+    }
+
+    // R&D 머리는 JS 가 다시 그리므로 단추에 직접 걸지 않고 위임한다.
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('.ba-share');
+      if (btn) {
+        e.preventDefault();
+        if (menu && menu.__for === btn) { close(); return; }
+        open(btn);
+        menu.__for = btn;
+        return;
+      }
+      if (menu && !menu.contains(e.target)) close();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    window.addEventListener('resize', close);
+  }
+
+  // ===================================================================
+  // 출처 문서 보기 (2026-10-15) — project_view.php 의 '보기' 단추
+  //
+  // 이미지·PDF 는 api/source_download.php?inline=1 로 그대로 띄운다.
+  // 엑셀·PPT·워드는 브라우저가 못 그리고, 외부 뷰어는 문서를 바깥으로
+  // 보내는 일이라 쓰지 않는다 — 업로드 때 뽑아 둔 본문을 글로 보여 준다.
+  // ===================================================================
+  function initSourceViewer() {
+    var EL = $('#ba-src-viewer');
+    if (!EL) return;
+    var INLINE = ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-src-view]');
+      if (!b) return;
+      var id    = b.dataset.srcView;
+      var mime  = b.dataset.mime || '';
+      var file  = b.dataset.file === '1';
+      var body  = $('#ba-sv-body');
+      var note  = $('#ba-sv-note');
+      var dl    = $('#ba-sv-dl');
+      var tab   = $('#ba-sv-tab');
+      // data-src-url 이 있으면 그 주소 (2026-10-19 — R&D 첨부는 api/rnd_file.php).
+      var raw   = b.dataset.srcUrl || ('api/source_download.php?id=' + encodeURIComponent(id));
+
+      $('#ba-sv-title').textContent = b.dataset.title || '문서 보기';
+      body.classList.toggle('ba-sv--pdf', file && mime === 'application/pdf');
+      note.textContent = '';
+      dl.hidden  = !file;  dl.href  = raw;
+      tab.hidden = true;
+
+      if (file && INLINE.indexOf(mime) >= 0) {
+        var src = raw + '&inline=1';
+        tab.hidden = false; tab.href = src;
+        body.innerHTML = mime === 'application/pdf'
+          ? '<iframe class="ba-sv__pdf" src="' + esc(src) + '" title="' + esc(b.dataset.title || '') + '"></iframe>'
+          : '<div class="ba-sv__img"><img src="' + esc(src) + '" alt="' + esc(b.dataset.title || '') + '"></div>';
+        openDrawer('ba-src-viewer');
+        return;
+      }
+
+      body.innerHTML = '<div class="ba-loading">불러오는 중…</div>';
+      openDrawer('ba-src-viewer');
+      api('api/project.php?act=source_text&id=' + encodeURIComponent(id)).then(function (d) {
+        if (!d.text) {
+          body.innerHTML = '<p class="ba-empty-inline">추출된 본문이 없습니다' +
+            (d.has_file ? ' — 내려받아 원본으로 여십시오.' : '.') + '</p>';
+          return;
+        }
+        body.innerHTML = '<pre class="ba-sv__text">' + esc(d.text) + '</pre>';
+        note.textContent = '서식 없이 글만 뽑은 것입니다. 표·그림은 원본에서 보십시오.' +
+          (d.truncated ? ' (앞부분 ' + (200000).toLocaleString() + '자만 표시)' : '');
+      }).catch(function (err) {
+        body.innerHTML = '<p class="ba-empty-inline">' + esc(err.message) + '</p>';
+      });
+    });
+
+    // 닫으면 비운다 — PDF 가 뒤에서 계속 메모리를 잡지 않게.
+    new MutationObserver(function () {
+      if (EL.hidden) $('#ba-sv-body').innerHTML = '';
+    }).observe(EL, { attributes: true, attributeFilter: ['hidden'] });
+  }
+
   // ---- 진입 ---------------------------------------------------------
+  initShare();
+  initViewAs();
   initDrawer();
   initRndLoadDrawer();
   initRndLoadPage();
 
+  // 하나가 터져도 다른 것은 돈다 (2026-10-12). 전에는 initProjectView 가
+  // 터지자 같은 줄의 initWbs·initAllocation 이 통째로 안 돌았다. 오류는
+  // 콘솔에 남긴다 — 삼키면 다음에 또 모르고 지나간다.
+  function run() {
+    Array.prototype.forEach.call(arguments, function (fn) {
+      try { fn(); } catch (e) { if (window.console) console.error('[BlueStudio] ' + (fn.name || '') , e); }
+    });
+  }
+
   switch (NAV) {
-    case 'dashboard': initDashboard(); break;
-    case 'project':   initProjectList(); initProjectForm(); initProjectView(); initWbs(); initAllocation(); initLinks();
-                      initRndBoard(); initRndForm(); initRndView(); break;
-    case 'member':    initMemberList(); initMemberProfile(); break;
-    case 'settings': initSettings(); break;
+    case 'dashboard': run(initDashboard); break;
+    // R&D 과제가 위 탭 띠에서 따로 켜진다(2026-10-16). 초기화는 그대로 함께 돈다.
+    case 'project':
+    case 'rnd':       run(initProjectList, initProjectForm, initProjectView, initSourceViewer, initWbs, initAllocation, initLinks, initEditors,
+                          initRndBoard, initRndForm, initRndView); break;
+    case 'member':    run(initMemberList, initMemberProfile); break;
+    case 'settings':  run(initSettings); break;
   }
 
   window.BA = { api: api, upload: upload, qs: qs, toast: toast, esc: esc, $: $, $$: $$,

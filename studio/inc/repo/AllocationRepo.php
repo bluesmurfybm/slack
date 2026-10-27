@@ -297,6 +297,127 @@ final class AllocationRepo
     }
 
     /**
+     * 지울 수 있는 배정안인가 (2026-10-22).
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 밖으로 나간 적 없는 안만 지운다                               │
+     * │                                                              │
+     * │ 확정본은 대시보드·진행상황·점유(bs_workload)의 근거다. 한 번  │
+     * │ 이라도 확정됐던 지난 안은 알림(bs_notification)이 가리키는    │
+     * │ 이력이다. 둘 다 confirmed_at 이 채워져 있다 — 그걸로 가른다.  │
+     * │                                                              │
+     * │ 행을 실제로 지운다(소프트 삭제 아님). 숨김 표시로 하면 배정안 │
+     * │ 을 읽는 모든 질의에 필터가 붙어야 하고, 하나만 빠져도 샌다.   │
+     * │ 초안을 지우면 assertNotAllocated() 의 막힘도 함께 풀린다.     │
+     * │                                                              │
+     * │ 이 조건은 deleteVersion() · purgeDrafts() 의 SQL 에도 그대로  │
+     * │ 들어 있다 — 읽고 지우는 사이에 누가 확정해도 지워지지 않게.   │
+     * └──────────────────────────────────────────────────────────────┘
+     */
+    public static function isDeletable(array $a): bool
+    {
+        return ($a['status'] ?? '') !== 'confirmed' && empty($a['confirmed_at']);
+    }
+
+    /**
+     * 배정안을 그대로 복사해 새 차수를 만든다 (2026-10-22).
+     *
+     * 확정본을 고치려면 새 버전을 내야 하는데, 엔진을 다시 돌리면 담당자가
+     * 뒤섞인다. 복사는 항목을 손대지 않고 옮겨 **고칠 출발점**만 만든다.
+     *
+     *   · 새 차수는 언제나 proposed — createVersion() 이 정한다
+     *   · 산출 설정(params)·eval_ver·engine_ver 는 원본 그대로. 근거(reason_json)
+     *     와 적합도가 원본 시점의 역량 판정에서 나왔기 때문이다. 오늘 판정으로
+     *     바꿔 적으면 숫자와 근거가 서로 다른 말을 한다
+     *   · 완료·보류 태스크의 항목도 그대로 옮긴다. 완료된 일의 담당자는 그 일을
+     *     실제로 한 사람이라, 빼면 사본을 확정하는 순간 기록이 지워진다
+     *   · 확정본을 복사해도 확정본은 그대로다. 사본을 확정할 때 confirm() 이
+     *     지난 안으로 내리고 점유를 다시 만든다
+     *
+     * @return int 새 배정안 id
+     */
+    public function copyVersion(int $sourceId, array $actor): int
+    {
+        $src = $this->find($sourceId);
+        if (!$src) {
+            throw new DomainException('복사할 배정안을 찾을 수 없습니다.');
+        }
+        if (!$this->items($sourceId)) {
+            throw new DomainException('항목이 없는 배정안은 복사할 수 없습니다.');
+        }
+
+        $params = $src['params_json'] ? (json_decode($src['params_json'], true) ?: []) : [];
+        $params['eval_ver']    = $src['eval_ver'] !== null ? (int)$src['eval_ver'] : null;
+        $params['engine_ver']  = $src['engine_ver'];
+        // 어디서 왔는지. 복사본의 복사본이어도 바로 위 원본만 적는다.
+        $params['copied_from'] = ['id' => (int)$src['id'], 'version' => (int)$src['version']];
+
+        $this->pdo->beginTransaction();
+        try {
+            $newId = $this->createVersion((int)$src['project_id'], $params, $actor);
+
+            // 태스크·구성원 FK 가 살아 있는 항목만 남아 있다(태스크 삭제는 CASCADE).
+            $this->pdo->prepare(
+                'INSERT INTO bs_allocation_item
+                    (allocation_id, task_id, member_id, role, alloc_ratio, fit_score,
+                     reason_json, is_manual, manual_note)
+                 SELECT ?, task_id, member_id, role, alloc_ratio, fit_score,
+                        reason_json, is_manual, manual_note
+                   FROM bs_allocation_item
+                  WHERE allocation_id = ?'
+            )->execute([$newId, $sourceId]);
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+        return $newId;
+    }
+
+    /** 배정안 한 차수를 지운다. 항목은 FK CASCADE 로 함께 지워진다. */
+    public function deleteVersion(int $allocationId): void
+    {
+        $a = $this->find($allocationId);
+        if (!$a) {
+            throw new DomainException('배정안을 찾을 수 없습니다.');
+        }
+        if ($a['status'] === 'confirmed') {
+            throw new DomainException(
+                '확정된 배정안은 지울 수 없습니다. 고치려면 복사해서 새 차수로 확정하세요.');
+        }
+        if (!self::isDeletable($a)) {
+            throw new DomainException('한 번 확정됐던 배정안은 이력이라 지울 수 없습니다.');
+        }
+
+        $st = $this->pdo->prepare(
+            "DELETE FROM bs_allocation
+              WHERE id = ? AND status <> 'confirmed' AND confirmed_at IS NULL"
+        );
+        $st->execute([$allocationId]);
+        if ($st->rowCount() === 0) {
+            // 읽은 뒤 그 사이에 누가 확정했다
+            throw new DomainException('그 사이 확정돼 지우지 않았습니다. 화면을 새로 고쳐 주세요.');
+        }
+    }
+
+    /**
+     * 프로젝트의 지울 수 있는 차수를 한꺼번에 지운다.
+     * 확정본과 한 번 확정됐던 안은 남는다 — isDeletable() 과 같은 조건.
+     *
+     * @return int 지운 차수 수
+     */
+    public function purgeDrafts(int $projectId): int
+    {
+        $st = $this->pdo->prepare(
+            "DELETE FROM bs_allocation
+              WHERE project_id = ? AND status <> 'confirmed' AND confirmed_at IS NULL"
+        );
+        $st->execute([$projectId]);
+        return $st->rowCount();
+    }
+
+    /**
      * 담당(owner)이 없는 태스크. 확정 전 점검용.
      *
      * **말단 태스크만 본다.** 배정 엔진이 말단만 배정하기 때문이다(상위
@@ -341,12 +462,70 @@ final class AllocationRepo
         $st->execute(array_merge(
             [(int)$a['project_id']], BS_TASK_NOT_ASSIGNABLE_STATUS, [$allocationId]
         ));
-        return $st->fetchAll(PDO::FETCH_ASSOC);
+        // ORDER BY wbs_no 는 글자 순이라 10 이 2 보다 앞에 온다.
+        return bs_wbs_sort($st->fetchAll(PDO::FETCH_ASSOC));
     }
 
     // =================================================================
     // 배정 항목 (bs_allocation_item)
     // =================================================================
+
+    /**
+     * 배정 항목의 **조상** 줄. 배정 대상이 아니라 **자리를 잡아 주는** 줄이다.
+     *
+     * ┌──────────────────────────────────────────────────────────────┐
+     * │ 왜 필요한가 (2026-10-08 — 쓰는 사람이 잡아냄)                 │
+     * │                                                              │
+     * │ 배정 표가 말단만 보여 줘서 `1 · 2.1 · 2.2 · 3.1` 처럼 뛰었다. │
+     * │ 바로 위 WBS 표에는 `2 로그인/회원가입` 이 있는데 배정 표에는  │
+     * │ 없으니, **같은 번호를 두 표에서 눈으로 맞춰야** 했다.         │
+     * │                                                              │
+     * │ 묶음 배정(level=d1)이면 상위가 곧 항목이라 조상이 없다 —      │
+     * │ 그때는 빈 배열이 돌아온다. 그게 맞다.                          │
+     * └──────────────────────────────────────────────────────────────┘
+     *
+     * 공수는 **확정된 말단의 합**이다. WBS 표와 같은 규칙이어야 두 표의
+     * 숫자가 갈리지 않는다(MD_EXPR 을 한 벌로 둔 것과 같은 이유다).
+     *
+     * @return array 번호 순으로 정렬된 줄들
+     */
+    public function groupRows(int $allocationId): array
+    {
+        $a = $this->find($allocationId);
+        if (!$a) {
+            return [];
+        }
+        $st = $this->pdo->prepare(
+            'SELECT t.id, t.wbs_no, t.title, t.depth, t.parent_id,
+                    (SELECT SUM(l.est_md) FROM bs_task l
+                      WHERE l.confirmed = 1
+                        AND NOT EXISTS (SELECT 1 FROM bs_task g WHERE g.parent_id = l.id)
+                        AND (l.parent_id = t.id
+                             OR l.parent_id IN (SELECT m.id FROM bs_task m
+                                                 WHERE m.parent_id = t.id))) AS est_md
+               FROM bs_task t
+              WHERE t.project_id = ?
+                AND EXISTS (SELECT 1
+                              FROM bs_allocation_item i
+                              JOIN bs_task c ON c.id = i.task_id
+                             WHERE i.allocation_id = ?
+                               AND (c.parent_id = t.id
+                                    OR c.parent_id IN (SELECT m2.id FROM bs_task m2
+                                                        WHERE m2.parent_id = t.id)))
+                AND NOT EXISTS (SELECT 1 FROM bs_allocation_item i2
+                                 WHERE i2.allocation_id = ? AND i2.task_id = t.id)'
+        );
+        $st->execute([(int)$a['project_id'], $allocationId, $allocationId]);
+
+        return bs_wbs_sort(array_map(static fn(array $r): array => [
+            'id'        => (int)$r['id'],
+            'wbs_no'    => $r['wbs_no'],
+            'title'     => $r['title'],
+            'depth'     => (int)$r['depth'],
+            'parent_id' => $r['parent_id'] !== null ? (int)$r['parent_id'] : null,
+            'est_md'    => $r['est_md'] !== null ? round((float)$r['est_md'], 2) : null,
+        ], $st->fetchAll(PDO::FETCH_ASSOC)));
+    }
 
     /** 한 배정안의 전체 항목. 태스크·구성원 정보까지 조인해서. */
     public function items(int $allocationId): array
@@ -363,7 +542,9 @@ final class AllocationRepo
               ORDER BY t.wbs_no, FIELD(i.role, "owner", "support", "reviewer"), m.emp_name'
         );
         $st->execute([$allocationId]);
-        return array_map([$this, 'presentItem'], $st->fetchAll(PDO::FETCH_ASSOC));
+        // SQL 의 ORDER BY 는 **역할·이름 2차 정렬**을 위해 그대로 둔다.
+        // 1차(번호)만 여기서 다시 센다 — usort 가 안정 정렬이라 2차는 안 흩어진다.
+        return bs_wbs_sort(array_map([$this, 'presentItem'], $st->fetchAll(PDO::FETCH_ASSOC)));
     }
 
     public function findItem(int $itemId): ?array
@@ -546,9 +727,11 @@ final class AllocationRepo
             }
             throw $e;
         }
+        // markAdjusted() 의 UPDATE 를 거치면 lastInsertId() 가 0 이 된다. 먼저 읽는다.
+        $id = (int)$this->pdo->lastInsertId();
 
         $this->markAdjusted($allocationId, $actor);
-        return (int)$this->pdo->lastInsertId();
+        return $id;
     }
 
     public function deleteItem(int $itemId): void
@@ -979,6 +1162,27 @@ final class AllocationRepo
                 AND t.project_id = ?"
         )->execute([$projectId]);
 
+        // ┌──────────────────────────────────────────────────────────────┐
+        // │ 비중을 낮춘 사람은 점유도 그만큼만 (2026-10-08)               │
+        // │                                                              │
+        // │ 「이 프로젝트에 절반만」 이라고 해 놓고 다른 프로젝트에서는    │
+        // │ 100% 로 잡히면, 그 사람은 두 곳 모두에서 꽉 찬 것으로 보인다. │
+        // │ 낮춘 뜻이 이 프로젝트 안에서만 살고 밖에서는 죽는 셈이다.     │
+        // │                                                              │
+        // │ 줄이 없는 사람은 1.0 이라 이 변경 전과 완전히 같은 값이다.    │
+        // └──────────────────────────────────────────────────────────────┘
+        $share = [];
+        try {
+            $q = $this->pdo->prepare(
+                'SELECT member_id, share FROM bs_project_member WHERE project_id = ?');
+            $q->execute([$projectId]);
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $share[(int)$r['member_id']] = (float)$r['share'];
+            }
+        } catch (Throwable $e) {
+            // 022 를 아직 안 올린 서버에서도 확정은 돌아야 한다
+        }
+
         $ins = $this->pdo->prepare(
             "INSERT INTO bs_workload
                 (member_id, kind, ref_type, ref_id, label, start_date, end_date,
@@ -994,10 +1198,12 @@ final class AllocationRepo
                 // 넣느니 빼는 편이 낫다 — 가용도가 조용히 어긋난다.
                 continue;
             }
+            $mid = (int)$it['member_id'];
             $ins->execute([
-                (int)$it['member_id'], (int)$it['id'],
+                $mid, (int)$it['id'],
                 ($it['wbs_no'] ? $it['wbs_no'] . ' ' : '') . $it['task_title'],
-                $from, $to, (float)$it['alloc_ratio'],
+                $from, $to,
+                round((float)$it['alloc_ratio'] * ($share[$mid] ?? 1.0), 3),
             ]);
         }
     }
@@ -1014,6 +1220,8 @@ final class AllocationRepo
         $r['status_label'] = BS_ALLOC_STATUS[$r['status']] ?? $r['status'];
         $r['eval_ver']     = $r['eval_ver'] !== null ? (int)$r['eval_ver'] : null;
         $r['params']       = $r['params_json'] ? json_decode($r['params_json'], true) : null;
+        // 상태만 본 값이다. 권한은 API 가 따로 건다.
+        $r['deletable']    = self::isDeletable($r);
         if (isset($r['item_count']))   { $r['item_count']   = (int)$r['item_count']; }
         if (isset($r['manual_count'])) { $r['manual_count'] = (int)$r['manual_count']; }
         unset($r['params_json']);

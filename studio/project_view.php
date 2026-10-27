@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
 require_once __DIR__ . '/inc/repo/ProjectRepo.php';
+require_once __DIR__ . '/inc/service/SourceUploader.php';   // humanSize() — 내려받기 단추 크기 표시
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -25,6 +26,22 @@ if (!$project) {
 
 $sources   = $repo->sources($projectId);
 $canManage = bs_can(BS_CAP_PROJECT_MANAGE, $projectId);
+
+// 공동 편집자 (026, 2026-10-14). 명단은 누구나 보고, 지정은 PM·관리자만.
+$editors   = $repo->editors($projectId);
+$canOwn    = bs_can_own_project($projectId);
+$editorPick = [];
+if ($canOwn) {
+    $taken = array_flip(array_column($editors, 'user_id'));
+    foreach (bs_db()->query(
+        "SELECT user_id, emp_name FROM bs_member
+          WHERE user_id IS NOT NULL AND user_id <> '' ORDER BY emp_name"
+    )->fetchAll(PDO::FETCH_ASSOC) as $m) {
+        if (!isset($taken[$m['user_id']]) && $m['user_id'] !== ($project['owner_id'] ?? '')) {
+            $editorPick[] = $m;
+        }
+    }
+}
 
 // 2단계(참여 가능 개발자)는 **인원을 고르는 자리**다. 여러 사람의 점수를
 // 나란히 놓고 보므로, 배정을 짜는 사람에게만 연다. API 도 같은 선을 쓴다
@@ -60,6 +77,8 @@ $domains = array_values(array_filter(
 bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 ?>
 
+<?= bs_back_link('project_list.php', '프로젝트 목록') ?>
+
 <div class="ba-pv" id="ba-pv"
      data-project-id="<?= (int)$projectId ?>"
      data-has-period="<?= $hasPeriod ? '1' : '0' ?>">
@@ -82,6 +101,31 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       </p>
     </div>
     <div class="ba-spacer"></div>
+    <?php
+    // 공유 (assign.js initShare). 슬랙에 붙일 요약 — 머리에 보이는 것만 담는다.
+    // 점수·배정은 넣지 않는다. 슬랙은 볼 권한을 따지지 않는다.
+    $shareLines = array_values(array_filter([
+        implode(' · ', array_filter([
+            $project['code'],
+            BS_PROJECT_STATUS[$project['status']] ?? $project['status'],
+            !empty($project['track']) ? (BS_PROJECT_TRACK[$project['track']] ?? $project['track']) : null,
+        ])),
+        implode(' · ', array_filter([
+            !empty($project['client']) ? '고객 ' . $project['client'] : null,
+            '담당 ' . ($project['owner_name'] ?? '-'),
+        ])),
+        implode(' · ', array_filter([
+            !empty($project['dev_start']) || !empty($project['dev_end'])
+                ? '개발 ' . ($project['dev_start'] ?: '?') . ' ~ ' . ($project['dev_end'] ?: '?') : null,
+            !empty($project['deploy_date']) ? '배포 ' . $project['deploy_date'] : null,
+        ])),
+    ]));
+    ?>
+    <button type="button" class="ba-btn ba-share" aria-haspopup="menu"
+            data-share-kind="프로젝트"
+            data-share-title="<?= h($project['name']) ?>"
+            data-share-lines="<?= h(json_encode($shareLines, JSON_UNESCAPED_UNICODE)) ?>"
+            data-share-path="project_view.php?id=<?= (int)$projectId ?>">공유</button>
     <?php if ($canManage): ?>
       <a class="ba-btn" href="project_form.php?id=<?= (int)$projectId ?>">수정</a>
     <?php endif; ?>
@@ -127,20 +171,106 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
           <span class="ba-period__label">운영 배포</span>
           <b><?= h(bs_date($project['deploy_date']) ?: '미정') ?></b>
         </div>
+
+        <!-- ┌──────────────────────────────────────────────────────────┐
+             │ 설정은 **읽는 화면에도** 있어야 한다 (2026-10-08)          │
+             │                                                          │
+             │ 기본이 켬이라 모든 숫자가 보정된 값으로 나오는데, 설정이  │
+             │ 수정 화면에만 있으면 보는 사람은 **왜 이 공수가 나왔는지** │
+             │ 알 길이 없다. 계수는 실측이 아니라 가정이라 더욱 그렇다.  │
+             │                                                          │
+             │ 기간 칸에 둔 이유 — 두 계수가 기간·공수와 맞물려 돈다.    │
+             │ 점유 반영률은 기간과 겹치는 영업일로 환산되고, 공수 계수는 │
+             │ 그 기간 안에 들어갈 M/D 를 바꾼다.                        │
+             └──────────────────────────────────────────────────────────┘ -->
+        <?php $aidd = bs_aidd_of($project); ?>
+        <div class="ba-period ba-period--aidd">
+          <span class="ba-period__label">AIDD 고려</span>
+          <?php if ($aidd['enabled']): ?>
+            <b class="ba-aidd-on">켬</b>
+            <span class="ba-dim">
+              공수 &times;<?= h(number_format($aidd['effort'], 2)) ?>
+              · 다른 업무 점유 &times;<?= h(number_format($aidd['load'], 2)) ?>
+            </span>
+          <?php else: ?>
+            <b class="ba-dim">끔</b>
+            <span class="ba-dim">공수와 가용도를 보정하지 않습니다.</span>
+          <?php endif; ?>
+        </div>
       </div>
+
+      <?php if ($aidd['enabled']): ?>
+      <p class="ba-panel__hint ba-aidd__note">
+        예상공수를 <b><?= h(number_format((1 - $aidd['effort']) * 100, 0)) ?>%</b> 줄이고,
+        다른 업무 점유를 <b><?= h(number_format((1 - $aidd['load']) * 100, 0)) ?>%</b>
+        덜 반영해 그만큼 여유로 봅니다.
+        <b>난이도는 바꾸지 않습니다</b> — AI 는 걸리는 시간을 줄이지 어려운 문제를
+        쉽게 만들지 않고, 난이도를 낮추면 ★4 이상을 그 분야 상위자에게 주는 규칙이
+        꺼집니다. 계수는 <b>실측이 아니라 가정</b>이라 화면에 드러내 둡니다.
+        <?php if ($canManage): ?>
+          고치려면 <b>[수정]</b> → <b>기간</b> 에서 바꾸고,
+          <b>예상공수는 [난이도 매기기]를 다시</b> 돌려야 반영됩니다.
+        <?php endif; ?>
+      </p>
+      <?php endif; ?>
+    </div>
+
+    <!-- 공동 편집자 (026, 2026-10-14) — PM 이 사람마다 지정한다 -->
+    <div class="ba-panel ba-editors" id="ba-editors" data-project-id="<?= (int)$projectId ?>">
+      <h2>공동 편집자 <span class="ba-dim"><?= count($editors) ?>명</span></h2>
+      <p class="ba-panel__hint">
+        담당 PM(<?= h($project['owner_name'] ?? '-') ?>) 외에 이 프로젝트를 고칠 수 있는 사람입니다.
+        정보·문서·WBS 편집과 <b>배정안 산출</b>까지 하고, <b>배정 확정과 삭제는 PM·관리자만</b> 합니다.
+      </p>
+      <div class="ba-editors__list">
+        <?php if (!$editors): ?>
+          <span class="ba-cell-none">지정된 사람이 없습니다.</span>
+        <?php endif; ?>
+        <?php foreach ($editors as $e): ?>
+          <span class="ba-editor" title="<?= h(($e['granted_by_name'] ? $e['granted_by_name'] . ' 님이 ' : '') . bs_date($e['created_at'])) ?> 지정">
+            <span class="ba-editor__av"><?= h(mb_substr((string)$e['name'], 0, 1)) ?></span>
+            <?= h($e['name']) ?>
+            <?php if ($canOwn): ?>
+              <button type="button" class="ba-editor__x" data-editor-del="<?= h($e['user_id']) ?>"
+                      aria-label="<?= h($e['name']) ?> 빼기" title="빼기">&times;</button>
+            <?php endif; ?>
+          </span>
+        <?php endforeach; ?>
+      </div>
+      <?php if ($canOwn): ?>
+        <div class="ba-editors__add">
+          <select class="ba-input" id="ba-editor-pick">
+            <option value="">구성원 고르기</option>
+            <?php foreach ($editorPick as $m): ?>
+              <option value="<?= h($m['user_id']) ?>"><?= h($m['emp_name']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <button type="button" class="ba-btn ba-btn--sm ba-btn--primary" id="ba-editor-add">편집자로 지정</button>
+        </div>
+      <?php endif; ?>
     </div>
 
     <?php if (!empty($project['summary'])): ?>
     <div class="ba-panel"><h2>개요</h2><p class="ba-pre"><?= h($project['summary']) ?></p></div>
     <?php endif; ?>
 
+    <?php
+    // 업무 내용 및 범위 / 참고 자료 — 등록 화면과 같은 두 블록 (023).
+    foreach (BS_SOURCE_PURPOSE as $pk => $plabel):
+      $rows = array_values(array_filter($sources,
+          static fn($s) => ($s['purpose'] ?? 'scope') === $pk));
+      if ($pk !== 'scope' && !$rows) { continue; }   // 참고 자료는 있을 때만
+    ?>
     <div class="ba-panel">
-      <h2>업무 내용 및 범위 <span class="ba-dim"><?= count($sources) ?>건</span></h2>
-      <?php if (!$sources): ?>
+      <h2><?= h($plabel) ?> <span class="ba-dim"><?= count($rows) ?>건</span></h2>
+      <?php if ($pk === 'reference'): ?>
+        <p class="ba-panel__hint">보관용 자료입니다. 분석하지 않으며 WBS·난이도·공수 판정에 쓰지 않습니다.</p>
+      <?php endif; ?>
+      <?php if (!$rows): ?>
         <p class="ba-empty-inline">등록된 문서가 없습니다.</p>
       <?php else: ?>
         <div class="ba-srclist">
-          <?php foreach ($sources as $s): ?>
+          <?php foreach ($rows as $s): ?>
             <div class="ba-src">
               <span class="ba-src__kind"><?= h(BS_SOURCE_KIND[$s['kind']] ?? $s['kind']) ?></span>
               <span class="ba-src__title">
@@ -148,14 +278,40 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                   <a href="<?= h($s['url']) ?>" target="_blank" rel="noopener"><?= h($s['title']) ?></a>
                 <?php else: ?><?= h($s['title']) ?><?php endif; ?>
               </span>
+              <?php if ($pk !== 'reference'): /* 참고 자료는 분석하지 않는다 — 상태도 없다 */ ?>
               <span class="ba-src__parse ba-src__parse--<?= h($s['parse_status']) ?>">
                 <?= h(['pending'=>'분석 대기','ok'=>'분석 완료','fail'=>'분석 실패','skip'=>'분석 안 함'][$s['parse_status']] ?? $s['parse_status']) ?>
               </span>
+              <?php endif; ?>
+              <?php
+              // 보기·내려받기 (2026-10-15). 파일로 올린 것만 내려받는다.
+              // 보기는 파일이 있거나 추출 본문이 있을 때 — 링크만 있는 출처는 제목 링크로 연다.
+              $hasFile = !empty($s['has_file']);
+              // 브라우저가 그리는 형식(이미지·PDF)이거나 추출 본문이 있을 때만 '보기'.
+              // 참고 자료의 엑셀·PPT 는 본문을 뽑지 않으므로 내려받기만 남는다.
+              $inlineOk = $hasFile && in_array((string)$s['mime'],
+                  ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp'], true);
+              $canSee  = $inlineOk || (int)($s['parsed_len'] ?? 0) > 0;
+              ?>
+              <?php if ($canSee || $hasFile): ?>
+              <span class="ba-src__acts">
+                <?php if ($canSee): ?>
+                  <button type="button" class="ba-btn ba-btn--sm" data-src-view="<?= (int)$s['id'] ?>"
+                          data-mime="<?= h((string)$s['mime']) ?>" data-file="<?= $hasFile ? '1' : '0' ?>"
+                          data-title="<?= h($s['title']) ?>">보기</button>
+                <?php endif; ?>
+                <?php if ($hasFile): ?>
+                  <a class="ba-btn ba-btn--sm" href="api/source_download.php?id=<?= (int)$s['id'] ?>"
+                     title="<?= h($s['title']) ?><?= !empty($s['file_size']) ? ' · ' . h(SourceUploader::humanSize((int)$s['file_size'])) : '' ?>">내려받기</a>
+                <?php endif; ?>
+              </span>
+              <?php endif; ?>
             </div>
           <?php endforeach; ?>
         </div>
       <?php endif; ?>
     </div>
+    <?php endforeach; ?>
 
     <?php if (!empty($project['notes']) || !empty($project['extra'])): ?>
     <div class="ba-panel">
@@ -222,7 +378,8 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     </div>
 
     <div class="ba-panel">
-      <h2>후보 <span class="ba-dim" id="ba-c-count"></span></h2>
+      <h2>후보</h2>
+      <div class="ba-tags" id="ba-c-count"></div>
       <p class="ba-panel__hint" id="ba-c-scope"></p>
 
       <div class="ba-table-wrap">
@@ -241,9 +398,21 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
               <th style="width:74px">진행 건</th>
               <th style="width:80px"
                   title="이 과업 기준으로 처리량·분야 경험·경험 범위·경력을 합한 값입니다.&#10;가용도는 넣지 않습니다 — 옆 칸에 따로 있습니다.&#10;3단계 배정표의 적합도와는 다른 숫자입니다(그쪽은 가용도를 넣습니다).">적합도</th>
+              <!-- ┌──────────────────────────────────────────────────┐
+                   │ 산술이 못 담는 것을 담는 칸                       │
+                   │                                                  │
+                   │ 왼쪽 칸들은 전부 **잰 값**이다. 「요즘 컨디션이   │
+                   │ 안 좋다」 「곧 다른 데로 빠진다」 는 재지지       │
+                   │ 않는다. 그 판단을 적는 자리다.                    │
+                   │                                                  │
+                   │ 점수를 깎지 않고 **가용 공수**를 줄인다 — 화면의  │
+                   │ 적합도는 그대로 실제 값이다.                      │
+                   └──────────────────────────────────────────────────┘ -->
+              <th style="width:104px"
+                  title="이 프로젝트에서만 쓰는 값입니다. 가용 공수에 곱해 배정량을 줄입니다.&#10;적합도 점수는 건드리지 않습니다 — 화면의 숫자는 그대로 실제 값입니다.&#10;되돌리려면 1.0 으로 두십시오.">참여 비중</th>
             </tr>
           </thead>
-          <tbody><tr><td colspan="9" class="ba-loading">불러오는 중…</td></tr></tbody>
+          <tbody><tr><td colspan="10" class="ba-loading">불러오는 중…</td></tr></tbody>
         </table>
       </div>
 
@@ -284,9 +453,12 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
          읽기는 바깥을 타므로 **크론 워커가 한다.** 이 화면은 넣고 진행률만
          본다 — 항목이 100개면 외부 호출이 100번이라 요청 안에서 못 한다. -->
     <div class="ba-panel ba-links" id="ba-links" data-project-id="<?= (int)$projectId ?>" hidden>
-      <h2>기획 링크 <span class="ba-dim" id="ba-lk-sum"></span></h2>
+      <h2>출처 문서 안의 링크</h2>
+      <div class="ba-tags" id="ba-lk-sum"></div>
       <p class="ba-panel__hint">
-        출처 문서에 걸린 <b>구글 드라이브·피그마</b> 주소를 따라가 내용을 읽어 둡니다.
+        <b>이 칸은 링크만 다룹니다.</b> 올린 파일은 아래 <b>업무 분해(WBS)</b> 칸의
+        <b>[새 문서만 분석]</b> 에서 읽습니다.
+        여기서는 출처 문서에 걸린 <b>구글 드라이브·피그마</b> 주소를 따라가 내용을 읽어 둡니다.
         읽어 둔 내용은 WBS 도출과 난이도 판정의 근거가 됩니다.
         <br>
         읽을 수 없는 주소(노션·사내 위키 등)는 <b>건너뜀</b>으로 남습니다 — 오류가 아닙니다.
@@ -300,11 +472,6 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <button type="button" class="ba-btn" id="ba-lk-retry" hidden
                 title="실패한 것만 다시 읽습니다. 성공한 것은 다시 읽지 않습니다">실패한 것만 다시</button>
         <button type="button" class="ba-btn ba-btn--danger" id="ba-lk-cancel" hidden>멈추기</button>
-        <span class="ba-sep"></span>
-        <button type="button" class="ba-btn" id="ba-lk-score"
-                title="읽어 둔 기획 내용을 근거로 난이도(1~5)와 예상공수(M/D)를 매깁니다&#10;비어 있는 칸만 채웁니다. 사람이 넣은 값은 건드리지 않습니다">난이도·공수 매기기</button>
-        <button type="button" class="ba-btn" id="ba-lk-rescore"
-                title="이미 매긴 것도 다시 매깁니다. 사람이 고친 값은 건드리지 않습니다">다시 매기기</button>
         <span class="ba-spacer"></span>
         <span class="ba-dim" id="ba-lk-msg"></span>
       </div>
@@ -338,7 +505,8 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     <?php endif; ?>
 
     <div class="ba-panel">
-      <h2>업무 분해(WBS) <span class="ba-dim" id="ba-w-sum"></span></h2>
+      <h2>업무 분해(WBS)</h2>
+      <div class="ba-tags" id="ba-w-sum"></div>
       <p class="ba-panel__hint">
         대 / 중 / 소 3단계까지 만들 수 있습니다. 번호(1, 1.1, 1.1.1)는 자리에 따라
         저장할 때 자동으로 매겨집니다.
@@ -368,24 +536,67 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
              없다. 문서가 이미 잘 정리돼 있으면 이쪽이 결과도 더 예측 가능하다. -->
         <button type="button" class="ba-btn" id="ba-w-extract-rule"
                 title="AI 없이 들여쓰기·번호 규칙만으로 뽑습니다. 즉시 끝나고 비용이 없습니다">규칙으로 WBS 도출 (AI 미사용)</button>
-        <span class="ba-sep"></span>
-        <!-- 표가 길면 바로 밑 [배정안] 까지 내려가는 길을 막는다.
-             대·중분류는 남기고 그 아래만 접는다 — 통째로 숨기면 구조가 안 보인다. -->
-        <button type="button" class="ba-btn ba-btn--sm" id="ba-w-fold"
-                title="하위를 모두 접습니다. 대분류만 남습니다">모두 접기</button>
-        <button type="button" class="ba-btn ba-btn--sm" id="ba-w-unfold"
-                title="접어 둔 것을 모두 펼칩니다">모두 펼치기</button>
+        <span class="ba-wbsbar__sep"></span>
+        <!-- ┌──────────────────────────────────────────────────────────┐
+             │ 링크 칸에 있던 단추다 (2026-10-08 — 쓰는 사람이 물었다)   │
+             │                                                          │
+             │ 난이도·공수는 **링크와 아무 상관이 없다.** 대상은 확정된  │
+             │ 태스크 전부다. 그런데 [링크 분석 시작] 바로 옆에 있어     │
+             │ "링크 전용 기능인가" 로 읽혔다.                           │
+             │                                                          │
+             │ 공수·난이도 칸을 보는 자리가 여기이므로 여기로 옮긴다.    │
+             └──────────────────────────────────────────────────────────┘ -->
+        <button type="button" class="ba-btn" id="ba-lk-score"
+                title="확정된 태스크에 난이도(1~5)와 예상공수(M/D)를 매깁니다&#10;올린 문서와 읽어 둔 링크에서 그 태스크 이야기를 찾아 근거로 씁니다&#10;비어 있는 칸만 채웁니다. 사람이 넣은 값은 건드리지 않습니다">난이도·공수 매기기</button>
+        <button type="button" class="ba-btn" id="ba-lk-rescore"
+                title="이미 매긴 것도 다시 매깁니다. 사람이 고친 값은 건드리지 않습니다">다시 매기기</button>
+        <span class="ba-dim" id="ba-lk-msg2"></span>
         <span class="ba-spacer"></span>
         <span class="ba-dim" id="ba-w-dirty"></span>
         <button type="button" class="ba-btn" id="ba-w-revert" hidden>되돌리기</button>
         <button type="button" class="ba-btn ba-btn--primary" id="ba-w-save">저장</button>
       </div>
+      <!-- 난이도·공수 매기기 진행 (2026-10-16). 단추가 이 칸에 있는데 진행 막대는
+           위 링크 칸에만 있어서, 누른 자리와 다른 곳이 움직였다. 이 칸에 따로 둔다. -->
+      <div class="ba-lk-prog" id="ba-sc-prog" hidden>
+        <div class="ba-lk-bar"><i id="ba-sc-fill"></i></div>
+        <span class="ba-dim" id="ba-sc-progtxt"></span>
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--danger" id="ba-sc-cancel">멈추기</button>
+      </div>
       <div id="ba-w-docs" hidden></div>
       <?php else: ?>
-      <div class="ba-note">읽기 전용입니다. WBS 를 고치려면 이 프로젝트의 담당 PM 이어야 합니다.</div>
+      <div class="ba-note ba-note--readonly">읽기 전용입니다. WBS 를 고치려면 이 프로젝트의 담당 PM 이어야 합니다.</div>
       <?php endif; ?>
 
-      <div class="ba-table-wrap">
+      <!-- ┌──────────────────────────────────────────────────────────────┐
+           │ 보기를 바꾸는 단추는 **표 위에** 따로 둔다 (2026-10-08)       │
+           │                                                              │
+           │ 위 줄의 단추들은 **자료를 바꾼다** — 분석하고, 도출하고,      │
+           │ 매기고, 저장한다. 접기·펼치기는 자료를 한 글자도 안 바꾸고    │
+           │ 보기만 바꾼다. 같은 줄에 섞여 있으면 눌러도 되는지 망설인다.  │
+           │                                                              │
+           │ 표 바로 위가 제자리다 — 영향이 미치는 곳 바로 옆.             │
+           └──────────────────────────────────────────────────────────────┘ -->
+      <div class="ba-viewbar">
+        <!-- 표를 통째로 감춘다. 접기(대분류만 남김)와 달리 줄이 하나도 안 남아
+             아래 배정 표로 바로 내려갈 수 있다 (2026-10-12). 보기만 바꾼다.
+             2026-10-14: 오른쪽 끝에 홀로 있어 단추로 안 보였다 — 맨 왼쪽에 둔다
+             (표 전체 → 표 안의 줄 순서로, 큰 것부터). -->
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--view" id="ba-w-hide"
+                aria-controls="ba-w-tablewrap" aria-expanded="true"><i class="ba-eye" aria-hidden="true"></i><span>표 숨기기</span></button>
+        <!-- 단추 하나가 두 일을 한다. 지금 상태의 **반대**를 적는다 —
+             "대분류만 보기" 가 보이면 지금은 펼쳐져 있다는 뜻이다.
+             (2026-10-14 문구 변경: 모두 접기 → 대분류만 보기, 모두 펼치기 → 모두 보기.
+              '접기' 는 무엇이 접히는지 말하지 않았다.) -->
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--view" id="ba-w-fold"
+                title="하위를 모두 접습니다. 대분류만 남습니다"
+                aria-pressed="false"><i class="ba-caret ba-caret--up"></i><span>대분류만 보기</span></button>
+      </div>
+      <p class="ba-panel__hint" id="ba-w-hidden-note" hidden>
+        WBS 표를 숨겨 두었습니다. 자료는 그대로입니다 — [표 펼치기] 로 다시 봅니다.
+      </p>
+
+      <div class="ba-table-wrap" id="ba-w-tablewrap">
         <table class="ba-table ba-wbs" id="ba-w-table">
           <thead>
             <tr>
@@ -422,12 +633,44 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
 
     <!-- ---- 배정안 (명세서 §6) ---- -->
     <div class="ba-panel" id="ba-al">
-      <h2>배정안 <span class="ba-dim" id="ba-al-badge"></span></h2>
+      <!-- ┌──────────────────────────────────────────────────────────┐
+           │ 설명을 화면에 다 적을 수는 없다 (2026-10-08)              │
+           │                                                          │
+           │ 가중치 다섯·감점 셋·방식 셋·단위 넷·AIDD 계수 둘이        │
+           │ 맞물려 돈다. 칸마다 한 줄씩 붙였지만 **왜 이 사람인가**   │
+           │ 를 답하려면 그 줄들을 머릿속에서 이어야 했다.             │
+           │                                                          │
+           │ 설명을 더 적어 화면을 덮는 대신 **부를 때 열리는** 자리를 │
+           │ 둔다. 평소에는 물음표 하나만 보인다.                      │
+           │                                                          │
+           │ **제목 바로 옆**이다. 처음엔 뱃지 뒤에 뒀는데, 뱃지가     │
+           │ "2차 · 산출됨 · 처리량 판정 264회차 · 엔진 v1" 처럼 길고  │
+           │ 길이가 매번 달라 물음표가 떠다녔다 — 어디를 봐야 할지     │
+           │ 모르는 자리에 있으면 없는 것과 같다.                      │
+           └──────────────────────────────────────────────────────────┘ -->
+      <h2 class="ba-h2">배정안
+        <span class="ba-spacer"></span>
+        <button type="button" class="ba-help" id="ba-al-help"
+                aria-label="배정이 어떻게 이루어지는지 보기"
+                title="배정이 어떻게 이루어지는지 — 용어·식·결과 읽는 법">?</button>
+      </h2>
+      <!-- ┌──────────────────────────────────────────────────────────────┐
+           │ 제목에 붙여 쓰기엔 너무 길다 (2026-10-08)                     │
+           │                                                              │
+           │ "3차 · 산출됨 · 자동 · 처리량 판정 276회차 · 엔진 v1" 은      │
+           │ 다섯 가지 사실이다. 제목 옆에 한 줄로 붙이면 제목이 어디서    │
+           │ 끝나는지 안 보이고, 가운뎃점으로 이은 긴 글은 **하나도 안     │
+           │ 읽힌다.**                                                     │
+           │                                                              │
+           │ 사실 하나에 표식 하나. 줄을 내려 따로 둔다.                   │
+           └──────────────────────────────────────────────────────────────┘ -->
+      <div class="ba-tags" id="ba-al-badge"></div>
       <p class="ba-panel__hint">
         확정된 태스크를 배정합니다. <b>[가중치 조정]</b> 에서 <b>배정 단위</b> 를
         고르면 대분류·중분류로 묶어 한 사람에게 줄 수 있습니다 —
         묶어도 <b>공수는 하위의 합계 그대로</b>이고 두 번 잡히지 않습니다.
         <b>확정하기 전에는 대시보드에 나오지 않습니다.</b>
+        처음 보신다면 제목 옆 <b>[?]</b> 를 눌러 보십시오.
       </p>
 
       <?php if ($canManage): ?>
@@ -442,6 +685,13 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
                 title="가중치와 배정 방식·단위를 펼칩니다. 이 단추로는 산출되지 않습니다">가중치·방식 조정</button>
         <button type="button" class="ba-btn" id="ba-al-compare"
                 title="차수별 적합도·쏠림·초과를 한 표에서 견줍니다">차수 비교</button>
+        <!-- 차수 복사·삭제 (2026-10-22). 확정본을 고치려면 복사해서 새 차수로 확정한다 -->
+        <button type="button" class="ba-btn" id="ba-al-copy" disabled
+                title="고른 차수를 그대로 옮겨 새 차수를 만듭니다. 확정본은 그대로 남습니다">복사</button>
+        <button type="button" class="ba-btn" id="ba-al-del" disabled
+                title="확정본과 한 번 확정됐던 안은 지울 수 없습니다">삭제</button>
+        <button type="button" class="ba-btn" id="ba-al-purge" disabled
+                title="확정본과 확정 이력을 뺀 나머지 차수를 모두 지웁니다">초안 정리</button>
         <span class="ba-spacer"></span>
         <button type="button" class="ba-btn ba-btn--primary" id="ba-al-confirm">최종 배정 완료</button>
       </div>
@@ -497,11 +747,50 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
           <label><input type="checkbox" id="ba-al-minone" checked>
             고른 후보는 적어도 1건 받게 한다</label>
         </div>
+        <!-- 직전 안 유지 (2026-10-12). 가중치를 0.02 만 고쳐도 담당자가 절반 넘게
+             뒤섞였다 — 점수차가 2점 안팎이라 한 건이 바뀌면 뒤가 줄줄이 밀린다. -->
+        <div class="ba-almode ba-almode--one">
+          <span class="ba-almode__l">직전 안 유지</span>
+          <label><input type="checkbox" id="ba-al-stick" checked>
+            지금 보고 있는 차수의 담당자를 기준으로, <b><?= (int)BS_ALLOC_STICK_EPS ?>점 넘게 나은 사람이 있을 때만</b> 바꾼다</label>
+        </div>
         <div class="ba-almode__hint">
           배정이 끝난 뒤, 0건인 후보에게 <b>적합도 손실이 가장 작은 한 건</b>을 넘깁니다.
           점수를 주무르지 않으므로 화면의 적합도는 그대로 실제 값입니다.
           난이도 ★4 이상은 그 분야 상위자에게만 가는 규칙을 깨지 않으며,
           못 넘긴 경우에는 <b>왜 못 넘겼는지</b> 적습니다.
+        </div>
+
+        <!-- ┌────────────────────────────────────────────────────────────┐
+             │ 차수별로 끌 수 있어야 견줄 수 있다 (2026-10-08)             │
+             │                                                            │
+             │ AIDD 계수는 **실측이 아니라 가정**이다. 가정이 결과를 얼마나 │
+             │ 바꾸는지는 켠 안과 끈 안을 나란히 놓아야 보인다 — 무작위    │
+             │ 배정을 대조군으로 둔 것과 같은 이유다.                      │
+             │                                                            │
+             │ 프로젝트 설정이 원본이라 여기서 **켤 수는 없다.** 끄기만    │
+             │ 한다 — 프로젝트가 안 쓰기로 한 것을 차수가 되살리면 어느    │
+             │ 쪽이 참인지 알 수 없게 된다.                                │
+             └────────────────────────────────────────────────────────────┘ -->
+        <?php $pvAidd = bs_aidd_of($project); ?>
+        <div class="ba-almode ba-almode--one">
+          <span class="ba-almode__l">AIDD</span>
+          <label><input type="checkbox" id="ba-al-aidd"
+                        <?= $pvAidd['enabled'] ? 'checked' : 'disabled' ?>>
+            이 차수에 AIDD 보정을 반영한다</label>
+        </div>
+        <div class="ba-almode__hint">
+          <?php if ($pvAidd['enabled']): ?>
+            프로젝트 설정은 <b>공수 &times;<?= h(number_format($pvAidd['effort'], 2)) ?>
+            · 점유 &times;<?= h(number_format($pvAidd['load'], 2)) ?></b> 입니다.
+            체크를 풀면 <b>이 차수만</b> 보정 없이 산출합니다 — 켠 차수와 끈 차수를
+            만들어 <b>[차수 비교]</b> 로 견주면 이 가정이 결과를 얼마나 바꾸는지 보입니다.
+            <b>여기서 끄는 것은 가용 공수에만 걸립니다</b> — 예상공수는 태스크에 이미
+            저장된 값을 그대로 씁니다.
+          <?php else: ?>
+            프로젝트 설정에서 꺼져 있습니다. 차수에서 켤 수는 없습니다 —
+            켜려면 <b>[수정] → 기간</b> 에서 바꾸십시오.
+          <?php endif; ?>
         </div>
 
         <div class="ba-sliders" id="ba-al-wsliders"></div>
@@ -574,6 +863,10 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
   </section>
 </div>
 
+<!-- 출처 문서 보기 (2026-10-15). 이미지·PDF 는 그대로, 엑셀·PPT·워드는 추출 본문.
+     외부 뷰어는 쓰지 않는다 — 업무 문서를 바깥으로 보내는 일이다. -->
+<?= bs_source_viewer_html() ?>
+
 <!-- 배정 근거 드로어 -->
 <div class="ba-drawer" id="ba-al-drawer" hidden>
   <div class="ba-drawer__box" role="dialog" aria-modal="true" aria-labelledby="ba-ar-title">
@@ -582,6 +875,181 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
       <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
     </div>
     <div class="ba-drawer__body" id="ba-ar-body"></div>
+    <div class="ba-drawer__foot">
+      <span class="ba-spacer"></span>
+      <button type="button" class="ba-btn" data-close>닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ┌──────────────────────────────────────────────────────────────────┐
+     │ 배정 설명 드로어                                                  │
+     │                                                                  │
+     │ 글은 `docs/allocation-explained.md` 와 **같은 내용**이다. 거기가  │
+     │ 원본이고 여기는 쓰는 자리에서 바로 꺼내 보는 요약이다. 식이       │
+     │ 바뀌면 둘 다 고친다 — 설명과 코드가 갈리면 둘 다 못 믿는다.       │
+     │                                                                  │
+     │ 접었다 폈다 하지 않는다. 찾아 들어온 사람은 **읽으러** 온 것이고, │
+     │ 접어 두면 무엇이 있는지 모른 채 닫는다.                           │
+     └──────────────────────────────────────────────────────────────────┘ -->
+<div class="ba-drawer" id="ba-al-helpd" hidden>
+  <div class="ba-drawer__box ba-drawer__box--wide" role="dialog" aria-modal="true"
+       aria-labelledby="ba-help-title">
+    <div class="ba-drawer__head">
+      <h2 id="ba-help-title">배정은 어떻게 이루어지는가</h2>
+      <button type="button" class="ba-close" data-close aria-label="닫기">&times;</button>
+    </div>
+    <div class="ba-drawer__body ba-guide">
+
+      <p class="ba-guide__lead">
+        <b>사람의 분야 실력은 전사 공통으로 한 번 재 두고</b>, 프로젝트는
+        <b>“이 일이 어느 분야냐”</b> 와 <b>“분야를 얼마나 중시하냐”</b> 만 정합니다.
+      </p>
+
+      <h3>1. 점수는 두 단계입니다</h3>
+      <pre class="ba-guide__box">base = 다섯 지표의 가중 평균           ← 이 사람이 이 일을 <b>할 수 있는가</b>
+fit  = base − 과부하 − 쏠림 + 묶음가산  ← 지금 이 사람에게 <b>줘도 되는가</b></pre>
+      <p>엔진이 보고 고르는 것은 <b>fit</b> 이고, 표의 ‘적합도’ 열도 fit 입니다.</p>
+
+      <h3>2. base — 다섯 지표</h3>
+      <pre class="ba-guide__box">       w_domain×분야적합 + w_cap×처리량 + w_avail×가용 + w_career×경력 + w_growth×성장
+base = ──────────────────────────────────────────────────────────────────────────────
+                            <b>실제로 쓴</b> 가중치의 합</pre>
+
+      <table class="ba-guide__t">
+        <thead><tr><th>지표</th><th>어디서 오나</th><th>기본</th><th>태스크마다<br>다른가</th></tr></thead>
+        <tbody>
+          <tr><td><b>분야적합</b></td>
+              <td>그 태스크의 <b>분야 태그</b> × 그 사람의 <b>그 계열 점수</b></td>
+              <td>0.35</td><td class="ba-guide__y">예</td></tr>
+          <tr><td><b>처리량</b></td>
+              <td>슬랙 6개월 이력의 난이도 가중 처리량 (전사 공통)</td>
+              <td>0.20</td><td>아니오</td></tr>
+          <tr><td><b>가용</b></td>
+              <td>다른 업무 점유를 뺀 남은 몫. <b>배정이 쌓이면 줄어듭니다</b></td>
+              <td>0.25</td><td>아니오*</td></tr>
+          <tr><td><b>경력</b></td>
+              <td><code>100 × (1 − e<sup>−개월/60</sup>)</code> — 5년 63, 10년 86</td>
+              <td>0.10</td><td>아니오</td></tr>
+          <tr><td><b>성장</b></td>
+              <td>분야적합의 <b>반대</b>. 못하는 분야일수록 높고 ★5는 0</td>
+              <td>0.00</td><td class="ba-guide__y">예</td></tr>
+        </tbody>
+      </table>
+      <p class="ba-guide__note">* 가용만 <b>배정 도중</b> 변합니다. 한 건 줄 때마다 즉시
+        줄어들어 쏠림이 저절로 풀립니다 — <code>w_avail</code> 을 0 으로 두면 이 장치가
+        꺼집니다.</p>
+
+      <h3>3. “실제로 쓴 가중치의 합”</h3>
+      <p>분모는 <code>0.90</code> 고정이 <b>아닙니다.</b> 그 (태스크, 사람) 짝에서
+        실제로 더해진 것만 셉니다. <b>가중치가 0</b> 이거나 <b>점수를 못 내면</b>
+        분자·분모 <b>양쪽에서</b> 빠집니다.</p>
+      <pre class="ba-guide__box">㈎ 다 정상       (0.35×95 + 0.20×92 + 0.25×100 + 0.10×0) / 0.90 = 79.6
+㈏ 분야 태그 없음 (          0.20×92 + 0.25×100 + 0.10×0) / <b>0.55</b> = 69.8
+㈐ 분모를 고정했다면                        38.40 / 0.90 = <b>42.7</b>  ← 37점 손해</pre>
+      <p>없는 점수에 0 을 넣거나 분모를 고정하면, <b>점수가 낮은 것이 아니라 잴 수 없을
+        뿐인 사람</b>이 벌을 받습니다. 쓸 수 있는 지표가 하나도 없으면
+        <code>0</code> 이 아니라 <b>적합도 없음</b>이고, 그 태스크는 ‘담당자 없음’ 으로
+        빠집니다.</p>
+
+      <h3>4. fit — 배정 상황을 반영합니다</h3>
+      <p>가중치가 0 이어도 <b>이것들은 그대로 붙습니다.</b> 가중 평균 바깥입니다.</p>
+      <table class="ba-guide__t">
+        <thead><tr><th></th><th>언제</th><th>크기</th></tr></thead>
+        <tbody>
+          <tr><td>과부하 감점</td><td>가용 공수의 70% 넘으면 서서히, 100% 넘으면 급격히</td><td>−50</td></tr>
+          <tr><td>쏠림 감점</td><td>전체 공수의 40% 넘게 맡으면</td><td>−30</td></tr>
+          <tr><td>묶음 가산</td><td>같은 대분류를 이미 맡았으면 (문맥 전환 비용)</td><td>+8</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5. 배정 순서</h3>
+      <pre class="ba-guide__box">① 줄 세우기   난이도↓, 공수↓, 번호순
+② 그리디      한 건씩, <b>그때마다 모든 후보 점수를 다시 매겨</b> 1등에게
+③ 지역 탐색   두 건씩 맞바꿔 fit 합이 오르면 바꾼다
+④ 최소 보장   고른 후보가 0건이면 손실이 가장 작은 한 건을 넘긴다</pre>
+      <p><b>②에서 가중치가 매 건 다시 쓰입니다.</b> 사람마다 점수를 한 번 매겨 놓고
+        순서대로 나눠 주는 것이 아닙니다.</p>
+
+      <h3>6. 실제로 이렇게 움직입니다</h3>
+      <pre class="ba-guide__box">계열 점수 — 가개발 학습활동 95 / 화면·테마 55
+            다개발 학습활동 40 / 화면·테마 90
+
+1번 「성능 개선」 ★5 · 학습활동
+   가개발 fit 92.9 | 분야 95 처리량 92 가용 100 경력 70   → <b>가개발</b>
+
+2번 「출석부 화면」 ★3 · 학습활동
+   가개발 fit 88.6 | 가용이 100 → <b>84.4</b> 로 줄었다(방금 10 M/D 를 받음) → 가개발
+
+3번 「테마 개편」 ★3 · <b>화면·테마</b>   ← 여기서 순위가 뒤집힌다
+   가개발 fit 47.5 | 분야 <b>55</b> … 감점 −22.1
+   다개발 fit 78.3 | 분야 <b>90</b> … 감점 0      → <b>다개발</b>
+
+4번 「출석 통계」 ★2 · 학습활동
+   가개발 fit 71.1 | 분야 95, 묶음가산 +8 <b>인데도</b> 쏠림 −22.1
+   나개발 fit 77.0 | 분야 70, 감점 0              → <b>나개발</b></pre>
+
+      <h3>7. 가중치를 올리면 무엇이 달라지나</h3>
+      <table class="ba-guide__t">
+        <thead><tr><th>가중치</th><th>올리면</th></tr></thead>
+        <tbody>
+          <tr><td>분야 적합</td><td><b>태스크마다 순위가 뒤집힙니다.</b> 분야 전문가에게 <b>흩어집니다</b></td></tr>
+          <tr><td>처리량</td><td>전반적으로 잘하는 사람에게 <b>몰립니다</b> (태스크와 무관한 고정값)</td></tr>
+          <tr><td>참여 가능</td><td>쏠림이 <b>자동으로 풀립니다</b> (한 건마다 즉시 반영)</td></tr>
+          <tr><td>경력</td><td>연차 긴 사람에게</td></tr>
+          <tr><td>성장 기회</td><td>못하는 분야에 일부러 배치 (★5는 자동 0)</td></tr>
+        </tbody>
+      </table>
+      <p class="ba-guide__note"><b>분야 적합과 처리량은 방향이 반대입니다.</b>
+        분야는 흩고, 처리량은 모읍니다.</p>
+
+      <h3>8. 가중치와 무관하게 늘 도는 것</h3>
+      <ul class="ba-guide__ul">
+        <li><b>난이도 ★4 이상은 그 분야 상위자에게만</b> — 점수 비교 <b>이전에</b>
+            후보를 가릅니다. 상위자가 아무도 없으면 차선으로 갑니다.</li>
+        <li><b>동점은 구성원 번호가 작은 쪽</b> — 같은 입력이면 늘 같은 배정안입니다.</li>
+        <li><b>표본 없는 사람은 0 이 아니라 그 계열 중앙값</b> 으로 놓고 ‘추정’ 을 답니다.
+            0 으로 두면 경험을 쌓을 길이 막힙니다.</li>
+      </ul>
+
+      <h3>9. 방식 · 단위 · 보장</h3>
+      <table class="ba-guide__t">
+        <tbody>
+          <tr><td><b>방식</b></td>
+              <td>가중치 / 무작위. 무작위는 <b>대조군</b>입니다 — 가중치 배정의 평균
+                  적합도가 무작위보다 확실히 높지 않으면 가중치가 제값을 못 하는 것입니다.
+                  무작위로 뽑아도 적합도는 계산해 보여 줍니다.</td></tr>
+          <tr><td><b>단위</b></td>
+              <td>말단까지 / 대분류 / 중분류 / 자동. 묶어도 <b>공수는 하위의 합</b>
+                  그대로이고 두 번 잡히지 않습니다.</td></tr>
+          <tr><td><b>최소 보장</b></td>
+              <td>고른 후보가 0건이면 <b>손실이 가장 작은 한 건</b>을 넘깁니다.
+                  점수는 손대지 않습니다 — 배정이 끝난 뒤 제약으로 고칩니다.</td></tr>
+          <tr><td><b>AIDD</b></td>
+              <td>공수를 계수만큼 줄이고, 다른 업무 점유를 덜 반영합니다.
+                  <b>난이도는 바꾸지 않습니다.</b> 계수는 실측이 아니라 <b>가정</b>이라
+                  가용도에 녹이지 않고 <code>+AIDD n%</code> 로 따로 적습니다.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>10. 자주 헷갈리는 자리</h3>
+      <ul class="ba-guide__ul">
+        <li><b>“분야 적합도”라는 사람 고유의 숫자는 없습니다.</b> 같은 사람이
+            학습활동 태스크에서 95, 화면·테마 태스크에서 55 입니다.</li>
+        <li><b>2단계 후보 표의 적합도와 이 표의 적합도는 다른 식입니다.</b>
+            후보 표는 <b>사람이 고르는 자리</b>라 가용도를 넣지 않습니다 — 섞으면
+            바쁜 전문가가 한가한 초보보다 낮게 나옵니다.</li>
+        <li><b>계열 점수는 프로젝트별이 아닙니다.</b> 전사 공통 스냅샷이고, 어느
+            스냅샷을 봤는지 배정안마다 기록해 둡니다.</li>
+        <li><b>종합 점수는 저장하지 않습니다.</b> 저장해 두면 그것을 정렬하는 순간
+            전사 랭킹이 됩니다.</li>
+      </ul>
+
+      <p class="ba-guide__note">
+        더 자세한 설명과 코드 위치는 <code>studio/docs/allocation-explained.md</code>
+        에 있습니다.
+      </p>
+    </div>
     <div class="ba-drawer__foot">
       <span class="ba-spacer"></span>
       <button type="button" class="ba-btn" data-close>닫기</button>

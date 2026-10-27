@@ -9,9 +9,8 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $user = bs_require_login();
 
-// 등록 버튼 노출. 프로젝트가 특정되지 않은 화면이라 관리자만 통과한다.
-// PM 은 자기 프로젝트를 고친다(bs_is_pm 은 프로젝트별 판정이라 여기서는 못 쓴다).
-$canCreate = bs_can(BS_CAP_PROJECT_MANAGE);
+// 등록 버튼 노출. 관리자와, 관리자가 등록 권한을 켜 준 사람 (027).
+$canCreate = bs_can(BS_CAP_PROJECT_CREATE);
 $isAdmin   = bs_is_admin();
 
 // 다른 화면에서 권한/존재 문제로 튕겨 왔을 때 이유를 알려 준다.
@@ -29,7 +28,7 @@ bs_layout_head(
 <?php if ($err !== ''): ?>
 <div class="ba-alert">
   <?= h(match ($err) {
-      'denied'   => '권한이 없습니다. PM 또는 관리자만 프로젝트를 등록·수정할 수 있습니다.',
+      'denied'   => '권한이 없습니다. 등록은 관리자와 등록 권한을 받은 사람, 수정은 담당 PM·편집자·관리자만 할 수 있습니다.',
       'notfound' => '프로젝트를 찾을 수 없습니다. 지워졌을 수 있습니다.',
       default    => '요청을 처리하지 못했습니다.',
   }) ?>
@@ -48,7 +47,7 @@ bs_layout_head(
   </div>
 
   <!-- ============ 실행 줄 ============ -->
-  <div class="ba-filters" style="justify-content:flex-start">
+  <div class="ba-filters ba-actionbar">
     <?php if ($canCreate): ?>
       <a class="ba-btn ba-btn--primary" href="project_form.php">새 프로젝트</a>
     <?php endif; ?>
@@ -58,7 +57,7 @@ bs_layout_head(
   </div>
 
   <!-- ============ 조회 조건 ============ -->
-  <div class="ba-filters">
+  <div class="ba-filters ba-filterbox">
     <label class="ba-field">
       <span>트랙</span>
       <select id="ba-f-track">

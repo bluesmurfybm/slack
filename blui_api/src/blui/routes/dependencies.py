@@ -1,16 +1,13 @@
 from functools import partial
 
 from fastapi import Depends, Request, Response
+from langchain_core.language_models import BaseChatModel
 
-from blui import answer, db, guard
-from blui.classifier import Classifier
+from blui import agents, answer, classifier, db, guard, llm
+from blui.agents import Agent
 from blui.configs import config
 from blui.tools.handoff import HandoffTool
-from common import guard as common_guard
-from common.guard import Guard
 from common.knowledge import KnowledgeEntry
-from common.llm import openai
-from common.llm.client import LLMClient
 from common.repositories.conversation import (
     ConversationMessageRepository,
     ConversationRepository,
@@ -19,8 +16,8 @@ from common.services.conversation import ConversationService
 
 COOKIE_NAME = "conversation_key"
 
-_llm_client: LLMClient | None = None
-_light_llm_client: LLMClient | None = None
+_model: BaseChatModel | None = None
+_light_model: BaseChatModel | None = None
 
 
 def get_knowledge(request: Request) -> list[KnowledgeEntry]:
@@ -28,31 +25,30 @@ def get_knowledge(request: Request) -> list[KnowledgeEntry]:
     return knowledge
 
 
-def get_llm_client() -> LLMClient:
-    global _llm_client
-    if _llm_client is None:
-        _llm_client = openai.build_from_config(config)
-    return _llm_client
+def get_model() -> BaseChatModel:
+    global _model
+    if _model is None:
+        _model = llm.build_model(config)
+    return _model
 
 
-def get_light_llm_client() -> LLMClient:
-    global _light_llm_client
-    if _light_llm_client is None:
-        _light_llm_client = openai.build(
-            config,
-            model=config.openai_light_model,
-            max_tokens=common_guard.MAX_TOKENS,
-            effort=None,
-        )
-    return _light_llm_client
+def get_light_model() -> BaseChatModel:
+    global _light_model
+    if _light_model is None:
+        _light_model = llm.build_light_model(config)
+    return _light_model
 
 
-def get_guard(light_llm_client: LLMClient = Depends(get_light_llm_client)) -> Guard:
-    return guard.build(light_llm_client)
+def get_guard(light_model: BaseChatModel = Depends(get_light_model)) -> Agent:
+    return guard.build(light_model)
 
 
-def get_classifier(light_llm_client: LLMClient = Depends(get_light_llm_client)) -> Classifier:
-    return Classifier(light_llm_client)
+def get_classifier(light_model: BaseChatModel = Depends(get_light_model)) -> Agent:
+    return classifier.build(light_model)
+
+
+def get_generator(model: BaseChatModel = Depends(get_model)) -> Agent:
+    return agents.build(model, answer.LLMOutput)
 
 
 def get_handoff_tool() -> HandoffTool:
@@ -70,25 +66,25 @@ def get_message_repository() -> ConversationMessageRepository:
 def get_conversation_service(
     conversation_repository: ConversationRepository = Depends(get_conversation_repository),
     message_repository: ConversationMessageRepository = Depends(get_message_repository),
-    llm_client: LLMClient = Depends(get_llm_client),
-    guard: Guard = Depends(get_guard),
-    classifier: Classifier = Depends(get_classifier),
+    guard: Agent = Depends(get_guard),
+    classifier: Agent = Depends(get_classifier),
+    generator: Agent = Depends(get_generator),
     knowledge: list[KnowledgeEntry] = Depends(get_knowledge),
     handoff: HandoffTool = Depends(get_handoff_tool),
 ) -> ConversationService[answer.Answer]:
+    graph = answer.build(
+        guard,
+        classifier,
+        generator,
+        knowledge,
+        config.inquiry_url,
+        config.request_url,
+        handoff,
+    )
     return ConversationService(
         conversation_repository,
         message_repository,
-        partial(
-            answer.answer,
-            llm_client,
-            guard,
-            classifier,
-            knowledge,
-            config.inquiry_url,
-            config.request_url,
-            handoff,
-        ),
+        partial(answer.answer, graph),
         config.max_user_messages,
     )
 

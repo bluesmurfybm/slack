@@ -50,16 +50,71 @@ body {
   font-family: 'Space Grotesk', Pretendard, sans-serif;
 }
 .ba-site__desc { margin: 4px 0 0; color: var(--ba-ink-soft); font-size: 13.5px; }
-.ba-site__aside { flex: 0 0 auto; }
+.ba-site__aside { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
-/* ---- 화면 이동 탭 --------------------------------------------------- */
-.ba-nav { display: flex; gap: 4px; }
-.ba-nav a {
-  display: block; padding: 7px 14px; border-radius: 8px;
-  color: var(--ba-ink-soft); text-decoration: none; font-size: 13.5px; font-weight: 600;
+/* ---- 대메뉴 구성원 / 관리자 (2026-10-16) — bluecart .bc-tabs 와 같은 모양 ---- */
+.ba-mode {
+  display: flex; gap: 2px;
+  padding: 3px; border-radius: 999px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line);
 }
-.ba-nav a:hover { background: var(--ba-surface); color: var(--ba-ink); }
-.ba-nav a.on { background: var(--ba-brand); color: #fff; }
+.ba-mode a {
+  display: block; padding: 6px 18px; border-radius: 999px;
+  font-size: 13.5px; font-weight: 600; color: var(--ba-ink-soft);
+  text-decoration: none; white-space: nowrap;
+  transition: background .14s ease, color .14s ease;
+}
+.ba-mode a:hover { color: var(--ba-ink); }
+.ba-mode a.on {
+  background: var(--ba-paper); color: var(--ba-brand);
+  box-shadow: 0 1px 2px rgba(16, 35, 90, .12);
+}
+
+/* ---- 서브 메뉴 (2026-10-16) — 본문 맨 위. bluecart .bc-subtabs 와 같은 모양 ---- */
+.ba-subnav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.ba-subnav a {
+  padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--ba-line); background: var(--ba-paper);
+  color: var(--ba-ink-soft); font-size: 13.5px; font-weight: 600; text-decoration: none;
+}
+.ba-subnav a:hover { color: var(--ba-ink); }
+.ba-subnav a.on { background: var(--ba-ink); border-color: var(--ba-ink); color: #fff; }
+
+/* ---- 서브 메뉴 띠 (2026-10-16 시안, BS_SUBNAV_STYLE='band') -----------------
+   머리말 아래쪽에 붙은 전폭 탭. 본문 안의 탭(프로젝트 | R&D 과제 — 14px·600·밑줄 2px)
+   보다 한 단계 위라는 것이 보이도록 글자·굵기·밑줄을 한 치수씩 키운다. */
+.ba-subbar { border-top: 1px solid var(--ba-line); }
+.ba-subbar__in {
+  max-width: 1280px; margin: 0 auto; padding: 0 2px;
+  display: flex; align-items: stretch; gap: 6px;
+  /* 좁은 화면에서 넘치면 옆으로 민다. 세로는 넘칠 일이 없으니 막고, 막대는 숨긴다. */
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.ba-subbar__in::-webkit-scrollbar { display: none; }
+.ba-subbar__in a {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  /* 밑줄이 글자 폭을 따라가면 '설정' 처럼 짧은 메뉴가 빈약해 보인다 — 탭에 최소 폭을
+     주고 밑줄은 탭 폭에 맞춘다 (2026-10-16). */
+  min-width: 112px; box-sizing: border-box;
+  padding: 15px 18px; white-space: nowrap;
+  font-size: 16px; font-weight: 800; letter-spacing: -.01em;
+  color: var(--ba-ink-soft); text-decoration: none;
+}
+.ba-subbar__in a:hover { color: var(--ba-ink); }
+.ba-subbar__in a.on { color: var(--ba-ink); }
+/* 홈(대시보드) — 글자 대신 아이콘. 다른 탭과 갈라 보이게 폭을 줄인다 (2026-10-16). */
+.ba-subbar__in a.ba-tab--icon { min-width: 64px; padding-left: 14px; padding-right: 14px; }
+.ba-tab--icon svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.ba-subnav a.ba-tab--icon { display: inline-flex; align-items: center; }
+.ba-subnav a.ba-tab--icon svg { width: 18px; height: 18px; }
+.ba-subbar__in a.on::after {
+  content: ''; position: absolute; left: 6px; right: 6px; bottom: 0;
+  height: 4px; border-radius: 4px 4px 0 0; background: var(--ba-brand);
+}
+
 
 /* ---- 본문 컨테이너 -------------------------------------------------- */
 .ba { max-width: 1280px; margin: 0 auto; padding: 22px 20px 60px; }
@@ -196,6 +251,33 @@ body {
 }
 .ba-source-pane { display: grid; gap: 12px; justify-items: start; }
 .ba-source-pane[hidden] { display: none; }
+
+/* ---- 자료 올리기 탭 — 폴더 탭 + 붙은 상자 (2026-10-19) -------------------
+   탭이 아래 [올리기] 같은 실행 단추와 같은 모양이라 위계가 안 보였다. 탭은
+   폴더 탭으로, 고른 탭은 아래 상자와 이어지게(바닥선을 상자 색으로 덮는다),
+   파일 선택·주소·[올리기] 는 그 상자 안에 든다. 위 규칙을 덮어쓴다.
+   --pane-bg: 상자 배경. 흰 패널 안에서는 연회색, 회색 폼 안에서는 흰색. */
+.ba-source-tabs {
+  --pane-bg: var(--ba-surface);
+  gap: 2px; margin-bottom: -1px; position: relative; z-index: 1; flex-wrap: nowrap; overflow-x: auto;
+}
+.ba-source-tabs button {
+  border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0;
+  background: none; color: var(--ba-ink-soft); padding: 8px 16px 9px; white-space: nowrap;
+}
+.ba-source-tabs button:hover { color: var(--ba-ink); background: color-mix(in srgb, var(--pane-bg) 60%, transparent); }
+.ba-source-tabs button[aria-selected="true"] {
+  background: var(--pane-bg); border-color: var(--ba-line); color: var(--ba-brand); font-weight: 700;
+  box-shadow: inset 0 2px 0 var(--ba-brand);   /* 고른 탭 위에 브랜드 색 한 줄 */
+}
+.ba-source-pane {
+  background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 8px;
+  padding: 14px 16px 16px;
+}
+.ba-source-tabs ~ .ba-source-pane { border-top-left-radius: 0; }
+/* 회색 폼(R&D 진행 기록·산출물) 안에서는 상자를 흰색으로 */
+.ba-rv-att .ba-source-tabs { --pane-bg: var(--ba-paper); }
+.ba-rv-att .ba-source-pane { background: var(--ba-paper); }
 .ba-source-pane > label { width: 100%; }
 .ba-source-pane input[type="file"] { font-size: 13px; }
 
@@ -245,7 +327,22 @@ body {
 .ba-head__sub { color: var(--ba-ink-soft); font-size: 13px; }
 
 /* ---- 상태 탭 -------------------------------------------------------- */
-.ba-listbar { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.ba-listbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+/* ---- 목록 화면 짜임 (2026-10-16) — 프로젝트 목록 · R&D 보드 --------------
+   서브 탭 / 실행 줄 / 조회 조건 / 상태 칩 / 표 가 같은 간격으로 붙어 복잡해
+   보였다. 실행 줄은 아래 선으로 끊고, 조회 조건은 상자로 묶어 덩어리를 가른다.
+   .ba-filters 는 다른 화면도 쓰므로 덧붙이는 클래스로만 바꾼다. */
+.ba-actionbar {
+  align-items: center; justify-content: flex-start;
+  padding-bottom: 18px; margin-bottom: 20px;
+  border-bottom: 1px solid var(--ba-line);
+}
+.ba-filterbox {
+  background: var(--ba-paper);
+  border: 1px solid var(--ba-line); border-radius: 12px;
+  padding: 14px 16px 16px; margin-bottom: 20px;
+}
 .ba-statabs { display: flex; gap: 4px; flex-wrap: wrap; row-gap: 8px; }
 .ba-statabs button {
   appearance: none; border: 1px solid var(--ba-line); background: var(--ba-paper);
@@ -848,10 +945,37 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 
 .ba-al__ver { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
 .ba-al__ver select { width: auto; min-width: 150px; }
-.ba-al__badge { font-size: 12px; font-weight: 600; }
-.ba-al__badge--confirmed { color: var(--ba-brand); }
-.ba-al__badge--archived  { color: var(--ba-ink-soft); }
-.ba-al__badge--adjusted  { color: var(--ba-warn); }
+/* ── 제목 밑 표식 ───────────────────────────────────────────────────
+   사실 하나에 표식 하나. 가운뎃점으로 이은 긴 글은 하나도 안 읽힌다.
+   모양은 WBS 표의 '자동' 표식(.ba-tag-auto)과 같은 결로 맞췄다.
+
+   ┌──────────────────────────────────────────────────────────────────┐
+   │ 색만으로 뜻을 나르지 않는다                                       │
+   │                                                                  │
+   │ 「자동」 한 낱말만 주황으로 떠 있으면, 그 칸에 여러 값이 올 수     │
+   │ 있다는 것을 모르는 사람에게는 **색이 잘못 나온 것**처럼 보인다.    │
+   │ 그래서 ① 이름을 앞에 붙이고(`단위 자동`) ② 숫자를 다르게 읽어야   │
+   │ 하는 것에만 `※` 를 붙인다. 색을 못 가리는 사람도 읽어야 한다.     │
+   └──────────────────────────────────────────────────────────────────┘ */
+.ba-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 10px; }
+.ba-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; border-radius: 4px; padding: 2px 7px;
+  border: 1px solid var(--ba-line); background: var(--ba-paper);
+  color: var(--ba-ink); white-space: nowrap;
+}
+/* 이름은 값보다 약하게 — 읽는 차례가 '무엇' 다음 '얼마' 다 */
+.ba-tag em { font-style: normal; font-weight: 500; color: var(--ba-ink-soft); }
+.ba-tag b  { font-weight: 700; }
+/* 색은 **뜻이 있을 때만**. 다 칠하면 색이 색을 가린다. */
+.ba-tag--ok   { color: var(--ba-brand);  border-color: #bfe0cc; background: #f4fbf6; }
+.ba-tag--ok   em { color: var(--ba-brand); opacity: .75; }
+.ba-tag--warn { color: var(--ba-warn);   border-color: #f0dcb8; background: #fffaf0; }
+.ba-tag--warn em { color: var(--ba-warn); opacity: .8; }
+.ba-tag--bad  { color: var(--ba-danger); border-color: #e8c4be; background: #fdf4f3; }
+.ba-tag--bad  em { color: var(--ba-danger); opacity: .8; }
+.ba-tag--off  { opacity: .6; }
+
 
 /* ---- 가중치 패널 ------------------------------------------------------ */
 .ba-wpanel {
@@ -908,7 +1032,6 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 }
 /* 무작위로 뽑은 안은 한눈에 달라 보여야 한다. 적합도 숫자가 나란히
    보이므로, 방식이 안 보이면 그 숫자가 근거처럼 읽힌다. */
-.ba-al__badge--rand { color: #7a5a12; }
 /* 자동이 쪼갠 이유. 줄마다 하나씩 — 문단으로 뭉치면 어느 항목 얘기인지 흐려진다. */
 .ba-al-splits { margin: 10px 0; line-height: 1.75; }
 .ba-al-splits > div { margin-top: 3px; }
@@ -924,27 +1047,66 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
    ---------------------------------------------------------------------- */
 .ba-loads { display: grid; gap: 4px; margin: 14px 0 18px; }
 .ba-loadrow {
-  display: grid; grid-template-columns: 76px 86px 1fr 120px 72px;
+  /* ┌──────────────────────────────────────────────────────────────┐
+     │ 여백이 묶음을 말한다 (2026-10-08)                             │
+     │                                                              │
+     │   이름 │ 건수막대 건수 │ 공수막대 「75 / 100 M/D (75%)」      │
+     │        └ 10px ┘  └── 28px ──┘      └ 10px ┘                  │
+     │                                                              │
+     │ 묶음 **안**은 10px, 묶음 **사이**는 28px. 전에는 다 10px 라   │
+     │ 다섯 칸이 한 줄로 늘어선 것처럼 보였고, 값과 비율을 따로 두니 │
+     │ 그 사이가 막대와 값 사이보다 넓어 더 흩어졌다.                │
+     │                                                              │
+     │ 건수 칸이 넓은 이유 — 막대가 짧으면 1건과 11건이 눈으로 안    │
+     │ 갈린다. 공수 막대(1fr)는 남는 폭을 다 쓰므로 넉넉하다.        │
+     └──────────────────────────────────────────────────────────────┘ */
+  display: grid; grid-template-columns: 76px 150px 1fr 200px;
   align-items: center; gap: 10px; font-size: 12.5px;
+  /* 위아래 간격은 따로 — 칸 사이 10px 가 아래 줄(달 초과 경고)에도 걸려
+     경고가 자기 줄보다 다음 사람 줄에 붙어 보였다 (2026-10-14). */
+  row-gap: 2px;
 }
 .ba-loadrow__n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 두 묶음은 떨어져 있어야 묶음으로 읽힌다 (2026-10-08)              │
+   │                                                                  │
+   │ 줄에는 묶음이 둘이다 — **건수**(막대+건수)와 **공수**(막대+값+%). │
+   │ 칸 사이 간격이 10px 로 모두 같으니 다섯 칸이 한 줄로 늘어선 것    │
+   │ 처럼 보여, 어디까지가 건수 이야기인지 눈이 못 가렸다.             │
+   │                                                                  │
+   │ 공수 막대 앞에만 여백을 더 준다. 선을 긋는 쪽은 여덟 줄에 세로줄  │
+   │ 이 여덟 번 생겨 더 시끄럽다.                                      │
+   └──────────────────────────────────────────────────────────────────┘ */
 .ba-loadrow__bar {
   position: relative; display: block; height: 12px; border-radius: 6px;
+  margin-left: 18px;
   background: var(--ba-surface); border: 1px solid var(--ba-line); overflow: hidden;
 }
+/* 건수와 맞바꿨다(2026-10-08 요청) — 건수 막대가 녹색, 공수 막대가 회색 */
 .ba-loadrow__bar i {
-  display: block; height: 100%; background: var(--ba-brand); opacity: .7;
+  display: block; height: 100%; background: var(--ba-ink-soft); opacity: .55;
 }
 /* 가용 공수 눈금 */
 .ba-loadrow__bar u {
   position: absolute; top: -2px; bottom: -2px; width: 2px;
   background: var(--ba-ink-soft); opacity: .8; overflow: visible;
 }
-.ba-loadrow__v, .ba-loadrow__p, .ba-loadrow__c {
+.ba-loadrow__v, .ba-loadrow__c {
   font-variant-numeric: tabular-nums; color: var(--ba-ink-soft); font-size: 11.5px;
 }
-.ba-loadrow__v { text-align: right; }
-.ba-loadrow__p { text-align: right; }
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 왼쪽에 맞춘다                                                     │
+   │                                                                  │
+   │ 오른쪽에 맞추면 글이 짧은 줄일수록 막대에서 멀어진다 — 막대가    │
+   │ 늘 같은 자리에서 끝나기 때문이다. 왼쪽에 맞추면 막대와의 간격이  │
+   │ **모든 줄에서 10px** 로 같고, 숫자도 같은 자리에서 시작한다.      │
+   │ 오른쪽 끝이 들쭉날쭉하지만 그 뒤에는 아무것도 없다.               │
+   └──────────────────────────────────────────────────────────────────┘ */
+.ba-loadrow__v { text-align: left; }
+/* 비율은 값에 딸린 것이라 한 단계 약하게 */
+.ba-loadrow__v em { font-style: normal; opacity: .8; }
+/* 단위는 **자료가 아니다.** 숫자보다 작게 적어 눈이 숫자부터 읽게 한다. */
+.ba-unit { font-size: .85em; opacity: .75; }
 
 /* 건수 막대 — 공수 막대와 **색을 달리한다.** 같은 색이면 두 막대가 한 축처럼
    읽힌다. 건수와 공수는 다른 자다(한 건이 대분류 통째일 수 있다). */
@@ -953,13 +1115,53 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   flex: 1; height: 8px; border-radius: 4px; overflow: hidden;
   background: var(--ba-surface); border: 1px solid var(--ba-line);
 }
-.ba-loadrow__cb b { display: block; height: 100%; background: var(--ba-ink-soft); opacity: .45; }
+.ba-loadrow__cb b { display: block; height: 100%; background: var(--ba-brand); opacity: .75; }
 .ba-loadrow__c em { font-style: normal; white-space: nowrap; }
 /* 달 초과 경고는 **다음 줄 전체**를 쓴다. 칸으로 끼워 넣으면 격자가 밀려
    다른 줄과 눈금이 어긋난다 — 막대를 견주려고 만든 격자다. */
-.ba-loadrow .ba-mover { grid-column: 1 / -1; margin: 1px 0 3px 86px; }
+/* ── 목표 공수 끌기 (2026-10-14) ─────────────────────────────────────
+   막대 끝의 손잡이를 끌어 그 사람의 목표 공수를 정한다. 이 차수에 쓴
+   목표는 다이아몬드로 따로 — 잰 가용 공수(세로 눈금)와 섞지 않는다. */
+.ba-tgtbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px;
+  margin: 12px 0 2px; padding: 8px 12px; font-size: 12.5px;
+  background: var(--ba-surface); border: 1px dashed var(--ba-line); border-radius: 8px;
+}
+.ba-tgtbar b { font-variant-numeric: tabular-nums; }
+.ba-tgtbar em { font-style: normal; font-weight: 600; }
+.ba-tgtbar .is-short { color: var(--ba-danger); }
+.ba-tgtbar .is-spare { color: var(--ba-warn); }
+.ba-tgtbar .is-ok    { color: var(--ba-brand); }
+.ba-loads.is-drag .ba-loadrow__bar { cursor: ew-resize; touch-action: none; overflow: visible; }
+.ba-loads.is-drag .ba-loadrow__bar > i { border-radius: 6px 0 0 6px; }
+.ba-loadrow__bar { position: relative; }
+.ba-tgt {
+  position: absolute; top: 50%; width: 12px; height: 18px; margin: -9px 0 0 -6px;
+  border-radius: 4px; background: var(--ba-paper); border: 2px solid var(--ba-ink-soft);
+  box-shadow: 0 1px 3px rgba(22, 36, 58, .25); cursor: ew-resize; z-index: 2;
+  opacity: .55; transition: opacity .12s;
+}
+.ba-loadrow:hover .ba-tgt, .ba-tgt:focus-visible, .ba-tgt.is-set { opacity: 1; }
+.ba-tgt.is-set { border-color: #2f6fd6; background: #e8f0fd; }
+.ba-tgt:focus-visible { outline: 2px solid #2f6fd6; outline-offset: 2px; }
+.ba-tgt-v { margin-left: 6px; font-size: 11.5px; font-weight: 700; color: #2f6fd6; white-space: nowrap; }
+/* 목표 0 = 주지 않음 — 파랑이 아니라 경고색으로 */
+.ba-tgt.is-zero { border-color: var(--ba-danger); background: #fdf3f2; }
+.ba-tgt-v.is-zero { color: var(--ba-danger); }
+.ba-tgtbar__warn {
+  flex: 1 1 100%; margin-top: 2px; font-size: 12px; color: var(--ba-warn);
+}
+.ba-tgt-was {
+  position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
+  background: #2f6fd6; transform: rotate(45deg); opacity: .8; z-index: 1;
+  text-decoration: none;
+}
+
+/* 자기 줄 바로 밑에 붙이고, 다음 사람과는 띄운다 */
+.ba-loadrow .ba-mover { grid-column: 1 / -1; margin: 0 0 8px 86px; }
 .ba-loadrow.is-over .ba-loadrow__bar i { background: var(--ba-danger); opacity: .75; }
-.ba-loadrow.is-over .ba-loadrow__p b { color: var(--ba-danger); }
+.ba-loadrow.is-over .ba-loadrow__v b { color: var(--ba-danger); }
+.ba-loadrow.is-over .ba-loadrow__v em { opacity: 1; }
 /* 0건인 후보. 숨기지 않고 **눈에 띄게** 둔다 — 고르고도 못 받은 자리다. */
 .ba-loadrow.is-zero .ba-loadrow__n { color: var(--ba-warn); }
 .ba-loadrow.is-zero .ba-loadrow__c em { color: var(--ba-warn); font-weight: 600; }
@@ -980,6 +1182,10 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-al__fit { text-align: right; }
 .ba-al__fitb { font-variant-numeric: tabular-nums; font-size: 14px; }
 .ba-al__act { text-align: right; }
+/* 보조 고르는 줄 — 담당 줄 바로 밑에 열린다 (2026-10-12) */
+.ba-al__pick td { background: var(--ba-surface); }
+.ba-al__pickbox { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 4px 0; }
+.ba-al__act .ba-mini { white-space: nowrap; }
 .ba-altable tr.is-manual > td { background: #fffdf6; }
 .ba-altable tr.is-orphan > td { background: #fdf5f5; }
 .ba-al__break td {
@@ -1017,9 +1223,15 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-ev__m { display: block; font-size: 11px; color: var(--ba-ink-soft); margin-top: 2px; }
 
 @media (max-width: 1100px) {
-  .ba-loadrow { grid-template-columns: 64px 64px 1fr 100px 56px; }
-  .ba-loadrow__cb { display: none; }
-  .ba-altable th:nth-child(4), .ba-altable td:nth-child(4) { display: none; }
+  .ba-loadrow { grid-template-columns: 64px 108px 1fr 168px; }
+  /* ┌──────────────────────────────────────────────────────────────┐
+     │ 자리가 아니라 **그 칸**을 숨긴다 (2026-10-08)                 │
+     │                                                              │
+     │ nth-child(4) 로 숨기면 "넷째 칸" 이면 무엇이든 사라진다.      │
+     │ 분류 줄은 넷째가 병합 셀이라 **설명과 밑줄이 통째로** 사라져  │
+     │ 표 가운데가 뚫려 보였다. 칸에 이름을 주고 그 이름만 숨긴다.   │
+     └──────────────────────────────────────────────────────────────┘ */
+  .ba-altable th:nth-child(4), .ba-altable td.ba-al__df { display: none; }
 }
 
 /* =====================================================================
@@ -1042,6 +1254,13 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 
 /* ---- 내가 맡은 일 ------------------------------------------------------ */
 .ba-mylist { display: grid; gap: 4px; }
+/* 프로젝트별 묶음. 제목이 곧 상세 화면 링크다. */
+.ba-mygroup + .ba-mygroup { margin-top: 14px; }
+.ba-mygroup__h { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px 2px; }
+.ba-mygroup__h a { font-weight: 700; font-size: 13.5px; color: var(--ba-ink); text-decoration: none; }
+.ba-mygroup__h a:hover { color: var(--ba-brand); text-decoration: underline; }
+.ba-mygroup__h .ba-dim { font-size: 11.5px; }
+.ba-mygroup__h b.is-late { color: var(--ba-danger); }
 .ba-my {
   display: grid; grid-template-columns: 120px 1fr 78px 90px 44px 110px;
   align-items: center; gap: 10px; width: 100%; text-align: left;
@@ -1049,6 +1268,12 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
   background: var(--ba-paper); font: inherit; font-size: 12.5px; cursor: pointer;
 }
 .ba-my:hover { background: var(--ba-surface); }
+/* 링크로 쓸 때 (2026-10-16 — 내 R&D 과제). 버튼과 달리 <a> 는 여백을 너비 밖에 더해
+   패널 밖으로 넘쳤고, 링크 밑줄·색이 그대로 묻었다. */
+a.ba-my { box-sizing: border-box; color: inherit; text-decoration: none; }
+/* 내 R&D 과제 — 칸이 다섯이다(코드 · 과제명 · 역할·점유 · 산출물 · 최근 기록).
+   '내가 맡은 일' 의 여섯 칸 배치를 그대로 쓰면 마지막 칸이 44px 에 끼어 넘쳤다. */
+.ba-my--rnd { grid-template-columns: 120px 1fr 96px 70px 170px; }
 .ba-my.is-late { border-color: #e8c4be; background: #fdf7f6; }
 .ba-my__p { color: var(--ba-ink-soft); font-size: 11.5px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1309,24 +1534,26 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 
 /* 프로젝트 / R&D 를 오가는 탭. 상태 탭(.ba-statabs)과 역할이 다르므로
    생김새도 다르게 둔다 — 둘이 비슷하면 어느 쪽이 지금 위치인지 헷갈린다. */
+/* 숨김 (2026-10-16) — 프로젝트 | R&D 과제 는 위 탭 띠로 올라갔다. 되살리려면 이 줄만 지운다. */
+.ba-typetabs[role="tablist"] { display: none; }
 .ba-typetabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 2px solid var(--ba-line);
-  margin-bottom: 16px;
+  /* 둥근 칩 (2026-10-16). 위 탭 띠(대시보드 · 프로젝트)보다 한 단계 아래로 읽히게.
+     선택은 짙은 남색 — 아래 상태 필터 칩(초록)과 섞이지 않게 색을 가른다. */
+  display: flex; flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
 }
 .ba-typetabs a {
-  padding: 9px 18px;
-  font-weight: 600;
+  padding: 6px 16px;
+  border: 1px solid var(--ba-line); border-radius: 999px;
+  background: var(--ba-paper);
+  font-size: 13.5px; font-weight: 600;
   color: var(--ba-ink-soft);
   text-decoration: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
 }
-.ba-typetabs a:hover { color: var(--ba-ink); }
+.ba-typetabs a:hover { color: var(--ba-ink); border-color: #cdd5e1; }
 .ba-typetabs a.on {
-  color: var(--ba-brand);
-  border-bottom-color: var(--ba-brand);
+  background: var(--ba-ink); border-color: var(--ba-ink); color: #fff;
 }
 
 /* 머리 통계 */
@@ -1422,8 +1649,9 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-badge--done     { background: #eef1f6; color: var(--ba-ink-soft); }
 .ba-badge--dropped  { background: #fbeceb; color: var(--ba-danger); }
 
-/* 발의 폼 */
-.ba-form {
+/* 발의 폼 — R&D 발의 폼에만. 전에는 .ba-form 전체에 걸려 프로젝트 등록·이의 제기
+   폼의 입력란이 글자 폭만큼 좁아졌다 (2026-10-15). 그쪽은 위의 grid 를 쓴다. */
+#ba-rnd-form.ba-form {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 14px;
@@ -1435,7 +1663,13 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 }
 .ba-field--wide { flex: 1 1 100%; }
 .ba-field--wide textarea,
-.ba-field--wide input { width: 100%; }
+.ba-field--wide input { width: 100%; box-sizing: border-box; }   /* 여백을 너비 안에 — 틀 밖으로 넘쳤다 (2026-10-19) */
+/* 글상자도 다른 입력칸과 같은 모양 (2026-10-19 — 브라우저 기본 글꼴·테두리로 보였다) */
+.ba-field textarea {
+  box-sizing: border-box; max-width: 100%; resize: vertical;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 7px 10px;
+  font-size: 13.5px; font-family: inherit; line-height: 1.6; color: var(--ba-ink); background: var(--ba-paper);
+}
 .ba-form__foot {
   flex: 1 1 100%;
   display: flex;
@@ -1468,6 +1702,111 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-rv-pane[hidden] { display: none; }
 .ba-rv-h { margin: 16px 0 6px; font-size: 14px; color: var(--ba-ink); }
 .ba-rv-text { margin: 0; font-size: 13px; line-height: 1.7; color: var(--ba-ink-soft); white-space: pre-wrap; }
+
+/* ── 수정 권한 토글 (026, 2026-10-14) ──────────────────────────────
+   켜짐/꺼짐이 한눈에 — 작은 스위치 모양. R&D 참여자 표와 프로젝트
+   공동 편집자 목록이 함께 쓴다. */
+.ba-edit-t {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 4px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--ba-line); background: var(--ba-paper);
+  font: inherit; font-size: 12px; font-weight: 600; color: var(--ba-ink-soft);
+}
+.ba-edit-t i {
+  position: relative; width: 26px; height: 15px; border-radius: 999px;
+  background: #cfd6e2; transition: background .15s;
+}
+.ba-edit-t i::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px;
+  border-radius: 50%; background: #fff; transition: left .15s;
+}
+.ba-edit-t.is-on { color: var(--ba-brand); border-color: #cfe5d8; background: #f0f7f2; }
+.ba-edit-t.is-on i { background: var(--ba-brand); }
+.ba-edit-t.is-on i::after { left: 13px; }
+.ba-edit-t:focus-visible { outline: 2px solid var(--ba-brand); outline-offset: 2px; }
+
+/* ── 프로젝트 공동 편집자 (026, 2026-10-14) ──────────────────────────── */
+.ba-editors__list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.ba-editor {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 4px 6px 4px 4px; border-radius: 999px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line);
+  font-size: 13px; font-weight: 600; color: var(--ba-ink);
+}
+.ba-editor__av {
+  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: #e9f3ed; color: var(--ba-brand); font-size: 12px; font-weight: 700;
+}
+.ba-editor__x {
+  border: 0; background: none; cursor: pointer; padding: 0 4px;
+  font-size: 15px; line-height: 1; color: var(--ba-ink-soft);
+}
+.ba-editor__x:hover { color: var(--ba-danger); }
+.ba-editors__add { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.ba-editors__add .ba-input { width: auto; min-width: 200px; }
+
+/* ── R&D 과제 개요 (2026-10-12) ─────────────────────────────────────
+   위: 사실 카드 다섯(아이콘 + 이름 + 값). 아래: 제목 띠가 있는 글 카드 둘.
+   색은 R&D 보라를 바탕으로 — 대시보드 도넛·사내 현황 카드와 같은 색이다. */
+.ba-rvfs {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px;
+}
+@media (max-width: 1100px) { .ba-rvfs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { .ba-rvfs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ba-rvf {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 12px 14px; background: var(--ba-paper);
+  border: 1px solid var(--ba-line); border-radius: var(--ba-r);
+}
+.ba-rvf__ic {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 34px; height: 34px; border-radius: 10px; background: #efeafc; color: #7a5bd6;
+}
+.ba-rvf__ic svg, .ba-rvc__h svg {
+  width: 18px; height: 18px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.ba-rvf__b { display: flex; flex-direction: column; min-width: 0; }
+.ba-rvf__k { font-size: 11.5px; color: var(--ba-ink-soft); }
+/* 자르지 않고 줄을 넘긴다 — 공개 범위·기간은 잘리면 뜻이 없어진다 */
+.ba-rvf__v {
+  font-size: 14px; font-weight: 700; color: var(--ba-ink);
+  line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere;
+}
+.ba-rvf__s { font-size: 11px; color: var(--ba-ink-soft); }
+
+.ba-rvcards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .ba-rvcards { grid-template-columns: 1fr; } }
+.ba-rvc {
+  --c: #7a5bd6; --c-soft: #f5f2fd;
+  background: var(--ba-paper); border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r); overflow: hidden;
+}
+.ba-rvc--scope { --c: var(--ba-brand); --c-soft: #f0f7f2; }
+/* 참고 자료 (2026-10-19) — 개요 카드 아래 한 줄 전체 */
+.ba-rvc--src { --c: #c98a12; --c-soft: #fbf1dc; margin-top: 14px; }
+.ba-rvc--src .ba-srclist { padding: 10px 14px 12px; }
+/* 발의·수정 화면의 참고 자료 패널 — 위 폼 상자와 붙지 않게 */
+.ba-rnd-src { margin-top: 16px; }
+.ba-rvc__h {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 16px; background: var(--c-soft); color: var(--c);
+  border-bottom: 1px solid var(--ba-line);
+}
+.ba-rvc__h h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--ba-ink); }
+.ba-rvc__b { padding: 14px 18px 16px; font-size: 13.5px; line-height: 1.75; color: #33425a; }
+
+/* 사람이 적은 글 — [소제목] / - 점 목록 / 1. 번호 목록만 알아본다 */
+.ba-rt__h {
+  margin: 14px 0 4px; font-size: 12.5px; font-weight: 700; color: var(--c, var(--ba-brand));
+  letter-spacing: .01em;
+}
+.ba-rt__h:first-child { margin-top: 0; }
+.ba-rt__p { margin: 0 0 6px; }
+.ba-rt__ul, .ba-rt__ol { margin: 2px 0 8px; padding-left: 20px; }
+.ba-rt__ul li, .ba-rt__ol li { margin: 3px 0; padding-left: 2px; }
+.ba-rt__ul li::marker { color: var(--c, var(--ba-brand)); }
+.ba-rt__ol li::marker { color: var(--c, var(--ba-brand)); font-weight: 700; }
 
 .ba-kvs { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
 .ba-kv { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
@@ -1565,6 +1904,69 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-viewtabs button[aria-selected="true"] {
   background: var(--ba-brand); border-color: var(--ba-brand); color: #fff;
 }
+/* display:flex 가 hidden 속성을 이긴다. 숨긴 동안 확실히 감춘다 (2026-10-12). */
+.ba-viewtabs[hidden] { display: none; }
+
+/* ── 사내 전체 현황 (2026-10-12) ─────────────────────────────────────
+   아래의 '내 …' 패널과 **다른 범위**라는 것이 먼저 보여야 한다. 그래서
+   제목과 '전사' 뱃지를 두고, 카드에도 "사내 전체" 를 한 번 더 적는다.
+   카드는 색 띠·아이콘으로 셋을 구분하고, 누르면 그 목록으로 간다. */
+.ba-org {
+  background: var(--ba-paper); border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r); padding: 16px 18px 18px; margin-bottom: 14px;
+}
+.ba-org__head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 12px; }
+.ba-org__head h2 { margin: 0; font-size: 15px; font-weight: 700; color: var(--ba-ink); }
+.ba-org__badge {
+  font-size: 11px; font-weight: 700; letter-spacing: .02em;
+  padding: 2px 8px; border-radius: 999px;
+  background: #e9f3ed; color: var(--ba-brand); border: 1px solid #cfe5d8;
+}
+.ba-org__hint { font-size: 12px; color: var(--ba-ink-soft); }
+
+.ba-org__cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .ba-org__cards { grid-template-columns: 1fr; } }
+
+.ba-orgc {
+  --c: var(--ba-brand); --c-soft: #e9f3ed;
+  position: relative; display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px 14px 18px; overflow: hidden;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: var(--ba-r);
+  color: inherit; text-decoration: none;
+  transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+/* 왼쪽 색 띠 — 셋을 색으로 먼저 가른다 */
+.ba-orgc::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c);
+}
+.ba-orgc:hover {
+  border-color: var(--c); box-shadow: 0 4px 14px rgba(22, 36, 58, .08); transform: translateY(-1px);
+}
+.ba-orgc:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+.ba-orgc--rnd { --c: #7a5bd6; --c-soft: #efeafc; }   /* 도넛의 R&D 색과 같다 */
+.ba-orgc--out { --c: #c98a12; --c-soft: #fbf1dc; }
+.ba-orgc--done { --c: var(--ba-brand); --c-soft: #e9f3ed; }
+/* 누를 곳이 없는 카드(R&D 보드) — 떠오르지 않게 (2026-10-16) */
+.ba-orgc--static:hover { border-color: var(--ba-line); box-shadow: none; transform: none; }
+
+.ba-orgc__ic {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 42px; height: 42px; border-radius: 12px; background: var(--c-soft); color: var(--c);
+}
+.ba-orgc__ic svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.ba-orgc__body { display: flex; flex-direction: column; min-width: 0; }
+.ba-orgc__t { font-size: 12.5px; font-weight: 600; color: var(--ba-ink-soft); }
+.ba-orgc .n {
+  font-size: 26px; font-weight: 700; line-height: 1.15; color: var(--ba-ink);
+  font-variant-numeric: tabular-nums; margin: 2px 0;
+}
+.ba-orgc__s {
+  font-size: 11.5px; color: var(--ba-ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* 점유 구성 도넛 — 외부 라이브러리 없이 conic-gradient 로 그린다. */
 .ba-donut { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
@@ -1620,6 +2022,20 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-ig__uri code { flex: 1; overflow-x: auto; white-space: nowrap; font-size: 12.5px;
   background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 8px; padding: 7px 10px; }
 .ba-ig__form { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+
+/* R&D 점유 상한 (2026-10-14) */
+.ba-caps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-top: 12px; }
+@media (max-width: 900px) { .ba-caps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ba-caps .ba-field { display: flex; flex-direction: column; gap: 4px; }
+.ba-caps .ba-field > span:first-child { font-size: 12.5px; font-weight: 600; color: var(--ba-ink); }
+.ba-caps__in { display: flex; align-items: center; gap: 6px; }
+.ba-caps__in input {
+  width: 90px; padding: 7px 10px; font: inherit; font-size: 15px; font-weight: 700;
+  border: 1px solid var(--ba-line); border-radius: 8px; text-align: right;
+}
+.ba-caps__in em { font-style: normal; color: var(--ba-ink-soft); font-weight: 600; }
+.ba-caps small { font-size: 11.5px; color: var(--ba-ink-soft); }
+.ba-settings__h { margin: 22px 0 6px; font-size: 15px; color: var(--ba-ink); }
 .ba-ig__btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .ba-ig__out { margin: 12px 0 0; padding: 12px 14px; max-height: 260px; overflow: auto;
   font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-all;
@@ -1730,3 +2146,378 @@ textarea.ba-input { resize: vertical; line-height: 1.6; }
 .ba-mb__r.is-over .ba-mb__b i { background: var(--ba-danger); opacity: .8; }
 .ba-mb__r.is-over .ba-mb__v,
 .ba-mb__r.is-over .ba-mb__m { color: var(--ba-danger); font-weight: 600; }
+
+/* ── AIDD 고려 ──────────────────────────────────────────────────────
+   보정분은 가용도에 **녹이지 않는다.** 확정과 추정을 안 합치는 것과 같은
+   이유다 — 예측을 측정값으로 읽으면 그 일정으로 사람이 움직인다. */
+.ba-aidd {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin: 10px 0 0; font-size: 13px;
+}
+.ba-aidd__on { display: flex; align-items: center; gap: 6px; }
+.ba-aidd__f  { display: flex; align-items: center; gap: 6px; color: var(--ba-ink-soft); }
+.ba-aidd__f input { width: 72px; }
+.ba-aidd__note { margin-top: 6px; }
+
+/* 돌려받은 몫. 점유의 끝자락을 덮어 "점유에서 나왔다" 를 눈으로 말한다 */
+.ba-av__a {
+  display: block; height: 100%; opacity: .85;
+  background: repeating-linear-gradient(-45deg,
+    var(--ba-brand) 0 2px, #ffffff 2px 5px);
+}
+.ba-aidd-tag {
+  display: inline-block; font-size: 11px; font-weight: 600;
+  color: var(--ba-brand-dk); white-space: nowrap;
+}
+
+/* 개요의 AIDD 줄. 기간과 같은 격자를 쓰되 값이 날짜가 아니라 계수다 */
+.ba-period--aidd { font-size: 13px; }
+.ba-period--aidd .ba-dim { font-size: 12.5px; }
+.ba-aidd-on { color: var(--ba-brand-dk); }
+
+/* ── 배정 표의 분류 줄 ──────────────────────────────────────────────
+   배정 대상이 아니라 **자리만** 잡아 준다. 담당자 선택 상자를 두면
+   배정할 수 있는 줄처럼 보이고, 눌러도 아무 일이 안 일어난다. */
+.ba-al__grp > td { background: var(--ba-surface); }
+.ba-al__grp .ba-al__t { font-weight: 700; }
+.ba-al__grp .ba-al__no,
+.ba-al__grp .ba-al__md { color: var(--ba-ink-soft); }
+/* 공수는 하위의 합이다. 흐리게 적어 **또 더할 숫자가 아님**을 말한다 */
+.ba-al__grp .ba-al__md { opacity: .7; }
+.ba-al__grp .ba-cell-none { font-size: 11.5px; }
+
+/* ── 보기 줄 ────────────────────────────────────────────────────────
+   표 바로 위. 위의 단추들은 **자료를 바꾸고**, 이 줄은 보기만 바꾼다.
+   같은 줄에 섞어 두면 눌러도 되는지 망설인다. */
+.ba-viewbar {
+  display: flex; align-items: center; gap: 6px;
+  /* 위 상자(작업 단추 줄·읽기 전용 안내)와 붙으면 이 단추가 그쪽 소속으로
+     읽혔다. 위로 띄우고 아래 표에 붙인다 — 단추는 **표의 것**이다 (2026-10-12). */
+  margin: 16px 0 6px; padding: 0 2px;
+}
+
+/* 읽기 전용 안내 (2026-10-12). 공통 .ba-note 는 아주 옅은 점선이라, 상자가
+   반 픽셀 자리에 걸리면 위 선이 흐려져 안 보였다. 실선·짙은 색으로 또렷하게. */
+.ba-note--readonly {
+  border: 1px solid #d5dce8; background: var(--ba-surface);
+  padding: 12px 16px;
+}
+/* 보기 단추 (2026-10-14). 테두리 없는 글자만으로는 단추로 안 보였다 —
+   테두리·옅은 바탕을 두되, 자료를 바꾸는 단추보다는 가볍게. */
+.ba-btn--view {
+  display: inline-flex; align-items: center; gap: 5px;
+  border-color: var(--ba-line); background: var(--ba-surface); color: var(--ba-ink);
+  font-weight: 600;
+}
+.ba-btn--view:hover { border-color: var(--ba-brand); color: var(--ba-brand); background: var(--ba-paper); }
+.ba-btn--view:disabled { opacity: .45; cursor: default; }
+.ba-btn--view:disabled:hover { border-color: var(--ba-line); color: var(--ba-ink); background: var(--ba-surface); }
+.ba-btn--view .ba-caret { margin-right: 0; }
+
+/* 눈 아이콘 — 라이브러리 없이 테두리로. 숨긴 상태에는 빗금을 긋는다 */
+.ba-eye {
+  position: relative; display: inline-block; width: 13px; height: 8px;
+  border: 1.6px solid currentColor; border-radius: 70% 15%; transform: rotate(45deg) scale(.9);
+}
+.ba-eye::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
+  margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: currentColor;
+}
+.ba-btn--view.is-hidden .ba-eye::before {
+  content: ''; position: absolute; left: 50%; top: -5px; width: 1.6px; height: 18px;
+  margin-left: -.8px; background: currentColor; transform: rotate(45deg);
+}
+
+/* 자료를 안 바꾸는 단추라 테두리를 뺀다 — 무게를 낮춘다 */
+.ba-btn--ghost {
+  border-color: transparent; background: transparent; color: var(--ba-ink-soft);
+}
+.ba-btn--ghost:hover { border-color: var(--ba-line); background: var(--ba-paper); }
+
+/* 세모. 글꼴 라이브러리 없이 테두리로 그린다(의존 라이브러리 없음 규칙) */
+.ba-caret {
+  display: inline-block; width: 0; height: 0; margin-right: 5px;
+  vertical-align: middle; border: 4px solid transparent;
+}
+/* 세모가 가리키는 쪽이 **누르면 가는 쪽**이다 —
+   ▲ 접기(줄이 위로 말려 올라간다) / ▼ 펼치기(아래로 펼쳐진다) */
+.ba-caret--up   { border-bottom: 5px solid currentColor; margin-top: -2px; }
+.ba-caret--down { border-top: 5px solid currentColor; margin-bottom: -2px; }
+
+/* ── 설명 드로어 ────────────────────────────────────────────────────
+   설명을 화면에 다 적어 덮는 대신 **부를 때 열리는** 자리를 둔다.
+   평소에는 물음표 하나만 보인다. */
+/* 제목에서 한 칸 띄우고 **색을 달리한다.** 제목에 붙여 같은 색으로 두면
+   글자의 일부로 읽혀 아무도 누르지 않는다. */
+/* ┌──────────────────────────────────────────────────────────────────┐
+   │ 칸의 **오른쪽 끝**에 못 박는다 (2026-10-08)                        │
+   │                                                                  │
+   │ 뱃지 뒤에 뒀더니 뱃지 길이("2차 · 산출됨 · 처리량 판정 264회차 ·  │
+   │ 엔진 v1")에 따라 떠다녔고, 제목 옆으로 당겼더니 제목과 뱃지를     │
+   │ 갈라 놓아 어색했다.                                               │
+   │                                                                  │
+   │ 늘 같은 자리에 있어야 찾는다. 오른쪽 끝은 **무엇이 길어져도**     │
+   │ 안 움직인다.                                                      │
+   └──────────────────────────────────────────────────────────────────┘ */
+/* 같은 꼴이 이미 .ba-prof__head h2 에 있다. 뱃지 모양은 건드리지 않는다. */
+.ba-h2 { display: flex; align-items: center; gap: 0; }
+/* 단추에만 건다. 같은 이름을 입력칸 밑 도움말 글(em.ba-help, 129행)도 써서
+   글이 21px 동그라미에 갇혀 세로로 찢어졌다 (2026-10-12). */
+button.ba-help {
+  flex: 0 0 auto;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%;
+  background: var(--ba-brand); color: #fff;
+  font-size: 13px; font-weight: 700; line-height: 21px; cursor: pointer;
+  vertical-align: middle; transition: transform .12s ease-out, background .12s;
+}
+button.ba-help:hover { background: var(--ba-brand-dk); transform: scale(1.12); }
+button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offset: 2px; }
+
+/* 식과 표가 많아 620px 로는 줄바꿈이 심하다 */
+.ba-drawer__box--wide { width: 860px; }
+
+.ba-guide { font-size: 13.5px; line-height: 1.72; }
+.ba-guide__lead {
+  margin: 0 0 16px; padding: 12px 14px; border-radius: var(--ba-r);
+  background: var(--ba-surface); font-size: 14px;
+}
+.ba-guide h3 {
+  margin: 22px 0 8px; font-size: 14px; font-weight: 700;
+  padding-bottom: 5px; border-bottom: 2px solid var(--ba-line);
+}
+.ba-guide h3:first-of-type { margin-top: 4px; }
+.ba-guide p { margin: 8px 0; }
+.ba-guide code { font-size: 12.5px; background: var(--ba-surface); padding: 1px 4px; border-radius: 4px; }
+/* 식은 줄을 맞춰야 읽힌다. 가로로 넘치면 줄바꿈 대신 스크롤 */
+.ba-guide__box {
+  margin: 8px 0; padding: 11px 13px; border-radius: var(--ba-r);
+  background: #16243a; color: #dce6f2; font-size: 12px; line-height: 1.75;
+  overflow-x: auto; white-space: pre; font-family: Consolas, 'D2Coding', monospace;
+}
+.ba-guide__box b { color: #9fd8b4; font-weight: 700; }
+.ba-guide__t { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12.5px; }
+.ba-guide__t th, .ba-guide__t td {
+  padding: 7px 9px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--ba-line);
+}
+.ba-guide__t th { font-size: 11.5px; color: var(--ba-ink-soft); background: var(--ba-surface); }
+.ba-guide__t td:first-child { white-space: nowrap; }
+.ba-guide__y { color: var(--ba-brand-dk); font-weight: 700; }
+.ba-guide__ul { margin: 8px 0; padding-left: 18px; }
+.ba-guide__ul li { margin: 5px 0; }
+.ba-guide__note {
+  margin: 8px 0 0; padding-left: 14px; position: relative;
+  font-size: 12.5px; color: var(--ba-ink-soft);
+}
+.ba-guide__note::before { content: '※'; position: absolute; left: 0; }
+
+@media (max-width: 900px) {
+  .ba-drawer__box--wide { width: 100vw; }
+}
+
+/* ── 참여 비중 ──────────────────────────────────────────────────────
+   왼쪽 칸들은 전부 **잰 값**이고 이 칸만 사람의 판단이다.
+   1.0 이 아닐 때만 눈에 띄게 한다 — 다 칠하면 색이 색을 가린다. */
+.ba-ct__share { width: 100%; font-size: 12px; padding: 3px 6px; }
+.ba-ct__share.is-low {
+  color: var(--ba-warn); border-color: #f0dcb8; background: #fffaf0; font-weight: 600;
+}
+.ba-ct__share + .ba-cell-none {
+  display: block; margin-top: 3px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ── 사용자로 보기 띠 (2026-10-12) ──────────────────────────────────
+   보는 동안 늘 위에 있어야 한다. 내 화면으로 착각하지 않게 눈에 띄는 색. */
+.ba-viewas {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  padding: 8px 16px; background: #fff4d6; border-bottom: 1px solid #f0d58a;
+  color: #7a5800; font-size: 13px;
+}
+.ba-viewas .ba-btn { margin-left: auto; }
+
+/* ── ★ 우선 후보 · 가감점 (024) ──────────────────────────────────────
+   참여 비중과 같은 규칙 — 사람이 손댄 칸만 눈에 띄게. 계산값은 작은
+   글씨로 곁에 남겨 둔다. 더한 값만 보이면 그것이 계산값처럼 읽힌다. */
+.ba-star {
+  border: 0; background: none; padding: 0 4px 0 0; cursor: pointer;
+  font-size: 15px; line-height: 1; color: var(--ba-line); vertical-align: -1px;
+}
+.ba-star:hover { color: var(--ba-warn); }
+.ba-star.is-on { color: #e0a100; }
+.ba-ct__adj { font-size: 11px; color: var(--ba-warn); white-space: nowrap; }
+.ba-ct__adjsel {
+  display: block; margin-top: 3px; width: 64px; font-size: 11.5px; padding: 1px 4px;
+  color: var(--ba-ink-soft);
+}
+.ba-ct__adjsel.is-on {
+  color: var(--ba-warn); border-color: #f0dcb8; background: #fffaf0; font-weight: 600;
+}
+
+/* 참여 비중을 낮춘 사람. 0건이어도 보장이 안 걸리므로 왜인지 보여야 한다 */
+.ba-share-tag {
+  font-size: 10.5px; font-weight: 700; color: var(--ba-warn); white-space: nowrap;
+}
+
+/* =====================================================================
+   공유 메뉴 (2026-10-15) — assign.js initShare
+   ===================================================================== */
+.ba-share-menu {
+  position: absolute; z-index: 1200;
+  min-width: 180px; padding: 6px;
+  background: var(--ba-paper); border: 1px solid var(--ba-line);
+  border-radius: var(--ba-r); box-shadow: 0 8px 24px rgba(22, 36, 58, .14);
+}
+.ba-share-menu button {
+  display: block; width: 100%; text-align: left;
+  padding: 8px 10px; border: 0; border-radius: 6px;
+  background: none; color: var(--ba-ink); font: inherit; font-size: 13px; cursor: pointer;
+}
+.ba-share-menu button:hover,
+.ba-share-menu button:focus-visible { background: var(--ba-surface); outline: none; }
+.ba-share-menu__note {
+  margin: 4px 4px 2px; padding-top: 6px; border-top: 1px solid var(--ba-line);
+  font-size: 12px; color: var(--ba-ink-soft); max-width: 220px;
+}
+
+/* =====================================================================
+   출처 문서 보기·내려받기 (2026-10-15) — assign.js initSourceViewer
+   ===================================================================== */
+.ba-src__acts { flex: 0 0 auto; display: flex; gap: 4px; }
+/* 가로 스크롤을 만들지 않는다 (2026-10-15). 테두리 1px 이 width:100% 위에 얹혀
+   2px 넘치던 것이 원인이었다 — 테두리를 너비 안에 넣고, 남는 넘침은 자른다. */
+.ba-sv { display: flex; flex-direction: column; min-height: 0; overflow-x: hidden; }
+.ba-sv--pdf { overflow: hidden; }   /* PDF 는 자기 뷰어가 스크롤한다 (initSourceViewer 가 붙인다) */
+.ba-sv__pdf {
+  display: block; box-sizing: border-box; flex: 1 1 auto;
+  width: 100%; height: 100%; min-height: 360px;
+  border: 1px solid var(--ba-line); border-radius: 6px;
+}
+.ba-sv__img { flex: 1; display: flex; align-items: flex-start; justify-content: center; min-width: 0; }
+.ba-sv__img img { display: block; box-sizing: border-box; max-width: 100%; height: auto; border: 1px solid var(--ba-line); border-radius: 6px; }
+.ba-sv__text {
+  box-sizing: border-box; max-width: 100%; overflow-wrap: anywhere;
+  margin: 0; padding: 14px; white-space: pre-wrap; word-break: break-word;
+  font: 13px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); border-radius: 6px;
+}
+@media (max-width: 640px) {
+  .ba-src { flex-wrap: wrap; }
+  .ba-src__acts { width: 100%; justify-content: flex-end; }
+}
+
+/* =====================================================================
+   R&D 카드 [⋯] 더보기 (2026-10-16) — 중단·삭제·영구삭제
+   되돌리기 어려운 일이라 늘 보이는 자리에 두지 않고 한 번 더 열게 한다.
+   ===================================================================== */
+.ba-more { position: relative; display: inline-block; }
+.ba-more > summary { list-style: none; cursor: pointer; min-width: 32px; text-align: center; }
+.ba-more > summary::-webkit-details-marker { display: none; }
+.ba-more__menu {
+  position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 20;
+  min-width: 120px; padding: 4px;
+  background: var(--ba-paper); border: 1px solid var(--ba-line); border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(22, 36, 58, .14);
+}
+.ba-more__item {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  border: 0; border-radius: 6px; background: none; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--ba-ink);
+}
+.ba-more__item:hover { background: var(--ba-surface); }
+.ba-more__item.is-danger { color: var(--ba-danger); }
+
+/* =====================================================================
+   화면 안 확인·입력 창 (2026-10-16) — assign.js askDialog
+   window.prompt/confirm 은 브라우저가 소리 없이 막을 수 있어 직접 그린다.
+   ===================================================================== */
+.ba-dlg {
+  position: fixed; inset: 0; z-index: 9500;
+  display: grid; place-items: center; padding: 16px;
+  background: rgba(16, 26, 38, .42);
+}
+.ba-dlg__box {
+  width: min(460px, 100%); box-sizing: border-box;
+  background: var(--ba-paper); border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(16, 26, 38, .28);
+  padding: 20px 20px 16px;
+}
+.ba-dlg__t { margin: 0 0 8px; font-size: 16px; }
+.ba-dlg__m { margin: 0 0 12px; font-size: 13.5px; line-height: 1.6; color: var(--ba-ink-soft); }
+.ba-dlg__in {
+  width: 100%; box-sizing: border-box; resize: vertical;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 8px 11px;
+  font: inherit; font-size: 13.5px;
+}
+.ba-dlg__in:focus { outline: 2px solid color-mix(in srgb, var(--ba-brand) 35%, transparent); border-color: var(--ba-brand); }
+.ba-dlg__err { margin: 6px 0 0; font-size: 12.5px; color: var(--ba-danger); }
+.ba-dlg__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.ba-btn--danger-fill { background: var(--ba-danger); border-color: var(--ba-danger); color: #fff; }
+.ba-btn--danger-fill:hover { filter: brightness(.93); }
+
+/* 내 R&D 과제 — 좁은 화면에서는 과제명 · 역할·점유 · 산출물만 (2026-10-16).
+   위의 1100px 규칙(.ba-my 세 칸)보다 뒤에 둬야 이긴다. */
+@media (max-width: 1100px) {
+  .ba-my--rnd { grid-template-columns: 1fr 96px 70px; }
+}
+
+/* =====================================================================
+   R&D 진행 기록·산출물 — 첨부, 고치기·지우기 (2026-10-19)
+   ===================================================================== */
+.ba-rv-item__acts { margin-left: auto; display: inline-flex; gap: 4px; }
+.ba-rv-log__meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ba-rv-output__h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ba-rv-files { display: grid; gap: 4px; margin-top: 8px; }
+.ba-rv-file {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 5px 8px; border: 1px solid var(--ba-line); border-radius: 6px;
+  background: var(--ba-surface); font-size: 12.5px;
+}
+.ba-rv-file__n { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.ba-rv-file__s { color: var(--ba-ink-soft); font-size: 11.5px; white-space: nowrap; }
+.ba-rv-form__foot { display: flex; justify-content: flex-end; gap: 6px; width: 100%; }
+/* 수정 폼 안의 첨부 목록은 한 줄 전체를 쓴다 — 좁은 칸에 갇혀 단추가 줄바꿈됐다 */
+.ba-rv-form .ba-rv-files { flex: 1 1 100%; width: 100%; }
+/* 파일 칸이 테두리 밖으로 나가지 않게 (여백을 너비 안에) */
+.ba-rv-form input[type="file"] { box-sizing: border-box; max-width: 100%; }
+.ba-rv-log.is-editing, .ba-rv-output.is-editing {
+  border-color: var(--ba-brand); background: #f6fbf8;
+}
+
+/* ---- R&D 자료 영역 · 긴 글 (2026-10-19) ---------------------------------
+   산출물의 링크를 자료 영역 [링크] 탭으로 (참고 자료 패널과 같은 탭 모양).
+   목록 칸은 화면 폭에 고정하고, 긴 주소·끊을 곳 없는 글은 칸 안에서 줄바꿈 —
+   전에는 칸이 글 길이만큼 늘어 화면 오른쪽으로 끝없이 나갔다. */
+.ba-rv-att { flex: 1 1 100%; width: 100%; display: grid; gap: 0; }   /* 간격이 탭과 상자 사이에도 들어가 둘이 떨어졌다 */
+.ba-rv-att__h { font-size: 12px; font-weight: 600; color: var(--ba-ink-soft); margin-bottom: 8px; }
+.ba-rv-att .ba-source-tabs { margin-bottom: -1px; }   /* 탭이 아래 상자에 붙게 */
+.ba-rv-att .ba-source-pane { justify-items: stretch; }
+.ba-rv-att input[type="url"] {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--ba-line); border-radius: 8px; padding: 7px 10px;
+  font-size: 13.5px; font-family: inherit; color: var(--ba-ink); background: var(--ba-paper);
+}
+.ba-rv-grow { flex: 1 1 260px; }
+.ba-rv-grow input { width: 100%; box-sizing: border-box; }
+.ba-rv-logs, .ba-rv-outputs { grid-template-columns: minmax(0, 1fr); }
+.ba-rv-log, .ba-rv-output { min-width: 0; }
+.ba-rv-log__content, .ba-rv-log__finding, .ba-rv-output__sum, .ba-rv-output__t,
+.ba-src__title, .ba-src__title a { overflow-wrap: anywhere; word-break: break-word; }
+.ba-rv-files .ba-src__title { white-space: normal; }
+/* 목록 칸은 화면 폭에 고정 — 안의 글이 칸을 밀어 넓히지 않게 */
+.ba-rv-files { grid-template-columns: minmax(0, 1fr); }
+.ba-rv-files .ba-src { min-width: 0; }
+.ba-src__link { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: normal; overflow-wrap: normal; }
+
+/* ---- 목록으로 돌아가기 · R&D 하단 단추 (2026-10-19) ---------------------- */
+.ba-back { margin: -6px 0 12px; }
+.ba-back a {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 600; color: var(--ba-ink-soft); text-decoration: none;
+  padding: 4px 8px 4px 4px; border-radius: 6px;
+}
+.ba-back a:hover { color: var(--ba-ink); background: var(--ba-paper); }
+.ba-back a span { font-size: 18px; line-height: 1; }
+.ba-rnd-formbar { margin-top: 16px; }

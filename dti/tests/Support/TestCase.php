@@ -34,6 +34,8 @@ abstract class TestCase extends BaseTestCase
     protected string $uploadDir;
     protected \Closure $mover;
     protected RecordingWebhook $webhook;
+    /** 웹 푸시로 보내려던 것. 시험은 네트워크·포털 DB 를 타지 않는다 */
+    protected array $pushed = [];
 
     protected function setUp(): void
     {
@@ -144,6 +146,7 @@ abstract class TestCase extends BaseTestCase
             'identity' => $identity,
             'mover' => $this->mover,
             'webhook' => \Closure::fromCallable($this->webhook),
+            'push' => function (array $opts): array { $this->pushed[] = $opts; return ['sent' => 0]; },
         ], ['method' => $method, 'seg' => $segments, 'body' => $body,
             'query' => $query, 'files' => $files]);
     }

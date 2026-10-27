@@ -28,9 +28,11 @@ bs_layout_head(
     'R&D 점유 현황',
     '과업 편성/현황',
     '구성원별 R&D 점유율과 상한 대비 여유를 봅니다. 점유 감사용입니다.',
-    'project'
+    'rnd'
 );
 ?>
+
+<?= bs_back_link('rnd_board.php', 'R&D 과제 목록') ?>
 
 <div class="ba-rnd-load" id="ba-rnd-load">
 
