@@ -24,9 +24,10 @@ $__bwCurrent = 'access';
 <link rel="icon" type="image/svg+xml" href="../styles/favicons/access.svg">
 <?php require_once __DIR__ . '/../core/pwa.php'; echo pwa_head_tags('../'); ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="../slack/styles/header.css">
-<link rel="stylesheet" href="../slack/styles/common.css">
-<link rel="stylesheet" href="styles/access.css">
+<!-- ?v=수정시각: 안 붙이면 브라우저가 예전 CSS 를 계속 써서 새 규칙(.hid 등)이 안 먹는다 -->
+<link rel="stylesheet" href="../slack/styles/header.css?v=<?= filemtime(__DIR__ . '/../slack/styles/header.css') ?>">
+<link rel="stylesheet" href="../slack/styles/common.css?v=<?= filemtime(__DIR__ . '/../slack/styles/common.css') ?>">
+<link rel="stylesheet" href="styles/access.css?v=<?= filemtime(__DIR__ . '/styles/access.css') ?>">
 <!-- Editor.js: 설명성 칸의 서식(굵기·색·취소선·목록) 편집용. 버전을 못 박아 둔다.
      색상은 외부 플러그인을 쓰지 않는다 — 아래 ColorTool 주석 참고. -->
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.30.7/dist/editorjs.umd.js"></script>
