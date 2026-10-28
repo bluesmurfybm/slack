@@ -42,8 +42,7 @@ $__bgPref  = board_bg_pref($__u);
 // 시스템을 더해도 드롭다운에만 생기고 타일은 안 생겼다. 목록을 통째로 넘겨
 // 타일도 이 목록에서 그린다 — 이제 json 만 고치면 양쪽이 같이 늘어난다.
 // 카드 순서는 사람마다 다르다. 끌어 놓은 순서가 있으면 그대로, 없으면 제목순.
-// 출입 명단이 있는 카드(json 의 "members")는 그 명단에 든 사람에게만 보인다.
-$__systems = board_sort_tiles(work_systems_for_viewer(work_systems()), $__u['tile_order'] ?? null);
+$__systems = board_sort_tiles(work_systems(), $__u['tile_order'] ?? null);
 // 카드가 열 개를 넘기면서 한 판에 늘어놓는 것만으로 찾기 어려워졌다. 관리자가
 // 묶음을 만들어 나눠 담는다. 묶음과 소속은 전사 공통, 묶음 **안의** 순서는
 // 위에서 정한 사람별 순서를 그대로 따른다.

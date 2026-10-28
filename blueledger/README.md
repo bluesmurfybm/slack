@@ -1,8 +1,7 @@
 # BlueLedger (blueledger)
 
-사내 재무회계 프로그램 BlueLedger 를 포털(blue-iWorks)로 옮기는 모듈. 출장여비는 다 옮겼고,
-회계 장부(파이썬 `app.py`)도 **급여대장을 뺀 모든 메뉴**를 옮겼다. 급여대장만 아직 지안 님 PC 의 파이썬 버전에 있다.
-아래 '회계 장부' 절 참고.
+사내 재무회계 프로그램 BlueLedger 를 포털(blue-iWorks)로 옮기는 모듈. **지금은 출장여비만 옮겼다.**
+회계 장부(통장·카드·급여·정산 등, 파이썬 `app.py`)는 아직 지안 님 PC 의 파이썬 버전에 있다.
 
 화면에 보이는 이름은 **BlueExpense**(출장여비)다. 폴더·주소(`blueledger/`)·
 업무 시스템 key(`blueledger`)·표 이름(`bl_*`)은 그대로 둔다. 바꾸면 배포 주소·nginx 규칙·DB 를 함께 옮겨야 한다.
@@ -89,59 +88,7 @@ DB 는 포털 MySQL 백업에 같이 들어간다(`bl_travel_*` 네 테이블). 
 옛 기록은 그 뒤 `D:\php82\php.exe blueledger\tools\import_travel.php <travel.db>` 로 넣는다.
 BlueLedger 의 SQL 은 MySQL/SQLite 둘 다 읽는 모양으로만 썼다(`db.php` 의 bl_upsert 등) — 번역기에 기대지 않는다.
 
-## 회계 장부 (ledger.php)
-
-출장여비와 달리 화면마다 서버가 HTML 을 만든다(파이썬 버전과 같은 방식). 표·입력칸이 많은 화면을 그대로 옮기고
-파이썬과 숫자를 칸 단위로 맞춰 보기 쉽게 하려는 것이다. 주소는 `blueledger/ledger.php?p=화면`.
-
-```
-ledger.php                입구. 출입 검사 → 저장(POST)·엑셀·화면으로 나눈다. 화면 목록은 lg_routes() 한 곳
-lib/ledger.php            계산 — 파이썬 함수를 같은 이름(lg_ 접두사)·같은 방식으로 옮김(잔액·카드 청구서·자금일보·자동 분류)
-lib/ledger_read.php       은행·카드사·홈택스 파일 읽기: xlsx(ZIP 직접)·옛 xls(OLE·BIFF8)·웹페이지형 xls·CSV
-lib/ledger_pages.php      홈·기준정보·거래 목록·출납장·자금일보의 값 만들기(lg_page_*)·저장(lg_post_*)
-lib/ledger_import.php     ③ 거래 가져오기(열 맞추기·카드 명세서·출납장·여러 파일 한 번에·중복·파일별 삭제)
-lib/ledger_classify.php   ④ 분류(한 건씩·적요별 묶음)·계정과목·규칙·거래 나누기·수기 입력
-lib/ledger_cards.php      ⑤ 카드대금 맞춰보기
-lib/ledger_settle.php     ⑥ 증빙·정산(홈택스 세금계산서·자동 정산·충전금·거래처)
-lib/ledger_close.php      ⑦ 월마감·보고서·세무사 전달용 엑셀
-lib/ledger_admin.php      관리: 장부 내려받기(엑셀)·출입 명단·작업 기록 (파이썬의 백업·사용자 대신)
-lib/ledger_views.php, views_*.php   화면 HTML (파이썬 templates/*.html 을 같은 문구로)
-lib/ledger_xlsx.php       엑셀 작성기(칸 합치기·테두리·수식·거르기, composer·ZipArchive 없이)
-lib/ledger_preview.php    출력 미리보기(팝업 창): 엑셀과 같은 통합문서를 표로 그리고 수식을 계산해 보여줌 → 인쇄·엑셀로 저장
-styles/ledger.css, static/ledger.js
-tools/import_ledger.php   파이썬 장부(blueledger.db 복사본) → bl_ledger_* 표 옮기기
-var/ledger_uploads/       올린 파일을 가져오는 동안만 두는 곳(1시간 지나면 지움, gitignore·웹 차단)
-```
-
-- 표: `bl_ledger_*` 16개(`db.php` BL_SCHEMA). 파이썬 표와 컬럼이 같고, settings 의 key/value 만 k/v 로 바꿨다.
-  번호가 저절로 붙는 표는 BL_SCHEMA 의 `'auto'`, 겹치면 안 되는 칸은 `'unique'` 로 적는다(bl_ddl 이 읽음).
-- 출입: 포털 로그인 + `bl_ledger_roles` 출입 명단. 명단에 없으면 403. 처음엔 jian=담당자(clerk), kimhy=대표(ceo, 보기 전용).
-  대표의 저장 요청은 서버가 막는다. 저장 요청은 모두 `_csrf` 값이 맞아야 한다.
-- 작업 기록: 저장·삭제마다 `bl_ledger_log` 에 남긴다. 거래를 지우면 지운 줄의 원래 내용(JSON)도 남긴다 —
-  파이썬 버전의 '지우기 전 장부 파일 백업' 대신이다.
-- 아직 안 옮긴 메뉴(급여대장)는 'PHP 옮기는 중' 안내 화면으로 간다.
-- 파이썬과 달라진 점: '가져올 파일 폴더' 대신 화면에서 여러 파일 올리기, 지우기 전 백업 대신 작업 기록에 원래 내용,
-  월마감 때 백업 대신 마감 요약을 작업 기록에, '백업' 메뉴 대신 장부 전체 엑셀 내려받기, '사용자' 대신 출입 명단.
-- 거래·세금계산서의 `dedup_key` 는 대소문자를 가린다(MySQL utf8mb4_bin, 로컬 SQLite 는 BINTEXT). 나머지 글자 칸은 포털과 같이 _ci.
-- 포털 카드: `core/worksystems.json` 의 key `ledger`(BlueExpense 는 `blueledger`), 아이콘 `styles/icons/ledger.svg`·
-  `styles/favicons/ledger.svg`. `"members": "bl_ledger_roles"` 라 출입 명단에 있는 사람에게만 카드·메뉴가 보인다
-  (`core/worksystems.php::work_systems_for_viewer`). 운영에 올릴 때 이 세 파일도 함께 올린다.
-- 옮기기: `D:\php82\php.exe blueledger\tools\import_ledger.php "<장부 복사본>"` (이미 거래가 있으면 `--replace`).
-  원본 장부가 아니라 반드시 복사본을 넘긴다. 파일은 읽기 전용으로 연다.
-- 대조(2026-10-23, 장부 복사본): 파이썬 화면 값과 홈·기준정보·거래 목록 10가지·여러 날 출납장·하루 출납장 598(299일×통장 2)·
-  자금일보 299일을 칸마다 비교해 198,524개 모두 같음. 엑셀(출납장 1~10월·9월, 자금일보 4일)도 값·수식·서식·칸 합치기까지 같음.
-  9/30 주거래계좌 잔액 1,394,494,164원, 10/23 카드 결제 예정 10,388,318원.
-- 대조(2026-10-23, ③~⑦): 같은 파일·같은 작업을 파이썬과 PHP 에 하고 표 전체를 줄 단위로 비교 —
-  거래 가져오기(가짜 통장·카드·농협 파일, 출납장), 분류 16가지 작업, 카드 맞추기, 자동 정산 전체 다시 하기(연결 239줄),
-  세금계산서 직접 처리·충전금·거래처, 월마감·보고서 엑셀까지 모두 같음. 옛 xls 홈택스 원본으로는 아직 대조하지 못했다.
-- 출력 미리보기(2026-10-23): 자금일보 2일·출납장 1~10월·세무사 전달용을 엑셀(Excel 프로그램 계산값)과 칸마다 비교해
-  15,019칸(수식 540개) 값·보이는 글자 모두 같음. 장부 내려받기는 미리보기 없이 바로 저장.
-- 백업에 `bl_ledger_*` 표를 더해야 한다.
-- MariaDB 에서 `ONLY_FULL_GROUP_BY` 를 켜 두었다면 잔액 계산(`lg_balances`)의 `GROUP BY a.id` 가 거절될 수 있다 — 운영 sql_mode 확인 필요.
-
 ## 알려진 남은 일
 
 - 포털 로그인(`api/login.php`)에 로그인 시도 횟수 제한이 없다 — 외부 공개 전에 포털 쪽에 넣어야 한다.
-- 회계 장부: 급여대장 옮기기. 옛 xls(홈택스·농협) 읽기를 실제 원본 파일로 대조.
-- book(파이썬)의 상단바 메뉴는 worksystems.json 을 직접 읽어 "members" 를 모른다 — 거기서는 BlueLedger 가 모두에게 보인다
-  (눌러도 출입 명단에 없으면 장부 화면이 막는다).
+- 회계 장부 화면 이식.
