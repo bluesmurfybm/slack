@@ -925,6 +925,11 @@ details.sh-menu > summary::-webkit-details-marker{display:none}
 .sh-proc-cats .chip{cursor:pointer;border:none}
 .sh-proc-cats .chip.on{background:var(--cos45);color:#fff}
 .sh-rows .sh-proc-caution{color:var(--nega40)}
+/* 펼친 절차 본문은 오른쪽 단추 칸 아래까지 한 줄 전체를 쓴다 */
+.sh-rows li.sh-proc-row{row-gap:0}
+.sh-rows li.sh-proc-row > div:first-child{display:contents}
+.sh-rows li.sh-proc-row > .a{grid-column:2;grid-row:1}
+.sh-rows li.sh-proc-row .sh-hist-body{grid-column:1 / -1;min-width:0;overflow-wrap:anywhere}
 .sh-hist-year{height:24px;padding:0 6px;font-size:12px}
 .sh-year-bar{display:flex;align-items:center;gap:8px;margin:0 0 10px}
 .sh-year-bar select{height:28px;padding:0 8px;font-size:12.5px}

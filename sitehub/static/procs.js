@@ -59,7 +59,7 @@ function procRow(p, s, common) {
   const link = p.link_url ? `<div class="sh-hist-body"><a href="${esc(/^[a-z][a-z0-9+.-]*:\/\//i.test(p.link_url) ? p.link_url : "http://" + p.link_url)}" target="_blank" rel="noopener">${esc(p.link_url)}</a></div>` : "";
   const copyBtn = p.steps ? `<button type="button" class="btn-mini ghost" onclick="copyProc(${p.id}, this)">절차 복사</button>` : "";
   const toSite = common ? `<button type="button" class="btn-mini ghost" onclick="copyProcToSite(${p.id}, ${s.id})" title="이 사이트에서만 고쳐 쓸 수 있게 사본을 만든다">이 사이트용 복사</button>` : "";
-  return `<li>
+  return `<li class="sh-proc-row">
     <div>
       <div class="t"><span class="chip">${esc(procCatLabel(p.category))}</span><button type="button" class="linkish sh-hist-head" onclick="this.closest('li').classList.toggle('open')">${esc(p.title)}</button>${used}${dur}</div>
       ${steps}${caution}${link}
