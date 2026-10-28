@@ -72,6 +72,19 @@ tr.r.off .nm { text-decoration:line-through; }
 .c-name .sub { display:block; font-size:11px; color:var(--hint); margin-top:1px; }
 .c-name .sub.warn { color:#c26a1e; }
 .vtag { font-size:11px; color:var(--info); background:var(--info-bg); border-radius:8px; padding:1px 7px; white-space:nowrap; }
+/* 유지보수 종료 — 평소엔 목록에서 빠지고, 포함해서 볼 때 이 표시로 구분한다 */
+.etag { display:inline-block; margin-left:6px; font-size:10px; font-weight:700; white-space:nowrap;
+        color:#8a3b3b; background:#fbe9e9; border:1px solid #f0c9c9; border-radius:5px; padding:1px 5px; }
+@media (prefers-color-scheme: dark) { .etag { color:#f0a0a0; background:#3a1c1c; border-color:#5c2a2a; } }
+tr.r.ended, .card.ended { opacity:.6; }
+/* 검색·필터에 걸러진 행 — DOM 은 그대로 두고 감추기만 한다 */
+.hid { display:none !important; }
+
+/* 학교명 칸 — 입력칸 오른쪽에 '사용' 체크(schools.active)를 붙인다 */
+.dcell .dpair { display:flex; align-items:center; gap:12px; }
+.dcell .dpair .dedit { flex:1; min-width:0; }
+.dcell .dchk { display:flex; align-items:center; gap:6px; flex:none; font-size:13px; color:var(--txt); cursor:pointer; white-space:nowrap; }
+.dcell .dchk input { width:16px; height:16px; margin:0; padding:0; flex:none; }
 .gtag { font-size:11px; color:var(--muted); background:var(--bg2); border:1px solid var(--line);
         border-radius:8px; padding:0 6px; margin-left:4px; white-space:nowrap; }
 .ptag { display:inline-block; font-size:11px; font-weight:600; color:#8a4b12; background:#fdf0e2;

@@ -32,33 +32,6 @@ function work_systems(string $base = ''): array {
     return $systems;
 }
 
-/**
- * 지금 로그인한 사람에게 보일 카드만 남긴다(대시보드 타일·드롭다운용).
- * json 에 "members": "<표 이름>" 을 단 시스템은 그 표(email 컬럼)에 있는 사람에게만 보인다 —
- * 예: BlueLedger 회계 장부는 bl_ledger_roles(재무 담당·대표)만. 화면 자체도 같은 표로 다시 막는다.
- * 로그인 전이거나 표를 못 읽으면(아직 안 만들어진 DB 등) 그 카드는 숨긴다.
- */
-function work_systems_for_viewer(array $systems): array {
-    static $seen = [];
-    $uid = (int)($_SESSION['portal_uid'] ?? 0);
-    return array_values(array_filter($systems, function ($sys) use ($uid, &$seen) {
-        $table = $sys['members'] ?? '';
-        if ($table === '') return true;
-        if (!$uid || !function_exists('portal_db') || !preg_match('/^bl_[a-z_]+$/', $table)) return false;
-        $k = "$uid|$table";
-        if (!isset($seen[$k])) {
-            try {
-                $st = portal_db()->prepare("SELECT 1 FROM `$table` m JOIN portal_users u ON LOWER(u.email) = LOWER(m.email) WHERE u.id = ?");
-                $st->execute([$uid]);
-                $seen[$k] = (bool)$st->fetchColumn();
-            } catch (Throwable $e) {
-                $seen[$k] = false;
-            }
-        }
-        return $seen[$k];
-    }));
-}
-
 /** key 에 해당하는 업무 시스템 이름. 모르는 key 면 null. */
 function work_system_label(string $key): ?string {
     foreach (work_systems() as $sys) {
@@ -110,7 +83,7 @@ function need_login_notice(?string $key): string {
  * 출력이 시작된 뒤에 그려지므로 헤더를 보낼 수 없다.
  */
 function work_systems_menu_data(string $base = ''): array {
-    $systems = work_systems_for_viewer(work_systems($base));
+    $systems = work_systems($base);
     $plain   = ['groups' => [['name' => null, 'items' => $systems]], 'badges' => []];
 
     $uid = (int)($_SESSION['portal_uid'] ?? 0);

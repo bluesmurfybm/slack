@@ -24,9 +24,10 @@ $__bwCurrent = 'access';
 <link rel="icon" type="image/svg+xml" href="../styles/favicons/access.svg">
 <?php require_once __DIR__ . '/../core/pwa.php'; echo pwa_head_tags('../'); ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="../slack/styles/header.css">
-<link rel="stylesheet" href="../slack/styles/common.css">
-<link rel="stylesheet" href="styles/access.css">
+<!-- ?v=수정시각: 안 붙이면 브라우저가 예전 CSS 를 계속 써서 새 규칙(.hid 등)이 안 먹는다 -->
+<link rel="stylesheet" href="../slack/styles/header.css?v=<?= filemtime(__DIR__ . '/../slack/styles/header.css') ?>">
+<link rel="stylesheet" href="../slack/styles/common.css?v=<?= filemtime(__DIR__ . '/../slack/styles/common.css') ?>">
+<link rel="stylesheet" href="styles/access.css?v=<?= filemtime(__DIR__ . '/styles/access.css') ?>">
 <!-- Editor.js: 설명성 칸의 서식(굵기·색·취소선·목록) 편집용. 버전을 못 박아 둔다.
      색상은 외부 플러그인을 쓰지 않는다 — 아래 ColorTool 주석 참고. -->
 <script src="https://cdn.jsdelivr.net/npm/@editorjs/editorjs@2.30.7/dist/editorjs.umd.js"></script>
@@ -58,7 +59,7 @@ $__bwCurrent = 'access';
     <span class="spacer"></span>
     <select id="fvpn" title="VPN 프로그램으로 거르기"></select>
     <label class="fchk"><input type="checkbox" id="onlyMissing"> 접속정보 없는 곳만</label>
-    <label class="fchk"><input type="checkbox" id="showOff"> 미사용 포함</label>
+    <label class="fchk"><input type="checkbox" id="showOff"> 미사용 대학 포함</label>
     <button id="btnNew" class="primary" type="button">+ 대학 추가</button>
     <button id="btnImport" type="button">엑셀 가져오기</button>
     <div class="viewtog" id="viewtog">
@@ -345,7 +346,7 @@ function buildVers() {
   $("vers").innerHTML = list.map(([v, label, c]) =>
     `<button type="button" class="chip${v === fver ? " on" : ""}" data-v="${escA(v)}">${esc(label)}<b>${c}</b></button>`).join("");
   $("vers").querySelectorAll(".chip").forEach(b =>
-    b.addEventListener("click", () => { fver = b.dataset.v; buildVers(); render(); }));
+    b.addEventListener("click", () => { fver = b.dataset.v; buildVers(); applyFilter(); }));
 }
 
 /* OS 필터. 버전 칩과 같은 모양으로 검색창 아래에 둔다.
@@ -372,8 +373,13 @@ function buildOsFilter() {
   wrap.innerHTML = list.map(([v, label, c]) =>
     `<button type="button" class="chip${v === fos ? " on" : ""}" data-v="${escA(v)}">${esc(label)}<b>${c}</b></button>`).join("");
   wrap.querySelectorAll(".chip").forEach(b =>
-    b.addEventListener("click", () => { fos = b.dataset.v; buildOsFilter(); render(); }));
+    b.addEventListener("click", () => { fos = b.dataset.v; buildOsFilter(); applyFilter(); }));
 }
+/* 유지보수 종료 = 학교 사용 여부(schools.active)가 꺼진 것. slack 쪽 '학교 사이트 관리'와
+   같은 값이라 한쪽에서 끄면 양쪽에 같이 반영된다.
+   끝난 곳은 평소 목록 조회(API)에서 빠진다. 상세에서 방금 끈 곳은 applyFilter 가 숨긴다. */
+const isEnded = r => !Number(r.active);
+
 function osMatch(r) {
   if (fos === "all") return true;
   const v = (r.os || "").trim();
@@ -443,36 +449,30 @@ document.addEventListener("mousedown", e => {
   if (e.target !== $("search")) searchRefocus = false;
 }, true);
 
+/* 목록 DOM 을 새로 만든다 — 불러온 값이나 보기 방식이 바뀔 때만 부른다.
+   검색·필터로는 부르지 않는다. 한 글자 칠 때마다 행을 다시 만들면 그 안의
+   상세 패널과 Editor.js 도 같이 다시 만들어지고, 에디터 초기화가 비동기라
+   검색창 포커스를 뒤늦게 가져가 버리기 때문이다. */
 function render() {
-  const q = $("search").value.trim().toLowerCase();
-  const onlyMissing = $("onlyMissing").checked;
-  const list = DATA.filter(r =>
-    (fver === "all" || (r.ver || "") === fver) &&
-    osMatch(r) &&
-    vpnMatch(r) &&
-    (!onlyMissing || !r.access_id) &&
-    matches(r, q));
-
-  $("count").textContent = list.length + "건";
   const sEl = $("search");
   const keepFocus = document.activeElement === sEl;
   const caret = keepFocus ? sEl.selectionStart : 0;
   const box = $("list");
 
-  // 상세 패널은 다시 만들지 않는다. 목록만 새로 그리고, 살아 있는 상세 노드를 떼었다가
-  // 제자리에 도로 끼운다 — 안의 Editor.js 가 그대로 유지돼야 검색어를 고칠 때마다
-  // 에디터가 새로 만들어지며 포커스를 가져가는 일이 없다.
+  // 살아 있는 상세 노드는 떼어 두었다가 제자리에 도로 끼운다
   if (detailEl && detailEl.parentNode) detailEl.parentNode.removeChild(detailEl);
 
-  if (!list.length) {
+  if (!DATA.length) {
     discardDetail();
+    ROWEL = new Map();
     box.innerHTML = '<div class="empty">데이터가 없습니다.</div>';
+    $("count").textContent = "0건";
     if (keepFocus) keepSearchFocus(caret);
     return;
   }
 
-  box.innerHTML = view === "card"
-    ? `<div class="cards">` + list.map(cardHtml).join("") + `</div>`
+  box.innerHTML = (view === "card"
+    ? `<div class="cards">` + DATA.map(cardHtml).join("") + `</div>`
     : `<table><thead><tr>
         <th class="c-name">대학(기관)명</th>
         <th class="c-ver">버전</th>
@@ -481,10 +481,49 @@ function render() {
         <th class="c-site">사이트</th>
         <th class="c-copy">빠른 복사</th>
         <th class="c-act"></th>
-      </tr></thead><tbody>` + list.map(rowHtml).join("") + `</tbody></table>`;
+      </tr></thead><tbody>` + DATA.map(rowHtml).join("") + `</tbody></table>`)
+    + '<div class="empty" id="noHit" hidden>검색 결과가 없습니다.</div>';
+
+  ROWEL = new Map();
+  box.querySelectorAll("tr.r, .card").forEach(el => ROWEL.set(el.dataset.key, el));
+
   bindList(box);
   placeDetail(box);
+  applyFilter();
   if (keepFocus) keepSearchFocus(caret);
+}
+
+/* 검색어·칩 필터를 반영한다 — DOM 은 그대로 두고 보이기/숨기기만 바꾼다.
+   그래서 검색창에서 글자를 지워도 상세 패널과 그 안의 에디터가 살아 있고,
+   포커스를 뺏길 일이 없다. */
+let ROWEL = new Map();
+
+function applyFilter() {
+  const q = $("search").value.trim().toLowerCase();
+  const onlyMissing = $("onlyMissing").checked;
+  const showOff = $("showOff").checked;
+  let hit = 0, openShown = false;
+
+  DATA.forEach(r => {
+    const key = rowKey(r);
+    // 방금 유지보수를 끈 곳은 빠지되, 펼쳐 둔 채 작업 중이면 닫을 때까지 남겨 둔다
+    const ok = (showOff || !isEnded(r) || key === openKey) &&
+               (fver === "all" || (r.ver || "") === fver) &&
+               osMatch(r) &&
+               vpnMatch(r) &&
+               (!onlyMissing || !r.access_id) &&
+               matches(r, q);
+    const el = ROWEL.get(key);
+    if (el) el.classList.toggle("hid", !ok);
+    if (ok) { hit++; if (key === openKey) openShown = true; }
+  });
+
+  // 펼쳐 둔 학교가 걸러지면 상세도 같이 숨긴다(버리지는 않는다)
+  if (detailEl) detailEl.classList.toggle("hid", !openShown);
+
+  $("count").textContent = hit + "건";
+  const none = $("noHit");
+  if (none) none.hidden = hit > 0;
 }
 
 /* ── 열려 있는 상세 패널 ──────────────────────────────────────
@@ -503,8 +542,8 @@ function resetDetail() { detailKey = ""; }
 
 function placeDetail(box) {
   if (!openKey) { discardDetail(); return; }
-  const rowEl = box.querySelector('[data-key="' + openKey + '"]');
-  if (!rowEl) { discardDetail(); return; }   // 검색에 걸러져 안 보이는 행
+  const rowEl = ROWEL.get(openKey);
+  if (!rowEl) { discardDetail(); return; }   // 목록에 아예 없는 학교
 
   if (!detailEl || detailKey !== openKey || detailView !== view) {
     const r = DATA.find(x => rowKey(x) === openKey);
@@ -567,14 +606,14 @@ function rowParts(r) {
 function cardHtml(r) {
   const key = rowKey(r);
   const p = rowParts(r);
-  return `<div class="card${r.active ? "" : " off"}${openKey === key ? " open" : ""}" data-key="${escA(key)}">
+  return `<div class="card${isEnded(r) ? " off ended" : ""}${openKey === key ? " open" : ""}" data-key="${escA(key)}">
     <div class="card-top">
       ${r.ver ? `<span class="vtag">${esc(r.ver)}</span>` : ""}
       ${r.vpn ? `<span class="ptag" title="${escA(r.vpn_note || r.vpn)}">${esc(r.vpn)}</span>` : ""}
       <span class="card-sp"></span>
       ${p.repoCell ? `<span class="card-repo" title="${escA(p.repoTitle)}">${p.repoCell}</span>` : ""}
     </div>
-    <div class="card-nm">${esc(r.name)}</div>
+    <div class="card-nm">${esc(r.name)}${isEnded(r) ? '<span class="etag">유지보수 종료</span>' : ""}</div>
     ${r.access_id ? "" : '<div class="sub warn">접속정보 없음</div>'}
     <div class="card-site">${p.site || '<span class="muted">사이트 주소 없음</span>'}</div>
     <div class="card-cp">${p.quick || '<span class="muted">복사할 계정 정보 없음</span>'}</div>
@@ -586,9 +625,10 @@ function rowHtml(r) {
   const key = rowKey(r);
   const p = rowParts(r);
   const dash = '<span class="muted">—</span>';
-  return `<tr class="r${r.active ? "" : " off"}${openKey === key ? " open" : ""}" data-key="${escA(key)}">
+  return `<tr class="r${isEnded(r) ? " off ended" : ""}${openKey === key ? " open" : ""}" data-key="${escA(key)}">
     <td class="c-name">
       <span class="nm">${esc(r.name)}</span>
+      ${isEnded(r) ? '<span class="etag">유지보수 종료</span>' : ""}
       ${r.access_id ? "" : '<span class="sub warn">접속정보 없음</span>'}
     </td>
     <td class="c-ver">${r.ver ? `<span class="vtag">${esc(r.ver)}</span>` : ""}</td>
@@ -662,12 +702,12 @@ function groupCell(r, f) {
         <button class="cp dsave" type="button" hidden>저장</button>
       </span>
     </div>
-    ${cellControl(f, v)}
+    ${cellControl(f, v, r)}
   </div>`;
 }
 
 /* 칸 하나의 입력 요소. data-orig 에 원래 값을 담아 두고 그것과 달라지면 저장 버튼을 띄운다. */
-function cellControl(f, v) {
+function cellControl(f, v, r) {
   if (f.type === "rich") {
     return `<div class="ejholder dedit" data-ej="${escA(f.key)}" data-orig="${escA(v)}"></div>`;
   }
@@ -676,9 +716,18 @@ function cellControl(f, v) {
                    data-orig="${escA(v)}" autocomplete="off">`;
   }
   if (f.type === "area") {
-    return `<textarea class="dedit" rows="2" data-orig="${escA(v)}">${esc(v)}</textarea>`;
+    const ph = f.placeholder ? ` placeholder="${escA(f.placeholder)}"` : "";
+    return `<textarea class="dedit" rows="2"${ph} data-orig="${escA(v)}">${esc(v)}</textarea>`;
   }
-  return `<input class="dedit" type="text" value="${escA(v)}" data-orig="${escA(v)}">`;
+  // 학교명 중 26곳은 엑셀에서 온 줄바꿈이 들어 있다. input 은 줄바꿈을 못 담으므로 펴서 보여 준다.
+  const input = `<input class="dedit" type="text" value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
+  if (!f.with) return input;
+  // 같은 칸 오른쪽에 붙는 켬/끔 — 학교명 옆 '사용'(schools.active). 서버 설정에 따라 "0" 이 올 수도 있다.
+  const on = !!Number(r && r[f.with]);
+  return `<div class="dpair">${input}
+    <label class="dchk" title="끄면 목록에서 빠집니다 — slack 학교 사용 여부와 같은 값">
+      <input class="dsub" type="checkbox" data-sub="${escA(f.with)}"${on ? " checked" : ""} data-orig="${on ? "1" : "0"}"> 사용
+    </label></div>`;
 }
 
 /* 상세 패널의 편집 요소를 붙인다 — 서식 칸은 Editor.js, 나머지는 입력칸 감시 */
@@ -717,6 +766,8 @@ function bindDetail(box, r) {
 
   box.querySelectorAll("input.dedit, textarea.dedit").forEach(el =>
     el.addEventListener("input", () => markDirty(el.closest(".dcell"))));
+  box.querySelectorAll("input.dsub").forEach(el =>
+    el.addEventListener("change", () => markDirty(el.closest(".dcell"))));
 
   box.querySelectorAll(".dsave").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); saveCell(b.closest(".dcell"), r); }));
@@ -749,27 +800,43 @@ async function cellValue(cell) {
   if (!el) return null;
   // 비밀번호는 원본이 여러 줄일 수 있는데 input 에는 한 줄로 펴서 담았다.
   // 손대지 않았으면 원본을 그대로 둔다 — 안 건드린 값이 조용히 잘리면 안 된다.
-  if (cell.dataset.type === "pw" && el.value === flatPw(el.dataset.orig)) return el.dataset.orig;
+  // 펴서 보여 준 값을 그대로 두었으면 원본(줄바꿈 포함)을 돌려준다 — 조용히 한 줄로 바뀌지 않게
+  if ((cell.dataset.type === "pw" || cell.dataset.type === "input") && el.value === flatPw(el.dataset.orig)) return el.dataset.orig;
   return el.value;
 }
 
 async function saveCell(cell, r) {
-  const key = cell.dataset.f;
   const value = await cellValue(cell);
   if (value === null) return;
+
+  // [키, 값] 목록. 학교명 칸은 옆의 '사용' 체크까지 같이 저장하되 바뀐 것만 보낸다.
+  const jobs = [[cell.dataset.f, value]];
+  const sub = cell.querySelector("input.dsub");
+  if (sub) {
+    if (value === cell.querySelector(".dedit").dataset.orig) jobs.pop();
+    const sv = sub.checked ? "1" : "0";
+    if (sv !== sub.dataset.orig) jobs.push([sub.dataset.sub, sv]);
+  }
+
   const btn = cell.querySelector(".dsave");
   btn.disabled = true;
   try {
-    const j = await (await fetch("access_api.php", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save_field", school_id: r.school_id, access_id: r.access_id, key, value }),
-    })).json();
-    if (!j.ok) throw new Error(j.error || "실패");
-    // 서버에 반영된 값을 화면 데이터에도 맞춰 둔다. 전체를 다시 불러오면 열어 둔 상세가
-    // 닫히고 다른 칸의 편집 중인 내용까지 날아가서, 이 행만 갱신한다.
-    r[key] = value;
-    if (j.access_id && !r.access_id) { r.access_id = j.access_id; openKey = "a" + j.access_id; }
-    toast("저장했습니다");
+    for (const [key, v] of jobs) {
+      const j = await (await fetch("access_api.php", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save_field", school_id: r.school_id, access_id: r.access_id, key, value: v }),
+      })).json();
+      if (!j.ok) throw new Error(j.error || "실패");
+      const saved = typeof j.value === "string" ? j.value : v;   // 서버가 형식을 정리해 돌려준 값
+      // 서버에 반영된 값을 화면 데이터에도 맞춰 둔다. 전체를 다시 불러오면 열어 둔 상세가
+      // 닫히고 다른 칸의 편집 중인 내용까지 날아가서, 이 행만 갱신한다.
+      const nv = (key === "active") ? (v === "1" ? 1 : 0) : saved;
+      // 학교명·URL·사용 여부는 schools 값이라 같은 학교의 다른 접속정보 행(한 학교 두 벌)도 같이 바꾼다
+      if (MASTER_KEYS.has(key)) DATA.forEach(x => { if (x.school_id === r.school_id) x[key] = nv; });
+      else r[key] = nv;
+      if (j.access_id && !r.access_id) { r.access_id = j.access_id; openKey = "a" + j.access_id; }
+    }
+    if (jobs.length) toast("저장했습니다");
     resetDetail();          // 저장된 값으로 상세를 새로 그린다
     render();
   } catch (e) {
@@ -801,6 +868,9 @@ const MASTER = [
   ["ops",  "운영 URL",      "input"],
   ["log",  "로그 관리 URL",  "input"],
 ];
+/* schools 에 저장되는 칸 — 상세에서 고치면 같은 학교의 모든 행에 반영한다(saveCell) */
+const MASTER_KEYS = new Set([...MASTER.map(m => m[0]), ...ALLF.filter(f => f.with).map(f => f.with)]);
+
 /* 추가 — 빈 행을 만들어 같은 폼을 띄운다. 저장하면 schools 에도 같이 들어간다. */
 function openCreate() {
   const blank = { school_id: 0, access_id: 0, name: "", ver: "", dev: "", ops: "", log: "" };
@@ -819,16 +889,27 @@ function openForm(r) {
   $("eGrid").innerHTML = [
     `<div class="esec">학교 정보 <span class="ehint">(학교 사이트 관리와 공유되는 값)</span></div>`,
     ...MASTER.map(([k, l, t]) => cellHtml(k, l, t, r[k])),
-    // url 타입은 위 '학교 정보'(schools)에서 이미 고치므로 폼에서는 건너뛴다
-    ...GROUPS.map(g => `<div class="esec">${esc(g.title)}</div>` +
-      g.fields.filter(f => f.type !== "url")
-              .map(f => cellHtml(f.key, f.label, f.type, r[f.key])).join("")),
+    // url 타입과 학교명은 위 '학교 정보'(schools)에서 이미 고치므로 폼에서는 건너뛴다.
+    // 학교명 옆 '사용' 체크도 schools 값이라 상세 화면에서만 켜고 끈다.
+    // 남는 칸이 없는 묶음은 제목도 그리지 않는다
+    ...GROUPS.map(g => {
+      const fs = g.fields.filter(f => f.type !== "url" && !f.master);
+      return fs.length
+        ? `<div class="esec">${esc(g.title)}</div>` + fs.map(f => cellHtml(f.key, f.label, f.type, r[f.key])).join("")
+        : "";
+    }),
   ].join("");
   openModal("mEdit");
   bindEyes();
   mountEditors(r);
   const first = $("eGrid").querySelector("input[data-k=name]");
   if (first) first.focus();
+}
+
+/* 칸 정의에 형식 안내(placeholder)가 있으면 속성으로 붙인다 — 예) 테스트 서버 정보 */
+function placeholderOf(key) {
+  const f = ALLF.find(x => x.key === key);
+  return f && f.placeholder ? ` placeholder="${escA(f.placeholder)}"` : "";
 }
 
 function cellHtml(key, label, type, value) {
@@ -851,7 +932,7 @@ function cellHtml(key, label, type, value) {
   }
   return `<label class="ecell${type === "area" ? " full" : ""}">
     <span>${esc(label)}</span>
-    ${type === "area" ? `<textarea data-k="${escA(key)}" rows="3">${v}</textarea>`
+    ${type === "area" ? `<textarea data-k="${escA(key)}" rows="3"${placeholderOf(key)}>${v}</textarea>`
                       : `<input data-k="${escA(key)}" type="text" value="${escA(value || "")}">`}
   </label>`;
 }
@@ -1188,24 +1269,21 @@ $("btnNew").addEventListener("click", openCreate);
 $("btnImport").addEventListener("click", () => openModal("mImport"));
 $("doImport").addEventListener("click", doImport);
 $("doSave").addEventListener("click", save);
-/* 상세가 열려 있으면 한 글자마다 Editor.js 를 8개쯤 부수고 다시 만들게 된다.
-   조금 미뤘다가 한 번만 그린다 — 포커스를 뺏길 기회 자체를 줄인다. */
-let searchT = null;
+/* 검색은 DOM 을 다시 만들지 않으므로 미룰 것도 없다 — 바로 반영한다 */
 $("search").addEventListener("input", () => {
   $("searchClear").hidden = !$("search").value;
-  clearTimeout(searchT);
-  searchT = setTimeout(render, 180);
+  applyFilter();
 });
 $("searchClear").addEventListener("click", () => {
   $("search").value = "";
   $("searchClear").hidden = true;
-  render();
+  applyFilter();
   $("search").focus();
 });
 // 들어오자마자 바로 학교명을 칠 수 있게
 $("search").focus();
-$("fvpn").addEventListener("change", () => { fvpn = $("fvpn").value; render(); });
-$("onlyMissing").addEventListener("change", render);
+$("fvpn").addEventListener("change", () => { fvpn = $("fvpn").value; applyFilter(); });
+$("onlyMissing").addEventListener("change", applyFilter);
 $("showOff").addEventListener("change", load);
 
 load();
