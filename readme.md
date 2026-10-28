@@ -58,6 +58,14 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── db.php, guard.php        전용 DB 연결 · 포털 로그인 가드
 │   └── styles/access.css
 │
+├── sitehub/                     BlueLab SiteHub — PHP, 포털 세션·DB 공유. 유지보수 사이트 정보(사이트 기준). 'sitehub' 절 참고
+│   ├── index.php                화면 한 장 — 요약 · 툴바 · 목록(리스트/카드) · 상세 드로어 · 시트
+│   ├── api.php                  JSON API (access_api.php 와 같은 모양)
+│   ├── import_xlsx.php          호스팅 정보_v.xlsx → 사이트·접속정보·담당자·계약 시딩 (CLI / 화면 업로드)
+│   ├── sync.php, list_cols.php  Slack 리스트 BlueLab-유지보수처리목록 → lab_history 동기화 · 컬럼 매핑(사람이 채움)
+│   ├── db.php, guard.php        lab_* 테이블 · enc:v1 암호화 · 칸 정의 · 포털 로그인 가드 · 동기화 토큰 선택
+│   └── views/, static/, styles/ dti 와 같은 상단바·헤더 / 클래식 스크립트 / dti style.css 복사본
+│
 ├── learn/                       BlueLearn(강의 수강료 지원) — PHP, 포털 세션·DB 공유
 │   ├── index.php                화면 한 장(SPA)
 │   ├── api.php                  JSON API 프런트 컨트롤러 (?p=/requests/3 로 라우팅)
@@ -141,9 +149,9 @@ php.ini 에 `date.timezone` 이 없으면 PHP 는 UTC 로 돌고 MySQL 은 서�
 
 | core/ 에 있는 것 | 쓰는 곳 |
 |---|---|
-| `auth.php` | api, access, dti, learn, moodle, slack, bluecart |
-| `db.php` | access, dti, learn, moodle (`add_column_if_missing()` 재사용) |
-| `worksystems.php` / `.json` | index, dti, learn, moodle, slack/header, bluecart, book |
+| `auth.php` | api, access, dti, learn, moodle, slack, bluecart, sitehub |
+| `db.php` | access, dti, learn, moodle, sitehub (`add_column_if_missing()` 재사용) |
+| `worksystems.php` / `.json` | index, dti, learn, moodle, slack/header, bluecart, book, sitehub |
 | `board.php` | api/notices·notice_file·events·admins |
 | `push.php` / `push_kinds.json` | index, api/me·push·notifications, dti, onwatch, dev/push_*, slackai·onwatch 워커(dev/push_cli.php 경유) |
 | `pwa.php` | 모든 모듈의 `<head>` |
@@ -1393,6 +1401,123 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 
 ---
 
+## sitehub (BlueLab SiteHub)
+
+BlueLab 팀이 유지보수하는 **사이트** 정보를 한 화면에서 찾아 복사하는 모듈(`sitehub/index.php`). Coursemos EnvHub(access)의
+BlueLab 쪽 짝이다 — 동작·API·암호화는 access 를, 화면 뼈대·스타일은 dti 를 따른다. 초기 데이터는 `호스팅 정보_v.xlsx`
+에서 가져오고(아래) 그 뒤는 화면에서 직접 고친다. 열람은 access 와 같이 포털 로그인 전원.
+
+- **사이트 기준이다.** 목록 1행 = 사이트 1개(`lab_sites`)이고 접속정보(`lab_site_accounts`)·담당자(`lab_site_contacts`)·
+  계약(`lab_site_contracts`)·Slack 이력(`lab_history`)이 전부 `site_id` 로 그 아래에 매달린다. 고객사는 `lab_sites.customer`
+  한 칸이라 고객사 기준 화면은 없다. FK 는 걸지 않는다(저장소 관례). 한 고객사가 사이트 둘이면 행도 둘이고, 중복은
+  사이트명·고객사가 **둘 다** 같을 때만 거절한다(보관함에 있으면 "복원해 쓰라"고 알려 준다).
+- **보관함(archive)** — 미사용·종료된 사이트는 지우지 않고 `lab_sites.archived=1`(+`archived_at`, `archive_note` 사유)로 보관한다.
+  툴바의 `사용 중 n / 보관함 n` 으로 오가고(주소 `?view=archive`), 요약 네 칸·필터·건수는 지금 보는 쪽만 센다. 행·카드·드로어의
+  `보관`(사유 한 줄) / `복원`, API `{action:archive, site_id, archived:1|0, note}`. **완전 삭제는 보관함 안에서만**(드로어 푸터
+  `완전 삭제`) — 하위 세 테이블이 같이 지워지고 이력은 `site_id` 만 NULL 이 된다. 1차의 `active`(사용 여부) 컬럼은
+  `sitehub_migrate()` 가 미사용 행을 보관으로 옮긴 뒤 DROP 한다. 엑셀 가져오기도 전체목록 상태 `중단`·시트명 `종료…` 는
+  새로 넣을 때만 보관으로 표시한다(`--force` 재적재는 사람이 바꾼 보관 상태를 안 건드린다).
+- **포털 로그인만 요구한다**(`guard.php`). 슬랙 토큰은 이력 동기화에만 쓰고 없어도 화면은 뜬다. 화면은 `?need_login=sitehub`
+  로 돌려보내고 API 는 401 JSON.
+- **DB 연결은 자체**(`sitehub_db()`) — slack/db.php 의 `db()` 를 안 부른다(requests 마이그레이션·토큰 전제 회피). 테이블은
+  최초 접속 때 `CREATE TABLE IF NOT EXISTS` 로 생긴다. 컬럼을 더할 때는 `sitehub_schema()` 에 적고 `sitehub_migrate()` 에서
+  `add_column_if_missing()`. 테이블·컬럼 코멘트는 `sitehub_apply_comments()` 가 버전(`lab_sync_meta.schema_comments`)으로 입힌다.
+- **칸 정의는 `db.php` 한 곳** — `sitehub_field_groups()`(기본 · 유지보수 방법)와 `sitehub_sub_fields()`(접속 · 담당자 · 계약).
+  드로어·시트 폼·검색·API 화이트리스트가 같은 정의를 본다. type 은 `input / area / url / pw / select / date / number / bool / staff`
+  이고 값 정규화는 `sitehub_normalize()` 가 type 별로 한다(날짜 형식·숫자·select 옵션 검사).
+- **계약 상태는 저장하지 않는다.** 종료일이 가장 늦은 계약 행으로 판정한다(`sitehub_contract_status()`) — 지남 `만료`,
+  30일 이내 `만료 임박`(`SITEHUB_SOON_DAYS`), 그 외 `계약중`, 계약 없음·형태 미계약 `미계약`. PHP 의 오늘(Asia/Seoul) 기준.
+  갱신 때마다 계약 행을 추가하면 과거 계약이 남는다. **계약 금액은 항상 1년 기준(연간 금액)** — 월·분기 납부라도 월 금액이 아니고,
+  납부 주기는 `billing` 칸에만 적는다. `amount_unit` 컬럼은 쓰지 않는다(옛 month 값은 `sitehub_migrate()` 가 year 로 맞춤, 숫자는 그대로).
+- **접속정보 만료일** — 종류에 `ssl`(SSL 인증서)이 있고, `hosting`·`domain`·`ssl` 만 `lab_site_accounts.expires_on`(만료일) 칸이 보인다
+  (`SITEHUB_EXPIRY_KINDS`, 다른 종류로 바꾸면 서버가 비움). 30일 안(`SITEHUB_SOON_DAYS`)이거나 지난 것은 `sitehub_load_sites()` 가
+  `expiry_alerts` 로 모아 주고, 목록 위 `만료 안내` 띠(모든 계정)·행 배지·통계의 만료 예정 표에 나온다.
+- **비밀번호(`login_pw`)는 access 와 같은 `enc:v1:` AES-256-GCM, 같은 `config.php` key.** `access/db.php` 를 include 하지
+  않고(그 파일은 include 시점에 access 마이그레이션을 돌린다) `sitehub_enc()/dec()` 를 따로 둔다 — 두 벌 중복은 알고 하는
+  것이고, 합치려면 `core/` 로 뽑아 access 와 함께 바꾼다. API 응답에는 평문이 실리므로 **운영은 HTTPS**. 수정 시
+  비밀번호를 비워 보내면 "그대로 두기"다(가린 칸이라 빈칸이 지우기면 실수로 날아간다).
+- **화면은 dti 복사본** — `views/head.php`(상단바 + `header.site`), `styles/style.css`(dti 것에서 sitehub 가 쓰는 규칙만 남기고
+  맨 아래 `SiteHub` 구획), 드로어·시트·확인창·토스트. slack/header.php 는 쓰지 않는다. 라이트 전용. Editor.js 없음
+  (서술형은 textarea). 스크립트는 인라인 onclick 이 전역 함수를 찾으므로 클래식 스크립트(`static/*.js`)다.
+- **상세 드로어는 `?site=<id>&tab=<key>`** 로 주소에 남는다 — 새로고침·뒤로가기 대응. 기본·유지보수 방법 탭은 칸을 눌러
+  그 자리에서 고치고(`save_field`, 칸 하나만 저장), 접속·담당자·계약은 행 단위 시트(`sub_save`/`sub_delete`/`sub_sort`).
+  쓰기 응답에는 바뀐 사이트 한 건이 실려 화면이 전체를 다시 안 받는다.
+- **비용(결제내역)** — 사이트 상세 '비용' 탭(`lab_site_costs`). 도메인·SSL·호스팅·외주·라이선스 등 사이트 유지에 우리가 낸 돈을 결제일·항목·금액·결제처·증빙 링크로 적고 누적·올해 합계를 보여 준다. 고객에게 받는 계약 금액(계약 탭)과는 별개다.
+- **이력 추가·수정·삭제(Slack 쓰기)** — 이력 탭의 `+ 이력 추가`·행의 `수정`/`삭제`(`history_write.php`, API `history_add/history_update/history_delete` · `GET ?history_options=1`). **Slack 리스트에 먼저 쓰고**(`slackLists.items.create/update/delete`) 성공하면 `lab_history` 에 반영한다 — 새 항목 id 를 그대로 `lab_history.id` 로 써서 다음 동기화 때 중복 없이 합쳐진다. 토큰은 **로그인한 사람의 개인 토큰만** 쓰고(공용 `sitehub_slack_token` 은 안 씀) `lists:write` 권한이 필요하다. 다루는 칸은 업체명(제목=사이트명)·요청일시·요청구분·작업내용·처리상태·무/유상·우선순위·완료시간-비고이고 첨부·요청자·담당자는 Slack 에서 한다. 열 ID·선택지는 `list_cols.php` + 리스트 스키마(6시간 임시 캐시). 삭제는 하위 항목과 절차 연결(`lab_procedure_uses`)도 같이 지운다.
+- **처리 절차(런북)** — '유지보수 방법' 탭 아래 "자주 있는 처리"(`static/procs.js`). `lab_procedures`(`site_id=0` 이 공통 절차, 그 외는 사이트 전용)와 `lab_procedure_uses`(이력 `lab_history.id` ↔ 절차 연결, 처리 횟수의 근거). 하위 테이블 공통 경로(`sub_save`)를 타지 않고 `proc_save/proc_delete/proc_sort/proc_copy/proc_use/proc_unuse` 액션과 `GET ?procedures=1` 을 쓴다. 공통 절차는 모든 사이트 탭에 보이고 `이 사이트용 복사`로 사본을 만들어 고친다. 목록은 처리 횟수가 많은 순, 요청 유형(`sitehub_procedure_categories()`)으로 거른다. 이력 행의 `절차` 버튼으로 어떤 절차로 처리했는지 잇는다. 사이트 전용 절차의 변경은 변경 이력에 남고 공통 절차는 남기지 않는다. **등록 제안**(`proc_suggest.php`, 공통 절차 머리의 `제안 보기`) — 이력 작업내용을 낱말로 쪼개 동작어(수정·변경…)를 빼고 3건 이상 반복되는 낱말을 키워드로 묶는 규칙 기반이다(AI 호출 없음). 이미 절차에 연결된 이력과 `무시`한 키워드(`lab_procedure_ignores`)는 뺀다. `등록`하면 서버가 묶음을 다시 계산해 절차를 만들고 그 묶음의 이력을 전부 연결한다(한 사이트에서만 나온 묶음은 사이트 전용, 아니면 공통). 불용어·유형 추정은 `proc_suggest.php` 상단 상수에서 고친다.
+- **Slack 이력 동기화(`sync.php`)** — 리스트 `BlueLab-유지보수처리목록`은 **thebluesoft.slack.com** 에 있어 포털에 저장된
+  개인 토큰(coursemos 용)으로는 못 읽는다. 토큰은 `config.local.php` 의 `sitehub_slack_token` → 없으면 로그인 사용자의
+  개인 토큰 → CLI 는 `SLACK_TOKEN`(`sitehub_sync_token()`). 리스트 ID·URL 은 `config.php` 의 `sitehub_list_id` ·
+  `sitehub_list_url`(리스트 `F088VTXBD0R`, `https://thebluesoft.slack.com/lists/T088QKAGZPB/F088VTXBD0R`). **컬럼 매핑은
+  `list_cols.php`** — 값은 컬럼 ID(`Col…`) 또는 기본 열의 key(`name`·`priority`)이고 `sync.php` 가 스키마를 읽어 key 를 ID 로
+  바꾼다(항목 fields 는 `column_id` 로만 온다). 비어 있으면 스키마를 출력하고 멈춘다(`php sitehub/sync.php schema`, 화면에서는
+  붙여 넣을 PHP 조각까지 만들어 준다). 리스트 ID·토큰 중 하나라도 없으면 동기화 버튼만 숨는다.
+  - **요청일시는 글자 열**(2026-10-08 변경) — Slack Lists 의 날짜 열은 시간을 못 담아서 `요청일시`(text, `YYYY-MM-DD HH:MM`)를 새로
+    만들고 옛 날짜 열은 `요청일(날짜)`로 이름만 바꿨다. 작업내용 앞머리 시간은 `sitehub/tools/move_request_time.php`(미리보기 →
+    `?apply=1`, rich_text 의 앞머리 글자만 떼서 서식 유지, 원본은 `var/sitehub/move_time_*.json` 백업, 토큰에 `lists:write` 필요)로 옮겼다.
+    동기화는 `list_cols.php` 의 `date`(글자 열)를 읽어 `lab_history.req_at` 에 시간까지 넣고, 비어 있으면 `date_old`(날짜 열)로 날짜만.
+  - **이 리스트의 열**: 업체명(`name`, text — 제목이자 사이트) · 우선순위(`priority`, 높음/보통/낮음) · 요청일(날짜)(date) · 요청일시(text) ·
+    요청구분(이메일/전화/카카오톡/내부점검/문자/방문) · 작업내용(text, 옛 이름 '시간 - 작업내용') · 처리상태(1_시작전/2_작업중/4_검토중/처리완료/
+    보류중/취소) · 무/유상 · 완료시간-비고(text) · 참고(attachment). 요청자·담당자(user)·완료일(date) 열은 **없다** —
+    `lab_history.req/asg` 는 `—`, `done` 은 완료시간-비고 앞머리의 날짜에서 파생(`sitehub_lead_date()`). 우선순위·요청구분·
+    무/유상·비고는 `lab_history.priority/channel/paid/remark`. 제목 열 = 업체명이라(`SH.titleIsSite`) 드로어 이력은 작업내용을
+    머리로 쓴다.
+  - **자동 동기화는 화면 기반**(서버 예약 실행은 두지 않기로 함) — SiteHub·통계 화면을 열어 둔 사람이 있으면 마지막 동기화가
+    `config.php` 의 `sitehub_auto_sync_min`(기본 10, 0 이면 끔) 분 넘게 지났을 때 뒤에서 증분 동기화한다(`static/core.js` autoSync,
+    1분마다 확인·가려진 탭은 쉼). 경과 시간은 서버가 주는 `sync_age` 로 맞추고, 여러 명이 열어도 flock 으로 Slack 호출은 한 번.
+    `sync.php` 응답의 `changed`(새 항목·고쳐진 항목·보관에서 돌아온 항목)가 있을 때만 목록·통계를 다시 받고 토스트를 띄운다.
+    아무도 화면을 안 열면 동기화도 없다 — 필요하면 그때 `php sitehub/sync.php` 를 작업 스케줄러/cron 에 걸면 된다.
+  - 증분 워터마크 `lab_sync_meta.updated_max_<listId>`, 전체는 `php sitehub/sync.php full` 또는 `?full=1`. flock 으로 중복 실행 방지.
+  - **매칭 규칙은 `match_lib.php` 한 곳**(동기화·자동 정리 공용). 정규화(공백·괄호·기호·(주) 제거) 후 같음 / 통째로 포함 / 1~2자 오타 /
+    어순만 다름 / 글자가 순서대로 다 들어 있음 / 글자가 다 들어 있음 / 두 글자 조각 겹침 0.7 — 대부분 앞 글자가 같아야 해서 지역명이
+    다른 이름('보은군…' vs '옥천군…')은 안 붙는다. 1·2등 사이트가 0.03 안쪽이면 고르지 않는다(단 1등만 사이트 이름이고 나머지는
+    Slack 표기일 뿐이면 이름 쪽). 사람이 미매칭 시트에서 고른 표기는 다음 동기화부터 저절로 붙는다(`site_locked=1` 이력 학습).
+    Slack 하위 항목(`parent_item_id` → `lab_history.parent_id`)은 부모 항목의 사이트를 따른다.
+  - **미매칭 자동 정리**(미매칭 시트의 `자동 정리`, API `{action:auto_resolve[, apply:1, exclude]}`) — 미리보기 후 적용. 기존 사이트의
+    다른 표기는 그 사이트에 붙이고 표기를 `slack_names` 에 더한다. 처음 보는 업체는 비슷한 표기끼리 묶어 새 사이트로 만든다(이름은
+    가장 많이 쓴 표기, 비고에 `[Slack 자동 등록]`, URL·계약은 빈칸 → 미계약). 업체명 칸에 작업 내용이 적힌 행(25자 넘음·`->`·날짜·
+    '~함/~추가' 끝말 등)과 여러 사이트에 걸치는 표기('충북대 …')는 건너뛰고 미매칭으로 둔다.
+  - 못 찾으면 `site_id NULL` → 툴바 `미매칭 n` 에서 사람이 지정하면 `site_locked=1` 로 재동기화에도 유지된다. 자주 다르게 적히는
+    업체는 기본 탭 `Slack 표기` 에 그 표기를 더해 두면 다음부터 자동 매칭.
+  - 라이브에서 빠진 항목은 `archived=1`, 돌아오면 0. 라이브 목록이 비면 보관 처리를 건너뛴다(권한 오류로 전체를 보관해 버리는
+    사고 방지). slack 모듈처럼 항목마다 `items.info` 로 확인하지는 않는다.
+  - CLI 는 core/auth.php 를 거치지 않으므로 `sync.php` 가 직접 `Asia/Seoul` 을 못 박는다.
+- **엑셀 가져오기(`import_xlsx.php`)** — 원본은 사내 공유 엑셀 `호스팅 정보_v.xlsx`(시트 하나 = 사이트 하나, `!!전체목록` 시트가
+  담당자·계약만료일·상태 보강). 화면의 `[엑셀 가져오기]`(업로드 또는 레포 루트의 같은 이름 파일) 또는
+  `php sitehub/import_xlsx.php "호스팅 정보_v.xlsx" [--force] [--dry-run] [--dump 시트명]`. 같은 사이트명이 있으면 건너뛰고
+  `--force` 면 그 사이트의 하위 행을 지우고 다시 넣는다. 자유 서술 칸은 "아이디 / 비번", 두 줄, URL, 포트를 가능한 만큼 가르고
+  못 가른 글은 메모에 원문으로 남긴다(정보가 사라지지 않는 게 우선). 계약 형태에 `free`(무상)가 있는 건 이 엑셀의 '무상' 때문.
+  **이 엑셀에는 전 고객사 계정이 들어 있어 커밋 금지**(`.gitignore` 에 `/호스팅 정보*.xlsx`). 7MB 라 PHP 기본
+  `upload_max_filesize`(2M)에 걸리면 안내가 뜬다 — php.ini 를 올리거나 루트 파일/CLI 로.
+- **통계(`stats.php`)는 지정 계정만** — `config.php` 의 `sitehub_stats_emails`(없으면 `guard.php` 의 `SITEHUB_STATS_DEFAULT_EMAILS` =
+  `pink@bluesoft.co.kr`). 목록 위 요약 네 칸과 헤더의 `통계` 버튼도 그 계정에만 보이고, `api.php?stats` 는 다른 계정에 403 을
+  준다(화면만 숨기지 않는다). 집계는 `stats_lib.php` — 계약·사이트는 오늘 기준·보관함 제외(배지와 같은 `sitehub_contract_status()`),
+  연 환산 계약액은 유상 계약중/임박의 최신 계약 금액(월 ×12, 1회 금액은 빼고 건수만, VAT 포함/별도 섞인 채 합산), 만료 예정은
+  지난 30일~앞으로 90일. 유지보수 이력은 `lab_history` 요청일 기준 기간(최근 12개월·올해·작년·전체, 월별 막대는 최대 36개월).
+  차트는 외부 라이브러리 없이 CSS 막대(`static/stats.js`), 월별은 `표로 보기` 가 있다.
+- **수정일 · 수정자 · 변경 이력(`audit_lib.php`)** — 사이트·접속정보·담당자·계약의 모든 쓰기가 `updated_at/updated_by`(portal_users.email,
+  엑셀 가져오기는 `import:xlsx`, 사람이 아니면 `system`)를 올리고 `lab_site_changes` 에 칸 하나 = 행 하나로 남긴다(이전 값 → 새 값,
+  select 는 라벨, 담당자는 이름). **비밀번호는 값을 남기지 않는다** — 복호화한 평문끼리 비교해 바뀌었으면 `(변경됨)` 만(암호문은 IV 가
+  매번 달라 늘 다르다). 하위 행을 고쳐도 사이트의 `updated_at/by` 가 같이 오른다(`sitehub_touch()`). 바뀐 게 없는 저장은 수정일도 기록도
+  안 남긴다. 사이트를 완전 삭제해도 기록은 남는다. 미매칭 자동 정리·엑셀 가져오기도 기록한다. 처음 한 번 `audit_seed` 마이그레이션이
+  엑셀에서 들어온 뒤 손대지 않은 행을 `import:xlsx` 로 표시하고, 그 전에 고친 행은 수정자 없이 날짜만 남는다.
+  화면: 드로어 머리 '마지막 수정', 하위 행마다 도장, 목록 '수정 n일 전', 드로어 7번째 탭 '변경 이력'(`GET ?changes=<site_id>`).
+- **BLUMO 감시 (`monitor_*.php`)** — 예전 따로 돌던 BLUMO(`D:\00_CIboard_package\004_blumo`, SQLite, http://blumo.pink)를 SiteHub 안으로 옮기고 그 폴더는 지웠다.
+  감시 대상은 사이트 상세의 `감시 설정` 탭(`lab_site_monitors` — 주소·구분·정상 판정 문구·에이전트 주소/키(enc:v1)·느림/대기/최소 크기·자동 점검 멈춤·알림 무음),
+  사이트의 `monitor=1` 이 감시 켜짐. 점검 엔진은 `monitor_engine.php`(판정 규칙 blumo_classify·blumo_cause 는 예전 BLUMO 그대로 — 바꾸면 장애 이력의 뜻이 바뀐다),
+  자동 실행은 **작업 스케줄러가 `php-win.exe sitehub\monitor_run.php` 를 5분마다**(`sitehub\tools\monitor-task.bat` 로 등록, 예전 "BLUMO" 작업은 지운다).
+  기록: `lab_monitor_state`(주소별 현재 상태 — 목록의 초록/빨강 원) · `lab_monitor_checks`(점검마다, retention_days 기본 180일) · `lab_monitor_incidents`(확정된 장애).
+  장애는 confirm_failures(기본 2)회 연속 실패로 확정, 상태가 바뀔 때만 웹훅(Slack #blumo) — 재알림 repeat_alert_min 분, 무음 중엔 기록만.
+  설정은 `lab_sync_meta` 의 `blumo_*`(웹훅 주소는 enc:v1). 화면 `monitor.php`: 감시 현황(지금 점검·전체 지금 점검·멈춤·무음·점검 기록 시트) · 장애 이력 ·
+  설정(지정 계정 — 웹훅·판정 기준·일시정지·환경 진단·예전 BLUMO 가져오기). 전체 지금 점검은 웹 요청이 길어지지 않게 CLI 를 뒤로 띄운다
+  (`blumo_php_cli()` 가 php.exe 를 찾는다. 못 찾으면 config.php `sitehub_php_cli`). https 점검은 `monitor/cacert.pem` 으로 인증서를 검증한다(윈도우 PHP 는 CA 묶음이 없다 —
+  검증을 끄면 TLS_FAIL 을 못 잡는다). `monitor/` 는 `.htaccess` 로 막는다 — `agent.tpl` 은 예전 blumo-agent.php 원본이라 .php 로 두면 자리 표시 키로 열린다.
+  예전 BLUMO 31곳은 `blumo_seed.php`(blumo_id 포함)로 사이트에 붙이고, 그쪽 설정·점검 기록은 설정 › 예전 BLUMO 가져오기 — 예전 blumo.sqlite 는 `var/sitehub/blumo_legacy.sqlite` 에 복사해 두었다(웹훅 주소가 들어 있음, gitignore·웹 차단. pdo_sqlite 필요, 경로 config `sitehub_blumo_legacy_db`).
+- 포털 등록은 세 곳 — `core/worksystems.json`(`key: sitehub`), 루트 `index.php` 의 `sitehubIcon` + ICONS 맵, 모듈 안의
+  `need_login=sitehub` · `work_systems_menu(..., 'sitehub')`.
+
+---
+
 ## slackai (WorkHub AI · 테스트베드)
 
 `slack/` 을 복사해 AI 레이어를 얹은 모듈. **`slack/` 은 건드리지 않고, 데이터베이스도 `slackai_db` 로 분리**한다
@@ -1478,6 +1603,10 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 | `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
 | `config.php` 의 `dti_slack_webhook` | dti 모듈 Slack 웹훅 URL(선택) | 없으면 발표자 등록 알림만 비활성 |
 | `SVN_배포_디비정보(블루내부공유).xlsx` (루트) | access 모듈 초기 데이터 | **직접 가져다 둘 것.** 전 대학 계정/비번이 들어 있어 커밋 금지 |
+| `config.php` 의 `sitehub_list_id` · `sitehub_list_url` | sitehub 모듈이 읽는 Slack 리스트(BlueLab-유지보수처리목록) ID·주소 | 없으면 이력 동기화만 꺼진다 |
+| `config.local.php` 의 `sitehub_slack_token` | sitehub 이력 동기화 토큰 (thebluesoft.slack.com — 포털 개인 토큰과 다른 워크스페이스) | **직접 추가.** 없으면 로그인 사용자의 개인 토큰을 시도 |
+| `config.php` 의 `sitehub_stats_emails` | sitehub 통계를 볼 수 있는 계정 목록 | 선택. 없으면 `pink@bluesoft.co.kr` 하나 |
+| `sitehub/list_cols.php` 의 값 | BlueLab 리스트의 컬럼 매핑 | 저장소에 **채워져** 있다(리스트 F088VTXBD0R 기준). 리스트 열이 바뀌면 `php sitehub/sync.php schema` 로 확인해 고친다 |
 
 `slack/config.php` 형식:
 ```php
@@ -1516,6 +1645,13 @@ return [
     'comment_channel' => 'C083TU7F0BZ',
     'list_url'        => 'https://coursemos.slack.com/lists/T04LNBX6L/F083TU7F0BZ',
 
+    // sitehub(BlueLab SiteHub) — Slack 리스트 'BlueLab-유지보수처리목록'. 워크스페이스는 thebluesoft.slack.com 이라
+    // 포털의 개인 토큰(coursemos)으로는 못 읽는다 → 토큰은 config.local.php 의 'sitehub_slack_token'.
+    // 비어 있으면 이력 동기화만 꺼지고 나머지 화면은 그대로 쓴다.
+    'sitehub_list_id'     => '',   // 예: F0XXXXXXXXX
+    'sitehub_list_url'    => '',   // 예: https://thebluesoft.slack.com/lists/T0XXXXXXX/F0XXXXXXXXX
+    'sitehub_slack_token' => $localCfg['sitehub_slack_token'] ?? null,
+
     // dti(DTI 발표) 슬랙 알림 웹훅 — 선택. 없으면 발표자 등록 알림만 조용히 꺼진다.
     // (파이썬 magazine 의 config_local.py 에 있던 SLACK_WEBHOOK_URL 자리다)
     'dti_slack_webhook' => null,
@@ -1539,6 +1675,7 @@ return [
 <?php
 return [
     'key' => 'p1WLBZerg/PAf8y7lae4DMSw0v1r8+LsQF3AjiV9Sas=',
+    'sitehub_slack_token' => 'xoxb-… 또는 xoxp-…',   // sitehub 이력 동기화용 (선택)
 ];
 ```
 
