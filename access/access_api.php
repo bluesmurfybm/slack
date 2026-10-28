@@ -34,7 +34,7 @@ try {
         $where = isset($_GET['all']) ? '' : ' WHERE s.active=1';
         $sel   = implode(',', array_map(fn($c) => "a.`$c`", $COLS));
         $rows  = $pdo->query("
-            SELECT s.id AS school_id, s.name, s.ver, s.dev, s.ops, s.`log`, s.active,
+            SELECT s.id AS school_id, s.name, s.ver, s.dev, s.ops, s.active,
                    a.id AS access_id, {$sel}
             FROM schools s
             LEFT JOIN school_access a ON a.school_id = s.id
@@ -64,6 +64,9 @@ try {
     // DB 를 건드리기 전에 먼저 검사한다 — 추가에서 schools 만 들어가고 실패하는 일이 없게.
     if (array_key_exists('test_srv', $in)) $in['test_srv'] = access_norm_test_srv($in['test_srv']);
     if (($in['key'] ?? '') === 'test_srv') $in['value'] = access_norm_test_srv($in['value'] ?? '');
+    // 운영 서버 대수도 같은 방식 — 숫자만 받는다
+    if (array_key_exists('ops_cnt', $in)) $in['ops_cnt'] = access_norm_count($in['ops_cnt']);
+    if (($in['key'] ?? '') === 'ops_cnt') $in['value'] = access_norm_count($in['value'] ?? '');
 
     if ($action === 'delete') {
         if ($accessId <= 0) throw new Exception('잘못된 접속정보 id');
@@ -81,8 +84,9 @@ try {
 
         // 대학명·버전·URL 은 마스터(schools) 소관이라 그쪽으로 보낸다
         // active(유지보수 여부)도 schools 소관이다 — slack 쪽 '학교 사용 여부'와 같은 값
+        // 로그 관리 URL(schools.log)은 이 화면에서 다루지 않는다 — slack 학교 관리에서만 고친다
         $master = ['name' => 'name', 'ver' => 'ver', 'dev' => 'dev', 'ops' => 'ops',
-                   'log' => 'log', 'active' => 'active'];
+                   'active' => 'active'];
         if (isset($master[$key])) {
             if ($schoolId <= 0) throw new Exception('학교를 선택하세요.');
             if ($key === 'name' && $val === '') throw new Exception('대학(기관)명을 입력하세요.');
@@ -134,13 +138,12 @@ try {
             throw new Exception("이미 등록된 대학입니다. (" . $name . ($ver !== '' ? " / {$ver}" : '') . ")");
         }
 
-        $pdo->prepare("INSERT INTO schools (name, ver, dev, ops, `log`, active, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())")
+        $pdo->prepare("INSERT INTO schools (name, ver, dev, ops, active, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, 1, NOW(), NOW())")
             ->execute([
                 $name, $ver,
                 trim((string)($in['dev'] ?? '')),
                 trim((string)($in['ops'] ?? '')),
-                trim((string)($in['log'] ?? '')),
             ]);
         $schoolId = (int)$pdo->lastInsertId();
 
@@ -165,15 +168,15 @@ try {
     if ($action !== 'save') throw new Exception('알 수 없는 action');
 
     // 마스터에 속한 값(대학명/버전/URL)은 같은 화면에서 고칠 수 있게 하되 schools 로 넘긴다
+    // `log`(로그 관리 URL)는 폼에 없는 칸이라 SET 에서 뺀다 — 넣으면 slack 쪽 값이 빈 칸으로 덮인다
     $name = trim((string)($in['name'] ?? ''));
     if ($name === '') throw new Exception('대학(기관)명을 입력하세요.');
-    $pdo->prepare("UPDATE schools SET name=?, ver=?, dev=?, ops=?, `log`=?, updated_at=NOW() WHERE id=?")
+    $pdo->prepare("UPDATE schools SET name=?, ver=?, dev=?, ops=?, updated_at=NOW() WHERE id=?")
         ->execute([
             $name,
             trim((string)($in['ver'] ?? '')),
             trim((string)($in['dev'] ?? '')),
             trim((string)($in['ops'] ?? '')),
-            trim((string)($in['log'] ?? '')),
             $schoolId,
         ]);
 

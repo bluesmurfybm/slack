@@ -85,6 +85,9 @@ tr.r.ended, .card.ended { opacity:.6; }
 .dcell .dpair .dedit { flex:1; min-width:0; }
 .dcell .dchk { display:flex; align-items:center; gap:6px; flex:none; font-size:13px; color:var(--txt); cursor:pointer; white-space:nowrap; }
 .dcell .dchk input { width:16px; height:16px; margin:0; padding:0; flex:none; }
+/* 같은 칸에 붙는 짧은 숫자 칸 — 운영 서버 OS 버전 옆 대수 */
+.dcell .dnum { display:flex; align-items:center; gap:6px; flex:none; font-size:13px; color:var(--txt); white-space:nowrap; }
+.dcell .dnum input { width:64px; height:32px; text-align:right; font-family:Consolas, "D2Coding", monospace; font-size:13px; }
 .gtag { font-size:11px; color:var(--muted); background:var(--bg2); border:1px solid var(--line);
         border-radius:8px; padding:0 6px; margin-left:4px; white-space:nowrap; }
 .ptag { display:inline-block; font-size:11px; font-weight:600; color:#8a4b12; background:#fdf0e2;

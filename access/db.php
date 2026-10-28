@@ -78,6 +78,8 @@ function access_db() {
             `id`          INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `school_id`   INT UNSIGNED NOT NULL COMMENT 'schools.id (마스터)',
             `os`          VARCHAR(60)  NOT NULL DEFAULT 'Rocky 8' COMMENT '서버 OS 버전',
+            `ops_os`      VARCHAR(60)  NOT NULL DEFAULT '' COMMENT '운영 서버 OS 버전',
+            `ops_cnt`     VARCHAR(10)  NOT NULL DEFAULT '' COMMENT '운영 서버 대수 (빈 칸 = 모름)',
             `opened`      VARCHAR(120) NOT NULL DEFAULT '' COMMENT '사업시작/최초운영오픈년월',
             `vpn`         VARCHAR(80)  NOT NULL DEFAULT '' COMMENT 'VPN/접근제어 프로그램명. 비어 있으면 별도 실행 불필요',
             `vpn_note`    TEXT         NULL COMMENT 'VPN 접속 방법 / 판정 근거가 된 문장',
@@ -194,6 +196,16 @@ function access_db() {
     } elseif (access_col_default($pdo, 'os') !== ACCESS_OS_DEFAULT) {
         $pdo->exec("ALTER TABLE `school_access` MODIFY `os` VARCHAR(60) NOT NULL DEFAULT '" . ACCESS_OS_DEFAULT . "' COMMENT '서버 OS 버전'");
         $pdo->exec("UPDATE school_access SET os='" . ACCESS_OS_DEFAULT . "' WHERE os=''");
+    }
+    // 운영 서버 OS 버전. 운영 서버는 학교가 관리하는 곳이 많아 테스트 서버와 같다고 볼 수
+    // 없으므로 기본값을 깔지 않고 빈 칸으로 시작한다.
+    if (!access_has_column($pdo, 'ops_os')) {
+        add_column_if_missing($pdo, "ALTER TABLE `school_access` ADD COLUMN `ops_os` VARCHAR(60) NOT NULL DEFAULT '' COMMENT '운영 서버 OS 버전' AFTER `os`");
+    }
+    // 운영 서버 대수. 숫자 칸이지만 다른 칸처럼 문자열로 둔다 — 모르는 곳은 빈 칸이어야 하고
+    // 저장 경로가 모든 칸을 문자열로 다룬다. 숫자인지는 access_norm_count() 가 거른다.
+    if (!access_has_column($pdo, 'ops_cnt')) {
+        add_column_if_missing($pdo, "ALTER TABLE `school_access` ADD COLUMN `ops_cnt` VARCHAR(10) NOT NULL DEFAULT '' COMMENT '운영 서버 대수 (빈 칸 = 모름)' AFTER `ops_os`");
     }
 
     // 접속 정보는 DB에 평문으로 두지 않는다.
@@ -369,19 +381,11 @@ function access_detect_vpn(array $row) {
     return ['vpn' => implode(', ', $names), 'vpn_note' => implode("\n", array_slice($hits, 0, 8))];
 }
 
-/* ─────────── 비밀번호 암·복호화 ───────────
- * 화면에 복사 버튼이 있어야 하므로 되돌릴 수 있는 방식이어야 한다. 포털이 슬랙 토큰에 쓰는
- * 것과 같은 AES-256-GCM + config.php 의 'key'(config.local.php 에서 1회 자동 생성)를 쓴다.
- * auth.php 의 enc_token()/dec_token() 을 그대로 부르지 않는 이유는 그 파일이 include 시점에
- * 세션을 여는데, 가져오기 스크립트는 CLI 로도 돌기 때문이다.
- *
- * 저장 형태는 'enc:v1:<base64(iv|tag|cipher)>'. 접두사가 붙은 값만 암호문으로 보고, 없으면
- * 아직 안 옮긴 평문으로 보고 그대로 돌려준다 — 마이그레이션이 멱등해진다.
- */
 /**
- * 테스트 서버 정보 형식 검사 — 두 줄로 정해 둔 칸이다.
+ * 테스트 서버 정보 형식 검사 — 두 줄(필요하면 세 줄)로 정해 둔 칸이다.
  *   1줄: 아이피[:포트]       예) 10.0.0.12:2222, 10.0.0.12
  *   2줄: 아이디 / 비밀번호   예) root / Zhtm&ahtm1
+ *   3줄: 프로젝트 폴더 위치  예) /home/ubion/lms — 한 서버에서 여러 사이트를 돌릴 때만. 생략 가능
  * 비밀번호에 '/' 가 들어갈 수 있어서 첫 '/' 에서만 가른다. 빈 값은 그대로 통과(미입력).
  * 공백·줄바꿈을 정리한 값을 돌려주고, 형식이 틀리면 Exception.
  */
@@ -389,8 +393,9 @@ function access_norm_test_srv($v) {
     $v = trim(str_replace("\r", '', (string)$v));
     if ($v === '') return '';
     $lines = array_values(array_filter(array_map('trim', explode("\n", $v)), 'strlen'));
-    $form  = '테스트 서버 정보는 두 줄로 적어 주세요 — 1줄: 아이피:포트(포트 생략 가능), 2줄: 아이디 / 비밀번호';
-    if (count($lines) !== 2) throw new Exception($form);
+    $form  = '테스트 서버 정보는 두 줄로 적어 주세요 — 1줄: 아이피:포트(포트 생략 가능), 2줄: 아이디 / 비밀번호'
+           . ' (한 서버에 여러 사이트면 3줄: 프로젝트 폴더 위치)';
+    if (count($lines) < 2 || count($lines) > 3) throw new Exception($form);
 
     if (!preg_match('/^(\d{1,3}(?:\.\d{1,3}){3})(?:\s*:\s*(\d{1,5}))?$/', $lines[0], $m)) {
         throw new Exception('첫 줄의 아이피 형식이 맞지 않습니다: ' . $lines[0] . ' (예: 10.0.0.12:22)');
@@ -406,7 +411,13 @@ function access_norm_test_srv($v) {
     if (!preg_match('#^([^/\s]+)\s*/\s*(.+)$#', $lines[1], $a)) {
         throw new Exception('둘째 줄은 "아이디 / 비밀번호" 형식이어야 합니다.');
     }
-    return $m[1] . ($port !== '' ? ':' . (int)$port : '') . "\n" . $a[1] . ' / ' . $a[2];
+    // 폴더 위치는 경로처럼 생긴 것만 받는다 — 메모가 섞여 들어오는 걸 막는다
+    $dir = $lines[2] ?? '';
+    if ($dir !== '' && !preg_match('#^(?:/|~|[A-Za-z]:[\\\\/])#', $dir)) {
+        throw new Exception('셋째 줄은 프로젝트 폴더 위치입니다. 경로로 적어 주세요: ' . $dir . ' (예: /home/ubion/lms)');
+    }
+    return $m[1] . ($port !== '' ? ':' . (int)$port : '') . "\n" . $a[1] . ' / ' . $a[2]
+         . ($dir !== '' ? "\n" . $dir : '');
 }
 
 /**
@@ -561,6 +572,15 @@ function access_rich_text($v) {
     return str_replace("\u{00A0}", ' ', $t);
 }
 
+/* ─────────── 비밀번호 암·복호화 ───────────
+ * 화면에 복사 버튼이 있어야 하므로 되돌릴 수 있는 방식이어야 한다. 포털이 슬랙 토큰에 쓰는
+ * 것과 같은 AES-256-GCM + config.php 의 'key'(config.local.php 에서 1회 자동 생성)를 쓴다.
+ * auth.php 의 enc_token()/dec_token() 을 그대로 부르지 않는 이유는 그 파일이 include 시점에
+ * 세션을 여는데, 가져오기 스크립트는 CLI 로도 돌기 때문이다.
+ *
+ * 저장 형태는 'enc:v1:<base64(iv|tag|cipher)>'. 접두사가 붙은 값만 암호문으로 보고, 없으면
+ * 아직 안 옮긴 평문으로 보고 그대로 돌려준다 — 마이그레이션이 멱등해진다.
+ */
 function access_secret_cols() {
     // 비밀번호뿐 아니라 서버·DB 접속 정보가 통째로 들어가는 칸까지 모두 암호화한다.
     // 화면에 뿌릴 때 API 가 풀어서 내려보내므로 쓰는 쪽은 달라지는 게 없다.
@@ -743,9 +763,22 @@ function access_split_login($raw) {
     ];
 }
 
+/**
+ * 운영 서버 대수 정리 — 빈 칸(모름) 또는 1~999. "2대" 처럼 적어도 숫자만 남긴다.
+ * 형식이 틀리면 화면에 보여 줄 문장으로 예외를 던진다.
+ */
+function access_norm_count($v) {
+    $v = trim((string)$v);
+    if ($v === '') return '';
+    if (!preg_match('/^(\d{1,3})\s*대?$/u', $v, $m) || (int)$m[1] < 1) {
+        throw new Exception('운영 서버 대수는 숫자로 입력하세요. 예) 2');
+    }
+    return (string)(int)$m[1];
+}
+
 /** school_access 에서 사용자가 편집할 수 있는 컬럼 (school_id/sort_no 는 제외) */
 function access_cols() {
-    return ['os','opened','vpn','vpn_note','repo','test_srv','deploy','note',
+    return ['os','ops_os','ops_cnt','opened','vpn','vpn_note','repo','test_srv','deploy','note',
             'login_dev_id','login_dev','dev_note','dev_db',
             'login_ops_id','login_ops','ops_note','ops_db','haksa_db'];
 }
@@ -756,22 +789,31 @@ function access_cols() {
  *
  *   type  input=한 줄, pw=가림(눈 아이콘), rich=Editor.js(굵기·색·취소선·목록)
  *   copy  1이면 값 옆에 복사 버튼
- * 'master' => 1 은 schools 값이라는 표시다(학교명). 상세에서 고치면 schools 를 고치고,
+ *   num   1이면 숫자 칸(휴대폰에서 숫자 자판). 값 검사는 access_api.php 가 한다.
+ *   check 켬/끔 체크 (학교명 옆 '사용' = schools.active)
+ * 'master' => 1 은 schools 값이라는 표시다(학교명·사용 여부). 상세에서 고치면 schools 를 고치고,
  * 추가/수정 모달에서는 위쪽 '학교 정보' 묶음이 따로 다루므로 빠진다.
- * 'with' => 'active' 는 같은 칸 오른쪽에 붙는 켬/끔 체크다(학교명 옆 '사용' = schools.active).
- * 저장 버튼은 칸에 하나라서 둘 중 바뀐 것만 저장한다(access.php 의 saveCell).
+ * 'in' => 'name' 처럼 쓰면 상세 화면에서 그 칸 오른쪽에 붙는다 — 컬럼은 따로고 입력칸만 한 칸에 모은다.
+ * 칸 제목은 '앞 칸 이름 · short', 입력칸 옆 글자는 text. 저장 버튼은 칸에 하나라서 바뀐 것만
+ * 컬럼별로 따로 저장한다(access.php 의 saveCell). 추가/수정 모달에서는 제 이름으로 따로 나온다.
  *   url   schools 에서 오는 값(마스터). 편집은 '학교 정보' 칸에서 한다.
  */
 function access_field_groups() {
     return [
         ['title' => '공통 정보', 'fields' => [
             // 학교명 칸 오른쪽에 '사용' 체크(schools.active)를 같이 둔다 — 저장 버튼 하나로 둘 다
-            ['key' => 'name',     'label' => '학교명 · 사용 여부', 'type' => 'input', 'master' => 1, 'with' => 'active'],
-            ['key' => 'os',       'label' => 'OS 버전',        'type' => 'input', 'default' => ACCESS_OS_DEFAULT],
+            ['key' => 'name',     'label' => '학교명',         'type' => 'input', 'master' => 1],
+            ['key' => 'active',   'label' => '사용 여부',      'type' => 'check', 'master' => 1, 'in' => 'name',
+             'text' => '사용', 'title' => '끄면 목록에서 빠집니다 — slack 학교 사용 여부와 같은 값'],
+            // 서버 OS·대수는 공통 정보에 모은다. os 는 처음부터 있던 칸이라 이름만 테스트 서버 OS 로
+            ['key' => 'os',       'label' => '테스트 서버 OS 버전', 'type' => 'input', 'default' => ACCESS_OS_DEFAULT],
+            ['key' => 'ops_os',   'label' => '운영 서버 OS 버전',   'type' => 'input'],
+            ['key' => 'ops_cnt',  'label' => '운영 서버 대수',      'type' => 'input', 'num' => 1, 'in' => 'ops_os',
+             'short' => '대수', 'text' => '대'],
             ['key' => 'opened',   'label' => '최초 오픈',      'type' => 'input'],
             ['key' => 'repo',     'label' => 'svn / git 주소', 'type' => 'area',  'copy' => 1],
             ['key' => 'test_srv', 'label' => '테스트 서버 정보', 'type' => 'area',  'copy' => 1,
-             'placeholder' => "아이피:포트 (포트는 생략 가능)\n아이디 / 비밀번호"],
+             'placeholder' => "아이피:포트 (포트는 생략 가능)\n아이디 / 비밀번호\n프로젝트 폴더 위치 (한 서버에 여러 사이트일 때)"],
             ['key' => 'vpn',      'label' => 'VPN 프로그램',   'type' => 'input'],
             ['key' => 'vpn_note', 'label' => 'VPN 접속 방법',  'type' => 'rich'],
             ['key' => 'deploy',   'label' => '배포 방법',      'type' => 'rich',  'copy' => 1],
@@ -786,7 +828,6 @@ function access_field_groups() {
         ]],
         ['title' => '운영 서버', 'fields' => [
             ['key' => 'ops',          'label' => '운영 URL',  'type' => 'url',   'copy' => 1],
-            ['key' => 'log',          'label' => '로그 관리', 'type' => 'url',   'copy' => 1],
             ['key' => 'login_ops_id', 'label' => '아이디',    'type' => 'input'],
             ['key' => 'login_ops',    'label' => '비밀번호',  'type' => 'pw',    'copy' => 1],
             ['key' => 'ops_note',     'label' => '메모',      'type' => 'rich'],

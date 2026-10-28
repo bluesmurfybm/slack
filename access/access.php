@@ -415,7 +415,7 @@ function vpnMatch(r) {
 
 function matches(r, q) {
   if (!q) return true;
-  return [r.name, r.ver, r.os, r.vpn, r.dev, r.ops, r.repo,
+  return [r.name, r.ver, r.os, r.ops_os, r.vpn, r.dev, r.ops, r.repo,
           r.login_ops_id, r.login_ops, r.login_dev_id, r.login_dev,
           val(r, "note"), val(r, "dev_db"), val(r, "ops_db"), val(r, "haksa_db")]
     .some(v => (v || "").toLowerCase().includes(q));
@@ -663,7 +663,7 @@ function detailBody(r) {
   // 값이 비어 있어도 칸은 보여 준다 — 인라인 편집이라 빈 칸이 곧 입력 자리다
   const sections = GROUPS.map(g =>
     `<div class="dsec">${esc(g.title)}</div>` +
-    `<div class="dgrid">${g.fields.map(f => groupCell(r, f)).join("")}</div>`
+    `<div class="dgrid">${g.fields.filter(f => !f.in).map(f => groupCell(r, f)).join("")}</div>`
   ).join("");
 
   return `
@@ -693,7 +693,7 @@ function groupCell(r, f) {
   }
 
   return `<div class="dcell" data-f="${escA(f.key)}" data-type="${escA(f.type)}">
-    <div class="dlabel"><span>${esc(f.label)}</span>
+    <div class="dlabel"><span>${esc([f.label, ...partsOf(f).map(p => p.short || p.label)].join(" · "))}</span>
       <span class="dbtns">
         ${extra}
         ${f.type === "pw" ? `<button class="cp deye" type="button" title="표시/숨김">보기</button>` : ""}
@@ -717,17 +717,30 @@ function cellControl(f, v, r) {
   }
   if (f.type === "area") {
     const ph = f.placeholder ? ` placeholder="${escA(f.placeholder)}"` : "";
-    return `<textarea class="dedit" rows="2"${ph} data-orig="${escA(v)}">${esc(v)}</textarea>`;
+    return `<textarea class="dedit" rows="3"${ph} data-orig="${escA(v)}">${esc(v)}</textarea>`;
   }
   // 학교명 중 26곳은 엑셀에서 온 줄바꿈이 들어 있다. input 은 줄바꿈을 못 담으므로 펴서 보여 준다.
-  const input = `<input class="dedit" type="text" value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
-  if (!f.with) return input;
-  // 같은 칸 오른쪽에 붙는 켬/끔 — 학교명 옆 '사용'(schools.active). 서버 설정에 따라 "0" 이 올 수도 있다.
-  const on = !!Number(r && r[f.with]);
-  return `<div class="dpair">${input}
-    <label class="dchk" title="끄면 목록에서 빠집니다 — slack 학교 사용 여부와 같은 값">
-      <input class="dsub" type="checkbox" data-sub="${escA(f.with)}"${on ? " checked" : ""} data-orig="${on ? "1" : "0"}"> 사용
-    </label></div>`;
+  const input = `<input class="dedit" type="text"${f.num ? ' inputmode="numeric"' : ""} value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
+  const parts = partsOf(f);
+  if (!parts.length) return input;
+  return `<div class="dpair">${input}${parts.map(p => subControl(p, r)).join("")}</div>`;
+}
+
+/* 같은 칸에 붙는 칸(정의의 'in') — 학교명 옆 '사용' 체크, 운영 서버 OS 버전 옆 대수.
+   DB 컬럼은 따로고 화면에서만 한 칸에 모은다. 저장은 saveCell 이 바뀐 것만 컬럼별로 보낸다. */
+const partsOf = f => ALLF.filter(p => p.in === f.key);
+
+function subControl(p, r) {
+  const v = r ? String(r[p.key] ?? "") : "";
+  if (p.type === "check") {
+    const on = !!Number(v);   // 서버 설정에 따라 "0" 이 올 수도 있다
+    return `<label class="dchk"${p.title ? ` title="${escA(p.title)}"` : ""}>
+      <input class="dsub" type="checkbox" data-sub="${escA(p.key)}"${on ? " checked" : ""} data-orig="${on ? "1" : "0"}"> ${esc(p.text || p.label)}
+    </label>`;
+  }
+  return `<label class="dnum" title="${escA(p.label)}">
+      <input class="dsub" type="text"${p.num ? ' inputmode="numeric"' : ""} data-sub="${escA(p.key)}" value="${escA(v)}" data-orig="${escA(v)}">${p.text ? " " + esc(p.text) : ""}
+    </label>`;
 }
 
 /* 상세 패널의 편집 요소를 붙인다 — 서식 칸은 Editor.js, 나머지는 입력칸 감시 */
@@ -767,7 +780,7 @@ function bindDetail(box, r) {
   box.querySelectorAll("input.dedit, textarea.dedit").forEach(el =>
     el.addEventListener("input", () => markDirty(el.closest(".dcell"))));
   box.querySelectorAll("input.dsub").forEach(el =>
-    el.addEventListener("change", () => markDirty(el.closest(".dcell"))));
+    el.addEventListener(el.type === "checkbox" ? "change" : "input", () => markDirty(el.closest(".dcell"))));
 
   box.querySelectorAll(".dsave").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); saveCell(b.closest(".dcell"), r); }));
@@ -809,13 +822,16 @@ async function saveCell(cell, r) {
   const value = await cellValue(cell);
   if (value === null) return;
 
-  // [키, 값] 목록. 학교명 칸은 옆의 '사용' 체크까지 같이 저장하되 바뀐 것만 보낸다.
+  // [키, 값] 목록. 같은 칸에 붙은 칸(학교명 옆 '사용', 운영 OS 옆 대수)까지 같이 저장하되
+  // 바뀐 것만 컬럼별로 보낸다.
   const jobs = [[cell.dataset.f, value]];
-  const sub = cell.querySelector("input.dsub");
-  if (sub) {
+  const subs = [...cell.querySelectorAll("input.dsub")];
+  if (subs.length) {
     if (value === cell.querySelector(".dedit").dataset.orig) jobs.pop();
-    const sv = sub.checked ? "1" : "0";
-    if (sv !== sub.dataset.orig) jobs.push([sub.dataset.sub, sv]);
+    for (const sub of subs) {
+      const sv = sub.type === "checkbox" ? (sub.checked ? "1" : "0") : sub.value.trim();
+      if (sv !== sub.dataset.orig) jobs.push([sub.dataset.sub, sv]);
+    }
   }
 
   const btn = cell.querySelector(".dsave");
@@ -866,14 +882,13 @@ const MASTER = [
   ["ver",  "버전",          "input"],
   ["dev",  "개발 URL",      "input"],
   ["ops",  "운영 URL",      "input"],
-  ["log",  "로그 관리 URL",  "input"],
 ];
 /* schools 에 저장되는 칸 — 상세에서 고치면 같은 학교의 모든 행에 반영한다(saveCell) */
-const MASTER_KEYS = new Set([...MASTER.map(m => m[0]), ...ALLF.filter(f => f.with).map(f => f.with)]);
+const MASTER_KEYS = new Set([...MASTER.map(m => m[0]), ...ALLF.filter(f => f.master).map(f => f.key)]);
 
 /* 추가 — 빈 행을 만들어 같은 폼을 띄운다. 저장하면 schools 에도 같이 들어간다. */
 function openCreate() {
-  const blank = { school_id: 0, access_id: 0, name: "", ver: "", dev: "", ops: "", log: "" };
+  const blank = { school_id: 0, access_id: 0, name: "", ver: "", dev: "", ops: "" };
   for (const f of ALLF) blank[f.key] = f.default || "";   // OS 처럼 기본값이 정해진 칸은 미리 채운다
   openForm(blank);
 }
@@ -912,6 +927,12 @@ function placeholderOf(key) {
   return f && f.placeholder ? ` placeholder="${escA(f.placeholder)}"` : "";
 }
 
+/* 숫자 칸(운영 서버 대수)은 휴대폰에서 숫자 자판이 뜨게 한다 */
+function numOf(key) {
+  const f = ALLF.find(x => x.key === key);
+  return f && f.num ? ' inputmode="numeric"' : "";
+}
+
 function cellHtml(key, label, type, value) {
   // 서식 칸은 <label> 로 감싸지 않는다 — 라벨 클릭이 에디터 포커스를 가로챈다
   if (type === "rich" || RICH.has(key)) {
@@ -933,7 +954,7 @@ function cellHtml(key, label, type, value) {
   return `<label class="ecell${type === "area" ? " full" : ""}">
     <span>${esc(label)}</span>
     ${type === "area" ? `<textarea data-k="${escA(key)}" rows="3"${placeholderOf(key)}>${v}</textarea>`
-                      : `<input data-k="${escA(key)}" type="text" value="${escA(value || "")}">`}
+                      : `<input data-k="${escA(key)}" type="text"${numOf(key)} value="${escA(value || "")}">`}
   </label>`;
 }
 
