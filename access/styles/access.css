@@ -18,11 +18,11 @@ button.primary { background:var(--info); color:#fff; border-color:var(--info); }
 button:disabled { opacity:.5; cursor:default; }
 
 /* 검색 히어로 — 이 화면에서 제일 많이 쓰는 동작이라 맨 위 넓은 자리를 준다 */
-.hero { display:flex; flex-direction:column; align-items:center; gap:14px;
+.hero { display:flex; flex-direction:column; align-items:flex-start; gap:14px;
         padding:26px 16px 22px; margin-bottom:14px; border-radius:16px;
         border:1px solid var(--line);
         background:linear-gradient(180deg, var(--info-bg) 0%, var(--bg) 100%); }
-.hero-in { position:relative; width:min(680px, 100%); }
+.hero-in { position:relative; width:100%; }
 .hero-in input { width:100%; height:50px; font-size:14.5px; border-radius:25px;
                  padding:0 42px 0 44px; border:1.5px solid var(--line); background:var(--bg); }
 .hero-in input::placeholder { color:var(--hint); }
@@ -33,7 +33,7 @@ button:disabled { opacity:.5; cursor:default; }
               width:28px; height:28px; padding:0; border:0; border-radius:50%;
               background:var(--bg2); color:var(--muted); font-size:12px; line-height:1; }
 .hero-clear:hover { color:var(--txt); }
-.hero-chips { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.hero-chips { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-start; }
 .hero-chips[hidden] { display:none; }
 /* OS 줄은 버전 줄과 구분되게 한 단계 작고 흐리게 — 두 줄이 똑같이 보이면 헷갈린다 */
 .hero-chips.os .chip { height:26px; padding:0 10px; font-size:12px; }
