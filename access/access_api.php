@@ -86,6 +86,13 @@ try {
         if (isset($master[$key])) {
             if ($schoolId <= 0) throw new Exception('학교를 선택하세요.');
             if ($key === 'name' && $val === '') throw new Exception('대학(기관)명을 입력하세요.');
+            if ($key === 'name') {
+                // 추가 때와 같은 규칙 — 이름·버전이 똑같은 학교가 둘이면 가져오기가 짝을 못 짓는다
+                $st = $pdo->prepare("SELECT 1 FROM schools a JOIN schools b ON b.id = ?
+                                     WHERE a.name = ? AND a.ver = b.ver AND a.id <> b.id LIMIT 1");
+                $st->execute([$schoolId, $val]);
+                if ($st->fetchColumn()) throw new Exception('같은 이름·버전의 학교가 이미 있습니다: ' . $val);
+            }
             if ($key === 'active') $val = (int)!!$val;   // 체크박스 → 0/1
             $col = $master[$key];   // 화이트리스트를 거친 이름만 들어온다
             $pdo->prepare("UPDATE schools SET `{$col}`=?, updated_at=NOW() WHERE id=?")

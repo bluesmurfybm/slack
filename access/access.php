@@ -724,7 +724,8 @@ function cellControl(f, v) {
     return `<label class="dchk"><input class="dedit" type="checkbox"${on ? " checked" : ""}
                    data-orig="${on ? "1" : "0"}"> 사용 <span class="dchk-off">(끄면 목록에서 빠집니다)</span></label>`;
   }
-  return `<input class="dedit" type="text" value="${escA(v)}" data-orig="${escA(v)}">`;
+  // 학교명 중 26곳은 엑셀에서 온 줄바꿈이 들어 있다. input 은 줄바꿈을 못 담으므로 펴서 보여 준다.
+  return `<input class="dedit" type="text" value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
 }
 
 /* 상세 패널의 편집 요소를 붙인다 — 서식 칸은 Editor.js, 나머지는 입력칸 감시 */
@@ -798,7 +799,8 @@ async function cellValue(cell) {
   if (el.type === "checkbox") return el.checked ? "1" : "0";
   // 비밀번호는 원본이 여러 줄일 수 있는데 input 에는 한 줄로 펴서 담았다.
   // 손대지 않았으면 원본을 그대로 둔다 — 안 건드린 값이 조용히 잘리면 안 된다.
-  if (cell.dataset.type === "pw" && el.value === flatPw(el.dataset.orig)) return el.dataset.orig;
+  // 펴서 보여 준 값을 그대로 두었으면 원본(줄바꿈 포함)을 돌려준다 — 조용히 한 줄로 바뀌지 않게
+  if ((cell.dataset.type === "pw" || cell.dataset.type === "input") && el.value === flatPw(el.dataset.orig)) return el.dataset.orig;
   return el.value;
 }
 
@@ -817,7 +819,10 @@ async function saveCell(cell, r) {
     const saved = typeof j.value === "string" ? j.value : value;   // 서버가 형식을 정리해 돌려준 값
     // 서버에 반영된 값을 화면 데이터에도 맞춰 둔다. 전체를 다시 불러오면 열어 둔 상세가
     // 닫히고 다른 칸의 편집 중인 내용까지 날아가서, 이 행만 갱신한다.
-    r[key] = (key === "active") ? (value === "1" ? 1 : 0) : saved;
+    const nv = (key === "active") ? (value === "1" ? 1 : 0) : saved;
+    // 학교명·URL·사용 여부는 schools 값이라 같은 학교의 다른 접속정보 행(한 학교 두 벌)도 같이 바꾼다
+    if (MASTER_KEYS.has(key)) DATA.forEach(x => { if (x.school_id === r.school_id) x[key] = nv; });
+    else r[key] = nv;
     if (j.access_id && !r.access_id) { r.access_id = j.access_id; openKey = "a" + j.access_id; }
     toast("저장했습니다");
     resetDetail();          // 저장된 값으로 상세를 새로 그린다
@@ -851,6 +856,9 @@ const MASTER = [
   ["ops",  "운영 URL",      "input"],
   ["log",  "로그 관리 URL",  "input"],
 ];
+/* schools 에 저장되는 칸 — 상세에서 고치면 같은 학교의 모든 행에 반영한다(saveCell) */
+const MASTER_KEYS = new Set([...MASTER.map(m => m[0]), ...ALLF.filter(f => f.master).map(f => f.key)]);
+
 /* 추가 — 빈 행을 만들어 같은 폼을 띄운다. 저장하면 schools 에도 같이 들어간다. */
 function openCreate() {
   const blank = { school_id: 0, access_id: 0, name: "", ver: "", dev: "", ops: "", log: "" };
@@ -869,10 +877,10 @@ function openForm(r) {
   $("eGrid").innerHTML = [
     `<div class="esec">학교 정보 <span class="ehint">(학교 사이트 관리와 공유되는 값)</span></div>`,
     ...MASTER.map(([k, l, t]) => cellHtml(k, l, t, r[k])),
-    // url 타입은 위 '학교 정보'(schools)에서 이미 고치므로 폼에서는 건너뛴다.
-    // 유지보수(bool)도 schools 값이라 상세 화면에서만 켜고 끈다.
+    // url 타입과 학교명은 위 '학교 정보'(schools)에서 이미 고치므로 폼에서는 건너뛴다.
+    // 사용 여부도 schools 값이라 상세 화면에서만 켜고 끈다.
     ...GROUPS.map(g => `<div class="esec">${esc(g.title)}</div>` +
-      g.fields.filter(f => f.type !== "url" && f.type !== "bool")
+      g.fields.filter(f => f.type !== "url" && !f.master)
               .map(f => cellHtml(f.key, f.label, f.type, r[f.key])).join("")),
   ].join("");
   openModal("mEdit");
