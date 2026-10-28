@@ -717,7 +717,7 @@ function cellControl(f, v, r) {
   }
   if (f.type === "area") {
     const ph = f.placeholder ? ` placeholder="${escA(f.placeholder)}"` : "";
-    return `<textarea class="dedit" rows="3"${ph} data-orig="${escA(v)}">${esc(v)}</textarea>`;
+    return `<textarea class="dedit" rows="${f.rows || 3}"${ph} data-orig="${escA(v)}">${esc(v)}</textarea>`;
   }
   // 학교명 중 26곳은 엑셀에서 온 줄바꿈이 들어 있다. input 은 줄바꿈을 못 담으므로 펴서 보여 준다.
   const input = `<input class="dedit" type="text"${f.num ? ' inputmode="numeric"' : ""} value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
@@ -953,7 +953,7 @@ function cellHtml(key, label, type, value) {
   }
   return `<label class="ecell${type === "area" ? " full" : ""}">
     <span>${esc(label)}</span>
-    ${type === "area" ? `<textarea data-k="${escA(key)}" rows="3"${placeholderOf(key)}>${v}</textarea>`
+    ${type === "area" ? `<textarea data-k="${escA(key)}" rows="${(ALLF.find(x => x.key === key) || {}).rows || 3}"${placeholderOf(key)}>${v}</textarea>`
                       : `<input data-k="${escA(key)}" type="text"${numOf(key)} value="${escA(value || "")}">`}
   </label>`;
 }

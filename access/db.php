@@ -386,15 +386,20 @@ function access_detect_vpn(array $row) {
  *   1줄: 아이피[:포트]       예) 10.0.0.12:2222, 10.0.0.12
  *   2줄: 아이디 / 비밀번호   예) root / Zhtm&ahtm1
  *   3줄: 프로젝트 폴더 위치  예) /home/ubion/lms — 한 서버에서 여러 사이트를 돌릴 때만. 생략 가능
+ * '--' 로 시작하는 줄은 주석이다 — 줄 수·형식 검사에서 빼고, 적은 자리 그대로 남긴다.
+ * 주석만 있어도 된다(아직 서버를 모를 때 "-- 아이피 변경됨, 확인 필요" 같은 메모).
  * 비밀번호에 '/' 가 들어갈 수 있어서 첫 '/' 에서만 가른다. 빈 값은 그대로 통과(미입력).
  * 공백·줄바꿈을 정리한 값을 돌려주고, 형식이 틀리면 Exception.
  */
 function access_norm_test_srv($v) {
     $v = trim(str_replace("\r", '', (string)$v));
     if ($v === '') return '';
-    $lines = array_values(array_filter(array_map('trim', explode("\n", $v)), 'strlen'));
+    $all   = array_values(array_filter(array_map('trim', explode("\n", $v)), 'strlen'));
+    $isNote = fn($l) => strncmp($l, '--', 2) === 0;
+    $lines = array_values(array_filter($all, fn($l) => !$isNote($l)));
+    if (!$lines) return implode("\n", $all);   // 주석만
     $form  = '테스트 서버 정보는 두 줄로 적어 주세요 — 1줄: 아이피:포트(포트 생략 가능), 2줄: 아이디 / 비밀번호'
-           . ' (한 서버에 여러 사이트면 3줄: 프로젝트 폴더 위치)';
+           . ' (한 서버에 여러 사이트면 3줄: 프로젝트 폴더 위치, 메모는 -- 로 시작)';
     if (count($lines) < 2 || count($lines) > 3) throw new Exception($form);
 
     if (!preg_match('/^(\d{1,3}(?:\.\d{1,3}){3})(?:\s*:\s*(\d{1,5}))?$/', $lines[0], $m)) {
@@ -414,10 +419,14 @@ function access_norm_test_srv($v) {
     // 폴더 위치는 경로처럼 생긴 것만 받는다 — 메모가 섞여 들어오는 걸 막는다
     $dir = $lines[2] ?? '';
     if ($dir !== '' && !preg_match('#^(?:/|~|[A-Za-z]:[\\\\/])#', $dir)) {
-        throw new Exception('셋째 줄은 프로젝트 폴더 위치입니다. 경로로 적어 주세요: ' . $dir . ' (예: /home/ubion/lms)');
+        throw new Exception('셋째 줄은 프로젝트 폴더 위치입니다. 경로로 적어 주세요: ' . $dir
+                            . ' (예: /home/ubion/lms, 메모라면 -- 로 시작)');
     }
-    return $m[1] . ($port !== '' ? ':' . (int)$port : '') . "\n" . $a[1] . ' / ' . $a[2]
-         . ($dir !== '' ? "\n" . $dir : '');
+    $norm = array_filter([$m[1] . ($port !== '' ? ':' . (int)$port : ''), $a[1] . ' / ' . $a[2], $dir], 'strlen');
+    // 주석 줄은 제자리에 두고, 나머지 줄만 정리한 값으로 바꿔 끼운다
+    $out = [];
+    foreach ($all as $l) $out[] = $isNote($l) ? $l : array_shift($norm);
+    return implode("\n", $out);
 }
 
 /**
@@ -790,6 +799,7 @@ function access_cols() {
  *   type  input=한 줄, pw=가림(눈 아이콘), rich=Editor.js(굵기·색·취소선·목록)
  *   copy  1이면 값 옆에 복사 버튼
  *   num   1이면 숫자 칸(휴대폰에서 숫자 자판). 값 검사는 access_api.php 가 한다.
+ *   rows  area 의 줄 수(기본 3). placeholder 가 그보다 길면 늘려야 안내가 잘리지 않는다.
  *   check 켬/끔 체크 (학교명 옆 '사용' = schools.active)
  * 'master' => 1 은 schools 값이라는 표시다(학교명·사용 여부). 상세에서 고치면 schools 를 고치고,
  * 추가/수정 모달에서는 위쪽 '학교 정보' 묶음이 따로 다루므로 빠진다.
@@ -813,7 +823,8 @@ function access_field_groups() {
             ['key' => 'opened',   'label' => '최초 오픈',      'type' => 'input'],
             ['key' => 'repo',     'label' => 'svn / git 주소', 'type' => 'area',  'copy' => 1],
             ['key' => 'test_srv', 'label' => '테스트 서버 정보', 'type' => 'area',  'copy' => 1,
-             'placeholder' => "아이피:포트 (포트는 생략 가능)\n아이디 / 비밀번호\n프로젝트 폴더 위치 (한 서버에 여러 사이트일 때)"],
+             'rows' => 4,   // 안내 넷째 줄(주석)까지 보이게
+             'placeholder' => "아이피:포트 (포트는 생략 가능)\n아이디 / 비밀번호\n프로젝트 폴더 위치 (한 서버에 여러 사이트일 때)\n-- 로 시작하는 줄은 주석 (예: -- 2025.3 서버 교체)"],
             ['key' => 'vpn',      'label' => 'VPN 프로그램',   'type' => 'input'],
             ['key' => 'vpn_note', 'label' => 'VPN 접속 방법',  'type' => 'rich'],
             ['key' => 'deploy',   'label' => '배포 방법',      'type' => 'rich',  'copy' => 1],
