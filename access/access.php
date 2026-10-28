@@ -53,6 +53,7 @@ $__bwCurrent = 'access';
     </div>
     <div id="vers" class="hero-chips"></div>
     <div id="oss" class="hero-chips os"></div>
+    <div id="opsoss" class="hero-chips os"></div>
   </div>
 
   <div class="tools">
@@ -127,7 +128,7 @@ const flatPw = s => (s || "").replace(/\s*\n+\s*/g, " ");
    접속정보가 있으면 그 id, 아직 없으면 학교 id 로 구분한다. */
 const rowKey = r => (r.access_id ? "a" + r.access_id : "s" + r.school_id);
 
-let DATA = [], fver = "all", fvpn = "all", fos = "all", openKey = "";
+let DATA = [], fver = "all", fvpn = "all", openKey = "";
 /* 리스트/카드 보기. 취향 문제라 이 브라우저에만 남긴다(읽기 실패해도 리스트로 동작). */
 let view = "list";
 try { if (localStorage.getItem("access_view") === "card") view = "card"; } catch (e) {}
@@ -349,42 +350,51 @@ function buildVers() {
     b.addEventListener("click", () => { fver = b.dataset.v; buildVers(); applyFilter(); }));
 }
 
-/* OS 필터. 버전 칩과 같은 모양으로 검색창 아래에 둔다.
+/* OS 필터 — 테스트 서버 OS · 운영 서버 OS 두 줄. 버전 칩과 같은 모양으로 검색창 아래에 둔다.
    자유 입력이라 실제로 들어온 값만 후보가 된다(VPN 처럼 쉼표로 쪼개지 않는다).
-   아직 아무 데도 OS 를 안 적었으면 거를 게 없으므로 줄 자체를 숨긴다. */
-function buildOsFilter() {
-  const n = {};
-  let none = 0;
-  for (const r of DATA) {
-    const v = (r.os || "").trim();
-    if (!v) { none++; continue; }
-    n[v] = (n[v] || 0) + 1;
-  }
-  const names = Object.keys(n).sort();
-  const wrap = $("oss");
-  wrap.hidden = names.length === 0;
-  if (wrap.hidden) { fos = "all"; wrap.innerHTML = ""; return; }
+   값이 하나도 없어도 줄은 보인다 — '미입력' 칩으로 아직 안 채운 곳을 찾는다. */
+const OS_FILTERS = [
+  { key: "os",     el: "oss",    all: "테스트 서버 OS 전체" },
+  { key: "ops_os", el: "opsoss", all: "운영 서버 OS 전체" },
+];
+const fos = { os: "all", ops_os: "all" };   // 줄마다 고른 칩
 
-  const list = [
-    ["all", "OS 전체", DATA.length],
-    ...names.map(v => ["p:" + v, v, n[v]]),
-    ...(none ? [["none", "미입력", none]] : []),
-  ];
-  wrap.innerHTML = list.map(([v, label, c]) =>
-    `<button type="button" class="chip${v === fos ? " on" : ""}" data-v="${escA(v)}">${esc(label)}<b>${c}</b></button>`).join("");
-  wrap.querySelectorAll(".chip").forEach(b =>
-    b.addEventListener("click", () => { fos = b.dataset.v; buildOsFilter(); applyFilter(); }));
+function buildOsFilter() {
+  for (const o of OS_FILTERS) {
+    const n = {};
+    let none = 0;
+    for (const r of DATA) {
+      const v = (r[o.key] || "").trim();
+      if (!v) { none++; continue; }
+      n[v] = (n[v] || 0) + 1;
+    }
+    const wrap = $(o.el);
+    wrap.hidden = DATA.length === 0;
+    const list = [
+      ["all", o.all, DATA.length],
+      ...Object.keys(n).sort().map(v => ["p:" + v, v, n[v]]),
+      ...(none ? [["none", "미입력", none]] : []),
+    ];
+    wrap.innerHTML = list.map(([v, label, c]) =>
+      `<button type="button" class="chip${v === fos[o.key] ? " on" : ""}" data-v="${escA(v)}">${esc(label)}<b>${c}</b></button>`).join("");
+    wrap.querySelectorAll(".chip").forEach(b =>
+      b.addEventListener("click", () => { fos[o.key] = b.dataset.v; buildOsFilter(); applyFilter(); }));
+  }
 }
 /* 유지보수 종료 = 학교 사용 여부(schools.active)가 꺼진 것. slack 쪽 '학교 사이트 관리'와
    같은 값이라 한쪽에서 끄면 양쪽에 같이 반영된다.
    끝난 곳은 평소 목록 조회(API)에서 빠진다. 상세에서 방금 끈 곳은 applyFilter 가 숨긴다. */
 const isEnded = r => !Number(r.active);
 
+/* 두 줄 모두 맞아야 보인다 — 예) 테스트 Rocky 8 + 운영 미입력 */
 function osMatch(r) {
-  if (fos === "all") return true;
-  const v = (r.os || "").trim();
-  if (fos === "none") return v === "";
-  return v === fos.slice(2);
+  return OS_FILTERS.every(({ key }) => {
+    const f = fos[key];
+    if (f === "all") return true;
+    const v = (r[key] || "").trim();
+    if (f === "none") return v === "";
+    return v === f.slice(2);
+  });
 }
 
 /* VPN 필터. 'FortiClient, Arcon' 처럼 두 개를 같이 쓰는 곳이 있어서 값 전체가 아니라
