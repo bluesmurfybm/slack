@@ -687,7 +687,7 @@ function groupCell(r, f) {
   } else if (f.key === "repo" && v) {
     const ri = repoInfo(v);
     if (ri.cmd && ri.cmd !== v) extra = cpBtn(ri.cmd, ri.kind === "git" ? "git clone" : "주소만");
-  } else if (plain && f.type !== "bool") {
+  } else if (plain) {
     const plk = plinkCmd(plain);
     if (plk) extra = cpBtn(plk, "plink만");
   }
@@ -702,12 +702,12 @@ function groupCell(r, f) {
         <button class="cp dsave" type="button" hidden>저장</button>
       </span>
     </div>
-    ${cellControl(f, v)}
+    ${cellControl(f, v, r)}
   </div>`;
 }
 
 /* 칸 하나의 입력 요소. data-orig 에 원래 값을 담아 두고 그것과 달라지면 저장 버튼을 띄운다. */
-function cellControl(f, v) {
+function cellControl(f, v, r) {
   if (f.type === "rich") {
     return `<div class="ejholder dedit" data-ej="${escA(f.key)}" data-orig="${escA(v)}"></div>`;
   }
@@ -719,13 +719,15 @@ function cellControl(f, v) {
     const ph = f.placeholder ? ` placeholder="${escA(f.placeholder)}"` : "";
     return `<textarea class="dedit" rows="2"${ph} data-orig="${escA(v)}">${esc(v)}</textarea>`;
   }
-  if (f.type === "bool") {
-    const on = !!v && v !== "0";
-    return `<label class="dchk"><input class="dedit" type="checkbox"${on ? " checked" : ""}
-                   data-orig="${on ? "1" : "0"}"> 사용 <span class="dchk-off">(끄면 목록에서 빠집니다)</span></label>`;
-  }
   // 학교명 중 26곳은 엑셀에서 온 줄바꿈이 들어 있다. input 은 줄바꿈을 못 담으므로 펴서 보여 준다.
-  return `<input class="dedit" type="text" value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
+  const input = `<input class="dedit" type="text" value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
+  if (!f.with) return input;
+  // 같은 칸 오른쪽에 붙는 켬/끔 — 학교명 옆 '사용'(schools.active). 서버 설정에 따라 "0" 이 올 수도 있다.
+  const on = !!Number(r && r[f.with]);
+  return `<div class="dpair">${input}
+    <label class="dchk" title="끄면 목록에서 빠집니다 — slack 학교 사용 여부와 같은 값">
+      <input class="dsub" type="checkbox" data-sub="${escA(f.with)}"${on ? " checked" : ""} data-orig="${on ? "1" : "0"}"> 사용
+    </label></div>`;
 }
 
 /* 상세 패널의 편집 요소를 붙인다 — 서식 칸은 Editor.js, 나머지는 입력칸 감시 */
@@ -762,10 +764,10 @@ function bindDetail(box, r) {
     });
   });
 
-  box.querySelectorAll("input.dedit, textarea.dedit").forEach(el => {
-    el.addEventListener("input", () => markDirty(el.closest(".dcell")));
-    if (el.type === "checkbox") el.addEventListener("change", () => markDirty(el.closest(".dcell")));
-  });
+  box.querySelectorAll("input.dedit, textarea.dedit").forEach(el =>
+    el.addEventListener("input", () => markDirty(el.closest(".dcell"))));
+  box.querySelectorAll("input.dsub").forEach(el =>
+    el.addEventListener("change", () => markDirty(el.closest(".dcell"))));
 
   box.querySelectorAll(".dsave").forEach(b =>
     b.addEventListener("click", e => { e.stopPropagation(); saveCell(b.closest(".dcell"), r); }));
@@ -796,7 +798,6 @@ async function cellValue(cell) {
   }
   const el = cell.querySelector(".dedit");
   if (!el) return null;
-  if (el.type === "checkbox") return el.checked ? "1" : "0";
   // 비밀번호는 원본이 여러 줄일 수 있는데 input 에는 한 줄로 펴서 담았다.
   // 손대지 않았으면 원본을 그대로 둔다 — 안 건드린 값이 조용히 잘리면 안 된다.
   // 펴서 보여 준 값을 그대로 두었으면 원본(줄바꿈 포함)을 돌려준다 — 조용히 한 줄로 바뀌지 않게
@@ -805,26 +806,37 @@ async function cellValue(cell) {
 }
 
 async function saveCell(cell, r) {
-  const key = cell.dataset.f;
   const value = await cellValue(cell);
   if (value === null) return;
+
+  // [키, 값] 목록. 학교명 칸은 옆의 '사용' 체크까지 같이 저장하되 바뀐 것만 보낸다.
+  const jobs = [[cell.dataset.f, value]];
+  const sub = cell.querySelector("input.dsub");
+  if (sub) {
+    if (value === cell.querySelector(".dedit").dataset.orig) jobs.pop();
+    const sv = sub.checked ? "1" : "0";
+    if (sv !== sub.dataset.orig) jobs.push([sub.dataset.sub, sv]);
+  }
+
   const btn = cell.querySelector(".dsave");
   btn.disabled = true;
   try {
-    const j = await (await fetch("access_api.php", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save_field", school_id: r.school_id, access_id: r.access_id, key, value }),
-    })).json();
-    if (!j.ok) throw new Error(j.error || "실패");
-    const saved = typeof j.value === "string" ? j.value : value;   // 서버가 형식을 정리해 돌려준 값
-    // 서버에 반영된 값을 화면 데이터에도 맞춰 둔다. 전체를 다시 불러오면 열어 둔 상세가
-    // 닫히고 다른 칸의 편집 중인 내용까지 날아가서, 이 행만 갱신한다.
-    const nv = (key === "active") ? (value === "1" ? 1 : 0) : saved;
-    // 학교명·URL·사용 여부는 schools 값이라 같은 학교의 다른 접속정보 행(한 학교 두 벌)도 같이 바꾼다
-    if (MASTER_KEYS.has(key)) DATA.forEach(x => { if (x.school_id === r.school_id) x[key] = nv; });
-    else r[key] = nv;
-    if (j.access_id && !r.access_id) { r.access_id = j.access_id; openKey = "a" + j.access_id; }
-    toast("저장했습니다");
+    for (const [key, v] of jobs) {
+      const j = await (await fetch("access_api.php", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save_field", school_id: r.school_id, access_id: r.access_id, key, value: v }),
+      })).json();
+      if (!j.ok) throw new Error(j.error || "실패");
+      const saved = typeof j.value === "string" ? j.value : v;   // 서버가 형식을 정리해 돌려준 값
+      // 서버에 반영된 값을 화면 데이터에도 맞춰 둔다. 전체를 다시 불러오면 열어 둔 상세가
+      // 닫히고 다른 칸의 편집 중인 내용까지 날아가서, 이 행만 갱신한다.
+      const nv = (key === "active") ? (v === "1" ? 1 : 0) : saved;
+      // 학교명·URL·사용 여부는 schools 값이라 같은 학교의 다른 접속정보 행(한 학교 두 벌)도 같이 바꾼다
+      if (MASTER_KEYS.has(key)) DATA.forEach(x => { if (x.school_id === r.school_id) x[key] = nv; });
+      else r[key] = nv;
+      if (j.access_id && !r.access_id) { r.access_id = j.access_id; openKey = "a" + j.access_id; }
+    }
+    if (jobs.length) toast("저장했습니다");
     resetDetail();          // 저장된 값으로 상세를 새로 그린다
     render();
   } catch (e) {
@@ -857,7 +869,7 @@ const MASTER = [
   ["log",  "로그 관리 URL",  "input"],
 ];
 /* schools 에 저장되는 칸 — 상세에서 고치면 같은 학교의 모든 행에 반영한다(saveCell) */
-const MASTER_KEYS = new Set([...MASTER.map(m => m[0]), ...ALLF.filter(f => f.master).map(f => f.key)]);
+const MASTER_KEYS = new Set([...MASTER.map(m => m[0]), ...ALLF.filter(f => f.with).map(f => f.with)]);
 
 /* 추가 — 빈 행을 만들어 같은 폼을 띄운다. 저장하면 schools 에도 같이 들어간다. */
 function openCreate() {
@@ -878,10 +890,14 @@ function openForm(r) {
     `<div class="esec">학교 정보 <span class="ehint">(학교 사이트 관리와 공유되는 값)</span></div>`,
     ...MASTER.map(([k, l, t]) => cellHtml(k, l, t, r[k])),
     // url 타입과 학교명은 위 '학교 정보'(schools)에서 이미 고치므로 폼에서는 건너뛴다.
-    // 사용 여부도 schools 값이라 상세 화면에서만 켜고 끈다.
-    ...GROUPS.map(g => `<div class="esec">${esc(g.title)}</div>` +
-      g.fields.filter(f => f.type !== "url" && !f.master)
-              .map(f => cellHtml(f.key, f.label, f.type, r[f.key])).join("")),
+    // 학교명 옆 '사용' 체크도 schools 값이라 상세 화면에서만 켜고 끈다.
+    // 남는 칸이 없는 묶음은 제목도 그리지 않는다
+    ...GROUPS.map(g => {
+      const fs = g.fields.filter(f => f.type !== "url" && !f.master);
+      return fs.length
+        ? `<div class="esec">${esc(g.title)}</div>` + fs.map(f => cellHtml(f.key, f.label, f.type, r[f.key])).join("")
+        : "";
+    }),
   ].join("");
   openModal("mEdit");
   bindEyes();

@@ -756,18 +756,19 @@ function access_cols() {
  *
  *   type  input=한 줄, pw=가림(눈 아이콘), rich=Editor.js(굵기·색·취소선·목록)
  *   copy  1이면 값 옆에 복사 버튼
- *   bool  켬/끔 (지금은 사용 여부 = schools.active)
- * 'master' => 1 은 schools 값이라는 표시다(학교명·사용 여부). 상세에서 고치면 schools 를 고치고,
+ * 'master' => 1 은 schools 값이라는 표시다(학교명). 상세에서 고치면 schools 를 고치고,
  * 추가/수정 모달에서는 위쪽 '학교 정보' 묶음이 따로 다루므로 빠진다.
+ * 'with' => 'active' 는 같은 칸 오른쪽에 붙는 켬/끔 체크다(학교명 옆 '사용' = schools.active).
+ * 저장 버튼은 칸에 하나라서 둘 중 바뀐 것만 저장한다(access.php 의 saveCell).
  *   url   schools 에서 오는 값(마스터). 편집은 '학교 정보' 칸에서 한다.
  */
 function access_field_groups() {
     return [
         ['title' => '공통 정보', 'fields' => [
-            ['key' => 'name',     'label' => '학교명',         'type' => 'input', 'master' => 1],
+            // 학교명 칸 오른쪽에 '사용' 체크(schools.active)를 같이 둔다 — 저장 버튼 하나로 둘 다
+            ['key' => 'name',     'label' => '학교명 · 사용 여부', 'type' => 'input', 'master' => 1, 'with' => 'active'],
             ['key' => 'os',       'label' => 'OS 버전',        'type' => 'input', 'default' => ACCESS_OS_DEFAULT],
             ['key' => 'opened',   'label' => '최초 오픈',      'type' => 'input'],
-            ['key' => 'active',   'label' => '사용 여부',      'type' => 'bool',  'master' => 1],
             ['key' => 'repo',     'label' => 'svn / git 주소', 'type' => 'area',  'copy' => 1],
             ['key' => 'test_srv', 'label' => '테스트 서버 정보', 'type' => 'area',  'copy' => 1,
              'placeholder' => "아이피:포트 (포트는 생략 가능)\n아이디 / 비밀번호"],
