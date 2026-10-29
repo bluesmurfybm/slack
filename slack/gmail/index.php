@@ -577,51 +577,85 @@ if ($starF) $flt .= " AND flagged = 1";
 /* 목록은 대화(thrid) 단위 1행 — 대표는 대화의 최신 메일 (Gmail 과 동일).
    thrid 미예열(NULL)/조회불가(0) 메일은 자기 자신이 한 대화. */
 $G = "COALESCE(NULLIF(thrid,0), uid)";                     // 대화 그룹 키
-$q = $pdo->prepare("SELECT COUNT(DISTINCT $G) FROM gmail_mails WHERE account = ?$flt");
-$q->execute(array_merge([$acct], $fp));
-$count = (int)$q->fetchColumn();
-$q = $pdo->prepare("SELECT COUNT(*) FROM (SELECT 1 FROM gmail_mails WHERE account = ?$flt
-                    GROUP BY $G HAVING SUM(seen = 0) > 0) t");
-$q->execute(array_merge([$acct], $fp));
-$unreadCnt = (int)$q->fetchColumn();
-$pages     = max(1, (int)ceil($count / $perPage));
-if ($page > $pages - 1) $page = $pages - 1;
 // 최신 활동 = 받은 메일과 내가 보낸 답장 중 가장 늦은 것 (Gmail 은 내 답장도 대화 날짜·순서에 반영)
 $lastAct = "GREATEST(x.last_udate, COALESCE(sc.slast, 0))";
 $order = $unreadFirst ? "(x.unread > 0) DESC, $lastAct DESC" : "$lastAct DESC";
-$pdo->exec("SET SESSION group_concat_max_len = 8192");     // 참여자 목록 잘림 방지
-// 대표 = 처음 보낸 원본 메일(제목·본문), 날짜/정렬 = 대화의 최신 활동 시각 (Gmail 동일)
-// 대화 수 = 받은 메일 + 내가 보낸 메일(gmail_sent) — Gmail 대화 화면의 건수와 같게
-$st = $pdo->prepare("
-    SELECT m.uid, m.subject, m.sender, m.body, m.labels, x.cnt + COALESCE(sc.scnt, 0) AS cnt, COALESCE(sc.scnt, 0) AS scnt,
-           x.unread, x.senders, x.has_att, x.starred,
-           $lastAct AS udate,
-           CASE WHEN x.unread > 0 THEN 0 ELSE 1 END AS seen
-    FROM (
-        SELECT $G AS g, COUNT(*) AS cnt, SUM(seen = 0) AS unread, MAX(udate) AS last_udate,
-               MAX(CASE WHEN atts IS NOT NULL AND atts <> '[]' THEN 1 ELSE 0 END) AS has_att,
-               MAX(flagged) AS starred,
-               GROUP_CONCAT(DISTINCT sender ORDER BY udate SEPARATOR '||') AS senders,
-               MIN(CONCAT(LPAD(udate, 10, '0'), LPAD(uid, 10, '0'))) AS mk   -- 대화의 첫 메일
-        FROM gmail_mails WHERE account = ?$flt GROUP BY g
-    ) x
-    JOIN gmail_mails m
-      ON m.account = ? AND CONCAT(LPAD(m.udate, 10, '0'), LPAD(m.uid, 10, '0')) = x.mk
-    LEFT JOIN (SELECT s.thrid, COUNT(*) AS scnt, MAX(s.udate) AS slast
-               FROM gmail_sent s
-               WHERE s.account = ? AND s.thrid IS NOT NULL
-                 -- 나에게 보낸/나를 참조한 메일은 받은편지함에도 같은 메일(같은 대화·같은 시각)이 있다 → 두 번 세지 않게
-                 AND NOT EXISTS (SELECT 1 FROM gmail_mails i WHERE i.account = s.account AND i.thrid = s.thrid AND i.udate = s.udate)
-               GROUP BY s.thrid) sc
-      ON sc.thrid = x.g
-    ORDER BY $order
-    LIMIT " . (int)$perPage . " OFFSET " . (int)($page * $perPage));
-$st->execute(array_merge([$acct], $fp, [$acct, $acct]));
-$rows = $st->fetchAll(PDO::FETCH_ASSOC);
-foreach ($rows as &$r) {                                   // 내가 답장한 대화는 참여자에 '나' (Gmail: "신중혁, 나")
-    if ((int)$r['scnt'] > 0) $r['senders'] .= '||나';
+/* 1단계: 정렬에 필요한 좁은 값(안 읽음 수·최신 시각)만 대화별로 모아 이 쪽에 나올 대화를 고른다.
+   본문 같은 넓은 컬럼까지 모든 대화에 대해 읽고 정렬하면 메일 수만 건에서 1~2초가 걸린다.
+   전체/안 읽은 대화 수는 창 함수로 같은 스캔에서 센다(검색어가 있으면 본문 LIKE 스캔이 한 번만 돈다).
+   동순위는 대화 키로 고정 — 안 그러면 같은 시각 대화가 쪽을 넘길 때 겹치거나 빠진다. */
+$pickPage = function ($page) use ($pdo, $acct, $G, $flt, $fp, $lastAct, $order, $perPage) {
+    $st = $pdo->prepare("
+        SELECT x.g, x.is_thr, x.unread, COALESCE(sc.scnt, 0) AS scnt, $lastAct AS udate,
+               COUNT(*) OVER () AS total, SUM(x.unread > 0) OVER () AS total_unread
+        FROM (SELECT $G AS g, MAX(COALESCE(thrid, 0) > 0) AS is_thr, SUM(seen = 0) AS unread, MAX(udate) AS last_udate
+              FROM gmail_mails WHERE account = ?$flt GROUP BY g) x
+        LEFT JOIN (SELECT s.thrid, COUNT(*) AS scnt, MAX(s.udate) AS slast
+                   FROM gmail_sent s
+                   WHERE s.account = ? AND s.thrid IS NOT NULL
+                     -- 나에게 보낸/나를 참조한 메일은 받은편지함에도 같은 메일(같은 대화·같은 시각)이 있다 → 두 번 세지 않게
+                     AND NOT EXISTS (SELECT 1 FROM gmail_mails i WHERE i.account = s.account AND i.thrid = s.thrid AND i.udate = s.udate)
+                   GROUP BY s.thrid) sc
+          ON sc.thrid = x.g
+        ORDER BY $order, x.g DESC
+        LIMIT " . (int)$perPage . " OFFSET " . (int)($page * $perPage));
+    $st->execute(array_merge([$acct], $fp, [$acct]));
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+};
+$top = $pickPage($page);
+if (!$top && $page > 0) {                                  // 범위 밖 쪽(메일이 줄었거나 필터가 바뀜) → 마지막 쪽
+    $q = $pdo->prepare("SELECT COUNT(DISTINCT $G) FROM gmail_mails WHERE account = ?$flt");
+    $q->execute(array_merge([$acct], $fp));
+    $page = max(0, (int)ceil((int)$q->fetchColumn() / $perPage) - 1);
+    $top = $pickPage($page);
 }
-unset($r);
+$count     = $top ? (int)$top[0]['total'] : 0;
+$unreadCnt = $top ? (int)$top[0]['total_unread'] : 0;
+$pages     = max(1, (int)ceil($count / $perPage));
+/* 2단계: 고른 대화들만 세부 집계(건수·첨부·별표·참여자·첫 메일) → 대표 메일을 PK 로 읽는다.
+   대표 = 처음 보낸 원본 메일(제목·본문), 날짜/정렬 = 대화의 최신 활동 시각 (Gmail 동일)
+   대화 수 = 받은 메일 + 내가 보낸 메일(gmail_sent) — Gmail 대화 화면의 건수와 같게 */
+$pdo->exec("SET SESSION group_concat_max_len = 8192");     // 참여자 목록 잘림 방지
+$det = []; $rep = [];
+foreach (array_chunk($top, 500) as $chunk) {               // '모두' 표시일 때 IN 목록이 너무 길어지지 않게
+    $thr = []; $one = [];
+    foreach ($chunk as $t) { if ($t['is_thr']) $thr[] = (int)$t['g']; else $one[] = (int)$t['g']; }
+    $w = [];
+    if ($thr) $w[] = 'thrid IN (' . implode(',', $thr) . ')';
+    if ($one) $w[] = '(COALESCE(thrid, 0) = 0 AND uid IN (' . implode(',', $one) . '))';
+    // 참여자 = 처음 등장한 순서. GROUP_CONCAT(DISTINCT sender ORDER BY udate) 는 같은 사람이 여러 번
+    // 보냈을 때 어느 시각으로 줄 세울지 정해져 있지 않아(읽는 순서에 따라 바뀜) 사람별 첫 시각을 먼저 구한다
+    $st = $pdo->prepare("
+        SELECT g, SUM(n) AS cnt, MAX(has_att) AS has_att, MAX(starred) AS starred,
+               GROUP_CONCAT(sender ORDER BY first_udate, sender SEPARATOR '||') AS senders,
+               MIN(mk) AS mk                                                 -- 대화의 첫 메일
+        FROM (SELECT $G AS g, sender, COUNT(*) AS n, MIN(udate) AS first_udate,
+                     MAX(CASE WHEN atts IS NOT NULL AND atts <> '[]' THEN 1 ELSE 0 END) AS has_att,
+                     MAX(flagged) AS starred,
+                     MIN(CONCAT(LPAD(udate, 10, '0'), LPAD(uid, 10, '0'))) AS mk
+              FROM gmail_mails WHERE account = ? AND (" . implode(' OR ', $w) . ")$flt GROUP BY g, sender) y
+        GROUP BY g");
+    $st->execute(array_merge([$acct], $fp));
+    $uids = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $d) { $det[$d['g']] = $d; $uids[] = (int)substr($d['mk'], 10); }
+    if (!$uids) continue;
+    // 목록에는 본문 앞부분(미리보기 90자)만 쓴다 — 긴 본문 전체를 옮기지 않게
+    $st = $pdo->prepare("SELECT uid, subject, sender, LEFT(body, 1000) AS body, labels
+                         FROM gmail_mails WHERE account = ? AND uid IN (" . implode(',', $uids) . ")");
+    $st->execute([$acct]);
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $m) $rep[(int)$m['uid']] = $m;
+}
+$rows = [];
+foreach ($top as $t) {
+    $d = $det[$t['g']] ?? null;
+    $m = $d ? ($rep[(int)substr($d['mk'], 10)] ?? null) : null;
+    if (!$m) continue;                                     // 두 조회 사이에 동기화가 지운 대화
+    $rows[] = $m + ['cnt' => (int)$d['cnt'] + (int)$t['scnt'], 'scnt' => (int)$t['scnt'], 'unread' => (int)$t['unread'],
+                    // 내가 답장한 대화는 참여자에 '나' (Gmail: "신중혁, 나")
+                    'senders' => $d['senders'] . ((int)$t['scnt'] > 0 ? '||나' : ''),
+                    'has_att' => $d['has_att'], 'starred' => $d['starred'], 'udate' => $t['udate'],
+                    'seen' => (int)$t['unread'] > 0 ? 0 : 1];
+}
 
 $lastSync = gmeta_get('gmail_last_sync', '없음');
 $backfillLeft = (int)gmeta_get('gmail_backfill_next', '-1');   // -1=아직 시작 안 함, 0=완료

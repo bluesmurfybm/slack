@@ -25,10 +25,19 @@ if ($tok === '' || strpos($u, 'https://files.slack.com/') !== 0) {
  * 받기·보내기 모두 디스크↔소켓으로 흘려보낸다 — 큰 동영상을 통째로 메모리에 올리면
  * memory_limit(운영 기본 128M)을 넘겨 실패한다.
  */
-$cacheDir = __DIR__ . '/.filecache';
-if (!is_dir($cacheDir)) @mkdir($cacheDir, 0775, true);
+// 운영(Linux)에서 slack/ 폴더 주인이 배포 계정이면 웹서버(www-data)가 .filecache 를 만들거나 쓸 수 없다
+// (.gitignore 대상이라 배포로도 안 생긴다) → 런타임 폴더(slack/.cache, 안 되면 시스템 임시 폴더) 아래로 물러난다
+$cacheDir = null;
+foreach ([__DIR__ . '/.filecache', slack_runtime_dir() . '/filecache'] as $d) {
+    if (!is_dir($d)) @mkdir($d, 0775, true);
+    if (is_dir($d) && is_writable($d)) { $cacheDir = $d; break; }
+}
+if ($cacheDir === null) {
+    http_response_code(500);
+    exit('cache write failed: 캐시 폴더에 쓸 수 없습니다 (' . __DIR__ . '/.filecache 권한 확인)');
+}
 // 웹 폴더 안이라 이름(sha256)만 알면 로그인 없이 받을 수 있다 — 직접 접근은 막는다(기존 폴더도 보강)
-if (is_dir($cacheDir) && !is_file($cacheDir . '/.htaccess')) @file_put_contents($cacheDir . '/.htaccess', "Require all denied\n");
+if (!is_file($cacheDir . '/.htaccess')) @file_put_contents($cacheDir . '/.htaccess', "Require all denied\n");
 $key       = hash('sha256', $u);
 $cacheFile = $cacheDir . '/' . $key;         // 바이트
 $metaFile  = $cacheFile . '.type';           // content-type
@@ -89,7 +98,7 @@ $tmp = $cacheFile . '.' . getmypid() . '.part';
 $out = @fopen($tmp, 'wb');
 if (!$out) {
     http_response_code(500);
-    exit('cache write failed');
+    exit('cache write failed: ' . $cacheDir . ' 에 쓸 수 없습니다');
 }
 $ch = curl_init($u);
 curl_setopt_array($ch, [
