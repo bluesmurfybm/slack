@@ -1,2 +1,4 @@
 # 셸 스크립트는 서버(리눅스)에서 실행된다. CRLF 로 나가면 bad interpreter 로 죽는다.
 *.sh text eol=lf
+# 배치 파일은 윈도우 cmd 가 읽는다. LF 로 나가면 goto/한글 줄이 깨진다.
+*.bat text eol=crlf
