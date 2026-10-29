@@ -186,17 +186,32 @@ function envlog_daemon_alive() {
 /** 처음 한 번: python3 -m venv + pip install -r requirements.txt (1분쯤 걸린다) */
 function envlog_make_venv($dir, $win) {
     $sys = (string)((require __DIR__ . '/../config.php')['envlog_system_python'] ?? '');
-    $cands = $sys !== '' ? [$sys] : ($win ? ['python', 'py -3'] : ['python3', 'python']);
+    // php-fpm 의 PATH 는 아주 짧다(보통 /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin) — 절대경로 후보도 같이 본다
+    $cands = $sys !== '' ? [$sys] : ($win ? ['python', 'py -3']
+             : ['python3', '/usr/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3.12', '/usr/bin/python3.11', '/usr/bin/python3.9', 'python']);
+    $tried = [];
     foreach ($cands as $c) {
         $o = []; $rc = 1;
+        exec($c . ' -V 2>&1', $o, $rc);                      // 실행 파일이 있는가
+        if ($rc !== 0) { $tried[] = $c . ': 없음'; continue; }
+        $ver = trim(implode(' ', $o));
+        $o = [];
         exec($c . ' -m venv ' . escapeshellarg($dir . '/venv') . ' 2>&1', $o, $rc);
-        if ($rc !== 0) continue;
+        if ($rc !== 0) {                                   // 있는데 venv 를 못 만듦 (python3-venv 미설치, 쓰기 권한 등)
+            @exec('rm -rf ' . escapeshellarg($dir . '/venv'));
+            return "{$c} ({$ver}) 는 있지만 venv 를 만들지 못했습니다: " . trim(implode(' ', array_slice($o, -4)))
+                 . " — Debian/Ubuntu 는 'apt install python3-venv', Rocky/CentOS 는 'dnf install python3' 로 venv 모듈을 갖춘 뒤 다시 시도";
+        }
         $pip = $dir . ($win ? '/venv/Scripts/python.exe' : '/venv/bin/python');
+        $o = [];
         exec(escapeshellarg($pip) . ' -m pip install -q -r ' . escapeshellarg($dir . '/requirements.txt') . ' 2>&1', $o, $rc);
         if ($rc === 0) return '';
-        return '파이썬 패키지 설치 실패(daemon/venv): ' . implode(' ', array_slice($o, -5));
+        @exec('rm -rf ' . escapeshellarg($dir . '/venv'));   // 반쪽짜리 venv 를 남기지 않는다 — 다음 시도에서 다시 만든다
+        return '파이썬 패키지 설치 실패(daemon/venv): ' . trim(implode(' ', array_slice($o, -5)))
+             . ' — 서버가 PyPI(인터넷)에 나갈 수 있는지, pip 가 있는지 확인';
     }
-    return 'python3 를 찾지 못했습니다 — 서버에 python3(venv 포함)를 설치하거나 config.php 에 envlog_system_python 경로를 적으세요';
+    return 'python3 를 찾지 못했습니다 (' . implode(', ', $tried) . ') — 서버에 python3 를 설치하거나 config.php 에 '
+         . "'envlog_system_python' => '/usr/bin/python3' 처럼 절대경로를 적으세요";
 }
 
 /** 데몬 응답을 그대로 흘려보낸다. 데몬이 안 떠 있으면 띄워 보고, 그래도 안 되면 이유를 알려 준다 */
