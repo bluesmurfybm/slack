@@ -211,6 +211,17 @@ function portal_db() {
           COMMENT='카드가 어느 묶음에 속하는가. sys_key 가 기본키라 한 카드는 한 묶음에만 든다'
     ");
 
+    // worksystems.json 의 "group" 힌트(새 카드의 기본 묶음)를 적용했다는 표시.
+    // 한 번 적용한 뒤에는 관리자가 어디로 옮기든 빼든 다시 손대지 않는다 — core/board.php::board_tile_assignments()
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_tile_group_hint` (
+            `sys_key`    VARCHAR(40) NOT NULL COMMENT 'worksystems.json 의 key',
+            `applied_at` DATETIME    NOT NULL,
+            PRIMARY KEY (`sys_key`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='카드의 기본 묶음 힌트를 적용한 기록. 있으면 다시 적용하지 않는다'
+    ");
+
     // 묶음을 접어 둔 상태. 묶음이 늘면 아래쪽 카드가 멀어지므로 접을 수 있게 한다.
     // 전사 설정이 아니라 **사람마다** 다른 값이라 계정에 남긴다.
     add_column_if_missing($pdo, "ALTER TABLE `portal_users`

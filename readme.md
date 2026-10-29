@@ -1249,6 +1249,9 @@ EnvHub 에 등록된 테스트서버(`school_access.test_srv`)를 거쳐 그 대
 - 큰 로그도 전체를 읽지 않는다 — 원격에서 `envlog_remote.sh`(bash/awk/grep)로 바이트 구간 읽기 ·
   시간 이진탐색 · grep 만 한다. 서버에 설치할 것이 없다.
 - 로컬 검증: `python envlogd.py --local-test <로그폴더>…` 로 실서버 없이 화면 전체를 돌려 볼 수 있다.
+- 대시보드에서는 **Coursemos 묶음**에 들어간다 — `worksystems.json` 의 `"group": "Coursemos"` 힌트를
+  `core/board.php::board_apply_tile_group_hints()` 가 그 이름의 묶음이 있을 때 한 번만 적용한다
+  (기록은 `portal_tile_group_hint`). 그 뒤 관리자가 옮기거나 빼도 다시 넣지 않는다. 새 모듈을 더할 때 같은 방법을 쓴다.
 
 ## access (학교 접속 정보)
 
