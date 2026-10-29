@@ -121,6 +121,16 @@ function envlog_ensure_daemon() {
     static $cfg = null;
     if ($cfg === null) $cfg = require __DIR__ . '/../config.php';
     if (($cfg['envlog_autostart'] ?? true) === false) return '자동 기동이 꺼져 있습니다(envlog_autostart)';
+    // 보안 설정으로 exec/popen 이 꺼진 PHP 에서는 띄울 수 없다 — 경로를 아무리 적어도 소용없으니 먼저 알린다
+    $disabled = array_map('trim', explode(',', (string)ini_get('disable_functions')));
+    $need = strncasecmp(PHP_OS, 'WIN', 3) === 0 ? ['exec', 'popen'] : ['exec'];
+    foreach ($need as $fn) {
+        if (!function_exists($fn) || in_array($fn, $disabled, true)) {
+            return "PHP 의 {$fn}() 이 꺼져 있어(php.ini disable_functions) 엔진을 띄울 수 없습니다 — php.ini(php-fpm 풀 설정)에서 "
+                 . "disable_functions 에서 {$fn} 를 빼고 php-fpm 을 재시작하거나, 'envlog_autostart' => false 로 두고 "
+                 . "데몬을 직접 띄우세요: cd envlog/daemon && python3 -m venv venv && venv/bin/pip install -r requirements.txt && nohup venv/bin/python envlogd.py &";
+        }
+    }
     if (!preg_match('#^https?://(127\.0\.0\.1|localhost)(?::(\d+))?$#', envlog_daemon_url(), $m)) {
         return '데몬 주소가 이 서버가 아닙니다 — 자동 기동 불가 (' . envlog_daemon_url() . ')';
     }
