@@ -41,7 +41,9 @@ $__bwCurrent = 'envlog';
     <div class="ac">
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
         <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" placeholder="대학 검색 — 이름 · 사이트 · IP" autocomplete="off">
+      <!-- name 을 검색용으로 두고 자동완성을 끈다. 아래 "직접 입력" 의 비밀번호 칸 때문에 브라우저가 이 칸을
+           로그인 아이디로 오해해 저장된 계정을 채우는 일이 있어, 비밀번호 칸은 new-password 로 표시한다 -->
+      <input id="q" name="univ-search" placeholder="대학 검색 — 이름 · 사이트 · IP" autocomplete="off" spellcheck="false">
       <span id="qVer" class="bdg ver" hidden></span>
       <div class="dd" id="dd"></div>
     </div>
@@ -49,7 +51,7 @@ $__bwCurrent = 'envlog';
     <button id="btnDisconnect" disabled>연결 끊기</button>
     <label class="chk"><input type="checkbox" id="chkManual"> 직접 입력</label>
     <div id="manual">
-      <input id="mHost" placeholder="IP:포트" size="18"><input id="mUser" placeholder="아이디" value="ubion" size="8"><input id="mPw" type="password" placeholder="비밀번호" size="12">
+      <input id="mHost" name="ssh-host" placeholder="IP:포트" size="18" autocomplete="off"><input id="mUser" name="ssh-user" placeholder="아이디" value="ubion" size="8" autocomplete="off"><input id="mPw" name="ssh-pass" type="password" placeholder="비밀번호" size="12" autocomplete="new-password">
     </div>
     <span id="connInfo" class="hint"></span>
   </div>

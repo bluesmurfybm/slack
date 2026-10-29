@@ -565,6 +565,10 @@ async function jumpTo(l, el) {
 }
 
 // ---------------------------------------------------------------- 초기화
+// 브라우저가 저장된 로그인 계정을 검색칸에 채워 넣는 경우(비밀번호 칸을 보고 로그인 폼으로 오해) — 선택한 대학이 없는데
+// 값이 들어와 있으면 지운다. 자동완성은 로드 직후나 조금 뒤에 일어나므로 두 번 본다
+const clearAutofill = () => { if (!acSel && $('q').value && !$('dd').classList.contains('on')) { $('q').value = ''; setQVer(''); } };
+setTimeout(clearAutofill, 100); setTimeout(clearAutofill, 800);
 (async () => {
   try {
     const c = await api('api.php?a=state');
