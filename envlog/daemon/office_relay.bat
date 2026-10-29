@@ -16,9 +16,11 @@ set PORTAL_USER=amitoa
 set PORTAL_KEY=G:\01_Bluesoft\0000_iWorks\02_산출물\gcp_key.ppk
 set PORT=8766
 set PLINK=plink
+rem PATH 에 없으면 흔한 설치 위치를 차례로 본다 (PuTTY, HeidiSQL 동봉 plink)
+where plink >nul 2>&1 || for %%P in ("D:\Program Files\PuTTY\plink.exe" "C:\Program Files\PuTTY\plink.exe" "C:\Program Files (x86)\PuTTY\plink.exe" "D:\Program Files\HeidiSQL\plink.exe" "C:\Program Files\HeidiSQL\plink.exe" "%LOCALAPPDATA%\Programs\HeidiSQL\plink.exe") do if exist %%P if "%PLINK%"=="plink" set PLINK=%%P
 
 cd /d "%~dp0"
-where %PLINK% >nul 2>&1 || (
+if not exist "%PLINK%" where %PLINK% >nul 2>&1 || (
   echo [알림] plink 를 찾지 못했습니다. PuTTY 를 설치하거나 위 PLINK 변수에 plink.exe 경로를 적어 주세요.
   pause & exit /b 1
 )
@@ -45,7 +47,7 @@ start "EnvLog 엔진 (envlogd)" /min venv\Scripts\python.exe envlogd.py --port %
 rem ② 역방향 터널 — 끊기면 10초 뒤 다시 연결
 :loop
 echo [%date% %time%] 터널 연결...
-%PLINK% -batch -N -i "%PORTAL_KEY%" -R 127.0.0.1:%PORT%:127.0.0.1:%PORT% %PORTAL_USER%@%PORTAL_HOST%
+"%PLINK%" -batch -N -i "%PORTAL_KEY%" -R 127.0.0.1:%PORT%:127.0.0.1:%PORT% %PORTAL_USER%@%PORTAL_HOST%
 echo [%date% %time%] 터널이 끊겼습니다. 10초 뒤 다시 연결합니다. (Ctrl+C 로 종료)
 timeout /t 10 /nobreak >nul
 goto loop
