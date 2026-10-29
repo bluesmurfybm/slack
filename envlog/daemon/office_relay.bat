@@ -42,7 +42,9 @@ echo ========================================================
 rem ① 엔진 — 별도 창 없이 백그라운드. 유휴 종료 끔(중계 PC 는 계속 떠 있어야 한다)
 set ENVLOG_EXIT_IDLE=0
 set ENVLOG_PORT=%PORT%
-start "EnvLog 엔진 (envlogd)" /min venv\Scripts\python.exe envlogd.py --port %PORT%
+if not exist var mkdir var
+rem 엔진 출력은 varelay.log 에 남긴다 (접속 실패 원인을 나중에 볼 수 있게)
+start "EnvLog 엔진 (envlogd)" /min cmd /c "venv\Scripts\python.exe envlogd.py --port %PORT% >> varelay.log 2>&1"
 
 rem ② 역방향 터널 — 끊기면 10초 뒤 다시 연결
 :loop
