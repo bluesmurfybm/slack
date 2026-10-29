@@ -534,7 +534,9 @@ def api_connect():
                   'password': str(d.get('password') or ''), 'dir': str(d.get('dir') or ''), 'no_ops': bool(d.get('no_ops'))}
         return jsonify(session_for(_uid()).connect(school))
     except Exception as e:
-        return api_error(f'접속 실패: {e}')
+        # TimeoutError 처럼 str() 이 빈 예외가 있다 — 종류 이름이라도 남겨 '접속 실패:' 만 뜨는 일이 없게
+        why = str(e) or {'TimeoutError': f"{school['host']}:{school['port']} 에 제한 시간 안에 연결되지 않음 (방화벽/허용 IP 확인)"}.get(type(e).__name__, type(e).__name__)
+        return api_error(f'접속 실패: {why}')
 
 
 @app.route('/shutdown', methods=['POST'])
