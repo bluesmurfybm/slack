@@ -58,6 +58,11 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── db.php, guard.php        전용 DB 연결 · 포털 로그인 가드
 │   └── styles/access.css
 │
+├── envlog/                      Coursemos EnvLog — 대학 운영 웹서버 아파치 로그 뷰어. 'envlog' 절, envlog/README.md
+│   ├── index.php, api.php       화면 · JSON API(대학 목록은 DB 에서 직접, 로그 조회는 데몬에 중계)
+│   ├── guard.php, static/, styles/
+│   └── daemon/                  ★ 상주 SSH 로그 엔진(Python, 127.0.0.1:8766) — envlogd.py · ssh_jump.py · envlog_remote.sh
+│
 ├── sitehub/                     BlueLab SiteHub — PHP, 포털 세션·DB 공유. 유지보수 사이트 정보(사이트 기준). 'sitehub' 절 참고
 │   ├── index.php                화면 한 장 — 요약 · 툴바 · 목록(리스트/카드) · 상세 드로어 · 시트
 │   ├── api.php                  JSON API (access_api.php 와 같은 모양)
@@ -1224,6 +1229,27 @@ moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jir
 - **일정 계산이 두 벌**이다 — `inc/schedule.php`(화면의 '다음 실행')와 `worker/core/schedule.py`(실제 실행).
   `tests/schedule_cases.json` 을 두 쪽 시험이 같이 읽는다.
 
+## envlog (Coursemos EnvLog · 운영 웹서버 로그 뷰어)
+
+EnvHub 에 등록된 테스트서버(`school_access.test_srv`)를 거쳐 그 대학 **운영 웹서버 여러 대의 아파치
+로그를 같은 시각으로 나란히** 보고 검색하는 화면(`envlog/index.php`). 개인 PC 용 도구(bluelog)를
+포털 안으로 들여왔다. 자세한 구조·화면 사용·배포는 **`envlog/README.md`**.
+
+- **DB 는 PHP 가 `config.php` 로 직접 읽는다.** 포털과 같은 서버라 DB 용 SSH 터널도 DB 비밀번호 입력도
+  없다. `test_srv` 복호화는 `access/db.php::access_dec()` 그대로.
+- **SSH 는 데몬(`envlog/daemon/envlogd.py`)이 한다.** 테스트서버 → 운영서버 2단 접속을 요청마다
+  새로 맺을 수 없어서다. 데몬은 127.0.0.1 에만 묶고 DB·인증을 모른다 — 포털 세션 확인은 `api.php` 가
+  하고, 사용자 id(`X-Envlog-User`)별로 세션을 나눈다. 30분 유휴면 SSH 를 닫는다.
+- **서비스 등록 없음.** 데몬이 없으면 `api.php` 가 웹 서버 계정으로 띄우고(처음엔 `daemon/venv` 도 자동 생성),
+  한 시간 요청이 없으면 데몬이 스스로 끝난다. 서버엔 `python3`(venv) 와 `envlog/daemon/` 쓰기 권한만 있으면 된다.
+- 데몬 주소는 `config.php` 의 `'envlog_url'`(없으면 `http://127.0.0.1:8766`). nginx 프록시 블록은
+  필요 없고(`api.php` 가 중계), 대신 `envlog/daemon/` 은 문서루트에서 막는다([nginx](#nginx)).
+- 개발 PC 에는 대학 접속 정보가 없으므로 `python envlogd.py --iworks-db --key …\gcp_key.ppk` 로 띄우면
+  데몬이 iWorks 서버 DB 를 SSH 터널로 읽어 준다(`envlog/README.md`).
+- 큰 로그도 전체를 읽지 않는다 — 원격에서 `envlog_remote.sh`(bash/awk/grep)로 바이트 구간 읽기 ·
+  시간 이진탐색 · grep 만 한다. 서버에 설치할 것이 없다.
+- 로컬 검증: `python envlogd.py --local-test <로그폴더>…` 로 실서버 없이 화면 전체를 돌려 볼 수 있다.
+
 ## access (학교 접속 정보)
 
 대학별 svn/git 주소 · 사이트 로그인 · 개발/운영/학사 DB · plink 터널링 · 배포 방법을 찾아
@@ -1662,6 +1688,10 @@ return [
     // (파이썬 magazine 의 config_local.py 에 있던 SLACK_WEBHOOK_URL 자리다)
     'dti_slack_webhook' => null,
 
+    // envlog 의 SSH 로그 엔진(envlog/daemon/envlogd.py) 주소. 기본 포트(8766)면 이 줄은 없어도 된다.
+    // (그 외 선택: 'envlog_system_python' 파이썬 경로, 'envlog_autostart' => false, 'envlog_schools_from' => 'db'|'daemon')
+    'envlog_url' => $localCfg['envlog_url'] ?? 'http://127.0.0.1:8766',
+
     // 대시보드/공통 헤더 드롭다운이 참조하는 외부 모듈 링크. book은 별도 프로세스라 절대주소 필요.
     // 실제 배포 주소가 다르면 config.local.php 에 'book_url' => '...' 을 넣어 덮어쓸 수 있음.
     // dti·learn 은 포털과 같은 PHP 앱이라 여기 주소가 없다 — index.php가
@@ -1774,8 +1804,9 @@ dti·learn·moodle 은 PHP 라 프록시 블록이 필요 없다. 대신 **문�
 원본이 들어가므로 URL 로 바로 열리면 안 된다:
 
 ```nginx
-location ^~ /moodle/watch/ { deny all; }
-location ^~ /learn/var/    { deny all; }
+location ^~ /moodle/watch/  { deny all; }
+location ^~ /learn/var/     { deny all; }
+location ^~ /envlog/daemon/ { deny all; }
 ```
 
 루트의 비밀 키 파일(`sso_secret.key`, `vapid.key`)도 문서루트 안에 있어 막지 않으면 URL 로 그대로
@@ -1790,6 +1821,12 @@ location = /manifest.webmanifest  { default_type application/manifest+json; }
 `learn/var/.htaccess` 가 같은 내용을 담고 있지만 **nginx 는 .htaccess 를 읽지 않는다.** 위 블록이
 없으면 아무 보호도 걸리지 않는다. 그리고 learn 은 이수증을 50MB 까지 받으므로 server 블록에
 `client_max_body_size 52m;` 가 있어야 한다(없으면 413).
+
+### envlog (유닛 없음)
+
+EnvLog 의 SSH 로그 엔진은 systemd 유닛이 없다 — `envlog/api.php` 가 필요할 때 띄우고 유휴면 스스로 끝난다.
+서버에 `python3`(venv 모듈)만 있으면 되고, 웹 서버 계정이 `envlog/daemon/` 에 쓸 수 있어야 한다
+(`venv/`·`var/` 가 생긴다). 자세한 건 `envlog/README.md` 의 배포 절.
 
 ### moodle-watch (systemd timer)
 

@@ -97,3 +97,7 @@ var/localdb/
 /호스팅 정보*.xlsx
 # sitehub 변환 도구의 Slack 원본 백업 (tools/move_request_time.php)
 /var/sitehub/
+
+# envlog 데몬 런타임(자동 생성): 파이썬 venv · 로그 · 기동 잠금
+envlog/daemon/venv/
+envlog/daemon/var/

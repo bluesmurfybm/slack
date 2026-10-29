@@ -11,6 +11,8 @@
     "desc": "역량 강화를 위한 강의를 신청하고 수강료를 지원받습니다.", "color": "#F2711C" },
   { "key": "access", "emoji": "🔑", "label": "Coursemos EnvHub", "path": "access/access.php",
     "desc": "대학별 svn·git, 계정, DB, plink 정보를 찾아 복사합니다.", "color": "#0F7B8A" },
+  { "key": "envlog", "emoji": "📜", "label": "Coursemos EnvLog", "path": "envlog/index.php",
+    "desc": "대학 운영 웹서버 여러 대의 아파치 로그를 같은 시각으로 나란히 보고 검색합니다.", "color": "#5B5FC7" },
   { "key": "moodle", "emoji": "🧭", "label": "MoodleUp?", "path": "moodle/",
     "desc": "무들 PAG·트래커·릴리스 변화를 매주 모아 코스모스 관점으로 요약합니다.", "color": "#D6336C" },
   { "key": "bluecart", "emoji": "🛒", "label": "BlueCart", "path": "bluecart/index.php",
