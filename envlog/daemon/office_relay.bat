@@ -9,6 +9,7 @@ rem
 rem  이 창 하나가 ① envlogd(127.0.0.1:8766, 유휴 종료 없음) ② plink 역방향 터널(끊기면 다시 연결) 을 돌린다.
 rem  포털 서버 config.php 에는 'envlog_autostart' => false 를 둔다(서버에서 자기 데몬을 띄우지 않도록).
 rem  서버 sshd 는 기본값(AllowTcpForwarding yes)이면 된다. 터널은 서버의 127.0.0.1 에만 묶인다.
+rem  엔진 출력은 var\relay.log 에 남는다 (접속 실패 원인을 나중에 볼 수 있게).
 rem ============================================================================
 setlocal
 set PORTAL_HOST=35.184.155.46
@@ -32,19 +33,19 @@ if not exist venv\Scripts\python.exe (
   echo [준비] 파이썬 가상환경을 만들고 패키지를 설치합니다 ^(처음 한 번^)...
   python -m venv venv && venv\Scripts\python.exe -m pip install -q -r requirements.txt || (echo [오류] 준비 실패 & pause & exit /b 1)
 )
+if not exist var mkdir var
 
 title EnvLog 사무실 중계 (envlogd + 터널 → %PORTAL_HOST%)
 echo ========================================================
 echo   EnvLog 사무실 중계 실행 중 - 이 창을 닫으면 포털의 EnvLog 가 멈춥니다.
-echo   엔진: 127.0.0.1:%PORT%   터널: %PORTAL_USER%@%PORTAL_HOST% 의 127.0.0.1:%PORT% ← 이 PC
+echo   엔진: 127.0.0.1:%PORT%  (로그: var\relay.log)
+echo   터널: %PORTAL_USER%@%PORTAL_HOST% 의 127.0.0.1:%PORT% ← 이 PC
 echo ========================================================
 
-rem ① 엔진 — 별도 창 없이 백그라운드. 유휴 종료 끔(중계 PC 는 계속 떠 있어야 한다)
+rem ① 엔진 — 최소화된 창에서 백그라운드. 유휴 종료 끔(중계 PC 는 계속 떠 있어야 한다)
 set ENVLOG_EXIT_IDLE=0
 set ENVLOG_PORT=%PORT%
-if not exist var mkdir var
-rem 엔진 출력은 varelay.log 에 남긴다 (접속 실패 원인을 나중에 볼 수 있게)
-start "EnvLog 엔진 (envlogd)" /min cmd /c "venv\Scripts\python.exe envlogd.py --port %PORT% >> varelay.log 2>&1"
+start "EnvLog 엔진 (envlogd)" /min cmd /c "venv\Scripts\python.exe envlogd.py --port %PORT% >> var\relay.log 2>&1"
 
 rem ② 역방향 터널 — 끊기면 10초 뒤 다시 연결
 :loop
