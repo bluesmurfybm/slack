@@ -78,6 +78,8 @@ blueup_learning_summary.txt
 !/studio/README.md
 # onwatch/README.md 도 같은 이유(배포 절차·systemd·환경변수)
 !/onwatch/README.md
+# envlog/README.md 도 같은 이유(배포·python3 준비·개발 PC 모드)
+!/envlog/README.md
 # slackai 워커가 레포별로 증류한 학습 지식 문서 — 플랜 프롬프트에 들어가므로 공유되어야 함
 !/slackai/worker/knowledge/*.md
 # 공지 첨부 원본. 폴더는 var/.htaccess(직접 접근 차단)와 함께 앱이 만든다.
