@@ -209,8 +209,11 @@ function envlog_make_venv($dir, $win) {
         exec($c . ' -m venv ' . escapeshellarg($dir . '/venv') . ' 2>&1', $o, $rc);
         if ($rc !== 0) {                                   // 있는데 venv 를 못 만듦 (python3-venv 미설치, 쓰기 권한 등)
             @exec('rm -rf ' . escapeshellarg($dir . '/venv'));
-            return "{$c} ({$ver}) 는 있지만 venv 를 만들지 못했습니다: " . trim(implode(' ', array_slice($o, -4)))
-                 . " — Debian/Ubuntu 는 'apt install python3-venv', Rocky/CentOS 는 'dnf install python3' 로 venv 모듈을 갖춘 뒤 다시 시도";
+            $out = trim(implode(' ', array_slice($o, -4)));
+            $hint = stripos($out, 'Permission denied') !== false || stripos($out, 'Errno 13') !== false
+                ? " — 웹 서버 계정이 {$dir} 에 폴더를 만들 수 없습니다. 예: sudo mkdir -p {$dir}/venv && sudo chown <php-fpm계정> {$dir}/venv"
+                : " — venv 모듈이 없는 경우입니다. Debian/Ubuntu 는 'apt install python3-venv', Rocky/CentOS 는 'dnf install python3' 뒤 다시 시도";
+            return "{$c} ({$ver}) 는 있지만 venv 를 만들지 못했습니다: {$out}{$hint}";
         }
         $pip = $dir . ($win ? '/venv/Scripts/python.exe' : '/venv/bin/python');
         $o = [];
