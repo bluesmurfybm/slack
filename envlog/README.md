@@ -128,7 +128,27 @@ api.php 는 어차피 `127.0.0.1:8766` 으로 HTTP 만 보내므로 코드 변�
 
 - 터널은 서버의 127.0.0.1 에만 묶이므로 외부에서는 닿지 않고, 인증은 여전히 포털 세션(api.php)이 한다.
 - 중계 PC 가 꺼지면 "EnvLog 엔진에 연결하지 못했습니다" 가 뜬다 — 그 PC 에서 bat 을 다시 실행.
-- 더 튼튼하게 하려면 사무실의 리눅스 서버에서 `autossh -N -R 127.0.0.1:8766:127.0.0.1:8766 …` + systemd 로 같은 일을 한다.
+- **사무실 리눅스 서버에서 돌리는 쪽이 더 낫다** — `office_relay.sh` (같은 일을 `ssh -R` 로, 포워딩 거부·끊김 시 자동 재접속).
+  준비는 스크립트 머리말에 있다: ppk 를 OpenSSH 키로 변환(`puttygen … -O private-openssh`), 호스트키 저장, config 의 autostart=false.
+  부팅 때 자동으로 뜨게 하려면 `/etc/systemd/system/envlog-relay.service`:
+  ```ini
+  [Unit]
+  Description=EnvLog office relay (envlogd + reverse tunnel to portal)
+  After=network-online.target
+
+  [Service]
+  WorkingDirectory=/opt/iworks/envlog/daemon        # 저장소를 받아 둔 곳의 envlog/daemon
+  ExecStart=/opt/iworks/envlog/daemon/office_relay.sh
+  Environment=PORTAL_KEY=/home/<계정>/.ssh/gcp_key
+  User=<계정>
+  Restart=always
+  RestartSec=10
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
+  `sudo systemctl enable --now envlog-relay` · 상태 `systemctl status envlog-relay` · 엔진 로그 `var/relay.log`.
+- 윈도우 PC 용은 `office_relay.bat` (plink 사용). 둘 중 하나만 돌린다 — 서버의 8766 포트는 한 터널만 잡을 수 있다.
 
 ## 개발 PC 에서 돌려 보기
 
