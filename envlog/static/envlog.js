@@ -227,6 +227,7 @@ async function loadFiles() {
 }
 // 파일명 검색: 입력한 글자가 들어간 파일만 (대소문자 무시). 폴더는 항상 보인다
 $('fileFilter').addEventListener('input', () => { renderFiles(); $('files').scrollTop = 0; });   // 검색어를 바꾸면 목록을 맨 위부터 보여 준다
+$('fileFilterClear').onclick = () => { $('fileFilter').value = ''; renderFiles(); $('files').scrollTop = 0; $('fileFilter').focus(); };
 function renderFiles() {
   const q = $('fileFilter').value.trim().toLowerCase(), sids = S.fileSids || [], all = S.fileList || [];
   const files = q ? all.filter(f => f.type === 'd' || f.name.toLowerCase().includes(q)) : all;

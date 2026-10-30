@@ -70,7 +70,8 @@ $__bwCurrent = 'envlog';
         <h2>로그 파일</h2>
         <div style="display:flex; gap:4px"><input id="logDir" value="/usr/local/apache2/logs" style="flex:1"><button id="btnFiles" title="목록 새로고침">↻</button></div>
         <div id="logdirs" class="hint" style="margin-top:4px"></div>
-        <input id="fileFilter" placeholder="파일명 검색 (예: 2026-10, error)" autocomplete="off" style="width:100%; margin-top:6px">
+        <!-- 기본값 php_errors.log: 가장 자주 보는 파일. 지우면 전체 목록 -->
+        <div style="display:flex; gap:4px; margin-top:6px"><input id="fileFilter" value="php_errors.log" placeholder="파일명 검색 (예: 2026-10, error)" autocomplete="off" style="flex:1"><button id="fileFilterClear" title="검색어 지우고 전체 보기">✕</button></div>
         <div class="list" id="files" style="margin-top:6px"><div class="hint" style="padding:6px">서버에 접속하면 목록이 표시됩니다.</div></div>
         <div class="hint" style="margin-top:4px">체크된 모든 서버의 목록을 합쳐 보여줍니다. 오른쪽 S번호 = 그 파일이 있는 서버. 선택한 파일은 같은 경로로 엽니다. 로그 폴더 밖은 볼 수 없습니다.</div>
       </section>
