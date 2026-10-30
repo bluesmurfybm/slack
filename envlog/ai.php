@@ -308,12 +308,14 @@ function envlog_ai_ask($user, array $in) {
     $system = "당신은 Moodle 기반 LMS(Coursemos) 운영을 돕는 로그 분석 전문가입니다. 아파치 access_log 와 PHP 오류 로그(php_errors.log) 조각을 보고 "
             . "운영자의 질문에 한국어로 답합니다. 규칙: ① 로그에 있는 사실과 추정을 구분해 말한다 ② 시간순으로 사용자의 행동 흐름을 먼저 짧게 정리하고, "
             . "그 다음 오류·이상 징후를 시각·파일·요청과 함께 짚고, 마지막에 가장 가능성 높은 원인과 확인 방법을 제안한다 ③ 근거가 되는 로그 줄은 시각과 함께 인용한다 "
-            . "④ 자료가 부족하면 무엇을 더 봐야 하는지 말한다. 자료는 서버에서 시간 범위·IP 로 미리 추린 일부이며 줄 수 상한에서 잘렸을 수 있다.";
+            . "④ 자료가 부족하면 무엇을 더 봐야 하는지 말한다. 자료는 서버에서 시간 범위·IP 로 미리 추린 일부이며 줄 수 상한에서 잘렸을 수 있다. "
+            . "⑤ 길이: 전체 답은 한국어 기준 700자~1,500자 안에서 끝낸다. 로그 줄 인용은 꼭 필요한 것만 최대 8줄, 각 줄은 핵심 부분만 짧게. "
+            . "표나 긴 나열 대신 짧은 문단과 글머리 기호를 쓴다. 같은 내용을 반복하지 않는다.";
     $meta = "대학: " . (string)($in['school'] ?? '') . "\n" . ($in['ip'] ?? '' ? "대상 IP: {$in['ip']}\n" : '')
           . (($in['from'] ?? '') !== '' ? "시간 범위: {$in['from']} ~ {$in['to']} (Asia/Seoul)\n" : '') . "로그 로테이션: 매일 " . envlog_ai_rotate_hour() . ":00\n";
 
     $body = [
-        'model' => $model, 'max_tokens' => 4000, 'stream' => true,
+        'model' => $model, 'max_tokens' => 6000, 'stream' => true,
         'system' => [['type' => 'text', 'text' => $system]],
         'messages' => [['role' => 'user', 'content' => [
             ['type' => 'text', 'text' => $meta . "\n<logs>\n" . $doc . "</logs>\n", 'cache_control' => ['type' => 'ephemeral']],

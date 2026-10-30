@@ -723,7 +723,7 @@ $('aiAsk').onclick = async () => {
           if (ev.t) { out.textContent += ev.t; out.scrollTop = out.scrollHeight; }
           else if (ev.start) aiStatus(`응답 중... (${ev.model}, 보낸 자료 ${fmtSize(ev.sent_bytes)}${ev.ssl ? ', ' + ev.ssl : ''})`);
           else if (ev.error) aiStatus(ev.error, true);
-          else if (ev.done) { aiStatus(`완료 — 입력 ${ev.usage.input.toLocaleString()} 토큰(캐시 읽기 ${ev.usage.cache_read.toLocaleString()}) · 출력 ${ev.usage.output.toLocaleString()} 토큰 · 약 ₩${ev.cost_krw} ($${ev.cost_usd})` + (ev.stop === 'max_tokens' ? ' · 답이 길어 잘렸습니다' : '')); aiBudget(ev.budget); }
+          else if (ev.done) { const u = ev.usage; aiStatus(`완료 — 입력 ${(u.input + u.cache_write + u.cache_read).toLocaleString()} 토큰(로그 본문 ${(u.cache_write + u.cache_read).toLocaleString()}${u.cache_read ? ', 캐시 재사용 ' + u.cache_read.toLocaleString() : ''}) · 출력 ${u.output.toLocaleString()} 토큰 · 약 ₩${ev.cost_krw} ($${ev.cost_usd})` + (ev.stop === 'max_tokens' ? ' · 답이 길어 잘렸습니다 — 질문을 더 좁혀 보세요' : '')); aiBudget(ev.budget); }
         }
       }
     }
