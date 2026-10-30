@@ -131,7 +131,8 @@ function rowHtml(l, idx, sid, hitOff, simple) {
 
 // ---------------------------------------------------------------- 상태
 const S = { servers: [], selected: new Set(), panes: [], file: '', merge: false, sync: true, active: null, school: null, searchTerm: '', searchType: 'ip', logDir: '/usr/local/apache2/logs',
-            hits: null };   // 마지막 검색 결과(줄 목록) — "검색된 줄만 보기" 가 켜져 있으면 패널에 이것만 그린다
+            hits: null,
+            syncSrc: null, syncUntil: 0 };   // 동기화 기준 패널과 잠금 시한 — 따라가는 패널이 기준을 되돌리지 않게   // 마지막 검색 결과(줄 목록) — "검색된 줄만 보기" 가 켜져 있으면 패널에 이것만 그린다
 const srvName = sid => { const s = S.servers.find(x => x.id === sid); return s ? `${s.name} ${s.host}` : 'S' + sid; };
 const filePath = () => S.logDir.replace(/\/+$/, '') + '/' + S.file;
 
@@ -370,8 +371,22 @@ function updatePos(pane) {
 const fmtKey = k => k ? `${k.slice(0, 4)}-${k.slice(4, 6)}-${k.slice(6, 8)} ${k.slice(8, 10)}:${k.slice(10, 12)}:${k.slice(12, 14)}` : '';
 function scrollToIndex(pane, i, pos) {
   const top = Math.max(0, pos === 'center' ? i * ROW_H - pane.body.clientHeight / 2 : i * ROW_H);
-  if (Math.abs(pane.body.scrollTop - top) > 0.5) { pane.ignoreUntil = performance.now() + 150; pane.body.scrollTop = top; }
+  if (Math.abs(pane.body.scrollTop - top) > 0.5) {
+    // 코드가 움직인 스크롤 표시: 시간(150ms) + 목표 위치. 패널이 많아 그리기가 늦으면 이벤트가 150ms 를 넘겨 오므로
+    // "지금 스크롤 위치가 코드가 지정한 곳" 이면 시간과 무관하게 코드 스크롤로 본다
+    pane.ignoreUntil = performance.now() + 150; pane.expectTop = top;
+    pane.body.scrollTop = top;
+  }
   updatePos(pane);
+}
+// 코드가 움직인 스크롤인가 (사용자 스크롤이 아니면 동기화를 일으키지 않는다)
+function isProgrammatic(pane) {
+  const st = pane.body.scrollTop;
+  if (pane.expectTop != null && Math.abs(st - pane.expectTop) <= 1) { pane.expectTop = null; return true; }
+  if (performance.now() < (pane.ignoreUntil || 0)) return true;
+  // 동기화가 진행 중이면 따라가는 패널은 기준 패널이 될 수 없다 — 2~6번이 1번을 되돌리는 되돌이 방지
+  if (S.syncSrc && S.syncSrc !== pane && performance.now() < S.syncUntil) return true;
+  return false;
 }
 function topKey(pane) { const i = Math.floor(pane.body.scrollTop / ROW_H); for (let j = i; j < pane.lines.length; j++) if (pane.lines[j].key) return pane.lines[j].key; return ''; }
 function indexOfKey(pane, key, sid, off) {
@@ -432,11 +447,11 @@ const allEof = pane => pane.sids.every(s => pane.src[s].eof);
 // 스크롤: 가장자리에서 앞/뒤 구간 추가 적재 + 동일 시간 동기화
 function onScroll(pane) {
   if (pane.hitsMode) {                                                              // 검색 결과만 보는 중 — 더 읽을 건 없지만 시간 맞추기는 한다
-    if (performance.now() < (pane.ignoreUntil || 0)) return;
+    if (isProgrammatic(pane)) return;
     if (S.sync && S.panes.length > 1) { clearTimeout(pane.timer); pane.timer = setTimeout(() => syncHits(pane), 150); }
     return;
   }
-  if (performance.now() < (pane.ignoreUntil || 0)) { updatePos(pane); return; }   // 방금 코드가 움직인 스크롤 → 동기화 트리거 아님
+  if (isProgrammatic(pane)) { updatePos(pane); return; }                           // 코드가 움직인 스크롤 → 동기화 트리거 아님
   pane.gen++;           // 사용자가 스크롤 중이면 진행 중이던 자동 이동은 취소
   updatePos(pane);
   const b = pane.body;
@@ -468,6 +483,7 @@ async function extend(pane, dir) {
 // 검색 결과 뷰에서의 동일 시간 스크롤: 다른 패널의 결과 목록에서 같은 시각(이후) 줄로 맞춘다 (서버 왕복 없음)
 function syncHits(pane) {
   const key = topKey(pane); if (!key) return;
+  S.syncSrc = pane; S.syncUntil = performance.now() + 800;
   for (const p of S.panes) {
     if (p === pane || !p.hitsMode) continue;
     let i = p.lines.findIndex(l => l.key >= key); if (i < 0) i = p.lines.length - 1;
@@ -476,7 +492,10 @@ function syncHits(pane) {
 }
 function syncOthers(pane) {
   const key = topKey(pane); if (!key) return;
-  for (const p of S.panes) if (p !== pane) gotoKey(p, key, false);
+  // 이 패널이 기준. 따라가는 패널들의 스크롤 이벤트(서버 탐색 뒤 늦게 오는 것 포함)는 기준을 바꾸지 못한다
+  S.syncSrc = pane; S.syncUntil = performance.now() + 1500;
+  const jobs = S.panes.filter(p => p !== pane).map(p => gotoKey(p, key, false));
+  Promise.all(jobs).then(() => { S.syncUntil = performance.now() + 300; });   // 다 끝난 뒤 잠깐 더 잠갔다가 푼다
 }
 
 // ---------------------------------------------------------------- 상세
