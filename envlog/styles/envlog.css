@@ -157,6 +157,16 @@
 #lv #aibox pre { max-height:220px; overflow:auto; margin:6px 0; padding:8px 10px; background:var(--bg2); border:1px solid var(--line); border-radius:8px; font:12px Consolas, "D2Coding", monospace; white-space:pre-wrap; word-break:break-all; }
 #lv #aibox #aiAnswer { max-height:320px; font-family:inherit; font-size:13px; line-height:1.55; white-space:pre-wrap; }
 #lv #aibox .hint.err { color:#b91c1c; }
+/* 진행 표시: 모으는 중 / 응답 기다리는 중 / 받는 중 — 눈에 띄게 띠와 점을 움직인다 */
+#lv #aibox .aiprogress { display:flex; align-items:center; gap:10px; margin:8px 0 4px; padding:8px 12px; border-radius:8px; background:var(--info-bg); color:var(--info); font-size:13px; font-weight:600; }
+#lv #aibox .aiprogress[hidden] { display:none; }
+#lv #aibox .aiprogress .dot { width:10px; height:10px; border-radius:50%; background:var(--info); animation:aiPulse 1s ease-in-out infinite; }
+#lv #aibox .aiprogress .bar { flex:1; height:4px; border-radius:2px; background:var(--bg); overflow:hidden; }
+#lv #aibox .aiprogress .bar i { display:block; width:30%; height:100%; background:var(--info); animation:aiSlide 1.2s linear infinite; }
+@keyframes aiPulse { 0%,100% { opacity:.3; transform:scale(.8) } 50% { opacity:1; transform:scale(1.1) } }
+@keyframes aiSlide { from { transform:translateX(-100%) } to { transform:translateX(400%) } }
+@media (prefers-reduced-motion: reduce) { #lv #aibox .aiprogress .dot, #lv #aibox .aiprogress .bar i { animation:none } }
+#lv #aibox #aiAnswer.waiting { color:var(--hint); font-style:italic; }
 #lv #status { padding:5px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); background:var(--bg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #lv #status.err { color:#b91c1c; }
 #lv .empty { padding:30px; text-align:center; color:var(--hint); }

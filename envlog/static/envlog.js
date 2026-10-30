@@ -595,6 +595,8 @@ const AI = { parts: null, key: null, busy: false };
 const pad2 = n => String(n).padStart(2, '0');
 const fmtLocal = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 function aiStatus(msg, err) { const e = $('aiMsg'); e.textContent = msg || ''; e.className = 'hint' + (err ? ' err' : ''); }
+// 진행 띠: text 가 있으면 보이고 없으면 숨긴다
+function aiProgress(text) { const p = $('aiProgress'); p.hidden = !text; if (text) $('aiProgressText').textContent = text; }
 // 머리글의 "이번 달 사용 / 상한" — ai_key·ai_ask 응답에 실려 온다
 function aiBudget(b) {
   if (!b) return; const el = $('aiBudget'); const won = n => '₩' + Math.round(n).toLocaleString();
@@ -681,7 +683,7 @@ async function aiCollect() {
   if (!sids.length) { aiStatus('왼쪽에서 서버를 선택하세요', true); return false; }
   if (!$('aiFrom').value || !$('aiTo').value) { aiStatus('시간 범위는 필수입니다', true); $('aiFrom').focus(); return false; }
   const body = { servers: sids, dir: S.logDir, access_base: $('aiAccess').value, php_base: $('aiPhp').value, ip: aiIps().join(','), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' ') };
-  setOff('aiCollect', '모으는 중'); aiStatus('서버에서 로그를 추리는 중... (IP grep 은 파일 크기만큼 걸립니다)'); $('aiParts').innerHTML = ''; AI.parts = null; $('aiAsk').disabled = true;
+  setOff('aiCollect', '모으는 중'); aiProgress('서버에서 로그를 추리는 중 — IP grep 은 파일 크기만큼 걸립니다 (수 GB 면 수십 초)'); aiStatus(''); $('aiParts').innerHTML = ''; AI.parts = null; $('aiAsk').disabled = true;
   try {
     const j = await api('api.php?a=ai_collect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     AI.parts = j.parts; AI.sig = JSON.stringify([aiIps(), $('aiFrom').value, $('aiTo').value, $('aiAccess').value, $('aiPhp').value, [...S.selected]]);
@@ -693,9 +695,9 @@ async function aiCollect() {
     if ($('aiModel').selectedOptions[0]?.disabled) { const ok = [...$('aiModel').options].find(o => !o.disabled); if (ok) $('aiModel').value = ok.value; }
     $('aiParts').querySelectorAll('.peek').forEach(a => a.onclick = e => { e.preventDefault(); const [f, s] = a.dataset.k.split('|'); const p = AI.parts.find(x => x.file === f && x.server === +s); const pre = $('aiPeek'); pre.hidden = !pre.hidden || pre.dataset.k !== a.dataset.k ? false : true; pre.dataset.k = a.dataset.k; pre.textContent = p.text; });
     aiStatus(j.total_bytes ? `자료 준비됨 — 파일 ${j.files.join(', ')}` : '조건에 맞는 줄이 없습니다 (IP·시간·파일 확인)', j.total_bytes === 0);
-    setOff('aiCollect', '');
+    setOff('aiCollect', ''); aiProgress('');
     return j.total_bytes > 0;
-  } catch (e) { aiStatus(e.message, true); setOff('aiCollect', ''); return false; }
+  } catch (e) { aiStatus(e.message, true); setOff('aiCollect', ''); aiProgress(''); return false; }
 }
 
 $('aiAsk').onclick = async () => {
@@ -707,7 +709,8 @@ $('aiAsk').onclick = async () => {
   if (!AI.parts || AI.sig !== sig) { setOff('aiAsk', '자료 모으는 중'); const ok = await aiCollect(); setOff('aiAsk', ''); if (!ok) return; }
   const body = { prompt, model: $('aiModel').value, context: AI.parts.filter(p => p.text).map(p => ({ server: p.server, file: p.file, text: p.text })),
                  ip: aiIps().join(', '), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
-  const out = $('aiAnswer'); out.textContent = ''; out.hidden = false; setOff('aiAsk', '응답 기다리는 중'); AI.busy = true; aiStatus('Claude 에 보내는 중...');
+  const out = $('aiAnswer'); out.textContent = '답을 기다리는 중…'; out.classList.add('waiting'); out.hidden = false; setOff('aiAsk', '응답 기다리는 중'); AI.busy = true;
+  aiProgress('Claude 에 보내는 중…'); aiStatus(''); let first = true;
   try {
     const r = await fetch('api.php?a=ai_ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok || !r.headers.get('content-type')?.includes('text/event-stream')) { const j = await r.json().catch(() => ({ error: 'HTTP ' + r.status })); throw new Error(j.error || ('HTTP ' + r.status)); }
@@ -720,15 +723,16 @@ $('aiAsk').onclick = async () => {
         for (const ln of chunk.split('\n')) {
           if (!ln.startsWith('data: ')) continue;
           const ev = JSON.parse(ln.slice(6));
-          if (ev.t) { out.textContent += ev.t; out.scrollTop = out.scrollHeight; }
-          else if (ev.start) aiStatus(`응답 중... (${ev.model}, 보낸 자료 ${fmtSize(ev.sent_bytes)}${ev.ssl ? ', ' + ev.ssl : ''})`);
+          if (ev.t) { if (first) { out.textContent = ''; out.classList.remove('waiting'); first = false; aiProgress('답을 받는 중…'); } out.textContent += ev.t; out.scrollTop = out.scrollHeight; }
+          else if (ev.start) aiProgress(`Claude 가 읽는 중… (${ev.model}, 보낸 자료 ${fmtSize(ev.sent_bytes)}${ev.ssl ? ', ' + ev.ssl : ''})`);
           else if (ev.error) aiStatus(ev.error, true);
           else if (ev.done) { const u = ev.usage; aiStatus(`완료 — 입력 ${(u.input + u.cache_write + u.cache_read).toLocaleString()} 토큰(로그 본문 ${(u.cache_write + u.cache_read).toLocaleString()}${u.cache_read ? ', 캐시 재사용 ' + u.cache_read.toLocaleString() : ''}) · 출력 ${u.output.toLocaleString()} 토큰 · 약 ₩${ev.cost_krw} ($${ev.cost_usd})` + (ev.stop === 'max_tokens' ? ' · 답이 길어 잘렸습니다 — 질문을 더 좁혀 보세요' : '')); aiBudget(ev.budget); }
         }
       }
     }
   } catch (e) { aiStatus(e.message, true); }
-  setOff('aiAsk', ''); AI.busy = false;
+  if (first) { out.classList.remove('waiting'); if (out.textContent === '답을 기다리는 중…') out.hidden = true; }
+  aiProgress(''); setOff('aiAsk', ''); AI.busy = false;
 };
 $('aiPrompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('aiAsk').click(); });
 }   // ENVLOG_AI
