@@ -123,6 +123,7 @@ $__envlogAi = (bool)((require __DIR__ . '/../config.php')['envlog_ai_enabled'] ?
           <div class="airow">
             <label>access_log</label><select id="aiAccess" title="대학마다 이름이 달라 로그가 가장 많이 쌓이는 것을 기본으로 고릅니다"></select>
             <label>php_errors</label><select id="aiPhp"></select>
+            <label class="chk" title="정적 파일 요청 제외, UA 요약, 같은 요청 접기 등으로 토큰을 50~70% 줄입니다. 원문이 필요하면 끄세요"><input type="checkbox" id="aiCondense" checked> 간추려 보내기</label>
             <button id="aiCollect" type="button" title="보낼 자료와 예상 비용을 미리 봅니다 (선택)">조회 대상 파일 확인</button>
             <span id="aiRotHint" class="hint" hidden></span>
             <span class="hint" style="flex-basis:100%">서버마다 남기는 access_log·php_errors 파일 이름이 다릅니다. 기본으로 고른 파일이 맞지 않으면 바꿔 주세요. 시간 범위에 맞는 날짜 파일은 자동으로 찾습니다.</span>

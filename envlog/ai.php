@@ -99,6 +99,90 @@ function envlog_ai_ssl_opts(&$note) {
     return ($ca !== '' && is_file($ca)) ? [CURLOPT_SSL_VERIFYPEER => true, CURLOPT_CAINFO => $ca] : [];
 }
 
+
+/* ---------------------------------------------------------------------------
+ * 간추려 보내기 — 토큰을 줄이는 전처리. 네트워크 압축은 토큰에 영향이 없으므로 내용을 줄인다.
+ *   access_log: 정적 파일 요청 제외(건수만), User-Agent 는 IP 마다 처음·바뀔 때만 요약으로, Referer·프로토콜·바이트 제거,
+ *               타임스탬프는 시:분:초만(날짜는 머리말), 같은 요청이 연속되면 "× N회"
+ *   php_errors: 타임존 제거, 같은 메시지(숫자 제외)가 반복되면 첫 것만 남기고 "같은 오류 N회", 스택트레이스는 첫 번째만
+ * 보통 access 는 50~70%, php 는 30~60% 줄어든다. 원문이 필요하면 화면의 "간추려 보내기" 를 끈다.
+ * ------------------------------------------------------------------------- */
+const ENVLOG_AI_STATIC_EXT = 'css|js|map|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|eot|otf|mp4|mp3|webm|pdf';
+
+/** User-Agent 요약 (화면의 uaParse 와 같은 규칙의 축약판) */
+function envlog_ai_ua($ua) {
+    if ($ua === '' || $ua === '-') return '';
+    if (preg_match('/(Googlebot|bingbot|Yeti|Daum|facebookexternalhit|AhrefsBot|SemrushBot|PetalBot|Applebot)/i', $ua, $m)) return '봇:' . $m[1];
+    if (preg_match('/bot|crawl|spider/i', $ua)) return '봇';
+    if (preg_match('/^(curl|Wget|python-requests|okhttp|axios|Java|PostmanRuntime)/i', $ua, $m)) return $m[1];
+    $dev = '';
+    if (preg_match('/Windows NT (\d+\.\d+)/', $ua, $m)) $dev = 'Win' . (['10.0' => '10', '6.1' => '7'][$m[1]] ?? $m[1]);
+    elseif (preg_match('/iPhone OS (\d+)/', $ua, $m)) $dev = 'iPhone' . $m[1];
+    elseif (stripos($ua, 'iPad') !== false) $dev = 'iPad';
+    elseif (preg_match('/Android (\d+)/', $ua, $m)) $dev = 'Android' . $m[1];
+    elseif (stripos($ua, 'Mac OS X') !== false) $dev = 'Mac';
+    elseif (stripos($ua, 'Linux') !== false) $dev = 'Linux';
+    if (preg_match('/Dalbit|MoodleMobile|Coursemos/i', $ua)) $dev = 'App' . ($dev ? "($dev)" : '');
+    $br = '';
+    if (preg_match('/Edg[eA]?\/(\d+)/', $ua, $m)) $br = 'Edge' . $m[1];
+    elseif (preg_match('/Whale\/(\d+)/', $ua, $m)) $br = 'Whale' . $m[1];
+    elseif (preg_match('/SamsungBrowser\/(\d+)/', $ua, $m)) $br = 'Samsung' . $m[1];
+    elseif (stripos($ua, 'KAKAOTALK') !== false) $br = '카카오톡';
+    elseif (preg_match('/(?:CriOS|Chrome)\/(\d+)/', $ua, $m)) $br = 'Chrome' . $m[1];
+    elseif (preg_match('/(?:FxiOS|Firefox)\/(\d+)/', $ua, $m)) $br = 'Firefox' . $m[1];
+    elseif (preg_match('/Version\/(\d+).*Safari/', $ua, $m)) $br = 'Safari' . $m[1];
+    elseif (preg_match('/Trident.*rv:(\d+)/', $ua, $m)) $br = 'IE' . $m[1];
+    return trim($dev . ' ' . $br) ?: substr($ua, 0, 24);
+}
+
+function envlog_ai_condense_access(array $lines) {
+    $out = []; $lastUa = []; $prev = null; $rep = 0; $static = 0; $dates = [];
+    $flush = function () use (&$out, &$prev, &$rep) {
+        if ($prev === null) return;
+        $out[] = $prev . ($rep > 1 ? " ×{$rep}회" : '');
+        $prev = null; $rep = 0;
+    };
+    foreach ($lines as $ln) {
+        if (!preg_match('#^(\S+) \S+ \S+ \[(\d\d/[A-Za-z]{3}/\d{4}):(\d\d:\d\d:\d\d)[^\]]*\] "([A-Z]+) (\S+)[^"]*" (\d{3}) (\S+)(?: "([^"]*)" "([^"]*)")?#', $ln, $m)) {
+            $flush(); $out[] = $ln; continue;              // 형식이 다른 줄은 그대로
+        }
+        [, $ip, $date, $time, $method, $path, $status, $bytes] = $m; $ua = $m[9] ?? '';
+        $dates[$date] = true;
+        $p = parse_url($path, PHP_URL_PATH) ?: $path;
+        if (preg_match('/\.(' . ENVLOG_AI_STATIC_EXT . ')$/i', $p) && $status[0] !== '5') { $static++; continue; }   // 정적 파일(5xx 는 남긴다)
+        $uaS = envlog_ai_ua($ua);
+        $uaTag = '';
+        if ($uaS !== '' && ($lastUa[$ip] ?? null) !== $uaS) { $lastUa[$ip] = $uaS; $uaTag = " [{$uaS}]"; }
+        $key = "$ip $method $path $status";
+        if ($prev !== null && $prevKey === $key && $uaTag === '') { $rep++; continue; }   // 같은 요청 연속 → 접기
+        $flush();
+        $prev = "$time $ip $status $method $path" . ($bytes === '-' ? '' : '') . $uaTag; $prevKey = $key; $rep = 1;
+    }
+    $flush();
+    $head = '# access_log 간추림: 시각 IP 상태 메서드 경로 [UA 는 IP 별 처음/바뀔 때만]. 날짜: ' . implode(', ', array_keys($dates))
+          . ($static ? ". 정적 파일(css/js/이미지/폰트) 요청 {$static}건 제외" : '');
+    return $head . "\n" . implode("\n", $out);
+}
+
+function envlog_ai_condense_php(array $lines) {
+    $out = []; $seen = []; $last = []; $inTrace = false; $skipTrace = false;
+    foreach ($lines as $ln) {
+        if (preg_match('/^\[(\d\d)-([A-Za-z]{3})-(\d{4}) (\d\d:\d\d:\d\d)(?: [^\]]*)?\] (.*)$/', $ln, $m)) {
+            $msg = $m[5];
+            $norm = preg_replace('/\d+/', '#', $msg);                 // 숫자만 다른 같은 오류는 하나로
+            if (isset($seen[$norm])) { $seen[$norm]++; $last[$norm] = "{$m[1]}-{$m[2]} {$m[4]}"; $skipTrace = true; continue; }
+            $seen[$norm] = 1; $last[$norm] = ''; $skipTrace = false;
+            $out[] = "{$m[1]}-{$m[2]} {$m[4]} " . preg_replace('/^PHP /', '', $msg);
+            $inTrace = true; continue;
+        }
+        if ($skipTrace) continue;                                     // 중복 오류의 스택·부가 줄은 버린다
+        $out[] = preg_replace('/^\* line (\d+) of (\S+): /', '  L$1 $2: ', $ln);
+    }
+    $dups = array_filter($seen, fn($n) => $n > 1);
+    $note = $dups ? ' 같은 오류의 반복은 첫 것만 남김: ' . implode(', ', array_map(fn($n, $k) => mb_substr($k, 0, 40) . "… ×{$n}(마지막 {$last[$k]})", $dups, array_keys($dups))) : '';
+    return "# php_errors 간추림: 일-월 시:분:초 메시지, 스택은 L줄 파일." . $note . "\n" . implode("\n", $out);
+}
+
 function envlog_ai_rotate_hour() {
     $cfg = require __DIR__ . '/../config.php';
     return (int)($cfg['envlog_rotate_hour'] ?? 5);
@@ -183,6 +267,7 @@ function envlog_ai_collect($uid, array $in) {
     $accessBase = trim((string)($in['access_base'] ?? ''));
     $phpBase = trim((string)($in['php_base'] ?? 'php_errors.log'));
     $ip = trim((string)($in['ip'] ?? ''));
+    $condense = !array_key_exists('condense', $in) || !empty($in['condense']);   // 기본 켬
     $from = envlog_ai_ts($in['from'] ?? ''); $to = envlog_ai_ts($in['to'] ?? '');
     if (!$servers || $dir === '') return ['error' => '서버와 로그 폴더가 필요합니다'];
     if ($from === null || $to === null) return ['error' => '시간 범위는 필수입니다 (최대 ' . (ENVLOG_AI_MAX_WINDOW_SEC / 60) . '분). IP 는 선택'];
@@ -203,7 +288,7 @@ function envlog_ai_collect($uid, array $in) {
     $fromKey = date('YmdHis', $from); $toKey = date('YmdHis', $to);
     $parts = []; $total = 0; $errors = []; $files = [];
     // 한 파일 추출 → parts 에 쌓고 줄 목록을 돌려준다
-    $pull = function ($sid, $kind, $name, $fk, $tk, $ipArg) use ($uid, $dir, &$parts, &$total, &$errors, &$files) {
+    $pull = function ($sid, $kind, $name, $fk, $tk, $ipArg) use ($uid, $dir, $condense, &$parts, &$total, &$errors, &$files) {
         $max = $kind === 'php' ? ENVLOG_AI_MAX_PHP_LINES : ENVLOG_AI_MAX_ACCESS_LINES;
         $files[$name] = true;
         [$out, $code, $err] = envlog_call($uid, 'GET', '/file/extract', ['server' => $sid, 'path' => $dir . '/' . $name, 'from' => $fk, 'to' => $tk, 'ip' => $ipArg, 'max' => $max], null, 320);
@@ -215,8 +300,9 @@ function envlog_ai_collect($uid, array $in) {
             $parts[] = ['server' => $sid, 'file' => $name, 'kind' => $kind, 'lines' => 0, 'bytes' => 0, 'capped' => false, 'missing' => $missing, 'text' => ''];
             return [];
         }
-        $text = implode("\n", $j['lines']);
-        $parts[] = ['server' => $sid, 'file' => $name, 'kind' => $kind, 'lines' => count($j['lines']), 'bytes' => strlen($text),
+        $raw = implode("\n", $j['lines']);
+        $text = $condense ? ($kind === 'access' ? envlog_ai_condense_access($j['lines']) : envlog_ai_condense_php($j['lines'])) : $raw;
+        $parts[] = ['server' => $sid, 'file' => $name, 'kind' => $kind, 'lines' => count($j['lines']), 'bytes' => strlen($text), 'raw_bytes' => strlen($raw),
                     'capped' => !empty($j['capped']), 'missing' => false, 'text' => $text];
         $total += strlen($text);
         return $j['lines'];
@@ -268,7 +354,8 @@ function envlog_ai_collect($uid, array $in) {
     $approx = (int)($total / 3.2) + 600;   // 지시문·질문 포함
     $lim = envlog_ai_limits(); $est = [];
     foreach (ENVLOG_AI_MODELS as $m) { $usd = envlog_ai_estimate_usd($m, $approx); $est[$m] = ['usd' => round($usd, 4), 'krw' => (int)ceil($usd * $lim['usd_krw']), 'ok' => $usd * $lim['usd_krw'] <= $lim['per_request_krw']]; }
-    return ['parts' => $parts, 'total_bytes' => $total, 'approx_tokens' => $approx, 'estimate' => $est, 'per_request_krw' => $lim['per_request_krw'], 'errors' => $errors,
+    return ['parts' => $parts, 'total_bytes' => $total, 'raw_bytes' => array_sum(array_column($parts, 'raw_bytes')), 'condensed' => $condense,
+            'approx_tokens' => $approx, 'estimate' => $est, 'per_request_krw' => $lim['per_request_krw'], 'errors' => $errors,
             'files' => $files, 'from' => date('Y-m-d H:i', $from), 'to' => date('Y-m-d H:i', $to), 'ip' => $ip];
 }
 
@@ -309,6 +396,7 @@ function envlog_ai_ask($user, array $in) {
             . "운영자의 질문에 한국어로 답합니다. 규칙: ① 로그에 있는 사실과 추정을 구분해 말한다 ② 시간순으로 사용자의 행동 흐름을 먼저 짧게 정리하고, "
             . "그 다음 오류·이상 징후를 시각·파일·요청과 함께 짚고, 마지막에 가장 가능성 높은 원인과 확인 방법을 제안한다 ③ 근거가 되는 로그 줄은 시각과 함께 인용한다 "
             . "④ 자료가 부족하면 무엇을 더 봐야 하는지 말한다. 자료는 서버에서 시간 범위·IP 로 미리 추린 일부이며 줄 수 상한에서 잘렸을 수 있다. "
+            . "자료가 '# … 간추림' 머리말로 시작하면 그 머리말의 형식 설명을 따른다(정적 파일 제외, 같은 요청 ×N회 접기, UA 는 바뀔 때만 표시). "
             . "⑤ 길이: 전체 답은 한국어 기준 700자~1,500자 안에서 끝낸다. 로그 줄 인용은 꼭 필요한 것만 최대 8줄, 각 줄은 핵심 부분만 짧게. "
             . "표나 긴 나열 대신 짧은 문단과 글머리 기호를 쓴다. 같은 내용을 반복하지 않는다.";
     $meta = "대학: " . (string)($in['school'] ?? '') . "\n" . ($in['ip'] ?? '' ? "대상 IP: {$in['ip']}\n" : '')
