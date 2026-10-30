@@ -22,7 +22,7 @@ $deny = [
     '#\.(key|db|db-wal|db-shm|sqlite|sqlite-wal|sqlite-shm|sql|sh|bat|env)$#i',
     '#/\.#',                                    // .sessions, .git, .htaccess …
     '#^/(var|learn/var|dti/var|studio/var|blueledger/var)(/|$)#i',
-    '#^/(blueledger/(tools|lib)|learn/tools|dti/tools|slackai/(tools|worker)|moodle/watch|envlog/daemon|core)(/|$)#i',
+    '#^/(blueledger/(tools|lib)|learn/tools|dti/tools|book/tools|slackai/(tools|worker)|moodle/watch|envlog/daemon|core)(/|$)#i',
 ];
 foreach ($deny as $re) {
     if (preg_match($re, $path)) {

@@ -30,10 +30,15 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
 ├── var/                         공지 첨부 원본 (.htaccess 로 직접 접근 차단, notice/ 는 gitignore)
 │
-├── book/                        BlueBooks(도서구매신청) — Python/FastAPI, 별도 프로세스(포트 8000)
-│   ├── app.py
-│   ├── index.html
-│   └── styles/
+├── book/                        BlueBooks(도서구매신청) — PHP, 포털 세션·DB 공유. 'book' 절 참고
+│   ├── index.php                화면 한 장(SPA) — 상단바는 PHP 가, 목록·폼은 static/*.js 가 그린다
+│   ├── api.php                  JSON API 프런트 컨트롤러 (?p=/requests/3 로 라우팅)
+│   ├── bootstrap.php, db.php, guard.php   require 목록 · book_requests 표/시드/설정 · 포털 세션 신원
+│   ├── lib/                     http(응답·검증·라우팅) · requests(읽기/쓰기·권한) · lookup(교보문고·카카오) · notify(슬랙)
+│   ├── routes/                  identity · requests · books
+│   ├── static/, styles/         core(상태·api·유틸) · list · form · main / dti 토큰을 따른 style.css
+│   ├── tools/migrate_from_sqlite.php   book.db(FastAPI/SQLite) → book_requests 이관 (CLI, 일회성)
+│   └── seed.json                표가 비어 있을 때 넣는 초기 127건
 │
 ├── moodle/                      MoodleUp?(무들 동향) — PHP 뷰어 + Python 주간 배치
 │   ├── index.php, db.php        주차별 리포트 화면(읽기 전용, 포털 세션)
@@ -124,8 +129,9 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
     └── styles/       페이지별 css + header.css(공통 상단바)
 ```
 
-**book(8000)만 다른 프로세스/포트**(FastAPI)다. **portal과 slack은 완전히 같은
-PHP 앱**이라고 봐도 된다 — slack/은 물리적으로 하위 폴더일 뿐, 세션도 같은 걸 공유한다.
+**모듈 전부가 포털과 같은 PHP 앱**이다 — slack/·book/ 등은 물리적으로 하위 폴더일 뿐, 세션도
+같은 걸 공유한다. (book 은 2026-10 까지 FastAPI 별도 프로세스(포트 8000)였고, 지금은 PHP 로 들어왔다.
+파이썬 배치(moodle/watch, onwatch/worker, envlog/daemon, slackai/worker)는 화면이 아니라 뒤에서 도는 일꾼이다.)
 
 ---
 
@@ -154,8 +160,8 @@ php.ini 에 `date.timezone` 이 없으면 PHP 는 UTC 로 돌고 MySQL 은 서�
 
 | core/ 에 있는 것 | 쓰는 곳 |
 |---|---|
-| `auth.php` | api, access, dti, learn, moodle, slack, bluecart, sitehub |
-| `db.php` | access, dti, learn, moodle, sitehub (`add_column_if_missing()` 재사용) |
+| `auth.php` | api, access, book, dti, learn, moodle, slack, bluecart, sitehub |
+| `db.php` | access, book, dti, learn, moodle, sitehub (`add_column_if_missing()` 재사용) |
 | `worksystems.php` / `.json` | index, dti, learn, moodle, slack/header, bluecart, book, sitehub |
 | `board.php` | api/notices·notice_file·events·admins |
 | `push.php` / `push_kinds.json` | index, api/me·push·notifications, dti, onwatch, dev/push_*, slackai·onwatch 워커(dev/push_cli.php 경유) |
@@ -172,17 +178,11 @@ require_once __DIR__ . '/core/worksystems.php';    // 포털 루트(index.php)�
 
 - `config.php` — 서버마다 사람이 직접 만드는 파일이다. 자리를 옮기면 이미 돌고 있는
   설치본을 전부 손봐야 한다. `slack`, `learn`, `dti` 도 루트 기준으로 읽고 있다.
-- `sso_secret.key` — `book/app.py` 가 `../sso_secret.key` 로 같은 파일을 직접 읽는다.
-  자리를 옮기면 키가 새로 생겨 book 쪽 SSO 검증이 전부 깨진다.
+- `sso_secret.key` — book 이 파이썬이던 때 `../sso_secret.key` 로 직접 읽던 파일이다. 지금 읽는
+  모듈은 없지만 `auth.php` 가 계속 만들고 서명 쿠키도 계속 심는다 — 다른 프로세스 모듈이 다시
+  생기면 그대로 쓰면 된다.
 - `.sessions/` — 옮기면 열려 있던 세션을 못 찾아 전원이 로그아웃된다.
 - `var/` — 공지 첨부 원본. 직접 접근을 막는 `.htaccess` 가 여기 있다.
-
-`book` 은 PHP 가 아니라 경로를 직접 적는다. 목록 원본을 옮겼으니 같이 고쳐 뒀다.
-
-```python
-WORK_SYSTEMS = os.path.join(BASE, "..", "core", "worksystems.json")
-SSO_SECRET_PATH = os.path.join(BASE, "..", "sso_secret.key")   # 루트 그대로
-```
 
 ---
 
@@ -322,38 +322,35 @@ push_send([
   `?need_login=<key>`를 붙인다(key는 `worksystems.json`의 key). 포털은 `need_login_notice()`로
   이름까지 붙인 문구를 만들어 로그인 화면에 토스트로 띄우고, URL에서 그 플래그만 지운다
   (`pathname`으로 싹 지우면 `need_token`·`view=profile`까지 날아간다). 붙이는 곳은
-  slack `auth.php`, dti·moodle `index.php`, moodle `bookmarks.php`, learn·access `guard.php`,
-  book `app.py` — 일곱 곳이다. **API는 다르다** — 401을 그대로 응답하고, 화면 JS가
-  그 401을 받아 포털로 보낸다(book `authedFetch`).
-- **book 모듈(다른 프로세스)**: 포털이 로그인 시 `blueiwork_id` 쿠키를 심는다 — 이메일+이름을
-  HMAC-SHA256으로 서명한 값(`auth.php::issue_sso_cookie()`). book(Python, `app.py`)은 같은
-  비밀키(`sso_secret.key`, 포털이 최초 실행 시 자동 생성)로 **서명만 검증**해서 이메일/이름을
-  얻는다. book은 MySQL에 붙지 않는다 — 쿠키 자체가 신원 증명.
-  - **전제: 포털과 book이 같은 호스트**(포트만 달라도 됨)여야 브라우저가 쿠키를 같이
-    보낸다. 다른 PC에서 띄우면 SSO가 동작하지 않는다.
-  - book 쪽 로그아웃 링크는 포털의 `api/logout.php`를 GET으로 직접 연다(`api/logout.php`가
-    POST면 JSON, GET이면 `index.php`로 리다이렉트하도록 나뉘어 있음).
-- **공통 상단바**: `slack/header.php`(PHP include)와 `book/index.html`의 `.bw-topbar`가 시각적으로
-  동일한 blue-iWorks 상단바(로고+사용자명+로그아웃)를 각자 방식으로 그린다. slack 하위 폴더
-  페이지는 include 전에 `$__bwBase = '../';`를 반드시 설정해야 링크가 안 깨진다(폴더 깊이 보정용).
+  slack `auth.php`, dti·moodle `index.php`, moodle `bookmarks.php`, learn·access·book `guard.php`
+  — 일곱 곳이다. **API는 다르다** — 401을 그대로 응답하고, 화면 JS가 그 401을 받아
+  포털로 보낸다(book·dti·learn 의 `static/core.js::api()`).
+- **SSO 서명 쿠키(`blueiwork_id`)**: 포털이 로그인 시 이메일+이름을 HMAC-SHA256 으로 서명해
+  심는다(`auth.php::issue_sso_cookie()`, 키는 `sso_secret.key`). book 이 파이썬 별도 프로세스이던
+  때 그쪽이 서명만 검증해 신원을 얻던 장치다. **지금은 검증하는 모듈이 없다** — book 도 PHP 로
+  들어와 세션을 그대로 쓴다. 다른 언어/프로세스 모듈이 다시 생기면 같은 호스트(포트만 달라도
+  됨)에 두고 이 쿠키를 검증하면 된다.
+- **공통 상단바**: `slack/header.php`(PHP include)를 쓰는 slack 과, 각자 head 에 같은 마크업을
+  그리는 book·dti·learn 이 시각적으로 동일한 blue-iWorks 상단바(로고+사용자명+로그아웃)를 그린다.
+  slack 하위 폴더 페이지는 include 전에 `$__bwBase = '../';`를 반드시 설정해야 링크가 안
+  깨진다(폴더 깊이 보정용).
 - **상단바 드롭다운의 "업무 시스템" 목록**: 원본은 `worksystems.json` 하나다(key·이모지·라벨 +
   포털 루트 기준 경로). 시스템이 늘거나 이름이 바뀌면 여기만 고치면 전 모듈 상단바와 포털
   대시보드 타일이 같이 바뀐다.
-  - PHP 쪽(포털·slack·access·moodle·dti·learn)은 `worksystems.php::work_systems_menu($base, $current)`
+  - 전 모듈(포털·slack·access·moodle·dti·learn·book)이 `worksystems.php::work_systems_menu($base, $current)`
     로 서버에서 그린다. `$base`는 그 페이지에서 **포털 루트까지 되짚는 접두사**(포털 `''`,
-    dti/learn/moodle/slack `'../'`, slack 하위 폴더 `'../../'`), `$current`는 현재 시스템 key —
+    book/dti/learn/moodle/slack `'../'`, slack 하위 폴더 `'../../'`), `$current`는 현재 시스템 key —
     그 줄이 `.on`(`styles/topbar.css`)으로 표시된다. `slack/header.php`를 쓰는 페이지는
     `$__bwCurrent`만 넘기면 된다.
-  - 별도 프로세스인 book 은 PHP 를 못 쓰니 `app.py` 가 **같은 json 을 직접 읽어**
-    `whoami` 로 내려주고 화면 JS(`renderWorkSystems`)가 그린다. 포털 트리가 안 보이면 목록만
-    비고 화면은 정상 동작한다.
+  - `api/my_systems.php` 는 PHP 를 못 쓰는 모듈(다른 프로세스)이 같은 메뉴를 그리려고 부르던
+    API 다. book 이 PHP 로 들어온 뒤로 부르는 곳은 없지만 그런 모듈이 다시 생기면 쓴다.
 - **카드 아이콘과 탭 파비콘**: 시스템마다 포털 카드의 색 배지(서비스 색 둥근 사각 + 흰 아이콘)를
   그대로 줄여 탭 파비콘으로 쓴다. 시스템을 더하면 다음을 함께 한다.
   1. `styles/icons/<key>.svg` 에 카드 아이콘을 둔다(24 격자, `stroke="currentColor"`). 포털 `ICONS` 는
      `worksystems.php::work_system_icons()` 로 이 폴더를 읽는다.
   2. `python dev/gen_favicons.py` 로 `styles/favicons/<key>.svg` 를 만들어 커밋한다(색은 `worksystems.json`).
   3. 그 시스템의 모든 페이지 `<head>` 에 `<link rel="icon" type="image/svg+xml" href="<포털 루트>styles/favicons/<key>.svg">`
-     를 건다. book 은 `shared-styles/`, dti 는 `dti_asset($page, '../styles/favicons/dti.svg')`.
+     를 건다. book·learn 은 `../styles/favicons/<key>.svg`, dti 는 `dti_asset($page, '../styles/favicons/dti.svg')`.
   포털 루트(blue-iWorks)만 `styles/favicon.ico`(세 줄)를 그대로 쓴다.
 
 ---
@@ -986,13 +983,41 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
 
 ---
 
-## book 권한 모델
+## book (BlueBooks · 도서구매신청)
 
-- 신청자는 항상 로그인한 본인 — 프론트 피커도 본인만 뜨고, 서버(`app.py`)도 클라이언트가 보낸
-  `applicant` 값을 무시하고 SSO 쿠키의 신원으로 강제 기록(`applicant_email` 컬럼).
-- 수정/삭제: 본인 글이거나 관리자(`ADMIN_EMAIL` = `jian@bluesoft.co.kr`, `app.py`에 하드코딩)만 가능.
-- 완료 처리(`done`)는 **관리자만** 가능(작성자 본인도 불가).
-- 레거시 데이터(로그인 연동 이전 신청)는 이름→이메일 매핑으로 최선 노력 백필했음(`NAME_TO_EMAIL`).
+파이썬 `app.py`(FastAPI + SQLite `book.db`, 포트 8000)를 **기능 그대로 PHP + MySQL 로 옮긴 것**이다
+(dti·learn 과 같은 이유 — 포털과 세션·DB 를 공유하면 SSO 쿠키 검증도, 별도 프로세스도, nginx 프록시
+블록도 필요 없어진다). 2026-10-30 이관.
+
+- **모양은 dti 와 같다** — `lib/`·`routes/` 에 `book_` 접두사 전역 함수, 라우트는 `['status','data']`
+  를 돌려주고 출력은 `api.php` 의 `book_send()` 한 곳. 화면 JS 는 FastAPI 시절 경로(`/bookapi/…`)를
+  그대로 쓰고 `static/core.js::bookApiURL()` 이 `api.php?p=…` 로 바꾼다.
+- **표는 `book_requests` 하나**(`db.php`). 파이썬 `requests` 표와 컬럼이 같고 `yes24_url` 만 뺐다(교보문고로
+  바뀐 뒤 아무도 안 읽던 컬럼). 날짜는 `YYYY-MM-DD` 문자열(learn·dti 와 같다). PDO 가 문자열로 주는
+  `done`·`price` 는 `lib/requests.php::book_row_out()` 이 캐스팅해 내보낸다.
+- **권한** — 신청자는 항상 로그인한 본인(클라이언트가 보낸 `applicant` 는 보지 않고 세션 신원을
+  `applicant_email` 에 기록). 수정/삭제는 본인 글이거나 관리자. 완료 처리(`done`)는 **관리자만**.
+  관리자 명단은 `db.php` 의 `BOOK_DEFAULT_ADMINS`(dti 의 `DTI_DEFAULT_ADMINS` 와 같은 자리).
+- **구성원 명단·뱃지 색은 `portal_users`** 다(`routes/identity.php::book_members`). 파이썬 시절 코드에
+  박혀 있던 13명 명단·색상표·`NAME_TO_EMAIL` 은 없앴다. 계정이 없는 이름(퇴사자)은 이름 해시로 색을
+  만들고, 본인 판정은 못 하니 관리자만 고칠 수 있다.
+- **표가 비면 `seed.json`(원본 엑셀 127건)을 넣는다.** 이름→이메일은 `portal_users` 로 맞춘다.
+  **운영 이관은 시드가 아니라 `tools/migrate_from_sqlite.php` 다** — 실제 신청은 `book.db` 에 쌓여
+  있다(2026-10 기준 138건). 첫 화면이 먼저 열려 시드가 들어갔으면 `--force` 로 비우고 다시 넣는다.
+  ```bash
+  php book/tools/migrate_from_sqlite.php --db=/home/blueapp_core/book/book.db --dry-run
+  php book/tools/migrate_from_sqlite.php --db=/home/blueapp_core/book/book.db --force
+  ```
+  id 를 그대로 유지한다. 오래된 `book.db`(`applicant_email` 컬럼 없음)도 받는다 — 이름으로 이메일을 맞춘다.
+- **바깥 조회(`lib/lookup.php`)** — 교보문고 상품 URL(검색 결과 첫 상품, 등록·제목/저자 수정 때 동기
+  호출, 5초 타임아웃)과 카카오 책 검색(도서명 자동완성·표지). 둘 다 curl 이고 실패하면 조용히 빈 값이다.
+  윈도 개발 PC 의 PHP 는 CA 번들이 없어 둘 다 SSL 오류로 비어 나온다 — 리눅스 서버에서는 된다.
+- **설정은 `config.php` 두 키** — `book_slack_webhook`(신청 알림, 없으면 알림만 꺼짐),
+  `kakao_rest_api_key`(없으면 `book/kakao_keys.json` 을 예전처럼 읽고, 그것도 없으면 자동완성만 꺼짐).
+  파이썬 시절 `book/config_local.py` 의 `SLACK_WEBHOOK_URL` 을 `config.local.php` 의
+  `book_slack_webhook` 으로 옮기면 된다.
+- **디자인** — dti 의 토큰(`--cos50` 파랑, `--r8` 라운드, Pretendard + Space Grotesk h1, 카드 목록)을
+  그대로 따르고 **페이지 배경(`#FAF8F1`)만 book 의 원래 베이지**를 유지했다. Orbit 폰트·지브라 줄은 뺐다.
 
 ---
 
@@ -1636,8 +1661,8 @@ BlueLab 쪽 짝이다 — 동작·API·암호화는 access 를, 화면 뼈대·�
 | `sso_secret.key` (루트) | book과 공유하는 SSO 서명 키 | **자동 생성됨**(최초 실행 시) |
 | `vapid.key` (루트) | 웹 푸시 서명 키쌍 | **자동 생성됨**(첫 알림 사용 시). 서버를 옮기면 같이 옮겨야 구독이 유지된다 |
 | `slack/config.local.php` | Gmail IMAP 계정 정보 | **직접 생성 필요**, 아래 형식 |
-| `book/config_local.py` | Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성 |
-| `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
+| `config.local.php` 의 `book_slack_webhook` | book Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성. 파이썬 시절 `book/config_local.py` 에서 옮긴다 |
+| `config.local.php` 의 `kakao_rest_api_key` 또는 `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
 | `config.php` 의 `dti_slack_webhook` | dti 모듈 Slack 웹훅 URL(선택) | 없으면 발표자 등록 알림만 비활성 |
 | `SVN_배포_디비정보(블루내부공유).xlsx` (루트) | access 모듈 초기 데이터 | **직접 가져다 둘 것.** 전 대학 계정/비번이 들어 있어 커밋 금지 |
 | `config.php` 의 `sitehub_list_id` · `sitehub_list_url` | sitehub 모듈이 읽는 Slack 리스트(BlueLab-유지보수처리목록) ID·주소 | 없으면 이력 동기화만 꺼진다 |
@@ -1702,13 +1727,10 @@ return [
     // (그 외 선택: 'envlog_system_python' 파이썬 경로, 'envlog_autostart' => false, 'envlog_schools_from' => 'db'|'daemon')
     'envlog_url' => $localCfg['envlog_url'] ?? 'http://127.0.0.1:8766',
 
-    // 대시보드/공통 헤더 드롭다운이 참조하는 외부 모듈 링크. book은 별도 프로세스라 절대주소 필요.
-    // 실제 배포 주소가 다르면 config.local.php 에 'book_url' => '...' 을 넣어 덮어쓸 수 있음.
-    // dti·learn 은 포털과 같은 PHP 앱이라 여기 주소가 없다 — index.php가
-    // slack·access처럼 상대경로(dti/index.php)로 직접 건다.
-    'links' => [
-        'book' => $localCfg['book_url'] ?? 'book',
-    ],
+    // book(BlueBooks) — 둘 다 선택. 웹훅이 없으면 신청 알림만, 카카오 키가 없으면 도서명 자동완성만 꺼진다.
+    // (파이썬 시절 book/config_local.py 의 SLACK_WEBHOOK_URL · kakao_keys.json 의 rest_api_key 자리)
+    'book_slack_webhook' => $localCfg['book_slack_webhook'] ?? null,
+    'kakao_rest_api_key' => $localCfg['kakao_rest_api_key'] ?? null,
 
     // dti 의 발표자료 PDF 변환에 쓰는 LibreOffice 실행 파일. PATH 에서 찾는다.
     // 웹 서버의 PATH 에 없으면 절대경로로 바꾼다(이 파일 자체가 서버마다 따로 만드는 파일이다).
@@ -1729,10 +1751,8 @@ return [
 
 ## 환경변수 / 설정값 확인 필요
 
-- **`PORTAL_URL`** (book 실행 시 환경변수) — book이 "로그인 안 됨" 상태에서 리다이렉트할 포털 주소.
-  기본값 `http://localhost/` 플레이스홀더 그대로면 실제 배포에서 안 맞을 수 있음.
-- **`index.php`의 `LINKS.book`** — 대시보드 타일이 여는 실제 주소. `config.php`의 `links`에서
-  읽는다. 나머지 모듈은 같은 PHP 앱이라 `index.php` 가 상대경로로 직접 건다.
+- **book 의 `PORTAL_URL`·`links.book`** 은 없어졌다(2026-10, PHP 이관). 서버 `config.local.php` 에
+  남아 있는 `book_url` 은 읽는 곳이 없으니 지워도 된다.
 - **moodle/watch 환경변수** — 전부 선택. 서버는 systemd 유닛의 `Environment=` 로 주고, 로컬은
   `moodle/watch/.env`(`.env.example` 복사, git 제외)에 적어 두면 CLI 와 `--serve` 가 같이 읽는다.
   환경변수가 있으면 `.env` 보다 우선한다. `MOODLE_ORG_TOKEN`(없으면 PAG 코스 skipped), `ANTHROPIC_API_KEY`
@@ -1773,50 +1793,29 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 
 ## 배포 (systemd)
 
-book 은 uvicorn 프로세스로 돈다. 유닛 파일은 서버에만 두고 저장소에는 올리지
-않는다(실제 호스트명이 들어가기 때문). `/etc/systemd/system/book.service`:
+화면 모듈은 전부 PHP 라 systemd 유닛이 없다. **book 의 uvicorn 유닛(`book.service`)은 2026-10 PHP
+이관으로 필요 없어졌다** — 서버에서 이렇게 걷어낸다.
 
-```ini
-[Unit]
-Description=book (BlueBooks 도서구매신청)
-After=network-online.target
-
-[Service]
-WorkingDirectory=/home/blueapp_core/book
-ExecStart=/home/blueapp_core/book/venv/bin/python -m uvicorn app:app --host 0.0.0.0 --port 8000
-Restart=always
-User=blueapp_core
-Environment=PORTAL_URL=http://포털주소/
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo systemctl disable --now book.service && sudo rm /etc/systemd/system/book.service
+# nginx 의 /book/ · /bookapi/ proxy_pass 두 블록을 지우고 reload
+php book/tools/migrate_from_sqlite.php --db=/home/blueapp_core/book/book.db --force   # book.db → book_requests
 ```
 
-- `WorkingDirectory` 아래에 런타임 산출물이 생긴다. 실행 사용자(`blueapp_core`)에게 쓰기
-  권한이 있어야 한다.
-- SSO 서명 키는 `../sso_secret.key`(= `/home/blueapp_core/sso_secret.key`)를 본다. 포털이
-  최초 실행 때 만든 그 파일이다.
+`book.db`·`venv/`·`app.py` 는 이관 결과를 확인한 뒤 지운다(`book.db` 는 백업으로 한 벌 남겨 둔다).
 
 ### nginx
 
-book 은 nginx 가 경로 접두사로 포트에 넘긴다(`/etc/nginx/sites-available/slack`).
-새 FastAPI 모듈을 올리면 **화면 경로와 API 접두사 두 블록**을 함께 추가해야 한다. 빠지면 그 경로가
-문서루트의 소스 폴더에 떨어져 403 이 난다.
-
-```nginx
-location /book/    { proxy_pass http://127.0.0.1:8000/; }
-location /bookapi/ { proxy_pass http://127.0.0.1:8000/bookapi/; }
-```
-
-(`proxy_set_header`·`client_max_body_size` 줄을 같이 둔다 — 업로드가 50MB 까지다.)
-dti·learn·moodle 은 PHP 라 프록시 블록이 필요 없다. 대신 **문서루트 아래에 있으면 안 되는 것들을
-막아둔다.** 배치 소스(`moodle/watch/`)와 업로드 보관함(`learn/var/`)이 그렇다 — 후자에는 이수증
-원본이 들어가므로 URL 로 바로 열리면 안 된다:
+PHP 모듈은 프록시 블록이 필요 없다. 대신 **문서루트 아래에 있으면 안 되는 것들을 막아둔다.**
+배치 소스(`moodle/watch/`), 업로드 보관함(`learn/var/`), CLI 도구(`*/tools/`), 남아 있는
+`book.db` 가 그렇다 — 업로드 보관함에는 이수증 원본이 들어가므로 URL 로 바로 열리면 안 된다:
 
 ```nginx
 location ^~ /moodle/watch/  { deny all; }
 location ^~ /learn/var/     { deny all; }
 location ^~ /envlog/daemon/ { deny all; }
+location ^~ /book/tools/    { deny all; }
+location ~ \.db$            { deny all; }
 ```
 
 루트의 비밀 키 파일(`sso_secret.key`, `vapid.key`)도 문서루트 안에 있어 막지 않으면 URL 로 그대로
@@ -1987,10 +1986,9 @@ sudo systemctl enable --now moodle-watch-refresh.path
 
 ## 알려진 제약 / TODO
 
-- [ ] book이 포털과 다른 호스트에 있으면 SSO 쿠키가 전달되지 않음 — 같은 서버로 이전 필요.
-- [ ] `PORTAL_URL`, `LINKS.book` 플레이스홀더를 실제 주소로 확정.
-- [ ] 관리자(`ADMIN_EMAIL`)가 book `app.py`에 하드코딩 — 여러 명이 되면 배열/DB 플래그로 전환 고려.
-      dti 는 `db.php` 의 `DTI_DEFAULT_ADMINS` 로 분리돼 있다.
+- [ ] book: 관리자 명단이 `db.php` 의 `BOOK_DEFAULT_ADMINS` 상수다(dti 와 같다). 화면에서 바꾸려면
+      learn 처럼 `*_admins` 표로 옮긴다.
+- [ ] book: 서버 이관 뒤 `book.service`·nginx 프록시·`book.db` 정리('배포' 절).
 - [ ] dti: 자료 순서를 바꿀 수 없다(등록 순 고정). 필요해지면 `dti_materials` 에 정렬 컬럼 추가.
 - [ ] dti: 응답의 `material_*`·`scan_*` 파생 키는 화면이 `materials`·`scans` 배열만 보게
       정리되면 뺄 수 있다. 지금은 카드 정렬과 멤버 점수가 그 키에 걸려 있다.
@@ -2024,7 +2022,8 @@ DB 를 여는 일곱 곳(`core/db.php`, access·learn·slack·slackai·dti·blue
   NOW/DATE_SUB/TIMESTAMPDIFF/FIELD/GROUP_CONCAT …). 문자열 비교는 `_ci` 처럼 대소문자를 무시한다.
   모르는 문법이 나오면 서버 창에 `[sqlite_compat]` 로 원문·번역문이 찍힌다 — 그걸 보고 규칙을 늘린다.
   한계: `ON UPDATE CURRENT_TIMESTAMP` 무시, 문자열 안 `\t` 같은 백슬래시 이스케이프는 글자 그대로.
-- 안 되는 것: 슬랙(개인 토큰)·Gmail(IMAP)·웹훅·LLM 등 바깥 연동, book(파이썬, 따로 띄워야 함).
+- 안 되는 것: 슬랙(개인 토큰)·Gmail(IMAP)·웹훅·LLM 등 바깥 연동. (book 도 PHP 라 같이 뜬다 —
+  교보문고·카카오 조회만 이 PC 의 PHP curl 에 CA 번들이 없어 비어 나온다.)
 - 2026-10-21 확인: 포털 로그인·공지·일정, BlueCart 요청, BlueLearn 신청, BlueStudio 프로젝트 생성, BlueLedger
   출장여비(46건 이관), access·moodle·dti 화면과 그 화면들의 API 요청 전부 정상.
 
@@ -2034,8 +2033,7 @@ DB 를 여는 일곱 곳(`core/db.php`, access·learn·slack·slackai·dti·blue
   개인 작업용으로 git에 안 올라간다).
 - PHP 파일 수정 후 `php -l 파일명`으로 문법 검사만이라도 하고 커밋할 것.
 - 포털·slack은 `php -S 127.0.0.1:PORT`로 즉석 기동 가능(세션/DB만 붙어 있으면 됨).
-  book은 `PORTAL_URL=http://127.0.0.1:PORT/ python -m uvicorn app:app --port 8098`.
-- dti·learn 은 포털과 같은 앱이라 포털을 띄우면 같이 뜬다 — `php -S 127.0.0.1:PORT` 로 루트를
-  서빙하고 `/dti/index.php` 로 들어가면 된다. 포털 로그인이 있어야 화면이 뜬다.
+- book·dti·learn 은 포털과 같은 앱이라 포털을 띄우면 같이 뜬다 — `php -S 127.0.0.1:PORT` 로 루트를
+  서빙하고 `/book/index.php` 로 들어가면 된다. 포털 로그인이 있어야 화면이 뜬다.
 - 주석은 거의 달지 않는다. 이름으로 설명하고, 주석은 "코드를 잘못 고치는 걸 막는
   정보"(동시성·보안·외부 제약)일 때만 그 줄 옆에 남긴다.
