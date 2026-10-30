@@ -82,6 +82,23 @@ function envlog_ai_estimate_usd($model, $inputTokens) {
     return $inputTokens / 1e6 * $pi + ENVLOG_AI_EST_OUTPUT_TOKENS / 1e6 * $po;
 }
 
+/**
+ * Anthropic 호출의 SSL 옵션. 운영(리눅스)은 시스템 CA 로 검증한다. 로컬 WAMP 의 PHP 에는 CA 번들이 없어
+ * "unable to get local issuer certificate" 가 나므로, 윈도우이거나 config 'envlog_ai_insecure_ssl' => true 면 검증을 끈다.
+ * 그 사이 단계로 slackai 가 두는 vendor/cacert.pem 이 있으면 그걸 쓴다.
+ */
+function envlog_ai_ssl_opts(&$note) {
+    $cfg = require __DIR__ . '/../config.php';
+    $note = '';
+    if (!empty($cfg['envlog_ai_insecure_ssl']) || strncasecmp(PHP_OS, 'WIN', 3) === 0) {
+        $note = 'SSL 검증 끔(로컬)';
+        return [CURLOPT_SSL_VERIFYPEER => false, CURLOPT_SSL_VERIFYHOST => 0];
+    }
+    $ca = ini_get('curl.cainfo') ?: (ini_get('openssl.cafile') ?: '');
+    if ($ca === '' && is_file(__DIR__ . '/../slackai/vendor/cacert.pem')) $ca = __DIR__ . '/../slackai/vendor/cacert.pem';
+    return ($ca !== '' && is_file($ca)) ? [CURLOPT_SSL_VERIFYPEER => true, CURLOPT_CAINFO => $ca] : [];
+}
+
 function envlog_ai_rotate_hour() {
     $cfg = require __DIR__ . '/../config.php';
     return (int)($cfg['envlog_rotate_hour'] ?? 5);
@@ -309,7 +326,8 @@ function envlog_ai_ask($user, array $in) {
     header('Cache-Control: no-cache'); header('X-Accel-Buffering: no');
     while (ob_get_level()) ob_end_flush();
     $send = function ($arr) { echo 'data: ' . json_encode($arr, JSON_UNESCAPED_UNICODE) . "\n\n"; flush(); };
-    $send(['start' => true, 'model' => $model, 'key_source' => $src, 'sent_bytes' => strlen($doc)]);
+    $sslOpts = envlog_ai_ssl_opts($sslNote);
+    $send(['start' => true, 'model' => $model, 'key_source' => $src, 'sent_bytes' => strlen($doc), 'ssl' => $sslNote]);
 
     $usage = ['input' => 0, 'output' => 0, 'cache_read' => 0, 'cache_write' => 0]; $buf = ''; $stop = ''; $httpErr = '';
     $ch = curl_init('https://api.anthropic.com/v1/messages');
@@ -317,6 +335,7 @@ function envlog_ai_ask($user, array $in) {
         CURLOPT_POST => true, CURLOPT_POSTFIELDS => json_encode($body, JSON_UNESCAPED_UNICODE),
         CURLOPT_HTTPHEADER => ['content-type: application/json', 'x-api-key: ' . $key, 'anthropic-version: 2023-06-01', 'accept: text/event-stream'],
         CURLOPT_TIMEOUT => 300, CURLOPT_CONNECTTIMEOUT => 15,
+    ] + $sslOpts + [
         CURLOPT_WRITEFUNCTION => function ($ch, $data) use (&$buf, &$usage, &$stop, &$httpErr, $send) {
             $buf .= $data;
             while (($pos = strpos($buf, "\n")) !== false) {
