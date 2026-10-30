@@ -999,8 +999,9 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
   `applicant_email` 에 기록). 수정/삭제는 본인 글이거나 관리자. 완료 처리(`done`)는 **관리자만**.
   관리자 명단은 `db.php` 의 `BOOK_DEFAULT_ADMINS`(dti 의 `DTI_DEFAULT_ADMINS` 와 같은 자리).
 - **구성원 명단·뱃지 색은 `portal_users`** 다(`routes/identity.php::book_members`). 파이썬 시절 코드에
-  박혀 있던 13명 명단·색상표·`NAME_TO_EMAIL` 은 없앴다. 계정이 없는 이름(퇴사자)은 이름 해시로 색을
-  만들고, 본인 판정은 못 하니 관리자만 고칠 수 있다.
+  박혀 있던 13명 명단·색상표·`NAME_TO_EMAIL` 은 없앴다. 신청자 칩도 포털 계정만 보인다. 계정이 없는
+  이름(퇴사자)은 칩이 없고 목록·합계에만 보이며, 이름 해시로 색을 만들고, 본인 판정은 못 하니 관리자만
+  고칠 수 있다.
 - **표가 비면 `seed.json`(원본 엑셀 127건)을 넣는다.** 이름→이메일은 `portal_users` 로 맞춘다.
   **운영 이관은 시드가 아니라 `tools/migrate_from_sqlite.php` 다** — 실제 신청은 `book.db` 에 쌓여
   있다(2026-10 기준 138건). 첫 화면이 먼저 열려 시드가 들어갔으면 `--force` 로 비우고 다시 넣는다.

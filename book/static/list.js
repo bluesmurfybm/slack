@@ -13,14 +13,10 @@ function onYear(v) {
   render();
 }
 
-// 신청자 칩은 포털 계정 순서다. 신청 건이 있는 계정 없는 이름(퇴사자)은 뒤에 붙인다
+// 신청자 칩은 포털 계정만, 포털 순서다. 퇴사자처럼 계정 없는 이름은 칩을 만들지 않는다 —
+// 그 신청 건은 목록·합계에는 그대로 보인다
 function applicantNames() {
-  const names = APP.members.map((m) => m.name.trim());
-  for (const d of APP.data) {
-    const n = String(d.applicant || "").trim();
-    if (n && !names.includes(n)) names.push(n);
-  }
-  return names;
+  return APP.members.map((m) => m.name.trim()).filter(Boolean);
 }
 function buildApplicantFilter() {
   const inYear = (d) => APP.year === "all" || d.year === APP.year;
