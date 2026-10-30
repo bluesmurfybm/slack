@@ -602,6 +602,14 @@ function aiBudget(b) {
 // 기본 시간 범위: 지금부터 2시간 전 ~ 지금
 (() => { const now = new Date(); const from = new Date(now.getTime() - 2 * 3600 * 1000); $('aiFrom').value = fmtLocal(from); $('aiTo').value = fmtLocal(now); })();
 $('aiToggle').onclick = () => { $('aibox').classList.toggle('open'); if ($('aibox').classList.contains('open')) { aiLoadKey(); aiFillAccess(); } };
+// IP 여러 개: '＋ IP 추가' 로 칸을 늘리고 ✕ 로 뺀다. 서버에는 콤마로 이어 보낸다
+const aiIps = () => [...document.querySelectorAll('.aiIpIn')].map(i => i.value.trim()).filter(Boolean);
+$('aiIpAdd').onclick = () => {
+  if (document.querySelectorAll('.aiIpIn').length >= 10) { aiStatus('IP 는 최대 10개까지입니다', true); return; }
+  const w = document.createElement('span'); w.className = 'ipwrap';
+  w.innerHTML = '<input class="aiIpIn" placeholder="예) 203.0.113.11" size="18" autocomplete="off"><button type="button" title="이 IP 빼기">✕</button>';
+  w.querySelector('button').onclick = () => w.remove(); $('aiIps').appendChild(w); w.querySelector('input').focus();
+};
 $('aiWin').onchange = () => {   // 빠른 범위: 끝 시각 기준으로 N분
   const m = +$('aiWin').value; if (!m) return;
   const to = $('aiTo').value ? new Date($('aiTo').value) : new Date(); $('aiFrom').value = fmtLocal(new Date(to.getTime() - m * 60000)); $('aiTo').value = fmtLocal(to);
@@ -652,7 +660,7 @@ $('aiCollect').onclick = async () => {
   const sids = S.servers.filter(s => S.selected.has(s.id)).map(s => s.id);
   if (!sids.length) { aiStatus('왼쪽에서 서버를 선택하세요', true); return; }
   if (!$('aiFrom').value || !$('aiTo').value) { aiStatus('시간 범위는 필수입니다 (최대 2시간)', true); $('aiFrom').focus(); return; }
-  const body = { servers: sids, dir: S.logDir, access_base: $('aiAccess').value, php_base: $('aiPhp').value, ip: $('aiIp').value.trim(), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' ') };
+  const body = { servers: sids, dir: S.logDir, access_base: $('aiAccess').value, php_base: $('aiPhp').value, ip: aiIps().join(','), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' ') };
   $('aiCollect').disabled = true; aiStatus('서버에서 로그를 추리는 중... (IP grep 은 파일 크기만큼 걸립니다)'); $('aiParts').innerHTML = ''; AI.parts = null; $('aiAsk').disabled = true;
   try {
     const j = await api('api.php?a=ai_collect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -675,7 +683,7 @@ $('aiAsk').onclick = async () => {
   if (!AI.parts) { aiStatus('먼저 "조회 대상 파일 확인" 을 누르세요', true); return; }
   if (!(AI.key && AI.key.has)) { aiStatus('Anthropic API 키가 없습니다 — "API 키" 로 등록하세요', true); return; }
   const body = { prompt, model: $('aiModel').value, context: AI.parts.filter(p => p.text).map(p => ({ server: p.server, file: p.file, text: p.text })),
-                 ip: $('aiIp').value.trim(), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
+                 ip: aiIps().join(', '), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
   const out = $('aiAnswer'); out.textContent = ''; out.hidden = false; $('aiAsk').disabled = true; AI.busy = true; aiStatus('Claude 에 보내는 중...');
   try {
     const r = await fetch('api.php?a=ai_ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

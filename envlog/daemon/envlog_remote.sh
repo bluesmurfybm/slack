@@ -6,7 +6,7 @@
 #   chunk FILE START END            : 바이트 구간의 '완전한 줄'만  "#start OFF" / "offset \t line" ... / "#end OFF"
 #   seek  FILE KEY(YYYYMMDDHHMMSS)  : 시간키 >= KEY 인 첫 줄의 바이트 오프셋
 #   grep  FILE PATTERN MAX FROM MODE: MODE=F(부분일치)|W(단어일치, IP용)|E(정규식)  → "offset \t line"
-#   extract FILE FROM TO IP MAX     : AI 분석용 — 시간 범위(키) 안의 줄, IP 가 있으면 그 IP 줄만. 끝에 "#capped" 가능
+#   extract FILE FROM TO IP MAX     : AI 분석용 — 시간 범위(키) 안의 줄, IP(콤마로 여러 개)가 있으면 그 IP 줄만. 끝에 "#capped" 가능
 export LC_ALL=C
 cmd=$1; shift
 
@@ -171,7 +171,9 @@ do_extract() {
   [ "$to" = "-" ] && to=99999999999999
   [ "$max" -gt 0 ] 2>/dev/null || max=500
   if [ "$ip" != "-" ]; then
-    grep -a -F -w -- "$ip" "$f" | awk -v from="$from" -v to="$to" -v max="$max" "$AWK_KEY"'
+    local -a pats=(); local one; IFS=',' read -ra ips <<< "$ip"
+    for one in "${ips[@]}"; do [ -n "$one" ] && pats+=(-e "$one"); done
+    grep -a -F -w "${pats[@]}" "$f" | awk -v from="$from" -v to="$to" -v max="$max" "$AWK_KEY"'
       { k = key($0); if (k == "") next; if (k < from) next; if (k > to) exit
         print; if (++n >= max) { print "#capped"; exit } }'
     return 0

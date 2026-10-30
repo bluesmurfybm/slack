@@ -165,7 +165,11 @@ function envlog_ai_collect($uid, array $in) {
     $from = envlog_ai_ts($in['from'] ?? ''); $to = envlog_ai_ts($in['to'] ?? '');
     if (!$servers || $dir === '') return ['error' => '서버와 로그 폴더가 필요합니다'];
     if ($from === null || $to === null) return ['error' => '시간 범위는 필수입니다 (최대 ' . (ENVLOG_AI_MAX_WINDOW_SEC / 60) . '분). IP 는 선택'];
-    if ($ip !== '' && !preg_match('/^[0-9A-Za-z.:_\-]{3,64}$/', $ip)) return ['error' => 'IP 형식이 아닙니다'];
+    // IP 는 여러 개(콤마) — 각각 검사하고 빈 것·중복은 버린다 (최대 10개)
+    $ips = array_values(array_unique(array_filter(array_map('trim', explode(',', $ip)), 'strlen')));
+    foreach ($ips as $one) if (!preg_match('/^[0-9A-Za-z.:_\-]{3,64}$/', $one)) return ['error' => "IP 형식이 아닙니다: {$one}"];
+    if (count($ips) > 10) return ['error' => 'IP 는 최대 10개까지입니다'];
+    $ip = implode(',', $ips);
     if (($from === null) !== ($to === null)) return ['error' => '시작·끝 시간을 둘 다 넣으세요'];
     if ($from !== null) {
         if ($to <= $from) return ['error' => '끝 시간이 시작 시간보다 뒤여야 합니다'];

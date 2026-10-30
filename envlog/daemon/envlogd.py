@@ -671,7 +671,7 @@ def api_file_extract():
         frm = re.sub(r'[^0-9]', '', request.args.get('from', ''))[:14]
         to = re.sub(r'[^0-9]', '', request.args.get('to', ''))[:14]
         ip = (request.args.get('ip') or '').strip() or '-'
-        if ip != '-' and not re.match(r'^[0-9A-Za-z.:_-]{3,64}$', ip):
+        if ip != '-' and not re.match(r'^[0-9A-Za-z.:_-]{3,64}(,[0-9A-Za-z.:_-]{3,64}){0,9}$', ip):
             return api_error('IP 형식이 아닙니다', 400)
         mx = min(int(request.args.get('max', '500')), 5000)
         srv = _srv(); p = call(srv.check_path(request.args['path']), 40)

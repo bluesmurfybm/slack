@@ -121,7 +121,14 @@
 #lv #detail.on { display:block; } #lv #detail dl { display:grid; grid-template-columns:90px 1fr; gap:2px 10px; margin:0; } #lv #detail dt { color:var(--muted); } #lv #detail dd { margin:0; word-break:break-all; }
 /* AI 분석 상자 — 접혀 있다가 머리글을 누르면 펼쳐진다 */
 #lv #aibox { border-top:1px solid var(--line); background:var(--bg2); }
-#lv #aibox .aihead { display:flex; align-items:center; gap:10px; padding:6px 12px; }
+#lv #aibox .aihead { display:flex; align-items:center; gap:10px; padding:6px 12px; flex-wrap:wrap; }
+#lv #aibox .aihead .aidesc { flex-basis:100%; display:none; }
+#lv #aibox.open .aihead .aidesc { display:block; }
+#lv #aibox .airow .lab { min-width:64px; }
+#lv #aibox #aiIps { display:inline-flex; gap:4px; flex-wrap:wrap; }
+#lv #aibox #aiIps .ipwrap { display:inline-flex; align-items:center; }
+#lv #aibox #aiIps .ipwrap button { height:32px; padding:0 6px; margin-left:-1px; border-radius:0 8px 8px 0; }
+#lv #aibox #aiIps .ipwrap input { border-radius:8px 0 0 8px; }
 #lv #aibox .aihead .spacer { flex:1; }
 #lv #aibox .aibody { display:none; padding:4px 12px 10px; border-top:1px solid var(--line); background:var(--bg); }
 #lv #aibox.open .aibody { display:block; }

@@ -95,24 +95,31 @@ $__bwCurrent = 'envlog';
       <div id="detail"></div>
       <!-- AI 분석: 로그를 서버에서 추려(IP·시간 범위) 사용자가 확인한 뒤 Claude 에 묻는다. 자세한 흐름은 ai.php 머리말 -->
       <div id="aibox">
-        <div class="aihead"><button id="aiToggle" type="button">🤖 AI 분석 (Claude) ▾</button>
-          <span class="hint">IP 또는 시간 범위로 php_errors·access_log 를 추려 질문합니다 · 자료는 보내기 전에 확인할 수 있습니다</span>
-          <span class="spacer"></span><span id="aiKeyState" class="bdg no">키 확인 중</span><span id="aiKeyHint" class="hint"></span><button id="aiKeyBtn" type="button">API 키</button></div>
+        <div class="aihead">
+          <button id="aiToggle" type="button">🤖 AI 분석 (Claude) ▾</button>
+          <span class="spacer"></span><span id="aiKeyState" class="bdg no">키 확인 중</span><span id="aiKeyHint" class="hint"></span><button id="aiKeyBtn" type="button">API 키</button>
+          <div class="aidesc hint">시간 범위(최대 2시간)로 php_errors·access_log 를 서버에서 추려 Claude 에게 묻습니다. IP 를 넣으면 그 사용자의 요청만 봅니다. 보내기 전에 자료와 예상 비용을 확인할 수 있습니다.</div>
+        </div>
         <div class="aibody">
           <div id="aiKeyRow" class="airow keyrow" hidden>
             <div id="aiKeyNote" class="hint" style="flex-basis:100%"></div>
             <label>개인 키 (선택)</label><input id="aiKeyIn" type="password" placeholder="sk-ant-… (비워 두면 공용 키 사용)" autocomplete="new-password" style="flex:1"><button id="aiKeySave" type="button">저장</button><button id="aiKeyClose" type="button">닫기</button>
           </div>
           <div class="airow">
-            <label>시간 <b style="color:#b91c1c">*</b></label><input id="aiFrom" type="datetime-local" step="60" required><span>~</span><input id="aiTo" type="datetime-local" step="60" required>
+            <label class="lab">시간 <b style="color:#b91c1c">*</b></label><input id="aiFrom" type="datetime-local" step="60" required><span>~</span><input id="aiTo" type="datetime-local" step="60" required>
             <select id="aiWin" title="끝 시각 기준 빠른 범위"><option value="">빠른 범위</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option></select>
-            <label>IP</label><input id="aiIp" placeholder="선택 — 특정 사용자만 볼 때" size="18" autocomplete="off">
+            <span class="hint">로테이션(매일 05:00) 기준으로 날짜별 파일을 자동 선택</span>
+          </div>
+          <div class="airow" id="aiIpRow">
+            <label class="lab">IP (선택)</label><span id="aiIps"><input class="aiIpIn" placeholder="예) 203.0.113.10" size="18" autocomplete="off"></span>
+            <button id="aiIpAdd" type="button" title="IP 를 하나 더 넣습니다 (최대 10개)">＋ IP 추가</button>
+            <span class="hint">넣으면 access_log 에서 그 IP 들의 요청만 봅니다. 비우면 시간 범위 전체(앞부분 400줄까지)</span>
           </div>
           <div class="airow">
             <label>access_log</label><select id="aiAccess" title="대학마다 이름이 달라 가장 큰 것을 기본으로 고릅니다"></select>
             <label>php_errors</label><select id="aiPhp"></select>
             <button id="aiCollect" type="button">조회 대상 파일 확인</button>
-            <span id="aiRotHint" class="hint"></span>
+            <span id="aiRotHint" class="hint" hidden></span>
           </div>
           <div id="aiParts" class="aiparts"></div>
           <div class="askgrid">
