@@ -51,7 +51,7 @@ $__envlogAi = (bool)((require __DIR__ . '/../config.php')['envlog_ai_enabled'] ?
       <div class="dd" id="dd"></div>
     </div>
     <button id="btnConnect" class="primary">접속</button>
-    <button id="btnDisconnect" disabled>연결 끊기</button>
+    <button id="btnDisconnect" disabled data-why="접속된 대학 없음" title="접속된 대학 없음">연결 끊기</button>
     <label class="chk"><input type="checkbox" id="chkManual"> 직접 입력</label>
     <div id="manual">
       <input id="mHost" name="ssh-host" placeholder="IP:포트" size="18" autocomplete="off"><input id="mUser" name="ssh-user" placeholder="아이디" value="ubion" size="8" autocomplete="off"><input id="mPw" name="ssh-pass" type="password" placeholder="비밀번호" size="12" autocomplete="new-password">
