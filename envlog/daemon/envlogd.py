@@ -663,6 +663,27 @@ def api_file_grep():
         return api_error(e)
 
 
+
+@app.route('/file/extract')
+def api_file_extract():
+    """AI 분석용 추출 — 시간 범위(from/to = YYYYMMDDHHMMSS, 비우면 제한 없음)와 IP(선택)로 줄을 뽑는다. max 줄에서 끊는다"""
+    try:
+        frm = re.sub(r'[^0-9]', '', request.args.get('from', ''))[:14]
+        to = re.sub(r'[^0-9]', '', request.args.get('to', ''))[:14]
+        ip = (request.args.get('ip') or '').strip() or '-'
+        if ip != '-' and not re.match(r'^[0-9A-Za-z.:_-]{3,64}$', ip):
+            return api_error('IP 형식이 아닙니다', 400)
+        mx = min(int(request.args.get('max', '500')), 5000)
+        srv = _srv(); p = call(srv.check_path(request.args['path']), 40)
+        out = call(srv.exec(['extract', p, frm.ljust(14, '0') if frm else '-', to.ljust(14, '9') if to else '-', ip, mx], 300), 310)
+        lines = out.split(chr(10))
+        capped = any(l == '#capped' for l in lines)
+        lines = [l for l in lines if l and l != '#capped']
+        return jsonify({'lines': lines, 'capped': capped})
+    except Exception as e:
+        return api_error(e)
+
+
 def takeover_port(port):
     """같은 포트에 api.php 가 자동 기동한 보통 모드 데몬이 떠 있으면 끝내고 자리를 받는다 (개발 PC 용)"""
     import urllib.request

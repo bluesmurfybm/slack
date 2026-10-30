@@ -222,6 +222,7 @@ async function loadFiles() {
   S.fileList = [...map.values()].sort((a, b) => (a.type !== b.type) ? (a.type === 'd' ? -1 : 1) : byName(a, b));
   S.fileSids = sids; S.fileErrs = res.filter(r => r.error);
   renderFiles();
+  if ($('aibox').classList.contains('open')) aiFillAccess();   // AI 상자의 access_log/php_errors 후보도 새 목록으로
   status(`${S.logDir}: 파일 ${S.fileList.filter(f => f.type !== 'd').length}개 (서버 ${sids.length}대 합침)` + (S.fileErrs.length ? ` — 실패 ${S.fileErrs.length}대` : ''), S.fileErrs.length > 0);
   loadLogDirs(sids);
 }
@@ -584,11 +585,122 @@ async function jumpTo(l, el) {
   if (S.sync) for (const p of S.panes) if (p !== pane) gotoKey(p, l.key, false);
 }
 
+// ---------------------------------------------------------------- AI 분석 (Claude)
+//  흐름: IP·시간 범위 입력 → "자료 모으기"(서버에서 추림, 로테이션 파일 자동 선택) → 보낼 자료 확인 → "질문" → 답 스트리밍
+//  무엇이 보내지는지는 자료 미리보기에서 보인다. 키는 서버에만 있다(ai_key).
+const AI = { parts: null, key: null, busy: false };
+const pad2 = n => String(n).padStart(2, '0');
+const fmtLocal = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+function aiStatus(msg, err) { const e = $('aiMsg'); e.textContent = msg || ''; e.className = 'hint' + (err ? ' err' : ''); }
+// 머리글의 "이번 달 사용 / 상한" — ai_key·ai_ask 응답에 실려 온다
+function aiBudget(b) {
+  if (!b) return; const el = $('aiBudget'); const won = n => '₩' + Math.round(n).toLocaleString();
+  el.innerHTML = `AI 사용 <b>${won(b.month_krw)}</b> / ${won(b.cap_krw)} (이번 달 ${b.calls}회 · 1회 ${won(b.per_request_krw)} 이하)`;
+  el.classList.toggle('warn', b.month_krw >= b.cap_krw * 0.8);
+}
+
+// 기본 시간 범위: 지금부터 2시간 전 ~ 지금
+(() => { const now = new Date(); const from = new Date(now.getTime() - 2 * 3600 * 1000); $('aiFrom').value = fmtLocal(from); $('aiTo').value = fmtLocal(now); })();
+$('aiToggle').onclick = () => { $('aibox').classList.toggle('open'); if ($('aibox').classList.contains('open')) { aiLoadKey(); aiFillAccess(); } };
+$('aiWin').onchange = () => {   // 빠른 범위: 끝 시각 기준으로 N분
+  const m = +$('aiWin').value; if (!m) return;
+  const to = $('aiTo').value ? new Date($('aiTo').value) : new Date(); $('aiFrom').value = fmtLocal(new Date(to.getTime() - m * 60000)); $('aiTo').value = fmtLocal(to);
+};
+
+async function aiLoadKey() {
+  try { AI.key = await api('api.php?a=ai_key'); }
+  catch (e) { aiStatus(e.message, true); return; }
+  $('aiKeyState').textContent = AI.key.has ? (AI.key.source === 'user' ? '개인 키 등록됨' : '회사 공용 키') : '키 없음';
+  $('aiKeyState').className = 'bdg ' + (AI.key.has ? 'ver' : 'no');
+  const sel = $('aiModel'); if (!sel.options.length) for (const m of AI.key.models) { const o = document.createElement('option'); o.value = m; o.textContent = { 'claude-opus-5-5': 'Opus 5.5 (정확)', 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-5-5': 'Haiku 5.5 (저렴)' }[m] || m; sel.appendChild(o); }
+  $('aiRotHint').textContent = `로테이션 매일 ${AI.key.rotate_hour}:00 기준으로 날짜별 파일을 자동 선택 · 범위 최대 ${AI.key.max_window_min}분`;
+  aiBudget(AI.key.budget);
+}
+$('aiKeyBtn').onclick = async () => {
+  const cur = AI.key && AI.key.source === 'user' ? '(등록됨 — 비우면 삭제)' : '';
+  $('aiKeyRow').hidden = !$('aiKeyRow').hidden; $('aiKeyIn').placeholder = 'sk-ant-… ' + cur; if (!$('aiKeyRow').hidden) $('aiKeyIn').focus();
+};
+$('aiKeySave').onclick = async () => {
+  try { AI.key = await api('api.php?a=ai_key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: $('aiKeyIn').value.trim() }) }); $('aiKeyIn').value = ''; $('aiKeyRow').hidden = true; aiLoadKey(); aiStatus('API 키를 저장했습니다'); }
+  catch (e) { aiStatus(e.message, true); }
+};
+
+// 현재 폴더의 파일 목록에서 access_log 후보(로테이션 이름을 묶어 기본 이름별 총 용량)와 php_errors 기본 이름을 고른다
+function aiFillAccess() {
+  const all = S.fileList || []; const groups = new Map();
+  for (const f of all) {
+    if (f.type === 'd' || isCompressed(f.name)) continue;
+    const base = f.name.replace(/[-.](\d{8})(\.\d+)?$/, '');
+    const g = groups.get(base) || { base, size: 0, n: 0 }; g.size += f.size; g.n++; groups.set(base, g);
+  }
+  const acc = [...groups.values()].filter(g => /access/i.test(g.base)).sort((a, b) => b.size - a.size);
+  const sel = $('aiAccess'); const prev = sel.value; sel.innerHTML = '<option value="">(access_log 안 봄)</option>' + acc.map(g => `<option value="${esc(g.base)}">${esc(g.base)} — ${fmtSize(g.size)} · ${g.n}개</option>`).join('');
+  sel.value = acc.some(g => g.base === prev) ? prev : (acc[0] ? acc[0].base : '');   // 기본: 가장 큰 것
+  const php = [...groups.values()].filter(g => /php_error/i.test(g.base)).sort((a, b) => b.size - a.size);
+  const ps = $('aiPhp'); ps.innerHTML = '<option value="">(php_errors 안 봄)</option>' + php.map(g => `<option value="${esc(g.base)}">${esc(g.base)} — ${fmtSize(g.size)} · ${g.n}개</option>`).join('');
+  ps.value = php.some(g => g.base === 'php_errors.log') ? 'php_errors.log' : (php[0] ? php[0].base : '');
+}
+
+$('aiCollect').onclick = async () => {
+  if (!S.servers.length) { aiStatus('먼저 대학에 접속하세요', true); return; }
+  const sids = S.servers.filter(s => S.selected.has(s.id)).map(s => s.id);
+  if (!sids.length) { aiStatus('왼쪽에서 서버를 선택하세요', true); return; }
+  const body = { servers: sids, dir: S.logDir, access_base: $('aiAccess').value, php_base: $('aiPhp').value, ip: $('aiIp').value.trim(), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' ') };
+  if ($('aiNoTime').checked) { body.from = ''; body.to = ''; }
+  $('aiCollect').disabled = true; aiStatus('서버에서 로그를 추리는 중... (IP grep 은 파일 크기만큼 걸립니다)'); $('aiParts').innerHTML = ''; AI.parts = null; $('aiAsk').disabled = true;
+  try {
+    const j = await api('api.php?a=ai_collect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    AI.parts = j.parts;
+    const rows = j.parts.map(p => `<tr class="${p.missing ? 'off' : ''}"><td><span class="s${p.server % 9}">S${p.server}</span></td><td>${esc(p.file)}</td><td class="num">${p.missing ? '없음' : p.lines + '줄'}</td><td class="num">${p.missing ? '' : fmtSize(p.bytes)}</td><td>${p.capped ? '<span class="bdg vpn">상한에서 끊김</span>' : ''}${p.trimmed ? '<span class="bdg vpn">용량 상한으로 잘림</span>' : ''}</td><td><a href="#" data-k="${esc(p.file)}|${p.server}" class="peek">${p.lines ? '내용 보기' : ''}</a></td></tr>`).join('');
+    $('aiParts').innerHTML = `<table><tr><th>서버</th><th>파일</th><th>줄</th><th>크기</th><th></th><th></th></tr>${rows}</table>
+      <div class="hint">보낼 자료 합계 ${fmtSize(j.total_bytes)} ≈ ${j.approx_tokens.toLocaleString()} 토큰 · 예상 비용 ${Object.entries(j.estimate).map(([m, e]) => `${m.replace('claude-', '').replace(/-/g, ' ')} ≈ ₩${e.krw}${e.ok ? '' : ' (상한 초과)'}`).join(' / ')}${j.errors.length ? ' · 오류: ' + esc(j.errors.join(' / ')) : ''}</div><pre id="aiPeek" hidden></pre>`;
+    for (const o of $('aiModel').options) { const e = j.estimate[o.value]; o.disabled = e ? !e.ok : false; o.textContent = o.textContent.replace(/ — .*$/, '') + (e ? ` — ≈₩${e.krw}` : ''); }
+    if ($('aiModel').selectedOptions[0]?.disabled) { const ok = [...$('aiModel').options].find(o => !o.disabled); if (ok) $('aiModel').value = ok.value; }
+    $('aiParts').querySelectorAll('.peek').forEach(a => a.onclick = e => { e.preventDefault(); const [f, s] = a.dataset.k.split('|'); const p = AI.parts.find(x => x.file === f && x.server === +s); const pre = $('aiPeek'); pre.hidden = !pre.hidden || pre.dataset.k !== a.dataset.k ? false : true; pre.dataset.k = a.dataset.k; pre.textContent = p.text; });
+    $('aiAsk').disabled = j.total_bytes === 0;
+    aiStatus(j.total_bytes ? `자료 준비됨 — 파일 ${j.files.join(', ')}. 내용을 확인한 뒤 질문하세요` : '조건에 맞는 줄이 없습니다 (IP·시간·파일 확인)', j.total_bytes === 0);
+  } catch (e) { aiStatus(e.message, true); }
+  $('aiCollect').disabled = false;
+};
+
+$('aiAsk').onclick = async () => {
+  const prompt = $('aiPrompt').value.trim();
+  if (!prompt) { aiStatus('질문을 입력하세요', true); $('aiPrompt').focus(); return; }
+  if (!AI.parts) { aiStatus('먼저 "자료 모으기" 를 누르세요', true); return; }
+  if (!(AI.key && AI.key.has)) { aiStatus('Anthropic API 키가 없습니다 — "API 키" 로 등록하세요', true); return; }
+  const body = { prompt, model: $('aiModel').value, context: AI.parts.filter(p => p.text).map(p => ({ server: p.server, file: p.file, text: p.text })),
+                 ip: $('aiIp').value.trim(), from: $('aiNoTime').checked ? '' : $('aiFrom').value.replace('T', ' '), to: $('aiNoTime').checked ? '' : $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
+  const out = $('aiAnswer'); out.textContent = ''; out.hidden = false; $('aiAsk').disabled = true; AI.busy = true; aiStatus('Claude 에 보내는 중...');
+  try {
+    const r = await fetch('api.php?a=ai_ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok || !r.headers.get('content-type')?.includes('text/event-stream')) { const j = await r.json().catch(() => ({ error: 'HTTP ' + r.status })); throw new Error(j.error || ('HTTP ' + r.status)); }
+    const rd = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
+    while (true) {
+      const { value, done } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i; while ((i = buf.indexOf('\n\n')) >= 0) {
+        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+        for (const ln of chunk.split('\n')) {
+          if (!ln.startsWith('data: ')) continue;
+          const ev = JSON.parse(ln.slice(6));
+          if (ev.t) { out.textContent += ev.t; out.scrollTop = out.scrollHeight; }
+          else if (ev.start) aiStatus(`응답 중... (${ev.model}, 보낸 자료 ${fmtSize(ev.sent_bytes)})`);
+          else if (ev.error) aiStatus(ev.error, true);
+          else if (ev.done) { aiStatus(`완료 — 입력 ${ev.usage.input.toLocaleString()} 토큰(캐시 읽기 ${ev.usage.cache_read.toLocaleString()}) · 출력 ${ev.usage.output.toLocaleString()} 토큰 · 약 ₩${ev.cost_krw} ($${ev.cost_usd})` + (ev.stop === 'max_tokens' ? ' · 답이 길어 잘렸습니다' : '')); aiBudget(ev.budget); }
+        }
+      }
+    }
+  } catch (e) { aiStatus(e.message, true); }
+  $('aiAsk').disabled = false; AI.busy = false;
+};
+$('aiPrompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('aiAsk').click(); });
+
 // ---------------------------------------------------------------- 초기화
 // 브라우저가 저장된 로그인 계정을 검색칸에 채워 넣는 경우(비밀번호 칸을 보고 로그인 폼으로 오해) — 선택한 대학이 없는데
 // 값이 들어와 있으면 지운다. 자동완성은 로드 직후나 조금 뒤에 일어나므로 두 번 본다
 const clearAutofill = () => { if (!acSel && $('q').value && !$('dd').classList.contains('on')) { $('q').value = ''; setQVer(''); } };
 setTimeout(clearAutofill, 100); setTimeout(clearAutofill, 800);
+aiLoadKey();   // 키 유무·모델 목록 (상자를 열기 전에도 머리글 뱃지에 보이게)
 (async () => {
   try {
     const c = await api('api.php?a=state');

@@ -51,6 +51,8 @@ function portal_db() {
     // 슬랙은 협업사 도메인 계정을 쓰는 사람이 있어, 이메일로 슬랙 사용자를 찾지
     // 못하고 알림이 조용히 빠졌다. 다른 사람만 적는다 — NULL 이면 email 과 같다는 뜻.
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `slack_email` VARCHAR(190) NULL COMMENT '슬랙 계정 이메일. 로그인 이메일과 다를 때만 채운다' AFTER `slack_token_enc`");
+    // envlog 의 AI 분석에 쓰는 개인 Anthropic API 키 — 슬랙 토큰과 같은 방식(enc_token/dec_token)으로 암호화해 둔다
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `anthropic_key_enc` TEXT NULL COMMENT 'AES-256-GCM 암호화된 개인 Anthropic API 키 (envlog AI 분석용)' AFTER `slack_email`");
     // Gmail 연동(slack/gmail). 사람마다 자기 메일함을 IMAP 으로 붙인다.
     // 비밀번호는 Google '앱 비밀번호' 이고 슬랙 토큰과 같은 enc_token()(AES-256-GCM)으로만 저장한다.
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `gmail_user` VARCHAR(190) NULL COMMENT 'Gmail 연동 주소' AFTER `slack_email`");

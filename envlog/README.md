@@ -110,6 +110,25 @@ location ^~ /envlog/daemon/ { deny all; }
 문제가 생기면 `envlog/daemon/var/envlogd.log` 를 본다. 데몬을 강제로 새로 띄우고 싶으면 프로세스를 죽이면 된다
 (`pkill -f envlogd.py`) — 다음 요청이 다시 띄운다.
 
+## AI 분석 (Claude) — 로그 패널 아래 "AI 분석" 상자
+
+IP 또는 시간 범위(최대 2시간)로 php_errors.log 와 access_log 를 서버에서 먼저 추린 뒤, 사용자가 보낼 자료를 확인하고
+Claude 에게 묻는다. 코드는 `envlog/ai.php`(수집·호출·요금 통제), 화면은 `static/envlog.js` 의 AI 절.
+
+- **입력**: IP(선택), 시간 범위(필수 — "시간 없이(IP 만)" 를 켜면 current 파일만 IP 로 검색), access_log 선택(대학마다
+  `ssl_호스트_access_log` 등 이름이 달라 **용량이 가장 큰 것을 기본**으로 고름), php_errors 선택.
+- **로테이션**: 매일 `envlog_rotate_hour`(기본 05:00)에 돌므로 `[D-1 05:00, D 05:00)` 기록은 `<이름>-D` 에 있다.
+  시간 범위로 파일을 자동 계산한다(10-30 09:00 에 10-29 13~15시를 찾으면 `php_errors.log-20261030`). 아직 안 돈 구간은 current.
+- **추출**: 원격 `envlog_remote.sh extract` 가 시간 범위를 이진탐색으로 찾아 그 구간만 읽고, IP 가 있으면 access_log 는 그 IP 줄만
+  (php_errors 는 IP 가 없어 시간 범위만). 서버·파일당 access 400줄 / php 300줄, 전체 160KB 상한. 넘치면 표시하고 잘라 보낸다.
+- **보내기 전 확인**: "자료 모으기" 결과(서버·파일·줄 수·크기·예상 비용)를 보고 "내용 보기" 로 실제 줄을 볼 수 있다. 이 단계까지는 AI 호출이 없다.
+- **요금 통제** (config.php 로 조정): 기본 모델 Haiku 5.5. 1회 예상 비용이 `envlog_ai_max_per_request_krw`(기본 50원)를 넘으면
+  거절, 이번 달 누적이 `envlog_ai_monthly_cap_usd`(기본 $100)를 넘으면 거절. 환율은 `envlog_ai_usd_krw`(기본 1400).
+  모든 호출은 `envlog_ai_usage` 표에 토큰·비용을 남기고, 화면 머리글에 "AI 사용 ₩누적 / ₩상한" 으로 보인다(80% 넘으면 주황).
+- **키**: `config.php` 의 `'anthropic_api_key'`(회사 공용) 또는 사용자가 상자의 "API 키" 로 등록한 개인 키(우선, `portal_users.anthropic_key_enc`).
+  키는 서버에서만 쓴다. 호출은 curl 로 직접(composer 없음), 답은 SSE 로 흘려 보여 준다.
+- 전송되는 것은 추린 로그 줄 + 질문이다. Anthropic API 로 보낸 데이터는 학습에 쓰이지 않고 30일 뒤 삭제된다(약관 기준).
+
 ## 대학 테스트서버가 사무실 IP 만 허용할 때 — 사무실 중계 (office_relay.bat)
 
 대학 테스트서버 대부분이 **블루소프트 사무실 IP 에서만** SSH 를 받는다. 포털 서버(GCP)에서는 닿지 않으므로

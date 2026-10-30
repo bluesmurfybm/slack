@@ -6,6 +6,7 @@
 #   chunk FILE START END            : 바이트 구간의 '완전한 줄'만  "#start OFF" / "offset \t line" ... / "#end OFF"
 #   seek  FILE KEY(YYYYMMDDHHMMSS)  : 시간키 >= KEY 인 첫 줄의 바이트 오프셋
 #   grep  FILE PATTERN MAX FROM MODE: MODE=F(부분일치)|W(단어일치, IP용)|E(정규식)  → "offset \t line"
+#   extract FILE FROM TO IP MAX     : AI 분석용 — 시간 범위(키) 안의 줄, IP 가 있으면 그 IP 줄만. 끝에 "#capped" 가능
 export LC_ALL=C
 cmd=$1; shift
 
@@ -160,6 +161,30 @@ do_seek() {
   if [ -z "$res" ]; then echo "$size"; else echo "${res##* }"; fi
 }
 
+# AI 분석용 추출: 시간 범위 [FROM, TO](YYYYMMDDHHMMSS, '-' 면 제한 없음) 안의 줄. IP 가 '-' 가 아니면 그 IP(단어 일치)가 든 줄만.
+#   시간 없는 줄(스택트레이스 등)은 바로 앞 시간 줄이 범위 안이면 같이 낸다. MAX 줄에서 끊고 "#capped" 를 찍는다.
+#   access_log 처럼 큰 파일도 FROM 위치를 이진탐색으로 찾아 그 뒤만 읽는다 (IP 모드는 grep 이 전체를 훑는다).
+do_extract() {
+  local f=$1 from=$2 to=$3 ip=$4 max=$5 off
+  need_file "$f"; need_text "$f"
+  [ "$from" = "-" ] && from=00000000000000
+  [ "$to" = "-" ] && to=99999999999999
+  [ "$max" -gt 0 ] 2>/dev/null || max=500
+  if [ "$ip" != "-" ]; then
+    grep -a -F -w -- "$ip" "$f" | awk -v from="$from" -v to="$to" -v max="$max" "$AWK_KEY"'
+      { k = key($0); if (k == "") next; if (k < from) next; if (k > to) exit
+        print; if (++n >= max) { print "#capped"; exit } }'
+    return 0
+  fi
+  off=$(do_seek "$f" "$from")
+  tail -c +$((off+1)) "$f" | awk -v from="$from" -v to="$to" -v max="$max" "$AWK_KEY"'
+    { k = key($0)
+      if (k != "") { if (k > to) exit; if (k < from) { last = ""; next }; last = k }
+      else if (last == "") next
+      print; if (++n >= max) { print "#capped"; exit } }'
+  return 0
+}
+
 do_grep() {
   local f=$1 pat=$2 max=$3 from=$4 mode=$5 opts
   need_file "$f"
@@ -178,5 +203,6 @@ case "$cmd" in
   chunk) do_chunk "$@" ;;
   seek)  do_seek "$@" ;;
   grep)  do_grep "$@" ;;
+  extract) do_extract "$@" ;;
   *) echo "#err unknown command: $cmd" >&2; exit 1 ;;
 esac

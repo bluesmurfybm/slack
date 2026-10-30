@@ -1249,6 +1249,8 @@ EnvHub 에 등록된 테스트서버(`school_access.test_srv`)를 거쳐 그 대
 - 큰 로그도 전체를 읽지 않는다 — 원격에서 `envlog_remote.sh`(bash/awk/grep)로 바이트 구간 읽기 ·
   시간 이진탐색 · grep 만 한다. 서버에 설치할 것이 없다.
 - 로컬 검증: `python envlogd.py --local-test <로그폴더>…` 로 실서버 없이 화면 전체를 돌려 볼 수 있다.
+- **AI 분석**: 패널 아래 상자에서 IP·시간 범위(최대 2시간)로 php_errors·access_log 를 서버에서 추려 확인한 뒤 Claude(기본 Haiku 5.5)에
+  묻는다. 1회 50원·월 $100 상한, 사용액은 머리글에 표시. 키는 `config.php` 의 `anthropic_api_key`. 자세한 건 `envlog/README.md`.
 - 대시보드에서는 **Coursemos 묶음**에 들어간다 — `worksystems.json` 의 `"group": "Coursemos"` 힌트를
   `core/board.php::board_apply_tile_group_hints()` 가 그 이름의 묶음이 있을 때 한 번만 적용한다
   (기록은 `portal_tile_group_hint`). 그 뒤 관리자가 옮기거나 빼도 다시 넣지 않는다. 새 모듈을 더할 때 같은 방법을 쓴다.
@@ -1690,6 +1692,10 @@ return [
     // dti(DTI 발표) 슬랙 알림 웹훅 — 선택. 없으면 발표자 등록 알림만 조용히 꺼진다.
     // (파이썬 magazine 의 config_local.py 에 있던 SLACK_WEBHOOK_URL 자리다)
     'dti_slack_webhook' => null,
+
+    // envlog AI 분석(Claude) — 회사 공용 Anthropic API 키(console.anthropic.com 발급). 개인 키를 등록한 사용자는 그 키가 우선.
+    // 요금 통제(선택): 'envlog_ai_monthly_cap_usd' => 100, 'envlog_ai_max_per_request_krw' => 50, 'envlog_ai_usd_krw' => 1400, 'envlog_rotate_hour' => 5
+    'anthropic_api_key' => $localCfg['anthropic_api_key'] ?? '',
 
     // envlog 의 SSH 로그 엔진(envlog/daemon/envlogd.py) 주소. 기본 포트(8766)면 이 줄은 없어도 된다.
     // (그 외 선택: 'envlog_system_python' 파이썬 경로, 'envlog_autostart' => false, 'envlog_schools_from' => 'db'|'daemon')

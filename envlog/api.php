@@ -7,6 +7,7 @@
  *   POST ?a=connect  {school_id}   DB 의 테스트서버 정보로 접속   / {host,user,password,name} 직접 입력
  *   POST ?a=disconnect
  *   GET  ?a=files|logdirs|info|chunk|seek|grep  &server=&path=…   로그 조회 (그대로 데몬에 넘김)
+ *   ?a=ai_key | ai_collect | ai_ask        AI 분석 (ai.php)
  *
  * 역할 나누기
  *   - DB(대학 목록·테스트서버 접속 정보)는 PHP 가 config.php 로 직접 읽는다. 포털과 같은 서버에서
@@ -19,6 +20,7 @@
  */
 require_once __DIR__ . '/guard.php';
 require_once __DIR__ . '/../access/db.php';   // access_db(), access_dec(), access_session_release 는 안 씀
+require_once __DIR__ . '/ai.php';              // ?a=ai_* — Claude 로그 분석
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -344,6 +346,9 @@ try {
             envlog_relay($uid, 'GET', '/file/seek', array_intersect_key($_GET, array_flip(['server', 'path', 'key'])), null, 140);
         case 'grep':
             envlog_relay($uid, 'GET', '/file/grep', array_intersect_key($_GET, array_flip(['server', 'path', 'q', 'mode', 'from', 'max'])), null, 320);
+        case 'ai_key': case 'ai_budget': case 'ai_collect': case 'ai_ask':
+            envlog_ai_handle($action, $method, $user, $uid);
+            break;
         default:
             http_response_code(400);
             echo json_encode(['error' => '알 수 없는 요청: ' . $action], JSON_UNESCAPED_UNICODE);

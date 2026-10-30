@@ -34,6 +34,7 @@ $__bwCurrent = 'envlog';
   <div class="head">
     <h1>📜 Coursemos EnvLog</h1>
     <span class="hint" style="color:var(--hint);font-size:12.5px">EnvHub 의 테스트서버를 거쳐 운영 웹서버 여러 대의 아파치 로그를 같은 시각으로 나란히 봅니다.</span>
+    <span id="aiBudget" class="budget" title="이번 달 AI 분석(Claude) 사용 금액 / 월 상한"></span>
   </div>
 
 <div id="lv">
@@ -92,6 +93,35 @@ $__bwCurrent = 'envlog';
       <div id="resultsBox" hidden><div class="list results" id="results"></div></div>
       <div id="panes"><div class="empty">대학을 검색해 접속한 뒤, 왼쪽에서 로그 파일을 선택하세요.</div></div>
       <div id="detail"></div>
+      <!-- AI 분석: 로그를 서버에서 추려(IP·시간 범위) 사용자가 확인한 뒤 Claude 에 묻는다. 자세한 흐름은 ai.php 머리말 -->
+      <div id="aibox">
+        <div class="aihead"><button id="aiToggle" type="button">🤖 AI 분석 (Claude) ▾</button>
+          <span class="hint">IP 또는 시간 범위로 php_errors·access_log 를 추려 질문합니다 · 자료는 보내기 전에 확인할 수 있습니다</span>
+          <span class="spacer"></span><span id="aiKeyState" class="bdg no">키 확인 중</span><button id="aiKeyBtn" type="button">API 키</button></div>
+        <div class="aibody">
+          <div id="aiKeyRow" class="airow" hidden><label>개인 Anthropic API 키</label><input id="aiKeyIn" type="password" placeholder="sk-ant-…" autocomplete="new-password" style="flex:1"><button id="aiKeySave" class="primary" type="button">저장</button><span class="hint">서버에 암호화해 두고 내 요청에만 씁니다. 비우고 저장하면 삭제</span></div>
+          <div class="airow">
+            <label>IP</label><input id="aiIp" placeholder="예) 203.0.113.10 (선택)" size="18" autocomplete="off">
+            <label>시간</label><input id="aiFrom" type="datetime-local" step="60"><span>~</span><input id="aiTo" type="datetime-local" step="60">
+            <select id="aiWin" title="끝 시각 기준 빠른 범위"><option value="">빠른 범위</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option></select>
+            <label class="chk" title="시간 범위 없이 IP 로만 현재 파일을 검색"><input type="checkbox" id="aiNoTime"> 시간 없이(IP 만)</label>
+          </div>
+          <div class="airow">
+            <label>access_log</label><select id="aiAccess" title="대학마다 이름이 달라 가장 큰 것을 기본으로 고릅니다"></select>
+            <label>php_errors</label><select id="aiPhp"></select>
+            <button id="aiCollect" type="button">자료 모으기</button>
+            <span id="aiRotHint" class="hint"></span>
+          </div>
+          <div id="aiParts" class="aiparts"></div>
+          <div class="airow">
+            <textarea id="aiPrompt" rows="2" placeholder="질문 — 예) 이 IP 사용자가 퀴즈 응시 중 겪은 문제와 원인을 찾아줘  (Ctrl+Enter 로 보내기)"></textarea>
+            <select id="aiModel" title="모델"></select>
+            <button id="aiAsk" class="primary" type="button" disabled>질문</button>
+          </div>
+          <div id="aiMsg" class="hint"></div>
+          <pre id="aiAnswer" hidden></pre>
+        </div>
+      </div>
       <div id="status">준비</div>
     </div>
   </div>
