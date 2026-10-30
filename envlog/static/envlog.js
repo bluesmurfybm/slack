@@ -610,7 +610,11 @@ $('aiWin').onchange = () => {   // 빠른 범위: 끝 시각 기준으로 N분
 async function aiLoadKey() {
   try { AI.key = await api('api.php?a=ai_key'); }
   catch (e) { aiStatus(e.message, true); return; }
-  $('aiKeyState').textContent = AI.key.has ? (AI.key.source === 'user' ? '개인 키 등록됨' : '회사 공용 키') : '키 없음';
+  $('aiKeyState').textContent = AI.key.has ? (AI.key.source === 'user' ? '개인 키 사용 중' : '회사 공용 키 사용 중 — 바로 쓸 수 있음') : '키 없음 — config.php 의 anthropic_api_key 또는 개인 키 필요';
+  $('aiKeyNote').textContent = AI.key.source === 'config'
+    ? '이미 회사 공용 키로 동작합니다. 아무것도 입력하지 않아도 됩니다. 내 계정 비용으로 따로 쓰고 싶을 때만 개인 키를 등록하세요(서버에 암호화 저장, 내 요청에만 사용). 등록한 키를 지우려면 비우고 저장.'
+    : AI.key.source === 'user' ? '개인 키가 등록되어 있습니다. 바꾸려면 새 키를 넣고 저장, 지우고 공용 키로 돌아가려면 비우고 저장.'
+    : '회사 공용 키가 설정되어 있지 않습니다. config.php 에 anthropic_api_key 를 넣거나, 여기에 개인 키를 등록하세요.';
   $('aiKeyState').className = 'bdg ' + (AI.key.has ? 'ver' : 'no');
   // 공용 키가 있으면 개인 키는 선택 사항 — 단추 이름으로 알린다
   $('aiKeyBtn').textContent = AI.key.source === 'config' ? '개인 키(선택)' : (AI.key.source === 'user' ? '개인 키 변경' : 'API 키 등록');
@@ -619,10 +623,8 @@ async function aiLoadKey() {
   $('aiRotHint').textContent = `로테이션 매일 ${AI.key.rotate_hour}:00 기준으로 날짜별 파일을 자동 선택 · 범위 최대 ${AI.key.max_window_min}분`;
   aiBudget(AI.key.budget);
 }
-$('aiKeyBtn').onclick = async () => {
-  const cur = AI.key && AI.key.source === 'user' ? '(등록됨 — 비우면 삭제)' : '';
-  $('aiKeyRow').hidden = !$('aiKeyRow').hidden; $('aiKeyIn').placeholder = 'sk-ant-… ' + cur; if (!$('aiKeyRow').hidden) $('aiKeyIn').focus();
-};
+$('aiKeyBtn').onclick = () => { $('aiKeyRow').hidden = !$('aiKeyRow').hidden; };
+$('aiKeyClose').onclick = () => { $('aiKeyRow').hidden = true; $('aiKeyIn').value = ''; };
 $('aiKeySave').onclick = async () => {
   try { AI.key = await api('api.php?a=ai_key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: $('aiKeyIn').value.trim() }) }); $('aiKeyIn').value = ''; $('aiKeyRow').hidden = true; aiLoadKey(); aiStatus('API 키를 저장했습니다'); }
   catch (e) { aiStatus(e.message, true); }

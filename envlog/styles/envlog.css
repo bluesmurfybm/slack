@@ -127,6 +127,7 @@
 #lv #aibox.open .aibody { display:block; }
 #lv #aibox .airow { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:6px 0; }
 #lv #aibox .airow label { font-size:12px; color:var(--muted); white-space:nowrap; }
+#lv #aibox .keyrow { background:var(--bg2); border:1px dashed var(--line); border-radius:8px; padding:8px 10px; }
 #lv #aibox .airow textarea { flex:1; min-width:260px; font-family:inherit; font-size:13px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--txt); padding:6px 10px; resize:vertical; }
 #lv #aibox .aiparts table { border-collapse:collapse; font-size:12px; margin:4px 0; }
 #lv #aibox .aiparts th, #lv #aibox .aiparts td { padding:3px 10px 3px 0; text-align:left; border-bottom:1px solid var(--line); }

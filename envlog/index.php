@@ -99,7 +99,10 @@ $__bwCurrent = 'envlog';
           <span class="hint">IP 또는 시간 범위로 php_errors·access_log 를 추려 질문합니다 · 자료는 보내기 전에 확인할 수 있습니다</span>
           <span class="spacer"></span><span id="aiKeyState" class="bdg no">키 확인 중</span><button id="aiKeyBtn" type="button">API 키</button></div>
         <div class="aibody">
-          <div id="aiKeyRow" class="airow" hidden><label>개인 Anthropic API 키</label><input id="aiKeyIn" type="password" placeholder="sk-ant-…" autocomplete="new-password" style="flex:1"><button id="aiKeySave" class="primary" type="button">저장</button><span class="hint">서버에 암호화해 두고 내 요청에만 씁니다. 비우고 저장하면 삭제</span></div>
+          <div id="aiKeyRow" class="airow keyrow" hidden>
+            <div id="aiKeyNote" class="hint" style="flex-basis:100%"></div>
+            <label>개인 키 (선택)</label><input id="aiKeyIn" type="password" placeholder="sk-ant-… (비워 두면 공용 키 사용)" autocomplete="new-password" style="flex:1"><button id="aiKeySave" type="button">저장</button><button id="aiKeyClose" type="button">닫기</button>
+          </div>
           <div class="airow">
             <label>IP</label><input id="aiIp" placeholder="예) 203.0.113.10 (선택)" size="18" autocomplete="off">
             <label>시간</label><input id="aiFrom" type="datetime-local" step="60"><span>~</span><input id="aiTo" type="datetime-local" step="60">
