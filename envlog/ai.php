@@ -314,13 +314,19 @@ function envlog_ai_ask($user, array $in) {
     $meta = "대학: " . (string)($in['school'] ?? '') . "\n" . ($in['ip'] ?? '' ? "대상 IP: {$in['ip']}\n" : '')
           . (($in['from'] ?? '') !== '' ? "시간 범위: {$in['from']} ~ {$in['to']} (Asia/Seoul)\n" : '') . "로그 로테이션: 매일 " . envlog_ai_rotate_hour() . ":00\n";
 
+    $messages = [['role' => 'user', 'content' => [
+        ['type' => 'text', 'text' => $meta . "\n<logs>\n" . $doc . "</logs>\n", 'cache_control' => ['type' => 'ephemeral']],
+        ['type' => 'text', 'text' => "질문: " . $prompt],
+    ]]];
+    $prior = trim((string)($in['prior'] ?? ''));
+    if ($prior !== '') {   // 잘린 답 이어 받기: 앞 답을 assistant 턴으로, 이어서 쓰라는 user 턴을 덧붙인다 (prefill 이 아니라 400 이 나지 않는다)
+        $messages[] = ['role' => 'assistant', 'content' => $prior];
+        $messages[] = ['role' => 'user', 'content' => '앞 답이 길이 제한으로 잘렸다. 반복 없이 잘린 지점 바로 다음부터 이어서 마무리해라.'];
+    }
     $body = [
         'model' => $model, 'max_tokens' => 6000, 'stream' => true,
         'system' => [['type' => 'text', 'text' => $system]],
-        'messages' => [['role' => 'user', 'content' => [
-            ['type' => 'text', 'text' => $meta . "\n<logs>\n" . $doc . "</logs>\n", 'cache_control' => ['type' => 'ephemeral']],
-            ['type' => 'text', 'text' => "질문: " . $prompt],
-        ]]],
+        'messages' => $messages,
     ];
 
     // SSE 로 흘려보낸다 (nginx 버퍼링 끔)

@@ -135,6 +135,7 @@ $__envlogAi = (bool)((require __DIR__ . '/../config.php')['envlog_ai_enabled'] ?
           </div>
           <div id="aiProgress" class="aiprogress" hidden><span class="dot"></span><span id="aiProgressText">처리 중…</span><span class="bar"><i></i></span></div>
           <div id="aiMsg" class="hint">시간 범위(와 필요하면 IP)를 넣고 질문을 쓴 뒤 "질문" 을 누르면 자료를 모아 바로 보냅니다. 보내기 전에 어떤 줄이 가는지·비용이 얼마인지 보고 싶으면 "조회 대상 파일 확인" 을 먼저 누르세요.</div>
+          <div id="aiAnsTools" class="airow" hidden><button id="aiMore" type="button" class="primary" hidden>이어서 받기</button><button id="aiExpand" type="button">펼치기</button><button id="aiCopy" type="button">복사</button><span class="hint">답은 로그에 근거한 추정입니다. 중요한 판단은 원문 로그로 확인하세요.</span></div>
           <pre id="aiAnswer" hidden></pre>
         </div>
       </div>

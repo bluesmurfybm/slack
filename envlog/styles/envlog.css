@@ -156,6 +156,8 @@
 #lv #aibox .aiparts a.peek { color:var(--info); font-size:12px; }
 #lv #aibox pre { max-height:220px; overflow:auto; margin:6px 0; padding:8px 10px; background:var(--bg2); border:1px solid var(--line); border-radius:8px; font:12px Consolas, "D2Coding", monospace; white-space:pre-wrap; word-break:break-all; }
 #lv #aibox #aiAnswer { max-height:320px; font-family:inherit; font-size:13px; line-height:1.55; white-space:pre-wrap; }
+#lv #aibox #aiAnswer.expanded { max-height:none; }
+#lv #aibox #aiAnsTools[hidden] { display:none; }
 #lv #aibox .hint.err { color:#b91c1c; }
 /* 진행 표시: 모으는 중 / 응답 기다리는 중 / 받는 중 — 눈에 띄게 띠와 점을 움직인다 */
 #lv #aibox .aiprogress { display:flex; align-items:center; gap:10px; margin:8px 0 4px; padding:8px 12px; border-radius:8px; background:var(--info-bg); color:var(--info); font-size:13px; font-weight:600; }

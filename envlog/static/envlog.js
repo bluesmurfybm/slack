@@ -700,16 +700,23 @@ async function aiCollect() {
   } catch (e) { aiStatus(e.message, true); setOff('aiCollect', ''); aiProgress(''); return false; }
 }
 
-$('aiAsk').onclick = async () => {
+$('aiExpand').onclick = () => { const a = $('aiAnswer'); a.classList.toggle('expanded'); $('aiExpand').textContent = a.classList.contains('expanded') ? '접기' : '펼치기'; };
+$('aiCopy').onclick = async () => { try { await navigator.clipboard.writeText($('aiAnswer').textContent); aiStatus('답을 복사했습니다'); } catch (e) { const r = document.createRange(); r.selectNodeContents($('aiAnswer')); getSelection().removeAllRanges(); getSelection().addRange(r); aiStatus('복사가 막혀 있어 본문을 선택해 두었습니다 — Ctrl+C'); } };
+$('aiMore').onclick = () => aiAsk(true);
+$('aiAsk').onclick = () => aiAsk(false);
+// cont=true 면 잘린 답을 이어 받는다 (앞 답을 함께 보냄)
+async function aiAsk(cont) {
   const prompt = $('aiPrompt').value.trim();
   if (!prompt) { aiStatus('질문을 입력하세요', true); $('aiPrompt').focus(); return; }
   if (!(AI.key && AI.key.has)) { aiStatus('Anthropic API 키가 없습니다 — "API 키" 로 등록하세요', true); return; }
   // 조건(시간·IP·파일)이 바뀌었거나 아직 안 모았으면 자동으로 먼저 모은다 — "조회 대상 파일 확인" 은 미리 보고 싶을 때만
   const sig = JSON.stringify([aiIps(), $('aiFrom').value, $('aiTo').value, $('aiAccess').value, $('aiPhp').value, [...S.selected]]);
   if (!AI.parts || AI.sig !== sig) { setOff('aiAsk', '자료 모으는 중'); const ok = await aiCollect(); setOff('aiAsk', ''); if (!ok) return; }
-  const body = { prompt, model: $('aiModel').value, context: AI.parts.filter(p => p.text).map(p => ({ server: p.server, file: p.file, text: p.text })),
+  const body = { prompt, model: $('aiModel').value, prior: cont ? $('aiAnswer').textContent : '', context: AI.parts.filter(p => p.text).map(p => ({ server: p.server, file: p.file, text: p.text })),
                  ip: aiIps().join(', '), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
-  const out = $('aiAnswer'); out.textContent = '답을 기다리는 중…'; out.classList.add('waiting'); out.hidden = false; setOff('aiAsk', '응답 기다리는 중'); AI.busy = true;
+  const out = $('aiAnswer'); const keep = cont ? out.textContent.replace(/\s+$/, '') + '\n' : '';
+  if (!cont) { out.textContent = '답을 기다리는 중…'; out.classList.add('waiting'); }
+  out.hidden = false; $('aiAnsTools').hidden = false; $('aiMore').hidden = true; setOff('aiAsk', '응답 기다리는 중'); setOff('aiMore', '받는 중'); AI.busy = true;
   aiProgress('Claude 에 보내는 중…'); aiStatus(''); let first = true;
   try {
     const r = await fetch('api.php?a=ai_ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -723,18 +730,18 @@ $('aiAsk').onclick = async () => {
         for (const ln of chunk.split('\n')) {
           if (!ln.startsWith('data: ')) continue;
           const ev = JSON.parse(ln.slice(6));
-          if (ev.t) { if (first) { out.textContent = ''; out.classList.remove('waiting'); first = false; aiProgress('답을 받는 중…'); } out.textContent += ev.t; out.scrollTop = out.scrollHeight; }
+          if (ev.t) { if (first) { out.textContent = keep; out.classList.remove('waiting'); first = false; aiProgress('답을 받는 중…'); } out.textContent += ev.t; out.scrollTop = out.scrollHeight; }
           else if (ev.start) aiProgress(`Claude 가 읽는 중… (${ev.model}, 보낸 자료 ${fmtSize(ev.sent_bytes)}${ev.ssl ? ', ' + ev.ssl : ''})`);
           else if (ev.error) aiStatus(ev.error, true);
-          else if (ev.done) { const u = ev.usage; aiStatus(`완료 — 입력 ${(u.input + u.cache_write + u.cache_read).toLocaleString()} 토큰(로그 본문 ${(u.cache_write + u.cache_read).toLocaleString()}${u.cache_read ? ', 캐시 재사용 ' + u.cache_read.toLocaleString() : ''}) · 출력 ${u.output.toLocaleString()} 토큰 · 약 ₩${ev.cost_krw} ($${ev.cost_usd})` + (ev.stop === 'max_tokens' ? ' · 답이 길어 잘렸습니다 — 질문을 더 좁혀 보세요' : '')); aiBudget(ev.budget); }
+          else if (ev.done) { const u = ev.usage; $('aiMore').hidden = ev.stop !== 'max_tokens'; setOff('aiMore', ''); aiStatus(`완료 — 입력 ${(u.input + u.cache_write + u.cache_read).toLocaleString()} 토큰(로그 본문 ${(u.cache_write + u.cache_read).toLocaleString()}${u.cache_read ? ', 캐시 재사용 ' + u.cache_read.toLocaleString() : ''}) · 출력 ${u.output.toLocaleString()} 토큰 · 약 ₩${ev.cost_krw} ($${ev.cost_usd})` + (ev.stop === 'max_tokens' ? ' · 답이 길어 잘렸습니다 — 질문을 더 좁혀 보세요' : '')); aiBudget(ev.budget); }
         }
       }
     }
   } catch (e) { aiStatus(e.message, true); }
-  if (first) { out.classList.remove('waiting'); if (out.textContent === '답을 기다리는 중…') out.hidden = true; }
-  aiProgress(''); setOff('aiAsk', ''); AI.busy = false;
-};
-$('aiPrompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('aiAsk').click(); });
+  if (first) { out.classList.remove('waiting'); if (out.textContent === '답을 기다리는 중…') { out.hidden = true; $('aiAnsTools').hidden = true; } }
+  aiProgress(''); setOff('aiAsk', ''); setOff('aiMore', ''); AI.busy = false;
+}
+$('aiPrompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) aiAsk(false); });
 }   // ENVLOG_AI
 
 // ---------------------------------------------------------------- 초기화
