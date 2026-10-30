@@ -107,7 +107,7 @@ $__bwCurrent = 'envlog';
           </div>
           <div class="airow">
             <label class="lab">시간 <b style="color:#b91c1c">*</b></label><input id="aiFrom" type="datetime-local" step="60" required><span>~</span><input id="aiTo" type="datetime-local" step="60" required>
-            <select id="aiWin" title="끝 시각 기준 빠른 범위"><option value="">빠른 범위</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option></select>
+            <select id="aiWin" title="끝 시각을 기준으로 시작 시각을 맞춥니다"><option value="">끝 시각부터 거슬러</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option></select>
             <span class="hint">로테이션(매일 05:00) 기준으로 날짜별 파일을 자동 선택</span>
           </div>
           <div class="airow" id="aiIpRow">
@@ -116,10 +116,11 @@ $__bwCurrent = 'envlog';
             <span class="hint">넣으면 access_log 에서 그 IP 들의 요청만 봅니다. 비우면 시간 범위 전체(앞부분 400줄까지)</span>
           </div>
           <div class="airow">
-            <label>access_log</label><select id="aiAccess" title="대학마다 이름이 달라 가장 큰 것을 기본으로 고릅니다"></select>
+            <label>access_log</label><select id="aiAccess" title="대학마다 이름이 달라 로그가 가장 많이 쌓이는 것을 기본으로 고릅니다"></select>
             <label>php_errors</label><select id="aiPhp"></select>
             <button id="aiCollect" type="button">조회 대상 파일 확인</button>
             <span id="aiRotHint" class="hint" hidden></span>
+            <span class="hint" style="flex-basis:100%">서버마다 남기는 access_log·php_errors 파일 이름이 다릅니다. 기본으로 고른 파일이 맞지 않으면 바꿔 주세요. 시간 범위에 맞는 날짜 파일은 자동으로 찾습니다.</span>
           </div>
           <div id="aiParts" class="aiparts"></div>
           <div class="askgrid">

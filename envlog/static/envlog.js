@@ -648,10 +648,10 @@ function aiFillAccess() {
     const g = groups.get(base) || { base, size: 0, n: 0 }; g.size += f.size; g.n++; groups.set(base, g);
   }
   const acc = [...groups.values()].filter(g => /access/i.test(g.base)).sort((a, b) => b.size - a.size);
-  const sel = $('aiAccess'); const prev = sel.value; sel.innerHTML = '<option value="">(access_log 안 봄)</option>' + acc.map(g => `<option value="${esc(g.base)}">${esc(g.base)} — ${fmtSize(g.size)} · ${g.n}개</option>`).join('');
+  const sel = $('aiAccess'); const prev = sel.value; sel.innerHTML = '<option value="">(access_log 안 봄)</option>' + acc.map(g => `<option value="${esc(g.base)}" title="${fmtSize(g.size)} · ${g.n}개 파일">${esc(g.base)}</option>`).join('');
   sel.value = acc.some(g => g.base === prev) ? prev : (acc[0] ? acc[0].base : '');   // 기본: 가장 큰 것
   const php = [...groups.values()].filter(g => /php_error/i.test(g.base)).sort((a, b) => b.size - a.size);
-  const ps = $('aiPhp'); ps.innerHTML = '<option value="">(php_errors 안 봄)</option>' + php.map(g => `<option value="${esc(g.base)}">${esc(g.base)} — ${fmtSize(g.size)} · ${g.n}개</option>`).join('');
+  const ps = $('aiPhp'); ps.innerHTML = '<option value="">(php_errors 안 봄)</option>' + php.map(g => `<option value="${esc(g.base)}" title="${fmtSize(g.size)} · ${g.n}개 파일">${esc(g.base)}</option>`).join('');
   ps.value = php.some(g => g.base === 'php_errors.log') ? 'php_errors.log' : (php[0] ? php[0].base : '');
 }
 
