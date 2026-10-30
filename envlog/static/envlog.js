@@ -672,6 +672,7 @@ $('aiCollect').onclick = async () => {
     if ($('aiModel').selectedOptions[0]?.disabled) { const ok = [...$('aiModel').options].find(o => !o.disabled); if (ok) $('aiModel').value = ok.value; }
     $('aiParts').querySelectorAll('.peek').forEach(a => a.onclick = e => { e.preventDefault(); const [f, s] = a.dataset.k.split('|'); const p = AI.parts.find(x => x.file === f && x.server === +s); const pre = $('aiPeek'); pre.hidden = !pre.hidden || pre.dataset.k !== a.dataset.k ? false : true; pre.dataset.k = a.dataset.k; pre.textContent = p.text; });
     $('aiAsk').disabled = j.total_bytes === 0;
+    $('aiAsk').title = j.total_bytes === 0 ? '모인 줄이 없어 보낼 수 없습니다 — IP·시간 범위·파일을 바꿔 다시 확인하세요' : '모인 자료와 질문을 Claude 에 보냅니다 (Ctrl+Enter)';
     aiStatus(j.total_bytes ? `자료 준비됨 — 파일 ${j.files.join(', ')}. 내용을 확인한 뒤 질문하세요` : '조건에 맞는 줄이 없습니다 (IP·시간·파일 확인)', j.total_bytes === 0);
   } catch (e) { aiStatus(e.message, true); }
   $('aiCollect').disabled = false;

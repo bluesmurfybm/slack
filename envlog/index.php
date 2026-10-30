@@ -125,10 +125,10 @@ $__bwCurrent = 'envlog';
           <div id="aiParts" class="aiparts"></div>
           <div class="askgrid">
             <textarea id="aiPrompt" rows="2" placeholder="질문 — 예) 이 IP 사용자가 퀴즈 응시 중 겪은 문제와 원인을 찾아줘  (Ctrl+Enter 로 보내기)"></textarea>
-            <button id="aiAsk" class="primary" type="button" disabled>질문</button>
+            <button id="aiAsk" class="primary" type="button" disabled title="먼저 '조회 대상 파일 확인' 을 눌러 보낼 자료를 모으면 켜집니다">질문</button>
             <div class="modelrow"><label>모델</label><select id="aiModel" title="모델"></select></div>
           </div>
-          <div id="aiMsg" class="hint"></div>
+          <div id="aiMsg" class="hint">① 시간 범위(와 필요하면 IP)를 넣고 "조회 대상 파일 확인" → ② 모인 자료와 예상 비용을 보고 → ③ 질문을 쓰고 "질문". 자료가 모이기 전에는 "질문" 이 꺼져 있습니다.</div>
           <pre id="aiAnswer" hidden></pre>
         </div>
       </div>
