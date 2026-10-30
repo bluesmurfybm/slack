@@ -100,6 +100,11 @@
 #lv #panes { flex:1; display:grid; gap:8px; padding:8px; min-height:0; background:var(--bg2); }
 #lv .pane { display:flex; flex-direction:column; min-width:0; min-height:0; border:1px solid var(--line); border-radius:10px; background:var(--bg); overflow:hidden; }
 #lv .pane.active { border-color:var(--info); box-shadow:0 0 0 2px var(--info-bg); }
+#lv .pane .ph .tail { display:none; color:#15803d; font-size:11px; font-weight:600; }
+#lv.tailing .pane .ph .tail { display:inline; }
+#lv.tailing .pane .ph .tail::before { content:"● "; animation:tailBlink 1.4s ease-in-out infinite; }
+@keyframes tailBlink { 0%,100% { opacity:.25 } 50% { opacity:1 } }
+@media (prefers-reduced-motion: reduce) { #lv.tailing .pane .ph .tail::before { animation:none } }
 #lv .pane .ph { display:flex; align-items:center; gap:8px; padding:6px 10px; background:var(--bg2); border-bottom:1px solid var(--line); font-size:12.5px; white-space:nowrap; overflow:hidden; }
 #lv .pane .ph .nm { font-weight:600; } #lv .pane .ph .pos { color:var(--hint); margin-left:auto; font-size:11.5px; } #lv .pane .ph .busy { color:#b45309; display:none; }
 #lv .pane.loading .ph .busy { display:inline; }

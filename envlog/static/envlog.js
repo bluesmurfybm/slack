@@ -192,6 +192,7 @@ async function doConnect() {
 }
 $('btnDisconnect').onclick = async () => { await api('api.php?a=disconnect', { method: 'POST' }); applySession(null, []); $('files').innerHTML = ''; status('연결 끊김'); };
 function applySession(school, servers) {
+  if (!school && S.tail) { $('chkTail').checked = false; $('chkTail').onchange(); }
   S.school = school; S.servers = servers; S.file = ''; S.selected = new Set(); logdirCache = {}; allowedDirs = [];
   setOff('btnDisconnect', school ? '' : '접속된 대학 없음');
   // 접속 중인 대학: 이름 + 무들 버전 뱃지 + 테스트서버 주소 (버전은 자동완성과 같은 모양의 뱃지)
@@ -207,6 +208,43 @@ function renderServers() {
 }
 $('chkSync').onchange = () => S.sync = $('chkSync').checked;
 $('chkMerge').onchange = () => { S.merge = $('chkMerge').checked; rebuildPanes(); };
+
+// ---------------------------------------------------------------- 실시간 따라가기 (tail -f)
+//  2초마다 각 패널의 소스가 파일 끝(eof)에 있으면 info 로 크기를 보고, 커졌으면 그 뒤만 읽어 덧붙인다.
+//  화면이 맨 아래(마지막 10줄 안)일 때만 따라 내려가고, 위를 보고 있으면 자리를 지킨다. 검색 결과 뷰·읽는 중에는 건너뛴다.
+S.tail = false; let tailTimer = null; let tailBusy = false;
+$('chkTail').onchange = () => {
+  S.tail = $('chkTail').checked; $('lv').classList.toggle('tailing', S.tail);
+  clearInterval(tailTimer); tailTimer = null;
+  if (S.tail) { tailTimer = setInterval(tailTick, 2000); status('실시간(tail -f) 켬 — 새 줄이 붙으면 아래에 덧붙입니다'); tailTick(); }
+  else status('실시간(tail -f) 끔');
+};
+async function tailTick() {
+  if (!S.tail || tailBusy || !S.panes.length) return;
+  tailBusy = true;
+  try {
+    for (const pane of S.panes) {
+      if (pane.hitsMode || pane.loading || pane.extending) continue;
+      const b = pane.body; const atBottom = b.scrollTop + b.clientHeight >= b.scrollHeight - ROW_H * 10;
+      let grew = false;
+      for (const sid of pane.sids) {
+        const s = pane.src[sid]; if (!s.eof || !s.info) continue;            // 끝까지 읽어 둔 소스만 따라간다
+        let info; try { info = await api(`api.php?a=info&server=${sid}&path=${encodeURIComponent(filePath())}`); } catch (e) { continue; }
+        if (info.size <= s.size) { if (info.size < s.size) { s.size = info.size; s.end = Math.min(s.end, info.size); } continue; }   // 로테이션으로 줄면 끝 위치를 맞춘다
+        s.size = info.size; s.eof = false;
+        while (!s.eof) { if (!(await extendSrc(sid, s, 1))) break; }         // 커진 만큼 끝까지 읽는다
+        if (s.lines.length > MAX_LINES) { const n = s.lines.length - MAX_LINES; s.lines.splice(0, n); s.start = s.lines[0].off; s.bof = false; }
+        grew = true;
+      }
+      if (!grew || !S.tail) continue;
+      const topI = Math.floor(b.scrollTop / ROW_H); const anchor = pane.lines[topI];
+      compose(pane); render(pane);
+      if (atBottom) scrollToIndex(pane, Math.max(0, pane.lines.length - 1));
+      else if (anchor) { const j = pane.lines.findIndex(l => l.sid === anchor.sid && l.off === anchor.off); if (j >= 0) scrollToIndex(pane, j); }
+    }
+  } catch (e) { status('실시간 갱신 실패: ' + e.message, true); }
+  tailBusy = false;
+}
 
 // ---------------------------------------------------------------- 파일 목록
 $('btnFiles').onclick = loadFiles;
@@ -279,7 +317,7 @@ function createPane(sid, sids) {
   const cols = (sid == null ? '38px ' : '') + '140px 118px minmax(0,1fr) 170px';
   el.style.setProperty('--cols', cols);
   const title = sid == null ? `병합 (${sids.map(s => 'S' + s).join(' + ')})` : `<span class="s${sid % 9}">S${sid}</span> ${esc(srvName(sid))}`;
-  el.innerHTML = `<div class="ph"><span class="nm">${title}</span><span class="hint">${esc(S.file)}</span><span class="busy">● 읽는 중</span><span class="pos"></span></div>
+  el.innerHTML = `<div class="ph"><span class="nm">${title}</span><span class="hint">${esc(S.file)}</span><span class="tail">실시간</span><span class="busy">● 읽는 중</span><span class="pos"></span></div>
     <div class="cols">${sid == null ? '<span>서버</span>' : ''}<span>시간</span><span>IP</span><span>메시지</span><span>User-Agent</span></div>
     <div class="body"><div class="rows"></div></div>
     <div class="pf"><button data-a="first" title="파일 처음">⏮</button><input type="range" min="0" max="1000" value="1000"><button data-a="last" title="파일 끝">⏭</button><button data-a="reload" title="다시 읽기(파일이 커졌으면 끝으로)">↻</button></div>`;
