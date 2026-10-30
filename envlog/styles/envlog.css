@@ -63,6 +63,8 @@
 #lv aside section { padding:12px 12px; border-bottom:1px solid var(--line); }
 #lv aside section:last-child { border-bottom:0; }
 #lv aside h2 { font-size:12px; color:var(--muted); margin:0 0 8px; font-weight:600; letter-spacing:.3px; }
+#lv aside .opts { display:flex; flex-direction:column; gap:6px; }   /* 보기 옵션: 한 줄에 하나씩 */
+#lv aside .opts .chk { color:var(--txt); }
 #lv .list { max-height:220px; overflow:auto; border:1px solid var(--line); border-radius:8px; background:var(--bg2); }
 #lv .list .item { padding:5px 8px; cursor:pointer; display:flex; gap:6px; align-items:baseline; border-bottom:1px solid var(--line); font-size:12.5px; }
 #lv .list .item:last-child { border-bottom:0; }
