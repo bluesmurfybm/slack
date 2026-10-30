@@ -51,9 +51,8 @@ return [
     'comment_channel' => '',
     'list_url'        => '',
     'dti_slack_webhook' => null,
-    'links' => [
-        'book' => $localCfg['book_url'] ?? 'http://127.0.0.1:8000/',
-    ],
+    'book_slack_webhook' => $localCfg['book_slack_webhook'] ?? null,
+    'kakao_rest_api_key' => $localCfg['kakao_rest_api_key'] ?? null,
     'soffice' => 'soffice',
 ];
 PHP);

@@ -1,5 +1,5 @@
 [
-  { "key": "book", "emoji": "📚", "label": "BlueBooks", "path": "book",
+  { "key": "book", "emoji": "📚", "label": "BlueBooks", "path": "book/index.php",
     "desc": "읽고 싶은 책을 신청하고 처리 현황을 확인합니다.", "color": "#2E6BF0" },
   { "key": "slack", "emoji": "📥", "label": "Coursemos WorkHub", "path": "slack/lists.php",
     "desc": "유지보수 요청 현황을 확인하고 관리합니다.", "color": "#1F9D76" },

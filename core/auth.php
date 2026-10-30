@@ -85,12 +85,12 @@ function needs_setup($u) {
     return password_verify('blue$123', $u['pw_hash']);
 }
 
-/** book 등 다른 언어/프로세스 앱이 검증할 수 있는 공유 시크릿 (git 제외, 최초 실행 시 1회 생성) */
+/** 다른 언어/프로세스 앱이 검증할 수 있는 공유 시크릿 (git 제외, 최초 실행 시 1회 생성).
+ *  book 이 파이썬이던 때 '../sso_secret.key' 로 읽던 것이다. 지금은 읽는 모듈이 없지만,
+ *  다른 프로세스 모듈이 다시 생기면 같은 자리를 읽게 하면 된다. */
 function sso_secret() {
     static $secret = null;
     if ($secret !== null) return $secret;
-    // book/app.py 가 '../sso_secret.key' 로 같은 파일을 직접 읽는다. 위치를
-    // 옮기면 키가 새로 생겨 book 쪽 SSO 검증이 전부 깨진다.
     $path = dirname(__DIR__) . '/sso_secret.key';
     if (!is_file($path)) {
         file_put_contents($path, bin2hex(random_bytes(32)));
@@ -105,8 +105,9 @@ function b64url_encode($s) {
 }
 
 /**
- * book처럼 별도 프로세스/언어로 떠 있는 모듈이 "로그인 사용자 = 이 이메일" 을 신뢰할 수 있도록
+ * 별도 프로세스/언어로 떠 있는 모듈이 "로그인 사용자 = 이 이메일" 을 신뢰할 수 있도록
  * HMAC 서명 쿠키를 심는다. 같은 호스트(포트만 다름)면 브라우저가 자동으로 같이 보내준다.
+ * (book 이 파이썬이던 때 쓰던 것. 지금 검증하는 모듈은 없다.)
  */
 function issue_sso_cookie($email, $name, $color = '') {
     global $SESS_LIFETIME;
