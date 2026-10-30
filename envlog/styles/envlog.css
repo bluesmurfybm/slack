@@ -177,6 +177,11 @@
 #lv #status { padding:5px 12px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); background:var(--bg2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #lv #status.err { color:#b91c1c; }
 #lv .empty { padding:30px; text-align:center; color:var(--hint); }
+/* 서버별 파일 읽기 실패 띠 — 그 서버만 다시 읽는 단추가 붙는다 */
+#lv .srcerr { margin:8px; padding:8px 10px; border:1px solid #b91c1c; border-radius:8px; background:var(--bg2); font-family:inherit; font-size:12.5px; }
+#lv .srcerr .line { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:2px 0; }
+#lv .srcerr .msg { color:#b91c1c; }
+#lv .srcerr button { height:26px; padding:0 10px; font-size:12px; }
 
 @media (prefers-color-scheme: dark) {
   #lv .lrow.hit { background:#3d3a1a; } #lv mark { background:#8a6d00; color:#fff; }

@@ -238,7 +238,7 @@ async function tailTick() {
       const b = pane.body;
       let grew = false;
       for (const sid of pane.sids) {
-        const s = pane.src[sid]; if (!s.eof || !s.info) continue;            // 끝까지 읽어 둔 소스만 따라간다
+        const s = pane.src[sid]; if (!s.eof || !s.info || s.error) continue;   // 끝까지 읽어 둔 소스만 따라간다 (실패한 서버는 제외)
         let info; try { info = await api(`api.php?a=info&server=${sid}&path=${encodeURIComponent(filePath())}`); } catch (e) { continue; }
         if (info.size <= s.size) { if (info.size < s.size) { s.size = info.size; s.end = Math.min(s.end, info.size); } continue; }   // 로테이션으로 줄면 끝 위치를 맞춘다
         s.size = info.size; s.eof = false;
@@ -287,7 +287,8 @@ function renderFiles() {
     ? `<div class="item dir" data-d="${esc(f.name)}"><span class="n" title="${esc(f.name)}">📁 ${esc(f.name)}/</span><span class="has">${f.has.map(s => `<b class="s${s % 9}">S${s}</b>`).join('')}</span></div>`
     : `<div class="item file${f.name === S.file ? ' sel' : ''}${isCompressed(f.name) ? ' off' : ''}" data-n="${esc(f.name)}" title="${isCompressed(f.name) ? '압축 파일은 열 수 없습니다 (텍스트 로그만)' : esc(f.name)}"><div class="n">${hl(f.name, q)}</div><div class="meta"><span>${fmtSize(f.size)}</span><span>${fmtTime(f.mtime)}</span><span class="has">${f.has.length === sids.length ? '' : f.has.map(s => `<b class="s${s % 9}">S${s}</b>`).join('')}</span></div></div>`).join('')
     + (all.length ? (q && !files.some(f => f.type !== 'd') ? `<div class="hint" style="padding:6px">"${esc(q)}" 에 맞는 파일 없음</div>` : '') : '<div class="hint" style="padding:6px">파일 없음 — 아래 "설정에서 찾은 로그 위치"를 눌러 보세요</div>')
-    + S.fileErrs.map(r => `<div class="hint" style="padding:4px 6px;color:var(--err)">${esc(r.error)}</div>`).join('');
+    + S.fileErrs.map(r => `<div class="hint" style="padding:4px 6px;color:#b91c1c">S${r.sid}: ${esc(r.error)} <a href="#" class="retryList" data-sid="${r.sid}">↻ 이 서버 목록 다시</a></div>`).join('');
+  $('files').querySelectorAll('.retryList').forEach(a => a.onclick = e => { e.preventDefault(); loadFiles(); });
   $('files').querySelectorAll('.item.dir').forEach(el => el.onclick = () => { const d = el.dataset.d; $('logDir').value = d === '..' ? (S.logDir.replace(/\/[^/]*$/, '') || '/') : S.logDir.replace(/\/$/, '') + '/' + d; loadFiles(); });
   $('files').querySelectorAll('.item:not(.dir)').forEach(el => el.onclick = () => { if (isCompressed(el.dataset.n)) { status('압축 파일은 열 수 없습니다 — 텍스트 로그만 볼 수 있습니다', true); return; } S.file = el.dataset.n; $('files').querySelectorAll('.item').forEach(x => x.classList.toggle('sel', x === el)); rebuildPanes(); });
 }
@@ -356,16 +357,39 @@ function applyLayout(pane) {
 }
 function setLoading(pane, on) { pane.loading += on ? 1 : -1; pane.el.classList.toggle('loading', pane.loading > 0); }
 
+// 파일 열기. 서버마다 따로 시도해서, 한 서버가 실패해도 나머지는 열리고 실패한 서버에는 "이 서버만 다시 읽기" 단추가 붙는다
 async function openPane(pane) {
   setLoading(pane, true);
-  try {
-    await Promise.all(pane.sids.map(async sid => {
-      const s = pane.src[sid];
-      s.info = await api(`api.php?a=info&server=${sid}&path=${encodeURIComponent(filePath())}`);
-      s.size = s.info.size;
-    }));
-    await gotoEnd(pane);
-  } catch (e) { pane.rows.innerHTML = `<div class="empty">${esc(e.message)}${/없습니다/.test(e.message) ? '<br><span class="hint">이 서버에는 같은 경로에 파일이 없습니다. 왼쪽 목록의 S번호로 어느 서버에 있는지 확인하거나, "설정에서 찾은 로그 위치"로 이동해 보세요.</span>' : ''}</div>`; status(e.message, true); }
+  await Promise.all(pane.sids.map(sid => openSrc(pane, sid)));
+  if (pane.sids.some(sid => !pane.src[sid].error)) { try { await gotoEnd(pane); } catch (e) { status(e.message, true); } }
+  renderErrors(pane);
+  setLoading(pane, false);
+}
+// 한 서버의 파일 정보를 읽는다. 실패하면 s.error 에 남긴다 (화면은 renderErrors 가 그린다)
+async function openSrc(pane, sid) {
+  const s = pane.src[sid];
+  try { s.info = await api(`api.php?a=info&server=${sid}&path=${encodeURIComponent(filePath())}`); s.size = s.info.size; s.error = ''; }
+  catch (e) { s.info = null; s.lines = []; s.start = s.end = s.size = 0; s.bof = s.eof = true; s.error = e.message; status(e.message, true); }
+}
+// 실패한 서버 안내 + "이 서버만 다시 읽기". 단일 패널이면 본문 자리에, 병합 패널이면 위쪽 띠로
+function renderErrors(pane) {
+  const bad = pane.sids.filter(sid => pane.src[sid].error);
+  pane.el.querySelectorAll('.srcerr').forEach(el => el.remove());
+  if (!bad.length) return;
+  const box = document.createElement('div'); box.className = 'srcerr';
+  box.innerHTML = bad.map(sid => { const m = pane.src[sid].error; return `<div class="line"><span class="s${sid % 9}">S${sid}</span> <span class="msg">${esc(m)}</span>${/없습니다/.test(m) ? '<span class="hint"> — 같은 경로에 파일이 없는 서버입니다. 왼쪽 목록의 S번호로 확인하거나 "설정에서 찾은 로그 위치"로 이동</span>' : ''} <button type="button" data-retry="${sid}">↻ 이 서버만 다시 읽기</button></div>`; }).join('');
+  box.querySelectorAll('[data-retry]').forEach(b => b.onclick = () => retrySrc(pane, +b.dataset.retry));
+  pane.body.insertBefore(box, pane.rows);
+  if (pane.sid != null) pane.rows.innerHTML = '';   // 단일 패널: 본문은 비워 둔다
+}
+async function retrySrc(pane, sid) {
+  setLoading(pane, true); status(`S${sid} 파일을 다시 읽는 중...`);
+  await openSrc(pane, sid);
+  if (!pane.src[sid].error) {
+    try { await loadSrcAt(sid, pane.src[sid], pane.src[sid].size); compose(pane); render(pane); scrollToIndex(pane, Math.max(0, pane.lines.length - 1)); status(`S${sid} 다시 읽음`); }
+    catch (e) { pane.src[sid].error = e.message; status(e.message, true); }
+  }
+  renderErrors(pane);
   setLoading(pane, false);
 }
 async function fetchChunk(sid, start, end) {
@@ -461,7 +485,7 @@ async function gotoEnd(pane) {
   const g = ++pane.gen;
   setLoading(pane, true);
   try {
-    await Promise.all(pane.sids.map(sid => loadSrcAt(sid, pane.src[sid], pane.src[sid].size)));
+    await Promise.all(pane.sids.filter(sid => !pane.src[sid].error).map(sid => loadSrcAt(sid, pane.src[sid], pane.src[sid].size)));
     if (g !== pane.gen) throw 0;
     compose(pane); render(pane); scrollToIndex(pane, pane.lines.length);
   } catch (e) { if (e !== 0) status(e.message, true); }
@@ -478,7 +502,7 @@ async function gotoKey(pane, key, force, hit) {
   const g = ++pane.gen;   // 더 새로운 이동/스크롤이 생기면 이 결과는 버린다
   setLoading(pane, true);
   try {
-    const loaded = await Promise.all(pane.sids.map(async sid => {
+    const loaded = await Promise.all(pane.sids.filter(sid => !pane.src[sid].error).map(async sid => {
       const s = { ...pane.src[sid] };
       const off = (hit && hit.sid === sid) ? hit.off : (await api(`api.php?a=seek&server=${sid}&path=${encodeURIComponent(filePath())}&key=${key}`)).offset;
       await loadSrcAt(sid, s, off);
