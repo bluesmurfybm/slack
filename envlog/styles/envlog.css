@@ -150,6 +150,8 @@
 #lv #aibox .aiparts th, #lv #aibox .aiparts td { padding:3px 10px 3px 0; text-align:left; border-bottom:1px solid var(--line); }
 #lv #aibox .aiparts th { color:var(--muted); font-weight:600; }
 #lv #aibox .aiparts td.num { text-align:right; font-variant-numeric:tabular-nums; }
+#lv #aibox .aiparts td .bdg { margin-right:6px; }   /* 뱃지가 두 개 붙을 때 사이를 띄운다 */
+#lv #aibox .aiparts td .bdg:last-child { margin-right:0; }
 #lv #aibox .aiparts tr.off { opacity:.5; }
 #lv #aibox .aiparts a.peek { color:var(--info); font-size:12px; }
 #lv #aibox pre { max-height:220px; overflow:auto; margin:6px 0; padding:8px 10px; background:var(--bg2); border:1px solid var(--line); border-radius:8px; font:12px Consolas, "D2Coding", monospace; white-space:pre-wrap; word-break:break-all; }
