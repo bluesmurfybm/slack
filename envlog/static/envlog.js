@@ -656,16 +656,18 @@ function aiFillAccess() {
   ps.value = php.some(g => g.base === 'php_errors.log') ? 'php_errors.log' : (php[0] ? php[0].base : '');
 }
 
-$('aiCollect').onclick = async () => {
-  if (!S.servers.length) { aiStatus('먼저 대학에 접속하세요', true); return; }
+$('aiCollect').onclick = () => aiCollect();
+// 자료 수집. 성공(보낼 줄이 있음)이면 true. "질문" 에서도 자료가 없으면 자동으로 먼저 부른다
+async function aiCollect() {
+  if (!S.servers.length) { aiStatus('먼저 대학에 접속하세요', true); return false; }
   const sids = S.servers.filter(s => S.selected.has(s.id)).map(s => s.id);
-  if (!sids.length) { aiStatus('왼쪽에서 서버를 선택하세요', true); return; }
-  if (!$('aiFrom').value || !$('aiTo').value) { aiStatus('시간 범위는 필수입니다 (최대 2시간)', true); $('aiFrom').focus(); return; }
+  if (!sids.length) { aiStatus('왼쪽에서 서버를 선택하세요', true); return false; }
+  if (!$('aiFrom').value || !$('aiTo').value) { aiStatus('시간 범위는 필수입니다', true); $('aiFrom').focus(); return false; }
   const body = { servers: sids, dir: S.logDir, access_base: $('aiAccess').value, php_base: $('aiPhp').value, ip: aiIps().join(','), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' ') };
   $('aiCollect').disabled = true; aiStatus('서버에서 로그를 추리는 중... (IP grep 은 파일 크기만큼 걸립니다)'); $('aiParts').innerHTML = ''; AI.parts = null; $('aiAsk').disabled = true;
   try {
     const j = await api('api.php?a=ai_collect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    AI.parts = j.parts;
+    AI.parts = j.parts; AI.sig = JSON.stringify([aiIps(), $('aiFrom').value, $('aiTo').value, $('aiAccess').value, $('aiPhp').value, [...S.selected]]);
     const rows = j.parts.map(p => `<tr class="${p.missing || p.skipped ? 'off' : ''}"><td><span class="s${p.server % 9}">S${p.server}</span></td><td>${esc(p.file)}</td><td class="num">${p.missing ? '없음' : p.skipped ? esc(p.skipped) : p.lines + '줄'}</td><td class="num">${p.missing ? '' : fmtSize(p.bytes)}</td><td>${p.capped ? '<span class="bdg vpn">상한에서 끊김</span>' : ''}${p.trimmed ? '<span class="bdg vpn">용량 상한으로 잘림</span>' : ''}</td><td><a href="#" data-k="${esc(p.file)}|${p.server}" class="peek">${p.lines ? '내용 보기' : ''}</a></td></tr>`).join('');
     $('aiParts').innerHTML = `<table><tr><th>서버</th><th>파일</th><th>줄</th><th>크기</th><th></th><th></th></tr>${rows}</table>
       <div class="hint">보낼 자료 합계 ${fmtSize(j.total_bytes)} ≈ ${j.approx_tokens.toLocaleString()} 토큰 · 예상 비용 ${Object.entries(j.estimate).map(([m, e]) => `${m.replace('claude-', '').replace(/-/g, ' ')} ≈ ₩${e.krw}${e.ok ? '' : ' (상한 초과)'}`).join(' / ')}${j.errors.length ? ' · 오류: ' + esc(j.errors.join(' / ')) : ''}</div><pre id="aiPeek" hidden></pre>`;
@@ -673,18 +675,19 @@ $('aiCollect').onclick = async () => {
     for (const o of $('aiModel').options) { const e = j.estimate[o.value]; o.disabled = e ? !e.ok : false; o.textContent = o.textContent.replace(/ — .*$/, '') + (e ? ` — ≈₩${e.krw}` : ''); }
     if ($('aiModel').selectedOptions[0]?.disabled) { const ok = [...$('aiModel').options].find(o => !o.disabled); if (ok) $('aiModel').value = ok.value; }
     $('aiParts').querySelectorAll('.peek').forEach(a => a.onclick = e => { e.preventDefault(); const [f, s] = a.dataset.k.split('|'); const p = AI.parts.find(x => x.file === f && x.server === +s); const pre = $('aiPeek'); pre.hidden = !pre.hidden || pre.dataset.k !== a.dataset.k ? false : true; pre.dataset.k = a.dataset.k; pre.textContent = p.text; });
-    $('aiAsk').disabled = j.total_bytes === 0;
-    $('aiAsk').title = j.total_bytes === 0 ? '모인 줄이 없어 보낼 수 없습니다 — IP·시간 범위·파일을 바꿔 다시 확인하세요' : '모인 자료와 질문을 Claude 에 보냅니다 (Ctrl+Enter)';
-    aiStatus(j.total_bytes ? `자료 준비됨 — 파일 ${j.files.join(', ')}. 내용을 확인한 뒤 질문하세요` : '조건에 맞는 줄이 없습니다 (IP·시간·파일 확인)', j.total_bytes === 0);
-  } catch (e) { aiStatus(e.message, true); }
-  $('aiCollect').disabled = false;
-};
+    aiStatus(j.total_bytes ? `자료 준비됨 — 파일 ${j.files.join(', ')}` : '조건에 맞는 줄이 없습니다 (IP·시간·파일 확인)', j.total_bytes === 0);
+    $('aiCollect').disabled = false;
+    return j.total_bytes > 0;
+  } catch (e) { aiStatus(e.message, true); $('aiCollect').disabled = false; return false; }
+}
 
 $('aiAsk').onclick = async () => {
   const prompt = $('aiPrompt').value.trim();
   if (!prompt) { aiStatus('질문을 입력하세요', true); $('aiPrompt').focus(); return; }
-  if (!AI.parts) { aiStatus('먼저 "조회 대상 파일 확인" 을 누르세요', true); return; }
   if (!(AI.key && AI.key.has)) { aiStatus('Anthropic API 키가 없습니다 — "API 키" 로 등록하세요', true); return; }
+  // 조건(시간·IP·파일)이 바뀌었거나 아직 안 모았으면 자동으로 먼저 모은다 — "조회 대상 파일 확인" 은 미리 보고 싶을 때만
+  const sig = JSON.stringify([aiIps(), $('aiFrom').value, $('aiTo').value, $('aiAccess').value, $('aiPhp').value, [...S.selected]]);
+  if (!AI.parts || AI.sig !== sig) { $('aiAsk').disabled = true; const ok = await aiCollect(); $('aiAsk').disabled = false; if (!ok) return; }
   const body = { prompt, model: $('aiModel').value, context: AI.parts.filter(p => p.text).map(p => ({ server: p.server, file: p.file, text: p.text })),
                  ip: aiIps().join(', '), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
   const out = $('aiAnswer'); out.textContent = ''; out.hidden = false; $('aiAsk').disabled = true; AI.busy = true; aiStatus('Claude 에 보내는 중...');
