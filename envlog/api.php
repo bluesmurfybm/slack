@@ -347,6 +347,9 @@ try {
         case 'grep':
             envlog_relay($uid, 'GET', '/file/grep', array_intersect_key($_GET, array_flip(['server', 'path', 'q', 'mode', 'from', 'max'])), null, 320);
         case 'ai_key': case 'ai_budget': case 'ai_collect': case 'ai_ask':
+            if (!((require __DIR__ . '/../config.php')['envlog_ai_enabled'] ?? true)) {
+                http_response_code(403); echo json_encode(['error' => 'AI 분석 기능이 꺼져 있습니다 (config.php envlog_ai_enabled)'], JSON_UNESCAPED_UNICODE); break;
+            }
             envlog_ai_handle($action, $method, $user, $uid);
             break;
         default:

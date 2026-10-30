@@ -222,7 +222,7 @@ async function loadFiles() {
   S.fileList = [...map.values()].sort((a, b) => (a.type !== b.type) ? (a.type === 'd' ? -1 : 1) : byName(a, b));
   S.fileSids = sids; S.fileErrs = res.filter(r => r.error);
   renderFiles();
-  if ($('aibox').classList.contains('open')) aiFillAccess();   // AI 상자의 access_log/php_errors 후보도 새 목록으로
+  if (window.ENVLOG_AI && $('aibox').classList.contains('open')) aiFillAccess();   // AI 상자의 access_log/php_errors 후보도 새 목록으로
   status(`${S.logDir}: 파일 ${S.fileList.filter(f => f.type !== 'd').length}개 (서버 ${sids.length}대 합침)` + (S.fileErrs.length ? ` — 실패 ${S.fileErrs.length}대` : ''), S.fileErrs.length > 0);
   loadLogDirs(sids);
 }
@@ -585,7 +585,8 @@ async function jumpTo(l, el) {
   if (S.sync) for (const p of S.panes) if (p !== pane) gotoKey(p, l.key, false);
 }
 
-// ---------------------------------------------------------------- AI 분석 (Claude)
+// ---------------------------------------------------------------- AI 분석 (Claude) — config envlog_ai_enabled 가 false 면 이 절은 건너뛴다(요소도 없음)
+if (window.ENVLOG_AI) {
 //  흐름: IP·시간 범위 입력 → "자료 모으기"(서버에서 추림, 로테이션 파일 자동 선택) → 보낼 자료 확인 → "질문" → 답 스트리밍
 //  무엇이 보내지는지는 자료 미리보기에서 보인다. 키는 서버에만 있다(ai_key).
 const AI = { parts: null, key: null, busy: false };
@@ -728,13 +729,14 @@ $('aiAsk').onclick = async () => {
   $('aiAsk').disabled = false; AI.busy = false;
 };
 $('aiPrompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('aiAsk').click(); });
+}   // ENVLOG_AI
 
 // ---------------------------------------------------------------- 초기화
 // 브라우저가 저장된 로그인 계정을 검색칸에 채워 넣는 경우(비밀번호 칸을 보고 로그인 폼으로 오해) — 선택한 대학이 없는데
 // 값이 들어와 있으면 지운다. 자동완성은 로드 직후나 조금 뒤에 일어나므로 두 번 본다
 const clearAutofill = () => { if (!acSel && $('q').value && !$('dd').classList.contains('on')) { $('q').value = ''; setQVer(''); } };
 setTimeout(clearAutofill, 100); setTimeout(clearAutofill, 800);
-aiLoadKey();   // 키 유무·모델 목록 (상자를 열기 전에도 머리글 뱃지에 보이게)
+if (window.ENVLOG_AI) aiLoadKey();   // 키 유무·모델 목록 (상자를 열기 전에도 머리글 뱃지에 보이게)
 (async () => {
   try {
     const c = await api('api.php?a=state');

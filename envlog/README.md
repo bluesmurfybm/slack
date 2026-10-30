@@ -124,6 +124,7 @@ Claude 에게 묻는다. 코드는 `envlog/ai.php`(수집·호출·요금 통제
 - **추출**: 원격 `envlog_remote.sh extract` 가 시간 범위를 이진탐색으로 찾아 그 구간만 읽고, IP 가 있으면 access_log 는 그 IP 줄만
   (php_errors 는 IP 가 없어 시간 범위만). 서버·파일당 access 400줄 / php 300줄, 전체 160KB 상한. 넘치면 표시하고 잘라 보낸다.
 - **보내기 전 확인**: "자료 모으기" 결과(서버·파일·줄 수·크기·예상 비용)를 보고 "내용 보기" 로 실제 줄을 볼 수 있다. 이 단계까지는 AI 호출이 없다.
+- **켜고 끄기**: `config.php` 의 `'envlog_ai_enabled' => false` 면 AI 상자와 사용 금액 표시가 화면에서 사라지고 `ai_*` API 도 거절한다(기본 true).
 - **요금 통제** (config.php 로 조정): 기본 모델 Haiku 5.5. 1회 예상 비용이 `envlog_ai_max_per_request_krw`(기본 50원)를 넘으면
   거절, 이번 달 누적이 `envlog_ai_monthly_cap_usd`(기본 $100)를 넘으면 거절. 환율은 `envlog_ai_usd_krw`(기본 1400).
   모든 호출은 `envlog_ai_usage` 표에 토큰·비용을 남기고, 화면 머리글에 "AI 사용 ₩누적 / ₩상한" 으로 보인다(80% 넘으면 주황).

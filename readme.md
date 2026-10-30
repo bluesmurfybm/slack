@@ -1693,7 +1693,8 @@ return [
     // (파이썬 magazine 의 config_local.py 에 있던 SLACK_WEBHOOK_URL 자리다)
     'dti_slack_webhook' => null,
 
-    // envlog AI 분석(Claude) — 회사 공용 Anthropic API 키(console.anthropic.com 발급). 개인 키를 등록한 사용자는 그 키가 우선.
+    // envlog AI 분석(Claude) — 'envlog_ai_enabled' => false 면 AI 상자가 아예 안 보인다(기본 true).
+    // 회사 공용 Anthropic API 키(console.anthropic.com 발급). 개인 키를 등록한 사용자는 그 키가 우선.
     // 요금 통제(선택): 'envlog_ai_monthly_cap_usd' => 100, 'envlog_ai_max_per_request_krw' => 50, 'envlog_ai_usd_krw' => 1400, 'envlog_rotate_hour' => 5
     'anthropic_api_key' => $localCfg['anthropic_api_key'] ?? '',
 

@@ -13,6 +13,8 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 // 공통 상단바(slack/header.php)는 "포털 루트까지 되짚는 접두사"를 $__bwBase 로 받는다.
 $__bwBase = '../slack/';
 $__bwCurrent = 'envlog';
+// AI 분석 기능 사용 여부 — config.php 'envlog_ai_enabled' (기본 true). false 면 AI 상자·사용 금액 표시를 아예 그리지 않고 api.php 도 거절한다
+$__envlogAi = (bool)((require __DIR__ . '/../config.php')['envlog_ai_enabled'] ?? true);
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -34,7 +36,7 @@ $__bwCurrent = 'envlog';
   <div class="head">
     <h1>📜 Coursemos EnvLog</h1>
     <span class="hint" style="color:var(--hint);font-size:12.5px">EnvHub 의 테스트서버를 거쳐 운영 웹서버 여러 대의 아파치 로그를 같은 시각으로 나란히 봅니다.</span>
-    <span id="aiBudget" class="budget" title="이번 달 AI 분석(Claude) 사용 금액 / 월 상한"></span>
+    <?php if ($__envlogAi): ?><span id="aiBudget" class="budget" title="이번 달 AI 분석(Claude) 사용 금액 / 월 상한"></span><?php endif; ?>
   </div>
 
 <div id="lv">
@@ -93,6 +95,7 @@ $__bwCurrent = 'envlog';
       <div id="resultsBox" hidden><div class="list results" id="results"></div></div>
       <div id="panes"><div class="empty">대학을 검색해 접속한 뒤, 왼쪽에서 로그 파일을 선택하세요.</div></div>
       <div id="detail"></div>
+      <?php if ($__envlogAi): ?>
       <!-- AI 분석: 로그를 서버에서 추려(IP·시간 범위) 사용자가 확인한 뒤 Claude 에 묻는다. 자세한 흐름은 ai.php 머리말 -->
       <div id="aibox">
         <div class="aihead">
@@ -134,12 +137,14 @@ $__bwCurrent = 'envlog';
           <pre id="aiAnswer" hidden></pre>
         </div>
       </div>
+      <?php endif; ?>
       <div id="status">준비</div>
     </div>
   </div>
 </div>
 </div>
 
+<script>window.ENVLOG_AI = <?= $__envlogAi ? 'true' : 'false' ?>;</script>
 <script src="static/envlog.js?v=<?= filemtime(__DIR__ . '/static/envlog.js') ?>"></script>
 </body>
 </html>
