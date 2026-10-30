@@ -223,7 +223,10 @@ function tailNote() {
 $('chkTail').onchange = () => {
   S.tail = $('chkTail').checked; $('lv').classList.toggle('tailing', S.tail);
   clearInterval(tailTimer); tailTimer = null;
-  if (S.tail) { tailTimer = setInterval(tailTick, TAIL_MS); status('따라가기(tail -f) 켬 — 새 줄이 붙으면 아래에 덧붙입니다. 실제 로그보다 몇 초 늦습니다'); tailNote(); tailTick(); }
+  if (S.tail) {
+    tailTimer = setInterval(tailTick, TAIL_MS); status('따라가기(tail -f) 켬 — 모든 서버 패널을 파일 끝에 맞추고 새 줄을 덧붙입니다. 실제 로그보다 몇 초 늦습니다'); tailNote();
+    Promise.all(S.panes.filter(p => !p.hitsMode).map(p => gotoEnd(p))).then(tailTick);   // 운영서버가 여러 대면 전부 끝으로
+  }
   else { status('따라가기(tail -f) 끔'); tailNote(); }
 };
 async function tailTick() {
@@ -232,7 +235,7 @@ async function tailTick() {
   try {
     for (const pane of S.panes) {
       if (pane.hitsMode || pane.loading || pane.extending) continue;
-      const b = pane.body; const atBottom = b.scrollTop + b.clientHeight >= b.scrollHeight - ROW_H * 10;
+      const b = pane.body;
       let grew = false;
       for (const sid of pane.sids) {
         const s = pane.src[sid]; if (!s.eof || !s.info) continue;            // 끝까지 읽어 둔 소스만 따라간다
@@ -244,10 +247,8 @@ async function tailTick() {
         grew = true;
       }
       if (!grew || !S.tail) continue;
-      const topI = Math.floor(b.scrollTop / ROW_H); const anchor = pane.lines[topI];
       compose(pane); render(pane);
-      if (atBottom) scrollToIndex(pane, Math.max(0, pane.lines.length - 1));
-      else if (anchor) { const j = pane.lines.findIndex(l => l.sid === anchor.sid && l.off === anchor.off); if (j >= 0) scrollToIndex(pane, j); }
+      scrollToIndex(pane, Math.max(0, pane.lines.length - 1));   // 따라가는 동안은 패널마다 항상 마지막 줄
     }
   } catch (e) { status('따라가기 갱신 실패: ' + e.message, true); }
   tailRtt = Math.round(performance.now() - t0); if (S.tail) tailNote();
@@ -504,6 +505,7 @@ function onScroll(pane) {
   if (isProgrammatic(pane)) { updatePos(pane); return; }                           // 코드가 움직인 스크롤 → 동기화 트리거 아님
   pane.gen++;           // 사용자가 스크롤 중이면 진행 중이던 자동 이동은 취소
   updatePos(pane);
+  if (S.tail) return;   // 따라가는 중: 다음 틱에 다시 끝으로 간다. 동기화·앞뒤 적재는 하지 않는다
   const b = pane.body;
   if (b.scrollTop < ROW_H * 10) extend(pane, -1);
   else if (b.scrollTop + b.clientHeight > b.scrollHeight - ROW_H * 10) extend(pane, 1);
