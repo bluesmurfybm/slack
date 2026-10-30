@@ -111,9 +111,11 @@ $__bwCurrent = 'envlog';
             <span id="aiWinHint" class="hint">IP 없이 보면 최대 2시간, IP 를 넣으면 최대 72시간</span>
           </div>
           <div class="airow" id="aiIpRow">
-            <label class="lab">IP (선택)</label><span id="aiIps"><input class="aiIpIn" placeholder="예) 203.0.113.10" size="18" autocomplete="off"></span>
-            <button id="aiIpAdd" type="button" title="IP 를 하나 더 넣습니다 (최대 10개)">＋ IP 추가</button>
-            <span class="hint">넣으면 access_log 에서 그 IP 들의 요청만 보고, php_errors 는 그 IP 의 첫~마지막 요청 사이만 봅니다. 비우면 시간 범위 전체(앞부분 400줄까지)</span>
+            <label class="lab">IP (선택)</label>
+            <span id="aiIps" class="chips"><span class="hint" id="aiIpsEmpty">없음 — 시간 범위 전체를 봅니다</span></span>
+            <button id="aiIpAdd" type="button" title="IP 를 넣습니다 (최대 10개)">＋ IP 추가</button>
+            <span id="aiIpEdit" class="ipedit" hidden><input id="aiIpNew" placeholder="예) 203.0.113.10 (여러 개는 쉼표)" size="26" autocomplete="off"><button id="aiIpOk" class="primary" type="button">확인</button><button id="aiIpCancel" type="button">취소</button></span>
+            <span class="hint" style="flex-basis:100%">IP 를 넣으면 access_log 에서 그 IP 들의 요청만 보고, php_errors 는 그 IP 의 첫~마지막 요청 사이만 봅니다. 비우면 시간 범위 전체(앞부분 400줄까지)</span>
           </div>
           <div class="airow">
             <label>access_log</label><select id="aiAccess" title="대학마다 이름이 달라 로그가 가장 많이 쌓이는 것을 기본으로 고릅니다"></select>

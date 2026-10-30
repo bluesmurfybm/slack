@@ -602,14 +602,28 @@ function aiBudget(b) {
 // 기본 시간 범위: 지금부터 2시간 전 ~ 지금
 (() => { const now = new Date(); const from = new Date(now.getTime() - 2 * 3600 * 1000); $('aiFrom').value = fmtLocal(from); $('aiTo').value = fmtLocal(now); })();
 $('aiToggle').onclick = () => { $('aibox').classList.toggle('open'); if ($('aibox').classList.contains('open')) { aiLoadKey(); aiFillAccess(); } };
-// IP 여러 개: '＋ IP 추가' 로 칸을 늘리고 ✕ 로 뺀다. 서버에는 콤마로 이어 보낸다
-const aiIps = () => [...document.querySelectorAll('.aiIpIn')].map(i => i.value.trim()).filter(Boolean);
-$('aiIpAdd').onclick = () => {
-  if (document.querySelectorAll('.aiIpIn').length >= 10) { aiStatus('IP 는 최대 10개까지입니다', true); return; }
-  const w = document.createElement('span'); w.className = 'ipwrap';
-  w.innerHTML = '<input class="aiIpIn" placeholder="예) 203.0.113.11" size="18" autocomplete="off"><button type="button" title="이 IP 빼기">✕</button>';
-  w.querySelector('button').onclick = () => w.remove(); $('aiIps').appendChild(w); w.querySelector('input').focus();
-};
+// IP 는 칩으로 쌓인다: '＋ IP 추가' → 입력칸 → 확인(Enter) → 칩. 칩의 ✕ 로 뺀다. 서버에는 콤마로 이어 보낸다
+AI.ips = [];
+const aiIps = () => AI.ips.slice();
+function aiRenderIps() {
+  $('aiIps').innerHTML = AI.ips.length ? AI.ips.map((ip, i) => `<span class="chip">${esc(ip)}<button type="button" data-i="${i}" title="이 IP 빼기">✕</button></span>`).join('') : '<span class="hint" id="aiIpsEmpty">없음 — 시간 범위 전체를 봅니다</span>';
+  $('aiIps').querySelectorAll('button').forEach(b => b.onclick = () => { AI.ips.splice(+b.dataset.i, 1); aiRenderIps(); });
+}
+function aiIpOpen() { $('aiIpEdit').hidden = false; $('aiIpAdd').hidden = true; $('aiIpNew').value = ''; $('aiIpNew').focus(); }
+function aiIpClose() { $('aiIpEdit').hidden = true; $('aiIpAdd').hidden = false; }
+function aiIpCommit() {
+  const vals = $('aiIpNew').value.split(/[\s,]+/).map(v => v.trim()).filter(Boolean);
+  for (const v of vals) {
+    if (!/^[0-9A-Za-z.:_-]{3,64}$/.test(v)) { aiStatus(`IP 형식이 아닙니다: ${v}`, true); return; }
+    if (AI.ips.length >= 10) { aiStatus('IP 는 최대 10개까지입니다', true); break; }
+    if (!AI.ips.includes(v)) AI.ips.push(v);
+  }
+  aiRenderIps(); aiIpClose(); aiStatus('');
+}
+$('aiIpAdd').onclick = aiIpOpen;
+$('aiIpOk').onclick = aiIpCommit;
+$('aiIpCancel').onclick = aiIpClose;
+$('aiIpNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); aiIpCommit(); } else if (e.key === 'Escape') aiIpClose(); });
 $('aiWin').onchange = () => {   // 빠른 범위: 끝 시각 기준으로 N분
   const m = +$('aiWin').value; if (!m) return;
   const to = $('aiTo').value ? new Date($('aiTo').value) : new Date(); $('aiFrom').value = fmtLocal(new Date(to.getTime() - m * 60000)); $('aiTo').value = fmtLocal(to);

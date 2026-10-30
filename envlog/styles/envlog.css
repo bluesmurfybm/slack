@@ -125,10 +125,12 @@
 #lv #aibox .aihead .aidesc { flex-basis:100%; display:none; }
 #lv #aibox.open .aihead .aidesc { display:block; }
 #lv #aibox .airow .lab { min-width:64px; }
-#lv #aibox #aiIps { display:inline-flex; gap:4px; flex-wrap:wrap; }
-#lv #aibox #aiIps .ipwrap { display:inline-flex; align-items:center; }
-#lv #aibox #aiIps .ipwrap button { height:32px; padding:0 6px; margin-left:-1px; border-radius:0 8px 8px 0; }
-#lv #aibox #aiIps .ipwrap input { border-radius:8px 0 0 8px; }
+#lv #aibox .chips { display:inline-flex; gap:6px; flex-wrap:wrap; align-items:center; min-height:32px; }
+#lv #aibox .chips .chip { display:inline-flex; align-items:center; gap:4px; height:28px; padding:0 4px 0 10px; border-radius:14px; background:var(--info-bg); color:var(--info); font-family:Consolas, "D2Coding", monospace; font-size:12.5px; font-weight:600; }
+#lv #aibox .chips .chip button { height:20px; width:20px; padding:0; border:0; border-radius:50%; background:transparent; color:var(--info); font-size:12px; line-height:1; }
+#lv #aibox .chips .chip button:hover { background:var(--bg); }
+#lv #aibox .ipedit { display:inline-flex; gap:4px; align-items:center; }
+#lv #aibox .ipedit[hidden] { display:none; }
 #lv #aibox .aihead .spacer { flex:1; }
 #lv #aibox .aibody { display:none; padding:4px 12px 10px; border-top:1px solid var(--line); background:var(--bg); }
 #lv #aibox.open .aibody { display:block; }
