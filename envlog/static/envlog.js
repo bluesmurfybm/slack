@@ -212,16 +212,23 @@ $('chkMerge').onchange = () => { S.merge = $('chkMerge').checked; rebuildPanes()
 // ---------------------------------------------------------------- 실시간 따라가기 (tail -f)
 //  2초마다 각 패널의 소스가 파일 끝(eof)에 있으면 info 로 크기를 보고, 커졌으면 그 뒤만 읽어 덧붙인다.
 //  화면이 맨 아래(마지막 10줄 안)일 때만 따라 내려가고, 위를 보고 있으면 자리를 지킨다. 검색 결과 뷰·읽는 중에는 건너뛴다.
-S.tail = false; let tailTimer = null; let tailBusy = false;
+S.tail = false; let tailTimer = null; let tailBusy = false; const TAIL_MS = 2000; let tailRtt = 0;   // tailRtt: 마지막 확인에 걸린 시간(ms)
+// 지연 안내: 확인 주기 + 서버 왕복(포털 → 엔진 → 테스트서버 → 운영서버). 실측으로 갱신한다
+function tailNote() {
+  const delay = Math.ceil((TAIL_MS + tailRtt) / 1000);
+  $('tailNote').textContent = `실시간이 아닙니다 — 테스트서버를 거쳐 운영서버를 읽는 구조라 새 줄은 약 ${delay}초(확인 주기 ${TAIL_MS / 1000}초 + 서버 왕복 ${(tailRtt / 1000).toFixed(1)}초) 늦게 보입니다.`;
+  $('tailNote').hidden = !S.tail;
+  document.querySelectorAll('#lv .pane .ph .tail').forEach(el => el.textContent = `따라가는 중 · 약 ${delay}초 지연`);
+}
 $('chkTail').onchange = () => {
   S.tail = $('chkTail').checked; $('lv').classList.toggle('tailing', S.tail);
   clearInterval(tailTimer); tailTimer = null;
-  if (S.tail) { tailTimer = setInterval(tailTick, 2000); status('실시간(tail -f) 켬 — 새 줄이 붙으면 아래에 덧붙입니다'); tailTick(); }
-  else status('실시간(tail -f) 끔');
+  if (S.tail) { tailTimer = setInterval(tailTick, TAIL_MS); status('따라가기(tail -f) 켬 — 새 줄이 붙으면 아래에 덧붙입니다. 실제 로그보다 몇 초 늦습니다'); tailNote(); tailTick(); }
+  else { status('따라가기(tail -f) 끔'); tailNote(); }
 };
 async function tailTick() {
   if (!S.tail || tailBusy || !S.panes.length) return;
-  tailBusy = true;
+  tailBusy = true; const t0 = performance.now();
   try {
     for (const pane of S.panes) {
       if (pane.hitsMode || pane.loading || pane.extending) continue;
@@ -242,7 +249,8 @@ async function tailTick() {
       if (atBottom) scrollToIndex(pane, Math.max(0, pane.lines.length - 1));
       else if (anchor) { const j = pane.lines.findIndex(l => l.sid === anchor.sid && l.off === anchor.off); if (j >= 0) scrollToIndex(pane, j); }
     }
-  } catch (e) { status('실시간 갱신 실패: ' + e.message, true); }
+  } catch (e) { status('따라가기 갱신 실패: ' + e.message, true); }
+  tailRtt = Math.round(performance.now() - t0); if (S.tail) tailNote();
   tailBusy = false;
 }
 
@@ -317,7 +325,7 @@ function createPane(sid, sids) {
   const cols = (sid == null ? '38px ' : '') + '140px 118px minmax(0,1fr) 170px';
   el.style.setProperty('--cols', cols);
   const title = sid == null ? `병합 (${sids.map(s => 'S' + s).join(' + ')})` : `<span class="s${sid % 9}">S${sid}</span> ${esc(srvName(sid))}`;
-  el.innerHTML = `<div class="ph"><span class="nm">${title}</span><span class="hint">${esc(S.file)}</span><span class="tail">실시간</span><span class="busy">● 읽는 중</span><span class="pos"></span></div>
+  el.innerHTML = `<div class="ph"><span class="nm">${title}</span><span class="hint">${esc(S.file)}</span><span class="tail" title="테스트서버를 거쳐 읽는 구조라 실제 로그보다 늦게 보입니다">따라가는 중</span><span class="busy">● 읽는 중</span><span class="pos"></span></div>
     <div class="cols">${sid == null ? '<span>서버</span>' : ''}<span>시간</span><span>IP</span><span>메시지</span><span>User-Agent</span></div>
     <div class="body"><div class="rows"></div></div>
     <div class="pf"><button data-a="first" title="파일 처음">⏮</button><input type="range" min="0" max="1000" value="1000"><button data-a="last" title="파일 끝">⏭</button><button data-a="reload" title="다시 읽기(파일이 커졌으면 끝으로)">↻</button></div>`;
