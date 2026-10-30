@@ -612,6 +612,9 @@ async function aiLoadKey() {
   catch (e) { aiStatus(e.message, true); return; }
   $('aiKeyState').textContent = AI.key.has ? (AI.key.source === 'user' ? '개인 키 등록됨' : '회사 공용 키') : '키 없음';
   $('aiKeyState').className = 'bdg ' + (AI.key.has ? 'ver' : 'no');
+  // 공용 키가 있으면 개인 키는 선택 사항 — 단추 이름으로 알린다
+  $('aiKeyBtn').textContent = AI.key.source === 'config' ? '개인 키(선택)' : (AI.key.source === 'user' ? '개인 키 변경' : 'API 키 등록');
+  $('aiKeyBtn').title = AI.key.source === 'config' ? '회사 공용 키가 설정되어 있습니다. 내 계정 비용으로 따로 쓰고 싶을 때만 개인 키를 등록하세요' : '';
   const sel = $('aiModel'); if (!sel.options.length) for (const m of AI.key.models) { const o = document.createElement('option'); o.value = m; o.textContent = { 'claude-opus-5-5': 'Opus 5.5 (정확)', 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-5-5': 'Haiku 5.5 (저렴)' }[m] || m; sel.appendChild(o); }
   $('aiRotHint').textContent = `로테이션 매일 ${AI.key.rotate_hour}:00 기준으로 날짜별 파일을 자동 선택 · 범위 최대 ${AI.key.max_window_min}분`;
   aiBudget(AI.key.budget);
