@@ -107,7 +107,7 @@ $__bwCurrent = 'envlog';
           </div>
           <div class="airow">
             <label class="lab">시간 <b style="color:#b91c1c">*</b></label><input id="aiFrom" type="datetime-local" step="60" required><span>~</span><input id="aiTo" type="datetime-local" step="60" required>
-            <select id="aiWin" title="끝 시각을 기준으로 시작 시각을 맞춥니다"><option value="">끝 시각부터 거슬러</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option></select>
+            <select id="aiWin" title="수동 지정: 시작·끝을 직접 입력. 30분/1시간/2시간: 끝 시각 기준으로 시작 시각을 맞춤"><option value="">수동 지정</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option></select>
             <span class="hint">로테이션(매일 05:00) 기준으로 날짜별 파일을 자동 선택</span>
           </div>
           <div class="airow" id="aiIpRow">
