@@ -70,7 +70,7 @@ $__envlogAi = (bool)((require __DIR__ . '/../config.php')['envlog_ai_enabled'] ?
         <div class="opts">
           <label class="chk" title="한 패널을 스크롤하면 다른 서버 패널도 같은 시각으로 이동"><input type="checkbox" id="chkSync" checked> 동일 시간 스크롤</label>
           <label class="chk" title="모든 서버 로그를 시간순으로 한 화면에 합쳐 보기"><input type="checkbox" id="chkMerge"> 병합 모드</label>
-          <label class="chk" title="2초마다 파일 끝을 확인해 새로 붙은 줄을 아래에 덧붙입니다 (tail -f). 테스트서버를 거쳐 운영서버를 읽는 구조라 실제 로그보다 몇 초 늦게 보입니다"><input type="checkbox" id="chkTail"> 따라가기(tail -f) <span class="hint">모든 패널 끝 고정</span></label>
+          <label class="chk" title="2초마다 파일 끝을 확인해 새로 붙은 줄을 아래에 덧붙입니다 (tail -f). 테스트서버를 거쳐 운영서버를 읽는 구조라 실제 로그보다 몇 초 늦게 보입니다"><input type="checkbox" id="chkTail"> 따라가기(tail -f) <span class="hint">모든 패널 끝 고정 · 검색 결과 뷰에서는 새 일치 줄만</span></label>
           <span id="tailNote" class="hint" hidden></span>
         </div>
       </section>

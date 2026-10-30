@@ -229,12 +229,32 @@ $('chkTail').onchange = () => {
   }
   else { status('따라가기(tail -f) 끔'); tailNote(); }
 };
+// 특정 위치로 가는 동작(시간 이동·결과 클릭)은 따라가기와 충돌하므로 끈다
+function tailOff(why) { if (!S.tail) return; $('chkTail').checked = false; $('chkTail').onchange(); status(`따라가기를 껐습니다 — ${why}`); }
+// 결과 뷰 따라가기: 검색한 시점 이후를 같은 조건으로 다시 grep 해 새 일치 줄만 덧붙인다 (tail -f | grep)
+async function tailGrep(pane) {
+  if (!S.liveGrep) return;
+  let added = false;
+  for (const sid of pane.sids) {
+    const from = S.liveGrep.from[sid]; if (from == null) continue;
+    let size; try { size = (await api(`api.php?a=info&server=${sid}&path=${encodeURIComponent(filePath())}`)).size; } catch (e) { continue; }
+    if (size <= from) { if (size < from) S.liveGrep.from[sid] = size; continue; }      // 로테이션으로 줄면 처음부터
+    let r; try { r = await api(`api.php?a=grep&server=${sid}&path=${encodeURIComponent(filePath())}&q=${encodeURIComponent(S.liveGrep.q)}&mode=${S.liveGrep.mode}&from=${from}&max=300`); } catch (e) { continue; }
+    S.liveGrep.from[sid] = size;
+    for (const [off, text] of r.hits) { const l = mkLine(off, text, ''); l.sid = sid; S.hits.push(l); added = true; }
+  }
+  if (!added || !S.tail) return;
+  S.hits.sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : a.sid - b.sid || a.off - b.off);
+  $('sInfo').textContent = `${S.hits.length}건 ▾`;
+  renderHitsView(pane); scrollToIndex(pane, Math.max(0, pane.lines.length - 1));
+}
 async function tailTick() {
   if (!S.tail || tailBusy || !S.panes.length) return;
   tailBusy = true; const t0 = performance.now();
   try {
     for (const pane of S.panes) {
-      if (pane.hitsMode || pane.loading || pane.extending) continue;
+      if (pane.loading || pane.extending) continue;
+      if (pane.hitsMode) { await tailGrep(pane); continue; }   // 검색 결과 뷰: 새 일치 줄만 이어 붙인다
       const b = pane.body;
       let grew = false;
       for (const sid of pane.sids) {
@@ -610,10 +630,12 @@ async function doSearch(fromCurrent) {
     const key = parseTimeInput(q, topKey(pane) || mainSrc(pane).info?.last || '');
     if (!key) { status('시간 형식을 인식하지 못했습니다', true); return; }
     S.searchTerm = ''; $('results').innerHTML = ''; $('sInfo').hidden = true; $('resultsBox').hidden = true; status(fmtKey(key) + ' 로 이동');
+    tailOff('시간 이동');
     for (const p of S.panes) gotoKey(p, key, true);
     return;
   }
   S.searchType = type; S.searchTerm = type === 'regex' ? '' : q;
+  S.liveGrep = null;   // 새 검색이면 이어 보기 기준을 다시 잡는다
   const mode = type === 'ip' ? 'W' : type === 'regex' ? 'E' : 'F';
   const sids = S.merge ? S.panes[0].sids : S.panes.map(p => p.sid);
   const fromOf = sid => { if (!fromCurrent) return 0; const p = S.merge ? S.panes[0] : S.panes.find(x => x.sid === sid); const i = Math.floor(p.body.scrollTop / ROW_H); const l = p.lines.slice(i).find(l => l.sid === sid); return l ? l.off + 1 : 0; };
@@ -632,6 +654,9 @@ async function doSearch(fromCurrent) {
     $('results').innerHTML = items.map((l, i) => `<div class="item" data-i="${i}"><div class="l1"><span class="s${l.sid % 9}">S${l.sid}</span><span class="t">${l.time || ''}</span><span class="ip">${esc(l.ip)}</span></div><div class="l2">${esc(l.kind === 'access' ? `${l.status} ${l.req}` : l.kind === 'error' ? l.msg : l.raw)}</div></div>`).join('');
     $('results').querySelectorAll('.item').forEach(el => el.onclick = () => jumpTo(items[+el.dataset.i], el));
     S.hits = items;
+    // 결과 뷰 따라가기(tail -f | grep)용: 각 서버의 '검색한 시점의 파일 크기' 부터 이어서 grep 한다
+    S.liveGrep = { q, mode, from: {} };
+    await Promise.all(sids.map(async sid => { try { S.liveGrep.from[sid] = (await api(`api.php?a=info&server=${sid}&path=${encodeURIComponent(filePath())}`)).size; } catch (e) { S.liveGrep.from[sid] = 0; } }));
     if ($('chkOnlyHits').checked) S.panes.forEach(renderHitsView);
     else S.panes.forEach(p => render(p));
   } catch (e) { $('sInfo').hidden = true; $('resultsBox').hidden = true; status('검색 실패: ' + e.message, true); }
@@ -652,6 +677,7 @@ $('chkOnlyHits').onchange = () => { if ($('chkOnlyHits').checked) { if (S.hits) 
 
 $('sInfo').onclick = () => { $('resultsBox').hidden = !$('resultsBox').hidden; };
 async function jumpTo(l, el) {
+  tailOff('원문 위치로 이동');
   if (S.panes.some(p => p.hitsMode)) { $('chkOnlyHits').checked = false; leaveHitsView(); }   // 결과 클릭 = 원문 위치로
   $('results').querySelectorAll('.item').forEach(x => x.classList.toggle('sel', x === el));
   const pane = S.merge ? S.panes[0] : S.panes.find(p => p.sid === l.sid); if (!pane) return;
