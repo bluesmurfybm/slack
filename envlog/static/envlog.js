@@ -716,7 +716,7 @@ async function aiAsk(cont) {
                  ip: aiIps().join(', '), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
   const out = $('aiAnswer'); const keep = cont ? out.textContent.replace(/\s+$/, '') + '\n' : '';
   if (!cont) { out.textContent = '답을 기다리는 중…'; out.classList.add('waiting'); }
-  out.hidden = false; $('aiAnsTools').hidden = false; $('aiMore').hidden = true; setOff('aiAsk', '응답 기다리는 중'); setOff('aiMore', '받는 중'); AI.busy = true;
+  out.hidden = false; $('aiAnsTools').hidden = true; $('aiMore').hidden = true; setOff('aiAsk', '응답 기다리는 중'); setOff('aiMore', '받는 중'); AI.busy = true;
   aiProgress('Claude 에 보내는 중…'); aiStatus(''); let first = true;
   try {
     const r = await fetch('api.php?a=ai_ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -733,7 +733,7 @@ async function aiAsk(cont) {
           if (ev.t) { if (first) { out.textContent = keep; out.classList.remove('waiting'); first = false; aiProgress('답을 받는 중…'); } out.textContent += ev.t; out.scrollTop = out.scrollHeight; }
           else if (ev.start) aiProgress(`Claude 가 읽는 중… (${ev.model}, 보낸 자료 ${fmtSize(ev.sent_bytes)}${ev.ssl ? ', ' + ev.ssl : ''})`);
           else if (ev.error) aiStatus(ev.error, true);
-          else if (ev.done) { const u = ev.usage; $('aiMore').hidden = ev.stop !== 'max_tokens'; setOff('aiMore', ''); aiStatus(`완료 — 입력 ${(u.input + u.cache_write + u.cache_read).toLocaleString()} 토큰(로그 본문 ${(u.cache_write + u.cache_read).toLocaleString()}${u.cache_read ? ', 캐시 재사용 ' + u.cache_read.toLocaleString() : ''}) · 출력 ${u.output.toLocaleString()} 토큰 · 약 ₩${ev.cost_krw} ($${ev.cost_usd})` + (ev.stop === 'max_tokens' ? ' · 답이 길어 잘렸습니다 — 질문을 더 좁혀 보세요' : '')); aiBudget(ev.budget); }
+          else if (ev.done) { const u = ev.usage; $('aiAnsTools').hidden = false; $('aiMore').hidden = ev.stop !== 'max_tokens'; setOff('aiMore', ''); aiStatus(`완료 — 입력 ${(u.input + u.cache_write + u.cache_read).toLocaleString()} 토큰(로그 본문 ${(u.cache_write + u.cache_read).toLocaleString()}${u.cache_read ? ', 캐시 재사용 ' + u.cache_read.toLocaleString() : ''}) · 출력 ${u.output.toLocaleString()} 토큰 · 약 ₩${ev.cost_krw} ($${ev.cost_usd})` + (ev.stop === 'max_tokens' ? ' · 답이 길어 잘렸습니다 — 질문을 더 좁혀 보세요' : '')); aiBudget(ev.budget); }
         }
       }
     }
