@@ -115,8 +115,10 @@ location ^~ /envlog/daemon/ { deny all; }
 IP 또는 시간 범위(최대 2시간)로 php_errors.log 와 access_log 를 서버에서 먼저 추린 뒤, 사용자가 보낼 자료를 확인하고
 Claude 에게 묻는다. 코드는 `envlog/ai.php`(수집·호출·요금 통제), 화면은 `static/envlog.js` 의 AI 절.
 
-- **입력**: IP(선택), 시간 범위(필수 — "시간 없이(IP 만)" 를 켜면 current 파일만 IP 로 검색), access_log 선택(대학마다
-  `ssl_호스트_access_log` 등 이름이 달라 **용량이 가장 큰 것을 기본**으로 고름), php_errors 선택.
+- **입력**: 시간 범위(필수. IP 없이 보면 최대 2시간, IP 를 넣으면 최대 72시간 — `envlog_ai_max_window_ip_hours`), IP(선택, 여러 개 가능),
+  access_log 선택(대학마다 `ssl_호스트_access_log` 등 이름이 달라 **로그가 가장 많이 쌓이는 것을 기본**으로 고름), php_errors 선택.
+- **IP 모드**: access_log 는 grep 으로 그 IP 줄만 뽑으니 범위가 길어도 양이 제한된다. php_errors 에는 IP 가 없으므로 서버마다
+  **그 IP 의 첫~마지막 요청 시각 ± 2분**만 읽고, 그 IP 의 요청이 없는 서버는 php_errors 를 건너뛴다.
 - **로테이션**: 매일 `envlog_rotate_hour`(기본 05:00)에 돌므로 `[D-1 05:00, D 05:00)` 기록은 `<이름>-D` 에 있다.
   시간 범위로 파일을 자동 계산한다(10-30 09:00 에 10-29 13~15시를 찾으면 `php_errors.log-20261030`). 아직 안 돈 구간은 current.
 - **추출**: 원격 `envlog_remote.sh extract` 가 시간 범위를 이진탐색으로 찾아 그 구간만 읽고, IP 가 있으면 access_log 는 그 IP 줄만

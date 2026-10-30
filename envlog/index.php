@@ -107,13 +107,13 @@ $__bwCurrent = 'envlog';
           </div>
           <div class="airow">
             <label class="lab">시간 <b style="color:#b91c1c">*</b></label><input id="aiFrom" type="datetime-local" step="60" required><span>~</span><input id="aiTo" type="datetime-local" step="60" required>
-            <select id="aiWin" title="수동 지정: 시작·끝을 직접 입력. 30분/1시간/2시간: 끝 시각 기준으로 시작 시각을 맞춤"><option value="">수동 지정</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option></select>
-            <span class="hint">로테이션(매일 05:00) 기준으로 날짜별 파일을 자동 선택</span>
+            <select id="aiWin" title="수동 지정: 시작·끝을 직접 입력. 그 외: 끝 시각 기준으로 시작 시각을 맞춤"><option value="">수동 지정</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option><option value="1440">1일 (IP 필요)</option><option value="2880">2일 (IP 필요)</option><option value="4320">3일 (IP 필요)</option></select>
+            <span id="aiWinHint" class="hint">IP 없이 보면 최대 2시간, IP 를 넣으면 최대 72시간</span>
           </div>
           <div class="airow" id="aiIpRow">
             <label class="lab">IP (선택)</label><span id="aiIps"><input class="aiIpIn" placeholder="예) 203.0.113.10" size="18" autocomplete="off"></span>
             <button id="aiIpAdd" type="button" title="IP 를 하나 더 넣습니다 (최대 10개)">＋ IP 추가</button>
-            <span class="hint">넣으면 access_log 에서 그 IP 들의 요청만 봅니다. 비우면 시간 범위 전체(앞부분 400줄까지)</span>
+            <span class="hint">넣으면 access_log 에서 그 IP 들의 요청만 보고, php_errors 는 그 IP 의 첫~마지막 요청 사이만 봅니다. 비우면 시간 범위 전체(앞부분 400줄까지)</span>
           </div>
           <div class="airow">
             <label>access_log</label><select id="aiAccess" title="대학마다 이름이 달라 로그가 가장 많이 쌓이는 것을 기본으로 고릅니다"></select>

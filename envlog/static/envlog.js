@@ -629,7 +629,8 @@ async function aiLoadKey() {
   $('aiKeyBtn').title = AI.key.source === 'config' ? '회사 공용 키가 설정되어 있습니다. 내 계정 비용으로 따로 쓰고 싶을 때만 개인 키를 등록하세요' : '';
   $('aiKeyHint').textContent = AI.key.source === 'config' ? '개인 키로 쓰려면 →' : AI.key.source === 'user' ? '' : '키를 등록하세요 →';
   const sel = $('aiModel'); if (!sel.options.length) for (const m of AI.key.models) { const o = document.createElement('option'); o.value = m; o.textContent = { 'claude-opus-5-5': 'Opus 5.5 (정확)', 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-5-5': 'Haiku 5.5 (저렴)' }[m] || m; sel.appendChild(o); }
-  $('aiRotHint').textContent = `로테이션 매일 ${AI.key.rotate_hour}:00 기준으로 날짜별 파일을 자동 선택 · 범위 최대 ${AI.key.max_window_min}분`;
+  $('aiRotHint').textContent = `로테이션 매일 ${AI.key.rotate_hour}:00 기준으로 날짜별 파일을 자동 선택`;
+  $('aiWinHint').textContent = `IP 없이 보면 최대 ${AI.key.max_window_min / 60}시간, IP 를 넣으면 최대 ${AI.key.max_window_ip_hours}시간`;
   aiBudget(AI.key.budget);
 }
 $('aiKeyBtn').onclick = () => { $('aiKeyRow').hidden = !$('aiKeyRow').hidden; };
@@ -665,9 +666,10 @@ $('aiCollect').onclick = async () => {
   try {
     const j = await api('api.php?a=ai_collect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     AI.parts = j.parts;
-    const rows = j.parts.map(p => `<tr class="${p.missing ? 'off' : ''}"><td><span class="s${p.server % 9}">S${p.server}</span></td><td>${esc(p.file)}</td><td class="num">${p.missing ? '없음' : p.lines + '줄'}</td><td class="num">${p.missing ? '' : fmtSize(p.bytes)}</td><td>${p.capped ? '<span class="bdg vpn">상한에서 끊김</span>' : ''}${p.trimmed ? '<span class="bdg vpn">용량 상한으로 잘림</span>' : ''}</td><td><a href="#" data-k="${esc(p.file)}|${p.server}" class="peek">${p.lines ? '내용 보기' : ''}</a></td></tr>`).join('');
+    const rows = j.parts.map(p => `<tr class="${p.missing || p.skipped ? 'off' : ''}"><td><span class="s${p.server % 9}">S${p.server}</span></td><td>${esc(p.file)}</td><td class="num">${p.missing ? '없음' : p.skipped ? esc(p.skipped) : p.lines + '줄'}</td><td class="num">${p.missing ? '' : fmtSize(p.bytes)}</td><td>${p.capped ? '<span class="bdg vpn">상한에서 끊김</span>' : ''}${p.trimmed ? '<span class="bdg vpn">용량 상한으로 잘림</span>' : ''}</td><td><a href="#" data-k="${esc(p.file)}|${p.server}" class="peek">${p.lines ? '내용 보기' : ''}</a></td></tr>`).join('');
     $('aiParts').innerHTML = `<table><tr><th>서버</th><th>파일</th><th>줄</th><th>크기</th><th></th><th></th></tr>${rows}</table>
       <div class="hint">보낼 자료 합계 ${fmtSize(j.total_bytes)} ≈ ${j.approx_tokens.toLocaleString()} 토큰 · 예상 비용 ${Object.entries(j.estimate).map(([m, e]) => `${m.replace('claude-', '').replace(/-/g, ' ')} ≈ ₩${e.krw}${e.ok ? '' : ' (상한 초과)'}`).join(' / ')}${j.errors.length ? ' · 오류: ' + esc(j.errors.join(' / ')) : ''}</div><pre id="aiPeek" hidden></pre>`;
+    if (!j.parts.some(p => p.kind === 'php' && p.lines)) { const sk = j.parts.filter(p => p.skipped); if (sk.length) aiStatus(`php_errors 는 IP 요청이 없는 서버(${[...new Set(sk.map(p => 'S' + p.server))].join(', ')})에서는 건너뛰었습니다`); }
     for (const o of $('aiModel').options) { const e = j.estimate[o.value]; o.disabled = e ? !e.ok : false; o.textContent = o.textContent.replace(/ — .*$/, '') + (e ? ` — ≈₩${e.krw}` : ''); }
     if ($('aiModel').selectedOptions[0]?.disabled) { const ok = [...$('aiModel').options].find(o => !o.disabled); if (ok) $('aiModel').value = ok.value; }
     $('aiParts').querySelectorAll('.peek').forEach(a => a.onclick = e => { e.preventDefault(); const [f, s] = a.dataset.k.split('|'); const p = AI.parts.find(x => x.file === f && x.server === +s); const pre = $('aiPeek'); pre.hidden = !pre.hidden || pre.dataset.k !== a.dataset.k ? false : true; pre.dataset.k = a.dataset.k; pre.textContent = p.text; });

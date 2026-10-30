@@ -17,7 +17,9 @@
  *   - Anthropic 호출은 curl 직접(운영 서버에 composer vendor 를 두지 않는 규칙).
  */
 
-const ENVLOG_AI_MAX_WINDOW_SEC = 2 * 3600;      // 시간 범위 상한
+const ENVLOG_AI_MAX_WINDOW_SEC = 2 * 3600;      // 시간 범위 상한 (IP 없이 전체를 볼 때)
+const ENVLOG_AI_MAX_WINDOW_IP_HOURS = 72;       // IP 가 있을 때의 상한(시간) — grep 으로 그 IP 줄만 뽑으므로 길어도 양이 제한된다. config envlog_ai_max_window_ip_hours
+const ENVLOG_AI_PHP_PAD_SEC = 120;              // IP 모드에서 php_errors 를 읽을 범위: 그 IP 의 첫~마지막 요청 ± 이 초
 const ENVLOG_AI_MAX_ACCESS_LINES = 400;         // access_log 서버·파일당 줄 상한
 const ENVLOG_AI_MAX_PHP_LINES = 300;            // php_errors 서버·파일당 줄 상한
 const ENVLOG_AI_MAX_BYTES = 160 * 1024;         // 전체 자료 바이트 상한 (대략 4~5만 토큰)
@@ -127,7 +129,9 @@ function envlog_ai_handle($action, $method, $user, $uid) {
             }
             [$k, $src] = envlog_ai_key_get($user);
             echo json_encode(['has' => $k !== '', 'source' => $src, 'models' => ENVLOG_AI_MODELS, 'rotate_hour' => envlog_ai_rotate_hour(),
-                              'max_window_min' => ENVLOG_AI_MAX_WINDOW_SEC / 60, 'budget' => envlog_ai_budget_state()], JSON_UNESCAPED_UNICODE);
+                              'max_window_min' => ENVLOG_AI_MAX_WINDOW_SEC / 60,
+                              'max_window_ip_hours' => (float)((require __DIR__ . '/../config.php')['envlog_ai_max_window_ip_hours'] ?? ENVLOG_AI_MAX_WINDOW_IP_HOURS),
+                              'budget' => envlog_ai_budget_state()], JSON_UNESCAPED_UNICODE);
             return;
 
         case 'ai_budget':
@@ -173,38 +177,60 @@ function envlog_ai_collect($uid, array $in) {
     if (($from === null) !== ($to === null)) return ['error' => '시작·끝 시간을 둘 다 넣으세요'];
     if ($from !== null) {
         if ($to <= $from) return ['error' => '끝 시간이 시작 시간보다 뒤여야 합니다'];
-        if ($to - $from > ENVLOG_AI_MAX_WINDOW_SEC) return ['error' => '시간 범위는 최대 ' . (ENVLOG_AI_MAX_WINDOW_SEC / 60) . '분까지입니다 — 자료가 너무 커집니다'];
+        $cfg = require __DIR__ . '/../config.php';
+        $ipHours = (float)($cfg['envlog_ai_max_window_ip_hours'] ?? ENVLOG_AI_MAX_WINDOW_IP_HOURS);
+        if ($ip === '' && $to - $from > ENVLOG_AI_MAX_WINDOW_SEC) return ['error' => 'IP 없이 볼 때 시간 범위는 최대 ' . (ENVLOG_AI_MAX_WINDOW_SEC / 60) . '분까지입니다 — IP 를 넣으면 최대 ' . $ipHours . '시간'];
+        if ($ip !== '' && $to - $from > $ipHours * 3600) return ['error' => 'IP 로 볼 때 시간 범위는 최대 ' . $ipHours . '시간까지입니다'];
     }
-    // 시간 범위가 없으면(IP 만) current 파일만 본다
-    $files = [];
-    if ($phpBase !== '') foreach ($from !== null ? envlog_ai_files_for($phpBase, $from, $to) : [$phpBase] as $f) $files[] = ['kind' => 'php', 'name' => $f];
-    if ($accessBase !== '') foreach ($from !== null ? envlog_ai_files_for($accessBase, $from, $to) : [$accessBase] as $f) $files[] = ['kind' => 'access', 'name' => $f];
-    if (!$files) return ['error' => '검색할 로그 파일이 없습니다 (php_errors.log / access_log 중 하나는 골라야 합니다)'];
-
-    $fromKey = $from !== null ? date('YmdHis', $from) : '';
-    $toKey = $to !== null ? date('YmdHis', $to) : '';
-    $parts = []; $total = 0; $errors = [];
+    if ($phpBase === '' && $accessBase === '') return ['error' => '검색할 로그 파일이 없습니다 (php_errors.log / access_log 중 하나는 골라야 합니다)'];
+    $fromKey = date('YmdHis', $from); $toKey = date('YmdHis', $to);
+    $parts = []; $total = 0; $errors = []; $files = [];
+    // 한 파일 추출 → parts 에 쌓고 줄 목록을 돌려준다
+    $pull = function ($sid, $kind, $name, $fk, $tk, $ipArg) use ($uid, $dir, &$parts, &$total, &$errors, &$files) {
+        $max = $kind === 'php' ? ENVLOG_AI_MAX_PHP_LINES : ENVLOG_AI_MAX_ACCESS_LINES;
+        $files[$name] = true;
+        [$out, $code, $err] = envlog_call($uid, 'GET', '/file/extract', ['server' => $sid, 'path' => $dir . '/' . $name, 'from' => $fk, 'to' => $tk, 'ip' => $ipArg, 'max' => $max], null, 320);
+        $j = $out !== null ? json_decode($out, true) : null;
+        if ($j === null || isset($j['error'])) {
+            $msg = $j['error'] ?? ($err ?: '응답 없음');
+            $missing = (bool)preg_match('/파일이 없습니다/u', $msg);
+            if (!$missing) $errors[] = "S{$sid} {$name}: {$msg}";
+            $parts[] = ['server' => $sid, 'file' => $name, 'kind' => $kind, 'lines' => 0, 'bytes' => 0, 'capped' => false, 'missing' => $missing, 'text' => ''];
+            return [];
+        }
+        $text = implode("\n", $j['lines']);
+        $parts[] = ['server' => $sid, 'file' => $name, 'kind' => $kind, 'lines' => count($j['lines']), 'bytes' => strlen($text),
+                    'capped' => !empty($j['capped']), 'missing' => false, 'text' => $text];
+        $total += strlen($text);
+        return $j['lines'];
+    };
+    $mon = ['Jan'=>1,'Feb'=>2,'Mar'=>3,'Apr'=>4,'May'=>5,'Jun'=>6,'Jul'=>7,'Aug'=>8,'Sep'=>9,'Oct'=>10,'Nov'=>11,'Dec'=>12];
     foreach ($servers as $sid) {
-        foreach ($files as $f) {
-            $max = $f['kind'] === 'php' ? ENVLOG_AI_MAX_PHP_LINES : ENVLOG_AI_MAX_ACCESS_LINES;
-            // php 오류 로그에는 IP 가 없으므로 IP 조건을 걸지 않는다 — 시간 범위만 (IP 만 준 경우엔 최근 줄)
-            $q = ['server' => $sid, 'path' => $dir . '/' . $f['name'], 'from' => $fromKey, 'to' => $toKey,
-                  'ip' => $f['kind'] === 'access' ? $ip : '', 'max' => $max];
-            [$out, $code, $err] = envlog_call($uid, 'GET', '/file/extract', $q, null, 320);
-            $j = $out !== null ? json_decode($out, true) : null;
-            if ($j === null || isset($j['error'])) {
-                $msg = $j['error'] ?? ($err ?: '응답 없음');
-                if (!preg_match('/파일이 없습니다/u', $msg)) $errors[] = "S{$sid} {$f['name']}: {$msg}";
-                $parts[] = ['server' => $sid, 'file' => $f['name'], 'kind' => $f['kind'], 'lines' => 0, 'bytes' => 0, 'capped' => false,
-                            'missing' => (bool)preg_match('/파일이 없습니다/u', $msg), 'text' => ''];
-                continue;
+        $hitMin = null; $hitMax = null;
+        if ($accessBase !== '') {
+            foreach (envlog_ai_files_for($accessBase, $from, $to) as $name) {
+                foreach ($pull($sid, 'access', $name, $fromKey, $toKey, $ip) as $ln) {
+                    // access 줄의 시각 → 그 IP 의 활동 구간 (php_errors 범위를 좁히는 데 쓴다)
+                    if ($ip !== '' && preg_match('#\[(\d\d)/([A-Za-z]{3})/(\d{4}):(\d\d):(\d\d):(\d\d)#', $ln, $m) && isset($mon[$m[2]])) {
+                        $t = mktime((int)$m[4], (int)$m[5], (int)$m[6], $mon[$m[2]], (int)$m[1], (int)$m[3]);
+                        $hitMin = $hitMin === null ? $t : min($hitMin, $t); $hitMax = $hitMax === null ? $t : max($hitMax, $t);
+                    }
+                }
             }
-            $text = implode("\n", $j['lines']);
-            $parts[] = ['server' => $sid, 'file' => $f['name'], 'kind' => $f['kind'], 'lines' => count($j['lines']),
-                        'bytes' => strlen($text), 'capped' => !empty($j['capped']), 'missing' => false, 'text' => $text];
-            $total += strlen($text);
+        }
+        if ($phpBase !== '') {
+            $pf = $from; $pt = $to;
+            if ($ip !== '' && $accessBase !== '') {
+                if ($hitMin === null) {   // 그 IP 의 요청이 없는 서버 — php_errors 는 볼 이유가 없다
+                    $parts[] = ['server' => $sid, 'file' => $phpBase, 'kind' => 'php', 'lines' => 0, 'bytes' => 0, 'capped' => false, 'missing' => false, 'skipped' => 'IP 요청 없음', 'text' => ''];
+                    continue;
+                }
+                $pf = max($from, $hitMin - ENVLOG_AI_PHP_PAD_SEC); $pt = min($to, $hitMax + ENVLOG_AI_PHP_PAD_SEC);   // 첫~마지막 요청 ± 2분
+            }
+            foreach (envlog_ai_files_for($phpBase, $pf, $pt) as $name) $pull($sid, 'php', $name, date('YmdHis', $pf), date('YmdHis', $pt), '');
         }
     }
+    $files = array_keys($files);
     // 전체 상한: 넘치면 큰 조각부터 뒤를 잘라 맞춘다 (잘린 조각은 trimmed 표시)
     if ($total > ENVLOG_AI_MAX_BYTES) {
         usort($parts, fn($a, $b) => $b['bytes'] <=> $a['bytes']);
@@ -226,7 +252,7 @@ function envlog_ai_collect($uid, array $in) {
     $lim = envlog_ai_limits(); $est = [];
     foreach (ENVLOG_AI_MODELS as $m) { $usd = envlog_ai_estimate_usd($m, $approx); $est[$m] = ['usd' => round($usd, 4), 'krw' => (int)ceil($usd * $lim['usd_krw']), 'ok' => $usd * $lim['usd_krw'] <= $lim['per_request_krw']]; }
     return ['parts' => $parts, 'total_bytes' => $total, 'approx_tokens' => $approx, 'estimate' => $est, 'per_request_krw' => $lim['per_request_krw'], 'errors' => $errors,
-            'files' => array_column($files, 'name'), 'from' => $from ? date('Y-m-d H:i', $from) : '', 'to' => $to ? date('Y-m-d H:i', $to) : '', 'ip' => $ip];
+            'files' => $files, 'from' => date('Y-m-d H:i', $from), 'to' => date('Y-m-d H:i', $to), 'ip' => $ip];
 }
 
 function envlog_ai_ask($user, array $in) {
