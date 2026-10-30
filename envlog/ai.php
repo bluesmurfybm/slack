@@ -164,7 +164,7 @@ function envlog_ai_collect($uid, array $in) {
     $ip = trim((string)($in['ip'] ?? ''));
     $from = envlog_ai_ts($in['from'] ?? ''); $to = envlog_ai_ts($in['to'] ?? '');
     if (!$servers || $dir === '') return ['error' => '서버와 로그 폴더가 필요합니다'];
-    if ($ip === '' && ($from === null || $to === null)) return ['error' => 'IP 또는 시간 범위 중 하나는 꼭 넣어야 합니다'];
+    if ($from === null || $to === null) return ['error' => '시간 범위는 필수입니다 (최대 ' . (ENVLOG_AI_MAX_WINDOW_SEC / 60) . '분). IP 는 선택'];
     if ($ip !== '' && !preg_match('/^[0-9A-Za-z.:_\-]{3,64}$/', $ip)) return ['error' => 'IP 형식이 아닙니다'];
     if (($from === null) !== ($to === null)) return ['error' => '시작·끝 시간을 둘 다 넣으세요'];
     if ($from !== null) {
@@ -232,7 +232,7 @@ function envlog_ai_ask($user, array $in) {
     $prompt = trim((string)($in['prompt'] ?? ''));
     $ctx = (array)($in['context'] ?? []);
     if ($prompt === '') { http_response_code(400); echo json_encode(['error' => '질문을 입력하세요'], JSON_UNESCAPED_UNICODE); return; }
-    if (!$ctx) { http_response_code(400); echo json_encode(['error' => '먼저 "자료 모으기" 로 로그를 모으세요'], JSON_UNESCAPED_UNICODE); return; }
+    if (!$ctx) { http_response_code(400); echo json_encode(['error' => '먼저 "조회 대상 파일 확인" 으로 로그를 모으세요'], JSON_UNESCAPED_UNICODE); return; }
 
     $doc = '';
     foreach ($ctx as $c) {

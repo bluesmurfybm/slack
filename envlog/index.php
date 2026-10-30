@@ -97,29 +97,28 @@ $__bwCurrent = 'envlog';
       <div id="aibox">
         <div class="aihead"><button id="aiToggle" type="button">🤖 AI 분석 (Claude) ▾</button>
           <span class="hint">IP 또는 시간 범위로 php_errors·access_log 를 추려 질문합니다 · 자료는 보내기 전에 확인할 수 있습니다</span>
-          <span class="spacer"></span><span id="aiKeyState" class="bdg no">키 확인 중</span><button id="aiKeyBtn" type="button">API 키</button></div>
+          <span class="spacer"></span><span id="aiKeyState" class="bdg no">키 확인 중</span><span id="aiKeyHint" class="hint"></span><button id="aiKeyBtn" type="button">API 키</button></div>
         <div class="aibody">
           <div id="aiKeyRow" class="airow keyrow" hidden>
             <div id="aiKeyNote" class="hint" style="flex-basis:100%"></div>
             <label>개인 키 (선택)</label><input id="aiKeyIn" type="password" placeholder="sk-ant-… (비워 두면 공용 키 사용)" autocomplete="new-password" style="flex:1"><button id="aiKeySave" type="button">저장</button><button id="aiKeyClose" type="button">닫기</button>
           </div>
           <div class="airow">
-            <label>IP</label><input id="aiIp" placeholder="예) 203.0.113.10 (선택)" size="18" autocomplete="off">
-            <label>시간</label><input id="aiFrom" type="datetime-local" step="60"><span>~</span><input id="aiTo" type="datetime-local" step="60">
+            <label>시간 <b style="color:#b91c1c">*</b></label><input id="aiFrom" type="datetime-local" step="60" required><span>~</span><input id="aiTo" type="datetime-local" step="60" required>
             <select id="aiWin" title="끝 시각 기준 빠른 범위"><option value="">빠른 범위</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option></select>
-            <label class="chk" title="시간 범위 없이 IP 로만 현재 파일을 검색"><input type="checkbox" id="aiNoTime"> 시간 없이(IP 만)</label>
+            <label>IP</label><input id="aiIp" placeholder="선택 — 특정 사용자만 볼 때" size="18" autocomplete="off">
           </div>
           <div class="airow">
             <label>access_log</label><select id="aiAccess" title="대학마다 이름이 달라 가장 큰 것을 기본으로 고릅니다"></select>
             <label>php_errors</label><select id="aiPhp"></select>
-            <button id="aiCollect" type="button">자료 모으기</button>
+            <button id="aiCollect" type="button">조회 대상 파일 확인</button>
             <span id="aiRotHint" class="hint"></span>
           </div>
           <div id="aiParts" class="aiparts"></div>
-          <div class="airow">
+          <div class="askgrid">
             <textarea id="aiPrompt" rows="2" placeholder="질문 — 예) 이 IP 사용자가 퀴즈 응시 중 겪은 문제와 원인을 찾아줘  (Ctrl+Enter 로 보내기)"></textarea>
-            <select id="aiModel" title="모델"></select>
             <button id="aiAsk" class="primary" type="button" disabled>질문</button>
+            <div class="modelrow"><label>모델</label><select id="aiModel" title="모델"></select></div>
           </div>
           <div id="aiMsg" class="hint"></div>
           <pre id="aiAnswer" hidden></pre>

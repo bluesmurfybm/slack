@@ -619,6 +619,7 @@ async function aiLoadKey() {
   // 공용 키가 있으면 개인 키는 선택 사항 — 단추 이름으로 알린다
   $('aiKeyBtn').textContent = AI.key.source === 'config' ? '개인 키(선택)' : (AI.key.source === 'user' ? '개인 키 변경' : 'API 키 등록');
   $('aiKeyBtn').title = AI.key.source === 'config' ? '회사 공용 키가 설정되어 있습니다. 내 계정 비용으로 따로 쓰고 싶을 때만 개인 키를 등록하세요' : '';
+  $('aiKeyHint').textContent = AI.key.source === 'config' ? '개인 키로 쓰려면 →' : AI.key.source === 'user' ? '' : '키를 등록하세요 →';
   const sel = $('aiModel'); if (!sel.options.length) for (const m of AI.key.models) { const o = document.createElement('option'); o.value = m; o.textContent = { 'claude-opus-5-5': 'Opus 5.5 (정확)', 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-5-5': 'Haiku 5.5 (저렴)' }[m] || m; sel.appendChild(o); }
   $('aiRotHint').textContent = `로테이션 매일 ${AI.key.rotate_hour}:00 기준으로 날짜별 파일을 자동 선택 · 범위 최대 ${AI.key.max_window_min}분`;
   aiBudget(AI.key.budget);
@@ -650,8 +651,8 @@ $('aiCollect').onclick = async () => {
   if (!S.servers.length) { aiStatus('먼저 대학에 접속하세요', true); return; }
   const sids = S.servers.filter(s => S.selected.has(s.id)).map(s => s.id);
   if (!sids.length) { aiStatus('왼쪽에서 서버를 선택하세요', true); return; }
+  if (!$('aiFrom').value || !$('aiTo').value) { aiStatus('시간 범위는 필수입니다 (최대 2시간)', true); $('aiFrom').focus(); return; }
   const body = { servers: sids, dir: S.logDir, access_base: $('aiAccess').value, php_base: $('aiPhp').value, ip: $('aiIp').value.trim(), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' ') };
-  if ($('aiNoTime').checked) { body.from = ''; body.to = ''; }
   $('aiCollect').disabled = true; aiStatus('서버에서 로그를 추리는 중... (IP grep 은 파일 크기만큼 걸립니다)'); $('aiParts').innerHTML = ''; AI.parts = null; $('aiAsk').disabled = true;
   try {
     const j = await api('api.php?a=ai_collect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -671,10 +672,10 @@ $('aiCollect').onclick = async () => {
 $('aiAsk').onclick = async () => {
   const prompt = $('aiPrompt').value.trim();
   if (!prompt) { aiStatus('질문을 입력하세요', true); $('aiPrompt').focus(); return; }
-  if (!AI.parts) { aiStatus('먼저 "자료 모으기" 를 누르세요', true); return; }
+  if (!AI.parts) { aiStatus('먼저 "조회 대상 파일 확인" 을 누르세요', true); return; }
   if (!(AI.key && AI.key.has)) { aiStatus('Anthropic API 키가 없습니다 — "API 키" 로 등록하세요', true); return; }
   const body = { prompt, model: $('aiModel').value, context: AI.parts.filter(p => p.text).map(p => ({ server: p.server, file: p.file, text: p.text })),
-                 ip: $('aiIp').value.trim(), from: $('aiNoTime').checked ? '' : $('aiFrom').value.replace('T', ' '), to: $('aiNoTime').checked ? '' : $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
+                 ip: $('aiIp').value.trim(), from: $('aiFrom').value.replace('T', ' '), to: $('aiTo').value.replace('T', ' '), school: S.school ? S.school.name : '' };
   const out = $('aiAnswer'); out.textContent = ''; out.hidden = false; $('aiAsk').disabled = true; AI.busy = true; aiStatus('Claude 에 보내는 중...');
   try {
     const r = await fetch('api.php?a=ai_ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
