@@ -15,6 +15,7 @@ sitehub_db();   // 테이블이 없으면 만든다
 
 $canStats    = sitehub_can_stats($me);
 $canSync     = sitehub_can_sync($me);
+$canManage   = sitehub_can_manage($me);
 $pageTitle   = 'BLUMO 감시';
 $pageLede    = '유지보수 사이트 접속 감시 — 증상이 아니라 원인까지';
 $headActions = '<a class="btn-ghost sh-statlink" href="index.php">← 사이트 목록</a>'
@@ -35,7 +36,7 @@ include __DIR__ . '/views/head.php';
       <div class="viewtoggle sh-viewseg" id="monTabs" role="tablist">
         <button type="button" data-tab="board" onclick="monTab('board')">감시 현황</button>
         <button type="button" data-tab="incidents" onclick="monTab('incidents')">장애 이력</button>
-<?php if ($canStats): ?>
+<?php if ($canManage): ?>
         <button type="button" data-tab="settings" onclick="monTab('settings')">설정</button>
 <?php endif; ?>
       </div>

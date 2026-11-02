@@ -37,6 +37,7 @@ $cfg = sitehub_config();
       canSync: <?= json_encode(!empty($canSync)) ?>,
       autoSyncMin: <?= (int)($cfg['sitehub_auto_sync_min'] ?? 10) ?>,   // 화면을 연 사람이 있으면 마지막 동기화가 이 분 넘게 지났을 때 뒤에서 동기화 (0 이면 끔)
       canStats: <?= json_encode(sitehub_can_stats($me)) ?>,   // 요약 네 칸 · 통계 화면 — 지정 계정만 (API 도 403)
+      canManage: <?= json_encode(sitehub_can_manage($me)) ?>,   // BLUMO 설정·연동 — 통계를 열어도 기본 계정만 (API 도 403)
       groups: <?= json_encode(sitehub_field_groups(), JSON_UNESCAPED_UNICODE) ?>,
       subs: <?= json_encode(sitehub_sub_fields(), JSON_UNESCAPED_UNICODE) ?>,
       procFields: <?= json_encode(sitehub_procedure_fields(), JSON_UNESCAPED_UNICODE) ?>,

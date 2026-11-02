@@ -159,7 +159,7 @@ try {
         }
         if (isset($_GET['monitor_settings']) || isset($_GET['blumo'])) {
             // 웹훅 주소(채널에 아무나 글을 쓸 수 있는 값)가 실리므로 지정 계정만
-            if (!sitehub_can_stats($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 볼 수 있습니다.']); }
+            if (!sitehub_can_manage($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 볼 수 있습니다.']); }
             if (isset($_GET['blumo'])) sitehub_out(['ok' => true, 'seed' => sitehub_blumo_seed_plan($pdo), 'meta' => sitehub_blumo_meta($pdo)]);
             $cfg = blumo_cfg($pdo);
             $legacy = blumo_legacy_path();
@@ -379,7 +379,7 @@ try {
 
     // ── BLUMO 설정 · 예전 BLUMO 가져오기 — 지정 계정만 ────────────────────────────
     if (in_array($action, ['monitor_settings_save', 'monitor_pause', 'monitor_test_webhook', 'monitor_doctor', 'monitor_legacy_import'], true)) {
-        if (!sitehub_can_stats($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 바꿀 수 있습니다.']); }
+        if (!sitehub_can_manage($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 바꿀 수 있습니다.']); }
         sitehub_session_release();
         if ($action === 'monitor_settings_save') {
             $u = trim((string)($in['webhook_url'] ?? ''));
@@ -413,7 +413,7 @@ try {
     }
 
     if ($action === 'blumo_import') {
-        if (!sitehub_can_stats($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 연동은 지정된 계정만 할 수 있습니다.']); }
+        if (!sitehub_can_manage($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 연동은 지정된 계정만 할 수 있습니다.']); }
         $plan = [];
         foreach (sitehub_blumo_seed_plan($pdo) as $p) $plan[$p['blumo_id']] = $p;
         $ins = $pdo->prepare("INSERT INTO lab_site_monitors (site_id, label, url, expect, health, note, blumo_id, sort_no, created_at, updated_at, updated_by)

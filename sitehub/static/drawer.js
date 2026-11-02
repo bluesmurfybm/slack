@@ -98,7 +98,7 @@ function renderTab(s) {
   else if (tab === "method") body.innerHTML = kvSection(s, "method") + procSection(s);
   else if (tab === "history") { body.innerHTML = `<div class="d-sec"><div class="sh-synced">불러오는 중…</div></div>`; loadHistory(s); }
   else if (tab === "changes") { body.innerHTML = `<div class="d-sec"><div class="sh-synced">불러오는 중…</div></div>`; loadChanges(s); }
-  else if (tab === "monitor") { body.innerHTML = monitorSection(s); if (SH.canStats && !APP.blumoLink) loadBlumoLink().then(() => { if (APP.open.id === s.id && APP.open.tab === "monitor") refreshDrawer(); }); }
+  else if (tab === "monitor") { body.innerHTML = monitorSection(s); if (SH.canManage && !APP.blumoLink) loadBlumoLink().then(() => { if (APP.open.id === s.id && APP.open.tab === "monitor") refreshDrawer(); }); }
   else body.innerHTML = subSection(s, tab);
 }
 
@@ -300,7 +300,7 @@ function monitorSection(s) {
     : (on ? `<ul class="sh-rows"><li class="empty">감시 주소가 없습니다. ‘+ 감시 주소’로 넣으세요.</li></ul>` : "");
   const list = (on || ms.length) ? `<div class="sh-sec-head" style="margin-top:14px"><h4>감시 주소 ${ms.length ? `<span class="muted">${ms.length}</span>` : ""}</h4>
       <button type="button" class="btn-mini primary" onclick="openSubForm('monitors', ${s.id})">+ 감시 주소</button></div>${rows}` : "";
-  const sugg = SH.canStats ? seedSuggestions(s) : "";
+  const sugg = SH.canManage ? seedSuggestions(s) : "";
   const foot = `<p class="sh-mon-foot">${monBlumoLine(APP.blumo)}<br>모든 사이트의 감시 현황·장애 이력은 <a href="monitor.php">BLUMO 감시</a> 화면에서 봅니다.</p>`;
   return `<div class="d-sec">${head}${sugg}${list}${foot}</div>`;
 }

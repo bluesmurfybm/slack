@@ -279,7 +279,7 @@ function monBanner() {
   const parts = [];
   if (b.running) parts.push(`<div class="sh-mon-banner run"><b>점검 진행 중</b> <span>${Number(b.running.done || 0)} / ${Number(b.running.total || 0) || "…"}${b.running.current ? " · " + esc(b.running.current) : ""}</span><span class="muted">끝나면 자동으로 새로 그립니다</span></div>`);
   const line = monBlumoLine(b);
-  parts.push(`<div class="sh-mon-banner${/sh-mon-warn/.test(line) ? " warn" : ""}">${line}${SH.canStats && (b.paused || !b.last_auto_run || !b.webhook) ? ` <button type="button" class="btn-mini" onclick="monTab('settings')">설정</button>` : ""}</div>`);
+  parts.push(`<div class="sh-mon-banner${/sh-mon-warn/.test(line) ? " warn" : ""}">${line}${SH.canManage && (b.paused || !b.last_auto_run || !b.webhook) ? ` <button type="button" class="btn-mini" onclick="monTab('settings')">설정</button>` : ""}</div>`);
   $("monBanner").innerHTML = parts.join("");
   const ra = $("runAll");
   if (ra) { ra.disabled = !!b.running; ra.textContent = b.running ? "점검 중…" : "전체 지금 점검"; }
@@ -302,7 +302,7 @@ function monRender() {
   list.sort((a, b) => rank[monSev(a)] - rank[monSev(b)]);   // 장애·경고가 위로 (같은 단계는 원래 순서 유지)
   if (!rows.length) {
     $("monBody").innerHTML = `<ul class="list"><li class="empty"><div class="big">감시 중인 사이트가 없습니다</div>
-      사이트 상세의 <b>감시 설정</b> 탭에서 감시를 켜세요.${SH.canStats ? ` 예전 BLUMO 에 있던 31곳은 <button type="button" class="linkish" style="color:var(--cos45)" onclick="openBlumoLink()">한 번에 연결</button>할 수 있습니다.` : ""}</li></ul>`;
+      사이트 상세의 <b>감시 설정</b> 탭에서 감시를 켜세요.${SH.canManage ? ` 예전 BLUMO 에 있던 31곳은 <button type="button" class="linkish" style="color:var(--cos45)" onclick="openBlumoLink()">한 번에 연결</button>할 수 있습니다.` : ""}</li></ul>`;
     return;
   }
   $("monBody").innerHTML = list.length ? `<ul class="list sh-mlist">${list.map(monRow).join("")}</ul>`
@@ -363,7 +363,7 @@ function monWatchRun() {
 }
 
 function monTab(t) {
-  if (t === "settings" && !SH.canStats) t = "board";
+  if (t === "settings" && !SH.canManage) t = "board";
   MON.tab = t;
   document.querySelectorAll("#monTabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
   const u = new URL(location.href);
