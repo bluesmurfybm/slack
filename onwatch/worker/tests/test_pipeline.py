@@ -7,7 +7,7 @@ from pathlib import Path
 from core.config import Settings
 from engine import EngineError, Research, Usage
 from notify import Notifier
-from pipeline import Ctx, housekeeping, run_watch, tick
+from pipeline import Ctx, housekeeping, pick_model, run_watch, tick
 
 NOW = datetime(2026, 10, 22, 10, 0, 0)
 
@@ -146,15 +146,19 @@ def finding(**kw):
 class Sink:
     """알림 가짜 — php·슬랙 호출을 기록만 한다."""
 
-    def __init__(self, slack_on=True):
+    def __init__(self, slack_on=True, models=None):
         self.php, self.posts = [], []
         self.slack_on = slack_on
+        self.models = models
 
     def php_runner(self, args, stdin=""):
         if args[0] == "onwatch/bin/settings.php":
             if self.slack_on is None:
                 raise RuntimeError("php 없음")
-            return json.dumps({"slack_enabled": self.slack_on})
+            d = {"slack_enabled": self.slack_on}
+            if self.models is not None:
+                d["models"] = self.models
+            return json.dumps(d)
         # 포털 알림은 --json-file 로 넘어온다 — 지워지기 전에 읽어 둔다
         payload = json.loads(Path(args[2]).read_text(encoding="utf-8")) if args[0] == "dev/push_cli.php" else stdin
         self.php.append((args[0], payload))
@@ -168,7 +172,10 @@ class Sink:
 def ctx(store, engine, sink, **settings_kw):
     s = Settings(_env_file=None, slack_webhook="https://hooks.slack.com/services/T/B/x", portal_url="https://iw/",
                  **settings_kw)
-    return Ctx(settings=s, store=store, engine_factory=lambda _s: engine,
+    def factory(_s, model):
+        engine.picked = model
+        return engine
+    return Ctx(settings=s, store=store, engine_factory=factory,
                notifier=Notifier(s, php_runner=sink.php_runner, http_post=sink.post), now=lambda: NOW)
 
 
@@ -313,3 +320,29 @@ def test_unreadable_slack_switch_counts_as_off():
     run_watch(ctx(store, FakeEngine({"summary": "", "baseline_hint": "", "findings": [finding()]}), sink),
               store.watches[7], trigger="schedule")
     assert sink.posts == []
+
+
+def test_watch_model_is_used_when_allowed():
+    store, sink = FakeStore([watch(model="claude-haiku-5-5")]), Sink(models=["claude-sonnet-5-5", "claude-haiku-5-5"])
+    eng = FakeEngine()
+    run_watch(ctx(store, eng, sink), store.watches[7], trigger="schedule")
+    assert eng.picked == "claude-haiku-5-5"
+
+
+def test_pick_model_falls_back_in_order():
+    allowed = ["claude-sonnet-5-5", "claude-haiku-5-5"]
+    # 모델을 고르기 전의 감시 → 배치 기본값
+    assert pick_model(watch(), "claude-sonnet-5-5", allowed) == "claude-sonnet-5-5"
+    # 관리자가 뺀 모델 → 배치 기본값, 그것도 빠졌으면 목록의 첫 모델
+    assert pick_model(watch(model="claude-opus-5-5"), "claude-haiku-5-5", allowed) == "claude-haiku-5-5"
+    assert pick_model(watch(model="claude-opus-5-5"), "claude-opus-5-5", allowed) == "claude-sonnet-5-5"
+    # 목록을 읽지 못하면 막지 않는다
+    assert pick_model(watch(model="claude-opus-5-5"), "claude-sonnet-5-5", None) == "claude-opus-5-5"
+    assert pick_model(watch(model=None), "claude-sonnet-5-5", None) == "claude-sonnet-5-5"
+
+
+def test_unreadable_admin_settings_does_not_block_model():
+    store, sink = FakeStore([watch(model="claude-opus-5-5")]), Sink(slack_on=None)
+    eng = FakeEngine()
+    run_watch(ctx(store, eng, sink), store.watches[7], trigger="schedule")
+    assert eng.picked == "claude-opus-5-5"

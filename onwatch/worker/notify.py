@@ -39,8 +39,8 @@ class Notifier:
         self.settings = settings
         self._php = php_runner or self._run_php
         self._post = http_post or requests.post
-        self._slack_on: bool | None = None
-        self._slack_at = 0.0
+        self._admin: dict | None = None
+        self._admin_at = 0.0
 
     # ------------------------------------------------------------ 바탕
     def _run_php(self, args: list[str], stdin: str = "") -> str:
@@ -73,19 +73,29 @@ class Notifier:
             if path:
                 Path(path).unlink(missing_ok=True)
 
+    def admin_settings(self) -> dict:
+        """화면 쪽 관리자 설정(onwatch/bin/settings.php). 읽지 못하면 빈 dict.
+        1분 동안 기억한다 — --serve 로 오래 떠 있어도 설정을 바꾸면 곧 따른다."""
+        now = time.monotonic()
+        if self._admin is None or now - self._admin_at > 60:
+            try:
+                self._admin = json.loads(self._php(["onwatch/bin/settings.php"]))
+            except Exception:
+                logger.exception("관리자 설정(bin/settings.php)을 읽지 못했다")
+                self._admin = {}
+            self._admin_at = now
+        return self._admin
+
     def slack_enabled(self) -> bool:
         """관리자의 슬랙 전체 스위치(onwatch/inc/settings.php 의 slack_enabled).
-        1분 동안 기억한다 — --serve 로 오래 떠 있어도 설정을 바꾸면 곧 따른다.
         읽지 못하면 끈 것으로 본다. 끄라고 해 둔 것을 모르고 보내는 쪽이 더 나쁘다."""
-        now = time.monotonic()
-        if self._slack_on is None or now - self._slack_at > 60:
-            try:
-                self._slack_on = bool(json.loads(self._php(["onwatch/bin/settings.php"]))["slack_enabled"])
-            except Exception:
-                logger.exception("슬랙 스위치를 읽지 못해 이번에는 슬랙을 보내지 않는다")
-                self._slack_on = False
-            self._slack_at = now
-        return self._slack_on
+        return bool(self.admin_settings().get("slack_enabled", False))
+
+    def allowed_models(self) -> list[str] | None:
+        """관리자가 허용한 모델(inc/settings.php 의 models). 읽지 못하면 None — 막지 않는다.
+        슬랙과 반대로 두는 까닭: 목록을 모른다고 감시를 멈추는 쪽이 비용 몇 센트보다 더 나쁘다."""
+        models = self.admin_settings().get("models")
+        return [str(m) for m in models] if isinstance(models, list) else None
 
     def webhook_for(self, w: dict) -> str | None:
         if not w.get("notify_slack") or not self.slack_enabled():

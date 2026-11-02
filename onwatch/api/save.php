@@ -3,7 +3,7 @@
  * POST api/save.php — 감시 만들기 / 고치기
  * 본문: id(고칠 때), title, prompt, baseline, starts_at, ends_at, interval_min, run_time, weekday,
  *       weekdays_only, hour_from, hour_to, notify_mode, min_importance, notify_slack, slack_webhook,
- *       prefer_domains, block_domains, max_searches, monthly_budget_usd, run_now(새로 만들 때)
+ *       prefer_domains, block_domains, max_searches, monthly_budget_usd, model, run_now(새로 만들 때)
  * 응답: {ok, id, url} / 검사 실패면 {ok:false, error, fields:{칸:메시지}}
  */
 require_once __DIR__ . '/_init.php';

@@ -124,13 +124,26 @@ def _skip_if_over_budget(r: _Run) -> dict | None:
     return {"watch": w["id"], "status": "budget"}
 
 
+def pick_model(w: dict, default: str, allowed: list[str] | None) -> str:
+    """이 감시를 돌릴 모델. 감시가 고른 모델 → 배치 기본값(ONWATCH_MODEL) → 허용 목록의 첫 모델.
+    고르지 않았거나(모델을 고르기 전의 감시) 관리자가 목록에서 뺀 모델이면 다음 것으로 넘어간다.
+    allowed 가 None(목록을 읽지 못함)이면 막지 않는다."""
+    chosen = str(w.get("model") or "").strip()
+    if allowed is None:
+        return chosen or default
+    for m in (chosen, default):
+        if m and m in allowed:
+            return m
+    return allowed[0] if allowed else default
+
+
 def _investigate(r: _Run) -> dict:
     s, store, w = r.ctx.settings, r.ctx.store, r.w
     usage = Usage()
     engine = None
     notes = None
     try:
-        engine = r.ctx.engine_factory(s)
+        engine = r.ctx.engine_factory(s, pick_model(w, s.model, r.ctx.notifier.allowed_models()))
         context = prompts.context_block(w, now=r.started, last_ok=store.last_ok_run(w["id"]),
                                         prior=store.prior_findings(w["id"]),
                                         rejected=store.rejected_findings(w["id"]))

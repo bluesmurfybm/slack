@@ -56,19 +56,24 @@
 
 **화면(감시마다)**: 기간(최대 180일 — 끝 없는 감시는 잊힌 채 비용만 쓴다), 주기(1·3·6·12시간 / 매일 / 매주),
 실행 시각·요일·시간대·평일만, 알림 방식(새 소식만 / 매번), 알릴 최소 중요도, 슬랙으로도 보내기(선택, 기본 꺼짐 — 기본 채널 / 전용 웹훅),
-먼저 볼 출처, 보지 않을 도메인(검색 도구에 그대로 건다), 한 번의 검색 상한, 월 비용 상한.
+**AI 모델**(Opus 5.5 / Sonnet 5.5 / Haiku 5.5 — 아래 '모델 고르기'), 먼저 볼 출처, 보지 않을 도메인(검색 도구에 그대로 건다), 한 번의 검색 상한, 월 비용 상한.
 
 **서버(`onwatch/config.local.php`, git 제외)** — 기본값 덮어쓰기:
 
 ```php
 <?php return ['max_days' => 180, 'default_days' => 30, 'default_budget_usd' => 20, 'max_budget_usd' => 200,
               'default_searches' => 15, 'max_searches' => 50, 'prompt_max_chars' => 8000,
-              'slack_enabled' => true];
+              'slack_enabled' => true,
+              'models' => ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']];
 ```
 
 `slack_enabled` 는 슬랙 알림 전체 스위치다. `false` 면 화면에서 슬랙 칸이 사라지고 배치도 보내지 않는다.
 감시마다 저장된 선택은 지우지 않아 다시 켜면 그대로 살아난다. 배치는 `bin/settings.php` 로 이 값을
 읽는다(1분마다 다시 읽음, 읽지 못하면 끈 것으로 본다) — 스위치의 원본은 이 파일 하나다.
+
+`models` 는 감시마다 고를 수 있는 모델이다. 사내 API 비용을 아끼려면 줄인다(예: Opus 를 빼기).
+빠진 모델을 이미 고른 감시는 배치가 `ONWATCH_MODEL` 로, 그것도 빠졌으면 목록의 첫 모델로 돌린다.
+배치는 이 목록도 `bin/settings.php` 로 읽는다(읽지 못하면 막지 않는다).
 
 **배치(`worker/.env` 또는 systemd `Environment=`)** — `worker/.env.example` 참고.
 
@@ -76,13 +81,29 @@
 |---|---|---|
 | `ONWATCH_ENGINE` | `auto` | 키가 있으면 `anthropic`, 없으면 `cli`(서버에 로그인된 claude CLI) |
 | `ANTHROPIC_API_KEY` | — | API 를 쓰면 검색 횟수 상한·제외 도메인이 도구에 직접 걸리고 비용이 정확하다 |
-| `ONWATCH_MODEL` | `claude-opus-5-5` | 조사·판정 모두 |
+| `ONWATCH_MODEL` | `claude-opus-5-5` | 모델을 고르지 않은 감시(003 이전에 만든 것)와 허용 목록에서 빠진 모델의 대신. 조사·판정 모두 |
 | `ONWATCH_RESEARCH_EFFORT` / `ONWATCH_JUDGE_EFFORT` | `high` / `medium` | |
 | `ONWATCH_MONTHLY_BUDGET_USD` | `100` | OnWatch 전체 월 상한. 넘으면 모든 감시를 건너뛴다 |
 | `ONWATCH_SLACK_WEBHOOK_URL` | — | 슬랙 기본 채널 |
 | `PORTAL_URL` | `/` | 슬랙 메시지의 '자세히 보기' 링크 앞부분(절대주소로) |
 | `PHP_BIN` | `php` | 포털 알림 다리(`dev/push_cli.php`)·DB 설정 읽기 |
 | `DB_*` | — | 비우면 포털 `config.php` 를 php CLI 로 읽는다 |
+
+### 모델 고르기
+
+감시마다 등록 화면 4번에서 고른다. 새 감시는 지시문·검색 상한을 보고 **권장** 모델로 시작하고,
+사람이 고르기 전까지는 권장을 따라간다(`ow_recommend_model()`, 결정은 등록자가 한다).
+
+| 권장 | 언제 |
+|---|---|
+| Opus 5.5 (정밀) | 검색 25회 이상 · 지시문 2,000자 이상 · 보안/법령/계약처럼 틀리면 곤란한 주제 |
+| Haiku 5.5 (절약) | 검색 5회 이하이면서 지시문 600자 이하 — 한두 곳 확인 |
+| Sonnet 5.5 (균형) | 그 밖 |
+
+추정 비용(검색 15회 상한, 한 번): Opus $0.13~0.65 · Sonnet $0.09~0.40 · Haiku $0.05~0.16.
+Haiku 는 웹 검색 비용($0.01/회)이 대부분이다. Haiku 5.5 는 동적 필터링 웹 도구를 못 써서 기본형
+(`web_search_20250305`·`web_fetch_20250910`)을 걸고, 거부 시 서버 대체 모델(fallbacks)도 없다(`engine.py`).
+모델 단가는 `inc/settings.php` 의 `OW_MODELS` 와 `worker/core/config.py` 의 `PRICES` 두 곳에 있다 — 함께 고친다.
 
 ### 엔진을 무엇으로
 
@@ -148,7 +169,7 @@ claude CLI 는 키 없이 돌릴 수 있지만(MoodleUp? 과 같은 계정) 검�
 
 ```bash
 php onwatch/tests/schedule_test.php                    # 일정·검증·마크다운 30건(DB 없음)
-cd onwatch/worker && .venv/Scripts/python -m pytest -q # 39건(DB·API·php 를 부르지 않음)
+cd onwatch/worker && .venv/Scripts/python -m pytest -q # 47건(DB·API·php 를 부르지 않음)
 .venv/Scripts/python -m ruff check .
 ```
 

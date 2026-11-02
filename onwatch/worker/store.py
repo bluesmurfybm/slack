@@ -12,7 +12,7 @@ import pymysql.cursors
 
 WATCH_COLS = """id, title, prompt, baseline, owner_id, status, starts_at, ends_at, interval_min, run_time,
     weekday, weekdays_only, hour_from, hour_to, notify_mode, min_importance, notify_slack, slack_webhook_enc,
-    prefer_domains, block_domains, max_searches, monthly_budget_usd, next_run_at, last_run_at, last_change_at,
+    prefer_domains, block_domains, max_searches, monthly_budget_usd, model, next_run_at, last_run_at, last_change_at,
     run_requested_at, run_requested_by, fail_streak, end_notice_sent"""
 
 
@@ -56,6 +56,11 @@ class Store:
         if not self._one("SHOW TABLES LIKE 'ow_watch'"):
             raise SchemaMissingError(
                 "ow_watch 표가 없습니다. 웹에서 /onwatch/ 를 한 번 열거나 php onwatch/bin/migrate.php 를 실행하세요")
+        # 코드가 스키마보다 먼저 올라간 경우 — 매 tick SELECT 가 깨지는 대신 이유를 알리고 멈춘다
+        if not self._one("SHOW COLUMNS FROM ow_watch LIKE 'model'"):
+            raise SchemaMissingError(
+                "ow_watch.model 열이 없습니다(sql/003). "
+                "웹에서 /onwatch/ 를 한 번 열거나 php onwatch/bin/migrate.php 를 실행하세요")
 
     # ---------------------------------------------------------------- 고르기
     def get_watch(self, watch_id: int) -> dict | None:
