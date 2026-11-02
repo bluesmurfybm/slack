@@ -105,6 +105,12 @@ bs_layout_head(
   <!-- ============ 상태 탭 ============ -->
   <div class="ba-listbar">
     <div class="ba-statabs" id="ba-i-tabs" role="tablist" aria-label="아이디어 상태"></div>
+    <span class="ba-spacer"></span>
+    <!-- 보기 방식 — 카드는 훑어보기, 리스트는 많은 건을 한눈에 견주기. 고른 것은 브라우저에 기억한다 -->
+    <div class="ba-bd__toggle" id="ba-i-view" role="group" aria-label="보기 방식">
+      <button type="button" class="ba-btn ba-btn--sm is-on" data-view="card" aria-pressed="true">카드</button>
+      <button type="button" class="ba-btn ba-btn--sm" data-view="list" aria-pressed="false">리스트</button>
+    </div>
   </div>
 
   <!-- ============ 카드 그리드 ============ -->

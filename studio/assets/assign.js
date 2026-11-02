@@ -6927,6 +6927,70 @@
       '</article>';
     }
 
+    // ---- 보기 방식 (카드 / 리스트) — 고른 것은 이 브라우저에 기억한다 ----
+    var VIEW_KEY = 'bs.idea.view';
+    var VIEW = 'card';
+    var LAST = null;
+    try { if (localStorage.getItem(VIEW_KEY) === 'list') VIEW = 'list'; } catch (e) { /* 기억 못 하면 카드 */ }
+
+    /** 리스트 한 줄. 카드와 같은 정보를 칸으로 — 많은 건을 위아래로 견주기 좋게. */
+    function row(r) {
+      var t = '';
+      if (r.is_new) t += '<span class="ba-badge ba-badge--new" title="아직 열어 보지 않은 새 소식이 있습니다">NEW</span> ';
+      t += '<a href="idea_view.php?id=' + r.id + '">' + esc(r.title) + '</a>';
+      if (r.duplicate_of) t += ' <span class="ba-badge ba-badge--stale" title="비슷한 아이디어로 묶였습니다">묶임</span>';
+      if (r.deleted) t += ' <span class="ba-badge ba-badge--dropped">삭제됨</span>';
+      var doms = (r.domains || []).map(function (d) { return d.name; }).join(', ');
+      var rt = r.rating || {};
+      var score = rt.shown
+        ? '<b>' + rt.value.toFixed(1) + '</b> · <b>' + rt.feasibility.toFixed(1) + '</b>'
+        : '<span class="ba-dim" title="' + (rt.min_raters || 3) + '명부터 평균 공개">–</span>';
+      return '<tr class="' + (r.deleted ? 'is-deleted' : '') + (r.is_new ? ' is-new' : '') + '">' +
+        '<td class="ba-code">' + esc(r.code) + '</td>' +
+        '<td class="ba-name">' + t + (doms ? '<div class="ba-idea-row__doms">' + esc(doms) + '</div>' : '') + '</td>' +
+        '<td>' + esc(r.category_label || '-') + '</td>' +
+        '<td><span class="ba-badge ba-badge--idea-' + esc(r.status) + '">' + esc(r.status_label) + '</span></td>' +
+        '<td>' + esc(r.author_name || '-') + '</td>' +
+        '<td class="ba-num">' + score + '</td>' +
+        '<td class="ba-num">' + (rt.count || 0) + '</td>' +
+        '<td class="ba-num">' + (r.comment_count || 0) + '</td>' +
+        '<td class="ba-period-cell">' + esc((r.created_at || '').slice(0, 10)) + '</td>' +
+      '</tr>';
+    }
+
+    function paintRows() {
+      $$('#ba-i-view [data-view]').forEach(function (b) {
+        var on = b.dataset.view === VIEW;
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      var grid = $('#ba-i-grid');
+      grid.classList.toggle('is-list', VIEW === 'list');
+      if (!LAST) return;
+      var rows = LAST.rows || [];
+      if (!rows.length) {
+        grid.innerHTML = '<div class="ba-empty">아직 보이는 아이디어가 없습니다. 첫 아이디어를 올려 보세요.</div>';
+        return;
+      }
+      grid.innerHTML = VIEW === 'card' ? rows.map(card).join('') :
+        '<div class="ba-table-wrap"><table class="ba-table ba-idea-table"><thead><tr>' +
+          '<th style="width:118px">번호</th><th>제목</th><th style="width:90px">갈래</th>' +
+          '<th style="width:80px">상태</th><th style="width:90px">작성자</th>' +
+          '<th style="width:96px" class="ba-num" title="가치 · 실현 가능성 평균. ' +
+            ((rows[0].rating || {}).min_raters || 3) + '명부터 보입니다">가치 · 실현</th>' +
+          '<th style="width:56px" class="ba-num">평가</th><th style="width:64px" class="ba-num">피드백</th>' +
+          '<th style="width:96px">등록일</th>' +
+        '</tr></thead><tbody>' + rows.map(row).join('') + '</tbody></table></div>';
+    }
+
+    $('#ba-i-view').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-view]');
+      if (!b || b.dataset.view === VIEW) return;
+      VIEW = b.dataset.view;
+      try { localStorage.setItem(VIEW_KEY, VIEW); } catch (err) { /* 저장 못 해도 지금 화면은 바뀐다 */ }
+      paintRows();
+    });
+
     function render(d) {
       var counts = d.counts || {};
       var total = 0;
@@ -6937,9 +7001,8 @@
                (n === 0 && code !== '' ? ' class="is-zero"' : '') + '>' + esc(IDEA_STATUS_LABEL[code]) + '<i>' + n + '</i></button>';
       }).join('');
 
-      $('#ba-i-grid').innerHTML = d.rows.length
-        ? d.rows.map(card).join('')
-        : '<div class="ba-empty">아직 보이는 아이디어가 없습니다. 첫 아이디어를 올려 보세요.</div>';
+      LAST = d;
+      paintRows();
 
       var pager = $('#ba-i-pager');
       var html = '';
