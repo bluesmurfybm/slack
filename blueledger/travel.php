@@ -71,7 +71,7 @@ $csrf = bl_csrf_token();
 <main id="main" data-tab="dash">
   <!-- 청구서 -->
   <section class="slip" aria-label="출장여비 청구서">
-    <div class="slip-head"><h2>출장여비 청구서</h2><span class="mode" id="formMode">New</span>
+    <div class="slip-head"><h2>출장여비 청구서</h2><span class="mode" id="formMode">New</span><span class="qtag" id="queueTag" hidden></span>
       <button type="button" class="btn fresh" id="btnNew" hidden>새로 쓰기</button>
       <button type="button" class="btn mybtn" id="btnMy" aria-haspopup="dialog">My Claims<span class="cnt" id="myCount"></span></button>
       <button type="button" class="slipx" id="btnSlipClose" aria-label="이 창 닫기" title="이 창 닫기">×</button></div>
@@ -130,6 +130,8 @@ $csrf = bl_csrf_token();
           <div class="thumbs" id="th-etc"></div>
           <span></span><input id="etcNote" placeholder="기타 내역 (주차비, 숙박비 등)" style="text-align:left;grid-column:2/-1">
           <span></span><div class="hint" id="attHint" style="grid-column:2/-1">영수증은 사진(JPG·PNG) 또는 PDF로 올릴 수 있습니다.</div>
+          <!-- 청구하는 금액 — 교통비+통행료+식대+기타. 금액을 고치면 바로 바뀐다 -->
+          <span class="lab sumlab">총 합계</span><div class="moneysum num" id="moneyTotal">0원</div>
         </div>
       </fieldset>
 
@@ -142,7 +144,7 @@ $csrf = bl_csrf_token();
           <button type="button" data-v="반려" class="s-no">반려</button>
         </div>
         <div class="grid" style="margin-top:8px">
-          <label class="f"><span>승인자</span><input id="approver"></label>
+          <label class="f"><span>승인자</span><input id="approver" readonly title="승인·반려를 누르면 승인 관리자 이름이 자동으로 들어갑니다"></label>
           <label class="f"><span>승인일</span><input type="date" id="approvedAt"></label>
         </div>
       </fieldset>
@@ -155,11 +157,12 @@ $csrf = bl_csrf_token();
           <button type="button" data-v="처리완료" class="s-ok">처리완료</button>
         </div>
         <div class="grid" style="margin-top:8px">
-          <label class="f"><span>처리자</span><input id="handler"></label>
+          <label class="f"><span>총 합계</span><input id="settleTotal" class="num" readonly tabindex="-1" title="출장여비 명세의 합계와 같습니다"></label>
+          <label class="f"><span>처리자</span><input id="handler" readonly title="정산 처리자는 김지안으로 고정입니다"></label>
           <label class="f"><span>처리일시</span><input type="date" id="processedAt"></label>
           <label class="f"><span>지급방법</span>
             <select id="payMethod"><option value="">선택</option><option>계좌이체</option><option>법인카드</option><option>현금</option><option>법인카드+계좌이체</option></select></label>
-          <label class="f"><span>비고</span><input id="note"></label>
+          <label class="f full"><span>비고</span><input id="note"></label>
         </div>
       </fieldset>
       <p class="lockmsg" id="lockMsg" hidden></p>
@@ -169,6 +172,9 @@ $csrf = bl_csrf_token();
       <div class="btns">
         <button class="btn danger" id="btnDel" hidden>삭제</button>
         <button class="btn primary" id="btnSave">청구서 저장</button>
+        <!-- 관리자(승인·정산) 화면: 누르면 바로 승인(반려)하고 저장한다. '청구서 저장' 단추와 위쪽 승인 칸을 대신한다 -->
+        <button class="btn danger" id="btnReject" hidden>반려</button>
+        <button class="btn primary" id="btnApprove" hidden>승인</button>
       </div>
     </div>
   </section>
@@ -264,6 +270,28 @@ $csrf = bl_csrf_token();
 </main>
 
 <!-- 구성원 화면 전용: 본인 청구와 진행 상태. 청구서 머리의 '내 청구' 단추로 연다 -->
+<!-- 영수증 크게 보기 — 미리보기·영수증 칸을 누르면 새 탭 대신 이 창이 화면 위에 뜬다 -->
+<dialog id="rcDlg" aria-labelledby="rcDlgTitle">
+  <div class="rcdlg-head">
+    <b id="rcDlgTitle"></b><span class="hint" id="rcDlgPos"></span>
+    <a id="rcDlgOpen" target="_blank" rel="noopener">새 창으로 ↗</a>
+    <button type="button" class="rcx" id="rcDlgClose" aria-label="닫기" title="닫기 (Esc)">×</button>
+  </div>
+  <div class="rcdlg-body">
+    <button type="button" class="rcnav" id="rcPrev" aria-label="이전 영수증">‹</button>
+    <div class="rcdlg-view" id="rcDlgView"></div>
+    <button type="button" class="rcnav" id="rcNext" aria-label="다음 영수증">›</button>
+  </div>
+</dialog>
+<!-- 관리자 화면으로 들어올 때 승인 대기·정산 대기가 있으면 뜬다 -->
+<dialog id="pendDlg" aria-labelledby="pendDlgTitle">
+  <div class="dh" id="pendDlgTitle">처리할 청구가 있습니다</div>
+  <div class="db">
+    <div class="pend-kpis" id="pendKpis"></div>
+    <div class="queue pend-list" id="pendList"></div>
+  </div>
+  <div class="df"><button class="btn primary" id="pendDlgClose">확인</button></div>
+</dialog>
 <dialog id="myDlg" aria-labelledby="myDlgTitle">
   <div class="dh" id="myDlgTitle">My Claims <span class="hint" id="myMeta" style="font-weight:500"></span></div>
   <div class="db mylist" id="myList"></div>
@@ -277,10 +305,7 @@ $csrf = bl_csrf_token();
       <div class="hint" style="margin-bottom:8px">관리자(정산)는 모든 청구를 관리하고 정산하며, 관리자(승인)는 승인·반려를 합니다. 두 관리자도 구성원 화면에서 본인 청구를 씁니다. 명단과 비밀번호는 blue-iWorks 포털 계정을 그대로 씁니다.</div>
       <div class="ulist" id="userList"></div>
     </div>
-    <div class="grid">
-      <label class="f"><span>승인자</span><input id="sApprover"></label>
-      <label class="f"><span>정산 처리자</span><input id="sHandler"></label>
-    </div>
+    <!-- 승인자·처리자는 설정하지 않는다 — 승인자는 김호영, 처리자는 김지안으로 고정된다(2026-10-26) -->
     <div>
       <div style="font-weight:600;margin-bottom:6px">주유비 산정 기준 <span class="hint" style="font-weight:400">(편도km ÷ 연비 × 유가 × 2, 천원 단위 올림)</span></div>
       <div class="grid">

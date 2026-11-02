@@ -6,6 +6,7 @@
  *   사용:  php schools_import.php ["xlsx경로"] [--force]
  *          --force 없으면 테이블에 데이터가 있을 때 중단(기존 편집 보호)
  */
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }   // CLI 전용 — 웹 주소로 실행되지 않게
 require_once __DIR__ . '/../db.php';
 
 $args   = $argv;

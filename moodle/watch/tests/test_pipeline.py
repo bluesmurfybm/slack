@@ -70,6 +70,17 @@ def test_summary_parse_tolerates_missing_updates():
     assert s.updates_md == ""
 
 
+def test_with_cli_reports_what_the_cli_said_when_it_fails(settings, monkeypatch):
+    class Out:
+        returncode, stdout = 1, ""
+        stderr = "Not logged in\nPlease run /login\n"
+
+    monkeypatch.setattr(summarizer.shutil, "which", lambda name: "/bin/claude")
+    monkeypatch.setattr(summarizer.subprocess, "run", lambda *a, **k: Out())
+    with pytest.raises(RuntimeError, match=r"종료 코드 1: Not logged in \| Please run /login"):
+        summarizer.with_cli(settings, "sys", {}, "prompt")
+
+
 def test_parse_update_reads_the_update_fields_and_a_new_headline():
     s = summarizer.parse_update('{"headline": "새 제목", "updates_md": "### PAG\\n- 새 글", "impacts": [{"url": "u", "impact": "중", "reason": "r"}], "actions": ["a"]}', "cli", "")
     assert s.headline == "새 제목"

@@ -29,7 +29,10 @@ if ($dry) { echo "[연습] 위 " . count($rows) . "건을 승인·처리완료�
 
 $now = now_stamp();
 $st = $pdo->prepare("UPDATE bl_travel_trips SET approval = '승인', status = '처리완료', reviewed_at = ?, updated_at = ? WHERE id = ?");
+// 승인자는 김호영으로 고정(2026-10-26). 옛 기록의 '대표'·빈칸도 같은 사람이다
+$fix = $pdo->prepare("UPDATE bl_travel_trips SET approver = '김호영' WHERE approval IN ('승인','반려') AND approver IN ('','대표')");
 $pdo->beginTransaction();
 foreach ($rows as $r) $st->execute([$now, $now, $r['id']]);
+$fix->execute();
 $pdo->commit();
 echo count($rows) . "건을 승인·처리완료로 바꿨습니다.\n";

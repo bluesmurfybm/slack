@@ -90,15 +90,21 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
             bl_apply_content($pdo, $row, $data, $me, $prev);
             if ($role !== ROLE_ADMIN) $row['staff_updated_at'] = $now;
         }
-        if ($role === ROLE_APPROVER) {
+        // 승인·반려는 승인 관리자와 정산 관리자 둘 다 한다(2026-10-26 지안 님 요청 — 화면 아래 [반려][승인]).
+        // 정산 관리자의 '청구서 저장'에도 승인 칸이 같이 오지만 상태가 그대로면 아무것도 바꾸지 않는다
+        if ($role === ROLE_APPROVER || $role === ROLE_ADMIN) {
             $before = [$row['approval'], $row['approver'], $row['approved_at']];
-            if (array_key_exists('approval', $data)) {
+            if (array_key_exists('approval', $data) && (string)$data['approval'] !== ($prev['approval'] ?? '승인대기')) {
                 $a = (string)$data['approval'];
                 if (!in_array($a, APPROVALS, true)) throw new BlError('승인 상태가 올바르지 않습니다', 400);
                 $row['approval'] = $a;
+                if (array_key_exists('approvedAt', $data)) $row['approved_at'] = to_date_str($data['approvedAt']);
             }
-            if (array_key_exists('approver', $data))   $row['approver']    = clip($data['approver'], 60);
-            if (array_key_exists('approvedAt', $data)) $row['approved_at'] = to_date_str($data['approvedAt']);
+            // 승인자는 고를 수 없다 — 승인 관리자가 누르면 본인 이름, 정산 관리자가 누르면 설정의 승인자(김호영).
+            // 승인대기로 되돌리면 비운다
+            $who = $role === ROLE_APPROVER ? $me['name'] : (bl_settings($pdo)['approverName'] ?? '김호영');
+            if ($row['approval'] === '승인대기') $row['approver'] = '';
+            elseif ($before[0] !== $row['approval'] || $row['approver'] === '') $row['approver'] = $who;
             if ($before !== [$row['approval'], $row['approver'], $row['approved_at']]) $row['reviewed_at'] = $now;
         }
         if ($role === ROLE_ADMIN) {
@@ -107,7 +113,10 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
                 if (!in_array($s, STATUSES, true)) throw new BlError('처리 상태가 올바르지 않습니다', 400);
                 $row['status'] = $s;
             }
-            if (array_key_exists('handler', $data))     $row['handler']      = clip($data['handler'], 60);
+            // 처리자는 고를 수 없다 — 설정의 정산 처리자(김지안)로 고정. 미처리로 되돌리면 비운다.
+            // 이미 처리완료였던 옛 기록은 그때 처리자(김태주·이승민 등)를 그대로 둔다
+            if ($row['status'] !== '처리완료') $row['handler'] = '';
+            elseif (($prev['status'] ?? '') !== '처리완료' || $row['handler'] === '') $row['handler'] = bl_settings($pdo)['handlerName'] ?? '김지안';
             if (array_key_exists('processedAt', $data)) $row['processed_at'] = to_date_str($data['processedAt']);
             if (array_key_exists('payMethod', $data))   $row['pay_method']   = clip($data['payMethod'], 30);
             if (array_key_exists('note', $data))        $row['note']         = clip($data['note'], 500);

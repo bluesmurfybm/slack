@@ -34,7 +34,7 @@ try {
         $where = isset($_GET['all']) ? '' : ' WHERE s.active=1';
         $sel   = implode(',', array_map(fn($c) => "a.`$c`", $COLS));
         $rows  = $pdo->query("
-            SELECT s.id AS school_id, s.name, s.ver, s.dev, s.ops, s.`log`, s.active,
+            SELECT s.id AS school_id, s.name, s.ver, s.dev, s.ops, s.active,
                    a.id AS access_id, {$sel}
             FROM schools s
             LEFT JOIN school_access a ON a.school_id = s.id
@@ -60,6 +60,14 @@ try {
     $schoolId = (int)($in['school_id'] ?? 0);
     $accessId = (int)($in['access_id'] ?? 0);   // 0 이면 이 학교의 첫 접속정보 = 신규
 
+    // 테스트 서버 정보는 형식을 정해 둔 칸이다. 어느 경로(칸 저장·추가·수정)로 오든
+    // DB 를 건드리기 전에 먼저 검사한다 — 추가에서 schools 만 들어가고 실패하는 일이 없게.
+    if (array_key_exists('test_srv', $in)) $in['test_srv'] = access_norm_test_srv($in['test_srv']);
+    if (($in['key'] ?? '') === 'test_srv') $in['value'] = access_norm_test_srv($in['value'] ?? '');
+    // 운영 서버 대수도 같은 방식 — 숫자만 받는다
+    if (array_key_exists('ops_cnt', $in)) $in['ops_cnt'] = access_norm_count($in['ops_cnt']);
+    if (($in['key'] ?? '') === 'ops_cnt') $in['value'] = access_norm_count($in['value'] ?? '');
+
     if ($action === 'delete') {
         if ($accessId <= 0) throw new Exception('잘못된 접속정보 id');
         $pdo->prepare("DELETE FROM school_access WHERE id=?")->execute([$accessId]);
@@ -75,10 +83,21 @@ try {
         $val = trim((string)($in['value'] ?? ''));
 
         // 대학명·버전·URL 은 마스터(schools) 소관이라 그쪽으로 보낸다
-        $master = ['name' => 'name', 'ver' => 'ver', 'dev' => 'dev', 'ops' => 'ops', 'log' => 'log'];
+        // active(유지보수 여부)도 schools 소관이다 — slack 쪽 '학교 사용 여부'와 같은 값
+        // 로그 관리 URL(schools.log)은 이 화면에서 다루지 않는다 — slack 학교 관리에서만 고친다
+        $master = ['name' => 'name', 'ver' => 'ver', 'dev' => 'dev', 'ops' => 'ops',
+                   'active' => 'active'];
         if (isset($master[$key])) {
             if ($schoolId <= 0) throw new Exception('학교를 선택하세요.');
             if ($key === 'name' && $val === '') throw new Exception('대학(기관)명을 입력하세요.');
+            if ($key === 'name') {
+                // 추가 때와 같은 규칙 — 이름·버전이 똑같은 학교가 둘이면 가져오기가 짝을 못 짓는다
+                $st = $pdo->prepare("SELECT 1 FROM schools a JOIN schools b ON b.id = ?
+                                     WHERE a.name = ? AND a.ver = b.ver AND a.id <> b.id LIMIT 1");
+                $st->execute([$schoolId, $val]);
+                if ($st->fetchColumn()) throw new Exception('같은 이름·버전의 학교가 이미 있습니다: ' . $val);
+            }
+            if ($key === 'active') $val = (int)!!$val;   // 체크박스 → 0/1
             $col = $master[$key];   // 화이트리스트를 거친 이름만 들어온다
             $pdo->prepare("UPDATE schools SET `{$col}`=?, updated_at=NOW() WHERE id=?")
                 ->execute([$val, $schoolId]);
@@ -88,17 +107,18 @@ try {
 
         if (!in_array($key, $COLS, true)) throw new Exception('수정할 수 없는 항목입니다: ' . $key);
         if ($schoolId <= 0) throw new Exception('학교를 선택하세요.');
+        $plain = $val;   // 정리된 값(예: 테스트 서버 정보)을 화면에도 돌려준다
         if (in_array($key, access_secret_cols(), true)) $val = access_enc($val);
 
         if ($accessId > 0) {
             $pdo->prepare("UPDATE school_access SET `{$key}`=?, updated_at=NOW() WHERE id=? AND school_id=?")
                 ->execute([$val, $accessId, $schoolId]);
-            echo json_encode(['ok' => true, 'access_id' => $accessId]);
+            echo json_encode(['ok' => true, 'access_id' => $accessId, 'value' => $plain], JSON_UNESCAPED_UNICODE);
         } else {
             // 접속 정보가 아직 없던 학교 — 이 칸 하나로 행을 만든다
             $pdo->prepare("INSERT INTO school_access (school_id, `{$key}`, created_at, updated_at)
                            VALUES (?, ?, NOW(), NOW())")->execute([$schoolId, $val]);
-            echo json_encode(['ok' => true, 'access_id' => (int)$pdo->lastInsertId()]);
+            echo json_encode(['ok' => true, 'access_id' => (int)$pdo->lastInsertId(), 'value' => $plain], JSON_UNESCAPED_UNICODE);
         }
         exit;
     }
@@ -118,13 +138,12 @@ try {
             throw new Exception("이미 등록된 대학입니다. (" . $name . ($ver !== '' ? " / {$ver}" : '') . ")");
         }
 
-        $pdo->prepare("INSERT INTO schools (name, ver, dev, ops, `log`, active, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())")
+        $pdo->prepare("INSERT INTO schools (name, ver, dev, ops, active, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, 1, NOW(), NOW())")
             ->execute([
                 $name, $ver,
                 trim((string)($in['dev'] ?? '')),
                 trim((string)($in['ops'] ?? '')),
-                trim((string)($in['log'] ?? '')),
             ]);
         $schoolId = (int)$pdo->lastInsertId();
 
@@ -149,15 +168,15 @@ try {
     if ($action !== 'save') throw new Exception('알 수 없는 action');
 
     // 마스터에 속한 값(대학명/버전/URL)은 같은 화면에서 고칠 수 있게 하되 schools 로 넘긴다
+    // `log`(로그 관리 URL)는 폼에 없는 칸이라 SET 에서 뺀다 — 넣으면 slack 쪽 값이 빈 칸으로 덮인다
     $name = trim((string)($in['name'] ?? ''));
     if ($name === '') throw new Exception('대학(기관)명을 입력하세요.');
-    $pdo->prepare("UPDATE schools SET name=?, ver=?, dev=?, ops=?, `log`=?, updated_at=NOW() WHERE id=?")
+    $pdo->prepare("UPDATE schools SET name=?, ver=?, dev=?, ops=?, updated_at=NOW() WHERE id=?")
         ->execute([
             $name,
             trim((string)($in['ver'] ?? '')),
             trim((string)($in['dev'] ?? '')),
             trim((string)($in['ops'] ?? '')),
-            trim((string)($in['log'] ?? '')),
             $schoolId,
         ]);
 

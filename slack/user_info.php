@@ -22,7 +22,7 @@ $id = trim((string)($_GET['id'] ?? ''));
 if (!preg_match('/^[UW][A-Z0-9]{5,}$/', $id)) { echo json_encode(['ok' => false]); exit; }
 
 // 프로필 캐시 (6시간)
-$cacheFile = sys_get_temp_dir() . '/slack_profile_cache.json';
+$cacheFile = slack_cache_path('slack_profile_cache.json');
 $cache = is_file($cacheFile) ? (json_decode(file_get_contents($cacheFile), true) ?: []) : [];
 if (isset($cache[$id]) && (time() - ($cache[$id]['ts'] ?? 0) < 6 * 3600)) {
     echo json_encode($cache[$id]['p'], JSON_UNESCAPED_UNICODE);

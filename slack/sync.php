@@ -19,7 +19,7 @@ if (!$isCli) {
 
 $full = $isCli ? (isset($argv[1]) && $argv[1] === 'full') : (isset($_GET['full']) && $_GET['full'] == '1');
 
-$lockFp = fopen(sys_get_temp_dir() . '/slackapi_sync.lock', 'c');
+$lockFp = fopen(slack_runtime_dir() . '/slackapi_sync.lock', 'c');   // 웹·데몬 공용 잠금(slack_lib.php)
 if (!$lockFp || !flock($lockFp, LOCK_EX | LOCK_NB)) {
     $m = ['ok' => true, 'skipped' => 'locked'];
     echo $isCli ? "이미 동기화 진행 중 → 스킵\n" : json_encode($m, JSON_UNESCAPED_UNICODE);
@@ -62,6 +62,15 @@ $prevStmt = $pdo->prepare("SELECT `updated` FROM requests WHERE id = ?");
 // locked(로컬 수정) 항목도 접수분류는 로컬 편집 대상이 아니므로 Slack 값으로 갱신
 $kindStmt = $pdo->prepare("UPDATE requests SET kind_id = ?, kind = ? WHERE id = ?");
 
+// 운영 MySQL(엄격 모드)은 컬럼보다 긴 값을 자르지 않고 거부한다(1406) — 그 항목 하나 때문에 동기화 전체가
+// 매번 실패한다. 컬럼 폭(db.php)에 맞춰 자른다. 담당자 ID 목록은 ID 가 반쪽 나지 않게 쉼표 단위로 자른다.
+$fit = fn($s, $n) => $s === null ? null : mb_substr((string)$s, 0, $n);
+$fitList = function ($s, $n) {
+    if ($s === null || strlen($s) <= $n) return $s;
+    $p = strrpos(substr($s, 0, $n + 1), ',');
+    return $p === false ? substr($s, 0, $n) : substr($s, 0, $p);
+};
+
 // 접수분류 컬럼 신설 → 기존 행 채우기 위해 1회 전체 동기화 (증분은 변경 항목만 처리하므로)
 $kindBackfill = !$full && meta_get('kind_backfill_v1') === null;
 if ($kindBackfill) $full = true;
@@ -88,7 +97,7 @@ foreach ($boards as $listId => $b) {
             $row['momo'] = '';
         }
 
-        if (isset($locked[$row['id']])) { $kindStmt->execute([$row['kind_id'], $row['kind'], $row['id']]); $skipped++; continue; }
+        if (isset($locked[$row['id']])) { $kindStmt->execute([$row['kind_id'], $fit($row['kind'], 40), $row['id']]); $skipped++; continue; }
 
         $prevStmt->execute([$row['id']]);
         $prev = $prevStmt->fetchColumn();
@@ -97,12 +106,12 @@ foreach ($boards as $listId => $b) {
 
         $stmt->execute([
             ':id' => $row['id'], ':list_id' => $listId, ':board' => $b['label'],
-            ':title' => $row['title'], ':body' => $row['body'], ':momo' => $row['momo'], ':lms' => $row['lms'],
-            ':req_id' => $row['req_id'], ':req' => $row['req'], ':asg_id' => $row['asg_id'], ':asg' => $row['asg'],
-            ':status_id' => $row['status_id'], ':status' => $row['status'],
-            ':priority_id' => $row['priority_id'], ':priority' => $row['priority'],
-            ':team_id' => $row['team_id'], ':team' => $row['team'],
-            ':kind_id' => $row['kind_id'], ':kind' => $row['kind'],
+            ':title' => $fit($row['title'], 500), ':body' => $row['body'], ':momo' => $fit($row['momo'], 500), ':lms' => $fit($row['lms'], 500),
+            ':req_id' => $row['req_id'], ':req' => $fit($row['req'], 120), ':asg_id' => $fitList($row['asg_id'], 255), ':asg' => $fit($row['asg'], 255),
+            ':status_id' => $row['status_id'], ':status' => $fit($row['status'], 60),
+            ':priority_id' => $row['priority_id'], ':priority' => $fit($row['priority'], 40),
+            ':team_id' => $row['team_id'], ':team' => $fit($row['team'], 60),
+            ':kind_id' => $row['kind_id'], ':kind' => $fit($row['kind'], 40),
             ':eta' => $row['eta'] ?: null, ':date' => $row['date'] ?: null, ':done' => $row['done'] ?: null,
             ':attachments' => $row['attachments'] ?? null,
             ':created' => $row['created'], ':updated' => $row['updated'], ':synced_at' => $now,
@@ -126,10 +135,14 @@ foreach ($boards as $listId => $b) {
             if (!empty($info['ok']) && !empty($rec['archived'])) {
                 $pdo->prepare("UPDATE requests SET archived=1 WHERE id=?")->execute([$rid]);
                 $archivedNow++;
-            } else {
+            } elseif (($info['error'] ?? '') === 'record_not_found') {
+                // Slack 이 '없다' 고 확답한 것만 지운다. 예전엔 보관 확답이 아니면 다 지워서
+                // 일시 오류(ratelimited·네트워크)에도 항목이 DB 에서 사라졌고, 증분 동기화는 바뀐 항목만
+                // 다시 넣으므로 전체 동기화 전까지 현황판에서 빠져 있었다.
                 $pdo->prepare("DELETE FROM requests WHERE id=?")->execute([$rid]);
                 $deleted++;
             }
+            // 그 밖(ok 인데 보관 아님 = 아직 살아 있음 / 일시 오류)은 그대로 두고 다음 동기화 때 다시 본다
         }
     }
     if (!empty($data['maxUpdated'])) meta_set('list_updated_max_' . $listId, $data['maxUpdated']);
