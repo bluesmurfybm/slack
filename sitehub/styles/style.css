@@ -588,6 +588,10 @@ ul.cards li.card.sh-card{min-height:200px}
 .sh-rows .s .sh-kids-btn{height:22px;padding:0 8px;font-size:11.5px}
 .sh-hist-date{font-size:12px;font-weight:600;color:var(--tx-quaternary);font-variant-numeric:tabular-nums;white-space:nowrap}
 .sh-rows .t .sh-hist-head{font-weight:600;text-align:left;white-space:pre-wrap;word-break:break-all}
+.sh-rows .t .sh-hist-date{font-size:14px;font-weight:700;color:var(--tx-primary)}
+.sh-hist-line{margin-top:3px}
+.sh-hist-line .sh-hist-head{font-size:12.5px;font-weight:400;color:var(--tx-tertiary);text-align:left;white-space:pre-wrap;word-break:break-all}
+.sh-hist-line .sh-hist-head:hover{color:var(--cos45)}
 
 /* 시트 폼 */
 .sheet{max-width:600px}

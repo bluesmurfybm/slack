@@ -438,7 +438,8 @@ function historyRow(h, kids = []) {
   const sub = asg + done + files + histProcChips(h) + kidsBtn;
   return `<li data-id="${esc(h.id)}">
     <div>
-      <div class="t">${historyStatusBadge(h.status)}${date}<button type="button" class="linkish sh-hist-head" onclick="this.closest('li').classList.toggle('open')" title="${esc(h.title || "")}">${esc(head)}</button>${prio}</div>
+      <div class="t">${historyStatusBadge(h.status)}${date}${prio}</div>
+      <div class="sh-hist-line"><button type="button" class="linkish sh-hist-head" onclick="this.closest('li').classList.toggle('open')" title="${esc(h.title || "")}">${esc(head)}</button></div>
       ${sub ? `<div class="s">${sub}</div>` : ""}
       ${body ? `<div class="sh-hist-body">${esc(body)}</div>` : ""}
       ${kids.length ? `<ul class="sh-hist-kids">${kids.map(k => `<li>${esc(k.title || k.site_text || "(내용 없음)")}${k.remark ? `<span class="muted"> · ${esc(k.remark)}</span>` : ""}</li>`).join("")}</ul>` : ""}
