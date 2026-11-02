@@ -75,8 +75,24 @@ function slackSelectMaps($token, $listId, $sampleRecordId) {
     return $maps;
 }
 
+/**
+ * CA 번들 — WAMP 기본 PHP 는 php.ini 에 curl.cainfo 가 없어 HTTPS 가 전부 "unable to get local issuer certificate" 로 실패한다.
+ * php.ini 설정이 없으면 slackai/vendor/cacert.pem(Mozilla 묶음, core/push.php 와 같은 파일)을 쓴다. 검증을 끄지는 않는다.
+ */
+function slackCurlCaOpts() {
+    static $opts = null;
+    if ($opts !== null) return $opts;
+    $opts = [];
+    if (is_file((string)ini_get('curl.cainfo'))) return $opts;
+    foreach ([(string)ini_get('openssl.cafile'), dirname(__DIR__) . '/slackai/vendor/cacert.pem'] as $ca) {
+        if ($ca !== '' && is_file($ca)) { $opts = [CURLOPT_CAINFO => $ca]; break; }
+    }
+    return $opts;
+}
+
 function slackGet($method, $token, $params) {
     $url = "https://slack.com/api/$method?" . http_build_query($params);
+    $code = 0; $curlErr = '';
     for ($try = 0; $try < 4; $try++) {
         $retryAfter = 0;
         $ch = curl_init($url);
@@ -88,16 +104,19 @@ function slackGet($method, $token, $params) {
                 if (stripos($h, 'Retry-After:') === 0) $retryAfter = (int)trim(substr($h, 12));
                 return strlen($h);
             },
-        ]);
+        ] + slackCurlCaOpts());
         $body = curl_exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr = curl_error($ch);
         curl_close($ch);
         if ($code == 429) { sleep($retryAfter > 0 ? $retryAfter : (1 << $try)); continue; }  // rate limit: 대기 후 재시도
-        $res = json_decode($body, true);
+        $res = json_decode((string)$body, true);
         if (is_array($res)) return $res;          // 정상(ok=true) 또는 실제 에러(ok=false) 그대로 반환
+        if ($code == 0 && $curlErr !== '') break; // 연결·SSL 오류는 기다려도 안 풀린다 — 호출 한도로 잘못 알리지 않게 바로 돌려준다
         sleep(1 << $try);                          // 빈/비정상 응답 → 백오프 후 재시도
     }
-    return ['ok' => false, 'error' => 'ratelimited'];
+    if ($code == 429) return ['ok' => false, 'error' => 'ratelimited'];
+    return ['ok' => false, 'error' => 'unknown', 'detail' => $curlErr !== '' ? $curlErr : "HTTP {$code}"];
 }
 
 function slackPost($method, $token, $fields) {
@@ -107,7 +126,7 @@ function slackPost($method, $token, $fields) {
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token, 'Content-Type: application/x-www-form-urlencoded'],
         CURLOPT_POSTFIELDS     => http_build_query($fields),
-    ]);
+    ] + slackCurlCaOpts());
     $res = json_decode(curl_exec($ch), true);
     curl_close($ch);
     return $res;
@@ -182,7 +201,7 @@ function slackFetchItems($token, $listId) {
         if ($cursor) $params['cursor'] = $cursor;
         $res = slackGet('slackLists.items.list', $token, $params);
         if (empty($res['ok'])) {
-            return ['error' => isset($res['error']) ? $res['error'] : 'unknown'];
+            return ['error' => isset($res['error']) ? $res['error'] : 'unknown', 'detail' => $res['detail'] ?? ''];
         }
         $items = array_merge($items, isset($res['items']) ? $res['items'] : []);
         $cursor = isset($res['response_metadata']['next_cursor']) ? $res['response_metadata']['next_cursor'] : null;

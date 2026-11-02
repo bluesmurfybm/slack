@@ -126,7 +126,7 @@ function sx_clean($v) {
 const SX_PORT_RE = '/\(?\s*(?:포트|port|sftp|ssh)\s*[:：]?\s*(\d{2,5})\s*\)?/iu';
 
 /**
- * "homepage / nemam4123   (포트 : 2022)", "cjhappyi↵happyi!772", "http://x/admin ↵admin / pw↵hadmin / pw2",
+ * "homepage / mmam1234   (포트 : 22)", "cjhappyi↵hap!112", "http://x/admin ↵admin / pw↵hadmin / pw2",
  * "아이디: a 비번: b" 같은 글에서 [url들, 호스트들, 포트, [[id,pw,prefix],…], 남는 글] 을 뽑는다.
  * 못 가른 줄은 전부 note 로 돌려주므로 정보가 사라지지는 않는다.
  */

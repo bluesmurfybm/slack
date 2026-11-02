@@ -11,7 +11,9 @@
  *  - 스키마(열 ID·선택지)는 6시간 임시 캐시. 항목 id 는 Slack 이 만들어 준 것을 그대로 lab_history.id 로 쓰므로 다음 동기화 때 중복 없이 합쳐진다.
  */
 
-const SITEHUB_HIST_SELECTS = ['channel', 'status', 'paid', 'priority'];   // select 열 역할
+require_once __DIR__ . '/../slack/slack_lib.php';   // slackGet 만 쓴다
+
+const SITEHUB_HIST_SELECTS =['channel', 'status', 'paid', 'priority'];   // select 열 역할
 const SITEHUB_HIST_FIELDS  = ['req_at', 'channel', 'body', 'status', 'paid', 'priority', 'remark'];   // 화면에서 쓰는 칸
 
 /** 로그인한 사람의 개인 토큰 — 없으면 예외 */
@@ -34,7 +36,7 @@ function sitehub_hw_error(array $r, string $what): string {
         case 'ratelimited':
             return "{$what} 실패: Slack 호출 한도에 걸렸습니다. 잠시 뒤 다시 하세요.";
         case 'unknown':
-            return "{$what} 실패: Slack 응답이 없습니다 — 서버에서 slack.com 으로 나가는 연결을 확인하세요.";
+            return "{$what} 실패: Slack 응답이 없습니다" . (!empty($r['detail']) ? "({$r['detail']})" : '') . " — 서버에서 slack.com 으로 나가는 연결을 확인하세요.";
     }
     return "{$what} 실패: {$c}";
 }
@@ -42,11 +44,20 @@ function sitehub_hw_error(array $r, string $what): string {
 /** 리스트 스키마 → ['cols' => [역할 => 열ID], 'opts' => [역할 => [옵션ID => 라벨]]]. 6시간 캐시 */
 function sitehub_hw_schema(PDO $pdo, string $token, string $listId): array {
     $cache = sys_get_temp_dir() . '/sitehub_hw_schema_' . md5($listId) . '.json';
-    if (is_file($cache) && time() - filemtime($cache) < 6 * 3600) {
-        $c = json_decode((string)file_get_contents($cache), true);
-        if (is_array($c) && !empty($c['cols'])) return $c;
+    $c = is_file($cache) ? json_decode((string)file_get_contents($cache), true) : null;
+    $c = (is_array($c) && !empty($c['cols'])) ? $c : null;
+    if ($c && time() - filemtime($cache) < 6 * 3600) return $c;
+    try {
+        return sitehub_hw_schema_fetch($pdo, $token, $listId, $cache);
+    } catch (Exception $e) {
+        // 호출 한도(ratelimited) 때는 만료된 캐시라도 쓴다 — 스키마(열 ID·선택지)는 거의 안 바뀐다
+        if ($c && strpos($e->getMessage(), '호출 한도') !== false) { @touch($cache, time() - 5 * 3600); return $c; }   // 1시간 뒤 다시 시도
+        throw $e;
     }
-    $sample = (string)$pdo->query("SELECT id FROM lab_history WHERE list_id = " . $pdo->quote($listId) . " AND parent_id IS NULL AND archived = 0 ORDER BY updated DESC LIMIT 1")->fetchColumn();
+}
+
+function sitehub_hw_schema_fetch(PDO $pdo, string $token, string $listId, string $cache): array {
+    $sample =(string)$pdo->query("SELECT id FROM lab_history WHERE list_id = " . $pdo->quote($listId) . " AND parent_id IS NULL AND archived = 0 ORDER BY updated DESC LIMIT 1")->fetchColumn();
     if ($sample === '') {
         $l = slackGet('slackLists.items.list', $token, ['list_id' => $listId, 'limit' => 1]);
         if (empty($l['ok'])) throw new Exception(sitehub_hw_error($l, '리스트 스키마 읽기'));

@@ -81,7 +81,7 @@ $COL = require __DIR__ . '/list_cols.php';
 $mapped = array_filter($COL, fn($v) => (string)$v !== '');
 
 /** Slack 오류 코드 → 사람이 바로 고칠 수 있는 안내. 토큰 값은 싣지 않고 출처만 적는다. */
-function sitehub_slack_error(string $code, string $what = '리스트를 읽지 못했습니다', string $needed = ''): string {
+function sitehub_slack_error(string $code, string $what = '리스트를 읽지 못했습니다', string $needed = '', string $detail = ''): string {
     $src  = $GLOBALS['SITEHUB_TOKEN_SRC'] ?? '동기화 토큰';
     $list = $GLOBALS['SITEHUB_LIST_ID'] ?? '';
     switch ($code) {
@@ -97,7 +97,7 @@ function sitehub_slack_error(string $code, string $what = '리스트를 읽지 �
         case 'ratelimited':
             return 'Slack 호출 한도에 걸렸습니다(ratelimited). 1~2분 뒤 다시 동기화하세요.';
         case 'unknown': case '':
-            return "{$what}: Slack 응답이 없습니다 — 서버에서 slack.com 으로 나가는 연결(방화벽·프록시·SSL 인증서)을 확인하세요.";
+            return "{$what}: Slack 응답이 없습니다" . ($detail !== '' ? "({$detail})" : '') . " — 서버에서 slack.com 으로 나가는 연결(방화벽·프록시·SSL 인증서)을 확인하세요.";
     }
     return "{$what}: {$code} (토큰 출처: {$src})";
 }
@@ -106,12 +106,12 @@ function sitehub_slack_error(string $code, string $what = '리스트를 읽지 �
 function sitehub_list_schema(string $token, string $listId, ?string $sampleId = null): array {
     if ($sampleId === null) {
         $r = slackGet('slackLists.items.list', $token, ['list_id' => $listId, 'limit' => 1]);
-        if (empty($r['ok'])) throw new RuntimeException(sitehub_slack_error((string)($r['error'] ?? 'unknown'), '리스트를 읽지 못했습니다', (string)($r['needed'] ?? '')));
+        if (empty($r['ok'])) throw new RuntimeException(sitehub_slack_error((string)($r['error'] ?? 'unknown'), '리스트를 읽지 못했습니다', (string)($r['needed'] ?? ''), (string)($r['detail'] ?? '')));
         $sampleId = $r['items'][0]['id'] ?? null;
     }
     if (!$sampleId) throw new RuntimeException('리스트에 항목이 하나도 없어 스키마를 읽을 수 없습니다.');
     $info = slackGet('slackLists.items.info', $token, ['list_id' => $listId, 'id' => $sampleId]);
-    if (empty($info['ok'])) throw new RuntimeException(sitehub_slack_error((string)($info['error'] ?? 'unknown'), '리스트 스키마를 읽지 못했습니다', (string)($info['needed'] ?? '')));
+    if (empty($info['ok'])) throw new RuntimeException(sitehub_slack_error((string)($info['error'] ?? 'unknown'), '리스트 스키마를 읽지 못했습니다', (string)($info['needed'] ?? ''), (string)($info['detail'] ?? '')));
     $schema = $info['list']['list_metadata']['schema'] ?? [];
     $out = [];
     foreach ($schema as $c) {
@@ -200,7 +200,7 @@ try {
     }
 
     $data = slackFetchItems($token, $listId);
-    if (isset($data['error'])) throw new RuntimeException(sitehub_slack_error((string)$data['error'], 'Slack 리스트를 읽지 못했습니다'));
+    if (isset($data['error'])) throw new RuntimeException(sitehub_slack_error((string)$data['error'], 'Slack 리스트를 읽지 못했습니다', '', (string)($data['detail'] ?? '')));
     $sampleId = $data['items'][0]['id'] ?? null;
     if ($sampleId) $COL = sitehub_resolve_cols($COL, sitehub_list_schema($token, $listId, $sampleId));
 
