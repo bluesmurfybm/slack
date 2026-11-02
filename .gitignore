@@ -5,6 +5,8 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+.claude/
+.history/
 
 # 로그 / 임시
 *.log
