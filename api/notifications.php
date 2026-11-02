@@ -49,7 +49,8 @@ function notif_tiles(int $uid)
 try {
     if ($method === 'GET') {
         if (!empty($_GET['count'])) {
-            echo json_encode(['unread' => push_inbox_unread($uid), 'tiles' => notif_tiles($uid)]);
+            echo json_encode(['unread' => push_inbox_unread($uid), 'tiles' => notif_tiles($uid),
+                              'previews' => push_tile_previews($uid, work_systems()) ?: new stdClass()]);
             exit;
         }
         $list = push_inbox_list(

@@ -112,6 +112,7 @@ const BS_CAP_PROFILE_VIEW_ANY   = 'profile.view_any';    // 남의 프로파일 
 const BS_CAP_EVAL_RUN           = 'eval.run';            // 역량 재판정 실행
 const BS_CAP_OBJECTION_REVIEW   = 'objection.review';    // 이의 제기 처리
 const BS_CAP_RND_APPROVE        = 'rnd.approve';         // R&D 과제 승인·반려 (P9)
+const BS_CAP_IDEA_REVIEW        = 'idea.review';         // 아이디어 검토(채택·보류·반려)·묶기 (032)
 
 /**
  * CLAUDE.md 가 강제하는 규칙을 코드에서 지키기 위한 상수.
@@ -155,6 +156,37 @@ const BS_RND_STATUS = [
     'running'  => '진행 중',
     'done'     => '종료',
     'dropped'  => '중단',
+];
+
+/**
+ * 아이디어·제안 (032). bs_idea.status
+ *
+ * promoted 는 사람이 고르는 값이 아니다 — 과제·프로젝트로 넘길 때만 붙는다.
+ * 검토 화면의 선택지는 BS_IDEA_REVIEW_STATUS 다.
+ */
+const BS_IDEA_STATUS = [
+    'open'      => '제안됨',
+    'reviewing' => '검토 중',
+    'adopted'   => '채택',
+    'hold'      => '보류',
+    'rejected'  => '반려',
+    'promoted'  => '과제화',
+];
+const BS_IDEA_REVIEW_STATUS = ['open', 'reviewing', 'adopted', 'hold', 'rejected'];
+
+/**
+ * 평가 평균을 보여 주기 시작하는 인원.
+ *
+ * 개별 점수는 본인만 보기로 했다. 평가가 한 명이면 평균이 곧 그 사람
+ * 점수라 누가 몇 점 줬는지 드러난다. 둘이어도 본인 점수를 빼면 남이
+ * 보인다. 셋부터 연다 — 역량 점수의 표본 부족 숨김과 같은 결.
+ */
+const BS_IDEA_MIN_RATERS = 3;
+
+/** 평가 두 축 (bs_idea_rating). 합친 점수는 저장하지 않는다. */
+const BS_IDEA_AXES = [
+    'value'       => ['가치',         '되면 얼마나 좋은가'],
+    'feasibility' => ['실현 가능성',  '우리가 해낼 수 있는가'],
 ];
 
 /** bs_project.rnd_category — R&D 과제의 갈래 */
@@ -1026,6 +1058,10 @@ function bs_can(string $capability, ?int $projectId = null): bool
         // 깎는 행위라(§9.1) 느슨하게 열어 두면 배정 회피 통로가 된다.
         // 정해지기 전까지는 **좁은 쪽**으로 둔다.
         BS_CAP_RND_APPROVE        => false,
+
+        // 아이디어 검토(채택·보류·반려)·묶기도 관리자 전용 (032). 과제 승인과
+        // 같은 사람이 보는 게 자연스럽다 — 채택이 곧 과제화의 앞 단계다.
+        BS_CAP_IDEA_REVIEW        => false,
 
         default => false,
     };

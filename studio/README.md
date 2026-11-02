@@ -113,6 +113,8 @@ DB 이름은 포털 `config.php` 의 `db.name` 과 같아야 합니다. BlueStud
 029_migration_rnd_file.sql          R&D 진행 기록·산출물 첨부 표 + 고친 기록 칸
 030_migration_url_length.sql        링크 칸 500 → 2000자 (산출물·참고 자료)
 031_migration_rnd_log_url.sql       R&D 진행 기록에 링크 칸
+032_migration_idea.sql              아이디어·제안 — 본문·분야·평가·피드백 표 + 과제·프로젝트의 출발점 칸
+                                    ← 빠지면 아이디어 탭이 안 열림
 ```
 
 ### 이미 돌고 있는 DB 에 새 번호만 더할 때
