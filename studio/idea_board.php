@@ -9,6 +9,13 @@ require_once __DIR__ . '/inc/repo/IdeaRepo.php';
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $user = bs_require_login();
+if (!IdeaRepo::schemaReady(bs_db())) {   // 032 없이 코드만 올라간 서버 — 쓰다가 실패하지 않게 미리 알린다
+    bs_layout_head($user, '아이디어', '과업 편성/현황', '', 'idea');
+    echo '<div class="ba-alert">이 서버의 DB 에 아이디어 표가 아직 없습니다. 관리자가 '
+       . '<code>studio/sql/032_migration_idea.sql</code> 을 적용하면 쓸 수 있습니다.</div>';
+    bs_layout_foot();
+    exit;
+}
 $err  = bs_param_str('err');
 
 bs_layout_head(
@@ -37,7 +44,7 @@ bs_layout_head(
        넘어가고, 그 진행이 아이디어 화면에 이어 보인다. -->
   <section class="ba-idea-flow" aria-label="아이디어가 가는 길">
     <ol>
-      <li><b>올리기</b><span>문제와 제안을 적습니다. 익명도 됩니다</span></li>
+      <li><b>올리기</b><span>떠오른 생각과 계기를 적습니다. 익명도 됩니다</span></li>
       <li><b>평가 · 피드백</b><span>누구나 가치와 실현 가능성을 매기고 의견을 붙입니다</span></li>
       <li><b>검토</b><span>채택 · 보류 · 반려 — 사유가 남습니다</span></li>
       <li><b>과제 · 프로젝트로</b><span>R&amp;D 과제로 발의하거나, 바로 프로젝트로 넘깁니다</span></li>
@@ -98,6 +105,12 @@ bs_layout_head(
   <!-- ============ 상태 탭 ============ -->
   <div class="ba-listbar">
     <div class="ba-statabs" id="ba-i-tabs" role="tablist" aria-label="아이디어 상태"></div>
+    <span class="ba-spacer"></span>
+    <!-- 보기 방식 — 카드는 훑어보기, 리스트는 많은 건을 한눈에 견주기. 고른 것은 브라우저에 기억한다 -->
+    <div class="ba-bd__toggle" id="ba-i-view" role="group" aria-label="보기 방식">
+      <button type="button" class="ba-btn ba-btn--sm is-on" data-view="card" aria-pressed="true">카드</button>
+      <button type="button" class="ba-btn ba-btn--sm" data-view="list" aria-pressed="false">리스트</button>
+    </div>
   </div>
 
   <!-- ============ 카드 그리드 ============ -->

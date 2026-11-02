@@ -32,6 +32,14 @@ require_once BS_ROOT . '/inc/service/PromoteService.php';
 $pdo   = bs_db();
 $ideas = new IdeaRepo($pdo);
 
+// 032 가 없는 DB 면 무엇을 눌러도 "처리 중 오류" 한 줄만 떴다(2026-11-02, 코드만
+// 먼저 올라간 서버). 원인과 할 일을 그대로 알린다.
+if (!IdeaRepo::schemaReady($pdo)) {
+    bs_json_error('SCHEMA_MISSING',
+        '이 서버의 DB 에 아이디어 표가 아직 없습니다. 관리자가 studio/sql/032_migration_idea.sql 을 적용해야 쓸 수 있습니다.',
+        503);
+}
+
 bs_route(bs_param_str('act', 'board'), [
 
     // =================================================================

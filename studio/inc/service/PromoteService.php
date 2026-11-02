@@ -163,7 +163,7 @@ final class PromoteService
     private function summaryOf(array $idea): ?string
     {
         $parts = [];
-        foreach (['problem' => '문제', 'proposal' => '제안', 'effect' => '기대 효과'] as $k => $label) {
+        foreach (['problem' => '배경', 'proposal' => '제안', 'effect' => '기대 효과'] as $k => $label) {
             if (trim((string)($idea[$k] ?? '')) !== '') {
                 $parts[] = "[$label]\n" . trim((string)$idea[$k]);
             }
