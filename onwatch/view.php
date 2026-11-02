@@ -250,6 +250,7 @@ ow_page_head($me, $w['title'] . ' · OnWatch');
             ?></dd>
           <dt>먼저 볼 출처</dt><dd><?= $w['prefer_domains'] ? h(str_replace("\n", ', ', (string)$w['prefer_domains'])) : '<span class="muted">없음</span>' ?></dd>
           <dt>보지 않을 도메인</dt><dd><?= $w['block_domains'] ? h(str_replace("\n", ', ', (string)$w['block_domains'])) : '<span class="muted">없음</span>' ?></dd>
+          <dt>모델</dt><dd><?php if (empty($w['model'])): ?><span class="muted">배치 기본값</span><?php else: ?><?= h(OW_MODELS[$w['model']]['label'] ?? $w['model']) ?><?php if (!isset(ow_models()[$w['model']])): ?> <span class="warn">— 지금은 고를 수 없어 배치 기본값으로 돕니다</span><?php endif; ?><?php endif; ?></dd>
           <dt>검색 상한</dt><dd>한 번에 <?= (int)$w['max_searches'] ?>회</dd>
           <dt>월 비용 상한</dt><dd>$<?= number_format($budget, 2) ?></dd>
         </dl>

@@ -22,6 +22,12 @@ logger = logging.getLogger("onwatch.engine")
 MAX_CONTINUATIONS = 6 # pause_turn(서버 도구 반복 한도)이 나면 이어 달라고 다시 보내는 횟수
 URL_RE = re.compile(r"https?://[^\s<>()\[\]\"'`]+")
 
+# 모델마다 다른 API 표면. 여기 없는 모델은 Opus·Sonnet 5.5 와 같다고 본다.
+# - Haiku 5.5 는 동적 필터링 웹 도구(_20260209)를 쓰지 못해 기본형을 건다.
+# - Haiku 5.5 는 서버 측 대체 모델(fallbacks)이 없다 — 거부되면 그대로 실패로 남는다.
+BASIC_WEB_TOOLS = ("claude-haiku-",)
+NO_FALLBACK = ("claude-haiku-",)
+
 
 class EngineError(RuntimeError):
     pass
@@ -90,9 +96,9 @@ def parse_json(text: str) -> dict:
 class AnthropicEngine:
     name = "anthropic"
 
-    def __init__(self, settings: Settings, client=None):
+    def __init__(self, settings: Settings, client=None, model: str | None = None):
         self.settings = settings
-        self.model = settings.model
+        self.model = model or settings.model
         if client is None:
             import anthropic  # noqa: PLC0415 CLI 만 쓰는 서버에서는 import 조차 필요 없다
             client = anthropic.Anthropic(api_key=settings.anthropic_api_key) \
@@ -101,10 +107,10 @@ class AnthropicEngine:
 
     def _stream(self, **kw):
         # fallbacks: 안전 분류기가 거부하면 서버가 대체 모델로 다시 해 본다(moodle/watch 와 같은 설정).
+        if not self.model.startswith(NO_FALLBACK):
+            kw.update(betas=["server-side-fallback-2026-07-01"], fallbacks="default")
         with self.client.beta.messages.stream(
             model=self.model,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
             thinking={"type": "adaptive"},
             **kw,
         ) as stream:
@@ -149,8 +155,11 @@ class AnthropicEngine:
         return urls
 
     def research(self, system: str, user: str, *, max_searches: int, blocked: list[str]) -> Research:
-        search = {"type": "web_search_20260209", "name": "web_search", "max_uses": max_searches}
-        fetch = {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": max_searches}
+        basic = self.model.startswith(BASIC_WEB_TOOLS)
+        search = {"type": "web_search_20250305" if basic else "web_search_20260209", "name": "web_search",
+                  "max_uses": max_searches}
+        fetch = {"type": "web_fetch_20250910" if basic else "web_fetch_20260209", "name": "web_fetch",
+                 "max_uses": max_searches}
         if blocked:
             search["blocked_domains"] = blocked
             fetch["blocked_domains"] = blocked
@@ -204,9 +213,9 @@ class AnthropicEngine:
 class CliEngine:
     name = "cli"
 
-    def __init__(self, settings: Settings, runner=None):
+    def __init__(self, settings: Settings, runner=None, model: str | None = None):
         self.settings = settings
-        self.model = settings.model
+        self.model = model or settings.model
         self.runner = runner or self._run
 
     def _run(self, args: list[str], stdin: str) -> str:
@@ -271,10 +280,11 @@ def _uniq(urls: list[str]) -> list[str]:
     return out
 
 
-def make_engine(settings: Settings):
+def make_engine(settings: Settings, model: str | None = None):
+    """model 은 감시가 고른 모델(pipeline.pick_model). 없으면 배치 기본값(ONWATCH_MODEL)."""
     mode = settings.engine
     if mode == "anthropic" or (mode == "auto" and settings.anthropic_api_key):
-        return AnthropicEngine(settings)
+        return AnthropicEngine(settings, model=model)
     if mode in ("auto", "cli"):
-        return CliEngine(settings)
+        return CliEngine(settings, model=model)
     raise EngineError(f"알 수 없는 ONWATCH_ENGINE: {mode}")

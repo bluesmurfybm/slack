@@ -99,6 +99,31 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         <?php endif; ?>
         · 담당 <?= h($project['owner_name']) ?>
       </p>
+      <?php
+      // 어디서 왔는가 (032) — 출발 아이디어·R&D 과제. 032 가 없는 DB 에서도 화면은 뜬다.
+      $origin = [];
+      try {
+          require_once __DIR__ . '/inc/repo/IdeaRepo.php';
+          $ideaRepo = new IdeaRepo(bs_db());
+          if ($oi = $ideaRepo->originOf((int)$projectId)) {
+              $origin[] = '출발 아이디어 <a href="' . h($oi['url']) . '">' . h($oi['code'] . ' ' . $oi['title']) . '</a>';
+          }
+          $st = bs_db()->prepare('SELECT origin_project_id FROM bs_project WHERE id = ?');
+          $st->execute([(int)$projectId]);
+          if ($op = (int)$st->fetchColumn()) {
+              $b = $ideaRepo->projectBrief($op);
+              if ($b) {
+                  $origin[] = '출발 R&amp;D 과제 ' . ($b['url'] ? '<a href="' . h($b['url']) . '">' . h($b['code'] . ' ' . $b['name']) . '</a>'
+                                                            : h($b['code'] . ' ' . $b['name']));
+              }
+          }
+      } catch (Throwable $e) {
+          $origin = [];
+      }
+      ?>
+      <?php if ($origin): ?>
+        <p class="ba-panel__hint ba-lineage"><?= implode(' · ', $origin) ?></p>
+      <?php endif; ?>
     </div>
     <div class="ba-spacer"></div>
     <?php

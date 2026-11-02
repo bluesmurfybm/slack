@@ -117,3 +117,35 @@ def test_cli_error_result():
     eng = CliEngine(settings(), runner=lambda a, s: json.dumps({"is_error": True, "result": "로그인 필요"}))
     with pytest.raises(EngineError, match="로그인 필요"):
         eng.judge("s", "u", {})
+
+
+def test_haiku_uses_basic_web_tools_without_fallback():
+    client = FakeClient([msg([NS(type="text", text="노트", citations=[])])])
+    eng = AnthropicEngine(settings(), client=client, model="claude-haiku-5-5")
+    eng.research("s", "u", max_searches=3, blocked=[])
+    call = client.calls[0]
+    assert call["model"] == "claude-haiku-5-5"
+    assert [t["type"] for t in call["tools"]] == ["web_search_20250305", "web_fetch_20250910"]
+    assert "fallbacks" not in call
+    assert "betas" not in call
+
+
+def test_watch_model_overrides_default():
+    client = FakeClient([msg([NS(type="text", text="노트", citations=[])])])
+    eng = AnthropicEngine(settings(), client=client, model="claude-sonnet-5-5")
+    eng.research("s", "u", max_searches=3, blocked=[])
+    assert client.calls[0]["model"] == "claude-sonnet-5-5"
+    assert client.calls[0]["tools"][0]["type"] == "web_search_20260209"
+    assert client.calls[0]["fallbacks"] == "default"
+    assert AnthropicEngine(settings(), client=client).model == "claude-opus-5-5"
+
+
+def test_cli_engine_passes_watch_model():
+    seen = {}
+
+    def runner(args, stdin):
+        seen["args"] = args
+        return json.dumps({"result": "{}", "usage": {}})
+
+    CliEngine(settings(), runner=runner, model="claude-haiku-5-5").judge("s", "u", {})
+    assert seen["args"][seen["args"].index("--model") + 1] == "claude-haiku-5-5"

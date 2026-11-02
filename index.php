@@ -63,6 +63,8 @@ $__collapsed = array_values(array_filter(array_map(
 // 어느 카드에 붙일지는 worksystems.json 의 "badge" — core/push.php::push_tile_badges.
 require_once __DIR__ . '/core/push.php';
 $__tileBadges = $__u ? push_tile_badges((int)$__u['id'], $__systems) : [];
+// 배지 툴팁에 띄울 최근 제목 (2026-11-02) — 숫자만으로는 열어 볼지 판단이 안 선다.
+$__tilePreviews = $__u ? push_tile_previews((int)$__u['id'], $__systems) : [];
 // 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
 $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
@@ -571,6 +573,8 @@ let TILE_ORDERED = <?= json_encode(!empty($__u['tile_order'])) ?>;
 let TILE_GROUPS = <?= json_encode($__tileGroups, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 // { 카드key: 안 읽은 알림 수 }. 알림함 숫자가 바뀔 때마다 paintTileBadges() 가 갈아 끼운다.
 let TILE_BADGES = <?= json_encode($__tileBadges ?: new stdClass()) ?>;
+// { 카드key: [최근 안 읽은 알림 제목, …] } — 배지 툴팁 (core/push.php::push_tile_previews)
+let TILE_PREVIEWS = <?= json_encode($__tilePreviews ?: new stdClass(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
 // { 카드key: 묶음id }. 여기 없는 카드는 '기타' 로 간다.
 let TILE_ASSIGN = <?= json_encode($__tileAssign ?: new stdClass(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 // 접어 둔 묶음 id. 사람마다 다르다.
@@ -790,6 +794,7 @@ async function refreshNotifBadge(){
   if(!current) return;
   try{
     const d=await bapi("api/notifications.php?count=1");
+    if (d.previews) TILE_PREVIEWS = d.previews;
     paintNotifBadge(d.unread, d.tiles);
   }catch(e){}
 }
@@ -1022,31 +1027,37 @@ function tileHTML(s){
     <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener"
        draggable="false" data-key="${esc(s.key)}">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}${s.badge ? tileBadgeHTML(TILE_BADGES[s.key]) : ""}</span>
+      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}${s.badge ? tileBadgeHTML(TILE_BADGES[s.key], s.key) : ""}</span>
       <div><h3>${esc(s.label)}</h3><p>${esc(s.desc || "")}</p></div>
     </a>`;
 }
 
 /* 카드 아이콘 오른쪽 위 숫자 — 그 시스템에서 온 안 읽은 알림 수.
    worksystems.json 에 "badge" 를 단 카드에만 자리를 만들어 둔다. */
-function tileBadgeHTML(n){
+function tileBadgeHTML(n, key){
   n = n|0;
-  return `<span class="tile-badge"${n ? "" : " hidden"} title="안 읽은 알림 ${n}건">${n>99 ? "99+" : n}</span>`;
+  return `<span class="tile-badge"${n ? "" : " hidden"} title="${esc(tileTip(n, key))}">${n>99 ? "99+" : n}</span>`;
+}
+/* 배지 툴팁 — 숫자 아래에 최근 제목 몇 줄. core/push.php::push_tile_tip 과 같은 모양 */
+function tileTip(n, key){
+  return `안 읽은 알림 ${n}건` + ((TILE_PREVIEWS[key] || []).map(t => "\n· " + t).join(""));
 }
 function paintTileBadges(tiles){
   if(!tiles) return;
   TILE_BADGES = tiles;
   document.querySelectorAll(".tile[data-key] .tile-badge").forEach(b => {
-    const n = TILE_BADGES[b.closest(".tile").dataset.key] | 0;
+    const key = b.closest(".tile").dataset.key;
+    const n = TILE_BADGES[key] | 0;
     b.textContent = n>99 ? "99+" : String(n);
-    b.title = `안 읽은 알림 ${n}건`;
+    b.title = tileTip(n, key);
     b.hidden = !n;
   });
   // 상단바 드롭다운의 같은 숫자(core/worksystems.php::work_systems_menu)도 같이 갈아 끼운다
   document.querySelectorAll(".dd-menu a[data-key] .dd-badge").forEach(b => {
-    const n = TILE_BADGES[b.closest("a").dataset.key] | 0;
+    const key = b.closest("a").dataset.key;
+    const n = TILE_BADGES[key] | 0;
     b.textContent = n>99 ? "99+" : String(n);
-    b.title = `안 읽은 알림 ${n}건`;
+    b.title = tileTip(n, key);
     b.hidden = !n;
   });
 }

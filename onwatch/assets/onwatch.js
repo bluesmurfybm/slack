@@ -150,7 +150,7 @@
       var el = form.elements[name];
       if (!el) return "";
       if (el.type === "checkbox") return el.checked ? "1" : "";
-      return el.value;
+      return el.value; // 라디오 묶음(RadioNodeList)이면 고른 값
     }
     function data() {
       var o = {};
@@ -179,9 +179,12 @@
       // 관리자가 슬랙을 꺼 두면 칸 자체가 없다
       if (box && form.elements.notify_slack) box.hidden = !form.elements.notify_slack.checked;
     }
+    // 모델: 새 감시는 사람이 고르기 전까지 권장을 따라간다
+    var autoModel = !!OW.auto_model;
     form.addEventListener("change", function (e) {
       if (e.target.name === "interval_min") syncSched();
       if (e.target.name === "notify_slack") syncSlack();
+      if (e.target.name === "model") autoModel = false;
       schedulePreview();
     });
     syncSched();
@@ -259,7 +262,11 @@
       api("api/preview.php", body).then(function (d) {
         if (seq !== pvSeq) return;
         if (d.error) { preview.innerHTML = '<span class="over">' + esc(d.error) + "</span>"; return; }
-        var c = d.cost;
+        syncModels(d);
+        // 비용 줄은 지금 고른 모델 기준. 방금 권장을 따라 바꿨을 수 있어 서버의 cost 대신 모델별 값을 쓴다
+        var m = d.models && d.models[val("model")];
+        var c = m ? { per_run_low: m.per_run_low, per_run_high: m.per_run_high, month_low: m.month_low, month_high: m.month_high,
+                      budget: d.cost.budget, over_budget: m.month_low > d.cost.budget } : d.cost;
         preview.innerHTML =
           "<b>" + esc(d.label) + "</b> · 기간 중 <b>" + d.runs.toLocaleString() + "회</b> 실행" +
           (d.next.length ? "<ul>" + d.next.map(function (n) { return "<li>" + esc(n.label) + "</li>"; }).join("") + (d.runs > 3 ? "<li>…</li>" : "") + "</ul>" : "") +
@@ -267,6 +274,20 @@
           ", 한 달 약 " + money(c.month_low) + "~" + money(c.month_high) +
           (c.over_budget ? ' <span class="over">— 월 상한 ' + money(c.budget) + "보다 많을 수 있습니다. 주기를 늘리거나 상한을 올리세요</span>" : "") + "</div>";
       }).catch(function () {});
+    }
+    function syncModels(d) {
+      var rec = d.recommend && d.recommend.model;
+      form.querySelectorAll("[data-rec]").forEach(function (b) { b.hidden = b.dataset.rec !== rec; });
+      var why = document.getElementById("modelWhy");
+      if (why && d.recommend) why.textContent = d.recommend.reason;
+      form.querySelectorAll("[data-mcost]").forEach(function (el) {
+        var m = (d.models || {})[el.dataset.mcost];
+        el.textContent = m ? "한 번 " + money(m.per_run_low) + "~" + money(m.per_run_high) + " · 한 달 약 " + money(m.month_low) + "~" + money(m.month_high) : "";
+      });
+      if (autoModel && rec) {
+        var r = form.querySelector('input[name="model"][value="' + rec + '"]');
+        if (r) r.checked = true;
+      }
     }
     schedulePreview();
 

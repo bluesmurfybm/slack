@@ -51,6 +51,7 @@ function bs_layout_head(
       <b>blue</b><span class="dash">-</span>iWorks
     </a>
     <div class="top-right">
+      <?= bs_layout_bell() ?>
       <div class="user-menu" id="hdrUserMenu">
         <div class="user-chip" onclick="baToggleUserMenu(event)" title="메뉴">
           <span class="avatar" style="background:<?= h($avatarColor) ?>"><?= h($avatarChar) ?></span>
@@ -110,6 +111,63 @@ function bs_layout_head(
 }
 
 /**
+ * 상단바 종 — BlueStudio 에서 온 안 읽은 알림 (032, 2026-11-02).
+ *
+ * 포털 메인에만 종이 있어서, studio 안에 있는 동안에는 새 아이디어가 올라와도
+ * 몰랐다. 숫자 배지에 마우스를 올리거나 누르면 최근 소식 제목이 펼쳐진다.
+ * 알림 원본은 포털 알림함(portal_notification)이다 — 따로 세지 않는다.
+ *
+ * 곁가지라 실패하면 아무것도 그리지 않는다. 화면은 떠야 한다.
+ */
+function bs_layout_bell(): string
+{
+    $uid = (int)($_SESSION['portal_uid'] ?? 0);
+    $me  = bs_current_user();
+    if (!$uid || !$me || !empty($me['view_as'])) {
+        return '';   // 남의 눈으로 볼 때 내 알림을 섞지 않는다
+    }
+    try {
+        require_once BS_PORTAL_ROOT . '/core/push.php';
+        $st = portal_db()->prepare(
+            "SELECT title, body, url, created_at FROM portal_notification
+              WHERE user_id = ? AND read_at IS NULL AND kind LIKE 'studio.%'
+              ORDER BY id DESC LIMIT 6");
+        $st->execute([$uid]);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $cnt  = portal_db()->prepare(
+            "SELECT COUNT(*) FROM portal_notification WHERE user_id = ? AND read_at IS NULL AND kind LIKE 'studio.%'");
+        $cnt->execute([$uid]);
+        $n = (int)$cnt->fetchColumn();
+    } catch (Throwable $e) {
+        error_log('[BlueStudio] 상단 종: ' . $e->getMessage());
+        return '';
+    }
+
+    $tip = push_tile_tip($n, array_map(static fn($r) => mb_strimwidth((string)$r['title'], 0, 60, '…'),
+                                      array_slice($rows, 0, 3)));
+    $items = '';
+    foreach ($rows as $r) {
+        $href = preg_match('#^https?://#i', (string)$r['url']) ? (string)$r['url'] : '../' . ltrim((string)$r['url'], '/');
+        $items .= '<a class="ba-bell__item" href="' . h($href) . '">'
+            . '<b>' . h((string)$r['title']) . '</b>'
+            . ($r['body'] !== '' ? '<span>' . h(mb_strimwidth((string)$r['body'], 0, 80, '…')) . '</span>' : '')
+            . '<i>' . h(bs_date((string)$r['created_at'], 'm-d H:i')) . '</i></a>';
+    }
+    return '<div class="ba-bell' . ($n ? ' has-new' : '') . '">'
+        . '<button type="button" class="ba-bell__btn" aria-haspopup="true" aria-expanded="false"'
+        . ' aria-label="BlueStudio 알림 ' . $n . '건" title="' . h($tip) . '"'
+        . ' onclick="var p=this.parentNode;p.classList.toggle(\'open\');this.setAttribute(\'aria-expanded\',p.classList.contains(\'open\'))">'
+        . '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>'
+        . ($n ? '<span class="ba-bell__n">' . ($n > 99 ? '99+' : $n) . '</span>' : '')
+        . '</button>'
+        . '<div class="ba-bell__pop" role="menu">'
+        . '<div class="ba-bell__head">BlueStudio 새 소식' . ($n ? ' <em>' . $n . '</em>' : '') . '</div>'
+        . ($items ?: '<p class="ba-bell__empty">새 소식이 없습니다.</p>')
+        . '<a class="ba-bell__all" href="../index.php">포털 알림함에서 모두 보기</a>'
+        . '</div></div>';
+}
+
+/**
  * 모듈 안 화면 이동 — 대메뉴 [구성원][관리자] + 서브 메뉴 (2026-10-16, BlueCart 와 같은 짜임).
  *
  *   머리말 오른쪽  대메뉴   구성원 | 관리자          ← 관리자에게만 보인다
@@ -129,6 +187,7 @@ const BS_NAV_GROUPS = [
         'dashboard' => ['index.php',        '대시보드', 'home'],   // 아이콘만 그린다
         'project'   => ['project_list.php', '프로젝트'],
         'rnd'       => ['rnd_board.php',    'R&D 과제'],
+        'idea'      => ['idea_board.php',   '아이디어'],   // 032 — 과제가 되기 전의 생각
     ]],
     'admin' => ['label' => '관리자', 'items' => [
         'member'    => ['member_list.php',  '구성원 관리'],

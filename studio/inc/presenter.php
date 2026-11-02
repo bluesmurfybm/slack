@@ -202,6 +202,8 @@ function bs_present_rnd(array $r, array $extra = []): array
             'restore'      => bs_rnd_can_purge($r),
             'purge'        => bs_rnd_can_purge($r),
             'interest'     => !bs_rnd_is_deleted($r),
+            // 승인된 과제를 프로젝트로 (032)
+            'promote_project' => bs_rnd_can_promote_project($r),
         ],
         // 삭제 상태 (2026-10-16). 관리자가 [삭제 포함] 으로 볼 때만 이 값이 선다.
         'deleted'         => bs_rnd_is_deleted($r),
@@ -447,7 +449,26 @@ function bs_rnd_actions(array $rnd, bool $canEdit, bool $canApprove): array
     if (bs_rnd_can_contribute($rnd))  { $out[] = 'log'; $out[] = 'output'; }
     if (bs_rnd_can_close($rnd))       { $out[] = 'finish'; $out[] = 'drop'; }
     if (bs_rnd_can_delete($rnd))      { $out[] = 'delete'; }
+    if (bs_rnd_can_promote_project($rnd)) { $out[] = 'promote_project'; }
     return $out;
+}
+
+/**
+ * R&D 과제를 프로젝트로 넘길 수 있는가 (032).
+ *
+ * 승인된 뒤(승인됨·진행 중·종료)에만, 주도자·발의자나 관리자가, 프로젝트
+ * 등록 권한(027)이 있을 때. 승인 전 과제를 프로젝트로 넘기면 과제 승인
+ * 통제를 옆길로 돌아가는 셈이다.
+ */
+function bs_rnd_can_promote_project(array $rnd): bool
+{
+    if (bs_rnd_is_deleted($rnd) || !in_array($rnd['status'], ['approved', 'running', 'done'], true)) {
+        return false;
+    }
+    if (!bs_can(BS_CAP_PROJECT_CREATE)) {
+        return false;
+    }
+    return bs_is_admin() || bs_rnd_is_lead($rnd) || bs_rnd_is_proposer($rnd);
 }
 
 /**
@@ -508,4 +529,177 @@ function bs_present_source(array $r): array
         'uploaded_by'  => $r['uploaded_by_name'] ?? null,
         'created_at'   => bs_date($r['created_at'], 'Y-m-d H:i'),
     ];
+}
+
+
+// =====================================================================
+// 아이디어·제안 (032)
+//
+// 볼 수 있는 범위는 없다 — 로그인한 사람 누구나 본다. 나누려고 올리는
+// 곳이라서다. 대신 **익명**이 있다. 작성자는 관리자와 본인만 본다.
+// =====================================================================
+
+/** 내가 올린 아이디어인가. 익명이어도 author_id 는 채워져 있다. */
+function bs_idea_is_author(array $idea): bool
+{
+    $me = bs_current_user();
+    return $me !== null && (string)($idea['author_id'] ?? '') === (string)$me['id'];
+}
+
+function bs_idea_is_deleted(array $idea): bool
+{
+    return !empty($idea['deleted_at']);
+}
+
+/**
+ * 본문을 고칠 수 있는가.
+ *
+ * 채택·반려·과제화 뒤에는 잠근다. 평가와 피드백은 그때 본문을 보고 한
+ * 것이라, 뒤에서 본문이 바뀌면 남은 평가가 다른 글에 붙은 셈이 된다.
+ */
+function bs_idea_can_edit(array $idea): bool
+{
+    if (bs_idea_is_deleted($idea)) {
+        return false;
+    }
+    if (bs_is_admin()) {
+        return $idea['status'] !== 'promoted';
+    }
+    return bs_idea_is_author($idea)
+        && in_array($idea['status'], ['open', 'reviewing', 'hold'], true);
+}
+
+/** 지울 수 있는가. 과제·프로젝트로 넘어간 것은 출발점이라 남긴다. */
+function bs_idea_can_delete(array $idea): bool
+{
+    if (bs_idea_is_deleted($idea) || $idea['status'] === 'promoted') {
+        return false;
+    }
+    return bs_is_admin() || bs_idea_is_author($idea);
+}
+
+/** 평가할 수 있는가. 자기 아이디어는 평가하지 않는다. */
+function bs_idea_can_rate(array $idea): bool
+{
+    return bs_current_user() !== null
+        && !bs_idea_is_deleted($idea)
+        && !bs_idea_is_author($idea)
+        && in_array($idea['status'], ['open', 'reviewing', 'adopted', 'hold'], true)
+        && empty($idea['duplicate_of']);   // 묶인 쪽은 원래 아이디어에 모은다
+}
+
+/** 피드백은 넘어간 뒤에도 받는다 — 과제에서 참고할 말이 붙는다. */
+function bs_idea_can_comment(array $idea): bool
+{
+    return bs_current_user() !== null && !bs_idea_is_deleted($idea);
+}
+
+/** 검토(채택·보류·반려)·묶기. */
+function bs_idea_can_review(array $idea): bool
+{
+    return !bs_idea_is_deleted($idea)
+        && $idea['status'] !== 'promoted'
+        && bs_can(BS_CAP_IDEA_REVIEW);
+}
+
+/**
+ * R&D 과제로 올릴 수 있는가.
+ *
+ * 과제 발의는 원래 누구나 한다. 다만 **남의 아이디어**는 채택된 뒤에만
+ * 가져간다 — 올린 사람이 다듬는 중인 생각을 다른 사람이 먼저 과제로
+ * 만들어 버리면 제안할 마음이 꺾인다. 올린 사람은 언제든 올린다.
+ * 올린 뒤에도 과제는 **발의됨**에서 시작한다. 승인을 건너뛰지 않는다.
+ */
+function bs_idea_can_promote_rnd(array $idea): bool
+{
+    if (bs_idea_is_deleted($idea) || in_array($idea['status'], ['promoted', 'rejected'], true)
+        || !empty($idea['duplicate_of']) || bs_current_user() === null) {
+        return false;
+    }
+    return bs_is_admin() || bs_idea_is_author($idea) || $idea['status'] === 'adopted';
+}
+
+/**
+ * 프로젝트로 바로 올릴 수 있는가 — 과제 단계를 건너뛰는 길.
+ * 프로젝트 등록 권한(027)이 있어야 하고, 관리자가 아니면 채택된 것만.
+ */
+function bs_idea_can_promote_project(array $idea): bool
+{
+    if (bs_idea_is_deleted($idea) || in_array($idea['status'], ['promoted', 'rejected'], true)
+        || !empty($idea['duplicate_of'])) {
+        return false;
+    }
+    if (!bs_can(BS_CAP_PROJECT_CREATE)) {
+        return false;
+    }
+    return bs_is_admin() || $idea['status'] === 'adopted';
+}
+
+/** 화면이 그릴 단추. 목록에 없는 단추는 그리지 않는다. */
+function bs_idea_actions(array $idea): array
+{
+    $out = [];
+    if (bs_idea_can_edit($idea))            { $out[] = 'update'; }
+    if (bs_idea_can_delete($idea))          { $out[] = 'delete'; }
+    if (bs_idea_can_rate($idea))            { $out[] = 'rate'; }
+    if (bs_idea_can_comment($idea))         { $out[] = 'comment'; }
+    if (bs_idea_can_review($idea))          { $out[] = 'review'; $out[] = 'merge'; }
+    if (bs_idea_can_promote_rnd($idea))     { $out[] = 'promote_rnd'; }
+    if (bs_idea_can_promote_project($idea)) { $out[] = 'promote_project'; }
+    return $out;
+}
+
+/**
+ * 작성자 표시. 익명이면 관리자와 본인 말고는 "익명" 만 본다.
+ * author_id 는 이 함수를 거친 뒤에는 밖으로 나가지 않는다.
+ */
+function bs_idea_author_label(array $idea): string
+{
+    if (!empty($idea['is_anonymous']) && !bs_is_admin() && !bs_idea_is_author($idea)) {
+        return '익명';
+    }
+    return (string)($idea['author_name'] ?? '');
+}
+
+/**
+ * 아이디어 한 건을 화면 모양으로.
+ * $full=false 면 목록용 — 본문 대신 앞부분만 싣는다.
+ */
+function bs_present_idea(array $r, bool $full = true): array
+{
+    $out = [
+        'id'            => (int)$r['id'],
+        'code'          => $r['code'],
+        'title'         => $r['title'],
+        'rnd_category'  => $r['rnd_category'],
+        'category_label'=> $r['rnd_category'] !== null ? (BS_RND_CATEGORY[$r['rnd_category']] ?? $r['rnd_category']) : null,
+        'status'        => $r['status'],
+        'status_label'  => BS_IDEA_STATUS[$r['status']] ?? $r['status'],
+        'author_name'   => bs_idea_author_label($r),
+        'is_anonymous'  => !empty($r['is_anonymous']),
+        'is_mine'       => bs_idea_is_author($r),
+        'duplicate_of'  => $r['duplicate_of'] !== null ? (int)$r['duplicate_of'] : null,
+        'promoted_project_id' => $r['promoted_project_id'] !== null ? (int)$r['promoted_project_id'] : null,
+        'deleted'       => bs_idea_is_deleted($r),
+        'created_at'    => bs_date($r['created_at'], 'Y-m-d H:i'),
+        'updated_at'    => bs_date($r['updated_at'], 'Y-m-d H:i'),
+        'actions'       => bs_idea_actions($r),
+    ];
+    if ($full) {
+        $out += [
+            'problem'          => $r['problem'],
+            'proposal'         => $r['proposal'],
+            'effect'           => $r['effect'],
+            'url'              => $r['url'],
+            'review_note'      => $r['review_note'],
+            'reviewed_by_name' => $r['reviewed_by_name'],
+            'reviewed_at'      => $r['reviewed_at'] ? bs_date($r['reviewed_at'], 'Y-m-d H:i') : null,
+            'promoted_by_name' => $r['promoted_by_name'],
+            'promoted_at'      => $r['promoted_at'] ? bs_date($r['promoted_at'], 'Y-m-d H:i') : null,
+        ];
+    } else {
+        $lead = trim((string)($r['proposal'] ?: $r['problem'] ?: ''));
+        $out['excerpt'] = mb_strimwidth(preg_replace('/\s+/u', ' ', $lead), 0, 160, '…');
+    }
+    return $out;
 }

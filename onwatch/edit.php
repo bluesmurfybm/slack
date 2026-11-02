@@ -43,6 +43,15 @@ if ($id) {
     if ($src) $v = array_merge($v, ow_clone_fields($src));
 }
 $isNew = !$w;
+// 모델 — 새 감시(와 모델을 넘겨받지 못한 복제)는 권장 모델로 시작하고, 사람이 고르기 전까지
+// 지시문·검색 상한을 바꾸면 권장을 따라간다(OW.auto_model). 고친 감시는 저장된 값 그대로.
+[$recModel, $recWhy] = ow_recommend_model($v);
+$curModel = (string)($v['model'] ?? '');
+$autoModel = $isNew && $curModel === '';
+if ($autoModel) $curModel = $recModel;
+$modelChoices = ow_models();
+$legacyModel = !$isNew && $curModel === '';                                    // 모델을 고르기 전에 만든 감시
+$retiredModel = $curModel !== '' && !isset($modelChoices[$curModel]) ? $curModel : null; // 관리자가 뺀 모델
 $pageTitle = $isNew ? ($clone ? '감시 복제' : '새 감시') : '감시 고치기';
 $weekdays = [1 => '월', 2 => '화', 3 => '수', 4 => '목', 5 => '금', 6 => '토', 7 => '일'];
 
@@ -218,8 +227,39 @@ ow_page_head($me, $pageTitle . ' · OnWatch');
       </div>
     </section>
 
+    <section class="card fsec">
+      <div class="fsec-h"><h2><span class="num">4</span>어떤 AI 로 조사할까요</h2></div>
+      <div class="field">
+        <div class="models" role="radiogroup" aria-label="모델">
+          <?php if ($legacyModel): ?>
+            <label class="mopt"><input type="radio" name="model" value="" checked>
+              <span class="mbox"><span class="mhead"><b>배치 기본값</b> <span class="mtier">지금처럼</span></span>
+              <span class="mdesc">모델을 고르기 전에 만든 감시입니다. 서버에 정해 둔 기본 모델로 돕니다.</span></span></label>
+          <?php endif; ?>
+          <?php if ($retiredModel): ?>
+            <label class="mopt"><input type="radio" name="model" value="<?= h($retiredModel) ?>" checked>
+              <span class="mbox"><span class="mhead"><b><?= h(OW_MODELS[$retiredModel]['label'] ?? $retiredModel) ?></b> <span class="mtier off">지금은 고를 수 없음</span></span>
+              <span class="mdesc">관리자가 이 모델을 목록에서 뺐습니다. 다른 모델을 고를 때까지 서버 기본 모델로 돕니다.</span></span></label>
+          <?php endif; ?>
+          <?php foreach ($modelChoices as $m => $info): ?>
+            <label class="mopt"><input type="radio" name="model" value="<?= h($m) ?>"<?= $curModel === $m ? ' checked' : '' ?>>
+              <span class="mbox">
+                <span class="mhead"><b><?= h($info['label']) ?></b> <span class="mtier"><?= h($info['tier']) ?></span>
+                  <span class="mrec" data-rec="<?= h($m) ?>"<?= $m === $recModel ? '' : ' hidden' ?>>권장</span></span>
+                <span class="mdesc"><?= h($info['desc']) ?></span>
+                <span class="mcost" data-mcost="<?= h($m) ?>"></span>
+              </span></label>
+          <?php endforeach; ?>
+        </div>
+        <p class="help" id="modelWhy"><?= h($recWhy) ?></p>
+        <p class="help">사내 다른 프로그램과 API 비용을 나눠 씁니다. 권장보다 비싼 모델은 결과가 아쉬울 때 고르세요.
+          조사·판정 모두 이 모델로 돌고, 실제로 쓴 모델과 비용은 실행 이력에 남습니다.</p>
+        <div class="err" data-for="model"></div>
+      </div>
+    </section>
+
     <details class="card fsec adv"<?= ($v['prefer_domains'] || $v['block_domains']) ? ' open' : '' ?>>
-      <summary><h2><span class="num">4</span>조사 범위와 비용 <span class="opt">고급</span></h2></summary>
+      <summary><h2><span class="num">5</span>조사 범위와 비용 <span class="opt">고급</span></h2></summary>
       <div class="row2">
         <div class="field">
           <label for="f_prefer">먼저 볼 출처</label>
@@ -259,4 +299,4 @@ ow_page_head($me, $pageTitle . ' · OnWatch');
     </div>
   </form>
 </div>
-<?php ow_page_foot(['page' => 'edit', 'templates' => $isNew ? ow_templates() : new stdClass()]); ?>
+<?php ow_page_foot(['page' => 'edit', 'templates' => $isNew ? ow_templates() : new stdClass(), 'auto_model' => $autoModel]); ?>

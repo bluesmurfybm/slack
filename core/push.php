@@ -618,6 +618,49 @@ function push_tile_badges(int $userId, array $systems): array
 }
 
 /**
+ * 카드 배지 툴팁에 띄울 최근 안 읽은 알림 제목 — 카드 key => [제목, …] (최신 순).
+ *
+ * 숫자만 보이면 "무슨 일이지" 를 알려고 들어가 봐야 한다. 제목 몇 줄이면 지금
+ * 열어 볼지 판단할 수 있다(2026-11-02, BlueStudio 아이디어 요청). 배지를 단
+ * 카드만, 카드마다 $per 건까지.
+ *
+ * @param array $systems work_systems() 의 결과
+ * @return array<string, list<string>>
+ */
+function push_tile_previews(int $userId, array $systems, int $per = 3): array
+{
+    $want = [];
+    foreach ($systems as $s) {
+        if (($s['badge'] ?? '') === 'inbox') $want[$s['key']] = true;
+    }
+    if (!$want) return [];
+    try {
+        // 안 읽은 것이 수백 건이어도 카드마다 몇 줄이면 된다 — 최근 것만 넉넉히 긁는다.
+        $st = portal_db()->prepare("SELECT kind, title FROM portal_notification
+                                     WHERE user_id = ? AND read_at IS NULL ORDER BY id DESC LIMIT 200");
+        $st->execute([$userId]);
+        $out = [];
+        foreach ($st->fetchAll() as $r) {
+            $sys = push_kind($r['kind'])['sys'] ?? 'portal';
+            if (!isset($want[$sys]) || count($out[$sys] ?? []) >= $per) continue;
+            $out[$sys][] = mb_strimwidth((string)$r['title'], 0, 60, '…');
+        }
+        return $out;
+    } catch (Throwable $e) {
+        error_log('[push] 카드 배지 제목: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/** 배지 툴팁 글 — "안 읽은 알림 N건" 아래에 최근 제목. 메뉴(PHP)와 포털(JS)이 같은 모양을 쓴다. */
+function push_tile_tip(int $n, array $titles): string
+{
+    $tip = "안 읽은 알림 {$n}건";
+    foreach ($titles as $t) $tip .= "\n· " . $t;
+    return $tip;
+}
+
+/**
  * 주소별 안 읽은 수. 모듈이 자기 목록에서 "이 건에 새 소식 N" 을 그릴 때 쓴다.
  * $kindPrefix 는 'onwatch.' 처럼 점까지 준다.
  *

@@ -118,7 +118,8 @@ function work_systems_menu_data(string $base = ''): array {
                 $groups[] = ['name' => '기타', 'items' => $rest];
             }
         }
-        return ['groups' => $groups, 'badges' => push_tile_badges($uid, $systems)];
+        return ['groups' => $groups, 'badges' => push_tile_badges($uid, $systems),
+                'previews' => push_tile_previews($uid, $systems)];
     } catch (Throwable $e) {
         error_log('[worksystems] 메뉴 묶음: ' . $e->getMessage());
         return $plain;
@@ -148,7 +149,10 @@ function work_systems_menu(string $base = '', string $current = '', bool $newTab
                 . ($newTab ? ' target="_blank" rel="noopener"' : '')
                 . '>' . $sys['emoji'] . ' ' . $h($sys['label'])
                 . (!empty($sys['badge'])
-                    ? '<span class="dd-badge"' . ($n ? '' : ' hidden') . ' title="안 읽은 알림 ' . $n . '건">'
+                    ? '<span class="dd-badge"' . ($n ? '' : ' hidden') . ' title="'
+                      . $h(function_exists('push_tile_tip')
+                          ? push_tile_tip($n, $data['previews'][$sys['key']] ?? [])
+                          : '안 읽은 알림 ' . $n . '건') . '">'
                       . ($n > 99 ? '99+' : $n) . '</span>'
                     : '')
                 . '</a>';

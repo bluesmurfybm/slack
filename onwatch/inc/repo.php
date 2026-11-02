@@ -242,6 +242,15 @@ function ow_validate(array $in, ?array $existing = null): array
         $err['monthly_budget_usd'] = '월 비용 상한은 0.5~' . ow_config('max_budget_usd') . ' USD 입니다.';
     }
 
+    // 모델: 고를 수 있는 것 중 하나. 빈 값은 '배치 기본값' — 모델을 고르기 전에 만든 감시가
+    // 그대로 두는 경우다. 관리자가 목록에서 뺀 모델도 이미 그 값이면 손대지 않고 저장을 막지 않는다
+    // (실제로는 배치가 기본값으로 돌린다 — 다른 칸을 고치려다 저장이 막히지 않게).
+    $model = trim((string)($in['model'] ?? ''));
+    $keepModel = $existing !== null && $model === (string)($existing['model'] ?? '');
+    if ($model !== '' && !$keepModel && !isset(ow_models()[$model])) {
+        $err['model'] = '고를 수 있는 모델이 아닙니다.';
+    }
+
     $webhook = trim((string)($in['slack_webhook'] ?? ''));
     if ($webhook !== '' && $webhook !== '__keep__' && !ow_valid_slack_webhook($webhook)) {
         $err['slack_webhook'] = '슬랙 웹훅은 https://hooks.slack.com/ 으로 시작하는 주소만 받습니다.';
@@ -266,6 +275,7 @@ function ow_validate(array $in, ?array $existing = null): array
         'block_domains'      => implode("\n", ow_clean_domains((string)($in['block_domains'] ?? ''))) ?: null,
         'max_searches'       => $searches,
         'monthly_budget_usd' => round($budget, 2),
+        'model'              => $model === '' ? null : $model,
     ];
     // 웹훅: '__keep__' 이면 그대로, 빈 값이면 지움(기본 채널), 아니면 새 값
     if ($webhook !== '__keep__') {
@@ -332,7 +342,7 @@ function ow_watch_update(array $w, array $row, int $uid): void
                'weekdays_only' => '평일만', 'hour_from' => '시간대', 'hour_to' => '시간대',
                'notify_mode' => '알림 방식', 'min_importance' => '최소 중요도', 'notify_slack' => '슬랙',
                'slack_webhook_enc' => '슬랙 웹훅', 'prefer_domains' => '우선 출처', 'block_domains' => '제외 도메인',
-               'max_searches' => '검색 상한', 'monthly_budget_usd' => '월 비용 상한'];
+               'max_searches' => '검색 상한', 'monthly_budget_usd' => '월 비용 상한', 'model' => '모델'];
     foreach ($row as $k => $v) {
         if ((string)($w[$k] ?? '') !== (string)$v) $changed[$labels[$k] ?? $k] = true;
     }
@@ -430,8 +440,10 @@ function ow_clone_fields(array $w): array
 {
     $keep = ['title', 'prompt', 'baseline', 'interval_min', 'run_time', 'weekday', 'weekdays_only', 'hour_from',
              'hour_to', 'notify_mode', 'min_importance', 'notify_slack', 'prefer_domains', 'block_domains',
-             'max_searches', 'monthly_budget_usd'];
+             'max_searches', 'monthly_budget_usd', 'model'];
     $out = array_intersect_key($w, array_flip($keep));
+    // 복제는 새 감시다 — 이제 고를 수 없는 모델이나 '배치 기본값' 은 넘기지 않고 권장으로 다시 고르게 둔다
+    if (!isset(ow_models()[(string)($out['model'] ?? '')])) unset($out['model']);
     $out['title'] = $w['title'] . ' (복사본)';
     return $out;
 }
