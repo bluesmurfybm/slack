@@ -32,6 +32,8 @@ $CFG = array(
     'conn_warn_pct' => 80,
     // DB 접속 대기 한도 (초). 넘으면 fail 로 떨어뜨린다
     'db_timeout'    => 5,
+    // DB 설정 파일을 직접 지정 (CI3·XE 가 아닌 사이트). 이 파일 기준 상대경로 가능. 예: 'config/config.php'
+    'db_config'     => '',
 );
 /* ==================================================== */
 
@@ -63,7 +65,7 @@ $root   = h_doc_root();
 
 $checks['php'] = h_check_php();
 
-$cms = h_detect_cms($root);
+$cms = h_detect_cms($root, $CFG);
 
 if (isset($_GET['mode']) && $_GET['mode'] === 'ping') {
     h_output($cms, $checks, $H_T0, 'ping');
@@ -107,8 +109,16 @@ function h_ms($t0) {
 }
 
 /* ---------- CMS 탐지 ---------- */
-function h_detect_cms($root) {
+function h_detect_cms($root, $CFG) {
     $out = array('type' => 'unknown', 'config' => null, 'root' => $root, 'version' => null);
+
+    if (!empty($CFG['db_config'])) {
+        $p = (string)$CFG['db_config'];
+        if (!preg_match('#^(/|[A-Za-z]:)#', $p)) $p = $root . '/' . ltrim($p, '/');
+        $out['type']   = 'custom';
+        $out['config'] = $p;
+        return $out;
+    }
 
     // XE / Rhymix
     $xe = $root . '/files/config/db.config.php';
@@ -142,14 +152,70 @@ function h_detect_cms($root) {
             return $out;
         }
     }
+
+    // 자체 제작 사이트: config/config.php 등에 DB 접속값이 상수·변수·배열로 들어 있다
+    foreach (array('config/config.php', 'config/database.php', 'config/db.php', 'inc/config.php', 'include/config.php') as $f) {
+        if (is_file($root . '/' . $f)) {
+            $out['type']   = 'custom';
+            $out['config'] = $root . '/' . $f;
+            return $out;
+        }
+    }
     return $out;
 }
 
 /* ---------- DB 설정 파싱 ---------- */
 function h_db_config($cms) {
     if (!$cms['config'] || !is_file($cms['config'])) return null;
-    if ($cms['type'] === 'ci3')  return h_db_config_ci3($cms['config']);
+    if ($cms['type'] === 'ci3')    return h_db_config_ci3($cms['config']);
+    if ($cms['type'] === 'custom') return h_db_config_text($cms['config']);
     return h_db_config_xe($cms['config']);
+}
+
+/**
+ * include 하지 않고 글자로만 읽는다 — 자체 제작 config 는 세션 시작·리다이렉트·DB 접속까지 하는 경우가 있다.
+ * define('DB_HOST', '…') · $db_host = '…' · ['hostname'] = '…' · 'hostname' => '…' 꼴을 모은다.
+ */
+function h_db_config_text($file) {
+    $src = @file_get_contents($file);
+    if ($src === false || $src === '') return null;
+    $kv = array();
+    $q = '(?:\'([^\']*)\'|"([^"]*)")';
+    $pats = array(
+        '/define\s*\(\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*,\s*' . $q . '/',
+        '/\$([A-Za-z0-9_]+)\s*=\s*' . $q . '\s*;/',
+        '/\[\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*\]\s*=\s*' . $q . '/',
+        '/[\'"]([A-Za-z0-9_]+)[\'"]\s*=>\s*' . $q . '/',
+    );
+    foreach ($pats as $re) {
+        if (!preg_match_all($re, $src, $m, PREG_SET_ORDER)) continue;
+        foreach ($m as $x) {
+            $k = strtolower($x[1]);
+            if (!isset($kv[$k])) $kv[$k] = isset($x[3]) ? $x[3] : $x[2];
+        }
+    }
+    $c = array(
+        'driver' => h_kv_pick($kv, array('db_driver', 'dbdriver', 'db_type')),
+        'host'   => h_kv_pick($kv, array('db_host', 'db_hostname', 'dbhost', 'db_server', 'mysql_host', 'g5_mysql_host', 'hostname', 'host')),
+        'port'   => h_kv_pick($kv, array('db_port', 'dbport', 'mysql_port', 'port')),
+        'user'   => h_kv_pick($kv, array('db_user', 'db_username', 'db_userid', 'dbuser', 'mysql_user', 'g5_mysql_user', 'username', 'user')),
+        'pass'   => h_kv_pick($kv, array('db_pass', 'db_password', 'db_passwd', 'dbpass', 'dbpasswd', 'mysql_password', 'g5_mysql_password', 'password', 'passwd', 'pass')),
+        'name'   => h_kv_pick($kv, array('db_name', 'db_database', 'dbname', 'mysql_db', 'g5_mysql_db', 'database', 'db')),
+        'prefix' => h_kv_pick($kv, array('db_prefix', 'dbprefix', 'table_prefix', 'prefix')),
+    );
+    if ($c['user'] === null || $c['name'] === null) return null;
+    if ($c['host'] === null)   $c['host'] = 'localhost';
+    if ($c['pass'] === null)   $c['pass'] = '';
+    if ($c['prefix'] === null) $c['prefix'] = '';
+    if ($c['driver'] === null || strpos(strtolower($c['driver']), 'mysql') === false) $c['driver'] = 'mysqli';
+    return h_db_normalize($c);
+}
+
+function h_kv_pick($kv, $names) {
+    foreach ($names as $n) {
+        if (isset($kv[$n]) && $kv[$n] !== '') return $kv[$n];
+    }
+    return null;
 }
 
 function h_db_config_ci3($file) {
@@ -336,6 +402,12 @@ function h_check_db($cms, $CFG) {
     $cfg = h_db_config($cms);
 
     if (!$cfg) {
+        if (!$cms['config']) {
+            // 설정 파일 위치를 모르는 사이트 — 장애가 아니므로 경고로 올리지 않는다. 필요하면 $CFG['db_config'] 로 지정
+            $r['status'] = 'skip';
+            $r['note']   = 'db config not located (set $CFG[db_config] to enable)';
+            return $r;
+        }
         $r['status'] = 'warn';
         $r['error']  = 'db config not found or unreadable';
         return $r;
