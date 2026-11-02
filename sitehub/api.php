@@ -39,7 +39,6 @@
  *   ── 지정 계정만 (sitehub_can_stats) ──
  *   GET  ?blumo=1 · POST {action:blumo_import, items:[{blumo_id, site_id}]} → 예전 BLUMO 31곳을 감시 주소로
  *   POST {action:monitor_settings_save, …} / monitor_pause {on} / monitor_test_webhook / monitor_doctor
- *   POST {action:monitor_legacy_import, path, settings, history}  → 예전 blumo.sqlite 의 설정·기록 가져오기
  * 쓰기 응답에는 바뀐 사이트 한 건(site)을 실어 보내서 화면이 전체를 다시 안 받아도 되게 한다.
  */
 require_once __DIR__ . '/guard.php';
@@ -162,12 +161,9 @@ try {
             if (!sitehub_can_manage($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 볼 수 있습니다.']); }
             if (isset($_GET['blumo'])) sitehub_out(['ok' => true, 'seed' => sitehub_blumo_seed_plan($pdo), 'meta' => sitehub_blumo_meta($pdo)]);
             $cfg = blumo_cfg($pdo);
-            $legacy = blumo_legacy_path();
             sitehub_out(['ok' => true, 'cfg' => array_intersect_key($cfg, BLUMO_DEFAULTS) + ['webhook_url' => $cfg['webhook_url'], 'paused' => $cfg['paused']],
                          'ranges' => BLUMO_RANGES, 'meta' => sitehub_blumo_meta($pdo), 'php_cli' => blumo_php_cli(), 'ca' => is_file($cfg['ca_bundle']),
-                         'run_cmd' => 'php ' . str_replace('\\', '/', __DIR__) . '/monitor_run.php',
-                         'legacy' => ['path' => $legacy, 'exists' => is_file($legacy), 'sqlite' => extension_loaded('pdo_sqlite'),
-                                      'imported_at' => blumo_meta_get($pdo, 'legacy_import_at')]]);
+                         'run_cmd' => 'php ' . str_replace('\\', '/', __DIR__) . '/monitor_run.php']);
         }
         if (isset($_GET['unmatched'])) {
             // 하위 항목은 부모를 따라가므로 미매칭 목록에는 요청(최상위)만 — 부모를 지정하면 하위도 같이 간다
@@ -377,8 +373,8 @@ try {
         sitehub_out(['ok' => true, 'site' => sitehub_load_site($pdo, $sid)]);
     }
 
-    // ── BLUMO 설정 · 예전 BLUMO 가져오기 — 지정 계정만 ────────────────────────────
-    if (in_array($action, ['monitor_settings_save', 'monitor_pause', 'monitor_test_webhook', 'monitor_doctor', 'monitor_legacy_import'], true)) {
+    // ── BLUMO 설정 — 지정 계정만 ────────────────────────────
+    if (in_array($action, ['monitor_settings_save', 'monitor_pause', 'monitor_test_webhook', 'monitor_doctor'], true)) {
         if (!sitehub_can_manage($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 바꿀 수 있습니다.']); }
         sitehub_session_release();
         if ($action === 'monitor_settings_save') {
@@ -404,11 +400,6 @@ try {
         if ($action === 'monitor_doctor') {
             @set_time_limit(90);
             sitehub_out(['ok' => true, 'lines' => blumo_doctor($pdo)]);
-        }
-        if ($action === 'monitor_legacy_import') {
-            $path = trim((string)($in['path'] ?? '')) ?: blumo_legacy_path();
-            sitehub_out(['ok' => true, 'result' => blumo_legacy_import($pdo, $path, !empty($in['settings']), !empty($in['history'])),
-                         'meta' => sitehub_blumo_meta($pdo)]);
         }
     }
 

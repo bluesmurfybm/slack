@@ -3,7 +3,7 @@
  * BLUMO 감시 — 예전 blumo.pink 관리화면을 SiteHub 안으로 옮긴 것. 화면 세 개(주소 ?tab=):
  *  - board     감시 주소 전체의 상태 · 원인 · 응답 · 24h 가용률 · SSL — 지금 점검, 자동 점검 멈춤, 알림 무음, 점검 기록
  *  - incidents 확정된 장애 이력
- *  - settings  웹훅 · 판정 기준 · 일시정지 · 자동 점검(작업 스케줄러) · 환경 진단 · 예전 BLUMO 가져오기 (지정 계정만)
+ *  - settings  웹훅 · 판정 기준 · 일시정지 · 자동 점검(작업 스케줄러) · 환경 진단 (지정 계정만)
  * 감시 대상 추가·수정은 사이트 상세의 '감시 설정' 탭. 점검은 monitor_engine.php, 자동 실행은 monitor_run.php.
  */
 require_once __DIR__ . '/guard.php';

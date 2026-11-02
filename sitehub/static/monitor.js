@@ -195,7 +195,7 @@ async function loadBlumoLink() {
 function seedSuggestions(s) {
   const seed = (APP.blumoLink && APP.blumoLink.seed || []).filter(x => !x.linked && x.site_id === s.id);
   if (!seed.length) return "";
-  return `<div class="sh-mon-seed"><b>예전 BLUMO 에 있던 감시 대상</b> — 이 사이트로 보입니다. 연결하면 예전 점검 기록을 옮겨 올 수 있습니다.
+  return `<div class="sh-mon-seed"><b>예전 BLUMO 에 있던 감시 대상</b> — 이 사이트로 보입니다. 연결하면 감시 주소가 생기고 감시가 켜집니다.
     <ul>${seed.map(x => `<li><span>${esc(x.name)} · <span class="muted">${esc(x.url)}</span></span>
       <button type="button" class="btn-mini primary" onclick="importSeeds([{blumo_id:${x.blumo_id}, site_id:${s.id}}], this)">이 사이트에 연결</button></li>`).join("")}</ul></div>`;
 }
@@ -241,7 +241,7 @@ function renderBlumoLink() {
   const nameOf = id => ((all.find(x => x.id === id)) || {}).name || "";
   box.innerHTML = `
     <p class="fhint">SiteHub 로 옮기기 전 BLUMO(blumo.pink)에 있던 ${seed.length}곳입니다. 연결하면 그 사이트에 감시 주소(정상 판정 문구·메모 포함)가 생기고 감시가 켜집니다.
-      주소·이름으로 사이트를 미리 골라 두었으니 확인하고 ‘선택한 대상 연결’을 누르세요. 예전 점검 기록·웹훅 설정은 감시 › 설정 › ‘예전 BLUMO 가져오기’에서 옮깁니다.</p>
+      주소·이름으로 사이트를 미리 골라 두었으니 확인하고 ‘선택한 대상 연결’을 누르세요.</p>
     <p class="fhint"><b>${seed.length - open.length} / ${seed.length}</b> 연결됨</p>
     <ul class="sh-rows sh-seed">${seed.map(x => `<li class="${x.linked ? "dim" : ""}">
       <div><label class="sh-seed-pick">${x.linked ? `<span class="badge sh-st-active">연결됨</span>` : `<input type="checkbox" data-bid="${x.blumo_id}"${x.site_id ? " checked" : ""}>`}
@@ -390,12 +390,12 @@ async function monIncidents() {
     </tbody></table></div></div>` : `<ul class="list"><li class="empty"><div class="big">기록된 장애가 없습니다</div>연속 실패로 확정된 장애만 여기에 남습니다</li></ul>`;
 }
 
-/* 설정 (지정 계정) — 알림 · 판정 기준 · 자동 점검 · 일시정지 · 환경 진단 · 예전 BLUMO 가져오기 */
+/* 설정 (지정 계정) — 알림 · 판정 기준 · 자동 점검 · 일시정지 · 환경 진단 */
 async function monSettings() {
   $("monBody").innerHTML = `<ul class="list"><li class="empty">불러오는 중…</li></ul>`;
   let j;
   try { j = await api("?monitor_settings=1"); } catch (e) { $("monBody").innerHTML = `<ul class="list"><li class="empty">${esc(e.message)}</li></ul>`; return; }
-  const c = j.cfg, R = j.ranges, b = j.meta, L = j.legacy;
+  const c = j.cfg, R = j.ranges, b = j.meta;
   APP.blumo = b;
   monBanner();
   const num = (k, label, hint) => `<div class="field"><label>${esc(label)}</label><input type="number" data-k="${k}" min="${R[k][0]}" max="${R[k][1]}" value="${esc(c[k])}">${hint ? `<span class="fhint">${esc(hint)}</span>` : ""}</div>`;
@@ -431,15 +431,6 @@ async function monSettings() {
         <button type="button" class="btn-ghost" onclick="monTestWebhook(this)">테스트 알림 보내기</button>
         <button type="button" class="btn-ghost" onclick="monDoctor(this)">환경 진단</button>
         <pre class="sh-mpre" id="monDoctorOut" hidden></pre></div>
-      <div class="sh-panel"><div class="sh-panel-head"><h3>예전 BLUMO 가져오기</h3><p>SiteHub 로 옮기기 전 BLUMO(blumo.pink, blumo.sqlite)</p></div>
-        <p class="sh-mset-p"><b>1.</b> 감시 대상 31곳을 사이트에 연결 <button type="button" class="btn-mini" onclick="openBlumoLink()">대상 연결</button></p>
-        <p class="sh-mset-p"><b>2.</b> 웹훅·판정 기준·일시정지와 점검 기록·장애 이력 옮기기 ${L.imported_at ? `<span class="muted">(${esc(L.imported_at.slice(5, 16))}에 가져옴)</span>` : ""}</p>
-        <div class="field"><label>blumo.sqlite 위치</label><input type="text" id="monLegacyPath" value="${esc(L.path)}"></div>
-        <p class="fhint">${!L.sqlite ? `<span class="sh-mon-warn">이 PHP 에 pdo_sqlite 확장이 없어 읽을 수 없습니다</span> — 웹훅 주소는 왼쪽에 직접 넣으세요.` : (L.exists ? "파일이 있습니다." : `<span class="sh-mon-warn">이 위치에 파일이 없습니다.</span>`)}
-          기록은 1번에서 연결한 대상만 옮깁니다. 여러 번 눌러도 같은 기록은 두 번 들어가지 않습니다.</p>
-        <label class="check"><input type="checkbox" id="monLegacySet" checked> 설정</label> <label class="check"><input type="checkbox" id="monLegacyHist" checked> 점검 기록 · 장애 이력</label>
-        <div style="margin-top:8px"><button type="button" class="btn-ghost" onclick="monLegacy(this)"${L.sqlite ? "" : " disabled"}>가져오기</button></div>
-        <pre class="sh-mpre" id="monLegacyOut" hidden></pre></div>
     </div>
   </div>`;
 }
@@ -468,19 +459,6 @@ async function monDoctor(btn) {
   try { const j = await postJSON({ action: "monitor_doctor" }); const o = $("monDoctorOut"); o.textContent = j.lines.join("\n"); o.hidden = false; }
   catch (e) { showToast(e.message); }
   finally { btn.disabled = false; btn.textContent = "환경 진단"; }
-}
-async function monLegacy(btn) {
-  btn.disabled = true;
-  try {
-    const j = await postJSON({ action: "monitor_legacy_import", path: $("monLegacyPath").value, settings: $("monLegacySet").checked ? 1 : 0, history: $("monLegacyHist").checked ? 1 : 0 });
-    const r = j.result, o = $("monLegacyOut");
-    o.textContent = `설정 ${r.settings.length ? r.settings.join(", ") : "없음"}\n점검 기록 ${r.checks}건 · 장애 이력 ${r.incidents}건 · 현재 상태 ${r.states}곳`
-      + (r.unmapped.length ? `\n연결 안 된 예전 대상(기록을 안 옮김): ${r.unmapped.join(", ")}` : "");
-    o.hidden = false;
-    APP.blumo = j.meta;
-    showToast("예전 BLUMO 에서 가져왔습니다");
-  } catch (e) { showToast(e.message); }
-  finally { btn.disabled = false; }
 }
 
 /* monitor.php 첫 화면 */
