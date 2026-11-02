@@ -760,7 +760,7 @@ final class IdeaRepo
             }
         }
         if ($isNew && $out['problem'] === null && $out['proposal'] === null) {
-            throw new InvalidArgumentException('무엇이 문제인지, 또는 어떻게 하자는지 중 하나는 적어 주세요.');
+            throw new InvalidArgumentException('배경 · 계기나 아이디어 · 제안 중 하나는 적어 주세요.');
         }
         if ($isNew || array_key_exists('url', $d)) {
             $out['url'] = $this->checkUrl($d['url'] ?? null);

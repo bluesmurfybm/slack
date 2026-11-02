@@ -44,7 +44,7 @@ bs_layout_head(
        넘어가고, 그 진행이 아이디어 화면에 이어 보인다. -->
   <section class="ba-idea-flow" aria-label="아이디어가 가는 길">
     <ol>
-      <li><b>올리기</b><span>문제와 제안을 적습니다. 익명도 됩니다</span></li>
+      <li><b>올리기</b><span>떠오른 생각과 계기를 적습니다. 익명도 됩니다</span></li>
       <li><b>평가 · 피드백</b><span>누구나 가치와 실현 가능성을 매기고 의견을 붙입니다</span></li>
       <li><b>검토</b><span>채택 · 보류 · 반려 — 사유가 남습니다</span></li>
       <li><b>과제 · 프로젝트로</b><span>R&amp;D 과제로 발의하거나, 바로 프로젝트로 넘깁니다</span></li>

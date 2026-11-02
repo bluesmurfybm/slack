@@ -51,7 +51,7 @@ bs_layout_head(
     $user,
     $isNew ? '아이디어 올리기' : '아이디어 고치기',
     '과업 편성/현황',
-    $isNew ? '다듬어지지 않아도 됩니다. 문제든 제안이든 하나만 적어도 올라갑니다.'
+    $isNew ? '다듬어지지 않아도 됩니다. 배경이든 아이디어든 하나만 적어도 올라갑니다.'
            : '채택·반려되기 전까지 고칠 수 있습니다.',
     'idea'
 );
@@ -93,15 +93,15 @@ bs_layout_head(
   </label>
 
   <label class="ba-field ba-field--wide">
-    <span>무엇이 문제인가요</span>
+    <span>배경 · 계기</span>
     <textarea id="ba-i-problem" rows="4"
-      placeholder="불편한 점, 놓치고 있는 기회, 반복되는 수작업 …"><?= $v('problem') ?></textarea>
+      placeholder="어떻게 이 생각을 하게 됐나요 — 새로 해 보고 싶은 것, 다른 곳에서 본 좋은 사례, 아쉬웠던 점 …"><?= $v('problem') ?></textarea>
   </label>
 
   <label class="ba-field ba-field--wide">
-    <span>어떻게 하면 좋을까요</span>
+    <span>아이디어 · 제안</span>
     <textarea id="ba-i-proposal" rows="5"
-      placeholder="떠오른 해결 방법. 구체적이지 않아도 됩니다"><?= $v('proposal') ?></textarea>
+      placeholder="무엇을 해 보면 좋을까요. 구체적이지 않아도 됩니다"><?= $v('proposal') ?></textarea>
   </label>
 
   <label class="ba-field ba-field--wide">

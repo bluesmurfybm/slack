@@ -7026,7 +7026,7 @@
       };
       if (!body.title.trim()) { toast('제목을 입력하세요.', true); return; }
       if (!body.problem.trim() && !body.proposal.trim()) {
-        toast('무엇이 문제인지, 또는 어떻게 하자는지 중 하나는 적어 주세요.', true); return;
+        toast('배경 · 계기나 아이디어 · 제안 중 하나는 적어 주세요.', true); return;
       }
       if (id) body.id = id;
       btn.disabled = true;
@@ -7100,7 +7100,7 @@
         h += '<div class="ba-idea-reviewnote"><b>검토 — ' + esc(i.status_label) + '</b> ' + esc(i.review_note) +
              '<span class="ba-dim"> · ' + esc(i.reviewed_by_name || '') + ' ' + esc(i.reviewed_at || '') + '</span></div>';
       }
-      h += para('무엇이 문제인가', i.problem) + para('어떻게 하면 좋을까', i.proposal) + para('기대 효과', i.effect);
+      h += para('배경 · 계기', i.problem) + para('아이디어 · 제안', i.proposal) + para('기대 효과', i.effect);
       if (i.url) h += '<h3>참고 링크</h3><p><a href="' + esc(i.url) + '" target="_blank" rel="noopener">' + esc(i.url) + '</a></p>';
       if ((i.domains || []).length) {
         h += '<h3>분야</h3><div class="ba-idea-card__doms">' +

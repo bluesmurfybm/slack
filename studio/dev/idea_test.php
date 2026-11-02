@@ -176,7 +176,7 @@ ok('로그인 안 하면 못 본다', $anon->get('board')['status'] === 401);
 $r = $user->post('create', ['title' => '', 'proposal' => 'x']);
 ok('제목 없으면 400', $r['status'] === 400, err($r));
 $r = $user->post('create', ['title' => '[시험아이디어] 빈 본문']);
-ok('문제·제안 둘 다 비면 400', $r['status'] === 400 && str_contains(err($r), '하나는'), err($r));
+ok('배경·제안 둘 다 비면 400', $r['status'] === 400 && str_contains(err($r), '하나는'), err($r));
 $r = $user->post('create', ['title' => '[시험아이디어] 링크', 'proposal' => 'x', 'url' => 'javascript:alert(1)']);
 ok('http(s) 아닌 링크는 400', $r['status'] === 400, err($r));
 $r = $user->post('create', ['title' => '[시험아이디어] 갈래', 'proposal' => 'x', 'rnd_category' => 'nope']);
