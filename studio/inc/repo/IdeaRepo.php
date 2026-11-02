@@ -46,6 +46,29 @@ final class IdeaRepo
 
     public function __construct(private PDO $pdo) {}
 
+    /**
+     * 032 가 이 DB 에 적용됐는가. 표 넷과 bs_project 의 출발점 칸까지 본다.
+     * 코드만 먼저 올라간 서버에서 원인 모를 500 대신 할 일을 알리려고 둔다.
+     */
+    public static function schemaReady(PDO $pdo): bool
+    {
+        static $ready = null;
+        if ($ready === null) {
+            try {
+                $n = (int)$pdo->query(
+                    "SELECT COUNT(*) FROM information_schema.tables
+                      WHERE table_schema = DATABASE()
+                        AND table_name IN ('bs_idea', 'bs_idea_domain', 'bs_idea_rating', 'bs_idea_comment')"
+                )->fetchColumn();
+                $col = (bool)$pdo->query("SHOW COLUMNS FROM bs_project LIKE 'origin_idea_id'")->fetch();
+                $ready = $n === 4 && $col;
+            } catch (Throwable $e) {
+                $ready = false;
+            }
+        }
+        return $ready;
+    }
+
     // =================================================================
     // 읽기
     // =================================================================

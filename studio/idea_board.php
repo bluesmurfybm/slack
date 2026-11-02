@@ -9,6 +9,13 @@ require_once __DIR__ . '/inc/repo/IdeaRepo.php';
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $user = bs_require_login();
+if (!IdeaRepo::schemaReady(bs_db())) {   // 032 없이 코드만 올라간 서버 — 쓰다가 실패하지 않게 미리 알린다
+    bs_layout_head($user, '아이디어', '과업 편성/현황', '', 'idea');
+    echo '<div class="ba-alert">이 서버의 DB 에 아이디어 표가 아직 없습니다. 관리자가 '
+       . '<code>studio/sql/032_migration_idea.sql</code> 을 적용하면 쓸 수 있습니다.</div>';
+    bs_layout_foot();
+    exit;
+}
 $err  = bs_param_str('err');
 
 bs_layout_head(
