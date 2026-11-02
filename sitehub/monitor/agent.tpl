@@ -174,33 +174,20 @@ function h_db_config($cms) {
 
 /**
  * include 하지 않고 글자로만 읽는다 — 자체 제작 config 는 세션 시작·리다이렉트·DB 접속까지 하는 경우가 있다.
- * define('DB_HOST', '…') · $db_host = '…' · ['hostname'] = '…' · 'hostname' => '…' 꼴을 모은다.
+ * define('DB_HOST', '…') · $db_host = '…' · ['hostname'] = '…' · 'hostname' => '…' · (ini/env) DB_HOST=… 꼴을 모은다.
+ * config.php 가 DB 설정 파일 경로만 들고 있는 사이트가 있어, 거기 적힌 파일(include·경로 문자열)도 2단계까지 따라가 읽는다.
  */
 function h_db_config_text($file) {
-    $src = @file_get_contents($file);
-    if ($src === false || $src === '') return null;
     $kv = array();
-    $q = '(?:\'([^\']*)\'|"([^"]*)")';
-    $pats = array(
-        '/define\s*\(\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*,\s*' . $q . '/',
-        '/\$([A-Za-z0-9_]+)\s*=\s*' . $q . '\s*;/',
-        '/\[\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*\]\s*=\s*' . $q . '/',
-        '/[\'"]([A-Za-z0-9_]+)[\'"]\s*=>\s*' . $q . '/',
-    );
-    foreach ($pats as $re) {
-        if (!preg_match_all($re, $src, $m, PREG_SET_ORDER)) continue;
-        foreach ($m as $x) {
-            $k = strtolower($x[1]);
-            if (!isset($kv[$k])) $kv[$k] = isset($x[3]) ? $x[3] : $x[2];
-        }
-    }
+    $seen = array();
+    h_db_collect_kv($file, $kv, $seen, 0);
     $c = array(
         'driver' => h_kv_pick($kv, array('db_driver', 'dbdriver', 'db_type')),
-        'host'   => h_kv_pick($kv, array('db_host', 'db_hostname', 'dbhost', 'db_server', 'mysql_host', 'g5_mysql_host', 'hostname', 'host')),
+        'host'   => h_kv_pick($kv, array('db_host', 'db_hostname', 'dbhost', 'db_server', 'db_ip', 'dbip', 'db_addr', 'mysql_host', 'mysql_server', 'mysql_ip', 'g5_mysql_host', 'hostname', 'host', 'server')),
         'port'   => h_kv_pick($kv, array('db_port', 'dbport', 'mysql_port', 'port')),
-        'user'   => h_kv_pick($kv, array('db_user', 'db_username', 'db_userid', 'dbuser', 'mysql_user', 'g5_mysql_user', 'username', 'user')),
-        'pass'   => h_kv_pick($kv, array('db_pass', 'db_password', 'db_passwd', 'dbpass', 'dbpasswd', 'mysql_password', 'g5_mysql_password', 'password', 'passwd', 'pass')),
-        'name'   => h_kv_pick($kv, array('db_name', 'db_database', 'dbname', 'mysql_db', 'g5_mysql_db', 'database', 'db')),
+        'user'   => h_kv_pick($kv, array('db_user', 'db_username', 'db_userid', 'db_id', 'dbid', 'dbuser', 'db_login', 'mysql_user', 'mysql_id', 'mysql_userid', 'g5_mysql_user', 'username', 'userid', 'user')),
+        'pass'   => h_kv_pick($kv, array('db_pass', 'db_password', 'db_passwd', 'db_pw', 'db_pwd', 'dbpw', 'dbpwd', 'dbpass', 'dbpasswd', 'mysql_password', 'mysql_pass', 'mysql_pw', 'mysql_pwd', 'g5_mysql_password', 'password', 'passwd', 'pass', 'pwd', 'pw')),
+        'name'   => h_kv_pick($kv, array('db_name', 'db_database', 'db_dbname', 'dbname', 'db_db', 'mysql_db', 'mysql_dbname', 'mysql_database', 'mysql_name', 'g5_mysql_db', 'database', 'dbase', 'db')),
         'prefix' => h_kv_pick($kv, array('db_prefix', 'dbprefix', 'table_prefix', 'prefix')),
     );
     if ($c['user'] === null || $c['name'] === null) return null;
@@ -209,6 +196,45 @@ function h_db_config_text($file) {
     if ($c['prefix'] === null) $c['prefix'] = '';
     if ($c['driver'] === null || strpos(strtolower($c['driver']), 'mysql') === false) $c['driver'] = 'mysqli';
     return h_db_normalize($c);
+}
+
+function h_db_collect_kv($file, &$kv, &$seen, $depth) {
+    $real = @realpath($file);
+    if ($real === false || isset($seen[$real]) || count($seen) >= 8) return;
+    $seen[$real] = true;
+    $src = @file_get_contents($real, false, null, 0, 262144);
+    if ($src === false || $src === '') return;
+
+    $q = '(?:\'([^\']*)\'|"([^"]*)")';
+    $pats = array(
+        '/define\s*\(\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*,\s*' . $q . '/',
+        '/\$([A-Za-z0-9_]+)\s*=\s*' . $q . '\s*;/',
+        '/\[\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*\]\s*=\s*' . $q . '/',
+        '/[\'"]([A-Za-z0-9_]+)[\'"]\s*=>\s*' . $q . '/',
+    );
+    if (!preg_match('/\.php\d?$/i', $real)) $pats[] = '/^[ \t]*([A-Za-z0-9_.]+)[ \t]*[=:][ \t]*["\']?([^"\'\r\n;#]*)/m';
+    foreach ($pats as $re) {
+        if (!preg_match_all($re, $src, $m, PREG_SET_ORDER)) continue;
+        foreach ($m as $x) {
+            $k = strtolower(str_replace('.', '_', $x[1]));
+            $v = isset($x[3]) ? $x[3] : $x[2];
+            if (!isset($kv[$k])) $kv[$k] = trim($v);
+        }
+    }
+
+    if ($depth >= 2) return;
+    if (!preg_match_all('/[\'"]([^\'"\r\n]{1,200}\.(?:php\d?|inc|ini|conf|cfg|env))[\'"]/i', $src, $m)) return;
+    $base = dirname($real);
+    $root = h_doc_root();
+    foreach (array_unique($m[1]) as $p) {
+        $p = str_replace('\\', '/', $p);
+        $cands = preg_match('#^(/|[A-Za-z]:)#', $p)
+            ? array($p, $base . $p, $root . $p)
+            : array($base . '/' . $p, $root . '/' . $p, dirname($root) . '/' . $p);
+        foreach ($cands as $c) {
+            if (@is_file($c) && @is_readable($c)) { h_db_collect_kv($c, $kv, $seen, $depth + 1); break; }
+        }
+    }
 }
 
 function h_kv_pick($kv, $names) {
