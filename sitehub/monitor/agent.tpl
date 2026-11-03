@@ -153,13 +153,23 @@ function h_detect_cms($root, $CFG) {
         }
     }
 
-    // 자체 제작 사이트: config/config.php 등에 DB 접속값이 상수·변수·배열로 들어 있다
-    foreach (array('config/config.php', 'config/database.php', 'config/db.php', 'inc/config.php', 'include/config.php') as $f) {
-        if (is_file($root . '/' . $f)) {
-            $out['type']   = 'custom';
-            $out['config'] = $root . '/' . $f;
-            return $out;
+    // 자체 제작 사이트: config/config.php 등에 DB 접속값이 있다. 에이전트를 하위 폴더에 올린 경우가 있어
+    // DOCUMENT_ROOT 와 상위 폴더(3단계)까지 찾는다
+    $bases = array($root);
+    if (!empty($_SERVER['DOCUMENT_ROOT'])) $bases[] = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']), '/');
+    for ($d = $root, $i = 0; $i < 3; $i++) { $up = dirname($d); if ($up === $d) break; $bases[] = $d = $up; }
+    // 처음 찾은 파일에 DB 값이 없을 수 있다(config/ 에 상수만 두고 접속은 루트 config.php 에서 하는 사이트) — 전부 모아 차례로 읽는다
+    $found = array();
+    foreach (array_unique($bases) as $b) {
+        foreach (array('config/config.php', 'config/database.php', 'config/db.php', 'config.php', 'dbconfig.php', 'db_config.php', 'data/dbconfig.php',
+                       'inc/config.php', 'include/config.php', 'common/config.php', 'lib/config.php') as $f) {
+            if (is_file($b . '/' . $f)) $found[] = $b . '/' . $f;
         }
+    }
+    if ($found) {
+        $out['type']    = 'custom';
+        $out['config']  = $found[0];
+        $out['configs'] = $found;
     }
     return $out;
 }
@@ -168,7 +178,12 @@ function h_detect_cms($root, $CFG) {
 function h_db_config($cms) {
     if (!$cms['config'] || !is_file($cms['config'])) return null;
     if ($cms['type'] === 'ci3')    return h_db_config_ci3($cms['config']);
-    if ($cms['type'] === 'custom') return h_db_config_text($cms['config']);
+    if ($cms['type'] === 'custom') {
+        foreach (isset($cms['configs']) ? $cms['configs'] : array($cms['config']) as $f) {
+            if (($c = h_db_config_text($f)) !== null) return $c;
+        }
+        return null;
+    }
     return h_db_config_xe($cms['config']);
 }
 
@@ -204,6 +219,36 @@ function h_db_collect_kv($file, &$kv, &$seen, $depth) {
     $seen[$real] = true;
     $src = @file_get_contents($real, false, null, 0, 262144);
     if ($src === false || $src === '') return;
+    if (preg_match('/\.php\d?$/i', $real)) $src = h_strip_php_comments($src);   // 주석 처리된 개발·로컬 접속 줄을 빼야 한다
+
+    // mysqli_connect("host", "user", "pass", "db", "port") · new mysqli(…) · mysql_connect(…) — 인자로 바로 넘기는 사이트
+    if (preg_match('/(mysqli_connect|mysql_connect|mysqli_real_connect|new\s+mysqli)\s*\(([^;]*?)\)\s*(?:or\b[^;]*)?;/i', $src, $m)) {
+        preg_match_all('/\'([^\']*)\'|"([^"]*)"|(\d+)|(\$[A-Za-z0-9_]+)/', $m[2], $tk, PREG_SET_ORDER);
+        if (stripos($m[1], 'real_connect') !== false) array_shift($tk);   // 첫 인자는 $link
+        $vals = array();
+        foreach ($tk as $t) {
+            $c = $t[0][0];
+            if ($c === '$') { $vals = array(); break; }   // 변수로 넘기면 아래 이름 규칙이 읽는다
+            $vals[] = $c === "'" ? $t[1] : ($c === '"' ? $t[2] : $t[3]);
+        }
+        foreach (array('db_host', 'db_user', 'db_pass', 'db_name', 'db_port') as $i => $n) {
+            if (isset($vals[$i]) && !isset($kv[$n])) $kv[$n] = $vals[$i];
+        }
+    }
+    // new PDO('mysql:host=…;port=…;dbname=…', 'user', 'pass')
+    if (preg_match('/new\s+PDO\s*\(\s*[\'"]mysql:([^\'"]*)[\'"]\s*(?:,\s*[\'"]([^\'"]*)[\'"])?\s*(?:,\s*[\'"]([^\'"]*)[\'"])?/i', $src, $m)) {
+        foreach (explode(';', $m[1]) as $part) {
+            $p = explode('=', $part, 2);
+            if (count($p) === 2 && !isset($kv['db_' . strtolower(trim($p[0]))])) $kv['db_' . strtolower(trim($p[0]))] = trim($p[1]);
+        }
+        if (isset($kv['db_dbname']) && !isset($kv['db_name'])) $kv['db_name'] = $kv['db_dbname'];
+        if (isset($m[2]) && !isset($kv['db_user'])) $kv['db_user'] = $m[2];
+        if (isset($m[3]) && !isset($kv['db_pass'])) $kv['db_pass'] = $m[3];
+    }
+    // mysqli_select_db($conn, 'name') — 접속 뒤 DB 를 바꾸는 사이트는 이쪽이 실제 DB 다
+    if (preg_match('/(?:mysqli_select_db\s*\(\s*\$[A-Za-z0-9_]+\s*,|mysql_select_db\s*\()\s*[\'"]([^\'"]+)[\'"]/i', $src, $m)) {
+        $kv['db_name'] = $m[1];
+    }
 
     $q = '(?:\'([^\']*)\'|"([^"]*)")';
     $pats = array(
@@ -235,6 +280,23 @@ function h_db_collect_kv($file, &$kv, &$seen, $depth) {
             if (@is_file($c) && @is_readable($c)) { h_db_collect_kv($c, $kv, $seen, $depth + 1); break; }
         }
     }
+}
+
+function h_strip_php_comments($src) {
+    if (function_exists('token_get_all')) {
+        $out = '';
+        foreach (@token_get_all($src) as $t) {
+            if (is_array($t)) {
+                if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT) continue;
+                $out .= $t[1];
+            } else {
+                $out .= $t;
+            }
+        }
+        return $out;
+    }
+    $src = preg_replace('#/\*.*?\*/#s', '', $src);
+    return preg_replace('#^\s*(//|\#).*$#m', '', $src);
 }
 
 function h_kv_pick($kv, $names) {
@@ -436,6 +498,9 @@ function h_check_db($cms, $CFG) {
         }
         $r['status'] = 'warn';
         $r['error']  = 'db config not found or unreadable';
+        $root = h_doc_root();
+        $r['tried']  = array_map(function ($f) use ($root) { return strpos($f, $root . '/') === 0 ? substr($f, strlen($root) + 1) : $f; },
+                                 isset($cms['configs']) ? $cms['configs'] : array($cms['config']));
         return $r;
     }
     $r['driver'] = $cfg['driver'];
