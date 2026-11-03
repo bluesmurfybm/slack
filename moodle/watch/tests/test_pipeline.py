@@ -1,6 +1,7 @@
 import json
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -589,3 +590,18 @@ def test_refresh_queue_serve_once_creates_dir_and_returns(tmp_path):
     settings = make_settings(tmp_path)
     refresh_queue.serve(settings, lambda w, u: {}, once=True)
     assert refresh_queue.requests_dir(settings).is_dir()
+
+
+def test_push_report_only_first_saved_run(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(run_weekly.notify.shutil, "which", lambda b: "/usr/bin/php")
+    monkeypatch.setattr(run_weekly.notify.subprocess, "run",
+                        lambda argv, **kw: calls.append(json.loads(Path(argv[-1]).read_text(encoding="utf-8"))))
+    on = make_settings(tmp_path, web_push=True)
+    run_weekly.notify.push_report(on, {"week": "2026-W37", "run_no": 1, "headline": "h"})
+    run_weekly.notify.push_report(on, {"week": "2026-W37", "id": 3, "run_no": 2})
+    run_weekly.notify.push_report(make_settings(tmp_path), {"week": "2026-W37", "id": 3, "run_no": 1})
+    assert calls == []
+    run_weekly.notify.push_report(on, {"week": "2026-W37", "id": 3, "run_no": 1, "headline": "h"})
+    assert calls == [{"kind": "moodle.report", "title": "MoodleUp? 2026-W37 주간 요약", "body": "h",
+                      "url": "moodle/?week=2026-W37", "tag": "moodle-2026-W37"}]

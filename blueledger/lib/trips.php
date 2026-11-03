@@ -131,6 +131,7 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
         bl_write_trip($pdo, $row, (bool)$prev);
         bl_link_files($pdo, $row);
         $pdo->commit();
+        bl_notify_trip($me, $prev, $row);
         return $row['id'];
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();

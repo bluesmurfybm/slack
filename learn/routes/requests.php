@@ -16,7 +16,7 @@ function learn_route_requests(PDO $pdo, array $identity, array $seg, $method) {
     if ($tail === 'review') learn_route_review($pdo, $identity, $rid, $method);
 
     if ($tail === '') {
-        if ($method === 'GET')    learn_requests_detail($pdo, $rid);
+        if ($method === 'GET')    learn_requests_detail($pdo, $identity, $rid);
         if ($method === 'PUT')    learn_requests_update($pdo, $identity, $rid);
         if ($method === 'DELETE') learn_requests_delete($pdo, $identity, $rid);
         throw new LearnError('없는 API 입니다', 404);
@@ -51,8 +51,9 @@ function learn_requests_list(PDO $pdo, array $identity) {
     jsend($out);
 }
 
-function learn_requests_detail(PDO $pdo, $rid) {
+function learn_requests_detail(PDO $pdo, array $identity, $rid) {
     $req = learn_fetch_request($pdo, $rid);
+    learn_notice_seen('learn.', learn_notice_url($rid));
     $out = learn_one_out($pdo, $req);
     $out['certs']   = learn_cert_listing($pdo, $rid);
     $out['history'] = learn_history($pdo, $rid);
@@ -161,6 +162,7 @@ function learn_requests_create(PDO $pdo, array $identity) {
         learn_record($pdo, $rid, S_APPROVED, $identity, '필수 강의라 승인 없이 수강 시작');
     } else {
         learn_record($pdo, $rid, learn_derive_status($req), $identity);
+        learn_notify_request($req, learn_derive_status($req), $identity);
     }
     jsend(learn_one_out($pdo, $req), 201);
 }
@@ -332,5 +334,9 @@ function learn_requests_action(PDO $pdo, array $identity, $rid, $action) {
     }
 
     learn_update_request($pdo, $rid, $fields);
-    jsend(learn_one_out($pdo, learn_fetch_request($pdo, $rid)));
+    $after = learn_fetch_request($pdo, $rid);
+    if ($action !== 'progress' && $action !== 'archive' && $action !== 'unarchive') {
+        learn_notify_request($after, learn_derive_status($after), $identity);
+    }
+    jsend(learn_one_out($pdo, $after));
 }

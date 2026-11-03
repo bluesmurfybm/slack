@@ -55,6 +55,7 @@ class Settings(BaseSettings):
 
     slack_webhook: str | None = Field(default=None, validation_alias="SLACK_WEBHOOK_URL")
     portal_url: str = "/"
+    web_push: bool = True # 새 주차를 포털 알림함·웹 푸시로 알린다(dev/push_cli.php)
 
     # MySQL. 비어 있으면 포털 config.php 를 php CLI 로 읽어 채운다(_db_from_php).
     db_host: str | None = None

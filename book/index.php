@@ -8,6 +8,7 @@ require_once __DIR__ . '/../core/worksystems.php';
 
 $page = book_page_begin();
 $me = $page['identity'];
+book_notice_seen((int)($_SESSION['portal_uid'] ?? 0));
 $meJson = json_encode([
     'email' => $me['email'],
     'name' => $me['name'],

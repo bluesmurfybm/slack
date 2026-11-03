@@ -14,6 +14,7 @@ def make_settings(tmp_path, **over) -> Settings:
     return Settings().model_copy(update={
         "data_dir": str(tmp_path / "var"),
         "slack_webhook": None,
+        "web_push": False,
         "summarizer": "none",
         "anthropic_api_key": None,
         "moodle_org_token": None,

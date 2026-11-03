@@ -29,3 +29,69 @@ function book_notify_slack(?string $webhook, array $rec): void {
     curl_exec($ch);
     curl_close($ch);
 }
+
+const BOOK_FIELD_LABELS = ['title' => '도서명', 'author' => '저자', 'publisher' => '출판사', 'gubun' => '구분', 'price' => '도서단가',
+    'note' => '비고', 'kyobo_url' => '교보문고 링크', 'thumbnail' => '표지'];
+
+function book_push(array $opts): void {
+    try {
+        require_once __DIR__ . '/../../core/push.php';
+        push_send($opts);
+    } catch (Throwable $e) {
+        error_log('[book] 알림 실패: ' . $e->getMessage());
+    }
+}
+
+function book_push_url(int $id): string {
+    return 'book/index.php?id=' . $id;
+}
+
+function book_notify_created(array $rec): void {
+    book_push([
+        'kind' => 'book.request',
+        'title' => '새 도서 신청 · ' . mb_strimwidth($rec['title'], 0, 60, '…'),
+        'body' => trim($rec['applicant'] . ' · ' . $rec['gubun']),
+        'url' => book_push_url((int)$rec['id']),
+        'tag' => 'book-' . (int)$rec['id'],
+        'except' => [$rec['applicant_email']],
+    ]);
+}
+
+/** 남이 내 신청을 바꿨을 때만 신청자에게 — $what 은 '구비 완료'·'수정(도서명)'·'삭제' 같은 짧은 말 */
+function book_notify_mine(array $row, array $actor, string $what): void {
+    $owner = (string)$row['applicant_email'];
+    if ($owner === '' || strcasecmp($owner, (string)$actor['email']) === 0) return;
+    book_push([
+        'kind' => 'book.mine',
+        'title' => $what . ' · ' . mb_strimwidth((string)$row['title'], 0, 60, '…'),
+        'body' => trim((string)$actor['name']) . '님이 내 도서 신청을 ' . ($what === '삭제' ? '지웠습니다.' : '바꿨습니다.'),
+        'url' => $what === '삭제' ? 'book/index.php' : book_push_url((int)$row['id']),
+        'tag' => 'book-' . (int)$row['id'],
+        'to' => [$owner],
+    ]);
+}
+
+/** 고친 칸 → 신청자에게 보낼 짧은 말. 바뀐 게 없으면 '' */
+function book_change_phrase(array $existing, array $changes): string {
+    $out = [];
+    if (array_key_exists('done', $changes) && (int)$changes['done'] !== (int)$existing['done']) {
+        $out[] = (int)$changes['done'] ? '구비 완료' : '미처리로 되돌림';
+    }
+    $fields = [];
+    foreach (BOOK_FIELD_LABELS as $k => $label) {
+        if (array_key_exists($k, $changes) && (string)($changes[$k] ?? '') !== (string)($existing[$k] ?? '')) $fields[] = $label;
+    }
+    if ($fields) $out[] = '수정(' . implode(', ', $fields) . ')';
+    return implode(' · ', $out);
+}
+
+/** 목록 한 장이 전부라 화면을 열면 book 알림을 모두 읽음으로 */
+function book_notice_seen(int $uid): void {
+    if (!$uid) return;
+    try {
+        require_once __DIR__ . '/../../core/push.php';
+        foreach (array_keys(push_inbox_unread_urls($uid, 'book.')) as $url) push_inbox_mark_read_url($uid, 'book.', $url);
+    } catch (Throwable $e) {
+        error_log('[book] 알림 읽음: ' . $e->getMessage());
+    }
+}

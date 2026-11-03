@@ -160,6 +160,7 @@ header.site{background:var(--bg-page)}
 .list li.row:last-child{border-bottom:none}
 .list li.row:hover{background:var(--gray98)}
 .list li.row.editing{background:var(--gray99)}
+.list li.row.linked{box-shadow:inset 3px 0 0 var(--cos50);background:var(--cos95)}
 
 .r-thumb{
   width:48px;height:68px;border-radius:var(--r4);overflow:hidden;background:var(--bg-subtle);

@@ -22,6 +22,7 @@ function dti_route_topics(array $ctx, array $req): array {
         ['POST', 'complete'] => dti_topic_complete($ctx, (int)$tid, $req['body']),
         ['POST', 'assign'] => dti_topic_assign($ctx, (int)$tid, $req['body']),
         ['GET', 'related'] => dti_topic_related($ctx, (int)$tid),
+        ['POST', 'seen'] => dti_topic_seen($ctx, (int)$tid),
         ['POST', 'emotions'] => dti_topic_emotion($ctx, (int)$tid, (string)($req['seg'][3] ?? '')),
         default => dti_route_materials($ctx, $req, (int)$tid),
     };
@@ -66,6 +67,10 @@ function dti_topic_create(array $ctx, array $body): array {
         dti_presentation_create($pdo, $tid, ['planned_date' => $plannedDate]);
     }
     dti_related_rebuild($pdo);
+    if ($topic['active'] === 1 && $topic['archived'] === 0) {
+        dti_push_topic($ctx['push'] ?? null, $tid, '새 아티클 · ' . $topic['title'],
+            trim($topic['magazine'] . ' ' . $topic['volume']), $ctx['identity']['email']);
+    }
 
     return dti_json(dti_topic_present_one($pdo, $topic, dti_presentation_of_topic($pdo, $tid)), 201);
 }
@@ -140,8 +145,8 @@ function dti_topic_claim(array $ctx, int $tid, array $body): array {
     $pres = dti_presentation_of_topic($pdo, $tid);
     dti_notify_new_presenter($ctx['config']['slack_webhook'], $ctx['webhook'] ?? null,
         $topic['title'], $pres['presenter'], $pres['planned_date']);
-    dti_push_new_presenter($ctx['push'] ?? null, $tid,
-        $topic['title'], $pres['presenter'], (string)$pres['planned_date']);
+    dti_push_new_presenter($ctx['push'] ?? null, $tid, $topic['title'], $pres['presenter'],
+        (string)$pres['planned_date'], $identity['email'], $identity['email']);
 
     return dti_json(dti_topic_present_one($pdo, $topic, $pres));
 }
@@ -155,7 +160,10 @@ function dti_topic_release(array $ctx, int $tid): array {
     if (!dti_may_manage($pres, $email, dti_is_admin($ctx['config'], $email))) {
         throw new DtiError('본인이 예약한 아티클만 취소할 수 있습니다', 403);
     }
-    if ($pres) dti_presentation_unassign($pdo, $ctx['config']['upload_dir'], $pres);
+    if ($pres) {
+        dti_presentation_unassign($pdo, $ctx['config']['upload_dir'], $pres);
+        dti_push_mine($ctx['push'] ?? null, $tid, $topic['title'], '발표 예약 취소', $pres['presenter_email'], $ctx['identity']);
+    }
 
     return dti_json(dti_topic_present_one($pdo, $topic, dti_presentation_of_topic($pdo, $tid)));
 }
@@ -175,6 +183,7 @@ function dti_topic_schedule(array $ctx, int $tid, array $body): array {
 
     $pres['planned_date'] = dti_want_date($body['planned_date'] ?? '', '예정일');
     dti_presentation_update($pdo, $pres);
+    dti_push_mine($ctx['push'] ?? null, $tid, $topic['title'], '발표 예정일 변경', $pres['presenter_email'], $ctx['identity']);
 
     return dti_json(dti_topic_present_one($pdo, $topic, $pres));
 }
@@ -187,6 +196,7 @@ function dti_topic_complete(array $ctx, int $tid, array $body): array {
     $pres = dti_presentation_of_topic($pdo, $tid) ?? dti_presentation_create($pdo, $tid);
     $pres['done_date'] = dti_want_date($body['done_date'] ?? '', '발표일') ?: date('Y-m-d');
     dti_presentation_update($pdo, $pres);
+    dti_push_mine($ctx['push'] ?? null, $tid, $topic['title'], '발표 완료', (string)$pres['presenter_email'], $ctx['identity']);
 
     return dti_json(dti_topic_present_one($pdo, $topic, $pres));
 }
@@ -204,9 +214,13 @@ function dti_topic_assign(array $ctx, int $tid, array $body): array {
     }
 
     $pres = dti_presentation_of_topic($pdo, $tid);
+    $before = (string)($pres['presenter_email'] ?? '');
 
     if ($email === '') {
-        if ($pres) dti_presentation_unassign($pdo, $ctx['config']['upload_dir'], $pres);
+        if ($pres) {
+            dti_presentation_unassign($pdo, $ctx['config']['upload_dir'], $pres);
+            dti_push_mine($ctx['push'] ?? null, $tid, $topic['title'], '발표자에서 빠짐', $pres['presenter_email'], $ctx['identity']);
+        }
         return dti_json(dti_topic_present_one($pdo, $topic, dti_presentation_of_topic($pdo, $tid)));
     }
 
@@ -225,10 +239,19 @@ function dti_topic_assign(array $ctx, int $tid, array $body): array {
     }
     dti_notify_new_presenter($ctx['config']['slack_webhook'], $ctx['webhook'] ?? null,
         $topic['title'], $pres['presenter'], $pres['planned_date']);
-    dti_push_new_presenter($ctx['push'] ?? null, $tid,
-        $topic['title'], $pres['presenter'], (string)$pres['planned_date']);
+    dti_push_new_presenter($ctx['push'] ?? null, $tid, $topic['title'], $pres['presenter'],
+        (string)$pres['planned_date'], $ctx['identity']['email'], $email);
+    dti_push_mine($ctx['push'] ?? null, $tid, $topic['title'], '발표자로 지정', $email, $ctx['identity']);
+    if (strcasecmp($before, $email) !== 0) {
+        dti_push_mine($ctx['push'] ?? null, $tid, $topic['title'], '발표자에서 빠짐', $before, $ctx['identity']);
+    }
 
     return dti_json(dti_topic_present_one($pdo, $topic, $pres));
+}
+
+function dti_topic_seen(array $ctx, int $tid): array {
+    dti_push_seen($ctx['seen'] ?? null, $ctx['identity']['email'], dti_push_url($tid));
+    return dti_json(['ok' => true]);
 }
 
 function dti_topic_related(array $ctx, int $tid): array {

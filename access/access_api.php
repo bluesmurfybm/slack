@@ -6,14 +6,17 @@
  *   POST {action:create}               → 새 대학 등록: schools 에 넣고 그 id 로 접속 정보까지 생성
  *   POST {action:save}                 → 한 학교의 접속 정보 저장(없으면 생성) + 마스터(schools) 동기화
  *   POST {action:delete}               → 접속 정보만 삭제(학교 자체는 slack/schools 에서 관리하므로 남긴다)
+ *   POST {action:notice_seen}          → 그 학교의 변경 알림을 읽음으로
  *
  * 마스터는 schools 다. 대학명/버전/개발·운영 URL 은 schools 를 고쳐야 하고, 그 외 접속·배포
  * 정보만 school_access 에 들어간다.
  */
 require_once __DIR__ . '/guard.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/notice_lib.php';
 
-if (!current_portal_user()) {
+$me = current_portal_user();
+if (!$me) {
     http_response_code(401);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['ok' => false, 'error' => '로그인이 필요합니다'], JSON_UNESCAPED_UNICODE);
@@ -68,9 +71,19 @@ try {
     if (array_key_exists('ops_cnt', $in)) $in['ops_cnt'] = access_norm_count($in['ops_cnt']);
     if (($in['key'] ?? '') === 'ops_cnt') $in['value'] = access_norm_count($in['value'] ?? '');
 
+    if ($action === 'notice_seen') {
+        access_notice_seen((int)$me['id'], $schoolId);
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     if ($action === 'delete') {
         if ($accessId <= 0) throw new Exception('잘못된 접속정보 id');
+        $st = $pdo->prepare("SELECT school_id FROM school_access WHERE id=?");
+        $st->execute([$accessId]);
+        $delSchool = (int)$st->fetchColumn();
         $pdo->prepare("DELETE FROM school_access WHERE id=?")->execute([$accessId]);
+        access_notice_add($me, $delSchool, '접속 정보 삭제', false);
         echo json_encode(['ok' => true]);
         exit;
     }
@@ -99,8 +112,12 @@ try {
             }
             if ($key === 'active') $val = (int)!!$val;   // 체크박스 → 0/1
             $col = $master[$key];   // 화이트리스트를 거친 이름만 들어온다
+            $st = $pdo->prepare("SELECT `{$col}` FROM schools WHERE id=?");
+            $st->execute([$schoolId]);
+            $old = (string)$st->fetchColumn();
             $pdo->prepare("UPDATE schools SET `{$col}`=?, updated_at=NOW() WHERE id=?")
                 ->execute([$val, $schoolId]);
+            foreach (access_notice_changed([$key => $old], [$key => $val]) as $label) access_notice_add($me, $schoolId, $label . ' 수정');
             echo json_encode(['ok' => true]);
             exit;
         }
@@ -108,6 +125,13 @@ try {
         if (!in_array($key, $COLS, true)) throw new Exception('수정할 수 없는 항목입니다: ' . $key);
         if ($schoolId <= 0) throw new Exception('학교를 선택하세요.');
         $plain = $val;   // 정리된 값(예: 테스트 서버 정보)을 화면에도 돌려준다
+        $old = '';
+        if ($accessId > 0) {
+            $st = $pdo->prepare("SELECT `{$key}` FROM school_access WHERE id=? AND school_id=?");
+            $st->execute([$accessId, $schoolId]);
+            $old = (string)$st->fetchColumn();
+        }
+        foreach (access_notice_changed([$key => $old], [$key => $plain]) as $label) access_notice_add($me, $schoolId, $label . ' 수정');
         if (in_array($key, access_secret_cols(), true)) $val = access_enc($val);
 
         if ($accessId > 0) {
@@ -155,6 +179,7 @@ try {
         $pdo->prepare("INSERT INTO school_access (school_id, {$sel}, created_at, updated_at)
                        VALUES (?, {$ph}, NOW(), NOW())")
             ->execute(array_merge([$schoolId], array_values($vals)));
+        access_notice_add($me, $schoolId, '새 대학 등록', false);
 
         echo json_encode(['ok' => true, 'school_id' => $schoolId, 'access_id' => (int)$pdo->lastInsertId()]);
         exit;
@@ -171,6 +196,20 @@ try {
     // `log`(로그 관리 URL)는 폼에 없는 칸이라 SET 에서 뺀다 — 넣으면 slack 쪽 값이 빈 칸으로 덮인다
     $name = trim((string)($in['name'] ?? ''));
     if ($name === '') throw new Exception('대학(기관)명을 입력하세요.');
+    $st = $pdo->prepare("SELECT name, ver, dev, ops FROM schools WHERE id=?");
+    $st->execute([$schoolId]);
+    $old = $st->fetch() ?: [];
+    if ($accessId > 0) {
+        $st = $pdo->prepare("SELECT * FROM school_access WHERE id=? AND school_id=?");
+        $st->execute([$accessId, $schoolId]);
+        $old += $st->fetch() ?: [];
+    }
+    $new = ['name' => $name];
+    foreach (['ver', 'dev', 'ops'] as $c) $new[$c] = trim((string)($in[$c] ?? ''));
+    foreach ($COLS as $c) $new[$c] = trim((string)($in[$c] ?? ''));
+    $labels = access_notice_changed($old, $new);
+    if ($accessId <= 0) access_notice_add($me, $schoolId, '접속 정보 추가', false);
+    elseif ($labels) access_notice_add($me, $schoolId, '수정(' . implode(', ', $labels) . ')');
     $pdo->prepare("UPDATE schools SET name=?, ver=?, dev=?, ops=?, updated_at=NOW() WHERE id=?")
         ->execute([
             $name,
@@ -199,5 +238,6 @@ try {
 
     echo json_encode(['ok' => true]);
 } catch (Throwable $e) {
+    access_notice_drop();
     echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }

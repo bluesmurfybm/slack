@@ -67,7 +67,7 @@ function dti_round_issue(array $ctx, int $rid, array $body): array {
     dti_require_admin($ctx);
     $pdo = $ctx['pdo'];
 
-    dti_round_find_or_fail($pdo, $rid);
+    $round = dti_round_find_or_fail($pdo, $rid);
     $picked = $body['issues'] ?? null;
     if (!is_array($picked) || !$picked) throw new DtiError('담을 호를 골라 주세요', 422);
 
@@ -80,6 +80,7 @@ function dti_round_issue(array $ctx, int $rid, array $body): array {
         $issues["{$magazine}\0{$volume}"] = [$magazine, $volume];
     }
     [$count, $moved] = dti_round_add_issues($pdo, $rid, array_values($issues));
+    dti_push_round_issued($ctx['push'] ?? null, $round, $count, $ctx['identity']['email']);
 
     return dti_json(['count' => $count, 'moved' => $moved]);
 }

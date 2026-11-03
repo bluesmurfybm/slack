@@ -14,6 +14,8 @@ if (!$req) {
     bc_json_error('요청을 찾을 수 없습니다.', 404);
 }
 
+Notifier::portalSeen($id);
+
 bc_json_ok([
     'request' => bc_present_request($req, $user),
     'history' => bc_present_history(PurchaseRequest::history($id)),

@@ -59,7 +59,16 @@ async function loadAll() {
     await reload();
   } catch (e) {
     if (e.message !== "unauthenticated") showToast(e.message);
+    return;
   }
+  openFromLink();
+}
+
+// 알림에서 들어온 주소 — ?req=N 은 그 신청을, #catalog 는 추천·필수 강의를 연다
+function openFromLink() {
+  const rid = Number(new URLSearchParams(location.search).get("req"));
+  if (location.hash === "#catalog" && APP.view.mode !== "admin") setPane("catalog");
+  if (rid) openDrawer(rid);
 }
 
 document.addEventListener("keydown", e => {

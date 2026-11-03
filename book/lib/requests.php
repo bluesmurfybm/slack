@@ -76,6 +76,7 @@ function book_request_create(array $ctx, array $body): array {
 
     $rec = book_row_out(book_request_find($pdo, (int)$pdo->lastInsertId()));
     book_notify_slack($ctx['config']['slack_webhook'], $rec);
+    book_notify_created($rec);
     return $rec;
 }
 
@@ -107,12 +108,14 @@ function book_request_update(array $ctx, int $id, array $body): array {
             $changes['title'] ?? $existing['title'],
             $changes['author'] ?? $existing['author']);
     }
+    $phrase = book_change_phrase($existing, array_intersect_key($changes, $body));
 
     if ($changes) {
         $sets = implode(', ', array_map(fn($k) => "`{$k}` = ?", array_keys($changes)));
         $st = $pdo->prepare("UPDATE book_requests SET {$sets} WHERE id = ?");
         $st->execute([...array_values($changes), $id]);
     }
+    if ($phrase !== '') book_notify_mine($existing, $ctx['identity'], $phrase);
     return book_row_out(book_request_find($pdo, $id));
 }
 
@@ -120,6 +123,7 @@ function book_request_delete(array $ctx, int $id): void {
     $existing = book_request_find($ctx['pdo'], $id);
     book_assert_can_edit($ctx, $existing, '삭제');
     $ctx['pdo']->prepare("DELETE FROM book_requests WHERE id = ?")->execute([$id]);
+    book_notify_mine($existing, $ctx['identity'], '삭제');
 }
 
 function book_assert_can_edit(array $ctx, array $row, string $what): void {

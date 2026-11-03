@@ -466,9 +466,10 @@ function push_set_pref(int $userId, string $kind, bool $enabled): void
  * 기기가 없어도 들어간다. 알림함(portal_notification)은 사람 기준이기 때문이다.
  *
  * @param array|string|null $to  이메일·portal_users.id 의 배열(또는 콤마 문자열). null 이면 켜 둔 전원
+ * @param array|string|null $except  같은 꼴로 뺄 사람(보통 바꾼 사람 본인)
  * @return array<int,array{id:int,email:string}>
  */
-function push_target_users(string $kind, $to = null): array
+function push_target_users(string $kind, $to = null, $except = null): array
 {
     $kindRow = push_kind($kind);
     if (!$kindRow) return [];
@@ -480,23 +481,35 @@ function push_target_users(string $kind, $to = null): array
     $args = [$kind, $kindRow['default'] ? 1 : 0];
 
     if ($to !== null) {
-        if (is_string($to)) $to = preg_split('/\s*,\s*/', trim($to), -1, PREG_SPLIT_NO_EMPTY);
-        $emails = []; $ids = [];
-        foreach ((array)$to as $t) {
-            if (is_int($t) || ctype_digit((string)$t)) $ids[] = (int)$t;
-            elseif (trim((string)$t) !== '') $emails[] = strtolower(trim((string)$t));
-        }
-        if (!$emails && !$ids) return [];
-        $or = [];
-        if ($emails) { $or[] = 'LOWER(u.email) IN (' . implode(',', array_fill(0, count($emails), '?')) . ')'; array_push($args, ...$emails); }
-        if ($ids)    { $or[] = 'u.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')';          array_push($args, ...$ids); }
-        $sql .= ' AND (' . implode(' OR ', $or) . ')';
+        [$or, $whoArgs] = push_who_sql($to);
+        if (!$or) return [];
+        $sql .= ' AND (' . $or . ')';
+        array_push($args, ...$whoArgs);
+    }
+    if ($except !== null) {
+        [$or, $whoArgs] = push_who_sql($except);
+        if ($or) { $sql .= ' AND NOT (' . $or . ')'; array_push($args, ...$whoArgs); }
     }
     $sql .= ' ORDER BY u.id';
 
     $st = portal_db()->prepare($sql);
     $st->execute($args);
     return array_map(static fn ($u) => ['id' => (int)$u['id'], 'email' => $u['email']], $st->fetchAll());
+}
+
+/** 이메일·id 목록 → [portal_users u 조건 SQL, 인자]. 비면 ['', []] */
+function push_who_sql($who): array
+{
+    if (is_string($who)) $who = preg_split('/\s*,\s*/', trim($who), -1, PREG_SPLIT_NO_EMPTY);
+    $emails = []; $ids = [];
+    foreach ((array)$who as $t) {
+        if (is_int($t) || ctype_digit((string)$t)) $ids[] = (int)$t;
+        elseif (trim((string)$t) !== '') $emails[] = strtolower(trim((string)$t));
+    }
+    $or = [];
+    if ($emails) $or[] = 'LOWER(u.email) IN (' . implode(',', array_fill(0, count($emails), '?')) . ')';
+    if ($ids) $or[] = 'u.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')';
+    return [implode(' OR ', $or), array_merge($emails, $ids)];
 }
 
 /** 이 사람들의 구독(기기) 전부. */
@@ -860,6 +873,7 @@ function push_http_post(string $endpoint, string $body, array $headers): array
  *   tag     같은 tag 의 알림은 기기에서 하나로 겹쳐진다(예: 'dti-topic-12')
  *   icon    아이콘 주소(포털 루트 기준). 비면 sw.js 기본값
  *   to      이메일·portal_users.id 배열 또는 콤마 문자열. 생략하면 이 종류를 켜 둔 전원
+ *   except  같은 꼴로 받는 사람에서 뺄 사람(보통 바꾼 사람 본인)
  *   ttl     초. 기본 하루
  *   urgency very-low|low|normal|high
  *   _subs   (시험용) DB 대신 쓸 구독 행 배열 — 주면 DB 를 전혀 건드리지 않는다
@@ -898,7 +912,7 @@ function push_send(array $opts): array
         // 사람마다 페이로드가 다르다(알림함 번호). 시험(_subs)은 DB 없이 한 벌만 쓴다.
         $payloads = [];
         if ($useDb) {
-            foreach (push_target_users($kind, $opts['to'] ?? null) as $u) {
+            foreach (push_target_users($kind, $opts['to'] ?? null, $opts['except'] ?? null) as $u) {
                 $nid = push_inbox_add($u['id'], $kind, $title, (string)($opts['body'] ?? ''), $url);
                 if ($nid) $r['notified']++;
                 $payloads[$u['id']] = push_payload(['nid' => $nid] + $opts);

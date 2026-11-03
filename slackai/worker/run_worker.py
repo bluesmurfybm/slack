@@ -23,6 +23,7 @@ import sys
 import time
 from pathlib import Path
 
+import notify
 from core import costs, store
 from core import jobs as jq
 from core.clock import now_str
@@ -160,6 +161,7 @@ class Worker:
                 log.info("  → 다음 잡 %s %s → #%s", n.kind, n.request_id or "", nid or "dup")
             self.db.commit()
             log.info("■ 잡 #%s done cost=$%.4f %s", jid, out.cost_usd, out.progress or "")
+            notify.job_finished(self.runner, self.s, job, "done")
         else:
             # 실패 시에도 비용은 남긴다
             self.db.exec("UPDATE ai_jobs SET cost_usd = %s, tokens_in = %s, tokens_out = %s, model = COALESCE(%s, model) "
@@ -171,6 +173,8 @@ class Worker:
                              (json.dumps(out.result, ensure_ascii=False)[:1_000_000], jid))
                 self.db.commit()
             log.warning("■ 잡 #%s %s: %s", jid, st, (out.error or "")[:500])
+            if st == "failed":
+                notify.job_finished(self.runner, self.s, job, "failed", out.error or "")
         try:
             store.event(self.db, job.get("request_id"), self.actor, f"job.{out.status}", "ai_jobs", jid,
                         {"kind": job["kind"], "cost": out.cost_usd, "error": (out.error or "")[:300] or None})

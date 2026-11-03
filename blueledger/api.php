@@ -21,6 +21,7 @@ require_once __DIR__ . '/guard.php';
 require_once __DIR__ . '/lib/settings.php';
 require_once __DIR__ . '/lib/trips.php';
 require_once __DIR__ . '/lib/storage.php';
+require_once __DIR__ . '/lib/notify.php';
 
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 if ($method === 'HEAD') $method = 'GET';

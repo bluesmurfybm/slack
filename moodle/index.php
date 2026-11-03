@@ -26,6 +26,14 @@ $report = moodle_report($weekParam);
 $items  = $report ? moodle_items($report['id']) : [];
 $runs   = $report ? moodle_runs($report['id']) : [];
 $notes  = $report ? moodle_notes($report['id']) : [];
+if ($report) {
+    try {
+        require_once __DIR__ . '/../core/push.php';
+        push_inbox_mark_read_url((int)$me['id'], 'moodle.', 'moodle/?week=' . $report['week']);
+    } catch (Throwable $e) {
+        error_log('[moodle] 알림 읽음: ' . $e->getMessage());
+    }
+}
 $refresh = $report ? moodle_refresh_state($report['week']) : null;   // 갱신 요청 파일 상태
 $runCount = $report ? max(1, (int)$report['run_count']) : 1;
 $isLatest = $report && $weeks && $weeks[0]['week'] === $report['week'];
