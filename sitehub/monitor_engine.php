@@ -191,8 +191,20 @@ function blumo_classify(array $m, array $cfg, array $r): string {
 }
 
 /** 에이전트 — 여기서 "증상"이 "원인"으로 바뀐다 */
-function blumo_health(array $m, array $cfg, array $r): array {
-    $url = $m['health'] . (strpos($m['health'], '?') === false ? '?' : '&') . 'key=' . rawurlencode($m['health_key']);
+/** PHP 에러를 "직전 점검 이후"만 세게 할 기준 — 에이전트가 응답하지 않은 점검은 그 사이 에러를 못 봤으니 건너뛴다 */
+function blumo_last_agent_ts(PDO $pdo, int $monitorId): ?int {
+    $st = $pdo->prepare("SELECT at, health FROM lab_monitor_checks WHERE monitor_id = ? ORDER BY at DESC LIMIT 30");
+    $st->execute([$monitorId]);
+    foreach ($st as $row) {
+        $h = $row['health'] ? json_decode($row['health'], true) : null;
+        if (is_array($h) && isset($h['checks'])) return strtotime($row['at']) ?: null;
+    }
+    return null;
+}
+
+function blumo_health(array $m, array $cfg, array $r, ?int $since = null): array {
+    $url = $m['health'] . (strpos($m['health'], '?') === false ? '?' : '&') . 'key=' . rawurlencode($m['health_key'])
+         . ($since ? '&since=' . $since : '');
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => $url, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 3,
@@ -258,7 +270,7 @@ function blumo_cause(array $r): string {
 /** 주소 하나 점검 → 기록 · 상태 · 알림. 사람이 누른 점검도 같은 길 */
 function blumo_check(PDO $pdo, array $m, array $cfg): array {
     $r = blumo_probe($m, $cfg);
-    if (($m['health'] ?? '') !== '' && ($m['health_key'] ?? '') !== '') $r = blumo_health($m, $cfg, $r);
+    if (($m['health'] ?? '') !== '' && ($m['health_key'] ?? '') !== '') $r = blumo_health($m, $cfg, $r, blumo_last_agent_ts($pdo, (int)$m['id']));
     $r['cause'] = blumo_cause($r);
     blumo_store($pdo, $m, $r);
     blumo_state($pdo, $cfg, $m, $r);

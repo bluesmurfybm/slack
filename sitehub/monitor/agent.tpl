@@ -26,7 +26,7 @@ $CFG = array(
     'min_free_mb'   => 200,
     // PHP 에러로그 경로. 비우면 자동 탐지
     'error_log'     => '',
-    // 최근 N분 이내 에러만 집계
+    // 최근 N분 이내 에러만 집계. BLUMO 가 ?since=(직전 점검 시각) 을 주면 그 뒤만 본다
     'error_window'  => 60,
     // DB 커넥션 사용률이 이 % 넘으면 warn
     'conn_warn_pct' => 80,
@@ -205,6 +205,11 @@ function h_db_config_text($file) {
         'name'   => h_kv_pick($kv, array('db_name', 'db_database', 'db_dbname', 'dbname', 'db_db', 'mysql_db', 'mysql_dbname', 'mysql_database', 'mysql_name', 'g5_mysql_db', 'database', 'dbase', 'db')),
         'prefix' => h_kv_pick($kv, array('db_prefix', 'dbprefix', 'table_prefix', 'prefix')),
     );
+    $sel = h_kv_pick($kv, array('db_select_name'));
+    if ($sel !== null) {
+        if ($c['name'] !== null && $c['name'] !== $sel) $c['alt_name'] = $c['name'];
+        $c['name'] = $sel;
+    }
     if ($c['user'] === null || $c['name'] === null) return null;
     if ($c['host'] === null)   $c['host'] = 'localhost';
     if ($c['pass'] === null)   $c['pass'] = '';
@@ -245,9 +250,10 @@ function h_db_collect_kv($file, &$kv, &$seen, $depth) {
         if (isset($m[2]) && !isset($kv['db_user'])) $kv['db_user'] = $m[2];
         if (isset($m[3]) && !isset($kv['db_pass'])) $kv['db_pass'] = $m[3];
     }
-    // mysqli_select_db($conn, 'name') — 접속 뒤 DB 를 바꾸는 사이트는 이쪽이 실제 DB 다
+    // mysqli_select_db($conn, 'name') — 접속 뒤 DB 를 바꾸는 사이트는 이쪽이 실제 DB 다.
+    // 단, 옛 이름이 남아 서버에선 실패(반환값 무시)하고 connect 때 DB 를 그대로 쓰는 사이트가 있어 덮어쓰지 않고 따로 둔다
     if (preg_match('/(?:mysqli_select_db\s*\(\s*\$[A-Za-z0-9_]+\s*,|mysql_select_db\s*\()\s*[\'"]([^\'"]+)[\'"]/i', $src, $m)) {
-        $kv['db_name'] = $m[1];
+        if (!isset($kv['db_select_name'])) $kv['db_select_name'] = $m[1];
     }
 
     $q = '(?:\'([^\']*)\'|"([^"]*)")';
@@ -525,11 +531,17 @@ function h_check_db($cms, $CFG) {
         $link = @mysqli_init();
         $connected = false;
         $errno = 0; $errmsg = '';
+        foreach (h_db_names($cfg) as $ni => $dbname) {
+        if ($ni > 0) {
+            if (!in_array($errno, array(1044, 1049), true)) break;
+            $link = @mysqli_init();
+            $errno = 0; $errmsg = '';
+        }
         if ($link) {
             @mysqli_options($link, MYSQLI_OPT_CONNECT_TIMEOUT, $tmo);
             if (defined('MYSQLI_OPT_READ_TIMEOUT')) @mysqli_options($link, MYSQLI_OPT_READ_TIMEOUT, $tmo + 5);
             try {
-                $connected = @mysqli_real_connect($link, $cfg['host'], $cfg['user'], $cfg['pass'], $cfg['name'], $cfg['port']);
+                $connected = @mysqli_real_connect($link, $cfg['host'], $cfg['user'], $cfg['pass'], $dbname, $cfg['port']);
             } catch (Exception $e) {
                 $connected = false;
                 $errmsg = $e->getMessage();
@@ -540,6 +552,8 @@ function h_check_db($cms, $CFG) {
                 if (!$errmsg) $errmsg = (string)mysqli_connect_error();
             }
         }
+        if ($connected) { $r['name'] = $dbname; break; }
+        }
         if (!$connected) {
             $r['status']     = 'fail';
             $r['connect_ms'] = h_ms($t0);
@@ -549,11 +563,21 @@ function h_check_db($cms, $CFG) {
         }
     } elseif (class_exists('PDO')) {
         try {
-            $dsn = 'mysql:host=' . $cfg['host'] . ';port=' . $cfg['port'] . ';dbname=' . $cfg['name'];
-            $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], array(
-                PDO::ATTR_TIMEOUT => $tmo,
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_SILENT,
-            ));
+            $names = h_db_names($cfg);
+            foreach ($names as $ni => $dbname) {
+                try {
+                    $dsn = 'mysql:host=' . $cfg['host'] . ';port=' . $cfg['port'] . ';dbname=' . $dbname;
+                    $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], array(
+                        PDO::ATTR_TIMEOUT => $tmo,
+                        PDO::ATTR_ERRMODE => PDO::ERRMODE_SILENT,
+                    ));
+                    $r['name'] = $dbname;
+                    break;
+                } catch (Exception $e) {
+                    $no = isset($e->errorInfo[1]) ? (int)$e->errorInfo[1] : (int)$e->getCode();
+                    if ($ni + 1 >= count($names) || !in_array($no, array(1044, 1049), true)) throw $e;
+                }
+            }
         } catch (Exception $e) {
             $r['status']     = 'fail';
             $r['connect_ms'] = h_ms($t0);
@@ -626,6 +650,12 @@ function h_check_db($cms, $CFG) {
     return $r;
 }
 
+function h_db_names($cfg) {
+    $names = array($cfg['name']);
+    if (!empty($cfg['alt_name']) && $cfg['alt_name'] !== $cfg['name']) $names[] = $cfg['alt_name'];
+    return $names;
+}
+
 function h_db_kv($link, $pdo, $sql) {
     $out = array();
     try {
@@ -646,6 +676,7 @@ function h_db_kv($link, $pdo, $sql) {
 function h_db_reason($errno, $msg) {
     $map = array(
         1040 => 'Too many connections — 동시접속 한도 초과',
+        1044 => 'Access denied to database — 계정에 해당 DB 권한 없음(DB 이름 확인)',
         1045 => 'Access denied — 계정/비밀번호 변경됨',
         1049 => 'Unknown database — DB 삭제 또는 이름 변경',
         2002 => 'Connection refused — DB 서버 다운 또는 소켓 경로 오류',
@@ -663,6 +694,9 @@ function h_db_reason($errno, $msg) {
 function h_check_errorlog($root, $cms, $CFG) {
     $r = array('status' => 'ok', 'recent' => 0);
     $since = time() - ($CFG['error_window'] * 60);
+    $given = isset($_GET['since']) && ctype_digit((string)$_GET['since']) ? (int)$_GET['since'] : 0;
+    $bySince = $given > time() - 7 * 86400 && $given <= time() + 300;
+    if ($bySince) $since = $given;
 
     $files = array();
     if ($CFG['error_log']) {
@@ -696,7 +730,8 @@ function h_check_errorlog($root, $cms, $CFG) {
                   || (strpos($ln, 'CRITICAL -') !== false);
             if (!$isErr) continue;
             $ts = h_line_time($ln);
-            if ($ts !== null && $ts < $since) continue;
+            if ($ts === null && $bySince) continue;   // 시각 없는 줄은 매 점검마다 다시 세게 되므로 직전 점검 기준일 땐 뺀다
+            if ($ts !== null && $ts <= $since) continue;
             $r['recent']++;
             $last = $ln;
         }
@@ -704,7 +739,7 @@ function h_check_errorlog($root, $cms, $CFG) {
     if ($r['recent'] > 0) {
         $r['status'] = 'warn';
         $r['last']   = substr(preg_replace('/\s+/', ' ', $last), 0, 300);
-        $r['window'] = $CFG['error_window'] . 'm';
+        $r['window'] = $bySince ? 'since ' . date('Y-m-d H:i:s', $since) : $CFG['error_window'] . 'm';
     }
     if ($r['recent'] >= 20) $r['status'] = 'fail';
     return $r;
@@ -722,8 +757,10 @@ function h_tail($file, $bytes) {
 
 function h_line_time($ln) {
     // "[14-Sep-2026 10:11:12 Asia/Seoul]" 또는 "ERROR - 2026-09-14 10:11:12"
-    if (preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2})/', $ln, $m)) {
-        $t = strtotime($m[1]);
+    // 시간대 이름(Asia/Seoul·UTC)이 붙어 있으면 함께 넘긴다 — 사이트 PHP 기본 시간대와 로그 시간대가 다르면 since 비교가 어긋난다
+    if (preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2}(?: [A-Za-z_]+(?:\/[A-Za-z_]+)*)?)\]/', $ln, $m)
+        || preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2})/', $ln, $m)) {
+        $t = @strtotime($m[1]);
         return $t ? $t : null;
     }
     if (preg_match('/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/', $ln, $m)) {
