@@ -4,6 +4,7 @@ async function load() {
   const j = await api("?all=1");
   APP.sites = j.sites || [];
   APP.staff = j.staff || [];
+  APP.notice = j.notice || {};
   APP.syncAge = j.meta ? j.meta.sync_age : null;
   applyMeta(j.meta);
   if (j.seeded) showToast(j.seeded.error ? "엑셀 자동 가져오기 실패: " + j.seeded.error
@@ -231,7 +232,7 @@ function rowHtml(s) {
     </div>
     <div class="row-main">
       <div class="row-title">
-        ${monitorDot(s.monitor_status)}<button type="button" class="linkish" onclick="openDrawer(${s.id})">${esc(s.name)}</button>
+        ${monitorDot(s.monitor_status)}<button type="button" class="linkish" onclick="openDrawer(${s.id})">${esc(s.name)}</button>${noticeMark(s)}
         ${s.customer ? `<span class="muted">${esc(s.customer)}</span>` : ""}
       </div>
       <div class="row-sub">
@@ -249,6 +250,30 @@ function rowHtml(s) {
       <button type="button" class="btn-mini ghost" onclick="openDrawer(${s.id})">상세</button>
     </div>
   </li>`;
+}
+
+function noticeMark(s) {
+  const n = APP.notice[s.id] | 0;
+  return n ? `<span class="sh-new" title="안 읽은 변경 알림 ${n}건">NEW</span>` : "";
+}
+
+/* 드로어를 열면 그 사이트의 변경 알림을 읽음으로 — 목록 표시와 상단 종을 같이 줄인다 */
+function noticeSeen(id) {
+  if (!(APP.notice[id] | 0)) return;
+  delete APP.notice[id];
+  document.querySelectorAll(`[data-id="${id}"] .sh-new`).forEach(el => el.remove());
+  postJSON({ action: "notice_seen", site_id: id }).then(j => {
+    const bell = $("shBell");
+    if (!bell) return;
+    bell.querySelectorAll(`.sh-bell__item[data-site="${id}"]`).forEach(el => el.remove());
+    const n = j.unread | 0, badge = bell.querySelector(".sh-bell__n");
+    badge.textContent = n > 99 ? "99+" : String(n);
+    badge.hidden = !n;
+    bell.querySelector(".sh-bell__head em").textContent = n || "";
+    bell.querySelector(".sh-bell__empty").hidden = !!bell.querySelector(".sh-bell__item");
+    bell.classList.toggle("has-new", !!n);
+    bell.querySelector(".sh-bell__btn").title = `안 읽은 알림 ${n}건`;
+  }).catch(() => { });
 }
 
 function emptyHtml() {
@@ -273,7 +298,7 @@ function cardHtml(s) {
   if (s.url_dev) tags.push(urlLink(s.url_dev, "개발"));
   return `<li class="card sh-card${s.archived ? " dim" : ""}" data-id="${s.id}">
     <div class="card-top">${statusBadge(s)}${(s.expiry_alerts || []).length ? expiryBadge(s.expiry_alerts[0], true) : ""}${s.hosting ? `<span class="chip ghost">${esc(splitTags(s.hosting)[0])}</span>` : ""}${s.stack ? `<span class="chip">${esc(s.stack)}</span>` : ""}${archiveBadge(s)}</div>
-    <div class="card-title"><span class="sh-ct">${monitorDot(s.monitor_status)}<button type="button" class="linkish" onclick="openDrawer(${s.id})">${esc(s.name)}</button></span>${s.customer ? `<span class="muted">${esc(s.customer)}</span>` : ""}</div>
+    <div class="card-title"><span class="sh-ct">${monitorDot(s.monitor_status)}<button type="button" class="linkish" onclick="openDrawer(${s.id})">${esc(s.name)}</button>${noticeMark(s)}</span>${s.customer ? `<span class="muted">${esc(s.customer)}</span>` : ""}</div>
     <div class="card-tags">${tags.map(t => `<span class="chip ghost">${t}</span>`).join("")}<span class="muted">이력 ${s.history_count}건</span>${listStamp(s).replace('<span class="sep">·</span>', "")}</div>
     <div class="card-foot"><div class="row-act">${accountCopyButtons(s)}${contactCopyButton(s)}</div>
       <div class="row-act">${archiveActBtn(s)}<button type="button" class="btn-mini ghost" onclick="openDrawer(${s.id})">상세</button></div></div>

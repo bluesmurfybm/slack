@@ -938,3 +938,27 @@ details.sh-menu > summary::-webkit-details-marker{display:none}
 .sh-year-bar{display:flex;align-items:center;gap:8px;margin:0 0 10px}
 .sh-year-bar select{height:28px;padding:0 8px;font-size:12.5px}
 .sh-rows li[hidden]{display:none}   /* .sh-rows li 의 display 가 hidden 속성을 이기므로 */
+
+/* 상단바 종 — studio 의 .ba-bell 과 같은 모양 (notice_lib.php::sitehub_notice_bell) */
+.sh-bell{position:relative}
+.sh-bell__btn{position:relative;width:36px;height:36px;border-radius:50%;border:0;background:transparent;cursor:pointer;display:grid;place-items:center;color:var(--gray50)}
+.sh-bell__btn:hover,.sh-bell.open .sh-bell__btn{background:var(--gray95)}
+.sh-bell__btn:focus-visible{outline:2px solid var(--cos50);outline-offset:2px}
+.sh-bell__btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sh-bell.has-new .sh-bell__btn{color:var(--cos40)}
+.sh-bell__n{position:absolute;top:2px;right:0;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:var(--nega50);color:#fff;font-size:10.5px;font-weight:700;line-height:16px;text-align:center}
+.sh-bell__n[hidden]{display:none}
+.sh-bell__pop{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:320px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--bo-secondary);border-radius:var(--r12);box-shadow:var(--shadow-lg);padding:6px}
+.sh-bell:hover .sh-bell__pop,.sh-bell:focus-within .sh-bell__pop,.sh-bell.open .sh-bell__pop{display:block}
+.sh-bell__head{padding:8px 10px 6px;font-size:12.5px;font-weight:700;color:var(--tx-primary)}
+.sh-bell__head em{font-style:normal;color:var(--nega50);margin-left:4px}
+.sh-bell__item{display:grid;gap:2px;padding:8px 10px;border-radius:var(--r8);text-decoration:none;color:var(--tx-primary);font-size:13px}
+.sh-bell__item:hover,.sh-bell__item:focus-visible{background:var(--cos95);outline:none}
+.sh-bell__item b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sh-bell__item span{color:var(--tx-quaternary);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sh-bell__item i{font-style:normal;color:var(--tx-quinary);font-size:11px}
+.sh-bell__empty{margin:0;padding:10px;color:var(--tx-quaternary);font-size:12.5px}
+.sh-bell__empty[hidden]{display:none}
+.sh-bell__all{display:block;border-top:1px solid var(--bo-secondary);margin-top:4px;padding:9px 10px 6px;font-size:12px;color:var(--cos40);text-decoration:none}
+/* 목록의 안 읽은 변경 알림 표시 — 드로어를 열면 읽음 */
+.sh-new{display:inline-block;margin-left:6px;padding:0 5px;border-radius:var(--r4);background:var(--nega50);color:#fff;font-size:10px;font-weight:700;line-height:16px;vertical-align:middle}

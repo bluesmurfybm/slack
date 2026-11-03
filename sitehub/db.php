@@ -21,6 +21,7 @@
 
 require_once __DIR__ . '/../core/db.php';   // add_column_if_missing() 재사용
 require_once __DIR__ . '/audit_lib.php';     // 변경 기록 (누가 언제 무엇을)
+require_once __DIR__ . '/notice_lib.php';
 require_once __DIR__ . '/monitor_lib.php';   // BLUMO 감시 (점검 엔진 monitor_engine.php 포함)
 
 function sitehub_db() {

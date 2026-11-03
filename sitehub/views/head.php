@@ -9,6 +9,7 @@ if (!isset($me)) {
     exit;
 }
 require_once __DIR__ . '/../../core/worksystems.php';
+require_once __DIR__ . '/../notice_lib.php';
 // 페이지마다 바꾸는 머리 — 기본은 목록 화면(index.php)
 $pageTitle = $pageTitle ?? 'BlueLab SiteHub';
 $pageLede  = $pageLede ?? '유지보수 사이트의 주소 · 계정 · 담당자 · 계약 · 처리 이력';
@@ -21,7 +22,7 @@ $canStats  = $canStats ?? sitehub_can_stats($me);
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><?= sitehub_h($pageTitle) ?></title>
-  <link rel="icon" href="../styles/favicon.ico">
+  <link rel="icon" type="image/svg+xml" href="../styles/favicons/sitehub.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -36,6 +37,7 @@ $canStats  = $canStats ?? sitehub_can_stats($me);
     <div class="topbar-in">
       <a class="logo" href="../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
       <div class="top-right">
+        <?= sitehub_notice_bell($me) ?>
         <div class="user-menu" id="hdrUserMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
             <span class="avatar" style="background:<?= sitehub_h(user_color($me)) ?>"><?= sitehub_h(mb_substr($me['name'], 0, 1)) ?></span>

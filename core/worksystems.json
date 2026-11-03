@@ -27,5 +27,6 @@
     "desc": "정해 둔 대상을 기간 동안 주기적으로 살피고 새 소식이 있을 때만 알립니다.", "color": "#C2410C",
     "badge": "inbox" },
   { "key": "sitehub", "emoji": "🗂️", "label": "BlueLab SiteHub", "path": "sitehub/index.php",
-    "desc": "유지보수 사이트의 URL·계정·담당자·계약·처리 이력을 한곳에서 찾아 복사합니다.", "color": "#B7472A" }
+    "desc": "유지보수 사이트의 URL·계정·담당자·계약·처리 이력을 한곳에서 찾아 복사합니다.", "color": "#B7472A",
+    "badge": "inbox" }
 ]
