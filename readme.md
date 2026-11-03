@@ -1481,7 +1481,8 @@ BlueLab 팀이 유지보수하는 **사이트** 정보를  관리하는 모듈(`
   상세 드로어는 주소 `?site=<id>&tab=<key>` 로 남는다.
 
 ### 지켜야 할 규칙
-- **비밀번호(`login_pw`)** 는 access 와 같은 `enc:v1:` AES-256-GCM·같은 key. `sitehub_enc()/dec()` 를 일부러 따로 둔다
+- **비밀번호(`login_pw`)** 는 access 와 같은 `enc:v1:` AES-256-GCM 이지만 키는 sitehub 전용 `sitehub_key`(`config.local.php`)다.
+  없으면 포털 공용 `key` 로 암호화하고, 풀 때는 `sitehub_key` → `key` 순서로 시도한다. `sitehub_enc()/dec()` 를 일부러 따로 둔다
   (`access/db.php` 를 include 하면 access 마이그레이션이 돈다). API 응답에 평문이 실리니 운영은 HTTPS. 수정 때 빈칸 = 그대로 두기.
 - **계약 상태는 저장하지 않는다** — 종료일이 가장 늦은 계약으로 판정(`sitehub_contract_status()`, 30일 안이면 `만료 임박`).
   **계약 금액은 항상 연간 금액**이고 납부 주기는 `billing` 칸에만 적는다.
@@ -1613,6 +1614,7 @@ BlueLab 팀이 유지보수하는 **사이트** 정보를  관리하는 모듈(`
 | `config.php` 의 `dti_slack_webhook` | dti 모듈 Slack 웹훅 URL(선택) | 없으면 발표자 등록 알림만 비활성 |
 | `SVN_배포_디비정보(블루내부공유).xlsx` (루트) | access 모듈 초기 데이터 | **직접 가져다 둘 것.** 전 대학 계정/비번이 들어 있어 커밋 금지 |
 | `config.php` 의 `sitehub_list_id` · `sitehub_list_url` | sitehub 모듈이 읽는 Slack 리스트(BlueLab-유지보수처리목록) ID·주소 | 없으면 이력 동기화만 꺼진다 |
+| `config.local.php` 의 `sitehub_key` | sitehub 비밀번호·BLUMO 웹훅·에이전트 키 암호화 키 (base64, 32바이트) | **직접 추가.** 없으면 포털 공용 `key`. 바꾸면 그 키로 암호화한 값이 안 풀리니 서버를 옮길 때 같이 옮긴다 |
 | `config.local.php` 의 `sitehub_slack_token` | sitehub 이력 동기화 토큰 (thebluesoft.slack.com — 포털 개인 토큰과 다른 워크스페이스) | **직접 추가.** 없으면 로그인 사용자의 개인 토큰을 시도 |
 | `config.php` 의 `sitehub_stats_emails` | sitehub 통계를 볼 수 있는 계정 목록 | 선택. 없으면 `pink@bluesoft.co.kr` 하나, `[]` 면 로그인한 누구나 |
 | `sitehub/list_cols.php` 의 값 | BlueLab 리스트의 컬럼 매핑 | 저장소에 **채워져** 있다(리스트 F088VTXBD0R 기준). 리스트 열이 바뀌면 `php sitehub/sync.php schema` 로 확인해 고친다 |
@@ -1660,6 +1662,8 @@ return [
     'sitehub_list_id'     => '',   // 예: F0XXXXXXXXX
     'sitehub_list_url'    => '',   // 예: https://thebluesoft.slack.com/lists/T0XXXXXXX/F0XXXXXXXXX
     'sitehub_slack_token' => $localCfg['sitehub_slack_token'] ?? null,
+    // sitehub 전용 암호화 키 — 없으면 위의 공용 key 를 쓴다
+    'sitehub_key' => $localCfg['sitehub_key'] ?? null,
 
     // dti(DTI 발표) 슬랙 알림 웹훅 — 선택. 없으면 발표자 등록 알림만 조용히 꺼진다.
     // (파이썬 magazine 의 config_local.py 에 있던 SLACK_WEBHOOK_URL 자리다)
