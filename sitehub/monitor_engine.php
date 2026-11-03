@@ -221,7 +221,14 @@ function blumo_cause(array $r): string {
         elseif (($c['errorlog']['recent'] ?? 0) > 0) $hint = 'PHP 에러 ' . $c['errorlog']['recent'] . '건 (' . substr((string)($c['errorlog']['last'] ?? ''), 0, 120) . ')';
         elseif (($c['database']['status'] ?? '') === 'warn') $hint = 'DB 경고: ' . ($c['database']['error'] ?? '') . (isset($c['database']['connections']) ? ' [' . $c['database']['connections'] . ']' : '');
     } elseif (is_array($h) && ($h['status'] ?? '') === 'unreachable') {
-        $hint = '에이전트 응답 없음 → 웹서버/PHP 레벨 문제';
+        $hc = (int)($h['http'] ?? 0);
+        $hint = match (true) {
+            $hc === 0   => '에이전트 연결 안 됨(시간 초과·차단)',
+            $hc === 403 => '에이전트도 403 — 방화벽/WAF/IP 차단',
+            $hc === 404 => '에이전트 404 — 파일이 없거나 키가 다름(에이전트를 다시 받아 올리기)',
+            $hc >= 500  => "에이전트 {$hc} — 에이전트 PHP 오류(PHP 버전·권한)",
+            default     => "에이전트 HTTP {$hc}",
+        };
     }
     $map = [
         'OK' => '정상', 'SLOW' => '응답 지연',
