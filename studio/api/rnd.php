@@ -700,6 +700,31 @@ bs_route(bs_param_str('act', 'board'), [
         $pid  = $repo->deleteFile((int)bs_param_int('file_id', 0), $user);
         bs_json_ok(bs_rnd_detail($repo, $pid) + ['message' => '파일을 지웠습니다.']);
     },
+
+    /**
+     * 프로젝트로 넘기기 (032). 승인된 과제의 주도자·발의자·관리자가, 프로젝트
+     * 등록 권한이 있을 때. 과제는 그대로 남는다 — 산출물·진행 기록·점유가 과제에 있다.
+     */
+    'promote_project' => function () use ($repo): void {
+        $user = bs_begin_write();
+        $pid  = bs_rnd_project_param();
+        require_once BS_ROOT . '/inc/service/PromoteService.php';
+        $pdo  = bs_db();
+        $data = [];
+        foreach (['name', 'summary', 'client', 'track', 'dev_start', 'dev_end',
+                  'test_start', 'test_end', 'deploy_date'] as $k) {
+            if (bs_param_str($k) !== '') {
+                $data[$k] = bs_param_str($k);
+            }
+        }
+        $newId = (new PromoteService($pdo, new IdeaRepo($pdo), $repo, new ProjectRepo($pdo)))
+            ->rndToProject($pid, $data, $user);
+        bs_json_ok([
+            'project_id' => $newId,
+            'url'        => 'project_view.php?id=' . $newId,
+            'message'    => '프로젝트로 등록했습니다(작성 중). 과제는 그대로 남습니다.',
+        ]);
+    },
 ]);
 
 /** 과제를 고칠 수 있어야 한다 — 아니면 끊는다. 못 보는 과제는 '없다' 로. */
@@ -772,7 +797,25 @@ function bs_rnd_detail(RndRepo $repo, int $pid): array
             $repo->outputs($pid)
         ),
         'sources' => bs_rnd_sources($pid),
+        // 어디서 왔고 어디로 갔는가 (032)
+        'lineage' => bs_rnd_lineage($pid),
     ];
+}
+
+/**
+ * 출발 아이디어와, 이 과제에서 만든 프로젝트.
+ * 032 가 없는 DB 에서도 과제 화면은 열려야 한다 — 실패하면 빈 값.
+ */
+function bs_rnd_lineage(int $pid): array
+{
+    try {
+        require_once BS_ROOT . '/inc/repo/IdeaRepo.php';
+        $ideas = new IdeaRepo(bs_db());
+        $brief = $ideas->projectBrief($pid);
+        return ['origin_idea' => $ideas->originOf($pid), 'project' => $brief['next'] ?? null];
+    } catch (Throwable $e) {
+        return ['origin_idea' => null, 'project' => null];
+    }
 }
 
 /**

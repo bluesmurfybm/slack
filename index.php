@@ -20,6 +20,8 @@ $__current = $__u ? [
     'email'       => $__u['email'],
     'has_token'   => !empty($__u['slack_token_enc']),
     'slack_email' => $__u['slack_email'] ?? null,
+    'gmail_user'  => $__u['gmail_user'] ?? null,
+    'has_gmail_pass' => !empty($__u['gmail_pass_enc']),
     'needs_setup' => needs_setup($__u),
     'color'       => user_color($__u),
 ] : null;
@@ -57,6 +59,12 @@ $__collapsed = array_values(array_filter(array_map(
     'intval',
     explode(',', (string)($__u['tile_collapsed'] ?? ''))
 )));
+// 카드 배지(안 읽은 알림 수). 처음부터 그려야 숫자가 뒤늦게 튀어나오지 않는다.
+// 어느 카드에 붙일지는 worksystems.json 의 "badge" — core/push.php::push_tile_badges.
+require_once __DIR__ . '/core/push.php';
+$__tileBadges = $__u ? push_tile_badges((int)$__u['id'], $__systems) : [];
+// 배지 툴팁에 띄울 최근 제목 (2026-11-02) — 숫자만으로는 열어 볼지 판단이 안 선다.
+$__tilePreviews = $__u ? push_tile_previews((int)$__u['id'], $__systems) : [];
 // 모듈이 미로그인 사용자를 되돌려보낼 때 ?need_login=<key> 를 붙인다 — 왜 튕겼는지 알려줘야 한다.
 $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_login'] : null);
 ?>
@@ -501,6 +509,25 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         </div>
       </div>
 
+      <!-- Gmail 연동(slack/gmail). 앱 비밀번호도 슬랙 토큰과 같이 암호화 저장하고 다시 보여 주지 않는다. -->
+      <div class="token-note">
+        📧 <b>Gmail 연동</b>은 본인 메일함을 업무 화면에서 보기 위한 설정입니다. 비밀번호 칸에는 로그인 비밀번호가 아니라
+        <b>Google 앱 비밀번호</b>(16자리)를 넣으세요 — Google 계정 → 보안 → 2단계 인증 → 앱 비밀번호에서 만들 수 있습니다.
+        암호화해 저장하며, 저장 후에는 화면에 다시 표시되지 않습니다.
+      </div>
+      <div class="fld">
+        <label>Gmail 주소</label>
+        <input id="pf-gmail" type="email" placeholder="example@gmail.com" autocomplete="off" disabled>
+        <div class="hintline">비우고 저장하면 연동이 해제되고 저장된 앱 비밀번호도 지워집니다.</div>
+      </div>
+      <div class="fld">
+        <label>Gmail 앱 비밀번호</label>
+        <div class="pw-wrap">
+          <input id="pf-gmailpw" type="password" placeholder="abcd efgh ijkl mnop" autocomplete="new-password" disabled>
+          <button class="eye" onclick="toggleEye('pf-gmailpw',this)" title="표시/숨김"></button>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button class="btn-primary" id="pf-editbtn" style="width:auto;padding:11px 22px;margin:0" onclick="startEditProfile()">수정</button>
         <button class="btn-ghost hidden" id="pf-cancel" onclick="cancelEditProfile()">취소</button>
@@ -544,6 +571,10 @@ let TILE_ORDERED = <?= json_encode(!empty($__u['tile_order'])) ?>;
 // 카드 묶음 [{id, name, sort_no}, …]. 위에서 아래 순.
 // **빈 배열이면 묶음을 안 쓴다는 뜻**이라 화면은 지금까지처럼 한 판에 그린다.
 let TILE_GROUPS = <?= json_encode($__tileGroups, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
+// { 카드key: 안 읽은 알림 수 }. 알림함 숫자가 바뀔 때마다 paintTileBadges() 가 갈아 끼운다.
+let TILE_BADGES = <?= json_encode($__tileBadges ?: new stdClass()) ?>;
+// { 카드key: [최근 안 읽은 알림 제목, …] } — 배지 툴팁 (core/push.php::push_tile_previews)
+let TILE_PREVIEWS = <?= json_encode($__tilePreviews ?: new stdClass(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
 // { 카드key: 묶음id }. 여기 없는 카드는 '기타' 로 간다.
 let TILE_ASSIGN = <?= json_encode($__tileAssign ?: new stdClass(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?>;
 // 접어 둔 묶음 id. 사람마다 다르다.
@@ -611,7 +642,14 @@ function enterApp(){
     return;
   }
   if(params.get("view")==="profile"){
+    const focus = params.get("focus");
     history.replaceState(null,"",location.pathname);
+    if(focus==="gmail"){                     // 업무 현황판 Gmail 탭에서 '미등록' 으로 넘어온 경우 — 바로 입력할 수 있게
+      showProfile("Gmail 주소와 앱 비밀번호를 등록해 주세요", true);
+      const g=document.getElementById("pf-gmail");
+      g.scrollIntoView({block:"center"}); g.focus();
+      return;
+    }
     showProfile();
     return;
   }
@@ -695,7 +733,7 @@ function pickSwatch(c){
    단, 초기 비번 미변경/토큰 요구 상황이면 볼 것도 없이 바로 수정 모드로 연다. */
 function setProfileMode(editing){
   profileEditing=editing;
-  ["pf-name","pf-email","pf-color","pf-pw","pf-slackmail","pf-token"].forEach(id=>{
+  ["pf-name","pf-email","pf-color","pf-pw","pf-slackmail","pf-token","pf-gmail","pf-gmailpw"].forEach(id=>{
     document.getElementById(id).disabled=!editing;
   });
   buildSwatches(document.getElementById("pf-color").value);
@@ -712,7 +750,16 @@ function cancelEditProfile(){
   document.getElementById("pf-color").value=hexOrDefault(current.color);
   document.getElementById("pf-slackmail").value=current.slack_email||"";
   document.getElementById("pf-token").value="";
+  fillGmailFields();
   setProfileMode(false);
+}
+
+/* Gmail 연동 칸: 주소는 그대로 보여 주고, 앱 비밀번호는 저장 여부만 알린다(원문은 서버도 안 내려 준다) */
+function fillGmailFields(){
+  document.getElementById("pf-gmail").value=current.gmail_user||"";
+  const pw=document.getElementById("pf-gmailpw");
+  pw.value="";
+  pw.placeholder = current.has_gmail_pass ? "저장됨 · 변경하려면 새 앱 비밀번호 입력" : "abcd efgh ijkl mnop";
 }
 
 function showProfile(alertMsg, forceEdit){
@@ -725,6 +772,7 @@ function showProfile(alertMsg, forceEdit){
   const tokenEl=document.getElementById("pf-token");
   tokenEl.value="";
   tokenEl.placeholder = current.has_token ? "저장됨 · 변경하려면 새 토큰 입력" : "xoxp-... (본인 토큰 붙여넣기)";
+  fillGmailFields();
   setProfileMode(!!(current && current.needs_setup) || !!forceEdit);
   if(alertMsg) toast(alertMsg);
   loadPushPanel();
@@ -746,10 +794,12 @@ async function refreshNotifBadge(){
   if(!current) return;
   try{
     const d=await bapi("api/notifications.php?count=1");
-    paintNotifBadge(d.unread);
+    if (d.previews) TILE_PREVIEWS = d.previews;
+    paintNotifBadge(d.unread, d.tiles);
   }catch(e){}
 }
-function paintNotifBadge(n){
+function paintNotifBadge(n, tiles){
+  paintTileBadges(tiles);
   const b=document.getElementById("nf-badge"), btn=document.getElementById("nfBtn");
   b.textContent = n>99 ? "99+" : String(n||0);
   b.classList.toggle("hidden", !n);
@@ -771,7 +821,7 @@ async function showNotifs(more){
     const d=await bapi(`api/notifications.php?limit=30${only}${before}`);
     nfItems=nfItems.concat(d.items);
     nfMore=d.has_more;
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
     renderNotifs();
   }catch(e){
     list.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`;
@@ -810,7 +860,7 @@ async function openNotif(id){
   const n=nfItems.find(x=>x.id===id);
   if(!n) return;
   if(!n.read_at){
-    try{ const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read:[id]})}); paintNotifBadge(d.unread); }catch(e){}
+    try{ const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read:[id]})}); paintNotifBadge(d.unread, d.tiles); }catch(e){}
     n.read_at="now";
   }
   const url=(n.url||"").trim();
@@ -823,14 +873,14 @@ async function deleteNotif(id){
   try{
     const d=await bapi("api/notifications.php",{method:"DELETE",body:JSON.stringify({ids:[id]})});
     nfItems=nfItems.filter(x=>x.id!==id);
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
     renderNotifs();
   }catch(e){ toast(e.message); }
 }
 async function readAllNotifs(){
   try{
     const d=await bapi("api/notifications.php",{method:"POST",body:JSON.stringify({read_all:true})});
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
     showNotifs();
   }catch(e){ toast(e.message); }
 }
@@ -838,7 +888,7 @@ async function deleteReadNotifs(){
   if(!confirm("읽은 알림을 모두 지울까요?")) return;
   try{
     const d=await bapi("api/notifications.php",{method:"DELETE",body:JSON.stringify({read:true})});
-    paintNotifBadge(d.unread);
+    paintNotifBadge(d.unread, d.tiles);
     showNotifs();
   }catch(e){ toast(e.message); }
 }
@@ -977,9 +1027,39 @@ function tileHTML(s){
     <a class="tile" href="${esc(s.url)}" target="_blank" rel="noopener"
        draggable="false" data-key="${esc(s.key)}">
       <span class="go">${arrow}</span>
-      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}</span>
+      <span class="ic" style="background:${esc(s.color || "#5A667F")}">${ICONS[s.key] || plusIcon}${s.badge ? tileBadgeHTML(TILE_BADGES[s.key], s.key) : ""}</span>
       <div><h3>${esc(s.label)}</h3><p>${esc(s.desc || "")}</p></div>
     </a>`;
+}
+
+/* 카드 아이콘 오른쪽 위 숫자 — 그 시스템에서 온 안 읽은 알림 수.
+   worksystems.json 에 "badge" 를 단 카드에만 자리를 만들어 둔다. */
+function tileBadgeHTML(n, key){
+  n = n|0;
+  return `<span class="tile-badge"${n ? "" : " hidden"} title="${esc(tileTip(n, key))}">${n>99 ? "99+" : n}</span>`;
+}
+/* 배지 툴팁 — 숫자 아래에 최근 제목 몇 줄. core/push.php::push_tile_tip 과 같은 모양 */
+function tileTip(n, key){
+  return `안 읽은 알림 ${n}건` + ((TILE_PREVIEWS[key] || []).map(t => "\n· " + t).join(""));
+}
+function paintTileBadges(tiles){
+  if(!tiles) return;
+  TILE_BADGES = tiles;
+  document.querySelectorAll(".tile[data-key] .tile-badge").forEach(b => {
+    const key = b.closest(".tile").dataset.key;
+    const n = TILE_BADGES[key] | 0;
+    b.textContent = n>99 ? "99+" : String(n);
+    b.title = tileTip(n, key);
+    b.hidden = !n;
+  });
+  // 상단바 드롭다운의 같은 숫자(core/worksystems.php::work_systems_menu)도 같이 갈아 끼운다
+  document.querySelectorAll(".dd-menu a[data-key] .dd-badge").forEach(b => {
+    const key = b.closest("a").dataset.key;
+    const n = TILE_BADGES[key] | 0;
+    b.textContent = n>99 ? "99+" : String(n);
+    b.title = tileTip(n, key);
+    b.hidden = !n;
+  });
 }
 
 const soonHTML = `
@@ -1218,6 +1298,12 @@ async function saveProfile(){
   // 슬랙 계정 이메일은 빈칸도 보낸다. 토큰과 달리 화면에 원문이 보이므로
   // 비운 것은 '지우기' 라는 뜻이다. 회사 메일과 같으면 서버가 비워서 저장한다.
   body.slack_email=v("pf-slackmail");
+  // Gmail: 주소는 빈칸도 보낸다(= 연동 해제). 앱 비밀번호는 빈칸이면 기존 값 유지.
+  const gm=v("pf-gmail"), gp=v("pf-gmailpw");
+  const gmChanged = gm.toLowerCase() !== (current.gmail_user||"").toLowerCase();
+  if(gm && !gp && (gmChanged || !current.has_gmail_pass)){ toast("Gmail 앱 비밀번호도 입력하세요"); return; }
+  body.gmail_user=gm;
+  if(gp) body.gmail_pass=gp;
 
   const r=await fetch("api/me.php",{method:"PUT",headers:{"Content-Type":"application/json"},
     body:JSON.stringify(body)});

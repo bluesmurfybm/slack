@@ -1651,7 +1651,8 @@ a.ba-my { box-sizing: border-box; color: inherit; text-decoration: none; }
 
 /* 발의 폼 — R&D 발의 폼에만. 전에는 .ba-form 전체에 걸려 프로젝트 등록·이의 제기
    폼의 입력란이 글자 폭만큼 좁아졌다 (2026-10-15). 그쪽은 위의 grid 를 쓴다. */
-#ba-rnd-form.ba-form {
+#ba-rnd-form.ba-form,
+#ba-idea-form.ba-form {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 14px;
@@ -2521,3 +2522,154 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
 .ba-back a:hover { color: var(--ba-ink); background: var(--ba-paper); }
 .ba-back a span { font-size: 18px; line-height: 1; }
 .ba-rnd-formbar { margin-top: 16px; }
+
+/* =====================================================================
+   아이디어·제안 (032)
+   카드·머리·탭은 R&D 보드 것을 그대로 쓴다(.ba-rnd-card · .ba-rnd-head ·
+   .ba-statabs). 여기에는 아이디어에만 있는 것 — 흐름 안내, 평가, 피드백.
+   ===================================================================== */
+
+/* 흐름 안내 — 올린 생각이 어디로 가는지 보여야 올릴 마음이 생긴다 */
+.ba-idea-flow ol {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+  margin: 0 0 14px; padding: 0; list-style: none; counter-reset: ideaflow;
+}
+.ba-idea-flow li {
+  counter-increment: ideaflow; position: relative;
+  background: var(--ba-paper); border: 1px solid var(--ba-line); border-radius: var(--ba-r);
+  padding: 12px 14px 12px 44px; font-size: 12.5px; color: var(--ba-ink-soft); line-height: 1.5;
+}
+.ba-idea-flow li::before {
+  content: counter(ideaflow); position: absolute; left: 14px; top: 12px;
+  width: 20px; height: 20px; border-radius: 50%; background: #e8f5ee; color: var(--ba-brand-dk);
+  font-weight: 700; font-size: 12px; display: grid; place-items: center;
+}
+.ba-idea-flow b { display: block; color: var(--ba-ink); font-size: 13.5px; margin-bottom: 2px; }
+@media (max-width: 760px) { .ba-idea-flow ol { grid-template-columns: 1fr 1fr; } }
+
+/* 카드 */
+.ba-idea-card.is-new { border-color: #bfe0cc; box-shadow: 0 0 0 1px #bfe0cc inset; }
+.ba-idea-card__doms { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+.ba-idea-card__score { font-weight: 600; color: var(--ba-ink); }
+.ba-idea-card__score.is-dim { font-weight: 400; color: var(--ba-ink-soft); }
+.ba-idea-tag {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px;
+  background: var(--ba-surface); border: 1px solid var(--ba-line); color: var(--ba-ink-soft);
+}
+.ba-badge--new              { background: var(--ba-brand); color: #fff; }
+.ba-badge--idea-open        { background: #e9eefb; color: #30509c; }
+.ba-badge--idea-reviewing   { background: #fdf3e2; color: var(--ba-warn); }
+.ba-badge--idea-adopted,
+.ba-badge--idea-promoted    { background: #e8f5ee; color: var(--ba-brand-dk); }
+.ba-badge--idea-hold        { background: #eef1f6; color: var(--ba-ink-soft); }
+.ba-badge--idea-rejected    { background: #fbeceb; color: var(--ba-danger); }
+
+/* 쓰는 중 비슷한 아이디어 */
+.ba-idea-similar {
+  flex: 1 1 100%; font-size: 12.5px; line-height: 1.7;
+  border: 1px solid #e6d3ae; background: #fffaf0; color: #7a5a1e; border-radius: 8px; padding: 8px 12px;
+}
+.ba-idea-similar a { color: inherit; text-decoration: underline; }
+
+/* 상세 — 본문 왼쪽, 평가·간 곳 오른쪽 */
+.ba-idea-cols { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; margin-top: 14px; align-items: start; }
+@media (max-width: 960px) { .ba-idea-cols { grid-template-columns: 1fr; } }
+.ba-idea-main, .ba-idea-side { display: grid; gap: 14px; }
+.ba-idea-view .ba-panel h3 { font-size: 13px; margin: 16px 0 6px; color: var(--ba-ink-soft); }
+.ba-idea-view .ba-panel h3:first-child { margin-top: 0; }
+.ba-idea-text { margin: 0; line-height: 1.75; color: var(--ba-ink); white-space: normal; }
+.ba-idea-reviewnote {
+  border-left: 3px solid var(--ba-brand); background: var(--ba-surface);
+  padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 13px; margin-bottom: 12px;
+}
+.ba-idea-review { display: inline-flex; gap: 4px; padding-left: 8px; margin-left: 4px; border-left: 1px solid var(--ba-line); }
+
+/* 평가 */
+.ba-idea-avg { display: grid; gap: 10px; margin: 6px 0 8px; }
+.ba-idea-avg > div {
+  display: grid; grid-template-columns: 80px 36px 1fr; align-items: center; gap: 8px; font-size: 13px;
+}
+.ba-idea-avg b { font-size: 16px; color: var(--ba-ink); text-align: right; }
+.ba-idea-avg i {
+  display: block; height: 8px; border-radius: 4px; background: var(--ba-brand); min-width: 4px;
+}
+.ba-idea-myrate { border-top: 1px solid var(--ba-line); margin-top: 12px; padding-top: 4px; }
+.ba-idea-axis { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+.ba-idea-axis > span { width: 84px; font-size: 12.5px; color: var(--ba-ink-soft); }
+.ba-idea-star {
+  width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--ba-line);
+  background: var(--ba-paper); color: var(--ba-ink-soft); font-weight: 600; cursor: pointer;
+}
+.ba-idea-star.on { background: var(--ba-brand); border-color: var(--ba-brand); color: #fff; }
+.ba-idea-star:focus-visible { outline: 2px solid var(--ba-brand); outline-offset: 2px; }
+.ba-idea-myrate input[type="text"] {
+  width: 100%; box-sizing: border-box; margin-top: 6px; padding: 7px 10px;
+  border: 1px solid var(--ba-line); border-radius: 8px; font: inherit; font-size: 13px;
+}
+.ba-idea-myrate__foot { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.ba-idea-opinions { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.ba-idea-opinions li { line-height: 1.55; }
+
+/* 간 곳 */
+.ba-idea-lineage { margin: 6px 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; }
+
+/* 피드백 */
+.ba-idea-c { padding: 10px 0; border-top: 1px solid var(--ba-line); font-size: 13.5px; }
+.ba-idea-c:first-child { border-top: 0; }
+.ba-idea-c.is-reply { margin-left: 18px; padding: 8px 0 0 12px; border-top: 0; border-left: 2px solid var(--ba-line); }
+.ba-idea-c.is-status { font-size: 12.5px; color: var(--ba-ink-soft); background: var(--ba-surface); padding: 8px 10px; border-radius: 8px; margin: 6px 0; border-top: 0; }
+.ba-idea-c__h { margin-bottom: 3px; }
+.ba-idea-c__b { line-height: 1.7; color: var(--ba-ink); }
+.ba-idea-c__a { display: flex; gap: 10px; margin-top: 4px; }
+.ba-linkbtn {
+  border: 0; background: none; padding: 0; font: inherit; font-size: 12px;
+  color: var(--ba-ink-soft); cursor: pointer;
+}
+.ba-linkbtn:hover { color: var(--ba-brand-dk); text-decoration: underline; }
+.ba-idea-cform { display: grid; gap: 8px; margin-top: 12px; }
+.ba-idea-cform textarea {
+  box-sizing: border-box; width: 100%; resize: vertical; padding: 8px 10px;
+  border: 1px solid var(--ba-line); border-radius: 8px; font: inherit; font-size: 13.5px; line-height: 1.6;
+}
+.ba-idea-cform .ba-btn { justify-self: end; }
+
+/* 상단바 종 (032) — 숫자에 올리거나 누르면 최근 소식 제목이 펼쳐진다 */
+.ba-bell { position: relative; margin-right: 10px; }
+.ba-bell__btn {
+  position: relative; width: 36px; height: 36px; border-radius: 50%;
+  border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; color: #5b6b85;
+}
+.ba-bell__btn:hover, .ba-bell.open .ba-bell__btn { background: #f1f4f9; }
+.ba-bell__btn:focus-visible { outline: 2px solid var(--ba-brand); outline-offset: 2px; }
+.ba-bell__btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ba-bell.has-new .ba-bell__btn { color: var(--ba-brand-dk); }
+.ba-bell__n {
+  position: absolute; top: 2px; right: 0; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 8px; background: #e5484d; color: #fff; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center;
+}
+.ba-bell__pop {
+  display: none; position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; width: 320px; max-width: calc(100vw - 32px);
+  background: #fff; border: 1px solid #e3e8f0; border-radius: 12px; box-shadow: 0 12px 32px rgba(22, 36, 58, .14); padding: 6px;
+}
+.ba-bell:hover .ba-bell__pop, .ba-bell:focus-within .ba-bell__pop, .ba-bell.open .ba-bell__pop { display: block; }
+.ba-bell__head { padding: 8px 10px 6px; font-size: 12.5px; font-weight: 700; color: #16243a; }
+.ba-bell__head em { font-style: normal; color: #e5484d; margin-left: 4px; }
+.ba-bell__item { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; text-decoration: none; color: #16243a; font-size: 13px; }
+.ba-bell__item:hover, .ba-bell__item:focus-visible { background: #f4fbf6; outline: none; }
+.ba-bell__item b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-bell__item span { color: #5b6b85; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ba-bell__item i { font-style: normal; color: #8a97ab; font-size: 11px; }
+.ba-bell__empty { margin: 0; padding: 10px; color: #5b6b85; font-size: 12.5px; }
+.ba-bell__all { display: block; border-top: 1px solid #e3e8f0; margin-top: 4px; padding: 9px 10px 6px; font-size: 12px; color: var(--ba-brand-dk); text-decoration: none; }
+
+/* 아이디어 리스트형 — 카드 그리드 자리에 표 하나를 꽉 채운다 */
+.ba-rnd-grid.is-list { display: block; }
+.ba-idea-table .ba-name a { font-weight: 600; }
+.ba-idea-table tr.is-new td:first-child { box-shadow: inset 3px 0 0 var(--ba-brand); }
+.ba-idea-row__doms { margin-top: 2px; font-size: 11.5px; color: var(--ba-ink-soft); }
+@media (max-width: 760px) {
+  /* 좁은 화면에서는 갈래·작성자·평가 인원을 접어 제목이 숨 쉴 자리를 둔다 */
+  .ba-idea-table th:nth-child(3), .ba-idea-table td:nth-child(3),
+  .ba-idea-table th:nth-child(5), .ba-idea-table td:nth-child(5),
+  .ba-idea-table th:nth-child(7), .ba-idea-table td:nth-child(7) { display: none; }
+}

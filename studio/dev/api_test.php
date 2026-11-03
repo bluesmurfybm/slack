@@ -1742,6 +1742,57 @@ $confirmedN = count(array_filter($r['json']['data']['rows'],
                                  fn($x) => $x['status'] === 'confirmed'));
 ok('확정본은 언제나 하나', $confirmedN === 1, (string)$confirmedN);
 
+// --- 차수 복사·삭제·정리 (2026-10-22) ------------------------------------
+$r = $guest->req('/studio/api/allocate.php?act=copy',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+ok('PM 아니면 복사 403', $r['status'] === 403, (string)$r['status']);
+$r = $admin->req('/studio/api/allocate.php?act=copy', ['json' => ['allocation_id' => $aid3]]);
+ok('복사도 CSRF 없으면 419', $r['status'] === 419, (string)$r['status']);
+
+$r = $admin->req('/studio/api/allocate.php?act=copy',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+ok('확정본을 복사한다', $r['status'] === 200, $r['status'] . ' ' . substr($r['body'], 0, 160));
+$cpAid = (int)($r['json']['data']['allocation_id'] ?? 0);
+ok('항목 수가 같다', count($r['json']['data']['items'] ?? []) === 2);
+ok('확정본은 그대로라고 말한다', str_contains($r['json']['data']['message'] ?? '', '확정본은 그대로'),
+   $r['json']['data']['message'] ?? '');
+ok('★ 복사해도 대시보드는 확정본 그대로',
+   ($admin->req('/studio/api/allocate.php?act=current&project_id=' . $pid)
+        ['json']['data']['allocation']['id'] ?? 0) === $aid3);
+
+$det = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $cpAid)['json']['data'];
+ok('복사본은 고칠 수 있다', ($det['can_edit'] ?? false) === true);
+ok('복사본은 지울 수 있다고 표시된다', ($det['allocation']['deletable'] ?? false) === true);
+ok('복사 출처가 보인다', ($det['allocation']['params']['copied_from']['id'] ?? 0) === $aid3);
+
+$r = $admin->req('/studio/api/allocate.php?act=delete',
+                 ['csrf' => true, 'json' => ['allocation_id' => $aid3]]);
+ok('★ 확정본은 지울 수 없다', $r['status'] === 400
+   && str_contains($r['json']['error']['message'] ?? '', '확정'), substr($r['body'], 0, 160));
+
+$r = $guest->req('/studio/api/allocate.php?act=delete',
+                 ['csrf' => true, 'json' => ['allocation_id' => $cpAid]]);
+ok('PM 아니면 삭제 403', $r['status'] === 403, (string)$r['status']);
+$r = $admin->req('/studio/api/allocate.php?act=delete',
+                 ['csrf' => true, 'json' => ['allocation_id' => $cpAid]]);
+ok('복사본을 지운다', $r['status'] === 200, $r['status'] . ' ' . substr($r['body'], 0, 160));
+$r = $admin->req('/studio/api/allocate.php?act=detail&allocation_id=' . $cpAid);
+ok('지운 차수는 없다', $r['status'] === 404, (string)$r['status']);
+
+$r = $guest->req('/studio/api/allocate.php?act=purge',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('PM 아니면 정리 403', $r['status'] === 403, (string)$r['status']);
+$r = $admin->req('/studio/api/allocate.php?act=purge',
+                 ['csrf' => true, 'json' => ['project_id' => $pid]]);
+ok('초안을 정리한다', $r['status'] === 200 && ($r['json']['data']['deleted'] ?? 0) > 0,
+   $r['status'] . ' ' . substr($r['body'], 0, 160));
+$rows = $admin->req('/studio/api/allocate.php?act=versions&project_id=' . $pid)['json']['data']['rows'];
+ok('★ 정리 뒤에는 지울 수 없는 차수만 남는다',
+   $rows && !array_filter($rows, fn($x) => $x['deletable']), json_encode(array_column($rows, 'status')));
+ok('정리해도 확정본은 남는다',
+   ($admin->req('/studio/api/allocate.php?act=current&project_id=' . $pid)
+        ['json']['data']['allocation']['id'] ?? 0) === $aid3);
+
 // ┌──────────────────────────────────────────────────────────────────┐
 // │ 차수 비교 (2026-10-07)                                            │
 // │                                                                  │

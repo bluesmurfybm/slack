@@ -4,9 +4,10 @@
  *  Gmail 이 변경(새 메일/읽음/삭제)을 푸시하면 즉시 gmail_sync_pass() 실행.
  *  폴링 없음: 대기 중엔 트래픽 0, 변경 시 수 초 안에 DB 반영.
  *
- *  실행:   php gmail_watch.php          (터미널 점유)
- *  상시:   start_gmail_watch.bat 실행   (백그라운드, 창 최소화)
- *  중지:   작업관리자에서 php.exe 종료 or 창 닫기
+ *  실행:   php gmail_watch.php --account=<포털 이메일|Gmail 주소>   (마이페이지에 등록한 그 사람 메일함)
+ *          php gmail_watch.php                                    (config.local.php 의 단일 계정 — 예전 방식)
+ *  상시:   Windows = start_gmail_watch.bat / Linux = systemd 서비스(계정마다 하나)
+ *  중지:   작업관리자에서 php.exe 종료 or 창 닫기 / systemctl stop
  */
 if (php_sapi_name() !== 'cli') exit('CLI 전용');
 define('GMAIL_SYNC_LIB_ONLY', 1);
@@ -14,7 +15,31 @@ require __DIR__ . '/gmail_sync.php';                       // gmail_sync_pass() 
 
 function wlog($m) { echo '[' . date('m-d H:i:s') . "] $m\n"; }
 
-wlog('Gmail 감시 시작 (IMAP IDLE)');
+/** 한 번 동기화 — 첫 수집(백필) 중이면 끝날 때까지 이어서 */
+function watch_sync($why) {
+    // MySQL 은 오래(기본 8시간) 쓰지 않은 연결을 끊는다. 밤·주말에 메일이 없으면 다음 동기화가
+    // 'server has gone away' 로 계속 실패하고, 데몬은 살아 있어 systemd 재시작도 안 걸린다 → 확인 후 다시 붙는다.
+    try { @db()->query('SELECT 1'); } catch (Throwable $e) { wlog('DB 연결이 끊겨 다시 접속합니다'); db(true); }
+    do {
+        $r = gmail_sync_pass();
+        wlog(sprintf('%s sync: 신규 %d, 읽음변경 %d, 삭제 %d, 남은수집 %d (%.1fs)%s', $why,
+            $r['added'] ?? 0, $r['flag_updated'] ?? 0, $r['deleted'] ?? 0, $r['backfill_remaining'] ?? 0,
+            $r['took'] ?? 0, empty($r['ok']) ? ' 오류: ' . ($r['error'] ?? '?') : ''));
+    } while (!empty($r['ok']) && ($r['backfill_remaining'] ?? 0) > 0);
+}
+
+if (!gmail_imap_ready()) {
+    // 동기화마다 같은 오류로 재시도만 반복하게 된다 — 설치부터 안내하고 끝낸다
+    wlog(GMAIL_NO_IMAP_MSG . ' (CLI: ' . PHP_BINARY . ', php -m 으로 imap 확인)');
+    exit(1);
+}
+if (!gmail_configured()) {
+    // 설정 없이 돌면 빈 계정으로 로그인 실패만 반복한다
+    wlog('Gmail 계정 설정이 없습니다 — --account=<이메일> 또는 config.local.php 의 gmail 설정을 확인하세요.');
+    exit(1);
+}
+wlog('Gmail 감시 시작 (IMAP IDLE) — ' . gmail_owner());
+$fails = 0;                                                // 연속 실패 수 — 재접속 간격을 늘린다
 while (true) {                                             // 끊기면 자동 재접속
     $fp = null;
     try {
@@ -38,6 +63,10 @@ while (true) {                                             // 끊기면 자동 �
         $label = $g['label'] ?: 'INBOX';
         $mb = strtoupper($label) === 'INBOX' ? 'INBOX' : imap_utf8_to_mutf7($label);
         if (strpos((string)$cmd('SELECT ' . $q($mb)), 'OK') === false) throw new RuntimeException('메일함 선택 실패');
+        $fails = 0;
+        // 끊겨 있던 동안(재접속 대기·데몬 정지) 바뀐 것은 푸시가 오지 않는다 — 붙자마자 한 번 맞춘다
+        watch_sync('접속');
+        $lastSyncAt = time();
         wlog('연결됨 — IDLE 대기');
 
         while (true) {
@@ -60,16 +89,20 @@ while (true) {                                             // 끊기면 자동 �
             while (($l = fgets($fp, 8192)) !== false) {    // IDLE 종료 응답 소진
                 if (strpos($l, "$t ") === 0) break;
             }
-            if ($changed) {
-                wlog('변경 푸시 감지 → 동기화');
-                $r = gmail_sync_pass();
-                wlog(sprintf('sync: 신규 %d, 읽음변경 %d, 삭제 %d (%.1fs)',
-                    $r['added'] ?? 0, $r['flag_updated'] ?? 0, $r['deleted'] ?? 0, $r['took'] ?? 0));
+            // 받은편지함 변화(푸시)가 없어도 5분마다 한 번은 맞춘다 — Gmail 웹에서 보낸 답장(보낸편지함)은
+            // 받은편지함 푸시가 오지 않아, 이게 없으면 상대가 다시 메일을 보낼 때까지 대화 건수에 안 잡힌다
+            if ($changed || time() - $lastSyncAt >= 300) {
+                watch_sync($changed ? '변경 푸시' : '주기');
+                $lastSyncAt = time();
             }
         }
     } catch (Throwable $e) {
-        wlog('오류: ' . $e->getMessage() . ' — 15초 후 재접속');
+        // 같은 오류(특히 비밀번호 틀림)로 15초마다 로그인하면 Google 이 계정을 잠글 수 있다 →
+        // 연속 실패마다 간격을 두 배로(15초 → 최대 30분), 접속에 성공하면 다시 15초부터.
+        $fails++;
+        $wait = min(1800, 15 * (1 << min($fails - 1, 7)));
+        wlog('오류: ' . $e->getMessage() . " — {$wait}초 후 재접속 (연속 {$fails}회)");
         if ($fp) @fclose($fp);
-        sleep(15);
+        sleep($wait);
     }
 }

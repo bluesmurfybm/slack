@@ -3729,11 +3729,55 @@
                esc(r.status_label) + (r.version === confirmedVer ? ' ✓' : '') + '</option>';
       }).join('');
       sel.disabled = rows.length === 0;
+
+      // 지울 수 있는지는 서버가 정해 내려 준다(deletable). 여기서 상태로 다시 따지지 않는다.
+      var purge = $('#ba-al-purge');
+      if (purge) {
+        var n = rows.filter(function (r) { return r.deletable; }).length;
+        purge.disabled = n === 0;
+        purge.dataset.n = String(n);
+      }
     }
 
     function syncVersionSelect() {
       var sel = $('#ba-al-ver');
       if (sel && CUR) sel.value = String(CUR.id);
+      var cp = $('#ba-al-copy'), del = $('#ba-al-del');
+      if (cp)  cp.disabled  = !CUR || !ITEMS.length;
+      if (del) del.disabled = !CUR || !CUR.deletable;
+    }
+
+    /** 고른 차수를 복사한다. 새 차수가 가장 최근이라 다시 읽으면 그게 열린다. */
+    function copyVersion() {
+      if (!CUR) return;
+      if (!confirm(CUR.version + '차를 그대로 복사해 새 차수를 만듭니다.' +
+            (CUR.status === 'confirmed'
+              ? '\n\n확정본은 그대로 남습니다. 새 차수를 확정하면 그때 바뀝니다.' : ''))) {
+        return;
+      }
+      api('api/allocate.php?act=copy', { method: 'POST', body: { allocation_id: CUR.id } })
+        .then(function (d) { toast(d.message); loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
+    }
+
+    function deleteVersion() {
+      if (!CUR || !CUR.deletable) return;
+      if (!confirm(CUR.version + '차를 지웁니다. 되돌릴 수 없습니다.')) return;
+      api('api/allocate.php?act=delete', { method: 'POST', body: { allocation_id: CUR.id } })
+        .then(function (d) { toast(d.message); CUR = null; loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
+    }
+
+    function purgeVersions() {
+      var n = parseInt(($('#ba-al-purge') || {}).dataset.n || '0', 10);
+      if (!n) return;
+      if (!confirm('차수 ' + n + '개를 지웁니다. 되돌릴 수 없습니다.\n\n' +
+            '확정본과 한 번 확정됐던 안은 남습니다.')) {
+        return;
+      }
+      api('api/allocate.php?act=purge', { method: 'POST', body: { project_id: PID } })
+        .then(function (d) { toast(d.message); CUR = null; loaded = false; load(); })
+        .catch(function (e) { showError('#ba-al-error', e.message); });
     }
 
     /**
@@ -3831,6 +3875,11 @@
         t.push(tag('방식', (M_LABEL[p.method] || p.method)
                            + (p.seed ? ' · 씨앗 ' + p.seed : ''), 'warn',
                    '적합도를 보지 않고 뽑았습니다. 표의 적합도는 대조용으로 계산한 값입니다'));
+      }
+      // 복사본의 적합도·근거는 원본 시점 판정이다. 출처가 안 보이면 오늘 숫자로 읽힌다.
+      if (p.copied_from) {
+        t.push(tag('복사', p.copied_from.version + '차에서', '',
+                   '이 차수의 항목을 그대로 옮겨 왔습니다. 적합도·근거는 원본 산출 시점 값입니다'));
       }
       if (CUR.eval_ver) {
         t.push(tag('처리량 판정', CUR.eval_ver + '회차', '',
@@ -4053,6 +4102,21 @@
       });
     })();
 
+    /**
+     * 완료·보류 태스크 표식 (2026-10-22).
+     * 엔진은 이런 태스크를 새로 배정하지 않지만, 복사한 차수에는 담당자째
+     * 따라온다 — 완료된 일의 담당자는 실제로 그 일을 한 사람이라서다.
+     */
+    function settledMark(it) {
+      if (it.task_status === 'done') {
+        return ' <span class="ba-tag-auto" title="끝난 일입니다. 담당자는 기록으로 남깁니다">완료</span>';
+      }
+      if (it.task_status === 'hold') {
+        return ' <span class="ba-tag-auto" title="세워 둔 일입니다. 풀리면 이 담당자가 이어 맡습니다">보류</span>';
+      }
+      return '';
+    }
+
     function renderTable(unassigned) {
       var tb = $('#ba-al-table').querySelector('tbody');
       if (!ITEMS.length) { renderEmpty(); return; }
@@ -4090,7 +4154,7 @@
         var it = row.v;
         return '<tr data-id="' + it.id + '"' + (it.is_manual ? ' class="is-manual"' : '') + '>' +
           '<td class="ba-al__no">' + esc(it.wbs_no || '-') + '</td>' +
-          '<td class="ba-al__t">' + esc(it.task_title) + '</td>' +
+          '<td class="ba-al__t">' + esc(it.task_title) + settledMark(it) + '</td>' +
           '<td class="ba-al__md">' + (it.est_md === null ? '-' : it.est_md) + '</td>' +
           '<td class="ba-al__df">' + (it.difficulty === null ? '-' : it.difficulty) + '</td>' +
           '<td>' + memberSelect(it, canEdit) + '</td>' +
@@ -4627,6 +4691,9 @@
       });
 
       $('#ba-al-compare').addEventListener('click', openCompare);
+      $('#ba-al-copy').addEventListener('click', copyVersion);
+      $('#ba-al-del').addEventListener('click', deleteVersion);
+      $('#ba-al-purge').addEventListener('click', purgeVersions);
 
       // 표에서 바로 그 차수를 연다. 보고 고르는 화면이니 고르면 열려야 한다.
       $('#ba-cmp-table').addEventListener('click', function (e) {
@@ -5797,6 +5864,10 @@
       if (r.can.reject)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="reject">과제 반려</button>');
       if (r.can.finish)  acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="finish">종료</button>');
       if (r.can.drop)    acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="drop">중단</button>');
+      // 프로젝트로 넘기기 (032). 이미 넘긴 과제에는 단추 대신 그 프로젝트 링크가 개요에 뜬다.
+      if (r.can.promote_project && !(D && D.lineage && D.lineage.project)) {
+        acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="promote_project">프로젝트로 넘기기</button>');
+      }
       // 삭제 (2026-10-16). 처리는 rndLifecycle — 보드 카드와 같은 확인을 거친다.
       if (r.can['delete']) {
         acts.push('<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-rv="delete"' +
@@ -6317,11 +6388,28 @@
       });
     }
 
+    /** 어디서 왔고 어디로 갔는가 (032) — 출발 아이디어와, 이 과제로 만든 프로젝트. */
+    function lineageBlock(l) {
+      if (!l || (!l.origin_idea && !l.project)) return '';
+      var parts = [];
+      if (l.origin_idea) {
+        parts.push('출발 아이디어 <a href="' + esc(l.origin_idea.url) + '">' +
+                   esc(l.origin_idea.code + ' ' + l.origin_idea.title) + '</a>');
+      }
+      if (l.project) {
+        parts.push('이 과제로 만든 프로젝트 ' + (l.project.url
+          ? '<a href="' + esc(l.project.url) + '">' + esc(l.project.code + ' ' + l.project.name) + '</a>'
+          : esc(l.project.code + ' ' + l.project.name)) +
+          ' <span class="ba-badge">' + esc(l.project.status_label) + '</span>');
+      }
+      return '<div class="ba-note ba-lineage">' + parts.join('<br>') + '</div>';
+    }
+
     function paint(d) {
       D = d;
       var r = d.rnd;
       $('#ba-rv-head').innerHTML        = head(r);
-      $('#ba-rv-overview').innerHTML    = overview(r) + sourcesBlock(d.sources || []);
+      $('#ba-rv-overview').innerHTML    = lineageBlock(d.lineage) + overview(r) + sourcesBlock(d.sources || []);
       $('#ba-rv-members').innerHTML     = members(d.members || [], r);
       $('#ba-rv-logs').innerHTML        = logs(d.logs || [], r);
       $('#ba-rv-outputs').innerHTML     = outputs(d.outputs || [], r);
@@ -6361,6 +6449,19 @@
       }
       if (act === 'interest') { post('interest'); return; }
       if (act === 'approve')  { post('approve'); return; }
+      if (act === 'promote_project') {
+        askDialog({ title: '프로젝트로 넘기기', ok: '등록하기',
+                    message: '이 과제를 바탕으로 프로젝트를 등록합니다.\n' +
+                             '· 프로젝트는 「작성 중」에서 시작합니다. 범위 문서·WBS·배정은 평소처럼 이어 갑니다\n' +
+                             '· 과제는 그대로 남습니다 — 산출물과 진행 기록, 참여자 점유가 과제에 있습니다' })
+          .then(function (v) {
+            if (v === null) return;
+            api('api/rnd.php?act=promote_project', { method: 'POST', body: { id: ID } })
+              .then(function (d) { toast(d.message); setTimeout(function () { location.href = d.url; }, 500); })
+              .catch(function (err) { toast(err.message, true); });
+          });
+        return;
+      }
 
       // 중단·반려는 화면 안 창으로 사유를 받는다 (2026-10-16 — window.prompt 가 막혀
       // 단추가 반응하지 않았다).
@@ -6764,6 +6865,536 @@
     }).observe(EL, { attributes: true, attributeFilter: ['hidden'] });
   }
 
+  // =====================================================================
+  // 아이디어·제안 (032) — 보드 / 올리기 / 상세
+  //
+  // 단추는 서버가 내려 준 actions 에 있는 것만 그린다(presenter.php 의
+  // bs_idea_actions). 평가 평균은 인원이 모자라면 서버가 null 로 준다 —
+  // 여기서 다시 계산하지 않는다.
+  // =====================================================================
+  var IDEA_STATUS_ORDER = ['', 'open', 'reviewing', 'adopted', 'hold', 'rejected', 'promoted'];
+  var IDEA_STATUS_LABEL = {
+    '': '전체', open: '제안됨', reviewing: '검토 중', adopted: '채택',
+    hold: '보류', rejected: '반려', promoted: '과제화'
+  };
+
+  /** 평가 요약 한 줄. 인원이 모자라면 몇 명이 더 필요한지 말한다. */
+  function ideaScoreText(rt) {
+    if (!rt || !rt.count) return '아직 평가 없음';
+    if (!rt.shown) return '평가 ' + rt.count + '명 · ' + rt.min_raters + '명부터 평균 공개';
+    return '가치 ' + rt.value.toFixed(1) + ' · 실현 ' + rt.feasibility.toFixed(1) + ' (' + rt.count + '명)';
+  }
+
+  function initIdeaBoard() {
+    var root = $('#ba-idea-board');
+    if (!root) return;
+
+    var state = { status: '', page: 1 };
+    var timer;
+    var MEM = listMemory('bs.list.idea', ['ba-i-category', 'ba-i-q', 'ba-i-sort', 'ba-i-mine', 'ba-i-deleted']);
+    MEM.restore(state);
+
+    function filters() {
+      return {
+        act: 'board', status: state.status, page: state.page,
+        category: ($('#ba-i-category') || {}).value || '',
+        q:        ($('#ba-i-q')        || {}).value || '',
+        sort:     ($('#ba-i-sort')     || {}).value || 'new',
+        mine:     ($('#ba-i-mine')     || {}).checked ? '1' : '',
+        with_deleted: ($('#ba-i-deleted') || {}).checked ? '1' : ''
+      };
+    }
+
+    function card(r) {
+      var b = '';
+      if (r.is_new) b += '<span class="ba-badge ba-badge--new" title="아직 열어 보지 않은 새 소식이 있습니다">NEW</span>';
+      if (r.category_label) b += '<span class="ba-badge">' + esc(r.category_label) + '</span>';
+      b += '<span class="ba-badge ba-badge--idea-' + esc(r.status) + '">' + esc(r.status_label) + '</span>';
+      if (r.duplicate_of) b += '<span class="ba-badge ba-badge--stale" title="비슷한 아이디어로 묶였습니다">묶임</span>';
+      if (r.deleted) b += '<span class="ba-badge ba-badge--dropped">삭제됨</span>';
+      var doms = (r.domains || []).map(function (d) { return '<span class="ba-idea-tag">' + esc(d.name) + '</span>'; }).join('');
+      return '<article class="ba-rnd-card ba-idea-card' + (r.is_new ? ' is-new' : '') + '" data-id="' + r.id + '">' +
+        '<div class="ba-rnd-card__head"><span class="ba-rnd-card__code">' + esc(r.code) + '</span>' + b + '</div>' +
+        '<h3 class="ba-rnd-card__title"><a href="idea_view.php?id=' + r.id + '">' + esc(r.title) + '</a></h3>' +
+        '<p class="ba-rnd-card__sum">' + esc(r.excerpt || '') + '</p>' +
+        (doms ? '<div class="ba-idea-card__doms">' + doms + '</div>' : '') +
+        '<div class="ba-rnd-card__meta">' +
+          '<span>' + esc(r.author_name || '-') + '</span>' +
+          '<span class="ba-idea-card__score' + (r.rating && r.rating.shown ? '' : ' is-dim') + '">' + esc(ideaScoreText(r.rating)) + '</span>' +
+          '<span>피드백 ' + (r.comment_count || 0) + '</span>' +
+          '<span>' + esc((r.created_at || '').slice(0, 10)) + '</span>' +
+        '</div>' +
+      '</article>';
+    }
+
+    // ---- 보기 방식 (카드 / 리스트) — 고른 것은 이 브라우저에 기억한다 ----
+    var VIEW_KEY = 'bs.idea.view';
+    var VIEW = 'card';
+    var LAST = null;
+    try { if (localStorage.getItem(VIEW_KEY) === 'list') VIEW = 'list'; } catch (e) { /* 기억 못 하면 카드 */ }
+
+    /** 리스트 한 줄. 카드와 같은 정보를 칸으로 — 많은 건을 위아래로 견주기 좋게. */
+    function row(r) {
+      var t = '';
+      if (r.is_new) t += '<span class="ba-badge ba-badge--new" title="아직 열어 보지 않은 새 소식이 있습니다">NEW</span> ';
+      t += '<a href="idea_view.php?id=' + r.id + '">' + esc(r.title) + '</a>';
+      if (r.duplicate_of) t += ' <span class="ba-badge ba-badge--stale" title="비슷한 아이디어로 묶였습니다">묶임</span>';
+      if (r.deleted) t += ' <span class="ba-badge ba-badge--dropped">삭제됨</span>';
+      var doms = (r.domains || []).map(function (d) { return d.name; }).join(', ');
+      var rt = r.rating || {};
+      var score = rt.shown
+        ? '<b>' + rt.value.toFixed(1) + '</b> · <b>' + rt.feasibility.toFixed(1) + '</b>'
+        : '<span class="ba-dim" title="' + (rt.min_raters || 3) + '명부터 평균 공개">–</span>';
+      return '<tr class="' + (r.deleted ? 'is-deleted' : '') + (r.is_new ? ' is-new' : '') + '">' +
+        '<td class="ba-code">' + esc(r.code) + '</td>' +
+        '<td class="ba-name">' + t + (doms ? '<div class="ba-idea-row__doms">' + esc(doms) + '</div>' : '') + '</td>' +
+        '<td>' + esc(r.category_label || '-') + '</td>' +
+        '<td><span class="ba-badge ba-badge--idea-' + esc(r.status) + '">' + esc(r.status_label) + '</span></td>' +
+        '<td>' + esc(r.author_name || '-') + '</td>' +
+        '<td class="ba-num">' + score + '</td>' +
+        '<td class="ba-num">' + (rt.count || 0) + '</td>' +
+        '<td class="ba-num">' + (r.comment_count || 0) + '</td>' +
+        '<td class="ba-period-cell">' + esc((r.created_at || '').slice(0, 10)) + '</td>' +
+      '</tr>';
+    }
+
+    function paintRows() {
+      $$('#ba-i-view [data-view]').forEach(function (b) {
+        var on = b.dataset.view === VIEW;
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      var grid = $('#ba-i-grid');
+      grid.classList.toggle('is-list', VIEW === 'list');
+      if (!LAST) return;
+      var rows = LAST.rows || [];
+      if (!rows.length) {
+        grid.innerHTML = '<div class="ba-empty">아직 보이는 아이디어가 없습니다. 첫 아이디어를 올려 보세요.</div>';
+        return;
+      }
+      grid.innerHTML = VIEW === 'card' ? rows.map(card).join('') :
+        '<div class="ba-table-wrap"><table class="ba-table ba-idea-table"><thead><tr>' +
+          '<th style="width:118px">번호</th><th>제목</th><th style="width:90px">갈래</th>' +
+          '<th style="width:80px">상태</th><th style="width:90px">작성자</th>' +
+          '<th style="width:96px" class="ba-num" title="가치 · 실현 가능성 평균. ' +
+            ((rows[0].rating || {}).min_raters || 3) + '명부터 보입니다">가치 · 실현</th>' +
+          '<th style="width:56px" class="ba-num">평가</th><th style="width:64px" class="ba-num">피드백</th>' +
+          '<th style="width:96px">등록일</th>' +
+        '</tr></thead><tbody>' + rows.map(row).join('') + '</tbody></table></div>';
+    }
+
+    $('#ba-i-view').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-view]');
+      if (!b || b.dataset.view === VIEW) return;
+      VIEW = b.dataset.view;
+      try { localStorage.setItem(VIEW_KEY, VIEW); } catch (err) { /* 저장 못 해도 지금 화면은 바뀐다 */ }
+      paintRows();
+    });
+
+    function render(d) {
+      var counts = d.counts || {};
+      var total = 0;
+      Object.keys(counts).forEach(function (k) { total += counts[k]; });
+      $('#ba-i-tabs').innerHTML = IDEA_STATUS_ORDER.map(function (code) {
+        var n = code === '' ? total : (counts[code] || 0);
+        return '<button type="button" role="tab" data-status="' + code + '" aria-selected="' + (state.status === code) + '"' +
+               (n === 0 && code !== '' ? ' class="is-zero"' : '') + '>' + esc(IDEA_STATUS_LABEL[code]) + '<i>' + n + '</i></button>';
+      }).join('');
+
+      LAST = d;
+      paintRows();
+
+      var pager = $('#ba-i-pager');
+      var html = '';
+      if (d.pages > 1) {
+        for (var i = 1; i <= d.pages; i++) {
+          html += '<button type="button" data-page="' + i + '"' + (i === d.page ? ' class="on"' : '') + '>' + i + '</button>';
+        }
+      }
+      pager.innerHTML = html;
+    }
+
+    function load() {
+      MEM.save(state);
+      api('api/idea.php?' + qs(filters())).then(render).catch(function (e) {
+        $('#ba-i-grid').innerHTML = '<div class="ba-empty">' + esc(e.message) + '</div>';
+      });
+    }
+
+    ['ba-i-category', 'ba-i-sort', 'ba-i-mine', 'ba-i-deleted'].forEach(function (id) {
+      var el = $('#' + id);
+      if (el) el.addEventListener('change', function () { state.page = 1; load(); });
+    });
+    $('#ba-i-q').addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { state.page = 1; load(); }, 250);
+    });
+    $('#ba-i-reset').addEventListener('click', function () {
+      ['ba-i-category', 'ba-i-q'].forEach(function (id) { $('#' + id).value = ''; });
+      $('#ba-i-sort').value = 'new';
+      ['ba-i-mine', 'ba-i-deleted'].forEach(function (id) { var el = $('#' + id); if (el) el.checked = false; });
+      state = { status: '', page: 1 };
+      load();
+    });
+    $('#ba-i-tabs').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-status]');
+      if (!b) return;
+      state.status = b.dataset.status; state.page = 1; load();
+    });
+    $('#ba-i-pager').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-page]');
+      if (!b) return;
+      state.page = parseInt(b.dataset.page, 10); load();
+    });
+    load();
+  }
+
+  function initIdeaForm() {
+    var root = $('#ba-idea-form');
+    if (!root) return;
+    var id = root.dataset.id ? parseInt(root.dataset.id, 10) : 0;
+    var timer;
+
+    // 쓰는 중에 비슷한 아이디어. 고치는 중이면 자기 자신은 뺀다.
+    var title = $('#ba-i-title');
+    title.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        var t = title.value.trim();
+        var box = $('#ba-i-similar');
+        if (t.length < 2) { box.hidden = true; return; }
+        api('api/idea.php?' + qs({ act: 'similar', title: t, exclude: id })).then(function (d) {
+          box.hidden = !d.rows.length;
+          box.innerHTML = '<b>비슷한 아이디어가 이미 있습니다</b> — 겹치면 거기에 피드백으로 보태 주세요.' +
+            d.rows.map(function (r) {
+              return '<div>· <a href="idea_view.php?id=' + r.id + '" target="_blank" rel="noopener">' +
+                     esc(r.code + ' ' + r.title) + '</a> <span class="ba-dim">' + esc(r.status_label) + '</span></div>';
+            }).join('');
+        }).catch(function () { box.hidden = true; });
+      }, 400);
+    });
+
+    $('#ba-i-submit').addEventListener('click', function () {
+      var btn = this;
+      var body = {
+        title:        title.value,
+        rnd_category: $('#ba-i-f-category').value,
+        is_anonymous: $('#ba-i-anon').checked ? '1' : '',
+        problem:      $('#ba-i-problem').value,
+        proposal:     $('#ba-i-proposal').value,
+        effect:       $('#ba-i-effect').value,
+        url:          $('#ba-i-url').value,
+        domain_ids:   $$('.ba-i-dom').filter(function (c) { return c.checked; })
+                        .map(function (c) { return parseInt(c.value, 10); })
+      };
+      if (!body.title.trim()) { toast('제목을 입력하세요.', true); return; }
+      if (!body.problem.trim() && !body.proposal.trim()) {
+        toast('배경 · 계기나 아이디어 · 제안 중 하나는 적어 주세요.', true); return;
+      }
+      if (id) body.id = id;
+      btn.disabled = true;
+      api('api/idea.php?act=' + (id ? 'update' : 'create'), { method: 'POST', body: body })
+        .then(function (d) {
+          toast(d.message);
+          setTimeout(function () { location.href = 'idea_view.php?id=' + (id || d.id); }, 500);
+        })
+        .catch(function (e) { btn.disabled = false; toast(e.message, true); });
+    });
+  }
+
+  function initIdeaView() {
+    var root = $('#ba-idea-view');
+    if (!root) return;
+    var ID = parseInt(root.dataset.id, 10);
+    var IDEA = null;
+    var MY = { value: 0, feasibility: 0 };
+
+    function load() {
+      return api('api/idea.php?' + qs({ act: 'get', id: ID })).then(function (d) {
+        IDEA = d.idea;
+        renderHead(); renderBody(); renderRating(); renderLineage(); renderComments(d.comments);
+      }).catch(function (e) { $('#ba-iv-head').innerHTML = '<div class="ba-empty">' + esc(e.message) + '</div>'; });
+    }
+    function has(a) { return IDEA && (IDEA.actions || []).indexOf(a) >= 0; }
+
+    function renderHead() {
+      var i = IDEA;
+      var b = '';
+      if (i.category_label) b += '<span class="ba-badge">' + esc(i.category_label) + '</span>';
+      b += '<span class="ba-badge ba-badge--idea-' + esc(i.status) + '">' + esc(i.status_label) + '</span>';
+      if (i.deleted) b += '<span class="ba-badge ba-badge--dropped">삭제됨</span>';
+
+      var acts = '';
+      if (has('update')) acts += '<a class="ba-btn ba-btn--sm" href="idea_form.php?id=' + i.id + '">고치기</a>';
+      if (has('promote_rnd')) acts += '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" data-iv="promote_rnd">R&amp;D 과제로</button>';
+      if (has('promote_project')) acts += '<button type="button" class="ba-btn ba-btn--sm" data-iv="promote_project" title="과제 단계를 건너뜁니다">프로젝트로 바로</button>';
+      if (has('review')) {
+        acts += '<span class="ba-idea-review" role="group" aria-label="검토">' +
+          ['reviewing', 'adopted', 'hold', 'rejected'].filter(function (s) { return s !== i.status; }).map(function (s) {
+            return '<button type="button" class="ba-btn ba-btn--sm" data-iv="review" data-status="' + s + '">' + IDEA_STATUS_LABEL[s] + '</button>';
+          }).join('') + '</span>';
+      }
+      var more = '';
+      if (has('merge')) more += '<button type="button" class="ba-more__item" data-iv="merge">' + (i.duplicate_of ? '묶음 풀기' : '비슷한 아이디어로 묶기') + '</button>';
+      if (has('delete')) more += '<button type="button" class="ba-more__item is-danger" data-iv="delete">삭제</button>';
+      if (more) acts += '<details class="ba-more"><summary class="ba-btn ba-btn--sm" aria-label="더보기">⋯</summary><div class="ba-more__menu">' + more + '</div></details>';
+
+      $('#ba-iv-head').innerHTML =
+        '<div class="ba-rnd-head__top"><span class="ba-rnd-card__code">' + esc(i.code) + '</span>' + b + '</div>' +
+        '<h1 class="ba-rnd-head__title">' + esc(i.title) + '</h1>' +
+        '<div class="ba-rnd-card__meta"><span>' + esc(i.author_name || '-') + (i.is_anonymous && i.author_name !== '익명' ? ' (익명으로 올림)' : '') + '</span>' +
+        '<span>' + esc(i.created_at) + '</span>' + (i.updated_at !== i.created_at ? '<span class="ba-dim">고침 ' + esc(i.updated_at) + '</span>' : '') + '</div>' +
+        (acts ? '<div class="ba-rnd-head__acts">' + acts + '</div>' : '');
+    }
+
+    function para(label, text) {
+      if (!text) return '';
+      return '<h3>' + label + '</h3><p class="ba-idea-text">' + esc(text).replace(/\n/g, '<br>') + '</p>';
+    }
+
+    function renderBody() {
+      var i = IDEA;
+      var h = '';
+      if (i.duplicate_target) {
+        h += '<div class="ba-note">비슷한 아이디어 <a href="idea_view.php?id=' + i.duplicate_target.id + '">' +
+             esc(i.duplicate_target.code + ' ' + i.duplicate_target.title) + '</a> 로 묶였습니다. 평가와 피드백은 그쪽에서 받습니다.</div>';
+      }
+      if (i.review_note && i.status !== 'open') {
+        h += '<div class="ba-idea-reviewnote"><b>검토 — ' + esc(i.status_label) + '</b> ' + esc(i.review_note) +
+             '<span class="ba-dim"> · ' + esc(i.reviewed_by_name || '') + ' ' + esc(i.reviewed_at || '') + '</span></div>';
+      }
+      h += para('배경 · 계기', i.problem) + para('아이디어 · 제안', i.proposal) + para('기대 효과', i.effect);
+      if (i.url) h += '<h3>참고 링크</h3><p><a href="' + esc(i.url) + '" target="_blank" rel="noopener">' + esc(i.url) + '</a></p>';
+      if ((i.domains || []).length) {
+        h += '<h3>분야</h3><div class="ba-idea-card__doms">' +
+             i.domains.map(function (d) { return '<span class="ba-idea-tag">' + esc(d.name) + '</span>'; }).join('') + '</div>';
+      }
+      if ((i.merged || []).length) {
+        h += '<h3>이 아이디어로 묶인 것</h3>' + i.merged.map(function (m) {
+          return '<div>· <a href="idea_view.php?id=' + m.id + '">' + esc(m.code + ' ' + m.title) + '</a></div>';
+        }).join('');
+      }
+      $('#ba-iv-body').innerHTML = h;
+    }
+
+    function stars(axis, cur) {
+      var s = '';
+      for (var n = 1; n <= 5; n++) {
+        s += '<button type="button" class="ba-idea-star' + (n <= cur ? ' on' : '') + '" data-axis="' + axis + '" data-n="' + n + '"' +
+             ' aria-label="' + n + '점" aria-pressed="' + (n === cur) + '">' + n + '</button>';
+      }
+      return s;
+    }
+
+    function renderRating() {
+      var rt = IDEA.rating;
+      var h = '<h2>평가</h2>';
+      if (rt.shown) {
+        h += '<div class="ba-idea-avg">' +
+          '<div><span>가치</span><b>' + rt.value.toFixed(1) + '</b><i style="width:' + (rt.value * 20) + '%"></i></div>' +
+          '<div><span>실현 가능성</span><b>' + rt.feasibility.toFixed(1) + '</b><i style="width:' + (rt.feasibility * 20) + '%"></i></div>' +
+          '</div><p class="ba-dim">' + rt.count + '명이 평가했습니다. 누가 몇 점을 줬는지는 본인만 봅니다.</p>';
+      } else {
+        h += '<p class="ba-dim">' + (rt.count ? rt.count + '명이 평가했습니다. ' : '아직 평가가 없습니다. ') +
+             rt.min_raters + '명이 모이면 평균을 보여 줍니다 — 한두 명이면 평균이 곧 그 사람 점수라서요.</p>';
+      }
+
+      if (has('rate')) {
+        MY = rt.mine ? { value: rt.mine.value, feasibility: rt.mine.feasibility } : { value: 0, feasibility: 0 };
+        h += '<div class="ba-idea-myrate"><h3>' + (rt.mine ? '내 평가' : '평가하기') + '</h3>' +
+          '<div class="ba-idea-axis"><span title="되면 얼마나 좋은가">가치</span>' + stars('value', MY.value) + '</div>' +
+          '<div class="ba-idea-axis"><span title="우리가 해낼 수 있는가">실현 가능성</span>' + stars('feasibility', MY.feasibility) + '</div>' +
+          '<input type="text" id="ba-iv-opinion" maxlength="300" placeholder="한줄 의견 (선택) — 이름과 함께 보입니다" value="' +
+            esc(rt.mine && rt.mine.opinion ? rt.mine.opinion : '') + '">' +
+          '<div class="ba-idea-myrate__foot">' +
+            (rt.mine ? '<button type="button" class="ba-btn ba-btn--sm" data-iv="unrate">평가 지우기</button>' : '') +
+            '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" data-iv="rate">' + (rt.mine ? '고치기' : '평가 남기기') + '</button>' +
+          '</div></div>';
+      } else if (IDEA.is_mine) {
+        h += '<p class="ba-dim">자기 아이디어는 평가하지 않습니다.</p>';
+      }
+
+      if ((rt.opinions || []).length) {
+        h += '<h3>한줄 의견</h3><ul class="ba-idea-opinions">' + rt.opinions.map(function (o) {
+          return '<li><b>' + esc(o.name || '') + '</b> ' + esc(o.opinion) + ' <span class="ba-dim">' + esc(o.at) + '</span></li>';
+        }).join('') + '</ul>';
+      }
+      $('#ba-iv-rating').innerHTML = h;
+    }
+
+    function renderLineage() {
+      var p = IDEA.promoted;
+      var box = $('#ba-iv-lineage');
+      if (!p) { box.hidden = true; return; }
+      function step(x) {
+        return '<li><span class="ba-dim">' + esc(x.type_label) + '</span> ' +
+          (x.url ? '<a href="' + esc(x.url) + '">' + esc(x.code + ' ' + x.name) + '</a>' : esc(x.code + ' ' + x.name)) +
+          ' <span class="ba-badge">' + esc(x.status_label) + '</span></li>';
+      }
+      box.hidden = false;
+      box.innerHTML = '<h2>이 아이디어가 간 곳</h2><ol class="ba-idea-lineage">' +
+        '<li><span class="ba-dim">아이디어</span> ' + esc(IDEA.code) + '</li>' + step(p) + (p.next ? step(p.next) : '') + '</ol>' +
+        '<p class="ba-dim">' + esc(IDEA.promoted_by_name || '') + ' · ' + esc(IDEA.promoted_at || '') + '</p>';
+    }
+
+    function commentHtml(c, isReply) {
+      if (c.kind === 'status') {
+        return '<div class="ba-idea-c is-status"><span class="ba-dim">' + esc(c.created_at) + ' · ' + esc(c.user_name || '') + '</span> ' +
+               esc(c.content || '').replace(/\n/g, '<br>') + '</div>';
+      }
+      var body = c.deleted ? '<span class="ba-dim">지운 피드백입니다.</span>' : esc(c.content).replace(/\n/g, '<br>');
+      var acts = '';
+      if (!c.deleted && !isReply && has('comment')) acts += '<button type="button" class="ba-linkbtn" data-c="reply" data-id="' + c.id + '">답글</button>';
+      if (c.can_edit) acts += '<button type="button" class="ba-linkbtn" data-c="edit" data-id="' + c.id + '">고치기</button>';
+      if (c.can_delete) acts += '<button type="button" class="ba-linkbtn" data-c="del" data-id="' + c.id + '">지우기</button>';
+      return '<div class="ba-idea-c' + (isReply ? ' is-reply' : '') + '" data-cid="' + c.id + '">' +
+        '<div class="ba-idea-c__h"><b>' + esc(c.user_name || '') + '</b> <span class="ba-dim">' + esc(c.created_at) +
+          (c.edited ? ' · 고침' : '') + '</span></div>' +
+        '<div class="ba-idea-c__b">' + body + '</div>' +
+        (acts ? '<div class="ba-idea-c__a">' + acts + '</div>' : '') +
+        (c.replies || []).map(function (r) { return commentHtml(r, true); }).join('') +
+      '</div>';
+    }
+
+    function renderComments(list) {
+      $('#ba-iv-clist').innerHTML = (list || []).length
+        ? list.map(function (c) { return commentHtml(c, false); }).join('')
+        : '<p class="ba-dim">아직 피드백이 없습니다.</p>';
+      $('.ba-idea-cform', root).hidden = !has('comment');
+    }
+
+    function post(act, body) {
+      return api('api/idea.php?act=' + act, { method: 'POST', body: body }).then(function (d) {
+        if (d.message) toast(d.message);
+        return d;
+      }).catch(function (e) { toast(e.message, true); throw e; });
+    }
+
+    // ---- 평가 ----
+    $('#ba-iv-rating').addEventListener('click', function (e) {
+      var st = e.target.closest('.ba-idea-star');
+      if (st) {
+        MY[st.dataset.axis] = parseInt(st.dataset.n, 10);
+        $$('.ba-idea-star[data-axis="' + st.dataset.axis + '"]').forEach(function (b) {
+          var n = parseInt(b.dataset.n, 10);
+          b.classList.toggle('on', n <= MY[st.dataset.axis]);
+          b.setAttribute('aria-pressed', String(n === MY[st.dataset.axis]));
+        });
+        return;
+      }
+      var b = e.target.closest('[data-iv]');
+      if (!b) return;
+      if (b.dataset.iv === 'rate') {
+        if (!MY.value || !MY.feasibility) { toast('가치와 실현 가능성을 모두 골라 주세요.', true); return; }
+        post('rate', { id: ID, value: MY.value, feasibility: MY.feasibility, opinion: $('#ba-iv-opinion').value })
+          .then(load).catch(function () {});
+      }
+      if (b.dataset.iv === 'unrate') post('unrate', { id: ID }).then(load).catch(function () {});
+    });
+
+    // ---- 피드백 ----
+    $('#ba-iv-csend').addEventListener('click', function () {
+      var t = $('#ba-iv-ctext');
+      if (!t.value.trim()) { toast('내용을 입력하세요.', true); return; }
+      post('comment', { id: ID, content: t.value }).then(function (d) { t.value = ''; renderComments(d.comments); }).catch(function () {});
+    });
+    $('#ba-iv-clist').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-c]');
+      if (!b) return;
+      var cid = parseInt(b.dataset.id, 10);
+      if (b.dataset.c === 'reply' || b.dataset.c === 'edit') {
+        var isEdit = b.dataset.c === 'edit';
+        askDialog({ title: isEdit ? '피드백 고치기' : '답글', input: true, required: true, ok: isEdit ? '저장' : '남기기',
+                    placeholder: isEdit ? '' : '답글을 적어 주세요' })
+          .then(function (v) {
+            if (v === null) return;
+            (isEdit ? post('comment_update', { comment_id: cid, content: v })
+                    : post('comment', { id: ID, parent_id: cid, content: v }))
+              .then(function (d) { renderComments(d.comments); }).catch(function () {});
+          });
+      }
+      if (b.dataset.c === 'del') {
+        askDialog({ title: '피드백 지우기', message: '답글이 달려 있으면 자리만 남습니다.', ok: '지우기', danger: true })
+          .then(function (v) {
+            if (v === null) return;
+            post('comment_delete', { comment_id: cid }).then(function (d) { renderComments(d.comments); }).catch(function () {});
+          });
+      }
+    });
+
+    // ---- 머리 단추: 검토·묶기·삭제·올리기 ----
+    $('#ba-iv-head').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-iv]');
+      if (!b) return;
+      var act = b.dataset.iv;
+
+      if (act === 'review') {
+        var s = b.dataset.status;
+        askDialog({ title: '검토 — ' + IDEA_STATUS_LABEL[s], input: true, required: s === 'rejected', ok: IDEA_STATUS_LABEL[s],
+                    message: s === 'rejected' ? '반려 사유는 올린 사람에게 그대로 전해집니다.' : '의견은 올린 사람에게 전해지고 피드백 흐름에도 남습니다.',
+                    placeholder: s === 'rejected' ? '반려 사유 (필수)' : '검토 의견 (선택)' })
+          .then(function (v) {
+            if (v === null) return;
+            post('review', { id: ID, status: s, note: v }).then(load).catch(function () {});
+          });
+      }
+      if (act === 'merge') {
+        if (IDEA.duplicate_of) {
+          post('merge', { id: ID, target_id: 0 }).then(load).catch(function () {});
+          return;
+        }
+        askDialog({ title: '비슷한 아이디어로 묶기', input: true, required: true, ok: '묶기',
+                    message: '이 아이디어를 묶을 원래 아이디어의 번호를 적어 주세요. 평가와 피드백은 그쪽으로 모읍니다.',
+                    placeholder: '예: IDEA-2026-003' })
+          .then(function (code) {
+            if (code === null) return;
+            code = code.trim().toUpperCase();
+            api('api/idea.php?' + qs({ act: 'board', q: code })).then(function (d) {
+              var hit = d.rows.filter(function (r) { return r.code === code; })[0];
+              if (!hit) { toast(code + ' 아이디어를 찾을 수 없습니다.', true); return; }
+              post('merge', { id: ID, target_id: hit.id }).then(load).catch(function () {});
+            });
+          });
+      }
+      if (act === 'delete') {
+        askDialog({ title: '아이디어 삭제', message: IDEA.code + ' 「' + IDEA.title + '」 를 지웁니다.', ok: '삭제', danger: true })
+          .then(function (v) {
+            if (v === null) return;
+            post('delete', { id: ID }).then(function () { location.href = 'idea_board.php'; }).catch(function () {});
+          });
+      }
+      if (act === 'promote_rnd') {
+        askDialog({ title: 'R&D 과제로 올리기', ok: '발의하기',
+                    message: '제목·본문·갈래·분야를 그대로 가져가 R&D 과제로 발의합니다.\n' +
+                             '· 발의자는 나입니다. 과제는 「발의됨」에서 시작하고 승인을 거칩니다\n' +
+                             '· 공개(합류 가능)·모집 중으로 열립니다. 다음 화면에서 기간·점유율을 채워 주세요' })
+          .then(function (v) {
+            if (v === null) return;
+            post('promote_rnd', { id: ID }).then(function (d) {
+              setTimeout(function () { location.href = 'rnd_form.php?id=' + d.project_id; }, 500);
+            }).catch(function () {});
+          });
+      }
+      if (act === 'promote_project') {
+        askDialog({ title: '프로젝트로 바로 올리기', ok: '등록하기',
+                    message: '과제 단계를 건너뛰고 프로젝트로 등록합니다.\n' +
+                             '· 프로젝트는 「작성 중」에서 시작합니다. 범위 문서·WBS·배정은 평소처럼 이어 갑니다\n' +
+                             '· 아이디어는 과제화로 바뀌고, 더는 고치거나 지울 수 없습니다' })
+          .then(function (v) {
+            if (v === null) return;
+            post('promote_project', { id: ID }).then(function (d) {
+              setTimeout(function () { location.href = d.url; }, 500);
+            }).catch(function () {});
+          });
+      }
+    });
+
+    document.addEventListener('click', function (e) {
+      $$('.ba-more[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });
+    });
+    load();
+  }
+
   // ---- 진입 ---------------------------------------------------------
   initShare();
   initViewAs();
@@ -6786,6 +7417,7 @@
     case 'project':
     case 'rnd':       run(initProjectList, initProjectForm, initProjectView, initSourceViewer, initWbs, initAllocation, initLinks, initEditors,
                           initRndBoard, initRndForm, initRndView); break;
+    case 'idea':      run(initIdeaBoard, initIdeaForm, initIdeaView); break;
     case 'member':    run(initMemberList, initMemberProfile); break;
     case 'settings':  run(initSettings); break;
   }

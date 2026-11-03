@@ -124,11 +124,57 @@ function board_tile_groups()
 /** [sys_key => group_id]. 묶음에 안 든 카드는 아예 줄이 없다. */
 function board_tile_assignments()
 {
+    board_apply_tile_group_hints();
     $out = [];
     foreach (portal_db()->query("SELECT sys_key, group_id FROM portal_tile_group_item") as $r) {
         $out[$r['sys_key']] = (int)$r['group_id'];
     }
     return $out;
+}
+
+/**
+ * worksystems.json 의 "group" 힌트 — 새 카드를 처음부터 어느 묶음에 둘지.
+ *
+ * 묶음은 관리자가 화면에서 만들고 카드를 끌어 넣는 DB 데이터라 코드가 정할 수 없다. 대신 카드를
+ * 추가하면서 json 에 "group": "Coursemos" 처럼 적어 두면, 그 이름(대소문자 무시, 부분 일치)의 묶음이
+ * 있을 때 **한 번만** 거기에 넣는다. 적용 기록(portal_tile_group_hint)이 남으면 그 뒤로는 관리자가
+ * 옮기든 빼든 간섭하지 않는다. 묶음이 아직 없으면 아무것도 하지 않고, 생기면 그때 적용된다.
+ */
+function board_apply_tile_group_hints()
+{
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    try {
+        $hinted = [];
+        foreach (work_systems() as $s) {
+            if (!empty($s['group'])) $hinted[$s['key']] = (string)$s['group'];
+        }
+        if (!$hinted) return;
+        $pdo = portal_db();
+        $applied = [];
+        foreach ($pdo->query("SELECT sys_key FROM portal_tile_group_hint") as $r) $applied[$r['sys_key']] = true;
+        $todo = array_diff_key($hinted, $applied);
+        if (!$todo) return;
+        $groups = board_tile_groups();
+        $mark = $pdo->prepare("INSERT INTO portal_tile_group_hint (sys_key, applied_at) VALUES (?, NOW())");
+        foreach ($todo as $key => $want) {
+            $gid = null;
+            foreach ($groups as $g) {
+                if (mb_stripos($g['name'], $want) !== false) { $gid = (int)$g['id']; break; }
+            }
+            if ($gid === null) continue;                 // 그런 묶음이 아직 없다 — 생기면 다음 요청에서
+            $has = $pdo->prepare("SELECT 1 FROM portal_tile_group_item WHERE sys_key = ?");
+            $has->execute([$key]);
+            if (!$has->fetchColumn()) {                  // 이미 어딘가에 들어 있으면 그대로 둔다
+                $pdo->prepare("INSERT INTO portal_tile_group_item (sys_key, group_id, updated_at) VALUES (?, ?, NOW())")
+                    ->execute([$key, $gid]);
+            }
+            $mark->execute([$key]);
+        }
+    } catch (Throwable $e) {
+        error_log('[board] 묶음 힌트 적용 실패: ' . $e->getMessage());
+    }
 }
 
 /** 새 묶음에 제안할 이름. 같은 이름이 있으면 뒤에 숫자를 붙인다. */

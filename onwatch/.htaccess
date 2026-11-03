@@ -1,0 +1,14 @@
+# 모듈 내부 디렉터리 직접 접근 차단 — bluecart/.htaccess 와 같은 방식.
+# 각 디렉터리 안에도 `Require all denied` 짜리 .htaccess 를 따로 두어 이중으로 막는다.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(inc|sql|bin|worker|tests|var)(/|$) - [R=404,L]
+  RewriteRule ^config\.local\.php$ - [R=404,L]
+  RewriteRule \.md$ - [R=404,L]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+  RedirectMatch 404 /(inc|sql|bin|worker|tests|var)/
+  RedirectMatch 404 /config\.local\.php$
+  RedirectMatch 404 \.md$
+</IfModule>

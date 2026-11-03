@@ -9,6 +9,9 @@
  * POST api/allocate.php?act=update_item    담당자 수동 조정
  * POST api/allocate.php?act=add_item       지원 인원 추가
  * POST api/allocate.php?act=delete_item
+ * POST api/allocate.php?act=copy           차수 복사 (새 차수, proposed)
+ * POST api/allocate.php?act=delete         차수 삭제 (확정·확정 이력 제외)
+ * POST api/allocate.php?act=purge          지울 수 있는 차수 일괄 정리
  * POST api/allocate.php?act=confirm        확정 + 알림 적재
  *
  * ┌──────────────────────────────────────────────────────────────────┐
@@ -505,6 +508,80 @@ bs_route(bs_param_str('act', 'versions'), [
             'load'       => bs_alloc_load($allocs, $members, $tasks, $a, $items),
             'unassigned' => $allocs->tasksWithoutOwner($allocationId),
             'message'    => '배정 항목을 삭제했습니다.',
+        ]);
+    },
+
+    /**
+     * 차수 복사 (2026-10-22). 원본을 그대로 옮긴 새 차수(proposed)를 만든다.
+     * 확정본을 고칠 때의 출발점이다 — 확정본 자체는 손대지 않는다.
+     */
+    'copy' => function () use ($allocs, $members, $tasks): void {
+        $user = bs_begin_write();
+        $src  = bs_alloc_param($allocs);
+        $projectId = (int)$src['project_id'];
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        $newId = $allocs->copyVersion((int)$src['id'], $user);
+
+        $a     = $allocs->find($newId);
+        $items = $allocs->items($newId);
+
+        // 원본 이후 배정에서 빠진 사람. 지우지 않고 알린다 — 빼면 미배정이
+        // 생기고, 그 일을 누구에게 줄지는 사람이 정할 일이다.
+        $gone = [];
+        foreach ($items as $it) {
+            $m = $members->find((int)$it['member_id']);
+            if ($m && !(int)$m['is_assignable']) {
+                $gone[(int)$m['id']] = $m['emp_name'];
+            }
+        }
+        $settled = count(array_filter($items, static fn($it) =>
+            in_array($it['task_status'], BS_TASK_NOT_ASSIGNABLE_STATUS, true)));
+
+        bs_json_ok([
+            'allocation_id' => $newId,
+            'version'       => (int)$a['version'],
+            'items'         => $items,
+            'load'          => bs_alloc_load($allocs, $members, $tasks, $a, $items),
+            'unassigned'    => $allocs->tasksWithoutOwner($newId),
+            'message'       => $src['version'] . '차를 복사해 ' . $a['version'] . '차를 만들었습니다.'
+                . ($src['status'] === 'confirmed'
+                    ? ' 확정본은 그대로 두었습니다 — 이 차수를 확정하면 바뀝니다.' : '')
+                . ($settled ? ' 완료·보류 태스크 ' . $settled . '건도 담당자째 옮겼습니다.' : '')
+                . ($gone ? ' 지금은 배정에서 빠진 사람이 들어 있습니다: '
+                           . implode(', ', $gone) . '.' : ''),
+        ]);
+    },
+
+    /**
+     * 차수 삭제 (2026-10-22). 확정본과 한 번 확정됐던 안은 지우지 않는다
+     * — AllocationRepo::isDeletable().
+     */
+    'delete' => function () use ($allocs): void {
+        bs_begin_write();
+        $a = bs_alloc_param($allocs);
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, (int)$a['project_id']);
+
+        $allocs->deleteVersion((int)$a['id']);
+
+        bs_json_ok([
+            'deleted' => (int)$a['id'],
+            'message' => $a['version'] . '차를 지웠습니다.',
+        ]);
+    },
+
+    /** 지울 수 있는 차수를 한꺼번에 정리한다. 확정본·확정 이력은 남는다. */
+    'purge' => function () use ($projects, $allocs): void {
+        bs_begin_write();
+        $projectId = bs_alloc_project_param($projects);
+        bs_require_cap_api(BS_CAP_ALLOCATION_PROPOSE, $projectId);
+
+        $n = $allocs->purgeDrafts($projectId);
+
+        bs_json_ok([
+            'deleted' => $n,
+            'message' => $n ? '차수 ' . $n . '개를 정리했습니다. 확정본과 확정 이력은 남겼습니다.'
+                            : '정리할 차수가 없습니다.',
         ]);
     },
 

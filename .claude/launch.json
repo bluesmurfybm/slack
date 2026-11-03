@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "iworks-local",
+      "runtimeExecutable": "D:\\php82\\php.exe",
+      "runtimeArgs": [
+        "-S",
+        "127.0.0.1:8780",
+        "-t",
+        "D:\\slack",
+        "D:\\slack\\dev\\local_router.php"
+      ],
+      "port": 8780
+    },
+    {
+      "name": "iworks-lan",
+      "runtimeExecutable": "D:\\php82\\php.exe",
+      "runtimeArgs": [
+        "-S",
+        "0.0.0.0:8780",
+        "-t",
+        "D:\\slack",
+        "D:\\slack\\dev\\local_router.php"
+      ],
+      "port": 8780
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/sqlite_compat.php';   // 로컬 시험(SQLite)일 때만 끼어든다. 운영은 new PDO 그대로
 /**
  * 포털(blue-iWorks) DB 연결.
  *  - slack 모듈과 같은 slackapi DB를 그대로 씀. 여기서는 포털 전용 테이블만 관리.
@@ -17,7 +18,7 @@ function portal_db() {
     ];
 
     $dsn = "mysql:host={$d['host']};port={$d['port']};charset={$d['charset']}";
-    $pdo = new PDO($dsn, $d['user'], $d['pass'], $opt);
+    $pdo = db_connect($dsn, $d['user'], $d['pass'], $opt, $d['name']);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$d['name']}`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `{$d['name']}`");
@@ -50,6 +51,12 @@ function portal_db() {
     // 슬랙은 협업사 도메인 계정을 쓰는 사람이 있어, 이메일로 슬랙 사용자를 찾지
     // 못하고 알림이 조용히 빠졌다. 다른 사람만 적는다 — NULL 이면 email 과 같다는 뜻.
     add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `slack_email` VARCHAR(190) NULL COMMENT '슬랙 계정 이메일. 로그인 이메일과 다를 때만 채운다' AFTER `slack_token_enc`");
+    // envlog 의 AI 분석에 쓰는 개인 Anthropic API 키 — 슬랙 토큰과 같은 방식(enc_token/dec_token)으로 암호화해 둔다
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `anthropic_key_enc` TEXT NULL COMMENT 'AES-256-GCM 암호화된 개인 Anthropic API 키 (envlog AI 분석용)' AFTER `slack_email`");
+    // Gmail 연동(slack/gmail). 사람마다 자기 메일함을 IMAP 으로 붙인다.
+    // 비밀번호는 Google '앱 비밀번호' 이고 슬랙 토큰과 같은 enc_token()(AES-256-GCM)으로만 저장한다.
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `gmail_user` VARCHAR(190) NULL COMMENT 'Gmail 연동 주소' AFTER `slack_email`");
+    add_column_if_missing($pdo, "ALTER TABLE `portal_users` ADD COLUMN `gmail_pass_enc` TEXT NULL COMMENT 'AES-256-GCM 암호화된 Gmail 앱 비밀번호' AFTER `gmail_user`");
 
     // -----------------------------------------------------------------
     // 알림판 — 공지 / 중요 일정 / 포털 관리자
@@ -204,6 +211,17 @@ function portal_db() {
                 REFERENCES `portal_tile_group` (`id`) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='카드가 어느 묶음에 속하는가. sys_key 가 기본키라 한 카드는 한 묶음에만 든다'
+    ");
+
+    // worksystems.json 의 "group" 힌트(새 카드의 기본 묶음)를 적용했다는 표시.
+    // 한 번 적용한 뒤에는 관리자가 어디로 옮기든 빼든 다시 손대지 않는다 — core/board.php::board_tile_assignments()
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_tile_group_hint` (
+            `sys_key`    VARCHAR(40) NOT NULL COMMENT 'worksystems.json 의 key',
+            `applied_at` DATETIME    NOT NULL,
+            PRIMARY KEY (`sys_key`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='카드의 기본 묶음 힌트를 적용한 기록. 있으면 다시 적용하지 않는다'
     ");
 
     // 묶음을 접어 둔 상태. 묶음이 늘면 아래쪽 카드가 멀어지므로 접을 수 있게 한다.

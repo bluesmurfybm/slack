@@ -42,7 +42,7 @@ try {
 
     $stmt = $pdo->prepare("
         SELECT r.id, r.board, r.list_id, r.archived, r.title, r.body, r.momo, r.lms, r.req_id, r.req, r.asg_id, r.asg,
-               r.status_id, r.status, r.priority_id, r.priority, r.team_id, r.team, r.cmt_count,
+               r.status_id, r.status, r.priority_id, r.priority, r.team_id, r.team, r.kind_id, r.kind, r.cmt_count,
                r.`eta`, r.`date`, r.`done`, r.created, r.updated, r.locked, r.edited_by, r.synced_at, r.updated_at,
                r.ai_stars, r.ai_reason, r.ai_conf, r.attachments,
                (rd.request_id IS NOT NULL) AS is_read,

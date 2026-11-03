@@ -18,11 +18,11 @@ button.primary { background:var(--info); color:#fff; border-color:var(--info); }
 button:disabled { opacity:.5; cursor:default; }
 
 /* 검색 히어로 — 이 화면에서 제일 많이 쓰는 동작이라 맨 위 넓은 자리를 준다 */
-.hero { display:flex; flex-direction:column; align-items:center; gap:14px;
+.hero { display:flex; flex-direction:column; align-items:flex-start; gap:14px;
         padding:26px 16px 22px; margin-bottom:14px; border-radius:16px;
         border:1px solid var(--line);
         background:linear-gradient(180deg, var(--info-bg) 0%, var(--bg) 100%); }
-.hero-in { position:relative; width:min(680px, 100%); }
+.hero-in { position:relative; width:100%; }
 .hero-in input { width:100%; height:50px; font-size:14.5px; border-radius:25px;
                  padding:0 42px 0 44px; border:1.5px solid var(--line); background:var(--bg); }
 .hero-in input::placeholder { color:var(--hint); }
@@ -33,7 +33,11 @@ button:disabled { opacity:.5; cursor:default; }
               width:28px; height:28px; padding:0; border:0; border-radius:50%;
               background:var(--bg2); color:var(--muted); font-size:12px; line-height:1; }
 .hero-clear:hover { color:var(--txt); }
-.hero-chips { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+.hero-chips { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-start; }
+.hero-chips[hidden] { display:none; }
+/* OS 줄은 버전 줄과 구분되게 한 단계 작고 흐리게 — 두 줄이 똑같이 보이면 헷갈린다 */
+.hero-chips.os .chip { height:26px; padding:0 10px; font-size:12px; }
+.hero-chips.os .chip b { font-size:10px; }
 
 /* 툴바 */
 .tools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
@@ -68,6 +72,22 @@ tr.r.off .nm { text-decoration:line-through; }
 .c-name .sub { display:block; font-size:11px; color:var(--hint); margin-top:1px; }
 .c-name .sub.warn { color:#c26a1e; }
 .vtag { font-size:11px; color:var(--info); background:var(--info-bg); border-radius:8px; padding:1px 7px; white-space:nowrap; }
+/* 유지보수 종료 — 평소엔 목록에서 빠지고, 포함해서 볼 때 이 표시로 구분한다 */
+.etag { display:inline-block; margin-left:6px; font-size:10px; font-weight:700; white-space:nowrap;
+        color:#8a3b3b; background:#fbe9e9; border:1px solid #f0c9c9; border-radius:5px; padding:1px 5px; }
+@media (prefers-color-scheme: dark) { .etag { color:#f0a0a0; background:#3a1c1c; border-color:#5c2a2a; } }
+tr.r.ended, .card.ended { opacity:.6; }
+/* 검색·필터에 걸러진 행 — DOM 은 그대로 두고 감추기만 한다 */
+.hid { display:none !important; }
+
+/* 학교명 칸 — 입력칸 오른쪽에 '사용' 체크(schools.active)를 붙인다 */
+.dcell .dpair { display:flex; align-items:center; gap:12px; }
+.dcell .dpair .dedit { flex:1; min-width:0; }
+.dcell .dchk { display:flex; align-items:center; gap:6px; flex:none; font-size:13px; color:var(--txt); cursor:pointer; white-space:nowrap; }
+.dcell .dchk input { width:16px; height:16px; margin:0; padding:0; flex:none; }
+/* 같은 칸에 붙는 짧은 숫자 칸 — 운영 서버 OS 버전 옆 대수 */
+.dcell .dnum { display:flex; align-items:center; gap:6px; flex:none; font-size:13px; color:var(--txt); white-space:nowrap; }
+.dcell .dnum input { width:64px; height:32px; text-align:right; font-family:Consolas, "D2Coding", monospace; font-size:13px; }
 .gtag { font-size:11px; color:var(--muted); background:var(--bg2); border:1px solid var(--line);
         border-radius:8px; padding:0 6px; margin-left:4px; white-space:nowrap; }
 .ptag { display:inline-block; font-size:11px; font-weight:600; color:#8a4b12; background:#fdf0e2;

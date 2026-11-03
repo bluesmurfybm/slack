@@ -7,6 +7,7 @@
  */
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/slack_lib.php';   // slack_runtime_dir() — sync.php 와 같은 잠금 파일
 require_login();
 session_release();   // 세션 잠금 즉시 해제(5초 폴링 경합 방지)
 
@@ -14,7 +15,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 // 진행 중 여부: 잠금을 비차단으로 잡아보고 성공하면 즉시 해제(=실행 중 아님)
 $running = false;
-$fp = @fopen(sys_get_temp_dir() . '/slackapi_sync.lock', 'c');
+$fp = @fopen(slack_runtime_dir() . '/slackapi_sync.lock', 'c');
 if ($fp) {
     if (flock($fp, LOCK_EX | LOCK_NB)) {
         flock($fp, LOCK_UN);

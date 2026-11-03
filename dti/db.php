@@ -3,6 +3,8 @@
  * dti 설정과 DB. 설정 값을 읽는 곳은 여기 하나뿐이고, 테스트는 이 배열만 갈아끼운다.
  */
 
+if (is_file(__DIR__ . '/../core/sqlite_compat.php')) require_once __DIR__ . '/../core/sqlite_compat.php';   // 로컬 시험(SQLite)용
+
 const DTI_TEAMS = ['APP', 'SQUARE', 'LAB'];
 const DTI_MAGAZINES = ['DI', 'MIT TR', 'Etc'];
 const DTI_EMOTIONS = ['like', 'apply', 'easy', 'new'];
@@ -85,11 +87,12 @@ function dti_max_upload_bytes(array $config): int {
 function dti_connect(array $config): PDO {
     $db = $config['db'];
     $dsn = "mysql:host={$db['host']};port={$db['port']};charset={$db['charset']}";
-    $pdo = new PDO($dsn, $db['user'], $db['pass'], [
+    $connect = function_exists('db_connect') ? 'db_connect' : fn($dsn, $u, $p, $o) => new PDO($dsn, $u, $p, $o);
+    $pdo = $connect($dsn, $db['user'], $db['pass'], [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
+    ], $db['name']);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$db['name']}`
                 CHARACTER SET {$db['charset']} COLLATE {$db['charset']}_unicode_ci");
     $pdo->exec("USE `{$db['name']}`");

@@ -1,0 +1,10 @@
+# 영수증 원본은 여기(receipts/) 쌓인다. 웹루트 아래이므로 직접 접근을 막고, 열람은 반드시
+# api.php?p=receipt 를 거치게 한다(로그인·권한 확인).
+# nginx 는 이 파일을 읽지 않는다 — server 블록에 `location ^~ /blueledger/var/ { deny all; }` 가 있어야 한다.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

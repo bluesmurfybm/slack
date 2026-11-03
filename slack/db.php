@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../core/sqlite_compat.php';   // db_connect() — 로컬 시험(SQLite)용
 /**
  * DB 연결.
  *  - config.php 의 db 설정 사용
@@ -22,8 +23,10 @@ if (!function_exists('add_column_if_missing')) {
     }
 }
 
-function db() {
+/** @param bool $reconnect 새로 접속 — 상시 도는 CLI 데몬이 MySQL 에 끊긴 연결(wait_timeout)을 버릴 때 */
+function db($reconnect = false) {
     static $pdo = null;
+    if ($reconnect) $pdo = null;
     if ($pdo) return $pdo;
 
     $cfg = require __DIR__ . '/../config.php';
@@ -36,7 +39,7 @@ function db() {
 
     // 1) DB 미지정으로 접속 → DB 생성
     $dsn = "mysql:host={$d['host']};port={$d['port']};charset={$d['charset']}";
-    $pdo = new PDO($dsn, $d['user'], $d['pass'], $opt);
+    $pdo = db_connect($dsn, $d['user'], $d['pass'], $opt, $d['name']);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$d['name']}`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `{$d['name']}`");
@@ -78,6 +81,9 @@ function db() {
     // 기존 설치본 마이그레이션: cmt_count 컬럼 없으면 추가
     add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `cmt_count` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `team`");
     add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `eta` DATE NULL AFTER `cmt_count`");
+    // 접수분류 (유비온 리스트 전용 select: 유지보수/오류/오류-LXP/유지보수-LXP)
+    add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `kind_id` VARCHAR(32) NULL AFTER `team`");
+    add_column_if_missing($pdo, "ALTER TABLE `requests` ADD COLUMN `kind` VARCHAR(40) NOT NULL DEFAULT '' COMMENT '접수분류' AFTER `kind_id`");
 
     // 담당자 다중(콤마구분) 저장 위해 컬럼 폭 확대: asg_id VARCHAR(32)→255 (1회만)
     $asgLen = $pdo->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='requests' AND COLUMN_NAME='asg_id'")->fetchColumn();

@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../core/sqlite_compat.php';   // db_connect() — 로컬 시험(SQLite)용
 /**
  * slackai DB 연결.
  *  - config.php 의 db 접속 정보를 쓰되, 데이터베이스 이름만 config.php 'slackai'.'db_name'(기본 slackai_db) 으로 바꾼다.
@@ -47,7 +48,7 @@ function db() {
 
     // 1) DB 미지정으로 접속 → DB 생성 → 선택. 세션 시간대는 KST 고정(워커·PHP 가 같은 기준으로 DATETIME 을 비교한다)
     $dsn = "mysql:host={$d['host']};port={$d['port']};charset={$d['charset']}";
-    $pdo = new PDO($dsn, $d['user'], $d['pass'], $opt);
+    $pdo = db_connect($dsn, $d['user'], $d['pass'], $opt, $dbName);
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbName`
                 CHARACTER SET {$d['charset']} COLLATE {$d['charset']}_unicode_ci");
     $pdo->exec("USE `$dbName`");
