@@ -158,14 +158,18 @@ function h_detect_cms($root, $CFG) {
     $bases = array($root);
     if (!empty($_SERVER['DOCUMENT_ROOT'])) $bases[] = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']), '/');
     for ($d = $root, $i = 0; $i < 3; $i++) { $up = dirname($d); if ($up === $d) break; $bases[] = $d = $up; }
+    // 처음 찾은 파일에 DB 값이 없을 수 있다(config/ 에 상수만 두고 접속은 루트 config.php 에서 하는 사이트) — 전부 모아 차례로 읽는다
+    $found = array();
     foreach (array_unique($bases) as $b) {
-        foreach (array('config/config.php', 'config/database.php', 'config/db.php', 'inc/config.php', 'include/config.php', 'common/config.php', 'lib/config.php') as $f) {
-            if (is_file($b . '/' . $f)) {
-                $out['type']   = 'custom';
-                $out['config'] = $b . '/' . $f;
-                return $out;
-            }
+        foreach (array('config/config.php', 'config/database.php', 'config/db.php', 'config.php', 'dbconfig.php', 'db_config.php', 'data/dbconfig.php',
+                       'inc/config.php', 'include/config.php', 'common/config.php', 'lib/config.php') as $f) {
+            if (is_file($b . '/' . $f)) $found[] = $b . '/' . $f;
         }
+    }
+    if ($found) {
+        $out['type']    = 'custom';
+        $out['config']  = $found[0];
+        $out['configs'] = $found;
     }
     return $out;
 }
@@ -174,7 +178,12 @@ function h_detect_cms($root, $CFG) {
 function h_db_config($cms) {
     if (!$cms['config'] || !is_file($cms['config'])) return null;
     if ($cms['type'] === 'ci3')    return h_db_config_ci3($cms['config']);
-    if ($cms['type'] === 'custom') return h_db_config_text($cms['config']);
+    if ($cms['type'] === 'custom') {
+        foreach (isset($cms['configs']) ? $cms['configs'] : array($cms['config']) as $f) {
+            if (($c = h_db_config_text($f)) !== null) return $c;
+        }
+        return null;
+    }
     return h_db_config_xe($cms['config']);
 }
 
@@ -489,6 +498,9 @@ function h_check_db($cms, $CFG) {
         }
         $r['status'] = 'warn';
         $r['error']  = 'db config not found or unreadable';
+        $root = h_doc_root();
+        $r['tried']  = array_map(function ($f) use ($root) { return strpos($f, $root . '/') === 0 ? substr($f, strlen($root) + 1) : $f; },
+                                 isset($cms['configs']) ? $cms['configs'] : array($cms['config']));
         return $r;
     }
     $r['driver'] = $cfg['driver'];
