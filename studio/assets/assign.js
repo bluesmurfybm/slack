@@ -402,15 +402,17 @@
    * bs_source_acts_html() 와 **같은 마크업**이다 — 한쪽만 고치지 말 것.
    * s 는 bs_present_source() 모양 (has_file · viewable · parsed_len · mime · id · title).
    */
+  // download_url 이 있으면 그 주소로 받고 본다 (033 — 아이디어 자료는 api/idea_file.php).
   function srcActsHtml(s) {
     var h = '';
     if (s.viewable || (s.parsed_len || 0) > 0) {
       h += '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' + s.id + '"' +
            ' data-mime="' + esc(s.mime || '') + '" data-file="' + (s.has_file ? '1' : '0') + '"' +
+           (s.download_url ? ' data-src-url="' + esc(s.download_url) + '"' : '') +
            ' data-title="' + esc(s.title || '') + '">보기</button>';
     }
     if (s.has_file) {
-      h += '<a class="ba-btn ba-btn--sm" href="api/source_download.php?id=' + s.id + '">내려받기</a>';
+      h += '<a class="ba-btn ba-btn--sm" href="' + esc(s.download_url || ('api/source_download.php?id=' + s.id)) + '">내려받기</a>';
     }
     return h ? '<span class="ba-src__acts">' + h + '</span>' : '';
   }
@@ -5866,7 +5868,7 @@
       if (r.can.drop)    acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="drop">중단</button>');
       // 프로젝트로 넘기기 (032). 이미 넘긴 과제에는 단추 대신 그 프로젝트 링크가 개요에 뜬다.
       if (r.can.promote_project && !(D && D.lineage && D.lineage.project)) {
-        acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="promote_project">프로젝트로 넘기기</button>');
+        acts.push('<button type="button" class="ba-btn ba-btn--sm" data-rv="promote_project">프로젝트로 전환</button>');
       }
       // 삭제 (2026-10-16). 처리는 rndLifecycle — 보드 카드와 같은 확인을 거친다.
       if (r.can['delete']) {
@@ -6450,7 +6452,7 @@
       if (act === 'interest') { post('interest'); return; }
       if (act === 'approve')  { post('approve'); return; }
       if (act === 'promote_project') {
-        askDialog({ title: '프로젝트로 넘기기', ok: '등록하기',
+        askDialog({ title: '프로젝트로 전환', ok: '등록하기',
                     message: '이 과제를 바탕으로 프로젝트를 등록합니다.\n' +
                              '· 프로젝트는 「작성 중」에서 시작합니다. 범위 문서·WBS·배정은 평소처럼 이어 갑니다\n' +
                              '· 과제는 그대로 남습니다 — 산출물과 진행 기록, 참여자 점유가 과제에 있습니다' })
@@ -7083,10 +7085,11 @@
         problem:      $('#ba-i-problem').value,
         proposal:     $('#ba-i-proposal').value,
         effect:       $('#ba-i-effect').value,
-        url:          $('#ba-i-url').value,
         domain_ids:   $$('.ba-i-dom').filter(function (c) { return c.checked; })
                         .map(function (c) { return parseInt(c.value, 10); })
       };
+      // 033 이 없는 DB 에서만 예전 링크 칸이 있다. 있으면 자료는 아래 패널로 간다.
+      if ($('#ba-i-url')) body.url = $('#ba-i-url').value;
       if (!body.title.trim()) { toast('제목을 입력하세요.', true); return; }
       if (!body.problem.trim() && !body.proposal.trim()) {
         toast('배경 · 계기나 아이디어 · 제안 중 하나는 적어 주세요.', true); return;
@@ -7096,10 +7099,91 @@
       api('api/idea.php?act=' + (id ? 'update' : 'create'), { method: 'POST', body: body })
         .then(function (d) {
           toast(d.message);
-          setTimeout(function () { location.href = 'idea_view.php?id=' + (id || d.id); }, 500);
+          var to = 'idea_view.php?id=' + (id || d.id);
+          if (id || !PENDING.length) { setTimeout(function () { location.href = to; }, 500); return; }
+          // 새 아이디어 — 담아 둔 자료를 이어서 보낸다. 실패해도 아이디어는 올라갔으니
+          // 무엇이 빠졌는지 알리고 고치기 화면으로 보낸다(거기서 다시 붙인다).
+          return sendPending(d.id).then(function (fails) {
+            if (!fails.length) { location.href = to; return; }
+            showError('#ba-form-error', '아이디어는 올렸지만 자료 일부를 붙이지 못했습니다.\n' +
+              fails.map(function (f) { return '· ' + f.name + ' — ' + f.message; }).join('\n') +
+              '\n고치기 화면에서 다시 붙여 주세요.');
+            setTimeout(function () { location.href = 'idea_form.php?id=' + d.id; }, 4000);
+          });
         })
         .catch(function (e) { btn.disabled = false; toast(e.message, true); });
     });
+
+    // ---- 참고 자료 (033) ----
+    // 고칠 때는 프로젝트·R&D 와 같은 패널 그대로(바로 올리고 지운다).
+    // 새로 올릴 때는 번호가 없으니 담아 두었다가 [올리기] 뒤에 보낸다.
+    var panel = $('[data-src-panel][data-src-api="api/idea.php"]');
+    var PENDING = [];   // {type:'file', file} | {type:'link', url, title}
+    if (panel && id) initSourcePanel(id);
+    if (panel && !id) initPending();
+
+    function initPending() {
+      var inp = function (k) { return $('[data-src-in="' + k + '"]', panel); };
+      $$('.ba-source-tabs [data-src-tab]', panel).forEach(function (b) {
+        b.addEventListener('click', function () {
+          $$('.ba-source-tabs [data-src-tab]', panel).forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
+          $$('[data-src-pane]', panel).forEach(function (p) { p.hidden = p.dataset.srcPane !== b.dataset.srcTab; });
+        });
+      });
+      function paint() {
+        $('[data-src-list]', panel).innerHTML = PENDING.length ? PENDING.map(function (p, i) {
+          return '<div class="ba-src"><span class="ba-src__kind">' + (p.type === 'file' ? '파일' : '링크') + '</span>' +
+            '<span class="ba-src__title">' + esc(p.type === 'file' ? p.file.name : (p.title || p.url)) + '</span>' +
+            '<span class="ba-src__meta">' + (p.type === 'file' ? esc(Math.max(1, Math.round(p.file.size / 1024)) + 'KB') : '') + '</span>' +
+            '<button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-pend-del="' + i + '">빼기</button></div>';
+        }).join('') : '<p class="ba-empty-inline">담은 자료가 없습니다. 아이디어를 올릴 때 함께 올라갑니다.</p>';
+      }
+      panel.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-src-act], [data-pend-del]');
+        if (!b) return;
+        if (b.dataset.pendDel) { PENDING.splice(parseInt(b.dataset.pendDel, 10), 1); paint(); return; }
+        if (b.dataset.srcAct === 'file') {
+          var f = inp('files');
+          if (!f.files.length) { toast('파일을 선택하세요.', true); return; }
+          Array.prototype.forEach.call(f.files, function (x) { PENDING.push({ type: 'file', file: x }); });
+          f.value = '';
+        }
+        if (b.dataset.srcAct === 'link') {
+          var u = inp('link-url').value.trim();
+          if (!/^https?:\/\//i.test(u)) { toast('http:// 또는 https:// 로 시작하는 주소를 넣어 주세요.', true); return; }
+          PENDING.push({ type: 'link', url: u, title: inp('link-title').value.trim() });
+          inp('link-url').value = ''; inp('link-title').value = '';
+        }
+        paint();
+      });
+    }
+
+    /** 담아 둔 자료 보내기 — 파일은 한 번에, 링크는 하나씩. 실패 목록을 돌려준다. */
+    function sendPending(newId) {
+      var fails = [];
+      var files = PENDING.filter(function (p) { return p.type === 'file'; });
+      var links = PENDING.filter(function (p) { return p.type === 'link'; });
+      var chain = Promise.resolve();
+      if (files.length) {
+        chain = chain.then(function () {
+          var fd = new FormData();
+          fd.append('id', newId);
+          fd.append('source_type', 'file');
+          files.forEach(function (p) { fd.append('files[]', p.file); });
+          return upload('api/idea.php?act=upload_source', fd)
+            .then(function (d) { fails = fails.concat(d.failed || []); })
+            .catch(function (e) { files.forEach(function (p) { fails.push({ name: p.file.name, message: e.message }); }); });
+        });
+      }
+      links.forEach(function (p) {
+        chain = chain.then(function () {
+          return api('api/idea.php?act=upload_source', { method: 'POST',
+            body: { id: newId, source_type: 'link', url: p.url, title: p.title } })
+            .catch(function (e) { fails.push({ name: p.title || p.url, message: e.message }); });
+        });
+      });
+      return chain.then(function () { return fails; });
+    }
   }
 
   function initIdeaView() {
@@ -7112,7 +7196,7 @@
     function load() {
       return api('api/idea.php?' + qs({ act: 'get', id: ID })).then(function (d) {
         IDEA = d.idea;
-        renderHead(); renderBody(); renderRating(); renderLineage(); renderComments(d.comments);
+        renderHead(); renderBody(); renderPromote(); renderRating(); renderLineage(); renderComments(d.comments);
       }).catch(function (e) { $('#ba-iv-head').innerHTML = '<div class="ba-empty">' + esc(e.message) + '</div>'; });
     }
     function has(a) { return IDEA && (IDEA.actions || []).indexOf(a) >= 0; }
@@ -7126,8 +7210,6 @@
 
       var acts = '';
       if (has('update')) acts += '<a class="ba-btn ba-btn--sm" href="idea_form.php?id=' + i.id + '">고치기</a>';
-      if (has('promote_rnd')) acts += '<button type="button" class="ba-btn ba-btn--sm ba-btn--primary" data-iv="promote_rnd">R&amp;D 과제로</button>';
-      if (has('promote_project')) acts += '<button type="button" class="ba-btn ba-btn--sm" data-iv="promote_project" title="과제 단계를 건너뜁니다">프로젝트로 바로</button>';
       if (has('review')) {
         acts += '<span class="ba-idea-review" role="group" aria-label="검토">' +
           ['reviewing', 'adopted', 'hold', 'rejected'].filter(function (s) { return s !== i.status; }).map(function (s) {
@@ -7165,6 +7247,18 @@
       }
       h += para('배경 · 계기', i.problem) + para('아이디어 · 제안', i.proposal) + para('기대 효과', i.effect);
       if (i.url) h += '<h3>참고 링크</h3><p><a href="' + esc(i.url) + '" target="_blank" rel="noopener">' + esc(i.url) + '</a></p>';
+      // 참고 자료 (033) — 보기·내려받기는 프로젝트·R&D 와 같은 단추. 붙이고 지우는 것은 고치기 화면에서.
+      if ((i.sources || []).length) {
+        h += '<h3>참고 자료 <span class="ba-dim">' + i.sources.length + '건</span></h3><div class="ba-srclist">' +
+          i.sources.map(function (s) {
+            var t = s.url ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>' : esc(s.title);
+            return '<div class="ba-src"><span class="ba-src__kind">' + esc(s.kind_label) + '</span>' +
+                   '<span class="ba-src__title">' + t + '</span>' +
+                   '<span class="ba-src__meta">' + esc(s.size_label || '') + '</span>' + srcActsHtml(s) + '</div>';
+          }).join('') + '</div>';
+      } else if (i.can_source) {
+        h += '<p class="ba-dim">참고 자료가 없습니다. <a href="idea_form.php?id=' + i.id + '">고치기</a>에서 파일·링크를 붙일 수 있습니다.</p>';
+      }
       if ((i.domains || []).length) {
         h += '<h3>분야</h3><div class="ba-idea-card__doms">' +
              i.domains.map(function (d) { return '<span class="ba-idea-tag">' + esc(d.name) + '</span>'; }).join('') + '</div>';
@@ -7175,6 +7269,31 @@
         }).join('');
       }
       $('#ba-iv-body').innerHTML = h;
+    }
+
+    /**
+     * 전환 패널 (2026-11-03). 단추를 조건이 맞을 때만 그리면 "전환 기능이 없다" 로
+     * 읽혔다. 늘 두 갈래를 보여 주고, 못 누르면 서버가 준 까닭(promote_hint)을 적는다.
+     * 넘어갔거나 지운 아이디어는 그리지 않는다 — 넘어간 곳은 '간 곳' 이 보여 준다.
+     */
+    function renderPromote() {
+      var box = $('#ba-iv-promote');
+      if (!box) return;
+      var hint = IDEA.promote_hint || {};
+      if (IDEA.status === 'promoted' || IDEA.deleted) { box.hidden = true; return; }
+      function row(act, label, desc, why) {
+        return '<div class="ba-idea-promote__row">' +
+          '<button type="button" class="ba-btn ba-btn--sm' + (act === 'promote_rnd' ? ' ba-btn--primary' : '') + '"' +
+            (has(act) ? ' data-iv="' + act + '"' : ' disabled aria-disabled="true"') + '>' + label + '</button>' +
+          '<span class="ba-dim">' + esc(why || desc) + '</span></div>';
+      }
+      var nSrc = (IDEA.sources || []).length;
+      box.hidden = false;
+      box.innerHTML = '<h2>과제 · 프로젝트로 전환</h2>' +
+        row('promote_rnd', 'R&amp;D 과제로 전환', '발의됨에서 시작해 승인을 거칩니다.', hint.rnd) +
+        row('promote_project', '프로젝트로 전환', '과제 단계를 건너뛰고 작성 중 프로젝트로 등록합니다.', hint.project) +
+        '<p class="ba-dim ba-idea-promote__foot">제목·본문·갈래·분야' + (nSrc ? '와 참고 자료 ' + nSrc + '건' : '') +
+        '이 그대로 따라갑니다. 전환하면 아이디어는 더 고칠 수 없습니다.</p>';
     }
 
     function stars(axis, cur) {
@@ -7322,8 +7441,8 @@
       }
     });
 
-    // ---- 머리 단추: 검토·묶기·삭제·올리기 ----
-    $('#ba-iv-head').addEventListener('click', function (e) {
+    // ---- 머리 단추(검토·묶기·삭제)와 전환 패널 ----
+    function onAct(e) {
       var b = e.target.closest('[data-iv]');
       if (!b) return;
       var act = b.dataset.iv;
@@ -7363,11 +7482,13 @@
             post('delete', { id: ID }).then(function () { location.href = 'idea_board.php'; }).catch(function () {});
           });
       }
+      var nSrc = (IDEA.sources || []).length;
+      var srcLine = nSrc ? '\n· 참고 자료 ' + nSrc + '건도 복사해 갑니다' : '';
       if (act === 'promote_rnd') {
-        askDialog({ title: 'R&D 과제로 올리기', ok: '발의하기',
+        askDialog({ title: 'R&D 과제로 전환', ok: '발의하기',
                     message: '제목·본문·갈래·분야를 그대로 가져가 R&D 과제로 발의합니다.\n' +
                              '· 발의자는 나입니다. 과제는 「발의됨」에서 시작하고 승인을 거칩니다\n' +
-                             '· 공개(합류 가능)·모집 중으로 열립니다. 다음 화면에서 기간·점유율을 채워 주세요' })
+                             '· 공개(합류 가능)·모집 중으로 열립니다. 다음 화면에서 기간·점유율을 채워 주세요' + srcLine })
           .then(function (v) {
             if (v === null) return;
             post('promote_rnd', { id: ID }).then(function (d) {
@@ -7376,10 +7497,10 @@
           });
       }
       if (act === 'promote_project') {
-        askDialog({ title: '프로젝트로 바로 올리기', ok: '등록하기',
+        askDialog({ title: '프로젝트로 전환', ok: '등록하기',
                     message: '과제 단계를 건너뛰고 프로젝트로 등록합니다.\n' +
                              '· 프로젝트는 「작성 중」에서 시작합니다. 범위 문서·WBS·배정은 평소처럼 이어 갑니다\n' +
-                             '· 아이디어는 과제화로 바뀌고, 더는 고치거나 지울 수 없습니다' })
+                             '· 아이디어는 과제화로 바뀌고, 더는 고치거나 지울 수 없습니다' + srcLine })
           .then(function (v) {
             if (v === null) return;
             post('promote_project', { id: ID }).then(function (d) {
@@ -7387,7 +7508,9 @@
             }).catch(function () {});
           });
       }
-    });
+    }
+    $('#ba-iv-head').addEventListener('click', onAct);
+    $('#ba-iv-promote').addEventListener('click', onAct);
 
     document.addEventListener('click', function (e) {
       $$('.ba-more[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });
@@ -7417,7 +7540,7 @@
     case 'project':
     case 'rnd':       run(initProjectList, initProjectForm, initProjectView, initSourceViewer, initWbs, initAllocation, initLinks, initEditors,
                           initRndBoard, initRndForm, initRndView); break;
-    case 'idea':      run(initIdeaBoard, initIdeaForm, initIdeaView); break;
+    case 'idea':      run(initIdeaBoard, initIdeaForm, initIdeaView, initSourceViewer); break;
     case 'member':    run(initMemberList, initMemberProfile); break;
     case 'settings':  run(initSettings); break;
   }

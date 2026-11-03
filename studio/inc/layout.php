@@ -371,20 +371,24 @@ function bs_placeholder(string $heading, string $phase, array $todo = []): void
  *   내려받기  파일로 올린 것
  *
  * $s 는 sources() 한 줄 (has_file · mime · parsed_len · id · title).
+ * download_url 이 있으면 그 주소로 받는다 (033 — 아이디어 자료는 api/idea_file.php).
  */
 function bs_source_acts_html(array $s): string
 {
     $hasFile = !empty($s['has_file']);
     $canSee  = ($hasFile && in_array((string)($s['mime'] ?? ''), BS_VIEWABLE_MIME, true))
             || (int)($s['parsed_len'] ?? 0) > 0;
+    $dl      = (string)($s['download_url'] ?? '');
     $h = '';
     if ($canSee) {
         $h .= '<button type="button" class="ba-btn ba-btn--sm" data-src-view="' . (int)$s['id'] . '"'
             . ' data-mime="' . h((string)($s['mime'] ?? '')) . '" data-file="' . ($hasFile ? '1' : '0') . '"'
+            . ($dl !== '' ? ' data-src-url="' . h($dl) . '"' : '')
             . ' data-title="' . h((string)$s['title']) . '">보기</button>';
     }
     if ($hasFile) {
-        $h .= '<a class="ba-btn ba-btn--sm" href="api/source_download.php?id=' . (int)$s['id'] . '">내려받기</a>';
+        $h .= '<a class="ba-btn ba-btn--sm" href="'
+            . h($dl !== '' ? $dl : 'api/source_download.php?id=' . (int)$s['id']) . '">내려받기</a>';
     }
     return $h === '' ? '' : '<span class="ba-src__acts">' . $h . '</span>';
 }

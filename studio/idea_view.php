@@ -47,10 +47,13 @@ bs_layout_head($user, $idea['title'], '과업 편성/현황', '', 'idea');
       </section>
     </div>
     <aside class="ba-idea-side">
+      <section class="ba-panel ba-idea-promote" id="ba-iv-promote" hidden></section>
       <section class="ba-panel" id="ba-iv-rating"></section>
       <section class="ba-panel" id="ba-iv-lineage" hidden></section>
     </aside>
   </div>
 </div>
+
+<?= bs_source_viewer_html() ?>
 
 <?php bs_layout_foot(); ?>
