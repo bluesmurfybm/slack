@@ -32,7 +32,7 @@ include __DIR__ . '/views/head.php';
         <select id="fStack" title="스택으로 거르기"></select>
       </div>
       <div class="viewtoggle sh-viewseg" id="viewseg" role="tablist">
-        <button type="button" data-view="active" onclick="setView('active')" title="사용 중인 사이트">사용 중1 <b id="cntActive"></b></button>
+        <button type="button" data-view="active" onclick="setView('active')" title="사용 중인 사이트">사용 중 <b id="cntActive"></b></button>
         <button type="button" data-view="archive" onclick="setView('archive')" title="보관함 — 미사용·종료된 사이트">보관함 <b id="cntArchive"></b></button>
       </div>
       <button class="btn-ghost" type="button" id="btnImport" onclick="openImport()" title="호스팅 정보 엑셀(시트별 사이트)을 읽어 넣습니다">엑셀 가져오기</button>
