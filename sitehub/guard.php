@@ -72,5 +72,14 @@ function sitehub_stats_emails(): array {
 }
 
 function sitehub_can_stats(?array $u): bool {
-    return $u !== null && !empty($u['email']) && in_array(strtolower((string)$u['email']), sitehub_stats_emails(), true);
+    if ($u === null) return false;
+    $emails = sitehub_stats_emails();
+    if (!$emails) return true;   // config.php 에서 빈 목록([])으로 두면 로그인한 누구나 본다
+    return !empty($u['email']) && in_array(strtolower((string)$u['email']), $emails, true);
+}
+
+/** BLUMO 설정·연동, Slack 쓰기 도구 — 웹훅 주소가 실려 통계를 열어도(빈 목록) 기본 계정만 */
+function sitehub_can_manage(?array $u): bool {
+    $emails = sitehub_stats_emails() ?: SITEHUB_STATS_DEFAULT_EMAILS;
+    return $u !== null && !empty($u['email']) && in_array(strtolower((string)$u['email']), $emails, true);
 }

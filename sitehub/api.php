@@ -23,6 +23,7 @@
  *        → Slack 리스트에 먼저 쓰고(개인 토큰) DB 반영. history_write.php
  *   POST {action:auto_resolve}                     → 미매칭 자동 정리 계획 (기존 사이트 연결 / 새 사이트 등록 / 건너뜀)
  *   POST {action:auto_resolve, apply:1, exclude:[표기…]} → 적용
+ *   POST {action:notice_seen, site_id} → 그 사이트의 변경 알림을 읽음으로 (notice_lib.php), 남은 안 읽은 수
  *   ── BLUMO 감시 (monitor_*.php) ──
  *   GET  ?monitors=1                 → 원 상태만 (목록이 1분마다)
  *   GET  ?monitor_board=1            → 감시 주소 전체 + 상태 + BLUMO 상태 (monitor.php 대시보드)
@@ -39,7 +40,6 @@
  *   ── 지정 계정만 (sitehub_can_stats) ──
  *   GET  ?blumo=1 · POST {action:blumo_import, items:[{blumo_id, site_id}]} → 예전 BLUMO 31곳을 감시 주소로
  *   POST {action:monitor_settings_save, …} / monitor_pause {on} / monitor_test_webhook / monitor_doctor
- *   POST {action:monitor_legacy_import, path, settings, history}  → 예전 blumo.sqlite 의 설정·기록 가져오기
  * 쓰기 응답에는 바뀐 사이트 한 건(site)을 실어 보내서 화면이 전체를 다시 안 받아도 되게 한다.
  */
 require_once __DIR__ . '/guard.php';
@@ -159,15 +159,12 @@ try {
         }
         if (isset($_GET['monitor_settings']) || isset($_GET['blumo'])) {
             // 웹훅 주소(채널에 아무나 글을 쓸 수 있는 값)가 실리므로 지정 계정만
-            if (!sitehub_can_stats($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 볼 수 있습니다.']); }
+            if (!sitehub_can_manage($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 볼 수 있습니다.']); }
             if (isset($_GET['blumo'])) sitehub_out(['ok' => true, 'seed' => sitehub_blumo_seed_plan($pdo), 'meta' => sitehub_blumo_meta($pdo)]);
             $cfg = blumo_cfg($pdo);
-            $legacy = blumo_legacy_path();
             sitehub_out(['ok' => true, 'cfg' => array_intersect_key($cfg, BLUMO_DEFAULTS) + ['webhook_url' => $cfg['webhook_url'], 'paused' => $cfg['paused']],
                          'ranges' => BLUMO_RANGES, 'meta' => sitehub_blumo_meta($pdo), 'php_cli' => blumo_php_cli(), 'ca' => is_file($cfg['ca_bundle']),
-                         'run_cmd' => 'php ' . str_replace('\\', '/', __DIR__) . '/monitor_run.php',
-                         'legacy' => ['path' => $legacy, 'exists' => is_file($legacy), 'sqlite' => extension_loaded('pdo_sqlite'),
-                                      'imported_at' => blumo_meta_get($pdo, 'legacy_import_at')]]);
+                         'run_cmd' => 'php ' . str_replace('\\', '/', __DIR__) . '/monitor_run.php']);
         }
         if (isset($_GET['unmatched'])) {
             // 하위 항목은 부모를 따라가므로 미매칭 목록에는 요청(최상위)만 — 부모를 지정하면 하위도 같이 간다
@@ -187,13 +184,20 @@ try {
         }
         $sites = sitehub_load_sites($pdo, null, true);
         $staff = $pdo->query("SELECT email, name FROM portal_users ORDER BY name, email")->fetchAll();
-        sitehub_out(['ok' => true, 'sites' => $sites, 'staff' => $staff, 'meta' => sitehub_meta($pdo, $me), 'seeded' => $seeded]);
+        sitehub_out(['ok' => true, 'sites' => $sites, 'staff' => $staff, 'meta' => sitehub_meta($pdo, $me), 'seeded' => $seeded,
+                     'notice' => sitehub_notice_unread((int)$me['id']) ?: new stdClass()]);
     }
 
     $in     = json_decode(file_get_contents('php://input'), true) ?: [];
     $action = (string)($in['action'] ?? '');
     $siteId = (int)($in['site_id'] ?? 0);
     $COLS   = sitehub_cols();
+    if (!in_array($action, ['auto_resolve', 'blumo_import'], true)) sitehub_notice_start($me);   // 여러 사이트를 한꺼번에 바꿔 알림이 쏟아진다
+
+    if ($action === 'notice_seen') {
+        sitehub_notice_seen((int)$me['id'], $siteId);
+        sitehub_out(['ok' => true, 'unread' => sitehub_notice_count((int)$me['id'])]);
+    }
 
     // ── 마스터(lab_sites) ──────────────────────────────────────────────────
 
@@ -377,9 +381,9 @@ try {
         sitehub_out(['ok' => true, 'site' => sitehub_load_site($pdo, $sid)]);
     }
 
-    // ── BLUMO 설정 · 예전 BLUMO 가져오기 — 지정 계정만 ────────────────────────────
-    if (in_array($action, ['monitor_settings_save', 'monitor_pause', 'monitor_test_webhook', 'monitor_doctor', 'monitor_legacy_import'], true)) {
-        if (!sitehub_can_stats($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 바꿀 수 있습니다.']); }
+    // ── BLUMO 설정 — 지정 계정만 ────────────────────────────
+    if (in_array($action, ['monitor_settings_save', 'monitor_pause', 'monitor_test_webhook', 'monitor_doctor'], true)) {
+        if (!sitehub_can_manage($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 설정은 지정된 계정만 바꿀 수 있습니다.']); }
         sitehub_session_release();
         if ($action === 'monitor_settings_save') {
             $u = trim((string)($in['webhook_url'] ?? ''));
@@ -405,15 +409,10 @@ try {
             @set_time_limit(90);
             sitehub_out(['ok' => true, 'lines' => blumo_doctor($pdo)]);
         }
-        if ($action === 'monitor_legacy_import') {
-            $path = trim((string)($in['path'] ?? '')) ?: blumo_legacy_path();
-            sitehub_out(['ok' => true, 'result' => blumo_legacy_import($pdo, $path, !empty($in['settings']), !empty($in['history'])),
-                         'meta' => sitehub_blumo_meta($pdo)]);
-        }
     }
 
     if ($action === 'blumo_import') {
-        if (!sitehub_can_stats($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 연동은 지정된 계정만 할 수 있습니다.']); }
+        if (!sitehub_can_manage($me)) { http_response_code(403); sitehub_out(['ok' => false, 'error' => 'BLUMO 연동은 지정된 계정만 할 수 있습니다.']); }
         $plan = [];
         foreach (sitehub_blumo_seed_plan($pdo) as $p) $plan[$p['blumo_id']] = $p;
         $ins = $pdo->prepare("INSERT INTO lab_site_monitors (site_id, label, url, expect, health, note, blumo_id, sort_no, created_at, updated_at, updated_by)
@@ -722,6 +721,7 @@ try {
             if ($hid === '') throw new Exception('잘못된 이력 id');
             $siteId = (int)sitehub_history_delete($pdo, $me, $hid);
         }
+        sitehub_notice_add($siteId, ['history_add' => 'create', 'history_update' => 'update', 'history_delete' => 'delete'][$action], 'history', null, '');
         sitehub_out(['ok' => true, 'rows' => $siteId > 0 ? sitehub_history_rows($pdo, 'site_id = ? AND archived = 0', [$siteId]) : [],
                      'meta' => sitehub_meta($pdo, $me), 'site' => $siteId > 0 ? sitehub_load_site($pdo, $siteId) : null]);
     }
@@ -729,5 +729,6 @@ try {
     throw new Exception('알 수 없는 action');
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    sitehub_notice_drop();
     sitehub_out(['ok' => false, 'error' => $e->getMessage()]);
 }

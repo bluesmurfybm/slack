@@ -137,6 +137,7 @@ function learn_route_catalog(PDO $pdo, array $identity, array $seg, $method) {
 /* ---------- 목록 ---------- */
 
 function learn_catalog_list(PDO $pdo, array $identity) {
+    learn_notice_seen('learn.catalog', 'learn/index.php');
     $admin = learn_is_admin($identity['email']);
     $email = $identity['email'];
     $today = date('Y-m-d');
@@ -278,7 +279,9 @@ function learn_catalog_create(PDO $pdo, array $identity) {
     $pdo->prepare('INSERT INTO learn_catalog (`' . implode('`,`', $cols) . '`) VALUES ('
                   . implode(',', array_fill(0, count($cols), '?')) . ')')
         ->execute(array_values($v));
-    jsend(learn_catalog_out(learn_fetch_catalog($pdo, (int)$pdo->lastInsertId())), 201);
+    $c = learn_catalog_out(learn_fetch_catalog($pdo, (int)$pdo->lastInsertId()));
+    learn_notify_catalog($c, $identity);
+    jsend($c, 201);
 }
 
 function learn_catalog_update(PDO $pdo, array $identity, $cid) {
@@ -298,7 +301,9 @@ function learn_catalog_update(PDO $pdo, array $identity, $cid) {
     foreach (array_keys($patch) as $c) $set[] = "`$c`=?";
     $pdo->prepare("UPDATE learn_catalog SET " . implode(',', $set) . " WHERE id=?")
         ->execute(array_merge(array_values($patch), [$cid]));
-    jsend(learn_catalog_out(learn_fetch_catalog($pdo, $cid)));
+    $c = learn_catalog_out(learn_fetch_catalog($pdo, $cid));
+    if (!learn_is_open($row, date('Y-m-d'))) learn_notify_catalog($c, $identity); // 임시 저장했다가 노출을 켠 때
+    jsend($c);
 }
 
 /**

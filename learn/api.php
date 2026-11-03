@@ -36,6 +36,7 @@ require_once __DIR__ . '/lib/http.php';
 require_once __DIR__ . '/lib/policy.php';
 require_once __DIR__ . '/lib/status.php';
 require_once __DIR__ . '/lib/storage.php';
+require_once __DIR__ . '/lib/notify.php';
 require_once __DIR__ . '/routes/identity.php';
 require_once __DIR__ . '/routes/requests.php';
 require_once __DIR__ . '/routes/certs.php';

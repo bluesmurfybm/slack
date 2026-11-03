@@ -191,8 +191,20 @@ function blumo_classify(array $m, array $cfg, array $r): string {
 }
 
 /** 에이전트 — 여기서 "증상"이 "원인"으로 바뀐다 */
-function blumo_health(array $m, array $cfg, array $r): array {
-    $url = $m['health'] . (strpos($m['health'], '?') === false ? '?' : '&') . 'key=' . rawurlencode($m['health_key']);
+/** PHP 에러를 "직전 점검 이후"만 세게 할 기준 — 에이전트가 응답하지 않은 점검은 그 사이 에러를 못 봤으니 건너뛴다 */
+function blumo_last_agent_ts(PDO $pdo, int $monitorId): ?int {
+    $st = $pdo->prepare("SELECT at, health FROM lab_monitor_checks WHERE monitor_id = ? ORDER BY at DESC LIMIT 30");
+    $st->execute([$monitorId]);
+    foreach ($st as $row) {
+        $h = $row['health'] ? json_decode($row['health'], true) : null;
+        if (is_array($h) && isset($h['checks'])) return strtotime($row['at']) ?: null;
+    }
+    return null;
+}
+
+function blumo_health(array $m, array $cfg, array $r, ?int $since = null): array {
+    $url = $m['health'] . (strpos($m['health'], '?') === false ? '?' : '&') . 'key=' . rawurlencode($m['health_key'])
+         . ($since ? '&since=' . $since : '');
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => $url, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 3,
@@ -221,7 +233,14 @@ function blumo_cause(array $r): string {
         elseif (($c['errorlog']['recent'] ?? 0) > 0) $hint = 'PHP 에러 ' . $c['errorlog']['recent'] . '건 (' . substr((string)($c['errorlog']['last'] ?? ''), 0, 120) . ')';
         elseif (($c['database']['status'] ?? '') === 'warn') $hint = 'DB 경고: ' . ($c['database']['error'] ?? '') . (isset($c['database']['connections']) ? ' [' . $c['database']['connections'] . ']' : '');
     } elseif (is_array($h) && ($h['status'] ?? '') === 'unreachable') {
-        $hint = '에이전트 응답 없음 → 웹서버/PHP 레벨 문제';
+        $hc = (int)($h['http'] ?? 0);
+        $hint = match (true) {
+            $hc === 0   => '에이전트 연결 안 됨(시간 초과·차단)',
+            $hc === 403 => '에이전트도 403 — 방화벽/WAF/IP 차단',
+            $hc === 404 => '에이전트 404 — 파일이 없거나 키가 다름(에이전트를 다시 받아 올리기)',
+            $hc >= 500  => "에이전트 {$hc} — 에이전트 PHP 오류(PHP 버전·권한)",
+            default     => "에이전트 HTTP {$hc}",
+        };
     }
     $map = [
         'OK' => '정상', 'SLOW' => '응답 지연',
@@ -251,7 +270,7 @@ function blumo_cause(array $r): string {
 /** 주소 하나 점검 → 기록 · 상태 · 알림. 사람이 누른 점검도 같은 길 */
 function blumo_check(PDO $pdo, array $m, array $cfg): array {
     $r = blumo_probe($m, $cfg);
-    if (($m['health'] ?? '') !== '' && ($m['health_key'] ?? '') !== '') $r = blumo_health($m, $cfg, $r);
+    if (($m['health'] ?? '') !== '' && ($m['health_key'] ?? '') !== '') $r = blumo_health($m, $cfg, $r, blumo_last_agent_ts($pdo, (int)$m['id']));
     $r['cause'] = blumo_cause($r);
     blumo_store($pdo, $m, $r);
     blumo_state($pdo, $cfg, $m, $r);
@@ -538,89 +557,4 @@ function blumo_doctor(PDO $pdo): array {
     $auto = blumo_meta_get($pdo, 'last_auto_run');
     $o[] = '마지막 자동 점검 ' . ($auto ?: '없음 — 작업 스케줄러 등록 필요 (sitehub/tools/monitor-task.bat)');
     return $o;
-}
-
-/* ── 예전 BLUMO(blumo.sqlite) 가져오기 — 설정(웹훅·기준·일시정지)과 점검 기록 ───────────────────────── */
-
-function blumo_legacy_path(): string {
-    $cfg = blumo_site_config();
-    if (!empty($cfg['sitehub_blumo_legacy_db'])) return (string)$cfg['sitehub_blumo_legacy_db'];
-    // 예전 BLUMO 폴더(D:\00_CIboard_package\004_blumo)는 지웠다 — 그 blumo.sqlite 를 여기에 복사해 두었다 (var/ 는 gitignore · 웹 차단)
-    return dirname(__DIR__) . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'sitehub' . DIRECTORY_SEPARATOR . 'blumo_legacy.sqlite';
-}
-
-/**
- * 예전 BLUMO 를 읽어 온다. 감시 주소는 'BLUMO 기존 대상 연결'(blumo_seed.php)로 먼저 붙여 두어야 한다 —
- * 기록은 BLUMO 사이트 이름 → BLUMO id → 그 blumo_id 를 가진 감시 주소로 옮긴다. 이미 옮긴 기록은 다시 넣지 않는다.
- */
-function blumo_legacy_import(PDO $pdo, string $path, bool $withSettings, bool $withHistory): array {
-    if (!extension_loaded('pdo_sqlite')) throw new Exception('이 PHP 에 pdo_sqlite 확장이 없어 blumo.sqlite 를 읽을 수 없습니다. 웹훅 주소는 설정에 직접 넣어 주세요.');
-    if (!is_file($path)) throw new Exception('파일이 없습니다: ' . $path);
-    $old = new PDO('sqlite:' . $path, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
-    $old->exec('PRAGMA busy_timeout=5000');
-    $out = ['settings' => [], 'checks' => 0, 'incidents' => 0, 'states' => 0, 'unmapped' => []];
-    if ($withSettings) {
-        $set = [];
-        foreach ($old->query("SELECT key, value FROM settings") as $r) $set[$r['key']] = $r['value'];
-        foreach (array_keys(BLUMO_RANGES) as $k) {
-            if (isset($set[$k]) && $set[$k] !== '' && $k !== 'retention_days') { blumo_meta_set($pdo, $k, (int)$set[$k]); $out['settings'][] = $k; }
-        }
-        if (isset($set['alert_on_warn'])) { blumo_meta_set($pdo, 'alert_on_warn', $set['alert_on_warn'] === '1' ? 1 : 0); $out['settings'][] = 'alert_on_warn'; }
-        if (!empty($set['webhook_url'])) { blumo_meta_set($pdo, 'webhook_url', sitehub_enc($set['webhook_url'])); $out['settings'][] = 'webhook_url'; }
-        if (!empty($set['webhook_format'])) { blumo_meta_set($pdo, 'webhook_format', $set['webhook_format']); $out['settings'][] = 'webhook_format'; }
-        if (isset($set['paused'])) { blumo_meta_set($pdo, 'paused', $set['paused'] === '1' ? '1' : '0'); $out['settings'][] = 'paused'; }
-    }
-    if ($withHistory) {
-        $map = [];   // BLUMO 이름 → 감시 주소 (BLUMO id 로, 없으면 같은 주소로)
-        $byBid = []; $byUrl = [];
-        foreach ($pdo->query("SELECT id, site_id, blumo_id, url FROM lab_site_monitors") as $m) {
-            if ($m['blumo_id'] !== null) $byBid[(int)$m['blumo_id']] = $m;
-            $byUrl[sitehub_monitor_key($m['url'])] = $byUrl[sitehub_monitor_key($m['url'])] ?? $m;
-        }
-        foreach ($old->query("SELECT id, name, url FROM sites") as $s) {
-            $hit = $byBid[(int)$s['id']] ?? ($byUrl[sitehub_monitor_key((string)$s['url'])] ?? null);
-            if ($hit) $map[$s['name']] = $hit; else $out['unmapped'][] = $s['name'];
-        }
-        $dt = fn($ts) => $ts ? date('Y-m-d H:i:s', (int)$ts) : null;
-        $has = $pdo->prepare("SELECT 1 FROM lab_monitor_checks WHERE monitor_id = ? AND at = ? AND class = ? LIMIT 1");
-        $ins = $pdo->prepare("INSERT INTO lab_monitor_checks (monitor_id, site_id, at, class, cause, code, dns_ms, connect_ms, tls_ms, ttfb_ms, total_ms, size, cert_days, health, snippet)
-                              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
-        $pdo->beginTransaction();
-        foreach ($old->query("SELECT * FROM checks ORDER BY id") as $c) {
-            $m = $map[$c['site']] ?? null;
-            if (!$m) continue;
-            $has->execute([$m['id'], $dt($c['ts']), $c['class']]);
-            if ($has->fetchColumn()) continue;
-            $ins->execute([$m['id'], $m['site_id'], $dt($c['ts']), $c['class'], mb_substr((string)$c['cause'], 0, 500), $c['code'], $c['dns_ms'], $c['connect_ms'],
-                           $c['tls_ms'], $c['ttfb_ms'], $c['total_ms'], $c['size'], $c['cert_days'], $c['health'], $c['snippet']]);
-            $out['checks']++;
-        }
-        $hasI = $pdo->prepare("SELECT 1 FROM lab_monitor_incidents WHERE monitor_id = ? AND started = ? LIMIT 1");
-        $insI = $pdo->prepare("INSERT INTO lab_monitor_incidents (monitor_id, site_id, started, ended, class, cause) VALUES (?,?,?,?,?,?)");
-        foreach ($old->query("SELECT * FROM incidents ORDER BY id") as $i) {
-            $m = $map[$i['site']] ?? null;
-            if (!$m) continue;
-            $hasI->execute([$m['id'], $dt($i['started'])]);
-            if ($hasI->fetchColumn()) continue;
-            $insI->execute([$m['id'], $m['site_id'], $dt($i['started']), $dt($i['ended']), $i['class'], mb_substr((string)$i['cause'], 0, 500)]);
-            $out['incidents']++;
-        }
-        // 현재 상태 — 여기에 아직 상태가 없는 주소만 (새로 점검한 게 이긴다)
-        $last = [];
-        foreach ($old->query("SELECT c.* FROM checks c JOIN (SELECT site, MAX(id) mx FROM checks GROUP BY site) x ON c.id = x.mx") as $c) $last[$c['site']] = $c;
-        $insS = $pdo->prepare("INSERT IGNORE INTO lab_monitor_state (monitor_id, site_id, status, since, fail_count, last_alert, class, cause, code, total_ms, cert_days, checked_at, updated_at)
-                               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,NOW())");
-        foreach ($old->query("SELECT * FROM state") as $s) {
-            $m = $map[$s['site']] ?? null;
-            if (!$m) continue;
-            $c = $last[$s['site']] ?? [];
-            $insS->execute([$m['id'], $m['site_id'], $s['status'] ?: 'up', $dt($s['since']), (int)$s['fail_count'], $dt($s['last_alert']),
-                            $c['class'] ?? (string)$s['last_class'], mb_substr((string)($c['cause'] ?? ''), 0, 500), $c['code'] ?? null, $c['total_ms'] ?? null,
-                            $c['cert_days'] ?? null, $dt($c['ts'] ?? null)]);
-            $out['states'] += $insS->rowCount();
-        }
-        $pdo->commit();
-    }
-    blumo_meta_set($pdo, 'legacy_import_at', date('Y-m-d H:i:s'));
-    return $out;
 }

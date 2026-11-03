@@ -13,6 +13,7 @@ function openDrawer(id, record = true) {
   } else if (record) {
     writeQuery({ topic: String(id) }, false);
   }
+  if (DRAWER_ID !== id) sendJSON("POST", `/magazineapi/topics/${id}/seen`).catch(() => {});
   DRAWER_ID = id;
   document.getElementById("drawer").innerHTML = drawerHtml(t);
   document.getElementById("drawer").classList.add("open");

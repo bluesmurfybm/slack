@@ -6,6 +6,10 @@
 require_once __DIR__ . '/guard.php';
 require_once __DIR__ . '/../core/worksystems.php';
 $u = bl_require_page_login();
+if (isset($_GET['trip'])) {
+    require_once __DIR__ . '/lib/notify.php';
+    bl_notice_seen((int)$u['id'], (string)$_GET['trip']);
+}
 $csrf = bl_csrf_token();
 ?>
 <!DOCTYPE html>

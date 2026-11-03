@@ -11,6 +11,17 @@
  */
 if (PHP_SAPI !== 'cli') { http_response_code(403); exit("CLI only\n"); }
 date_default_timezone_set('Asia/Seoul');
+// 작업 스케줄러는 php-win.exe 로 돌려 화면 출력이 사라지므로 오류는 파일에 남긴다
+$__runLog = dirname(__DIR__) . '/var/sitehub/monitor_run.log';
+if (!is_dir(dirname($__runLog))) @mkdir(dirname($__runLog), 0775, true);
+if (is_file($__runLog) && filesize($__runLog) > 1048576) @rename($__runLog, $__runLog . '.old');
+ini_set('log_errors', '1');
+ini_set('error_log', $__runLog);
+set_exception_handler(function (Throwable $e) {
+    error_log('[BLUMO] ' . get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(2);
+});
 require_once __DIR__ . '/db.php';   // guard.php(세션) 없이 — 설정은 config.php 를 직접 읽는다
 require_once __DIR__ . '/monitor_engine.php';
 

@@ -13,6 +13,12 @@ $adm = admin_me();
 session_release();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 $initRid = isset($_GET['request_id']) ? admin_str($_GET['request_id'], 32) : '';
+try {
+    require_once __DIR__ . '/../../core/push.php';
+    if ($pu = current_portal_user()) push_inbox_mark_read_url((int)$pu['id'], 'slackai.', 'slackai/ai/jobs.php' . ($initRid !== '' ? '?request_id=' . rawurlencode($initRid) : ''));
+} catch (Throwable $e) {
+    error_log('[slackai] 알림 읽음: ' . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="ko">

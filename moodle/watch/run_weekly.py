@@ -260,6 +260,7 @@ def run(settings: Settings, opts: RunOptions, conn_factory=None) -> dict:
     if report["note"]:
         problems.append(f"요약 없음: {why}")
     notify.report_done(settings, report, {r.source: len(r.items) for r in results}, problems)
+    notify.push_report(settings, report)
     report["item_count"] = len(items)
     return report
 

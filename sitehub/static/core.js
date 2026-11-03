@@ -9,6 +9,7 @@ const APP = {
   view: "active",       // active=사용 중 · archive=보관함. 보관된 사이트는 archived=1 — 삭제 대신 여기로 옮긴다
   layout: "list",
   open: { id: null, tab: "basic" },   // 드로어에 열린 사이트 — 주소 ?site=&tab= 와 같이 움직인다
+  notice: {},           // { site_id: 안 읽은 변경 알림 수 } — notice_lib.php::sitehub_notice_unread
 };
 
 const LAYOUT_KEY = "sitehub-list-layout";

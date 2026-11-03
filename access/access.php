@@ -883,7 +883,30 @@ function bindList(box) {
     el.addEventListener("click", () => {
       openKey = (openKey === el.dataset.key) ? "" : el.dataset.key;
       render();
+      if (openKey) noticeSeen(openKey);
     }));
+}
+
+/* 변경 알림 읽음 — 그 학교를 펼쳐 봤으면 */
+function noticeSeen(key) {
+  const r = DATA.find(x => rowKey(x) === key);
+  if (!r) return;
+  fetch("access_api.php", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "notice_seen", school_id: r.school_id }),
+  }).catch(() => {});
+}
+
+/* 알림이 연 학교(?school=N) — 펼쳐서 보여 준다 */
+function openLinked() {
+  const id = parseInt(new URLSearchParams(location.search).get("school") || "", 10);
+  const r = id && DATA.find(x => x.school_id === id);
+  if (!r) return;
+  openKey = rowKey(r);
+  render();
+  const el = ROWEL.get(openKey);
+  if (el) el.scrollIntoView({ block: "center" });
+  noticeSeen(openKey);
 }
 
 /* ── 편집 ──────────────────────────────────────────────────── */
@@ -1317,7 +1340,7 @@ $("fvpn").addEventListener("change", () => { fvpn = $("fvpn").value; applyFilter
 $("onlyMissing").addEventListener("change", applyFilter);
 $("showOff").addEventListener("change", load);
 
-load();
+load().then(openLinked);
 </script>
 </body>
 </html>

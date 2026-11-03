@@ -7,7 +7,7 @@
  *  각 항목의 [요청일 날짜] + [작업내용 앞머리 시간] → 새 열에 "YYYY-MM-DD HH:MM", 작업내용에서는 그 시간 글자만 뗀다.
  *
  *  CLI : php sitehub/tools/move_request_time.php [apply] [limit=N] [target=Col…]
- *  웹  : sitehub/tools/move_request_time.php (미리보기 JSON) · ?apply=1[&limit=N] (적용) — 통계 권한 계정만(guard sitehub_can_stats)
+ *  웹  : sitehub/tools/move_request_time.php (미리보기 JSON) · ?apply=1[&limit=N] (적용) — 관리 계정만(guard sitehub_can_manage)
  *
  *  - 최상위 항목만 (하위 작업은 건드리지 않는다)
  *  - 작업내용은 rich_text 를 직접 고친다 — 앞머리 글자만 떼고 굵게·목록 같은 서식은 그대로. 시간이 링크·이모지와 섞여 있거나
@@ -34,7 +34,7 @@ if (!$isCli) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     $me = current_portal_user();
-    if (!$me || !sitehub_can_stats($me)) { http_response_code(403); echo json_encode(['ok' => false, 'error' => '권한이 없습니다'], JSON_UNESCAPED_UNICODE); exit; }
+    if (!$me || !sitehub_can_manage($me)) { http_response_code(403); echo json_encode(['ok' => false, 'error' => '권한이 없습니다'], JSON_UNESCAPED_UNICODE); exit; }
     sitehub_session_release();
     $token = sitehub_sync_token($me);
 } else {

@@ -45,6 +45,7 @@ function dti_material_attach_link(array $ctx, int $tid, string $slot, array $bod
         'name' => dti_want_str($body, 'name', '자료 이름') ?: $url,
         'created_by' => $ctx['identity']['email'],
     ]);
+    dti_material_push($ctx, $topic, $slot);
 
     return dti_material_payload($ctx, $topic);
 }
@@ -81,6 +82,7 @@ function dti_material_attach_file(array $ctx, int $tid, string $slot, array $fil
             'created_by' => $ctx['identity']['email'],
         ]);
     }
+    dti_material_push($ctx, $topic, $slot);
 
     return dti_material_payload($ctx, $topic);
 }
@@ -117,6 +119,13 @@ function dti_material_download(array $ctx, int $tid, string $slot, ?int $mid): a
     $path = dti_resolve_upload($ctx['config']['upload_dir'], $material['path']);
 
     return dti_file($path, $material['name'] ?: basename($path));
+}
+
+function dti_material_push(array $ctx, array $topic, string $slot): void {
+    if ($topic['active'] !== 1 || $topic['archived'] !== 0) return;
+    dti_push_topic($ctx['push'] ?? null, (int)$topic['id'],
+        ($slot === 'scan' ? '스캔 원본' : '발표 자료') . ' · ' . $topic['title'],
+        (string)($ctx['identity']['name'] ?? ''), $ctx['identity']['email']);
 }
 
 function dti_material_guard(array $ctx, int $tid): array {

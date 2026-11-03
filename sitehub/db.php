@@ -15,12 +15,13 @@
  *
  *  ※ slack/db.php 의 db() 를 부르지 않고 자체 연결을 만든다. slack 쪽은 requests 등 무거운 마이그레이션이
  *    딸려 있고, sitehub 는 slack 토큰 없이도 써야 하기 때문. 비밀번호 암호화는 access 모듈과 같은
- *    포맷(enc:v1)·같은 키를 쓰지만 access/db.php 도 include 하지 않는다 — 그 파일은 include 시점에
+ *    포맷(enc:v1)을 쓰지만 access/db.php 도 include 하지 않는다 — 그 파일은 include 시점에
  *    access 마이그레이션을 돌린다.
  */
 
 require_once __DIR__ . '/../core/db.php';   // add_column_if_missing() 재사용
 require_once __DIR__ . '/audit_lib.php';     // 변경 기록 (누가 언제 무엇을)
+require_once __DIR__ . '/notice_lib.php';
 require_once __DIR__ . '/monitor_lib.php';   // BLUMO 감시 (점검 엔진 monitor_engine.php 포함)
 
 function sitehub_db() {
@@ -100,7 +101,7 @@ function sitehub_schema() {
                 'host'       => "VARCHAR(500) NOT NULL DEFAULT '' COMMENT '호스트 또는 URL'",
                 'port'       => "VARCHAR(10) NOT NULL DEFAULT '' COMMENT '포트 (비우면 기본)'",
                 'login_id'   => "VARCHAR(200) NOT NULL DEFAULT '' COMMENT '아이디'",
-                'login_pw'   => "TEXT NULL COMMENT '비밀번호 — enc:v1:<base64(iv|tag|cipher)> AES-256-GCM, config.php key'",
+                'login_pw'   => "TEXT NULL COMMENT '비밀번호 — enc:v1:<base64(iv|tag|cipher)> AES-256-GCM, config.php sitehub_key'",
                 'expires_on' => "DATE NULL COMMENT '만료일 — 호스팅·도메인·SSL 만 (30일 전부터 목록 위에 안내)'",
                 'note'       => "TEXT NULL COMMENT '메모'",
                 'sort_no'    => "INT NOT NULL DEFAULT 0 COMMENT '사이트 안에서의 순서'",
@@ -438,17 +439,27 @@ function sitehub_has_index(PDO $pdo, $table, $name) {
     return (bool)$st->fetchColumn();
 }
 
-/* ── 암호화 (access 모듈과 같은 포맷·같은 키) ───────────────────────────────────
+/* ── 암호화 (access 모듈과 같은 포맷) ───────────────────────────────────────────
    저장 형태 enc:v1:<base64(iv|tag|cipher)>. 접두사가 없으면 아직 안 옮긴 평문으로 보고 그대로 돌려준다. */
 
-function sitehub_key() {
-    static $key = null;
-    if ($key === null) {
+function sitehub_keys() {
+    static $keys = null;
+    if ($keys === null) {
         $cfg = require __DIR__ . '/../config.php';
-        $key = base64_decode($cfg['key']);
-        if ($key === false || strlen($key) !== 32) throw new RuntimeException('config.php 의 key 가 32바이트 base64 가 아닙니다.');
+        $keys = [];
+        foreach (['sitehub_key', 'key'] as $name) { // 공용 key 로 암호화해 둔 예전 값도 풀려야 한다
+            if (empty($cfg[$name])) continue;
+            $k = base64_decode($cfg[$name], true);
+            if ($k === false || strlen($k) !== 32) throw new RuntimeException("config.php 의 {$name} 가 32바이트 base64 가 아닙니다.");
+            if (!in_array($k, $keys, true)) $keys[] = $k;
+        }
+        if (!$keys) throw new RuntimeException('config.php 에 sitehub_key 도 key 도 없습니다.');
     }
-    return $key;
+    return $keys;
+}
+
+function sitehub_key() {
+    return sitehub_keys()[0];
 }
 
 function sitehub_is_enc($v) {
@@ -470,9 +481,11 @@ function sitehub_dec($v) {
     if (!sitehub_is_enc($v)) return $v;
     $raw = base64_decode(substr($v, 7), true);
     if ($raw === false || strlen($raw) < 29) return '';
-    $p = openssl_decrypt(substr($raw, 28), 'aes-256-gcm', sitehub_key(), OPENSSL_RAW_DATA,
-                         substr($raw, 0, 12), substr($raw, 12, 16));
-    return $p === false ? '' : $p;              // 키가 바뀌었으면 빈 값(원문을 흘리지 않는다)
+    foreach (sitehub_keys() as $key) {
+        $p = openssl_decrypt(substr($raw, 28), 'aes-256-gcm', $key, OPENSSL_RAW_DATA, substr($raw, 0, 12), substr($raw, 12, 16));
+        if ($p !== false) return $p;
+    }
+    return '';   // 어느 키로도 안 풀리면 빈 값(원문을 흘리지 않는다)
 }
 
 /** 아직 평문으로 남아 있는 비밀번호만 골라 암호화한다 (여러 번 돌려도 안전) */

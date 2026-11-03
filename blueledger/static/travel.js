@@ -72,7 +72,7 @@ async function startAs(u){
   if(S.single){
     const t=S.trips.find(x=>x.id===S.single);
     if(t)showSingle(t);else showSingleGone('청구서를 찾을 수 없습니다. 이미 삭제되었을 수 있습니다.');
-  }
+  }else if(TRIP_PARAM){const t=S.trips.find(x=>x.id===TRIP_PARAM);if(t)fillForm(t)} // 구성원이 알림으로 들어오면 그 청구서를 연다
   clearInterval(S.poll);S.poll=setInterval(()=>{if(!document.hidden)loadState().catch(()=>{})},20000);
 }
 /* ---------- 구성원 / 관리자 화면 전환 (관리자 계정만) ---------- */

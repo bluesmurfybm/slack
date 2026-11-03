@@ -26,12 +26,14 @@ $CFG = array(
     'min_free_mb'   => 200,
     // PHP 에러로그 경로. 비우면 자동 탐지
     'error_log'     => '',
-    // 최근 N분 이내 에러만 집계
+    // 최근 N분 이내 에러만 집계. BLUMO 가 ?since=(직전 점검 시각) 을 주면 그 뒤만 본다
     'error_window'  => 60,
     // DB 커넥션 사용률이 이 % 넘으면 warn
     'conn_warn_pct' => 80,
     // DB 접속 대기 한도 (초). 넘으면 fail 로 떨어뜨린다
     'db_timeout'    => 5,
+    // DB 설정 파일을 직접 지정 (CI3·XE 가 아닌 사이트). 이 파일 기준 상대경로 가능. 예: 'config/config.php'
+    'db_config'     => '',
 );
 /* ==================================================== */
 
@@ -63,7 +65,7 @@ $root   = h_doc_root();
 
 $checks['php'] = h_check_php();
 
-$cms = h_detect_cms($root);
+$cms = h_detect_cms($root, $CFG);
 
 if (isset($_GET['mode']) && $_GET['mode'] === 'ping') {
     h_output($cms, $checks, $H_T0, 'ping');
@@ -107,8 +109,16 @@ function h_ms($t0) {
 }
 
 /* ---------- CMS 탐지 ---------- */
-function h_detect_cms($root) {
+function h_detect_cms($root, $CFG) {
     $out = array('type' => 'unknown', 'config' => null, 'root' => $root, 'version' => null);
+
+    if (!empty($CFG['db_config'])) {
+        $p = (string)$CFG['db_config'];
+        if (!preg_match('#^(/|[A-Za-z]:)#', $p)) $p = $root . '/' . ltrim($p, '/');
+        $out['type']   = 'custom';
+        $out['config'] = $p;
+        return $out;
+    }
 
     // XE / Rhymix
     $xe = $root . '/files/config/db.config.php';
@@ -142,14 +152,164 @@ function h_detect_cms($root) {
             return $out;
         }
     }
+
+    // 자체 제작 사이트: config/config.php 등에 DB 접속값이 있다. 에이전트를 하위 폴더에 올린 경우가 있어
+    // DOCUMENT_ROOT 와 상위 폴더(3단계)까지 찾는다
+    $bases = array($root);
+    if (!empty($_SERVER['DOCUMENT_ROOT'])) $bases[] = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']), '/');
+    for ($d = $root, $i = 0; $i < 3; $i++) { $up = dirname($d); if ($up === $d) break; $bases[] = $d = $up; }
+    // 처음 찾은 파일에 DB 값이 없을 수 있다(config/ 에 상수만 두고 접속은 루트 config.php 에서 하는 사이트) — 전부 모아 차례로 읽는다
+    $found = array();
+    foreach (array_unique($bases) as $b) {
+        foreach (array('config/config.php', 'config/database.php', 'config/db.php', 'config.php', 'dbconfig.php', 'db_config.php', 'data/dbconfig.php',
+                       'inc/config.php', 'include/config.php', 'common/config.php', 'lib/config.php') as $f) {
+            if (is_file($b . '/' . $f)) $found[] = $b . '/' . $f;
+        }
+    }
+    if ($found) {
+        $out['type']    = 'custom';
+        $out['config']  = $found[0];
+        $out['configs'] = $found;
+    }
     return $out;
 }
 
 /* ---------- DB 설정 파싱 ---------- */
 function h_db_config($cms) {
     if (!$cms['config'] || !is_file($cms['config'])) return null;
-    if ($cms['type'] === 'ci3')  return h_db_config_ci3($cms['config']);
+    if ($cms['type'] === 'ci3')    return h_db_config_ci3($cms['config']);
+    if ($cms['type'] === 'custom') {
+        foreach (isset($cms['configs']) ? $cms['configs'] : array($cms['config']) as $f) {
+            if (($c = h_db_config_text($f)) !== null) return $c;
+        }
+        return null;
+    }
     return h_db_config_xe($cms['config']);
+}
+
+/**
+ * include 하지 않고 글자로만 읽는다 — 자체 제작 config 는 세션 시작·리다이렉트·DB 접속까지 하는 경우가 있다.
+ * define('DB_HOST', '…') · $db_host = '…' · ['hostname'] = '…' · 'hostname' => '…' · (ini/env) DB_HOST=… 꼴을 모은다.
+ * config.php 가 DB 설정 파일 경로만 들고 있는 사이트가 있어, 거기 적힌 파일(include·경로 문자열)도 2단계까지 따라가 읽는다.
+ */
+function h_db_config_text($file) {
+    $kv = array();
+    $seen = array();
+    h_db_collect_kv($file, $kv, $seen, 0);
+    $c = array(
+        'driver' => h_kv_pick($kv, array('db_driver', 'dbdriver', 'db_type')),
+        'host'   => h_kv_pick($kv, array('db_host', 'db_hostname', 'dbhost', 'db_server', 'db_ip', 'dbip', 'db_addr', 'mysql_host', 'mysql_server', 'mysql_ip', 'g5_mysql_host', 'hostname', 'host', 'server')),
+        'port'   => h_kv_pick($kv, array('db_port', 'dbport', 'mysql_port', 'port')),
+        'user'   => h_kv_pick($kv, array('db_user', 'db_username', 'db_userid', 'db_id', 'dbid', 'dbuser', 'db_login', 'mysql_user', 'mysql_id', 'mysql_userid', 'g5_mysql_user', 'username', 'userid', 'user')),
+        'pass'   => h_kv_pick($kv, array('db_pass', 'db_password', 'db_passwd', 'db_pw', 'db_pwd', 'dbpw', 'dbpwd', 'dbpass', 'dbpasswd', 'mysql_password', 'mysql_pass', 'mysql_pw', 'mysql_pwd', 'g5_mysql_password', 'password', 'passwd', 'pass', 'pwd', 'pw')),
+        'name'   => h_kv_pick($kv, array('db_name', 'db_database', 'db_dbname', 'dbname', 'db_db', 'mysql_db', 'mysql_dbname', 'mysql_database', 'mysql_name', 'g5_mysql_db', 'database', 'dbase', 'db')),
+        'prefix' => h_kv_pick($kv, array('db_prefix', 'dbprefix', 'table_prefix', 'prefix')),
+    );
+    $sel = h_kv_pick($kv, array('db_select_name'));
+    if ($sel !== null) {
+        if ($c['name'] !== null && $c['name'] !== $sel) $c['alt_name'] = $c['name'];
+        $c['name'] = $sel;
+    }
+    if ($c['user'] === null || $c['name'] === null) return null;
+    if ($c['host'] === null)   $c['host'] = 'localhost';
+    if ($c['pass'] === null)   $c['pass'] = '';
+    if ($c['prefix'] === null) $c['prefix'] = '';
+    if ($c['driver'] === null || strpos(strtolower($c['driver']), 'mysql') === false) $c['driver'] = 'mysqli';
+    return h_db_normalize($c);
+}
+
+function h_db_collect_kv($file, &$kv, &$seen, $depth) {
+    $real = @realpath($file);
+    if ($real === false || isset($seen[$real]) || count($seen) >= 8) return;
+    $seen[$real] = true;
+    $src = @file_get_contents($real, false, null, 0, 262144);
+    if ($src === false || $src === '') return;
+    if (preg_match('/\.php\d?$/i', $real)) $src = h_strip_php_comments($src);   // 주석 처리된 개발·로컬 접속 줄을 빼야 한다
+
+    // mysqli_connect("host", "user", "pass", "db", "port") · new mysqli(…) · mysql_connect(…) — 인자로 바로 넘기는 사이트
+    if (preg_match('/(mysqli_connect|mysql_connect|mysqli_real_connect|new\s+mysqli)\s*\(([^;]*?)\)\s*(?:or\b[^;]*)?;/i', $src, $m)) {
+        preg_match_all('/\'([^\']*)\'|"([^"]*)"|(\d+)|(\$[A-Za-z0-9_]+)/', $m[2], $tk, PREG_SET_ORDER);
+        if (stripos($m[1], 'real_connect') !== false) array_shift($tk);   // 첫 인자는 $link
+        $vals = array();
+        foreach ($tk as $t) {
+            $c = $t[0][0];
+            if ($c === '$') { $vals = array(); break; }   // 변수로 넘기면 아래 이름 규칙이 읽는다
+            $vals[] = $c === "'" ? $t[1] : ($c === '"' ? $t[2] : $t[3]);
+        }
+        foreach (array('db_host', 'db_user', 'db_pass', 'db_name', 'db_port') as $i => $n) {
+            if (isset($vals[$i]) && !isset($kv[$n])) $kv[$n] = $vals[$i];
+        }
+    }
+    // new PDO('mysql:host=…;port=…;dbname=…', 'user', 'pass')
+    if (preg_match('/new\s+PDO\s*\(\s*[\'"]mysql:([^\'"]*)[\'"]\s*(?:,\s*[\'"]([^\'"]*)[\'"])?\s*(?:,\s*[\'"]([^\'"]*)[\'"])?/i', $src, $m)) {
+        foreach (explode(';', $m[1]) as $part) {
+            $p = explode('=', $part, 2);
+            if (count($p) === 2 && !isset($kv['db_' . strtolower(trim($p[0]))])) $kv['db_' . strtolower(trim($p[0]))] = trim($p[1]);
+        }
+        if (isset($kv['db_dbname']) && !isset($kv['db_name'])) $kv['db_name'] = $kv['db_dbname'];
+        if (isset($m[2]) && !isset($kv['db_user'])) $kv['db_user'] = $m[2];
+        if (isset($m[3]) && !isset($kv['db_pass'])) $kv['db_pass'] = $m[3];
+    }
+    // mysqli_select_db($conn, 'name') — 접속 뒤 DB 를 바꾸는 사이트는 이쪽이 실제 DB 다.
+    // 단, 옛 이름이 남아 서버에선 실패(반환값 무시)하고 connect 때 DB 를 그대로 쓰는 사이트가 있어 덮어쓰지 않고 따로 둔다
+    if (preg_match('/(?:mysqli_select_db\s*\(\s*\$[A-Za-z0-9_]+\s*,|mysql_select_db\s*\()\s*[\'"]([^\'"]+)[\'"]/i', $src, $m)) {
+        if (!isset($kv['db_select_name'])) $kv['db_select_name'] = $m[1];
+    }
+
+    $q = '(?:\'([^\']*)\'|"([^"]*)")';
+    $pats = array(
+        '/define\s*\(\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*,\s*' . $q . '/',
+        '/\$([A-Za-z0-9_]+)\s*=\s*' . $q . '\s*;/',
+        '/\[\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*\]\s*=\s*' . $q . '/',
+        '/[\'"]([A-Za-z0-9_]+)[\'"]\s*=>\s*' . $q . '/',
+    );
+    if (!preg_match('/\.php\d?$/i', $real)) $pats[] = '/^[ \t]*([A-Za-z0-9_.]+)[ \t]*[=:][ \t]*["\']?([^"\'\r\n;#]*)/m';
+    foreach ($pats as $re) {
+        if (!preg_match_all($re, $src, $m, PREG_SET_ORDER)) continue;
+        foreach ($m as $x) {
+            $k = strtolower(str_replace('.', '_', $x[1]));
+            $v = isset($x[3]) ? $x[3] : $x[2];
+            if (!isset($kv[$k])) $kv[$k] = trim($v);
+        }
+    }
+
+    if ($depth >= 2) return;
+    if (!preg_match_all('/[\'"]([^\'"\r\n]{1,200}\.(?:php\d?|inc|ini|conf|cfg|env))[\'"]/i', $src, $m)) return;
+    $base = dirname($real);
+    $root = h_doc_root();
+    foreach (array_unique($m[1]) as $p) {
+        $p = str_replace('\\', '/', $p);
+        $cands = preg_match('#^(/|[A-Za-z]:)#', $p)
+            ? array($p, $base . $p, $root . $p)
+            : array($base . '/' . $p, $root . '/' . $p, dirname($root) . '/' . $p);
+        foreach ($cands as $c) {
+            if (@is_file($c) && @is_readable($c)) { h_db_collect_kv($c, $kv, $seen, $depth + 1); break; }
+        }
+    }
+}
+
+function h_strip_php_comments($src) {
+    if (function_exists('token_get_all')) {
+        $out = '';
+        foreach (@token_get_all($src) as $t) {
+            if (is_array($t)) {
+                if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT) continue;
+                $out .= $t[1];
+            } else {
+                $out .= $t;
+            }
+        }
+        return $out;
+    }
+    $src = preg_replace('#/\*.*?\*/#s', '', $src);
+    return preg_replace('#^\s*(//|\#).*$#m', '', $src);
+}
+
+function h_kv_pick($kv, $names) {
+    foreach ($names as $n) {
+        if (isset($kv[$n]) && $kv[$n] !== '') return $kv[$n];
+    }
+    return null;
 }
 
 function h_db_config_ci3($file) {
@@ -336,8 +496,17 @@ function h_check_db($cms, $CFG) {
     $cfg = h_db_config($cms);
 
     if (!$cfg) {
+        if (!$cms['config']) {
+            // 설정 파일 위치를 모르는 사이트 — 장애가 아니므로 경고로 올리지 않는다. 필요하면 $CFG['db_config'] 로 지정
+            $r['status'] = 'skip';
+            $r['note']   = 'db config not located (set $CFG[db_config] to enable)';
+            return $r;
+        }
         $r['status'] = 'warn';
         $r['error']  = 'db config not found or unreadable';
+        $root = h_doc_root();
+        $r['tried']  = array_map(function ($f) use ($root) { return strpos($f, $root . '/') === 0 ? substr($f, strlen($root) + 1) : $f; },
+                                 isset($cms['configs']) ? $cms['configs'] : array($cms['config']));
         return $r;
     }
     $r['driver'] = $cfg['driver'];
@@ -362,11 +531,17 @@ function h_check_db($cms, $CFG) {
         $link = @mysqli_init();
         $connected = false;
         $errno = 0; $errmsg = '';
+        foreach (h_db_names($cfg) as $ni => $dbname) {
+        if ($ni > 0) {
+            if (!in_array($errno, array(1044, 1049), true)) break;
+            $link = @mysqli_init();
+            $errno = 0; $errmsg = '';
+        }
         if ($link) {
             @mysqli_options($link, MYSQLI_OPT_CONNECT_TIMEOUT, $tmo);
             if (defined('MYSQLI_OPT_READ_TIMEOUT')) @mysqli_options($link, MYSQLI_OPT_READ_TIMEOUT, $tmo + 5);
             try {
-                $connected = @mysqli_real_connect($link, $cfg['host'], $cfg['user'], $cfg['pass'], $cfg['name'], $cfg['port']);
+                $connected = @mysqli_real_connect($link, $cfg['host'], $cfg['user'], $cfg['pass'], $dbname, $cfg['port']);
             } catch (Exception $e) {
                 $connected = false;
                 $errmsg = $e->getMessage();
@@ -377,6 +552,8 @@ function h_check_db($cms, $CFG) {
                 if (!$errmsg) $errmsg = (string)mysqli_connect_error();
             }
         }
+        if ($connected) { $r['name'] = $dbname; break; }
+        }
         if (!$connected) {
             $r['status']     = 'fail';
             $r['connect_ms'] = h_ms($t0);
@@ -386,11 +563,21 @@ function h_check_db($cms, $CFG) {
         }
     } elseif (class_exists('PDO')) {
         try {
-            $dsn = 'mysql:host=' . $cfg['host'] . ';port=' . $cfg['port'] . ';dbname=' . $cfg['name'];
-            $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], array(
-                PDO::ATTR_TIMEOUT => $tmo,
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_SILENT,
-            ));
+            $names = h_db_names($cfg);
+            foreach ($names as $ni => $dbname) {
+                try {
+                    $dsn = 'mysql:host=' . $cfg['host'] . ';port=' . $cfg['port'] . ';dbname=' . $dbname;
+                    $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], array(
+                        PDO::ATTR_TIMEOUT => $tmo,
+                        PDO::ATTR_ERRMODE => PDO::ERRMODE_SILENT,
+                    ));
+                    $r['name'] = $dbname;
+                    break;
+                } catch (Exception $e) {
+                    $no = isset($e->errorInfo[1]) ? (int)$e->errorInfo[1] : (int)$e->getCode();
+                    if ($ni + 1 >= count($names) || !in_array($no, array(1044, 1049), true)) throw $e;
+                }
+            }
         } catch (Exception $e) {
             $r['status']     = 'fail';
             $r['connect_ms'] = h_ms($t0);
@@ -463,6 +650,12 @@ function h_check_db($cms, $CFG) {
     return $r;
 }
 
+function h_db_names($cfg) {
+    $names = array($cfg['name']);
+    if (!empty($cfg['alt_name']) && $cfg['alt_name'] !== $cfg['name']) $names[] = $cfg['alt_name'];
+    return $names;
+}
+
 function h_db_kv($link, $pdo, $sql) {
     $out = array();
     try {
@@ -483,6 +676,7 @@ function h_db_kv($link, $pdo, $sql) {
 function h_db_reason($errno, $msg) {
     $map = array(
         1040 => 'Too many connections — 동시접속 한도 초과',
+        1044 => 'Access denied to database — 계정에 해당 DB 권한 없음(DB 이름 확인)',
         1045 => 'Access denied — 계정/비밀번호 변경됨',
         1049 => 'Unknown database — DB 삭제 또는 이름 변경',
         2002 => 'Connection refused — DB 서버 다운 또는 소켓 경로 오류',
@@ -500,6 +694,9 @@ function h_db_reason($errno, $msg) {
 function h_check_errorlog($root, $cms, $CFG) {
     $r = array('status' => 'ok', 'recent' => 0);
     $since = time() - ($CFG['error_window'] * 60);
+    $given = isset($_GET['since']) && ctype_digit((string)$_GET['since']) ? (int)$_GET['since'] : 0;
+    $bySince = $given > time() - 7 * 86400 && $given <= time() + 300;
+    if ($bySince) $since = $given;
 
     $files = array();
     if ($CFG['error_log']) {
@@ -533,7 +730,8 @@ function h_check_errorlog($root, $cms, $CFG) {
                   || (strpos($ln, 'CRITICAL -') !== false);
             if (!$isErr) continue;
             $ts = h_line_time($ln);
-            if ($ts !== null && $ts < $since) continue;
+            if ($ts === null && $bySince) continue;   // 시각 없는 줄은 매 점검마다 다시 세게 되므로 직전 점검 기준일 땐 뺀다
+            if ($ts !== null && $ts <= $since) continue;
             $r['recent']++;
             $last = $ln;
         }
@@ -541,7 +739,7 @@ function h_check_errorlog($root, $cms, $CFG) {
     if ($r['recent'] > 0) {
         $r['status'] = 'warn';
         $r['last']   = substr(preg_replace('/\s+/', ' ', $last), 0, 300);
-        $r['window'] = $CFG['error_window'] . 'm';
+        $r['window'] = $bySince ? 'since ' . date('Y-m-d H:i:s', $since) : $CFG['error_window'] . 'm';
     }
     if ($r['recent'] >= 20) $r['status'] = 'fail';
     return $r;
@@ -559,8 +757,10 @@ function h_tail($file, $bytes) {
 
 function h_line_time($ln) {
     // "[14-Sep-2026 10:11:12 Asia/Seoul]" 또는 "ERROR - 2026-09-14 10:11:12"
-    if (preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2})/', $ln, $m)) {
-        $t = strtotime($m[1]);
+    // 시간대 이름(Asia/Seoul·UTC)이 붙어 있으면 함께 넘긴다 — 사이트 PHP 기본 시간대와 로그 시간대가 다르면 since 비교가 어긋난다
+    if (preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2}(?: [A-Za-z_]+(?:\/[A-Za-z_]+)*)?)\]/', $ln, $m)
+        || preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2})/', $ln, $m)) {
+        $t = @strtotime($m[1]);
         return $t ? $t : null;
     }
     if (preg_match('/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/', $ln, $m)) {

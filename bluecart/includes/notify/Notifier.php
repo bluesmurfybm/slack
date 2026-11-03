@@ -29,16 +29,23 @@ final class Notifier
         $channelPosted = false;
         $delivered     = ['EMAIL' => [], 'SLACK_DM' => []];
 
+        $portalTo = [];
+
         foreach ($targets as $role) {
             // 검토 대기·반려 건의 철회는 구매담당자와 상관이 없다. 아직 넘어온 적이 없다.
             if ($event === 'REQUEST_CANCELED' && $role === 'BUYER' && $from !== 'APPROVED') {
                 continue;
             }
+            $recipients = RoleAssign::resolveRecipients($role, $request);
+            foreach ($recipients as $r) {
+                if (!empty($r['email'])) {
+                    $portalTo[] = (string)$r['email'];
+                }
+            }
             $channels = Setting::enabledChannels($event, $role);
             if (!$channels) {
                 continue;
             }
-            $recipients = RoleAssign::resolveRecipients($role, $request);
             if (!$recipients) {
                 self::log($request['id'], $event, $role, 'EMAIL', '-', null, null,
                           'SKIPPED', '수신 대상이 배정되어 있지 않습니다.');
@@ -75,6 +82,32 @@ final class Notifier
                     error_log('[BlueCart] notify failed: ' . $e->getMessage());
                 }
             }
+        }
+
+        self::sendPortal($event, $request, $actor, $portalTo);
+    }
+
+    /** 포털 알림을 누르면 열 주소(포털 루트 기준). 읽음 처리도 이 주소로 맞춘다. */
+    public static function portalUrl(int $requestId): string
+    {
+        return 'bluecart/index.php?id=' . $requestId;
+    }
+
+    /** 요청 상세를 열면 그 요청의 포털 알림을 읽음으로 */
+    public static function portalSeen(int $requestId): void
+    {
+        if (BC_PORTAL_ROOT === '' || !function_exists('current_portal_user')) {
+            return;
+        }
+        try {
+            $me = current_portal_user();
+            if (empty($me['id'])) {
+                return;
+            }
+            require_once BC_PORTAL_ROOT . '/core/push.php';
+            push_inbox_mark_read_url((int)$me['id'], 'bluecart.', self::portalUrl($requestId));
+        } catch (Throwable $e) {
+            error_log('[BlueCart] portal seen failed: ' . $e->getMessage());
         }
     }
 
@@ -246,6 +279,31 @@ final class Notifier
             self::markSent($logId);
         } catch (Throwable $e) {
             self::markFailed($logId, $e->getMessage());
+        }
+    }
+
+    /**
+     * 포털 알림함·웹 푸시(종류 bluecart.flow). 메일·슬랙 설정과 상관없이 이 이벤트를 받을 사람 전원에게 간다 —
+     * 받을지는 사람마다 포털 마이페이지에서 정한다. 금액은 싣지 않는다(잠금 화면에도 뜬다).
+     */
+    private static function sendPortal(string $event, array $req, array $actor, array $to): void
+    {
+        if (BC_PORTAL_ROOT === '' || !bc_config('notify.enabled', true) || !$to) {
+            return;
+        }
+        try {
+            require_once BC_PORTAL_ROOT . '/core/push.php';
+            push_send([
+                'kind' => 'bluecart.flow',
+                'title' => BC_EVENT[$event] . ' · ' . $req['item_name'],
+                'body' => $req['req_no'] . ' · ' . $req['requester_name'] . ' · ' . bc_status_label($req['status']),
+                'url' => self::portalUrl((int)$req['id']),
+                'to' => array_values(array_unique($to)),
+                'except' => [(string)($actor['email'] ?? '')],
+                'tag' => 'bluecart-' . (int)$req['id'],
+            ]);
+        } catch (Throwable $e) {
+            error_log('[BlueCart] portal push failed: ' . $e->getMessage());
         }
     }
 
