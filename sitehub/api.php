@@ -23,6 +23,7 @@
  *        → Slack 리스트에 먼저 쓰고(개인 토큰) DB 반영. history_write.php
  *   POST {action:auto_resolve}                     → 미매칭 자동 정리 계획 (기존 사이트 연결 / 새 사이트 등록 / 건너뜀)
  *   POST {action:auto_resolve, apply:1, exclude:[표기…]} → 적용
+ *   POST {action:notice_seen, site_id} → 그 사이트의 변경 알림을 읽음으로 (notice_lib.php), 남은 안 읽은 수
  *   ── BLUMO 감시 (monitor_*.php) ──
  *   GET  ?monitors=1                 → 원 상태만 (목록이 1분마다)
  *   GET  ?monitor_board=1            → 감시 주소 전체 + 상태 + BLUMO 상태 (monitor.php 대시보드)
@@ -183,13 +184,20 @@ try {
         }
         $sites = sitehub_load_sites($pdo, null, true);
         $staff = $pdo->query("SELECT email, name FROM portal_users ORDER BY name, email")->fetchAll();
-        sitehub_out(['ok' => true, 'sites' => $sites, 'staff' => $staff, 'meta' => sitehub_meta($pdo, $me), 'seeded' => $seeded]);
+        sitehub_out(['ok' => true, 'sites' => $sites, 'staff' => $staff, 'meta' => sitehub_meta($pdo, $me), 'seeded' => $seeded,
+                     'notice' => sitehub_notice_unread((int)$me['id']) ?: new stdClass()]);
     }
 
     $in     = json_decode(file_get_contents('php://input'), true) ?: [];
     $action = (string)($in['action'] ?? '');
     $siteId = (int)($in['site_id'] ?? 0);
     $COLS   = sitehub_cols();
+    if (!in_array($action, ['auto_resolve', 'blumo_import'], true)) sitehub_notice_start($me);   // 여러 사이트를 한꺼번에 바꿔 알림이 쏟아진다
+
+    if ($action === 'notice_seen') {
+        sitehub_notice_seen((int)$me['id'], $siteId);
+        sitehub_out(['ok' => true, 'unread' => sitehub_notice_count((int)$me['id'])]);
+    }
 
     // ── 마스터(lab_sites) ──────────────────────────────────────────────────
 
@@ -713,6 +721,7 @@ try {
             if ($hid === '') throw new Exception('잘못된 이력 id');
             $siteId = (int)sitehub_history_delete($pdo, $me, $hid);
         }
+        sitehub_notice_add($siteId, ['history_add' => 'create', 'history_update' => 'update', 'history_delete' => 'delete'][$action], 'history', null, '');
         sitehub_out(['ok' => true, 'rows' => $siteId > 0 ? sitehub_history_rows($pdo, 'site_id = ? AND archived = 0', [$siteId]) : [],
                      'meta' => sitehub_meta($pdo, $me), 'site' => $siteId > 0 ? sitehub_load_site($pdo, $siteId) : null]);
     }
@@ -720,5 +729,6 @@ try {
     throw new Exception('알 수 없는 action');
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    sitehub_notice_drop();
     sitehub_out(['ok' => false, 'error' => $e->getMessage()]);
 }

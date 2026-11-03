@@ -12,6 +12,7 @@ function openDrawer(id, tab, push = true) {
   if (view !== APP.view) { APP.view = view; APP.filter.status = ""; buildFilters(); render(); }
   APP.open.id = s.id;
   if (tab) APP.open.tab = tab;
+  noticeSeen(s.id);
   if (!TABS.some(t => t[0] === APP.open.tab)) APP.open.tab = "basic";
   writeURL(push && !wasOpen);
   const d = $("drawer");
