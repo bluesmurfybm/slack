@@ -117,9 +117,11 @@ final class SourceUploader
      * **같은 검사**를 거치게 하려고 떼어 냈다. 형식·크기·내용 대조는 여기 한 곳.
      * DB 에 못 넣으면 부른 쪽이 @unlink($r['path']) 로 치운다.
      *
+     * $projectId 대신 'idea-12' 같은 폴더 이름도 받는다 (033 — 아이디어 참고 자료).
+     *
      * @return array{name:string, ext:string, size:int, mime:string, path:string}
      */
-    public function saveFile(int $projectId, array $file): array
+    public function saveFile(int|string $projectId, array $file): array
     {
         $this->assertUploadOk($file);
 
@@ -169,6 +171,29 @@ final class SourceUploader
         @chmod($stored, 0640);
 
         return ['name' => $origName, 'ext' => $ext, 'size' => $size, 'mime' => $mime, 'path' => $stored];
+    }
+
+    /**
+     * 이미 저장된 파일을 다른 과업 폴더로 복사한다 (033). 아이디어를 과제·
+     * 프로젝트로 전환할 때 참고 자료 파일을 따로 가지게 하려고 쓴다 —
+     * 같은 파일을 두 행이 가리키면 한쪽을 지울 때 다른 쪽 파일이 사라진다.
+     * 실패하면 RuntimeException. 새 경로를 돌려준다.
+     */
+    public function copyStored(string $path, int $projectId): string
+    {
+        if (!is_file($path)) {
+            throw new RuntimeException('원본 파일이 저장소에 없습니다.');
+        }
+        $dir = $this->dirFor($projectId);
+        $this->ensureDir($dir);
+        $ext  = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $hash = @hash_file('sha256', $path) ?: '';
+        $dest = $dir . '/' . substr($hash, 0, 16) . '_' . bin2hex(random_bytes(4)) . ($ext !== '' ? '.' . $ext : '');
+        if (!@copy($path, $dest)) {
+            throw new RuntimeException('파일을 복사하지 못했습니다.');
+        }
+        @chmod($dest, 0640);
+        return $dest;
     }
 
     /** $_FILES['files'] 를 한 파일씩 펼친다 (2026-10-19 공개 — R&D 첨부도 쓴다). */
@@ -323,7 +348,7 @@ final class SourceUploader
     }
 
     /** 프로젝트별 하위 폴더. 한 폴더에 파일이 수천 개 쌓이지 않게 나눈다. */
-    private function dirFor(int $projectId): string
+    private function dirFor(int|string $projectId): string
     {
         return rtrim(BS_UPLOAD_DIR, '/\\') . '/' . date('Y') . '/' . $projectId;
     }

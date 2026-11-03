@@ -8,6 +8,8 @@
  * POST api/idea.php?act=create                올리기
  * POST api/idea.php?act=update                고치기 (올린 사람 — 채택 전까지)
  * POST api/idea.php?act=delete
+ * POST api/idea.php?act=upload_source       참고 자료 — 파일(multipart files[]) | 링크 (033)
+ * POST api/idea.php?act=delete_source
  * POST api/idea.php?act=rate                  평가 (가치·실현 가능성 1~5 + 한줄 의견)
  * POST api/idea.php?act=unrate
  * POST api/idea.php?act=comment               피드백·답글
@@ -127,6 +129,44 @@ bs_route(bs_param_str('act', 'board'), [
         $id   = bs_idea_id_param();
         $ideas->softDelete($id, $user);
         bs_json_ok(['deleted' => $id, 'message' => '아이디어를 지웠습니다.']);
+    },
+
+    // =================================================================
+    // 참고 자료 (033) — 파일 · 링크. 화면은 프로젝트·R&D 와 같은 패널
+    // (assign.js initSourcePanel)이라 번호를 project_id 로 보낸다. 둘 다 받는다.
+    // 권한은 IdeaRepo 가 본다(본문을 고칠 수 있는 사람).
+    // =================================================================
+
+    'upload_source' => function () use ($ideas): void {
+        $user = bs_begin_write();
+        $id   = bs_param_int('id', 0) ?: bs_param_int('project_id', 0);
+        if (!$id) {
+            bs_json_error('MISSING_PARAM', '아이디어 번호가 없습니다.', 400);
+        }
+        switch (bs_param_str('source_type', 'file')) {
+            case 'file':
+                if (empty($_FILES['files'])) {
+                    bs_json_error('MISSING_PARAM', '선택된 파일이 없습니다.', 400);
+                }
+                $r   = $ideas->addFiles((int)$id, $_FILES['files'], $user);
+                $msg = count($r['saved']) . '개를 올렸습니다.'
+                     . ($r['failed'] ? ' ' . count($r['failed']) . '개는 실패했습니다.' : '');
+                bs_json_ok(['saved' => $r['saved'], 'failed' => $r['failed'],
+                            'sources' => bs_idea_sources($ideas, (int)$id), 'message' => $msg]);
+                // no break — bs_json_ok 이 exit 한다
+            case 'link':
+                $ideas->addLink((int)$id, bs_param_str('url'), bs_param_str('title'), $user);
+                bs_json_ok(['saved' => [], 'failed' => [], 'sources' => bs_idea_sources($ideas, (int)$id),
+                            'message' => '링크를 등록했습니다.']);
+            default:
+                bs_json_error('INVALID_ARGUMENT', '아이디어 자료는 파일과 링크만 받습니다.', 400);
+        }
+    },
+
+    'delete_source' => function () use ($ideas): void {
+        bs_begin_write();
+        $id = $ideas->deleteSource((int)bs_param_int('source_id', 0));
+        bs_json_ok(['sources' => bs_idea_sources($ideas, $id), 'message' => '자료를 지웠습니다.']);
     },
 
     // =================================================================
@@ -301,6 +341,11 @@ function bs_read_promote_input(): array
         $out['recruiting'] = in_array(bs_param_str('recruiting'), ['1', 'true'], true);
     }
     return $out;
+}
+
+function bs_idea_sources(IdeaRepo $ideas, int $id): array
+{
+    return array_map('bs_present_idea_source', $ideas->sources($id));
 }
 
 function bs_idea_promoter(PDO $pdo, IdeaRepo $ideas): PromoteService

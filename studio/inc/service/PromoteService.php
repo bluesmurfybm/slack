@@ -17,6 +17,9 @@
  * └──────────────────────────────────────────────────────────────────┘
  *
  * 알림은 트랜잭션이 끝난 뒤에 보낸다 — 알림이 실패해도 올리기는 끝난다.
+ *
+ * 아이디어의 참고 자료(033)는 새 과제·프로젝트의 **참고 자료로 복사**한다.
+ * 파일도 따로 복사한다 — 한쪽에서 지워도 다른 쪽은 남는다.
  */
 
 declare(strict_types=1);
@@ -50,6 +53,7 @@ final class PromoteService
             throw new DomainException('이 아이디어는 지금 R&D 과제로 올릴 수 없습니다.');
         }
         $domainIds = array_column($this->ideas->domainsOf([$ideaId])[$ideaId] ?? [], 'id');
+        $copied    = [];   // 참고 자료 파일 복사본 — 되돌리면 지운다
 
         $this->pdo->beginTransaction();
         try {
@@ -66,11 +70,13 @@ final class PromoteService
                 'load_cap'     => $data['load_cap']  ?? null,
             ], $actor);
             $this->setOrigin($rndId, $ideaId, null);
+            $this->ideas->copySourcesTo($ideaId, $rndId, $actor, $copied);
             $code = $this->codeOf($rndId);
             $this->ideas->markPromoted($ideaId, $rndId, "R&D 과제 $code", $actor);
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
+            $this->unlinkAll($copied);
             throw $e;
         }
 
@@ -89,16 +95,19 @@ final class PromoteService
         if (!$idea || !bs_idea_can_promote_project($idea)) {
             throw new DomainException('이 아이디어는 지금 프로젝트로 올릴 수 없습니다.');
         }
+        $copied = [];   // 참고 자료 파일 복사본 — 되돌리면 지운다
 
         $this->pdo->beginTransaction();
         try {
             $pid = $this->projects->create($this->projectData($data, $idea['title'], $this->summaryOf($idea)), $actor);
             $this->setOrigin($pid, $ideaId, null);
+            $this->ideas->copySourcesTo($ideaId, $pid, $actor, $copied);
             $code = $this->codeOf($pid);
             $this->ideas->markPromoted($ideaId, $pid, "프로젝트 $code", $actor);
             $this->pdo->commit();
         } catch (Throwable $e) {
             $this->pdo->rollBack();
+            $this->unlinkAll($copied);
             throw $e;
         }
 
@@ -170,6 +179,16 @@ final class PromoteService
         }
         $parts[] = '— 출발 아이디어 ' . $idea['code'];
         return implode("\n\n", $parts);
+    }
+
+    /** 트랜잭션이 되돌려졌을 때 복사해 둔 파일을 치운다. 행은 롤백으로 이미 없다. */
+    private function unlinkAll(array $paths): void
+    {
+        foreach ($paths as $p) {
+            if (is_file($p)) {
+                @unlink($p);
+            }
+        }
     }
 
     private function setOrigin(int $projectId, ?int $ideaId, ?int $rndId): void

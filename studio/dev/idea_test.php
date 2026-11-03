@@ -46,6 +46,16 @@ final class IdeaClient
         return $this->req("/studio/api/$api.php?act=$act", ['json' => $body, 'csrf' => true]);
     }
 
+    /** multipart 로 파일 올리기 (033 참고 자료). $files 는 [경로 => 올릴 이름]. */
+    public function upload(string $act, array $fields, array $files): array
+    {
+        $i = 0;
+        foreach ($files as $path => $name) {
+            $fields['files[' . $i++ . ']'] = new CURLFile($path, '', $name);
+        }
+        return $this->req("/studio/api/idea.php?act=$act", ['form' => $fields, 'csrf' => true]);
+    }
+
     public function req(string $path, array $o = []): array
     {
         $ch = curl_init($this->base . $path);
@@ -56,6 +66,10 @@ final class IdeaClient
             CURLOPT_TIMEOUT        => 30,
         ]);
         $h = [];
+        if (!empty($o['form'])) {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $o['form']);
+        }
         if (!empty($o['json'])) {
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($o['json'], JSON_UNESCAPED_UNICODE));
@@ -132,6 +146,17 @@ foreach ([[$ADMIN, '시험관리자'], [$USER, '시험사용자'], [$U2, '시험
 $pdo->prepare('UPDATE bs_member SET can_create_project = 0 WHERE user_id = ?')->execute([$USER]);
 
 $cleanup = static function () use ($pdo, $ADMIN, $USER, $U2, $U3): void {
+    // 표를 지우기 전에 디스크의 첨부부터 (033). 행은 FK 로 따라 지워진다.
+    $files = [];
+    if ($pdo->query("SHOW TABLES LIKE 'bs\\_idea\\_source'")->fetch()) {
+        $files = $pdo->query("SELECT s.file_path FROM bs_idea_source s JOIN bs_idea i ON i.id = s.idea_id
+                               WHERE i.title LIKE '[시험아이디어]%' AND s.file_path IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
+    }
+    $files = array_merge($files, $pdo->query("SELECT s.file_path FROM bs_project_source s JOIN bs_project p ON p.id = s.project_id
+                               WHERE p.name LIKE '[시험아이디어]%' AND s.file_path IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN));
+    foreach ($files as $f) {
+        @unlink((string)$f);
+    }
     $pdo->exec("UPDATE bs_project SET origin_idea_id = NULL, origin_project_id = NULL WHERE name LIKE '[시험아이디어]%'");
     $pdo->exec("DELETE FROM bs_project WHERE name LIKE '[시험아이디어]%'");
     $pdo->exec("DELETE FROM bs_idea WHERE title LIKE '[시험아이디어]%'");
@@ -230,6 +255,56 @@ ok('올린 사람은 고친다', $r['status'] === 200 && (d($r)['idea']['effect'
 ok('넘어오지 않은 칸은 그대로', (d($r)['idea']['proposal'] ?? '') === '3회 결석 시 담당 교수에게 알림');
 
 // =====================================================================
+echo "\n[3-1] 참고 자료 — 파일 · 링크 (033)\n";
+// =====================================================================
+$png = sys_get_temp_dir() . '/bs_idea_test.png';
+file_put_contents($png, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='));
+$fake = sys_get_temp_dir() . '/bs_idea_test_fake.pdf';
+file_put_contents($fake, 'not a pdf');
+
+$r = $u2->upload('upload_source', ['id' => $A, 'source_type' => 'file'], [$png => '화면.png']);
+ok('★ 남의 아이디어에는 못 붙인다', $r['status'] === 400, err($r));
+$r = $user->upload('upload_source', ['id' => $A, 'source_type' => 'file'], [$png => '화면.png', $fake => '가짜.pdf']);
+ok('올린 사람은 파일을 붙인다', $r['status'] === 200 && count(d($r)['saved'] ?? []) === 1, err($r));
+ok('★ 내용이 확장자와 다르면 그 파일만 실패', count(d($r)['failed'] ?? []) === 1 && (d($r)['failed'][0]['name'] ?? '') === '가짜.pdf',
+   json_encode(d($r)['failed'] ?? null, JSON_UNESCAPED_UNICODE));
+$SRC = (int)(d($r)['sources'][0]['id'] ?? 0);
+$s0  = d($r)['sources'][0] ?? [];
+ok('이미지는 보기·내려받기를 준다', ($s0['viewable'] ?? false) === true && ($s0['download_url'] ?? '') === "api/idea_file.php?id=$SRC");
+ok('★ 응답에 저장 경로가 없다', !str_contains($r['body'], 'file_path') && !str_contains($r['body'], 'var/source'));
+$r = $user->post('upload_source', ['id' => $A, 'source_type' => 'link', 'url' => 'javascript:alert(1)']);
+ok('http(s) 아닌 링크는 400', $r['status'] === 400, err($r));
+$r = $user->post('upload_source', ['id' => $A, 'source_type' => 'link', 'url' => 'https://www.figma.com/file/abc/시안', 'title' => '시안']);
+ok('링크를 붙인다', $r['status'] === 200 && count(d($r)['sources'] ?? []) === 2, err($r));
+ok('피그마 주소는 피그마로', (d($r)['sources'][1]['kind'] ?? '') === 'figma');
+$LINK = (int)(d($r)['sources'][1]['id'] ?? 0);
+
+$dl = $u2->req("/studio/api/idea_file.php?id=$SRC");
+ok('누구나 내려받는다', $dl['status'] === 200 && $dl['body'] === file_get_contents($png), (string)$dl['status']);
+$dl = $u2->req("/studio/api/idea_file.php?id=$SRC&inline=1");
+ok('이미지는 바로 보기', $dl['status'] === 200 && $dl['body'] === file_get_contents($png));
+ok('로그인 안 하면 못 받는다', $anon->req("/studio/api/idea_file.php?id=$SRC")['status'] === 401);
+ok('링크 자료는 내려받을 파일이 없다', $u2->req("/studio/api/idea_file.php?id=$LINK")['status'] === 404);
+$g = d($u2->get('get', ['id' => $A]))['idea'] ?? [];
+ok('상세에 자료가 실린다', count($g['sources'] ?? []) === 2);
+ok('남은 자료를 고칠 수 없다고 받는다', ($g['can_source'] ?? true) === false);
+ok('★ 전환 못 하는 까닭을 준다(채택 전 남의 것)', is_string($g['promote_hint']['rnd'] ?? null) && is_string($g['promote_hint']['project'] ?? null),
+   json_encode($g['promote_hint'] ?? null, JSON_UNESCAPED_UNICODE));
+$g = d($user->get('get', ['id' => $A]))['idea'] ?? [];
+ok("올린 사람은 과제 전환이 열려 있다", array_key_exists('rnd', $g['promote_hint'] ?? []) && $g['promote_hint']['rnd'] === null && in_array('promote_rnd', $g['actions'] ?? [], true), json_encode([$g["promote_hint"] ?? null, $g["actions"] ?? null], JSON_UNESCAPED_UNICODE));
+ok('권한이 없으면 프로젝트 전환 까닭이 권한', str_contains((string)($g['promote_hint']['project'] ?? ''), '권한'));
+
+$r = $user->upload('upload_source', ['id' => $A, 'source_type' => 'file'], [$png => '지울것.png']);
+$DEL = (int)(end(d($r)['sources'])['id'] ?? 0);
+$delPath = (string)$pdo->query("SELECT file_path FROM bs_idea_source WHERE id = $DEL")->fetchColumn();
+ok('(지울 파일 하나 더)', $r['status'] === 200 && is_file($delPath));
+ok('남의 자료는 못 지운다', $u2->post('delete_source', ['source_id' => $DEL])['status'] === 400);
+$r = $user->post('delete_source', ['source_id' => $DEL]);
+clearstatcache();   // 위에서 is_file 로 본 값이 남아 있다
+ok("지우면 파일도 지운다", $r['status'] === 200 && count(d($r)['sources'] ?? []) === 2 && !is_file($delPath), count(d($r)["sources"] ?? []) . " " . $delPath . " " . (int)is_file($delPath));
+@unlink($fake);
+
+// =====================================================================
 echo "\n[4] 평가 — 두 축, 본인 것만, 셋부터 평균\n";
 // =====================================================================
 $r = $user->post('rate', ['id' => $A, 'value' => 5, 'feasibility' => 5]);
@@ -318,6 +393,8 @@ ok('상태 기록이 피드백 흐름에 남는다',
 ok('검토 의견이 보인다', (d($r)['idea']['review_note'] ?? '') === '다음 분기 과제 후보');
 $r = $user->post('update', ['id' => $A, 'title' => '[시험아이디어] 채택 뒤 고침']);
 ok('★ 채택 뒤에는 본문이 잠긴다', $r['status'] === 400, err($r));
+$r = $user->post('upload_source', ['id' => $A, 'source_type' => 'link', 'url' => 'https://example.com/late']);
+ok('★ 채택 뒤에는 자료도 잠긴다', $r['status'] === 400, err($r));
 ok('검토 결과가 올린 사람에게 간다', $unread($USER, 'studio.idea_mine') >= 3);
 
 // =====================================================================
@@ -354,6 +431,14 @@ ok('갈래가 따라간다', $row['rnd_category'] === 'enhance');
 ok('분야가 따라간다', (int)$pdo->query("SELECT COUNT(*) FROM bs_rnd_domain WHERE project_id = $RND")->fetchColumn() === 1);
 ok('개요에 아이디어 본문과 번호가 들어간다', str_contains((string)$row['summary'], '[제안]') && str_contains((string)$row['summary'], 'IDEA-'));
 ok('출발 아이디어가 이어진다', (int)$row['origin_idea_id'] === $A);
+$cp = $pdo->query("SELECT * FROM bs_project_source WHERE project_id = $RND ORDER BY id")->fetchAll();
+ok('★ 참고 자료가 과제의 참고 자료로 따라간다', count($cp) === 2 && $cp[0]['purpose'] === 'reference' && $cp[1]['url'] !== null,
+   (string)count($cp));
+$orig = (string)$pdo->query("SELECT file_path FROM bs_idea_source WHERE id = $SRC")->fetchColumn();
+ok('★ 파일은 따로 복사된다(한쪽을 지워도 남게)', is_file((string)$cp[0]['file_path']) && $cp[0]['file_path'] !== $orig && is_file($orig));
+$dl = $u2->req('/studio/api/source_download.php?id=' . (int)$cp[0]['id']);
+ok('과제 쪽에서 내려받는다', $dl['status'] === 200 && $dl['body'] === file_get_contents($png), (string)$dl['status']);
+ok('올린 사람이 그대로 남는다', $cp[0]['uploaded_by'] === $USER);
 $g = d($u2->get('get', ['id' => $A]))['idea'] ?? [];
 ok('아이디어는 과제화로', ($g['status'] ?? '') === 'promoted' && ($g['promoted']['type'] ?? '') === 'rnd', json_encode($g['promoted'] ?? null));
 ok('★ 과제화된 아이디어는 못 지운다', $user->post('delete', ['id' => $A])['status'] === 400);
@@ -405,6 +490,7 @@ ok('보드에서 빠진다', !in_array($ANON, array_column(d($u2->get('board', [
 ok('관리자는 지운 것까지 볼 수 있다',
    in_array($ANON, array_column(d($admin->get('board', ['q' => '[시험아이디어]', 'with_deleted' => 1]))['rows'] ?? [], 'id'), true));
 
+@unlink($png);
 $cleanup();
 
 echo "\n" . str_repeat('=', 29) . "\n통과 $pass / 실패 $fail\n\n";

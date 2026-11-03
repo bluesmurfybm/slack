@@ -44,6 +44,9 @@ final class IdeaRepo
         'pending'  => '검토 기다리는 순',
     ];
 
+    /** 아이디어 하나에 붙일 수 있는 참고 자료 수(파일·링크 합계). */
+    public const SOURCE_MAX = 20;
+
     public function __construct(private PDO $pdo) {}
 
     /**
@@ -165,6 +168,9 @@ final class IdeaRepo
 
         $p['promoted'] = $r['promoted_project_id'] !== null
             ? $this->projectBrief((int)$r['promoted_project_id']) : null;
+        $p['promote_hint'] = bs_idea_promote_hint($r);
+        $p['sources']      = array_map('bs_present_idea_source', $this->sources($id));
+        $p['can_source']   = self::sourcesReady($this->pdo) && bs_idea_can_edit($r);
         return $p;
     }
 
@@ -686,6 +692,220 @@ final class IdeaRepo
              UNION SELECT user_id FROM bs_idea_comment WHERE idea_id = ? AND kind = 'comment' AND deleted_at IS NULL");
         $st->execute([$id, $id]);
         return $st->fetchAll(PDO::FETCH_COLUMN);
+    }
+
+    // =================================================================
+    // 참고 자료 — 파일·링크 (033)
+    //
+    // 붙이고 지우는 사람은 본문을 고칠 수 있는 사람(bs_idea_can_edit)이다.
+    // 자료도 평가받은 본문의 일부라서 본문이 잠기면 같이 잠긴다.
+    // =================================================================
+
+    /** 033 이 이 DB 에 있는가. 없으면 화면은 예전 링크 칸 하나로 돈다. */
+    public static function sourcesReady(PDO $pdo): bool
+    {
+        static $ready = null;
+        if ($ready === null) {
+            try {
+                $ready = (bool)$pdo->query(
+                    "SELECT COUNT(*) FROM information_schema.tables
+                      WHERE table_schema = DATABASE() AND table_name = 'bs_idea_source'"
+                )->fetchColumn();
+            } catch (Throwable $e) {
+                $ready = false;
+            }
+        }
+        return $ready;
+    }
+
+    /** 자료 목록 — 원본 행(file_path 포함). 화면에는 bs_present_idea_source 로 내보낸다. */
+    public function sources(int $id): array
+    {
+        if (!self::sourcesReady($this->pdo)) {
+            return [];
+        }
+        $st = $this->pdo->prepare('SELECT * FROM bs_idea_source WHERE idea_id = ? ORDER BY id');
+        $st->execute([$id]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * 파일 올리기. 검사·저장은 프로젝트 출처와 **같은 것**(SourceUploader::saveFile).
+     * 하나가 실패해도 나머지는 올린다.
+     *
+     * @return array{saved:list<array>, failed:list<array>}
+     */
+    public function addFiles(int $id, array $files, array $actor): array
+    {
+        $this->requireSourceEdit($id);
+        require_once __DIR__ . '/ProjectRepo.php';
+        require_once __DIR__ . '/../service/SourceUploader.php';
+        $up   = new SourceUploader(new ProjectRepo($this->pdo));
+        $list = array_values(array_filter($up->filesFrom($files),
+            static fn($f) => ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE));
+        if ($list === []) {
+            throw new DomainException('선택된 파일이 없습니다.');
+        }
+        if (count($list) > BS_UPLOAD_MAX_FILES) {
+            throw new DomainException('한 번에 ' . BS_UPLOAD_MAX_FILES . '개까지 올릴 수 있습니다.');
+        }
+        $this->assertSourceRoom($id, count($list));
+
+        $saved = $failed = [];
+        foreach ($list as $file) {
+            try {
+                $f = $up->saveFile('idea-' . $id, $file);
+                try {
+                    $this->insertSource($id, [
+                        'kind' => BS_EXT_KIND[$f['ext']], 'title' => $f['name'], 'url' => null,
+                        'file_path' => $f['path'], 'mime' => $f['mime'], 'file_size' => $f['size'],
+                    ], $actor);
+                } catch (Throwable $e) {
+                    @unlink($f['path']);     // DB 에 못 넣었으면 파일도 남기지 않는다
+                    throw $e;
+                }
+                $saved[] = ['id' => (int)$this->pdo->lastInsertId(), 'name' => $f['name']];
+            } catch (DomainException | RuntimeException $e) {
+                $failed[] = ['name' => (string)($file['name'] ?? ''), 'message' => $e->getMessage()];
+            }
+        }
+        return ['saved' => $saved, 'failed' => $failed];
+    }
+
+    /** 링크 하나. 표시 이름이 비면 주소에서 만든다. */
+    public function addLink(int $id, string $url, string $title, array $actor): int
+    {
+        $this->requireSourceEdit($id);
+        $safe = $this->checkUrl($url);
+        if ($safe === null) {
+            throw new InvalidArgumentException('주소를 입력하세요.');
+        }
+        $this->assertSourceRoom($id, 1);
+        $title = trim($title);
+        if ($title === '') {
+            $host  = (string)parse_url($safe, PHP_URL_HOST);
+            $last  = basename((string)parse_url($safe, PHP_URL_PATH));
+            $title = $last !== '' ? $host . ' / ' . rawurldecode($last) : ($host ?: $safe);
+        }
+        $isFigma = str_contains(strtolower((string)parse_url($safe, PHP_URL_HOST)), 'figma.com');
+        $this->insertSource($id, [
+            'kind' => $isFigma ? 'figma' : 'url', 'title' => mb_substr($title, 0, 200), 'url' => $safe,
+            'file_path' => null, 'mime' => null, 'file_size' => null,
+        ], $actor);
+        return (int)$this->pdo->lastInsertId();
+    }
+
+    /** 자료 하나 지우기. 파일도 지운다(행 먼저). 그 아이디어 번호를 돌려준다. */
+    public function deleteSource(int $sourceId): int
+    {
+        $row = $this->sourceRow($sourceId);
+        if (!$row) {
+            throw new DomainException('자료를 찾을 수 없습니다.');
+        }
+        $this->requireSourceEdit((int)$row['idea_id']);
+        $this->pdo->prepare('DELETE FROM bs_idea_source WHERE id = ?')->execute([$sourceId]);
+        if (!empty($row['file_path']) && is_file((string)$row['file_path'])) {
+            @unlink((string)$row['file_path']);
+        }
+        return (int)$row['idea_id'];
+    }
+
+    /**
+     * 내려받기·보기용 한 건 — 그 아이디어를 볼 수 있을 때만(get() 과 같은 판정).
+     * file_path 를 포함하므로 응답에 싣지 말 것.
+     */
+    public function findSourceForView(int $sourceId): ?array
+    {
+        $row = $this->sourceRow($sourceId);
+        if (!$row) {
+            return null;
+        }
+        $idea = $this->find((int)$row['idea_id']);
+        if (!$idea || (bs_idea_is_deleted($idea) && !bs_is_admin() && !bs_idea_is_author($idea))) {
+            return null;
+        }
+        return $row;
+    }
+
+    /**
+     * 전환한 과제·프로젝트의 참고 자료로 복사한다 (033). 파일도 따로 복사해
+     * 한쪽을 지워도 다른 쪽이 남게 한다. 트랜잭션은 부르는 쪽(PromoteService)이
+     * 연다 — 실패하면 복사해 둔 파일 경로를 $copied 로 받아 치운다.
+     */
+    public function copySourcesTo(int $id, int $projectId, array $actor, array &$copied): int
+    {
+        $rows = $this->sources($id);
+        if ($rows === []) {
+            return 0;
+        }
+        require_once __DIR__ . '/ProjectRepo.php';
+        require_once __DIR__ . '/../service/SourceUploader.php';
+        $projects = new ProjectRepo($this->pdo);
+        $up       = new SourceUploader($projects);
+        $ids      = [];
+        foreach ($rows as $r) {
+            $path = null;
+            if (!empty($r['file_path'])) {
+                if (!is_file((string)$r['file_path'])) {
+                    continue;   // 저장소에서 사라진 파일 — 빈 행을 옮기지 않는다
+                }
+                $path = $copied[] = $up->copyStored((string)$r['file_path'], $projectId);
+            }
+            $ids[] = $projects->addSource($projectId, [
+                'kind'         => $r['kind'],
+                'title'        => $r['title'],
+                'url'          => $r['url'],
+                'file_path'    => $path,
+                'file_size'    => $r['file_size'],
+                'mime'         => $r['mime'],
+                // 참고 자료는 분석하지 않는다.
+                'parse_status' => 'skip',
+            ], ['id'   => $r['uploaded_by'] ?: $actor['id'],
+                'name' => $r['uploaded_by_name'] ?: ($actor['name'] ?? null)]);
+        }
+        $projects->setSourcePurpose($projectId, $ids, 'reference');
+        return count($ids);
+    }
+
+    private function sourceRow(int $sourceId): ?array
+    {
+        if (!self::sourcesReady($this->pdo)) {
+            return null;
+        }
+        $st = $this->pdo->prepare('SELECT * FROM bs_idea_source WHERE id = ?');
+        $st->execute([$sourceId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+        return $row === false ? null : $row;
+    }
+
+    private function requireSourceEdit(int $id): void
+    {
+        if (!self::sourcesReady($this->pdo)) {
+            throw new DomainException('참고 자료를 쓰려면 DB 에 033 마이그레이션을 먼저 적용해야 합니다.');
+        }
+        $idea = $this->find($id);
+        if (!$idea || !bs_idea_can_edit($idea)) {
+            throw new DomainException('이 아이디어의 자료를 고칠 수 없습니다. 올린 사람은 채택 전까지, 관리자는 전환 전까지 고칩니다.');
+        }
+    }
+
+    private function assertSourceRoom(int $id, int $adding): void
+    {
+        $st = $this->pdo->prepare('SELECT COUNT(*) FROM bs_idea_source WHERE idea_id = ?');
+        $st->execute([$id]);
+        $have = (int)$st->fetchColumn();
+        if ($have + $adding > self::SOURCE_MAX) {
+            throw new DomainException(sprintf('참고 자료는 아이디어당 %d개까지입니다. (현재 %d개)', self::SOURCE_MAX, $have));
+        }
+    }
+
+    private function insertSource(int $id, array $d, array $actor): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO bs_idea_source (idea_id, kind, title, url, file_path, mime, file_size, uploaded_by, uploaded_by_name)
+             VALUES (?,?,?,?,?,?,?,?,?)'
+        )->execute([$id, $d['kind'], $d['title'], $d['url'], $d['file_path'], $d['mime'], $d['file_size'],
+                    (string)($actor['id'] ?? ''), $actor['name'] ?? null]);
     }
 
     // =================================================================

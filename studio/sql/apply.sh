@@ -120,6 +120,7 @@ FILES="
 030_migration_url_length.sql
 031_migration_rnd_log_url.sql
 032_migration_idea.sql
+033_migration_idea_source.sql
 "
 SKIP="003_migration_soft_delete.sql 004_migration_eval_exclusion.sql"
 

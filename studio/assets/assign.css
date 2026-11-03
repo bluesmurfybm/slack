@@ -2626,6 +2626,12 @@ button.ba-help:focus-visible { outline: 2px solid var(--ba-brand); outline-offse
   color: var(--ba-ink-soft); cursor: pointer;
 }
 .ba-linkbtn:hover { color: var(--ba-brand-dk); text-decoration: underline; }
+/* 전환 패널 (2026-11-03) — 못 누르는 단추도 그리고 옆에 까닭을 적는다 */
+.ba-idea-promote__row { display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; align-items: center; margin: 8px 0; }
+.ba-idea-promote__row .ba-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.ba-idea-promote__row .ba-dim { font-size: 12px; line-height: 1.45; }
+.ba-idea-promote__foot { font-size: 12px; margin: 10px 0 0; }
+#ba-iv-body .ba-srclist { margin-top: 4px; }
 .ba-idea-cform { display: grid; gap: 8px; margin-top: 12px; }
 .ba-idea-cform textarea {
   box-sizing: border-box; width: 100%; resize: vertical; padding: 8px 10px;
