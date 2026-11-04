@@ -205,10 +205,11 @@ function h_db_config_text($file) {
         'name'   => h_kv_pick($kv, array('db_name', 'db_database', 'db_dbname', 'dbname', 'db_db', 'mysql_db', 'mysql_dbname', 'mysql_database', 'mysql_name', 'g5_mysql_db', 'database', 'dbase', 'db')),
         'prefix' => h_kv_pick($kv, array('db_prefix', 'dbprefix', 'table_prefix', 'prefix')),
     );
+    // 접속 줄의 DB 를 먼저 본다 — select_db 에 옛 이름이 남아 서버에선 실패하는 사이트가 있다(365dodream). 접속 줄에 DB 가 없을 때만 select_db 이름을 쓴다
     $sel = h_kv_pick($kv, array('db_select_name'));
-    if ($sel !== null) {
-        if ($c['name'] !== null && $c['name'] !== $sel) $c['alt_name'] = $c['name'];
-        $c['name'] = $sel;
+    if ($sel !== null && $sel !== $c['name']) {
+        if ($c['name'] === null) $c['name'] = $sel;
+        else $c['alt_name'] = $sel;
     }
     if ($c['user'] === null || $c['name'] === null) return null;
     if ($c['host'] === null)   $c['host'] = 'localhost';
@@ -224,7 +225,8 @@ function h_db_collect_kv($file, &$kv, &$seen, $depth) {
     $seen[$real] = true;
     $src = @file_get_contents($real, false, null, 0, 262144);
     if ($src === false || $src === '') return;
-    if (preg_match('/\.php\d?$/i', $real)) $src = h_strip_php_comments($src);   // 주석 처리된 개발·로컬 접속 줄을 빼야 한다
+    $isPhp = preg_match('/\.(php\d?|inc)$/i', $real) || strpos($src, '<?') !== false;
+    $src = $isPhp ? h_strip_php_comments($src) : h_strip_conf_comments($src);   // 주석 처리된 개발·로컬 접속 줄을 빼야 한다
 
     // mysqli_connect("host", "user", "pass", "db", "port") · new mysqli(…) · mysql_connect(…) — 인자로 바로 넘기는 사이트
     if (preg_match('/(mysqli_connect|mysql_connect|mysqli_real_connect|new\s+mysqli)\s*\(([^;]*?)\)\s*(?:or\b[^;]*)?;/i', $src, $m)) {
@@ -250,8 +252,7 @@ function h_db_collect_kv($file, &$kv, &$seen, $depth) {
         if (isset($m[2]) && !isset($kv['db_user'])) $kv['db_user'] = $m[2];
         if (isset($m[3]) && !isset($kv['db_pass'])) $kv['db_pass'] = $m[3];
     }
-    // mysqli_select_db($conn, 'name') — 접속 뒤 DB 를 바꾸는 사이트는 이쪽이 실제 DB 다.
-    // 단, 옛 이름이 남아 서버에선 실패(반환값 무시)하고 connect 때 DB 를 그대로 쓰는 사이트가 있어 덮어쓰지 않고 따로 둔다
+    // mysqli_select_db($conn, 'name') — 접속 줄의 DB 가 안 될 때 두 번째로 시도할 이름으로만 둔다
     if (preg_match('/(?:mysqli_select_db\s*\(\s*\$[A-Za-z0-9_]+\s*,|mysql_select_db\s*\()\s*[\'"]([^\'"]+)[\'"]/i', $src, $m)) {
         if (!isset($kv['db_select_name'])) $kv['db_select_name'] = $m[1];
     }
@@ -263,7 +264,7 @@ function h_db_collect_kv($file, &$kv, &$seen, $depth) {
         '/\[\s*[\'"]([A-Za-z0-9_]+)[\'"]\s*\]\s*=\s*' . $q . '/',
         '/[\'"]([A-Za-z0-9_]+)[\'"]\s*=>\s*' . $q . '/',
     );
-    if (!preg_match('/\.php\d?$/i', $real)) $pats[] = '/^[ \t]*([A-Za-z0-9_.]+)[ \t]*[=:][ \t]*["\']?([^"\'\r\n;#]*)/m';
+    if (!$isPhp) $pats[] = '/^[ \t]*([A-Za-z0-9_.]+)[ \t]*[=:][ \t]*["\']?([^"\'\r\n;#]*)/m';
     foreach ($pats as $re) {
         if (!preg_match_all($re, $src, $m, PREG_SET_ORDER)) continue;
         foreach ($m as $x) {
@@ -288,12 +289,13 @@ function h_db_collect_kv($file, &$kv, &$seen, $depth) {
     }
 }
 
+// 주석 · PHP 태그 바깥 글(<!-- --> 포함)을 뺀다 — 실행되지 않는 예전 접속 줄을 먼저 집어 가면 엉뚱한 DB 로 붙는다
 function h_strip_php_comments($src) {
     if (function_exists('token_get_all')) {
         $out = '';
         foreach (@token_get_all($src) as $t) {
             if (is_array($t)) {
-                if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT) continue;
+                if ($t[0] === T_COMMENT || $t[0] === T_DOC_COMMENT || $t[0] === T_INLINE_HTML) continue;
                 $out .= $t[1];
             } else {
                 $out .= $t;
@@ -301,8 +303,13 @@ function h_strip_php_comments($src) {
         }
         return $out;
     }
+    $src = preg_replace('#<!--.*?-->#s', '', $src);
     $src = preg_replace('#/\*.*?\*/#s', '', $src);
-    return preg_replace('#^\s*(//|\#).*$#m', '', $src);
+    return preg_replace('#(^|[ \t;{}])(//|\#)[^\r\n]*#m', '$1', $src);
+}
+
+function h_strip_conf_comments($src) {
+    return preg_replace('/^[ \t]*[;#][^\r\n]*/m', '', $src);
 }
 
 function h_kv_pick($kv, $names) {
