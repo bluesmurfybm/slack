@@ -33,6 +33,7 @@ $csrf = bl_csrf_token();
   <div class="topbar-in">
     <a class="logo" href="../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
     <div class="top-right">
+      <?= work_systems_bell('../', 'blueledger') ?>
       <div class="user-menu" id="hdrUserMenu">
         <div class="user-chip" id="hdrChip" title="메뉴">
           <span class="avatar" style="background:<?= htmlspecialchars(user_color($u)) ?>"><?= htmlspecialchars(mb_substr($u['name'], 0, 1)) ?></span>

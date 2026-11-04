@@ -58,3 +58,27 @@ html{scrollbar-gutter:stable}
 .topbar .dd-menu .dd-badge{min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;
   border-radius:999px;background:#E5484D;color:#fff;font-size:10.5px;font-weight:700;line-height:18px;text-align:center}
 .topbar .dd-menu .dd-badge[hidden]{display:none}
+/* 상단바 종 — 그 모듈의 안 읽은 알림(core/worksystems.php::work_systems_bell).
+   모양은 studio(.ba-bell)·sitehub(.sh-bell) 의 종과 같다. 색은 메뉴 배지(.dd-badge)와 같은 빨강 */
+.topbar .tb-bell{position:relative;font-family:'Pretendard',system-ui,sans-serif}
+.topbar .tb-bell__btn{position:relative;width:36px;height:36px;margin:0;padding:0;border-radius:50%;border:0;background:transparent;
+  cursor:pointer;display:grid;place-items:center;color:#63719A}
+.topbar .tb-bell__btn:hover,.topbar .tb-bell.open .tb-bell__btn{background:#EEF3FB}
+.topbar .tb-bell__btn:focus-visible{outline:2px solid #4C8DFF;outline-offset:2px}
+.topbar .tb-bell__btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.topbar .tb-bell.has-new .tb-bell__btn{color:#1C5DE5}
+.topbar .tb-bell__n{position:absolute;top:2px;right:0;min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;
+  background:#E5484D;color:#fff;font-size:10.5px;font-weight:700;line-height:16px;text-align:center}
+.topbar .tb-bell__pop{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:320px;max-width:calc(100vw - 32px);
+  background:#fff;border:1px solid #E2E9F6;border-radius:14px;box-shadow:0 1px 2px rgba(16,35,90,.05), 0 12px 32px -18px rgba(16,35,90,.35);
+  padding:6px;text-align:left}
+.topbar .tb-bell:hover .tb-bell__pop,.topbar .tb-bell:focus-within .tb-bell__pop,.topbar .tb-bell.open .tb-bell__pop{display:block}
+.topbar .tb-bell__head{padding:8px 10px 6px;font-size:12.5px;font-weight:700;color:#16223B}
+.topbar .tb-bell__head em{font-style:normal;color:#E5484D;margin-left:4px}
+.topbar .tb-bell__item{display:grid;gap:2px;padding:8px 10px;border-radius:9px;text-decoration:none;color:#16223B;font-size:13px}
+.topbar .tb-bell__item:hover,.topbar .tb-bell__item:focus-visible{background:#EEF3FB;outline:none}
+.topbar .tb-bell__item b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar .tb-bell__item span{color:#63719A;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topbar .tb-bell__item i{font-style:normal;color:#8A97AB;font-size:11px}
+.topbar .tb-bell__empty{margin:0;padding:10px;color:#63719A;font-size:12.5px}
+.topbar .tb-bell__all{display:block;border-top:1px solid #E2E9F6;margin-top:4px;padding:9px 10px 6px;font-size:12px;color:#1C5DE5;text-decoration:none}

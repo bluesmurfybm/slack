@@ -34,6 +34,9 @@ if ($id) {
 }
 
 $isNew  = $idea === null;
+// 참고 자료 (033). 033 이 없는 DB 에서는 예전 링크 칸 하나로 돈다.
+$srcReady = IdeaRepo::sourcesReady(bs_db());
+$sources  = $isNew || !$srcReady ? [] : array_map('bs_present_idea_source', $repo->sources($id));
 $v      = static fn(string $k) => h((string)($idea[$k] ?? ''));
 $picked = [];
 if (!$isNew) {
@@ -110,11 +113,14 @@ bs_layout_head(
       placeholder="되면 무엇이 달라지나요 — 시간 절약, 오류 감소, 새 사업 기회 …"><?= $v('effect') ?></textarea>
   </label>
 
+  <?php if (!$srcReady): ?>
+  <!-- 033 이 없는 DB — 예전 링크 칸 하나로 돈다 -->
   <label class="ba-field ba-field--wide">
     <span>참고 링크 <span class="ba-dim">선택</span></span>
     <input type="url" id="ba-i-url" maxlength="<?= BS_URL_MAX ?>" value="<?= $v('url') ?>"
            placeholder="https://…  비슷한 서비스, 관련 문서, 슬랙 스레드">
   </label>
+  <?php endif; ?>
 
   <fieldset class="ba-field ba-field--wide ba-domains">
     <legend>분야 태그 <span class="ba-dim">선택 — 과제로 넘어가면 그대로 따라갑니다</span></legend>
@@ -136,11 +142,71 @@ bs_layout_head(
   </fieldset>
 </div>
 
+<?php if ($srcReady): ?>
+<!-- ============ 참고 자료 (033) ============
+     R&D 과제 수정 화면과 같은 패널(assign.js initSourcePanel)이고 보낼 곳만
+     api/idea.php 다. 새로 올릴 때는 아직 번호가 없으니 골라 두기만 하고,
+     [올리기] 로 아이디어가 생긴 뒤 이어서 보낸다(initIdeaForm). 과제·프로젝트로
+     전환하면 그쪽 참고 자료로 복사된다. -->
+<div class="ba-alert" id="ba-form-error" hidden></div>
+<section class="ba-panel ba-rnd-src" data-src-panel="reference" data-src-api="api/idea.php"
+         <?= $isNew ? 'data-src-pending="1"' : '' ?>>
+  <h2>참고 자료 <span class="ba-dim">선택</span></h2>
+  <p class="ba-panel__hint">화면 캡처, 조사 문서, 비슷한 서비스 주소처럼 생각을 설명해 줄 자료입니다.
+    파일과 링크를 섞어 <?= IdeaRepo::SOURCE_MAX ?>개까지 붙일 수 있고, 과제·프로젝트로 전환하면 그대로 따라갑니다.</p>
+
+  <div class="ba-source-tabs" role="tablist" aria-label="자료 종류">
+    <button type="button" role="tab" data-src-tab="file" aria-selected="true">파일 올리기</button>
+    <button type="button" role="tab" data-src-tab="link" aria-selected="false">링크 등록</button>
+  </div>
+
+  <div class="ba-source-pane" data-src-pane="file">
+    <label>
+      <span>파일</span>
+      <input type="file" data-src-in="files" multiple accept=".xlsx,.pptx,.docx,.pdf,.jpg,.jpeg,.png,.gif,.webp">
+      <em class="ba-help">xlsx · pptx · docx · pdf · 이미지 /
+        한 개 최대 <?= (int)round(BS_UPLOAD_MAX_BYTES / 1048576) ?>MB / 한 번에 <?= BS_UPLOAD_MAX_FILES ?>개까지</em>
+    </label>
+    <button type="button" class="ba-btn" data-src-act="file"><?= $isNew ? '담기' : '올리기' ?></button>
+  </div>
+
+  <div class="ba-source-pane" data-src-pane="link" hidden>
+    <div class="ba-form__row">
+      <label><span class="ba-req">주소</span>
+        <input type="url" data-src-in="link-url" maxlength="<?= BS_URL_MAX ?>" placeholder="https://…  비슷한 서비스, 관련 문서, 슬랙 스레드"></label>
+      <label><span>표시 이름</span>
+        <input type="text" data-src-in="link-title" maxlength="200" placeholder="비우면 주소에서 자동으로"></label>
+    </div>
+    <button type="button" class="ba-btn" data-src-act="link"><?= $isNew ? '담기' : '등록' ?></button>
+  </div>
+
+  <div class="ba-srclist" data-src-list>
+    <?php if (!$sources): ?>
+      <p class="ba-empty-inline"><?= $isNew ? '담은 자료가 없습니다. 아이디어를 올릴 때 함께 올라갑니다.' : '아직 등록된 자료가 없습니다.' ?></p>
+    <?php else: foreach ($sources as $s): ?>
+      <div class="ba-src" data-id="<?= (int)$s['id'] ?>">
+        <span class="ba-src__kind"><?= h($s['kind_label']) ?></span>
+        <span class="ba-src__title">
+          <?php if (!empty($s['url'])): ?>
+            <a href="<?= h($s['url']) ?>" target="_blank" rel="noopener"><?= h($s['title']) ?></a>
+          <?php else: ?><?= h($s['title']) ?><?php endif; ?>
+        </span>
+        <span class="ba-src__meta"><?= h((string)($s['size_label'] ?? '')) ?></span>
+        <?= bs_source_acts_html($s) ?>
+        <button type="button" class="ba-btn ba-btn--sm ba-btn--danger" data-src-del="<?= (int)$s['id'] ?>">삭제</button>
+      </div>
+    <?php endforeach; endif; ?>
+  </div>
+</section>
+<?php endif; ?>
+
 <div class="ba-formbar ba-rnd-formbar">
   <a class="ba-btn" href="idea_board.php">목록</a>
   <?php if (!$isNew): ?><a class="ba-btn" href="idea_view.php?id=<?= $id ?>">상세 보기</a><?php endif; ?>
   <span class="ba-spacer"></span>
   <button type="button" class="ba-btn ba-btn--primary" id="ba-i-submit"><?= $isNew ? '올리기' : '저장' ?></button>
 </div>
+
+<?= bs_source_viewer_html() ?>
 
 <?php bs_layout_foot(); ?>

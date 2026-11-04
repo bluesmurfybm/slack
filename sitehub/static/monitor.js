@@ -25,7 +25,7 @@ async function monCheck(id, btn) {
     const j = await postJSON({ action: "monitor_check", id });
     monAfterChange(j.site);
     showToast(`${j.class === "OK" ? "정상" : j.class} · ${j.cause}${j.total_ms !== null ? " · " + monN(j.total_ms) + "ms" : ""}`);
-    if ($("monDetail") && Number($("monDetail").dataset.id) === id) monOpenDetail(id);
+    if (monDetailShown() && Number($("monDetail").dataset.id) === id) monOpenDetail(id);
   } catch (e) {
     showToast(e.message);
   } finally {
@@ -88,8 +88,11 @@ function monBlumoLine(b) {
 
 /* ── 점검 기록 (시트) — 상태 · 가용률 · 응답시간 막대 · 장애 이력 · 점검 80회 ── */
 
+// closeSheet 는 오버레이만 숨기고 시트 내용은 남겨 두므로, #monDetail 이 있어도 닫혀 있을 수 있다
+function monDetailShown() { return !!$("monDetail") && $("overlay").classList.contains("open"); }
+
 async function monOpenDetail(id) {
-  const first = !$("monDetail");
+  const first = !monDetailShown();
   if (first) openSheet(`<div class="sheet-head"><div><span class="k">BLUMO 점검 기록</span><h2 id="monDetailH">불러오는 중…</h2></div>
       <button type="button" class="btn-mini ghost" onclick="closeSheet()">✕</button></div>
     <div class="sheet-body sh-mdetail" id="monDetail" data-id="${id}"><p class="fhint">불러오는 중…</p></div>`);

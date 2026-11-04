@@ -32,6 +32,7 @@ learn_require_page_login();
       <a class="logo" id="hdrBrand" href="#" style="text-decoration:none"><b>blue</b><span
           class="dash">-</span>iWorks</a>
       <div class="top-right">
+        <?= work_systems_bell('../', 'learn') ?>
         <div class="user-menu" id="hdrUserMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
             <span class="avatar" id="hdrAvatar"></span>

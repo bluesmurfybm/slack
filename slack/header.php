@@ -21,6 +21,7 @@ $__bwUser = function_exists('current_portal_user') ? current_portal_user() : nul
     <a class="logo" href="<?= $__bwBase ?>../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
     <div class="top-right">
       <?php if ($__bwUser): ?>
+      <?= work_systems_bell($__bwBase . '../', $__bwCurrent) ?>
       <div class="user-menu" id="hdrUserMenu">
         <div class="user-chip" onclick="__hdrToggleMenu(event)" title="메뉴">
           <span class="avatar" style="background:<?= htmlspecialchars(user_color($__bwUser), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(mb_substr($__bwUser['name'], 0, 1), ENT_QUOTES, 'UTF-8') ?></span>

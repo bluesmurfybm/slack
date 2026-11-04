@@ -41,6 +41,7 @@ $meJson = json_encode([
       <a class="logo" href="<?= book_h($page['portal']) ?>/" style="text-decoration:none"><b>blue</b><span
           class="dash">-</span>iWorks</a>
       <div class="top-right">
+        <?= work_systems_bell('../', 'book') ?>
         <div class="user-menu" id="hdrUserMenu">
           <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
             <span class="avatar" style="background:<?= book_h($me['color'] ?: '#606D79') ?>"><?= book_h(mb_substr($me['name'], 0, 1)) ?></span>

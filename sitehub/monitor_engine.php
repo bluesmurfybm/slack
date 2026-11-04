@@ -192,8 +192,20 @@ function blumo_classify(array $m, array $cfg, array $r): string {
 }
 
 /** 에이전트 — 여기서 "증상"이 "원인"으로 바뀐다 */
-function blumo_health(array $m, array $cfg, array $r): array {
-    $url = $m['health'] . (strpos($m['health'], '?') === false ? '?' : '&') . 'key=' . rawurlencode($m['health_key']);
+/** PHP 에러를 "직전 점검 이후"만 세게 할 기준 — 에이전트가 응답하지 않은 점검은 그 사이 에러를 못 봤으니 건너뛴다 */
+function blumo_last_agent_ts(PDO $pdo, int $monitorId): ?int {
+    $st = $pdo->prepare("SELECT at, health FROM lab_monitor_checks WHERE monitor_id = ? ORDER BY at DESC LIMIT 30");
+    $st->execute([$monitorId]);
+    foreach ($st as $row) {
+        $h = $row['health'] ? json_decode($row['health'], true) : null;
+        if (is_array($h) && isset($h['checks'])) return strtotime($row['at']) ?: null;
+    }
+    return null;
+}
+
+function blumo_health(array $m, array $cfg, array $r, ?int $since = null): array {
+    $url = $m['health'] . (strpos($m['health'], '?') === false ? '?' : '&') . 'key=' . rawurlencode($m['health_key'])
+         . ($since ? '&since=' . $since : '');
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => $url, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 3,
@@ -259,7 +271,7 @@ function blumo_cause(array $r): string {
 /** 주소 하나 점검 → 기록 · 상태 · 알림. 사람이 누른 점검도 같은 길 */
 function blumo_check(PDO $pdo, array $m, array $cfg): array {
     $r = blumo_probe($m, $cfg);
-    if (($m['health'] ?? '') !== '' && ($m['health_key'] ?? '') !== '') $r = blumo_health($m, $cfg, $r);
+    if (($m['health'] ?? '') !== '' && ($m['health_key'] ?? '') !== '') $r = blumo_health($m, $cfg, $r, blumo_last_agent_ts($pdo, (int)$m['id']));
     $r['cause'] = blumo_cause($r);
     blumo_store($pdo, $m, $r);
     blumo_state($pdo, $cfg, $m, $r);
@@ -523,6 +535,12 @@ function blumo_doctor(PDO $pdo): array {
     $o[] = 'CA 묶음 ' . $cfg['ca_bundle'] . (is_file($cfg['ca_bundle']) ? '' : '  ← 파일 없음! https 점검이 전부 TLS_FAIL 이 됩니다');
     $php = blumo_php_cli();
     $o[] = '점검용 PHP ' . ($php !== '' ? $php : '못 찾음 — config.php 에 sitehub_php_cli 경로 지정 필요 (전체 지금 점검이 안 됨)');
+    $ch = curl_init('https://api.ipify.org');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2]);
+    blumo_ca($ch, $cfg);
+    $ip = trim((string)curl_exec($ch));
+    curl_close($ch);
+    $o[] = '나가는 IP ' . (filter_var($ip, FILTER_VALIDATE_IP) ? $ip . ' — 사이트가 403 이면 호스팅의 해외 IP 차단·방화벽 허용 목록에 이 IP 를 넣는다' : '확인 실패');
     $targets = [];
     if ($cfg['webhook_url'] !== '') { $u = parse_url($cfg['webhook_url']); $targets['웹훅 호스트'] = 'https://' . ($u['host'] ?? '') . '/'; }
     $targets['일반 HTTPS 사이트'] = 'https://www.google.com/';

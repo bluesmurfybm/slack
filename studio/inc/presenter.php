@@ -635,6 +635,62 @@ function bs_idea_can_promote_project(array $idea): bool
     return bs_is_admin() || $idea['status'] === 'adopted';
 }
 
+/**
+ * 전환이 막힌 까닭 (2026-11-03). 단추를 숨기기만 하면 "전환 기능이 없다"
+ * 로 읽힌다 — 늘 그리고, 못 누르면 왜 못 누르는지 적는다.
+ * 누를 수 있으면 null. 넘어간 것·지운 것은 패널 자체를 그리지 않으므로 null.
+ *
+ * @return array{rnd:?string, project:?string}
+ */
+function bs_idea_promote_hint(array $idea): array
+{
+    if (bs_idea_is_deleted($idea) || $idea['status'] === 'promoted') {
+        return ['rnd' => null, 'project' => null];
+    }
+    $common = match (true) {
+        $idea['status'] === 'rejected'  => '반려된 아이디어는 전환하지 않습니다.',
+        !empty($idea['duplicate_of'])   => '묶인 아이디어입니다. 원래 아이디어에서 전환하세요.',
+        default                         => null,
+    };
+    $rnd = $common ?? (bs_idea_can_promote_rnd($idea) ? null
+        : '채택되면 누구나 전환할 수 있습니다. 그 전에는 올린 사람과 관리자만 합니다.');
+    $prj = $common ?? match (true) {
+        bs_idea_can_promote_project($idea) => null,
+        !bs_can(BS_CAP_PROJECT_CREATE)     => '프로젝트 등록 권한이 있는 사람만 전환합니다. 권한은 관리자가 줍니다.',
+        default                            => '채택된 뒤에 전환할 수 있습니다.',
+    };
+    return ['rnd' => $rnd, 'project' => $prj];
+}
+
+/**
+ * 아이디어 참고 자료 한 건 → 화면 모양 (033). 프로젝트 참고 자료(bs_present_source)와
+ * 같은 열쇠를 써서 srcActsHtml()·보기 창을 그대로 쓴다. 내려받는 곳만 다르다.
+ * file_path 는 내보내지 않는다.
+ */
+function bs_present_idea_source(array $r): array
+{
+    require_once BS_ROOT . '/inc/service/SourceUploader.php';   // humanSize()
+    $hasFile = !empty($r['file_path']);
+    $mime    = (string)($r['mime'] ?? '');
+    return [
+        'id'           => (int)$r['id'],
+        'purpose'      => 'reference',
+        'kind'         => $r['kind'],
+        'kind_label'   => BS_SOURCE_KIND[$r['kind']] ?? $r['kind'],
+        'title'        => $r['title'],
+        'url'          => $r['url'],
+        'file_size'    => $r['file_size'] !== null ? (int)$r['file_size'] : null,
+        'size_label'   => $r['file_size'] !== null ? SourceUploader::humanSize((int)$r['file_size']) : null,
+        'mime'         => $r['mime'],
+        'has_file'     => $hasFile,
+        'viewable'     => $hasFile && in_array($mime, BS_VIEWABLE_MIME, true),
+        'parsed_len'   => 0,
+        'download_url' => $hasFile ? 'api/idea_file.php?id=' . (int)$r['id'] : null,
+        'uploaded_by'  => $r['uploaded_by_name'] ?? null,
+        'created_at'   => bs_date($r['created_at'], 'Y-m-d H:i'),
+    ];
+}
+
 /** 화면이 그릴 단추. 목록에 없는 단추는 그리지 않는다. */
 function bs_idea_actions(array $idea): array
 {

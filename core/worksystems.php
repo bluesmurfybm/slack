@@ -160,3 +160,75 @@ function work_systems_menu(string $base = '', string $current = '', bool $newTab
     }
     return $html . '</div>';
 }
+
+/**
+ * 상단바 종 — 그 모듈에서 온 안 읽은 알림 수와 최근 소식 몇 줄.
+ *
+ * 포털 메인에만 종이 있어서 모듈 안에 있는 동안에는 새 소식을 몰랐다. studio
+ * (bs_layout_bell)·sitehub(sitehub_notice_bell) 에 먼저 붙인 모양을 전 모듈로 넓힌 것이다.
+ * 숫자에 마우스를 올리거나 누르면 최근 소식이 펼쳐진다.
+ *
+ * 원본은 포털 알림함(portal_notification) — 따로 세지 않는다. 어느 모듈 것인지는
+ * push_kinds.json 의 sys 로 가른다. 카드 배지·메뉴 숫자(push_inbox_unread_by_sys)와 같은 규칙이라
+ * 세 곳의 숫자가 늘 같다.
+ *
+ * 메뉴(work_systems_menu_data)와 같은 이유로 로그인 세션을 거친 페이지에서만 그린다.
+ * 곁가지라 실패하면 아무것도 그리지 않는다. 화면은 떠야 한다.
+ */
+function work_systems_bell(string $base, string $key): string {
+    $h     = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
+    $uid   = (int)($_SESSION['portal_uid'] ?? 0);
+    $label = work_system_label($key);
+    if (!$uid || $label === null || !function_exists('current_portal_user')) {
+        return '';
+    }
+    try {
+        require_once __DIR__ . '/push.php';
+        $kinds = array_keys(array_filter(push_kinds(), function ($k) use ($key) { return $k['sys'] === $key; }));
+        $n = 0;
+        $rows = [];
+        if ($kinds) {
+            $in = implode(',', array_fill(0, count($kinds), '?'));
+            $st = portal_db()->prepare("SELECT COUNT(*) FROM portal_notification
+                                         WHERE user_id = ? AND read_at IS NULL AND kind IN ($in)");
+            $st->execute(array_merge([$uid], $kinds));
+            $n = (int)$st->fetchColumn();
+            if ($n) {
+                $st = portal_db()->prepare("SELECT title, body, url, created_at FROM portal_notification
+                                             WHERE user_id = ? AND read_at IS NULL AND kind IN ($in)
+                                             ORDER BY id DESC LIMIT 6");
+                $st->execute(array_merge([$uid], $kinds));
+                $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('[worksystems] 상단 종(' . $key . '): ' . $e->getMessage());
+        return '';
+    }
+
+    $tip = push_tile_tip($n, array_map(function ($r) { return mb_strimwidth((string)$r['title'], 0, 60, '…'); },
+                                      array_slice($rows, 0, 3)));
+    $items = '';
+    foreach ($rows as $r) {
+        $url  = (string)$r['url'];
+        $href = $url === '' ? $base . 'index.php'
+              : (preg_match('#^https?://#i', $url) ? $url : $base . ltrim($url, '/'));
+        $body = (string)$r['body'];
+        $items .= '<a class="tb-bell__item" href="' . $h($href) . '">'
+            . '<b>' . $h($r['title']) . '</b>'
+            . ($body !== '' ? '<span>' . $h(mb_strimwidth($body, 0, 80, '…')) . '</span>' : '')
+            . '<i>' . $h(date('m-d H:i', strtotime((string)$r['created_at']))) . '</i></a>';
+    }
+    return '<div class="tb-bell' . ($n ? ' has-new' : '') . '">'
+        . '<button type="button" class="tb-bell__btn" aria-haspopup="true" aria-expanded="false"'
+        . ' aria-label="' . $h($label) . ' 알림 ' . $n . '건" title="' . $h($tip) . '"'
+        . ' onclick="var p=this.parentNode;p.classList.toggle(\'open\');this.setAttribute(\'aria-expanded\',p.classList.contains(\'open\'))">'
+        . '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>'
+        . ($n ? '<span class="tb-bell__n">' . ($n > 99 ? '99+' : $n) . '</span>' : '')
+        . '</button>'
+        . '<div class="tb-bell__pop" role="menu">'
+        . '<div class="tb-bell__head">' . $h($label) . ' 새 소식' . ($n ? ' <em>' . $n . '</em>' : '') . '</div>'
+        . ($items ?: '<p class="tb-bell__empty">새 소식이 없습니다.</p>')
+        . '<a class="tb-bell__all" href="' . $h($base) . 'index.php">포털 알림함에서 모두 보기</a>'
+        . '</div></div>';
+}

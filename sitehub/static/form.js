@@ -164,14 +164,14 @@ function openSubForm(table, siteId, rowId) {
   const pairs = [];
   for (let i = 0; i < narrow.length; i += 2) pairs.push(narrow.slice(i, i + 2));
   const pwNote = isEdit && table === "accounts" ? `<span class="fhint">비밀번호를 지우고 저장하면 비밀번호가 비워집니다. 눈 아이콘으로 값을 확인할 수 있습니다.</span>`
-    : isEdit && table === "monitors" ? `<span class="fhint">에이전트 키를 비워 두면 기존 키를 그대로 둡니다.</span>` : "";
+    : isEdit && table === "monitors" ? `<span class="fhint">에이전트 키는 눈 아이콘으로 확인할 수 있습니다. 비워 두면 기존 키를 그대로 둡니다.</span>` : "";
   const probe = table === "monitors" ? `<div class="sh-probe"><button type="button" class="btn-mini" onclick="probeMonitor(this)">주소 열어 확인</button>
       <span class="sh-probe-out fhint">주소를 한 번 열어 응답과 페이지 제목을 봅니다. 정상 판정 문구가 비어 있으면 제목으로 채웁니다.</span></div>` : "";
   openSheet(`
     <div class="sheet-head"><div><span class="k">${esc(site.name)}</span><h2>${esc(def.one)} ${isEdit ? "수정" : "추가"}</h2></div>
       <button type="button" class="btn-mini ghost" onclick="closeSheet()">✕</button></div>
     <div class="sheet-body" id="subForm">
-      ${pairs.map((p, i) => `<div class="two">${p.map(f => fieldHtml(f, row ? (f.type === "pw" && table !== "accounts" ? "" : row[f.key]) : defaultFor(f))).join("")}</div>${i === 0 ? probe : ""}`).join("")}
+      ${pairs.map((p, i) => `<div class="two">${p.map(f => fieldHtml(f, row ? row[f.key] : defaultFor(f))).join("")}</div>${i === 0 ? probe : ""}`).join("")}
       ${pwNote}
       ${def.fields.filter(wide).map(f => fieldHtml(f, row?.[f.key])).join("")}
     </div>

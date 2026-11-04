@@ -249,6 +249,18 @@ push_send([
   모듈 목록의 건별 숫자는 `push_inbox_unread_urls($uid, 'onwatch.')`.
 - 다른 기준(처리 대기 건수 등)이 필요해지면 `badge` 에 새 값을 정의하고 `push_tile_badges()` 에 갈래를 더한다.
 
+### 모듈 상단바 종 (그 모듈의 안 읽은 알림)
+
+모듈 화면 상단바의 사용자 메뉴 왼쪽에 **그 모듈에서 온 안 읽은 알림 수**를 종으로 보인다. 마우스를 올리거나
+누르면 최근 6건(제목·본문 앞부분·시각)이 펼쳐지고 누르면 그 건으로 간다. 세는 규칙(`push_kinds.json` 의 `sys`)이
+카드 배지·사용자 메뉴의 시스템별 숫자와 같아 세 곳 숫자가 늘 맞는다.
+
+- **그리는 곳**: `work_systems_bell($base, $key)`(core/worksystems.php). 상단바 `.top-right` 에서
+  `.user-menu` 앞에 넣는다. 모양은 `styles/topbar.css` 의 `.tb-bell`.
+- studio(`bs_layout_bell`)·sitehub(`sitehub_notice_bell`)는 먼저 만든 자기 종을 그대로 쓴다 — sitehub 는 드로어를
+  열면 종에서 그 건을 지우는 동작이 붙어 있다.
+- 알림을 아직 보내지 않는 모듈(WorkHub·EnvLog)은 종이 비어 "새 소식이 없습니다" 로 보인다.
+
 ### 앱 설치 안내
 
 브라우저는 설치할 수 있는 사이트에도 팝업을 띄우지 않는다(주소창 아이콘뿐). 그래서 `pwa.js` 가
