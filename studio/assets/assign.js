@@ -938,6 +938,7 @@
         }
         $('#ba-cards-sum').textContent = d.rows.length + '건';
         box.innerHTML = '<div class="ba-cards">' + d.rows.map(card).join('') + '</div>';
+        markCards();
         if (PID) openBoard(PID);
       }).catch(function (e) {
         $('#ba-cards').innerHTML = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
@@ -950,8 +951,10 @@
       var ddText = dd === null ? '기한 미정'
                  : (dd === 0 ? 'D-DAY' : (dd > 0 ? 'D-' + dd : 'D+' + (-dd)));
 
+      var on = Number(p.id) === PID;
       return '<button type="button" class="ba-card' + (dd !== null && dd < 0 ? ' is-past' : '') +
-             '" data-project="' + p.id + '">' +
+             (on ? ' is-on' : '') + '" data-project="' + p.id + '" aria-pressed="' + on + '">' +
+        '<span class="ba-card__on" aria-hidden="true">보는 중 ↓</span>' +
         '<div class="ba-card__top">' +
           '<span class="ba-card__name">' + esc(p.name) + '</span>' +
           '<span class="ba-card__dd">' + ddText + '</span>' +
@@ -987,9 +990,22 @@
       }).join('') + '</div>';
     }
 
+    /** 지금 아래에 펼친 프로젝트를 카드에서도 보이게 한다(2026-11-04 지적 — 어느 것을 보는지 몰랐다). */
+    function markCards() {
+      var wrap = $('#ba-cards .ba-cards');
+      if (!wrap) return;
+      wrap.classList.toggle('has-on', PID > 0);
+      $$('.ba-card[data-project]', wrap).forEach(function (c) {
+        var on = parseInt(c.dataset.project, 10) === PID;
+        c.classList.toggle('is-on', on);
+        c.setAttribute('aria-pressed', String(on));
+      });
+    }
+
     // ---- 보드 -------------------------------------------------------------
     function openBoard(id) {
       PID = id;
+      markCards();
       clearError('#ba-dash-error');
       api('api/dashboard.php?' + qs({ act: 'board', project_id: id })).then(function (d) {
         BOARD = d;
@@ -1309,6 +1325,7 @@
     if (closeBtn) closeBtn.addEventListener('click', function () {
       $('#ba-board').hidden = true;
       PID = 0;
+      markCards();
     });
 
     var views = $('#ba-dash-views');
