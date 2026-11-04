@@ -53,6 +53,14 @@ $pFrom = $project['dev_start'] ?: ($project['test_start'] ?: null);
 $pTo   = $project['deploy_date'] ?: ($project['test_end'] ?: ($project['dev_end'] ?: null));
 $hasPeriod = $pFrom !== null && $pTo !== null && $pFrom <= $pTo;
 
+// 4단계(대시보드)는 홈 진행판(index.php?project_id=N)으로 보낸다(2026-11-04).
+// 진행판은 확정된 배정안만 그리므로, 확정 전에는 열어 봐야 빈 화면이다.
+$st = bs_db()->prepare(
+    "SELECT 1 FROM bs_allocation WHERE project_id = ? AND status = 'confirmed' LIMIT 1"
+);
+$st->execute([$projectId]);
+$hasConfirmed = (bool)$st->fetchColumn();
+
 // 분야 선택지.
 //
 // 두 화면이 쓰는 목록이 다르다 —
@@ -168,7 +176,10 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
     <button type="button" role="tab" data-pv-tab="wbs" aria-selected="false">
       <span>3</span> 업무 배정
     </button>
-    <button type="button" role="tab" data-pv-tab="dash" aria-selected="false" disabled>
+    <button type="button" role="tab" data-pv-tab="dash" aria-selected="false"
+            <?= $hasConfirmed
+                ? 'data-href="index.php?project_id=' . (int)$projectId . '" title="이 프로젝트의 진행판(칸반·간트)으로 갑니다"'
+                : 'disabled title="배정안을 확정하면 열립니다"' ?>>
       <span>4</span> 대시보드
     </button>
   </nav>
@@ -882,9 +893,6 @@ bs_layout_head($user, $project['name'], '과업 편성/현황', '', 'project');
         그 점수는 다른 사람 것이기 때문입니다.
       </p>
     </div>
-  </section>
-  <section data-pv-pane="dash" hidden>
-    <div class="ba-note">대시보드는 P6 에서 구현합니다.</div>
   </section>
 </div>
 

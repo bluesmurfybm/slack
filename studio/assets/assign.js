@@ -1367,6 +1367,7 @@
     $$('[data-pv-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (btn.disabled) return;
+        if (btn.dataset.href) { location.href = btn.dataset.href; return; }   // 4단계 — 홈 진행판
         $$('[data-pv-tab]').forEach(function (b) {
           b.setAttribute('aria-selected', String(b === btn));
         });
