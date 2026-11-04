@@ -347,8 +347,10 @@
             location.href = 'project_form.php?id=' + data.id + '&created=1';
             return;
           }
+          // 제자리에 두면 하단 토스트를 놓쳐 저장됐는지 모른다(2026-11-04 지적).
+          // R&D·아이디어 고치기와 같이 상세로 넘어간다.
           toast(data.message || '저장했습니다.');
-          saveBtn.disabled = false;
+          setTimeout(function () { location.href = 'project_view.php?id=' + pid; }, 600);
         }).catch(function (e) {
           showError('#ba-form-error', e.message);
           saveBtn.disabled = false;
