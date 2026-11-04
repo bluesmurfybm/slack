@@ -1010,7 +1010,9 @@
       api('api/dashboard.php?' + qs({ act: 'board', project_id: id })).then(function (d) {
         BOARD = d;
         $('#ba-board').hidden = false;
-        $('#ba-bd-name').textContent = d.project.name;
+        // 제목에서 바로 상세로 (2026-11-04)
+        $('#ba-bd-name').innerHTML = '<a class="ba-bd__link" href="project_view.php?id=' + id + '"' +
+          ' title="프로젝트 상세로 갑니다">' + esc(d.project.name) + ' <span aria-hidden="true">›</span></a>';
         $('#ba-bd-sub').textContent =
           d.project.code + (d.project.client ? ' · ' + d.project.client : '') +
           (d.allocation ? ' · 배정 ' + d.allocation.version + '차 확정' : '');
