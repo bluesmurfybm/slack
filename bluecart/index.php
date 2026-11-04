@@ -69,6 +69,7 @@ $roleLabels = array_map(
       <b>blue</b><span class="dash">-</span>iWorks
     </a>
     <div class="top-right">
+      <?= $inPortal ? work_systems_bell('../', $moduleKey) : '' ?>
       <div class="user-menu" id="hdrUserMenu">
         <div class="user-chip" onclick="bcToggleUserMenu(event)" title="메뉴">
           <span class="avatar" style="background:<?= h($avatarColor) ?>"><?= h($avatarChar) ?></span>

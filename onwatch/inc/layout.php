@@ -27,6 +27,7 @@ function ow_page_head(array $me, string $title): void
   <div class="topbar-in">
     <a class="logo" href="../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
     <div class="top-right">
+      <?= work_systems_bell('../', OW_MODULE_KEY) ?>
       <div class="user-menu" id="hdrUserMenu">
         <div class="user-chip" onclick="owToggleMenu(event)" title="메뉴">
           <span class="avatar" style="background:<?= h(user_color($me)) ?>"><?= h(mb_substr($me['name'], 0, 1)) ?></span>
