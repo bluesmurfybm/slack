@@ -9,6 +9,8 @@ function adminActionsHtml(t) {
   out.push(`<button class="btn-mini" onclick="openAssign(${t.id})">발표자 지정</button>`);
   if (t.status === "발표예정") {
     out.push(`<button class="btn-mini" onclick="complete(${t.id})">발표완료</button>`);
+  } else if (t.status === "발표완료") {
+    out.push(`<button class="btn-mini" onclick="complete(${t.id})">발표일 변경</button>`);
   }
   out.push(`<button class="btn-mini" onclick="setArchived(${t.id},1)">보관함으로</button>`);
   out.push(`<button class="btn-mini ghost" onclick="openEdit(${t.id})">수정</button>`);
