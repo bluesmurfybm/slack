@@ -6,8 +6,9 @@
  *  - 점검 한 번 = 외부에서 주소를 열어 증상을 가르고(DNS/TLS/상태코드/트래픽 차단/백지…),
  *    에이전트(blumo-agent.php)가 붙어 있으면 DB·디스크·세션·에러로그로 원인까지 한 줄로 만든다.
  *  - 기록: lab_monitor_checks(점검마다) · lab_monitor_state(주소별 현재 상태) · lab_monitor_incidents(확정된 장애).
- *  - 알림: 상태가 바뀔 때만 웹훅(Slack #blumo). confirm_failures 회 연속 실패해야 장애로 확정, 장애가 이어지면
- *    repeat_alert_min 분마다 재알림, 복구되면 지속시간과 함께 알림. 무음(mute_until) 중이면 기록만.
+ *  - 알림: 상태가 바뀔 때만 웹훅(Slack #blumo). confirm_failures 회 연속 실패해야 장애로 확정해 한 번 알리고,
+ *    장애가 이어져도 다시 보내지 않는다. 복구되면 지속시간과 함께 알림. 무음(mute_until) 중이면 기록만.
+ *    포털 알림(sitehub_notice_down)은 장애가 확정될 때 한 번만. repeat_alert_min 은 경고(alert_on_warn) 재알림 간격.
  *  - 설정은 lab_sync_meta 의 blumo_* (웹훅 주소는 enc:v1 암호문). 화면은 monitor.php › 설정(지정 계정).
  *  - 자동 점검은 작업 스케줄러가 monitor_run.php 를 5분마다 부른다(tools/monitor-task.bat).
  *
@@ -310,9 +311,7 @@ function blumo_state(PDO $pdo, array $cfg, array $m, array $r): void {
         $pdo->prepare("INSERT INTO lab_monitor_incidents (monitor_id, site_id, started, class, cause) VALUES (?,?,?,?,?)")
             ->execute([$m['id'], $m['site_id'], date('Y-m-d H:i:s', $now), $r['class'], mb_substr($r['cause'], 0, 500)]);
         $send('장애 발생 · ' . $m['name'], blumo_msg($m, $r, null), 'down');
-        $alert = $now;
-    } elseif ($isDown && $status === 'down' && $now - $alert >= $repeat) {
-        $send('장애 지속 · ' . $m['name'] . ' (' . blumo_dur($now - $since) . ')', blumo_msg($m, $r, null), 'down');
+        if (!$muted) sitehub_notice_down($m, $r);
         $alert = $now;
     } elseif (!$isDown && $status === 'down') {
         $dur = blumo_dur($now - $since);

@@ -57,7 +57,7 @@ function sitehub_audit_diff(PDO $pdo, array $fields, array $old, array $new): ar
 /** 기록 남기기. $changes 가 비면(만들기·삭제·보관 등) 한 행, 있으면 칸마다 한 행 */
 function sitehub_audit(PDO $pdo, ?array $me, int $siteId, string $action, string $target, ?int $rowId, string $rowLabel,
                        array $changes = [], string $note = ''): void {
-    sitehub_notice_add($siteId, $action, $target, $rowId, $rowLabel, array_column($changes, 'label'));
+    sitehub_notice_add($siteId, $action, $target, $rowId, $rowLabel);
     $st = $pdo->prepare("INSERT INTO lab_site_changes (site_id, at, user_email, user_name, action, target, row_id, row_label, field, field_label, old_value, new_value, note)
                          VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $email = (string)($me['email'] ?? 'system');
