@@ -401,7 +401,7 @@ async function monSettings() {
   const num = (k, label, hint) => `<div class="field"><label>${esc(label)}</label><input type="number" data-k="${k}" min="${R[k][0]}" max="${R[k][1]}" value="${esc(c[k])}">${hint ? `<span class="fhint">${esc(hint)}</span>` : ""}</div>`;
   $("monBody").innerHTML = `<div class="sh-sgrid sh-mset">
     <div class="sh-panel" id="monSetForm">
-      <div class="sh-panel-head"><h3>알림</h3><p>상태가 바뀔 때만 보냅니다 — 장애 확정 · 장애 지속(재알림) · 복구</p></div>
+      <div class="sh-panel-head"><h3>알림</h3><p>상태가 바뀔 때만 보냅니다 — 장애 확정 · 복구. 장애가 이어져도 다시 보내지 않습니다</p></div>
       <div class="field"><label>웹훅 주소</label><div class="sh-copyrow"><div class="pwwrap"><input type="password" data-k="webhook_url" value="${esc(c.webhook_url)}" autocomplete="off" placeholder="https://hooks.slack.com/services/…">
         <button type="button" class="eye" title="표시" onclick="toggleEye(this)">${EYE_OFF}</button></div></div>
         <span class="fhint">이 주소를 아는 사람은 누구나 채널(#blumo)에 글을 쓸 수 있습니다. 화면 공유할 때 주의하세요.</span></div>
@@ -409,7 +409,7 @@ async function monSettings() {
         <div class="field"><label>형식</label><select data-k="webhook_format">${[["slack", "슬랙"], ["jandi", "잔디"], ["raw", "JSON(자체 수신)"]].map(([k, l]) => `<option value="${k}"${c.webhook_format === k ? " selected" : ""}>${l}</option>`).join("")}</select></div>
         ${num("confirm_failures", "장애 확정 (연속 실패 횟수)", "깜빡임 무시 — 이만큼 연속 실패해야 장애")}
       </div>
-      <div class="two">${num("repeat_alert_min", "장애 지속 시 재알림 (분)")}
+      <div class="two">${num("repeat_alert_min", "경고 재알림 (분)", "느림 · SSL 만료 임박 알림을 켰을 때")}
         <div class="field"><label>경고 알림</label><label class="check" style="height:40px;width:max-content"><input type="checkbox" data-k="alert_on_warn"${Number(c.alert_on_warn) ? " checked" : ""}> 느림 · SSL 만료 임박도 알림</label></div></div>
       <div class="sh-panel-head" style="margin-top:8px"><h3>판정 기준</h3><p>감시 주소마다 따로 정하지 않으면 이 값</p></div>
       <div class="two">${num("slow_ms", "느림 기준 (ms)")}${num("timeout", "페이지 대기 한도 (초)")}</div>

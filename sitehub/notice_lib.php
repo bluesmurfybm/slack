@@ -1,15 +1,15 @@
 <?php
 /**
- * 변경 알림 — sitehub_audit() 에 남는 변경을 포털 알림함·웹 푸시(core/push.php)로 보낸다.
- *  - api.php 의 사용자 요청에서만 켠다. 엑셀 가져오기·미매칭 자동 정리는 한 번에 수백 건이라 알리지 않는다.
- *  - 한 요청의 변경은 사이트마다 한 건으로 묶어 응답을 보낸 뒤에 보낸다. 요청이 실패하면 버린다.
- *  - 값은 싣지 않고 칸·항목 이름만 싣는다. 푸시는 잠금 화면에도 뜬다.
+ * 알림 — 포털 알림함·웹 푸시(core/push.php)로 보낸다. 새로 등록된 것과 BLUMO 장애만 알린다.
+ *  - 등록: sitehub_audit() 의 create 만. api.php 의 사용자 요청에서만 켠다. 엑셀 가져오기·미매칭 자동 정리는 알리지 않는다.
+ *    한 요청의 등록은 사이트마다 한 건으로 묶어 응답을 보낸 뒤에 보낸다. 요청이 실패하면 버린다. 값은 싣지 않는다.
+ *  - 장애: 장애가 확정될 때 한 번. 지속·복구는 보내지 않고, 같은 사이트는 SITEHUB_NOTICE_DOWN_QUIET_MIN 분 안에 다시 보내지 않는다.
  */
 
 const SITEHUB_NOTICE_QUIET_MIN = 10;
+const SITEHUB_NOTICE_DOWN_QUIET_MIN = 60;
 const SITEHUB_NOTICE_TARGETS = ['site' => '사이트', 'accounts' => '접속 정보', 'contacts' => '담당자', 'contracts' => '계약',
     'costs' => '비용 내역', 'monitors' => '감시 주소', 'procedures' => '처리 절차', 'history' => '이력'];
-const SITEHUB_NOTICE_VERBS = ['create' => '추가', 'update' => '수정', 'delete' => '삭제', 'archive' => '보관', 'restore' => '복원'];
 const SITEHUB_NOTICE_TABS = ['accounts' => 'accounts', 'contacts' => 'contacts', 'contracts' => 'contracts', 'costs' => 'costs',
     'monitors' => 'monitor', 'history' => 'history'];
 
@@ -29,13 +29,10 @@ function sitehub_notice_drop(): void {
     $buf['sites'] = [];
 }
 
-function sitehub_notice_add(int $siteId, string $action, string $target, ?int $rowId, string $rowLabel, array $fieldLabels = []): void {
+function sitehub_notice_add(int $siteId, string $action, string $target, ?int $rowId, string $rowLabel): void {
     $buf = &sitehub_notice_buf();
-    if ($buf['me'] === null || $siteId <= 0 || !isset(SITEHUB_NOTICE_VERBS[$action], SITEHUB_NOTICE_TARGETS[$target])) return;
-    $key = $action . ':' . $target . ':' . (int)$rowId;
-    $old = $buf['sites'][$siteId][$key]['fields'] ?? [];
-    $buf['sites'][$siteId][$key] = ['action' => $action, 'target' => $target, 'label' => $rowLabel,
-        'fields' => array_values(array_unique(array_merge($old, $fieldLabels)))];
+    if ($buf['me'] === null || $siteId <= 0 || $action !== 'create' || !isset(SITEHUB_NOTICE_TARGETS[$target])) return;
+    $buf['sites'][$siteId][$target . ':' . (int)$rowId] = ['target' => $target, 'label' => $rowLabel];
 }
 
 function sitehub_notice_flush(): void {
@@ -56,14 +53,8 @@ function sitehub_notice_flush(): void {
 }
 
 function sitehub_notice_phrase(array $e): string {
-    $verb = SITEHUB_NOTICE_VERBS[$e['action']];
-    $fields = $e['fields'] ? '(' . implode(', ', $e['fields']) . ')' : '';
-    if ($e['target'] === 'site') {
-        $site = ['create' => '새 사이트 등록', 'delete' => '사이트 삭제', 'archive' => '보관함으로 옮김', 'restore' => '보관함에서 복원'];
-        return $site[$e['action']] ?? '정보 ' . $verb . $fields;
-    }
-    $label = $e['label'] !== '' ? " '" . $e['label'] . "'" : '';
-    return SITEHUB_NOTICE_TARGETS[$e['target']] . $label . ' ' . $verb . $fields;
+    if ($e['target'] === 'site') return '새 사이트 등록';
+    return SITEHUB_NOTICE_TARGETS[$e['target']] . ($e['label'] !== '' ? " '" . $e['label'] . "'" : '') . ' 등록';
 }
 
 function sitehub_notice_send(array $me, int $siteId, array $events): void {
@@ -71,12 +62,8 @@ function sitehub_notice_send(array $me, int $siteId, array $events): void {
     $st = sitehub_db()->prepare("SELECT name FROM lab_sites WHERE id = ?");
     $st->execute([$siteId]);
     $name = $st->fetchColumn();
-    $gone = $name === false;
-    if ($gone) {
-        $siteEv = array_values(array_filter($events, fn($e) => $e['target'] === 'site'));
-        $name = $siteEv ? $siteEv[0]['label'] : '삭제된 사이트';
-    }
-    $structural = (bool)array_filter($events, fn($e) => $e['target'] === 'site' && $e['action'] !== 'update');
+    if ($name === false) return;
+    $structural = (bool)array_filter($events, fn($e) => $e['target'] === 'site');
     $kind = $structural ? 'sitehub.site' : 'sitehub.change';
     $base = 'sitehub/index.php?site=' . $siteId;
     $tab = SITEHUB_NOTICE_TABS[$events[0]['target']] ?? '';
@@ -87,10 +74,33 @@ function sitehub_notice_send(array $me, int $siteId, array $events): void {
         'kind' => $kind,
         'title' => $name . ' · ' . mb_strimwidth($phrases[0], 0, 60, '…') . (count($phrases) > 1 ? ' 외 ' . (count($phrases) - 1) . '건' : ''),
         'body' => mb_strimwidth(trim(($me['name'] ?? '') . ' · ' . implode(', ', $phrases)), 0, 200, '…'),
-        'url' => $gone ? 'sitehub/index.php' : $base . ($tab !== '' ? '&tab=' . $tab : ''),
+        'url' => $base . ($tab !== '' ? '&tab=' . $tab : ''),
         'to' => $to,
         'tag' => 'sitehub-' . $siteId,
     ]);
+}
+
+/** BLUMO 가 장애를 확정했을 때. blumo_state() 가 장애 한 번에 한 번 부른다 */
+function sitehub_notice_down(array $m, array $r): void {
+    try {
+        require_once __DIR__ . '/../core/push.php';
+        $url = 'sitehub/index.php?site=' . (int)$m['site_id'] . '&tab=monitor';
+        // 한 서버의 주소 여러 개가 같이 죽거나 죽었다 살았다 할 때 쌓이지 않게
+        $st = portal_db()->prepare("SELECT 1 FROM portal_notification WHERE kind = 'sitehub.down' AND url = ?
+                                     AND created_at > NOW() - INTERVAL " . SITEHUB_NOTICE_DOWN_QUIET_MIN . " MINUTE LIMIT 1");
+        $st->execute([$url]);
+        if ($st->fetchColumn()) return;
+        push_send([
+            'kind' => 'sitehub.down',
+            'title' => '장애 · ' . $m['name'],
+            'body' => mb_strimwidth((string)$r['cause'], 0, 200, '…'),
+            'url' => $url,
+            'tag' => 'sitehub-down-' . (int)$m['site_id'],
+            'urgency' => 'high',
+        ]);
+    } catch (Throwable $e) {
+        error_log('[sitehub] 장애 알림 실패: ' . $e->getMessage());
+    }
 }
 
 function sitehub_notice_recipients(array $me, ?string $quietUrl): array {
@@ -98,7 +108,7 @@ function sitehub_notice_recipients(array $me, ?string $quietUrl): array {
     $skip = [strtolower((string)($me['email'] ?? ''))];
     if ($quietUrl !== null) {   // 드로어는 칸 하나씩 저장한다 — 저장할 때마다 쌓이지 않게
         $st = $pdo->prepare("SELECT u.email FROM portal_notification n JOIN portal_users u ON u.id = n.user_id
-                              WHERE n.kind LIKE 'sitehub.%' AND n.read_at IS NULL
+                              WHERE n.kind = 'sitehub.change' AND n.read_at IS NULL
                                 AND n.created_at > NOW() - INTERVAL " . SITEHUB_NOTICE_QUIET_MIN . " MINUTE
                                 AND (n.url = ? OR n.url LIKE ?)");
         $st->execute([$quietUrl, addcslashes($quietUrl, '%_\\') . '&%']);

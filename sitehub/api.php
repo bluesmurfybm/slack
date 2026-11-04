@@ -721,7 +721,7 @@ try {
             if ($hid === '') throw new Exception('잘못된 이력 id');
             $siteId = (int)sitehub_history_delete($pdo, $me, $hid);
         }
-        sitehub_notice_add($siteId, ['history_add' => 'create', 'history_update' => 'update', 'history_delete' => 'delete'][$action], 'history', null, '');
+        if ($action === 'history_add') sitehub_notice_add($siteId, 'create', 'history', null, '');
         sitehub_out(['ok' => true, 'rows' => $siteId > 0 ? sitehub_history_rows($pdo, 'site_id = ? AND archived = 0', [$siteId]) : [],
                      'meta' => sitehub_meta($pdo, $me), 'site' => $siteId > 0 ? sitehub_load_site($pdo, $siteId) : null]);
     }

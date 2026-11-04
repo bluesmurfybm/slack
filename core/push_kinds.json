@@ -17,8 +17,9 @@
   { "key": "studio.alloc",  "sys": "studio",  "label": "과업 배정 확정",   "desc": "내게 배정된 과업이 확정되면",            "default": true  },
   { "key": "studio.idea",      "sys": "studio", "label": "새 아이디어",       "desc": "BlueStudio 에 아이디어·제안이 새로 올라오면", "default": true },
   { "key": "studio.idea_mine", "sys": "studio", "label": "내 아이디어 소식",  "desc": "내 아이디어·피드백에 답이 달리거나, 검토되거나, 과제·프로젝트로 넘어가면", "default": true },
-  { "key": "sitehub.site", "sys": "sitehub", "label": "SiteHub 사이트 등록·삭제", "desc": "사이트가 새로 등록되거나 삭제·보관·복원되면", "default": true },
-  { "key": "sitehub.change", "sys": "sitehub", "label": "SiteHub 정보 변경", "desc": "사이트의 기본 정보·접속 정보·담당자·계약·비용·감시 주소·처리 절차·이력이 추가·수정·삭제되면 (같은 사이트는 10분에 한 번)", "default": true },
+  { "key": "sitehub.site", "sys": "sitehub", "label": "SiteHub 새 사이트", "desc": "사이트가 새로 등록되면", "default": true },
+  { "key": "sitehub.change", "sys": "sitehub", "label": "SiteHub 항목 등록", "desc": "사이트에 접속 정보·담당자·계약·비용·감시 주소·처리 절차·이력이 새로 등록되면 (같은 사이트는 10분에 한 번)", "default": true },
+  { "key": "sitehub.down", "sys": "sitehub", "label": "SiteHub 장애 발생", "desc": "BLUMO 가 감시 주소의 장애를 확정하면 (장애 한 번에 한 번, 같은 사이트는 1시간에 한 번)", "default": true },
   { "key": "slackai.job",   "sys": "slackai", "label": "WorkHub AI 작업",  "desc": "플랜·실행 작업이 끝나면",                "default": false },
   { "key": "onwatch.finding", "sys": "onwatch", "label": "OnWatch 새 소식",   "desc": "받고 있는 수시 감시에서 새 소식을 찾으면", "default": true  },
   { "key": "onwatch.system",  "sys": "onwatch", "label": "OnWatch 감시 상태", "desc": "감시가 곧 끝나거나, 끝났거나, 계속 실패하거나 예산을 넘기면", "default": true  }
