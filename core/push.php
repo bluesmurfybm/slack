@@ -90,6 +90,7 @@ function push_kinds(): array
                 'label'   => (string)($r['label'] ?? $r['key']),
                 'desc'    => (string)($r['desc'] ?? ''),
                 'default' => !empty($r['default']),
+                'hidden'  => !empty($r['hidden']),
             ];
         }
     }
@@ -472,7 +473,7 @@ function push_set_pref(int $userId, string $kind, bool $enabled): void
 function push_target_users(string $kind, $to = null, $except = null): array
 {
     $kindRow = push_kind($kind);
-    if (!$kindRow) return [];
+    if (!$kindRow || $kindRow['hidden']) return [];   // 숨긴 종류는 끈 기능 — 예전에 켜 둔 사람에게도 보내지 않는다
 
     $sql = "SELECT u.id, u.email
               FROM portal_users u
