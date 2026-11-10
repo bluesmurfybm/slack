@@ -135,7 +135,7 @@ function sitehub_schema() {
             'cols' => [
                 'id'           => "INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '계약 id'",
                 'site_id'      => "INT UNSIGNED NOT NULL COMMENT 'lab_sites.id (FK 없이 JOIN)'",
-                'kind'         => "VARCHAR(20) NOT NULL DEFAULT 'annual' COMMENT '형태 annual=연간, monthly=월간, case=건별, hosting=호스팅만, free=무상, none=미계약'",
+                'kind'         => "VARCHAR(20) NOT NULL DEFAULT 'annual' COMMENT '형태 annual=연간, monthly=월간, case=건별, hosting=호스팅만, dev=개발중, free=무상, none=미계약'",
                 'start_date'   => "DATE NULL COMMENT '계약 시작일'",
                 'end_date'     => "DATE NULL COMMENT '계약 종료일 — 계약중/만료 임박(30일)/만료 판정 기준'",
                 'amount'       => "BIGINT NULL COMMENT '연간 금액 (원) — 1년 기준 계약 금액. 월·분기로 나눠 받아도 1년 합계 (납부 주기는 billing)'",
@@ -560,7 +560,7 @@ function sitehub_contact_roles() {
 }
 
 function sitehub_contract_kinds() {
-    return ['annual' => '연간', 'monthly' => '월간', 'case' => '건별', 'hosting' => '호스팅만', 'free' => '무상', 'none' => '미계약'];
+    return ['annual' => '연간', 'monthly' => '월간', 'case' => '건별', 'hosting' => '호스팅만', 'dev' => '개발중', 'free' => '무상', 'none' => '미계약'];
 }
 
 function sitehub_cost_kinds() {

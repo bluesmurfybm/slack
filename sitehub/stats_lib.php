@@ -41,7 +41,7 @@ function sitehub_stats_annual(?array $c): ?int {
 function sitehub_stats_year_contract(array $contracts, string $y): ?array {
     $best = null;
     foreach ($contracts as $c) {
-        if (in_array($c['kind'] ?? '', ['free', 'none'], true)) continue;
+        if (in_array($c['kind'] ?? '', ['free', 'dev', 'none'], true)) continue;   // 개발중은 개발비라 유지보수 연간 계약액에 넣지 않는다
         $st = (string)($c['start_date'] ?? ''); $en = (string)($c['end_date'] ?? '');
         if (($st !== '' && $st > "{$y}-12-31") || ($en !== '' && $en < "{$y}-01-01")) continue;
         if ($best === null || ($en === '' ? '9999' : $en) > (($best['end_date'] ?? '') === '' ? '9999' : $best['end_date'])) $best = $c;

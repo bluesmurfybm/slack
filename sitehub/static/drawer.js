@@ -465,7 +465,7 @@ async function openHistForm(siteId, id) {
     sel("channel", "요청구분"),
     { key: "body", label: "작업내용", type: "area", required: 1 },
     sel("status", "처리상태"), sel("paid", "무/유상"), sel("priority", "우선순위"),
-    { key: "remark", label: "완료시간 · 비고", type: "text" },
+    { key: "remark", label: "완료시간 · 비고", type: "area", rows: 5 },
   ];
   const v = row ? { req_at: row.req_at ? String(row.req_at).slice(0, 16) : (row.date || ""), channel: row.channel, body: row.body, status: row.status, paid: row.paid, priority: row.priority, remark: row.remark }
     : { req_at: HIST_NOW(), channel: "", body: "", status: (APP.histOpts.status || []).find(x => /시작전/.test(x)) || "", paid: "", priority: "", remark: "" };

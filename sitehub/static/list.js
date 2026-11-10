@@ -97,9 +97,9 @@ function siteText(s) {
   return parts.filter(Boolean).join("\n").toLowerCase();
 }
 
-/* 정렬: 계약(유상) → 무상 → 건별 → 미계약. 같은 묶음 안에서는 만료 임박 → 계약중 → 만료, 그 다음 종료일이 가까운 순, 이름순. */
+/* 정렬: 계약(유상) → 무상 → 건별·개발중 → 미계약. 같은 묶음 안에서는 만료 임박 → 계약중 → 만료, 그 다음 종료일이 가까운 순, 이름순. */
 const STATUS_ORDER = { soon: 0, active: 1, expired: 2, none: 3 };
-const KIND_TIER = { free: 1, case: 2, none: 3 };   // 그 밖(연간·월간)은 0
+const KIND_TIER = { free: 1, case: 2, dev: 2, none: 3 };   // 그 밖(연간·월간)은 0
 const kindTier = cs => KIND_TIER[cs.kind] ?? 0;
 function sortSites(rows) {
   return rows.slice().sort((a, b) => {
