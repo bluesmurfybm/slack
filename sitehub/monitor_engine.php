@@ -13,6 +13,8 @@
  *  - 자동 점검은 작업 스케줄러가 monitor_run.php 를 5분마다 부른다(tools/monitor-task.bat).
  *
  * 함수 이름 blumo_* — 판정 규칙(blumo_classify · blumo_cause)은 예전 BLUMO 와 같다. 바꾸면 장애 이력의 뜻이 달라진다.
+ * 요청은 브라우저처럼 보낸다(BLUMO_UA + Accept 머리글). 403·406 이면 브라우저 UA 그대로 한 번 더 열어
+ * 봇 차단(UA 규칙)인지 IP·서버 설정 차단인지 가르고, 원인 줄에 그 결과와 응답한 서버 IP 를 붙인다(blumo_probe_note).
  */
 
 const BLUMO_DEFAULTS = [
@@ -25,6 +27,11 @@ const BLUMO_RANGES = [   // 설정 화면에서 받는 값의 범위
     'confirm_failures' => [1, 10], 'repeat_alert_min' => [5, 1440], 'retention_days' => [30, 730],
 ];
 const BLUMO_UP_CLASSES = ['OK', 'SLOW', 'TLS_EXPIRING'];   // 이 셋은 '살아 있음' — 장애가 아니다
+// 'Blumo/1.0' 만 보내면 Mozilla 로 시작하지 않는 UA·Accept 없는 요청을 막는 사이트(.htaccess 봇 차단)가 멀쩡해도 403 을 준다
+const BLUMO_BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const BLUMO_UA = BLUMO_BROWSER_UA . ' Blumo/1.0 (+bluesoft.co.kr)';
+const BLUMO_ACCEPT = ['Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7'];
+const BLUMO_RETRY_CODES = [403, 406];   // 봇 차단이 주로 쓰는 코드 — 이때만 브라우저 UA 로 재확인
 
 /** config.php — 화면은 guard.php 의 sitehub_config(), CLI(monitor_run.php)는 세션 없이 직접 읽는다 */
 function blumo_site_config(): array {
@@ -101,14 +108,33 @@ function blumo_target_row(array $m): array {
 /* ── 점검 ─────────────────────────────────────────────────────────────────────── */
 
 function blumo_probe(array $m, array $cfg): array {
+    $r = blumo_fetch($m, $cfg, BLUMO_UA);
+    if (!$r['errno'] && in_array($r['code'], BLUMO_RETRY_CODES, true)) {
+        $b = blumo_fetch($m, $cfg, BLUMO_BROWSER_UA, true);
+        if (!$b['errno'] && $b['code'] >= 200 && $b['code'] < 400) {
+            $b['ua_retry'] = 'ok';
+            $b['ts'] = $r['ts'];
+            $r = $b;
+        } else {
+            $r['ua_retry'] = $b['errno'] ? 'err' : (string)$b['code'];
+        }
+    }
+    $r['class'] = blumo_classify($m, $cfg, $r);
+    return $r;
+}
+
+/** 주소를 한 번 연다. $browser 면 브라우저가 첫 화면을 열 때 붙이는 머리글까지 보낸다 */
+function blumo_fetch(array $m, array $cfg, string $ua, bool $browser = false): array {
     $timeout = $m['timeout'] ?? $cfg['timeout'];
     $body = '';
+    $headers = BLUMO_ACCEPT;
+    if ($browser) array_push($headers, 'Upgrade-Insecure-Requests: 1', 'Sec-Fetch-Dest: document', 'Sec-Fetch-Mode: navigate', 'Sec-Fetch-Site: none', 'Sec-Fetch-User: ?1');
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL => $m['url'], CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 5,
         CURLOPT_CONNECTTIMEOUT => min(10, $timeout), CURLOPT_TIMEOUT => $timeout,
         CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_CERTINFO => true, CURLOPT_ENCODING => '',
-        CURLOPT_USERAGENT => 'Blumo/1.0 (+bluesoft.co.kr)', CURLOPT_HEADER => false,
+        CURLOPT_USERAGENT => $ua, CURLOPT_HTTPHEADER => $headers, CURLOPT_HEADER => false,
         CURLOPT_WRITEFUNCTION => function ($ch, $chunk) use (&$body) {
             if (strlen($body) < 131072) $body .= $chunk;   // 앞 128KB만
             return strlen($chunk);
@@ -133,9 +159,18 @@ function blumo_probe(array $m, array $cfg): array {
         'total_ms' => (int)round($g('total_time') * 1000),
         'size' => isset($i['size_download']) ? (int)$i['size_download'] : strlen($body),
         'cert_days' => blumo_cert_days($i), 'body' => $body, 'health' => null,
+        'ip' => (string)($i['primary_ip'] ?? ''),
     ];
-    $r['class'] = blumo_classify($m, $cfg, $r);
     return $r;
+}
+
+/** 원인 줄 뒤에 붙이는 확인 결과 — UA 재확인 결과와, 오류로 답한 서버의 IP(DNS 가 엉뚱한 서버를 가리키는지 볼 수 있게) */
+function blumo_probe_note(array $r): string {
+    if (($r['ua_retry'] ?? '') === 'ok') return ' (Blumo 점검 요청만 차단 — 브라우저 UA 로는 정상)';
+    $n = [];
+    if (isset($r['ua_retry'])) $n[] = '브라우저 UA 로도 ' . ($r['ua_retry'] === 'err' ? '실패' : $r['ua_retry']) . ' — UA 가 아닌 IP·서버 설정 차단';
+    if ($r['code'] >= 400 && ($r['ip'] ?? '') !== '') $n[] = '응답 서버 ' . $r['ip'];
+    return $n ? ' | ' . implode(' · ', $n) : '';
 }
 
 function blumo_cert_days(array $i): ?int {
@@ -210,7 +245,7 @@ function blumo_health(array $m, array $cfg, array $r, ?int $since = null): array
     curl_setopt_array($ch, [
         CURLOPT_URL => $url, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => true, CURLOPT_MAXREDIRS => 3,
         CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_TIMEOUT => $cfg['health_timeout'],
-        CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_USERAGENT => 'Blumo/1.0 (+bluesoft.co.kr)',
+        CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_USERAGENT => BLUMO_UA, CURLOPT_HTTPHEADER => BLUMO_ACCEPT,
     ]);
     blumo_ca($ch, $cfg);
     $out = curl_exec($ch);
@@ -272,7 +307,7 @@ function blumo_cause(array $r): string {
 function blumo_check(PDO $pdo, array $m, array $cfg): array {
     $r = blumo_probe($m, $cfg);
     if (($m['health'] ?? '') !== '' && ($m['health_key'] ?? '') !== '') $r = blumo_health($m, $cfg, $r, blumo_last_agent_ts($pdo, (int)$m['id']));
-    $r['cause'] = blumo_cause($r);
+    $r['cause'] = blumo_cause($r) . blumo_probe_note($r);
     blumo_store($pdo, $m, $r);
     blumo_state($pdo, $cfg, $m, $r);
     return $r;
