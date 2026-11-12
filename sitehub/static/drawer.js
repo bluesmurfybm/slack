@@ -335,7 +335,7 @@ function monitorRow(s, m, on) {
       <div class="s">
         <span><b>정상 판정 문구</b> ${m.expect ? esc(m.expect) : `<span class="muted">없음 — 응답 크기로만 판단</span>`}</span>
         ${opts.length ? `<span><b>기준</b> ${esc(opts.join(" · "))}</span>` : ""}
-        <span><b>에이전트</b> ${m.health ? `<a href="${esc(m.health)}" target="_blank" rel="noopener">${esc(m.health.replace(/^https?:\/\//, ""))}</a> ${cpBtn(m.health, "복사", "에이전트 주소 복사")} ` : `<span class="muted">주소 없음</span> `}<button type="button" class="btn-mini ghost" onclick="downloadAgent(${s.id}, ${m.id})" title="키가 들어간 blumo-agent.php — 사이트 최상위에 올린다">blumo-agent.php 받기</button></span>
+        <span><b>에이전트</b> ${m.health ? `<a href="${esc(m.health)}" target="_blank" rel="noopener">${esc(m.health.replace(/^https?:\/\//, ""))}</a> ${cpBtn(m.health_key ? m.health + (m.health.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(m.health_key) : m.health, "복사", "에이전트 주소 복사 (키 포함)")} ` : `<span class="muted">주소 없음</span> `}<button type="button" class="btn-mini ghost" onclick="downloadAgent(${s.id}, ${m.id})" title="키가 들어간 blumo-agent.php — 사이트 최상위에 올린다">blumo-agent.php 받기</button></span>
         ${m.health_key ? `<span><b>에이전트 키</b> ${cpBtn(m.health_key, "복사", "에이전트 키 복사")}</span>` : ""}
       </div>
       ${m.note ? `<div class="n">${esc(m.note)}</div>` : ""}
