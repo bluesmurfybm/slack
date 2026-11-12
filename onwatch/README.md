@@ -183,3 +183,16 @@ cd onwatch/worker && .venv/Scripts/python -m pytest -q # 47건(DB·API·php 를 
 - 웹 페이지 안의 지시문(프롬프트 주입)은 따르지 말라고 일러 두었지만 완전한 방어는 아니다. 판정 결과는
   늘 원문 링크와 함께 사람이 확인하는 '알림' 이다.
 - 감시 하나가 수 분 걸린다. 같은 때에 여러 감시가 몰리면 차례로 돈다(한 번 깨어날 때 최대 5건).
+
+## 포털 관점 요약
+
+- **두 조각**: `onwatch/*.php`(화면·API)가 `ow_*` 표에 쓰고, `onwatch/worker/run.py`(systemd timer, 1분)가
+  때가 된 감시를 잠가 돌린다. '지금 실행' 은 `ow_watch.run_requested_at` 하나로 전한다 — 파일·소켓 없음.
+- **스키마**는 `onwatch/sql/NNN_*.sql` 이 원본이다. 화면이 처음 DB 에 붙을 때 안 된 파일을 적용한다(`ow_schema`).
+  배치는 표를 만들지 않는다.
+- **조사 두 단계**: Claude(웹 검색·읽기 서버 도구)로 조사 노트 → 도구 없이 JSON 판정. 검색 인용과 구조화
+  출력을 한 요청에 함께 쓸 수 없어서다. API 키가 없으면 claude CLI 로 돈다(검색 상한·정확한 비용은 API 만).
+- **중복 방지**: 이미 알린 목록·사람의 '중복/틀림' 평가를 모델에 주고, 코드가 fingerprint 로 한 번 더 거른다.
+- **비용**: 감시별 월 상한(화면) + 전체 월 상한(`ONWATCH_MONTHLY_BUDGET_USD`). 넘으면 건너뛰고 등록자에게 한 번 알린다.
+- **일정 계산이 두 벌**이다 — `inc/schedule.php`(화면의 '다음 실행')와 `worker/core/schedule.py`(실제 실행).
+  `tests/schedule_cases.json` 을 두 쪽 시험이 같이 읽는다.
