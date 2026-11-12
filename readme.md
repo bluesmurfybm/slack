@@ -7,7 +7,7 @@ Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청
 ## 전체 구조
 
 ```
-D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
+./                               ← 포털(PHP) — 이 저장소의 루트
 ├── index.php                    로그인/대시보드/프로필 (SPA 한 페이지)
 ├── core/                        모듈들이 공유하는 포털 공용 소스 (아래 참고)
 │   ├── auth.php                 세션·SSO·current_portal_user()
@@ -24,7 +24,8 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 ├── vapid.key                    웹 푸시 서명 키쌍 (자동 생성, 루트, gitignore)
 ├── .sessions/                   PHP 세션 저장 경로 (루트)
 ├── api/                         login.php, logout.php, me.php
-│                                notices.php, notice_file.php, events.php, admins.php, push.php, notifications.php
+│                                notices.php, notice_file.php, events.php, event_words.php, admins.php, push.php, notifications.php
+│                                my_systems.php, tile_groups.php
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
 │                                icons/(카드 아이콘) · favicons/(시스템별 탭 파비콘, gen_favicons.py)
 ├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
@@ -118,8 +119,13 @@ D:\lms\slackapi\                 ← 포털(PHP) — 이 저장소의 루트
 │   ├── tests/                   PHPUnit 214건
 │   └── var/uploads/             발표자료 원본 (gitignore, .htaccess 로 직접 접근 차단)
 │
+├── bluecart/                    BlueCart(물품 요청) — bluecart/README.md
+├── blueledger/                  BlueExpense(출장여비) — blueledger/README.md
+├── studio/                      BlueStudio(개발 과업 편성) — studio/README.md
+├── chatbot_api/, blui_api/      포털 챗봇 서버 두 벌(FastAPI) — nginx 가 /chatapi(8003)·/bluiapi(8004) 로 넘긴다
+│
 └── slack/                       업무현황판 — PHP, 포털과 같은 Apache/세션 공유
-    ├── auth.php, db.php, config.php, slack_lib.php, header.php   (공통)
+    ├── auth.php, db.php, slack_lib.php, header.php   (공통. 설정은 루트 config.php 를 읽는다)
     ├── lists.php, comments.php, data.php, assign.php, ...        (핵심 요청 목록 기능)
     ├── difficulty/   난이도 분석
     ├── category/     카테고리 분석
@@ -1176,8 +1182,7 @@ root 권한이 필요한 것들(`learning.service` 중지, nginx 블록 정리)�
 
 moodle.org **Technical Transformation PAG** 코스(id 17257), Moodle Tracker(Jira Cloud), GitHub
 `moodle/moodle`, moodledev.io(`moodle/devdocs`), moodle.com 뉴스를 **주 1회 모아 한국어로 요약**하고
-코스모스 관점의 영향도(고/중/저)를 붙여 보여준다. 기획 원문은 `moodle/moodle-weekly-followup-checking.md`
-(gitignore, 개인 문서).
+코스모스 관점의 영향도(고/중/저)를 붙여 보여준다.
 
 - **두 조각이다.** `moodle/watch/`(Python 배치)가 쓰고, `moodle/index.php`(PHP)가 읽는다. 배치는
   실행당 **한 트랜잭션**이고 화면은 SELECT 만 한다 — 폴링·UPDATE 는 없다. 별도 포트·nginx 블록도
@@ -1596,9 +1601,9 @@ BlueLab 팀이 유지보수하는 **사이트** 정보를  관리하는 모듈(`
   이 경로를 언급하는 svn cat/diff·git show/diff 거부, 경로 없는 전체 `svn diff`/`git diff` 거부)·프롬프트 규칙·플랜 files 제거·
   실행 dirty 판정/diff/커밋 대상 제외·실행 전후 해시 비교(바뀌면 로그 경고)를 한 곳에서 건다. codex/openai 검토는 프롬프트 규칙 + 필터된 diff 만 받는다.
   참고: Claude CLI 는 cmd 에서 띄운 워커에서는 Bash 도구를 주지만 Git Bash 안에서 띄우면 PowerShell 을 준다 — 워커는 `start_worker.bat` 로 띄울 것.
-- 워커가 쓰는 PHP 는 `slackai/worker/.env` 의 `PHP_BIN`(기본 `D:\wamp64\bin\php\php8.3.28\php.exe` — Apache WAMP 와 같은 버전).
+- 워커가 쓰는 PHP 는 `slackai/worker/.env` 의 `PHP_BIN`(기본 `php` — PATH 에서 찾는다. Apache 와 같은 버전을 가리키게 한다).
   레포별로 다른 PHP 로 `php -l` 을 돌리려면 레포 화면의 "php 실행 파일" 칸(`ai_repos.php_bin`). `.env` 를 바꾸면 워커를 다시 시작한다.
-- **레포 자동 등록** — 레포 화면 [📥 school_access 로 자동 등록] → 워커 `discover_repos` 잡이 `REPO_SCAN_ROOTS`(기본 `F:\project;G:\01_Bluesoft`)
+- **레포 자동 등록** — 레포 화면 [📥 school_access 로 자동 등록] → 워커 `discover_repos` 잡이 `REPO_SCAN_ROOTS`(`;` 로 나눈 작업 사본 루트 목록, `slackai/worker/.env`)
   아래 `*\03_Source\*` 작업 사본의 svn/git 주소를 `school_access.repo` 와 맞춰 `ai_repos` 를 만든다/갱신한다(school_id·버전·LMS 호스트 포함).
   `school_access` 는 `school_id, repo` 두 컬럼만 읽는다(계정·비번 컬럼은 읽지 않음). 같은 학교 사본이 여럿이면 최근 커밋 것만 '사용'.
 - 승인자(플랜 승인·커밋·교훈 승인) = `config.php slackai.approvers` ∪ `ai_settings.approvers` ∪ `portal_admin`. 나머지 버튼은 로그인 사용자 누구나.
@@ -1628,7 +1633,7 @@ BlueLab 팀이 유지보수하는 **사이트** 정보를  관리하는 모듈(`
 | `config.local.php` (루트) | 포털 SSO 토큰 암호화 키 | **자동 생성됨**(최초 실행 시) |
 | `sso_secret.key` (루트) | book과 공유하는 SSO 서명 키 | **자동 생성됨**(최초 실행 시) |
 | `vapid.key` (루트) | 웹 푸시 서명 키쌍 | **자동 생성됨**(첫 알림 사용 시). 서버를 옮기면 같이 옮겨야 구독이 유지된다 |
-| `slack/config.local.php` | Gmail IMAP 계정 정보 | **직접 생성 필요**, 아래 형식 |
+| `slack/config.local.php` | Gmail IMAP 계정 정보 | **직접 생성 필요**. 키는 `slack/gmail/gmail_lib.php` 머리 주석 참고 |
 | `config.local.php` 의 `book_slack_webhook` | book Slack 웹훅 URL(선택) | 없으면 알림 기능만 비활성. 파이썬 시절 `book/config_local.py` 에서 옮긴다 |
 | `config.local.php` 의 `kakao_rest_api_key` 또는 `book/kakao_keys.json` | 카카오 도서검색 API 키(선택) | 없으면 검색 자동완성만 비활성 |
 | `config.php` 의 `dti_slack_webhook` | dti 모듈 Slack 웹훅 URL(선택) | 없으면 발표자 등록 알림만 비활성 |
@@ -1639,14 +1644,14 @@ BlueLab 팀이 유지보수하는 **사이트** 정보를  관리하는 모듈(`
 | `config.php` 의 `sitehub_stats_emails` | sitehub 통계를 볼 수 있는 계정 목록 | 선택. 없으면 `pink@bluesoft.co.kr` 하나, `[]` 면 로그인한 누구나 |
 | `sitehub/list_cols.php` 의 값 | BlueLab 리스트의 컬럼 매핑 | 저장소에 **채워져** 있다(리스트 F088VTXBD0R 기준). 리스트 열이 바뀌면 `php sitehub/sync.php schema` 로 확인해 고친다 |
 
-`slack/config.php` 형식:
+루트 `config.php` 형식:
 ```php
 <?php
 /**
  * blue-iwork 포털 설정.
- *  - DB는 slack 모듈(slack/config.php)과 동일한 slackapi MySQL을 그대로 재사용                                                                                                     한다.
+ *  - DB는 slack 모듈과 같은 slackapi MySQL을 그대로 재사용한다.
  *    (같은 물리 DB, 포털 전용 테이블만 추가로 생성)
- *  - 슬랙 토큰 암호화 키는 git에 올리지 않는 config.local.php 에 최초 실행 시 1                                                                                                     회 자동 생성.
+ *  - 슬랙 토큰 암호화 키는 git에 올리지 않는 config.local.php 에 최초 실행 시 1회 자동 생성.
  */
 
 $local = __DIR__ . '/config.local.php';
@@ -1657,7 +1662,7 @@ if (!is_file($local)) {
 $localCfg = require $local;
 
 return [
-    // DB 접속 정보 (slack/config.php 와 동일한 slackapi DB)
+    // DB 접속 정보 (slack 모듈과 같은 slackapi DB)
     'db' => [
         'host'    => '127.0.0.1',
         'port'    => 3306,
@@ -1709,7 +1714,7 @@ return [
 ];
 ```
 
-`slack/config.local.php` 형식:
+루트 `config.local.php` 형식:
 ```php
 <?php
 return [
@@ -1732,8 +1737,8 @@ return [
   `DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME`(없으면 config.php 를 php 로 읽음).
 - **PHP IMAP 확장** — Gmail 기능(`slack/gmail/`)에 필요. 이 서버(WAMP php8.2.28 등)엔 이미 켜져
   있는 것 확인함. 다른 서버로 옮기면 `extension=imap` 활성화 확인.
-- **`slack/gmail/start_gmail_watch.bat`** — PHP 실행 경로가 `c:\wamp64\bin\php\php8.1.0\php.exe`로
-  고정돼 있음. 다른 PHP 버전 쓰는 서버면 경로 수정 필요.
+- **`slack/gmail/start_gmail_watch.bat`** · **`slack/start_slack_watch.bat`** — PHP 실행 경로가
+  WAMP php8.1.0 으로 고정돼 있음. 다른 PHP 버전 쓰는 서버면 배치 파일의 경로 수정 필요.
 
 ---
 
@@ -1967,8 +1972,8 @@ sudo systemctl enable --now moodle-watch-refresh.path
 - [ ] Gmail 연동은 계정 1개 고정(`config.local.php`) 기반 — 다계정 지원은 `gmail_lib.php` 주석의
       "[향후 회원가입]" 부분에 걸이 남아 있음.
 - [ ] `.bak-migrate/`는 예전 구조 백업(사용 안 함, 삭제 검토 가능).
-- [ ] moodle: PAG 코스 슬라이드(folder 8882) 텍스트 추출과 일반 개발자 포럼 키워드 필터는 아직 없다
-      (기획 문서 6단계). BBB 녹화는 수집 대상 아님.
+- [ ] moodle: PAG 코스 슬라이드(folder 8882) 텍스트 추출과 일반 개발자 포럼 키워드 필터는 아직 없다.
+      BBB 녹화는 수집 대상 아님.
 - [ ] moodle: 요약 품질은 첫 몇 주 실제 리포트를 보고 `summarizer.py::SYSTEM` 을 손봐야 한다.
 
 ---
@@ -1981,7 +1986,7 @@ DB 를 여는 일곱 곳(`core/db.php`, access·learn·slack·slackai·dti·blue
 
 - 켜지는 조건: 루트 `config.php` 의 `db.driver` 가 `'sqlite'` **이고** PHP 내장 서버(`php -S`)·명령줄일 때.
   운영(php-fpm)에서는 config 가 어떻든 켜지지 않는다.
-- 준비물: `D:\php82` 에 PHP 8.2 (php.ini 에서 pdo_sqlite·sqlite3·mbstring·openssl·fileinfo·curl 켬).
+- 준비물: PHP 8.2 — `로컬_실행.bat` 맨 위 `set PHP=` 가 가리키는 자리에 둔다 (php.ini 에서 pdo_sqlite·sqlite3·mbstring·openssl·fileinfo·curl 켬).
 - 실행: 루트 `로컬_실행.bat` 더블클릭 → `dev/local_setup.php`(설정 파일 생성·스키마 적용, 여러 번 돌려도 됨) →
   http://127.0.0.1:8780/ . 계정은 사내 13명, 처음 비밀번호 `blue$123`. 8765 는 파이썬 출장여비가 쓰고 있어 피했다.
 - 데이터: `var/localdb/<DB이름>.sqlite` (gitignore). 지우고 다시 실행하면 빈 상태로 돌아간다.
