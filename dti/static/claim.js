@@ -28,11 +28,13 @@ async function release(id) {
 }
 
 async function complete(id) {
-  const d = await askDate("발표일", "비워 두면 오늘 날짜로 기록됩니다.", today());
+  const t = APP.topics.find(x => x.id === id);
+  const fixing = !!(t && t.done_date);
+  const d = await askDate("발표일", "비워 두면 오늘 날짜로 기록됩니다.", fixing ? t.done_date : today());
   if (d === null) return;
   try {
     await postJSON(`/magazineapi/topics/${id}/complete`, { done_date: d });
-    showToast("발표완료 처리했습니다");
+    showToast(fixing ? "발표일을 바꿨습니다" : "발표완료 처리했습니다");
     await reload();
   } catch (e) { showToast(e.message); }
 }

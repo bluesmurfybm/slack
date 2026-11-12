@@ -9,7 +9,7 @@ function fieldControl(f, value) {
   const k = esc(f.key);
   switch (f.type) {
     case "area":
-      return `<textarea data-k="${k}" rows="3">${esc(v)}</textarea>`;
+      return `<textarea data-k="${k}" rows="${f.rows || 3}">${esc(v)}</textarea>`;
     case "pw": {
       const box = `<div class="pwwrap"><input type="password" data-k="${k}" value="${esc(v)}" autocomplete="new-password">
         <button type="button" class="eye" title="표시" onclick="toggleEye(this)">${EYE_OFF}</button></div>`;

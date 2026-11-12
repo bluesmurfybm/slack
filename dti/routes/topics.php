@@ -194,9 +194,12 @@ function dti_topic_complete(array $ctx, int $tid, array $body): array {
 
     $topic = dti_topic_find_or_fail($pdo, $tid);
     $pres = dti_presentation_of_topic($pdo, $tid) ?? dti_presentation_create($pdo, $tid);
+    // 이미 끝난 발표에 다시 오면 발표일을 바로잡는 것이다 — 잘못 넣은 날짜를 고칠 길이 이것뿐이다
+    $fixing = $pres['done_date'] !== '';
     $pres['done_date'] = dti_want_date($body['done_date'] ?? '', '발표일') ?: date('Y-m-d');
     dti_presentation_update($pdo, $pres);
-    dti_push_mine($ctx['push'] ?? null, $tid, $topic['title'], '발표 완료', (string)$pres['presenter_email'], $ctx['identity']);
+    dti_push_mine($ctx['push'] ?? null, $tid, $topic['title'], $fixing ? '발표일 변경' : '발표 완료',
+        (string)$pres['presenter_email'], $ctx['identity']);
 
     return dti_json(dti_topic_present_one($pdo, $topic, $pres));
 }

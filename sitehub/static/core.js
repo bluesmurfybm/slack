@@ -128,7 +128,7 @@ const siteById = id => APP.sites.find(s => s.id === Number(id)) || null;
 function statusBadge(s, withDday) {
   const cs = s.contract_status || { code: "none", label: "미계약", dday: null };
   const cls = { active: "lv-recommended", soon: "warn", expired: "lv-required", none: "off" }[cs.code] || "off";
-  const kindWord = { free: "무상", case: "건별", hosting: "호스팅만" }[cs.kind];
+  const kindWord = { free: "무상", case: "건별", hosting: "호스팅만", dev: "개발중" }[cs.kind];
   let txt = kindWord ? (cs.code === "active" ? kindWord : kindWord + " " + cs.label) : cs.label;
   if (withDday !== false && cs.dday !== null && cs.dday !== undefined && cs.code !== "none") {
     txt += " " + (cs.dday < 0 ? "D+" + (-cs.dday) : cs.dday === 0 ? "D-day" : "D-" + cs.dday);

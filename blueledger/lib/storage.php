@@ -38,12 +38,41 @@ function bl_upload_receipt(PDO $pdo, array $me) {
     if (!isset(RECEIPT_TYPES[$mime])) throw new BlError('사진(JPG·PNG) 또는 PDF 파일만 올릴 수 있습니다', 400);
 
     $id = date('Ymd') . '_' . bin2hex(random_bytes(8)) . '.' . RECEIPT_TYPES[$mime];
-    if (!move_uploaded_file($file['tmp_name'], bl_receipt_dir() . '/' . $id)) throw new BlError('파일을 저장하지 못했습니다', 500);
+    $dir = bl_receipt_dir_writable();
+    if (!@move_uploaded_file($file['tmp_name'], $dir . '/' . $id)) {
+        bl_receipt_log('파일 옮기기 실패', $dir);
+        throw new BlError(RECEIPT_DIR_HELP, 500);
+    }
 
     $name = clip(basename((string)($file['name'] ?? '영수증')), 120);
-    $pdo->prepare("INSERT INTO bl_travel_files (id, orig_name, mime, size, uploaded_by, created_at) VALUES (?,?,?,?,?,?)")
-        ->execute([$id, $name, $mime, (int)$file['size'], $me['email'], now_stamp()]);
+    try {
+        $pdo->prepare("INSERT INTO bl_travel_files (id, orig_name, mime, size, uploaded_by, created_at) VALUES (?,?,?,?,?,?)")
+            ->execute([$id, $name, $mime, (int)$file['size'], $me['email'], now_stamp()]);
+    } catch (Throwable $e) {
+        @unlink($dir . '/' . $id);
+        error_log('[blueledger] 영수증 DB 기록 실패: ' . $e->getMessage());
+        throw new BlError('영수증 파일은 받았지만 DB(bl_travel_files 표)에 기록하지 못했습니다. 서버 관리자에게 알려 주세요', 500);
+    }
     return ['id' => $id, 'type' => $mime, 'name' => $name];
+}
+
+// 운영 서버에서 처음 올릴 때 폴더가 없거나 웹 서버 계정이 쓸 수 없으면 '파일을 저장하지 못했습니다' 한 줄만 보여
+// 원인을 알 수 없었다(2026-11-05). 화면에는 할 일을, 서버 오류 기록에는 경로·계정을 남긴다.
+const RECEIPT_DIR_HELP = '영수증 저장 폴더(blueledger/var/receipts)에 쓸 수 없습니다. 서버 관리자에게 이 폴더를 웹 서버 계정이 쓸 수 있게 해 달라고 알려 주세요';
+
+/** 올리기 전용 — 폴더를 만들고 쓸 수 있는지 확인한다. 안 되면 원인을 남기고 멈춘다 */
+function bl_receipt_dir_writable() {
+    $dir = bl_receipt_dir();
+    if (!is_dir($dir) || !is_writable($dir)) {
+        bl_receipt_log(is_dir($dir) ? '폴더에 쓸 수 없음' : '폴더를 만들 수 없음', $dir);
+        throw new BlError(RECEIPT_DIR_HELP, 500);
+    }
+    return $dir;
+}
+
+function bl_receipt_log($why, $dir) {
+    $who = function_exists('posix_geteuid') && function_exists('posix_getpwuid') ? (posix_getpwuid(posix_geteuid())['name'] ?? '?') : get_current_user();
+    error_log("[blueledger] 영수증 저장 실패 — $why: $dir (PHP 실행 계정: $who)");
 }
 
 /** 브라우저가 붙여 보낸 Content-Type 은 믿지 않고 파일 첫 바이트로 판정한다 */

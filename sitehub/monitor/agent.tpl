@@ -716,8 +716,10 @@ function h_check_errorlog($root, $cms, $CFG) {
         }
         if ($cms['type'] === 'ci3' && $cms['config']) {
             $logdir = dirname(dirname($cms['config'])) . '/logs';
-            $f = $logdir . '/log-' . date('Y-m-d') . '.php';
-            if (is_file($f)) $files[] = $f;
+            foreach (array_unique(array(date('Y-m-d', $since), date('Y-m-d'))) as $d) {
+                $f = $logdir . '/log-' . $d . '.php';
+                if (is_file($f)) $files[] = $f;
+            }
         }
     }
     $files = array_unique($files);
@@ -739,14 +741,15 @@ function h_check_errorlog($root, $cms, $CFG) {
             $ts = h_line_time($ln);
             if ($ts === null && $bySince) continue;   // 시각 없는 줄은 매 점검마다 다시 세게 되므로 직전 점검 기준일 땐 뺀다
             if ($ts !== null && $ts <= $since) continue;
+            if ($ts !== null && $bySince && $ts > time() + 300) continue;   // 시간대를 못 맞춘 미래 시각도 같은 이유로 뺀다
             $r['recent']++;
             $last = $ln;
         }
     }
+    $r['window'] = $bySince ? 'since ' . date('Y-m-d H:i:s T', $since) : $CFG['error_window'] . 'm';
     if ($r['recent'] > 0) {
         $r['status'] = 'warn';
         $r['last']   = substr(preg_replace('/\s+/', ' ', $last), 0, 300);
-        $r['window'] = $bySince ? 'since ' . date('Y-m-d H:i:s', $since) : $CFG['error_window'] . 'm';
     }
     if ($r['recent'] >= 20) $r['status'] = 'fail';
     return $r;
@@ -765,16 +768,26 @@ function h_tail($file, $bytes) {
 function h_line_time($ln) {
     // "[14-Sep-2026 10:11:12 Asia/Seoul]" 또는 "ERROR - 2026-09-14 10:11:12"
     // 시간대 이름(Asia/Seoul·UTC)이 붙어 있으면 함께 넘긴다 — 사이트 PHP 기본 시간대와 로그 시간대가 다르면 since 비교가 어긋난다
-    if (preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2}(?: [A-Za-z_]+(?:\/[A-Za-z_]+)*)?)\]/', $ln, $m)
-        || preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2})/', $ln, $m)) {
-        $t = @strtotime($m[1]);
+    if (preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2}) ([A-Za-z_]+(?:\/[A-Za-z_]+)*)\]/', $ln, $m)) {
+        $t = @strtotime($m[1] . ' ' . $m[2]);
         return $t ? $t : null;
     }
-    if (preg_match('/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/', $ln, $m)) {
-        $t = strtotime($m[1]);
-        return $t ? $t : null;
+    if (preg_match('/\[(\d{2}-[A-Za-z]{3}-\d{4} \d{2}:\d{2}:\d{2})/', $ln, $m)
+        || preg_match('/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/', $ln, $m)) {
+        return h_local_time($m[1]);
     }
     return null;
+}
+
+// 시간대 없는 로그 시각. 에이전트는 앱을 부트스트랩하지 않아 사이트 PHP 기본 시간대(흔히 UTC)로 읽는데,
+// CI3 로그는 앱이 KST 로 쓴다 — 그대로 두면 9시간 미래 시각이 돼 매 점검마다 "직전 점검 이후" 에러로 다시 세어진다
+function h_local_time($s) {
+    $t = @strtotime($s);
+    if ($t && $t > time() + 300) {
+        $kst = @strtotime($s . ' Asia/Seoul');
+        if ($kst && $kst <= time() + 300) $t = $kst;
+    }
+    return $t ? $t : null;
 }
 
 /* ---------- 출력 ---------- */

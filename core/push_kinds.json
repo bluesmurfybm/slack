@@ -18,7 +18,7 @@
   { "key": "studio.idea",      "sys": "studio", "label": "새 아이디어",       "desc": "BlueStudio 에 아이디어·제안이 새로 올라오면", "default": true },
   { "key": "studio.idea_mine", "sys": "studio", "label": "내 아이디어 소식",  "desc": "내 아이디어·피드백에 답이 달리거나, 검토되거나, 과제·프로젝트로 넘어가면", "default": true },
   { "key": "sitehub.site", "sys": "sitehub", "label": "SiteHub 새 사이트", "desc": "사이트가 새로 등록되면", "default": true },
-  { "key": "sitehub.change", "sys": "sitehub", "label": "SiteHub 항목 등록", "desc": "사이트에 접속 정보·담당자·계약·비용·감시 주소·처리 절차·이력이 새로 등록되면 (같은 사이트는 10분에 한 번)", "default": true },
+  { "key": "sitehub.change", "sys": "sitehub", "label": "SiteHub 항목 등록", "desc": "사이트에 접속 정보·담당자·계약·비용·감시 주소·처리 절차·이력이 새로 등록되면 (같은 사이트는 10분에 한 번)", "default": true, "hidden": true },
   { "key": "sitehub.down", "sys": "sitehub", "label": "SiteHub 장애 발생", "desc": "BLUMO 가 감시 주소의 장애를 확정하면 (장애 한 번에 한 번, 같은 사이트는 1시간에 한 번)", "default": true },
   { "key": "slackai.job",   "sys": "slackai", "label": "WorkHub AI 작업",  "desc": "플랜·실행 작업이 끝나면",                "default": false },
   { "key": "onwatch.finding", "sys": "onwatch", "label": "OnWatch 새 소식",   "desc": "받고 있는 수시 감시에서 새 소식을 찾으면", "default": true  },

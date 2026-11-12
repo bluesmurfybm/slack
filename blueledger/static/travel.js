@@ -38,6 +38,8 @@ async function api(path,body){
   let j={};try{j=await r.json()}catch(e){}
   // 포털에서 로그아웃했거나 세션이 끝났다 — 로그인 화면으로 보낸다
   if(r.status===401){location.href='../index.php?need_login=blueledger';throw new Error(j.error||'로그인이 필요합니다.')}
+  // nginx 가 업로드 크기 한도(client_max_body_size)로 먼저 끊으면 JSON 이 아닌 413 페이지가 온다
+  if(r.status===413&&!j.error)throw new Error('파일이 서버 업로드 한도보다 큽니다. 서버 관리자에게 업로드 크기 설정을 확인해 달라고 알려 주세요.');
   if(!r.ok)throw new Error(j.error||'요청을 처리하지 못했습니다.');
   return j;
 }

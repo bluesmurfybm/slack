@@ -177,6 +177,18 @@ final class PresentationTest extends TestCase
         $this->assertSame(date('Y-m-d'), $res['data']['done_date']);
     }
 
+    public function test_끝난_발표의_발표일을_고친다(): void
+    {
+        $tid = $this->claimedTopic();
+        $this->post(['topics', (string)$tid, 'complete'], $this->admin(), ['done_date' => '2026-09-01']);
+        $res = $this->post(['topics', (string)$tid, 'complete'], $this->admin(), ['done_date' => '2026-09-08']);
+
+        $this->assertSame(200, $res['status']);
+        $this->assertSame('발표완료', $res['data']['status']);
+        $this->assertSame('2026-09-08', $res['data']['done_date']);
+        $this->assertSame(1, (int)$this->pdo->query("SELECT COUNT(*) FROM dti_presentations")->fetchColumn());
+    }
+
     public function test_일반_사용자는_발표완료로_못_바꾼다(): void
     {
         $tid = $this->claimedTopic();

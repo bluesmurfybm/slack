@@ -127,6 +127,8 @@ function adminDrawerActions(t) {
   const out = [`<button class="btn-ghost" onclick="openAssign(${t.id})">발표자 지정</button>`];
   if (t.status === "발표예정") {
     out.push(`<button class="btn-ghost" onclick="complete(${t.id})">발표완료</button>`);
+  } else if (t.status === "발표완료") {
+    out.push(`<button class="btn-ghost" onclick="complete(${t.id})">발표일 변경</button>`);
   }
   out.push(`<button class="btn-ghost" onclick="openEdit(${t.id})">수정</button>`);
   out.push(`<button class="btn-ghost danger" onclick="askDelete(${t.id})">삭제</button>`);

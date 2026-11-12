@@ -30,6 +30,7 @@ function push_api_payload(array $u): array
     $devices = push_subscriptions_of((int)$u['id']);
     $kinds = [];
     foreach (push_kinds() as $k) {
+        if ($k['hidden']) continue;
         $kinds[] = [
             'key'       => $k['key'],
             'sys'       => $k['sys'],

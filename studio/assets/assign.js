@@ -347,8 +347,10 @@
             location.href = 'project_form.php?id=' + data.id + '&created=1';
             return;
           }
+          // 제자리에 두면 하단 토스트를 놓쳐 저장됐는지 모른다(2026-11-04 지적).
+          // R&D·아이디어 고치기와 같이 상세로 넘어간다.
           toast(data.message || '저장했습니다.');
-          saveBtn.disabled = false;
+          setTimeout(function () { location.href = 'project_view.php?id=' + pid; }, 600);
         }).catch(function (e) {
           showError('#ba-form-error', e.message);
           saveBtn.disabled = false;
@@ -936,6 +938,7 @@
         }
         $('#ba-cards-sum').textContent = d.rows.length + '건';
         box.innerHTML = '<div class="ba-cards">' + d.rows.map(card).join('') + '</div>';
+        markCards();
         if (PID) openBoard(PID);
       }).catch(function (e) {
         $('#ba-cards').innerHTML = '<p class="ba-empty-inline">' + esc(e.message) + '</p>';
@@ -948,8 +951,10 @@
       var ddText = dd === null ? '기한 미정'
                  : (dd === 0 ? 'D-DAY' : (dd > 0 ? 'D-' + dd : 'D+' + (-dd)));
 
+      var on = Number(p.id) === PID;
       return '<button type="button" class="ba-card' + (dd !== null && dd < 0 ? ' is-past' : '') +
-             '" data-project="' + p.id + '">' +
+             (on ? ' is-on' : '') + '" data-project="' + p.id + '" aria-pressed="' + on + '">' +
+        '<span class="ba-card__on" aria-hidden="true">보는 중 ↓</span>' +
         '<div class="ba-card__top">' +
           '<span class="ba-card__name">' + esc(p.name) + '</span>' +
           '<span class="ba-card__dd">' + ddText + '</span>' +
@@ -985,14 +990,29 @@
       }).join('') + '</div>';
     }
 
+    /** 지금 아래에 펼친 프로젝트를 카드에서도 보이게 한다(2026-11-04 지적 — 어느 것을 보는지 몰랐다). */
+    function markCards() {
+      var wrap = $('#ba-cards .ba-cards');
+      if (!wrap) return;
+      wrap.classList.toggle('has-on', PID > 0);
+      $$('.ba-card[data-project]', wrap).forEach(function (c) {
+        var on = parseInt(c.dataset.project, 10) === PID;
+        c.classList.toggle('is-on', on);
+        c.setAttribute('aria-pressed', String(on));
+      });
+    }
+
     // ---- 보드 -------------------------------------------------------------
     function openBoard(id) {
       PID = id;
+      markCards();
       clearError('#ba-dash-error');
       api('api/dashboard.php?' + qs({ act: 'board', project_id: id })).then(function (d) {
         BOARD = d;
         $('#ba-board').hidden = false;
-        $('#ba-bd-name').textContent = d.project.name;
+        // 제목에서 바로 상세로 (2026-11-04)
+        $('#ba-bd-name').innerHTML = '<a class="ba-bd__link" href="project_view.php?id=' + id + '"' +
+          ' title="프로젝트 상세로 갑니다">' + esc(d.project.name) + ' <span aria-hidden="true">›</span></a>';
         $('#ba-bd-sub').textContent =
           d.project.code + (d.project.client ? ' · ' + d.project.client : '') +
           (d.allocation ? ' · 배정 ' + d.allocation.version + '차 확정' : '');
@@ -1307,6 +1327,7 @@
     if (closeBtn) closeBtn.addEventListener('click', function () {
       $('#ba-board').hidden = true;
       PID = 0;
+      markCards();
     });
 
     var views = $('#ba-dash-views');
@@ -1365,6 +1386,7 @@
     $$('[data-pv-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         if (btn.disabled) return;
+        if (btn.dataset.href) { location.href = btn.dataset.href; return; }   // 4단계 — 홈 진행판
         $$('[data-pv-tab]').forEach(function (b) {
           b.setAttribute('aria-selected', String(b === btn));
         });
