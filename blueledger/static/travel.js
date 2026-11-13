@@ -501,6 +501,7 @@ function render(){
   F('statsYear').textContent=label;
   renderTable(rows);
   renderBoard();
+  renderKCal();
   renderMyList();
   renderMemberDash();
 }
@@ -925,7 +926,7 @@ function restoreDraft(d){
 ['input','change'].forEach(ev=>F('form').addEventListener(ev,saveDraftSoon));
 function renderDraftNote(){
   const n=F('draftNote'),t=S.trips.find(x=>x.id===S.editingId),fresh=S.role==='staff'&&!S.editingId&&!S.single;
-  F('btnDraft').hidden=!fresh;if(fresh)F('btnSave').textContent='대표 승인 요청';
+  F('btnDraft').hidden=F('btnDraftDel').hidden=!fresh;if(fresh)F('btnSave').textContent='대표 승인 요청';
   if(t){n.textContent=stageOf(t).stage;n.className='draftnote st-'+stageOf(t).key;return}
   const d=readDraft();
   n.className='draftnote st-draft';
@@ -993,6 +994,7 @@ F('todoList').addEventListener('click',e=>{const b=e.target.closest('[data-act]'
 function memberAct(act,id){
   const t=id&&S.trips.find(x=>x.id===id);
   if(act==='draft'){newClaim();return}
+  if(act==='draft-del'){discardDraft();return}
   if(act==='attach-draft'){newClaim();focusMissing();return}
   if(act==='attach'&&t){fillForm(t);focusMissing();return}
   if(act==='redo'&&t){rewriteFrom(t);return}
@@ -1042,7 +1044,7 @@ function renderMBoard(d,dHas,rej){
 }
 function mcardHtml(t,col){
   const miss=missOf(t),rejd=!t.draft&&t.approval==='반려',dt=String(t.date||'');
-  const btn=t.draft?`<button type="button" class="btn sm primary" data-act="draft">이어서 작성하기</button>`
+  const btn=t.draft?`<button type="button" class="btn sm primary" data-act="draft">이어서 작성하기</button><button type="button" class="btn sm danger mc-del" data-act="draft-del" aria-label="작성 중인 청구서 삭제">삭제</button>`
     :rejd?`<button type="button" class="btn sm" data-act="redo" data-id="${esc(t.id)}">다시 작성하기</button>`
     :miss.length?`<button type="button" class="btn sm" data-act="attach" data-id="${esc(t.id)}">영수증 첨부하기</button>`:'';
   return `<article class="mcard${miss.length?' miss':''}${t.draft?' draft':''}${rejd?' rej':''}" ${t.draft?'data-act="draft"':`data-act="open" data-id="${esc(t.id)}"`} tabindex="0">
@@ -1070,6 +1072,19 @@ function renderSumBar(){
     <div class="sfl">${parts.filter(p=>p.v).map(p=>`<span><i class="m-${p.k}"></i>${p.l} <b class="num">${Math.round(p.v/all*100)}%</b></span>`).join('')}</div>`
     :'<div class="sfb"></div><div class="sfl"><span>금액을 넣으면 항목 비율이 보여요</span></div>';
 }
+/* 작성 중인 청구서 삭제 — 서버에 보관한 작성 중 청구서를 지운다(제출한 청구는 그대로).
+   첨부해 둔 영수증은 어느 청구서에도 붙지 않은 파일로 남는다(제출한 청구의 삭제와 같은 방식) */
+function discardDraft(){
+  const d=readDraft(),writing=drawerOn()&&!S.editingId;
+  if(!draftHasContent(d)&&!writing)return;
+  const what=d&&d.place?`'${d.place}' `:'';
+  if(!confirm(`작성 중인 ${what}청구서를 삭제할까요?
+입력한 내용과 첨부한 영수증이 모두 빠지고, 되돌릴 수 없습니다.`))return;
+  clearTimeout(saveDraftSoon._t);S.redoOf='';writeDraft(null,true);
+  if(writing){clearForm();closeDrawer()}
+  renderMemberDash();toast('작성 중인 청구서를 삭제했습니다');
+}
+F('btnDraftDel').addEventListener('click',discardDraft);
 F('btnDraft').addEventListener('click',()=>{
   const d=draftData();
   if(!draftHasContent(d)){toast('저장할 내용이 없습니다');return}
@@ -1094,8 +1109,9 @@ function setAview(v){
 }
 F('viewSeg').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b&&b.dataset.v!==S.aview)setAview(b.dataset.v)});
 
-// 사람마다 다른 색 — 이름으로 8가지 중 하나를 고른다(같은 사람은 늘 같은 색)
-function pc(name){let h=0;for(const c of String(name||''))h=(h*31+c.codePointAt(0))>>>0;return 'pc'+(h%8)}
+// 사람마다 다른 색 — 근무인원 명단 순서로 8가지 색을 돌려 쓴다(명단 앞 8명은 서로 겹치지 않는다).
+// 명단에 없는 이름(예전 기록 등)은 이름으로 고른다. 같은 사람은 보드·일정 어디서나 같은 색
+function pc(name){const i=staffList().indexOf(name);if(i>=0)return 'pc'+(i%8);let h=0;for(const c of String(name||''))h=(h*31+c.codePointAt(0))>>>0;return 'pc'+(h%8)}
 function avHtml(name,cls=''){return `<span class="av ${pc(name)}${cls?' '+cls:''}">${initial(name)}</span>`}
 const KCOLS=[['wait','승인 대기'],['settle','정산 대기'],['done','정산 완료'],['no','반려']];
 const KMOVES={'wait>settle':'approve','wait>no':'reject','settle>done':'settle','no>wait':'revert'};
@@ -1349,6 +1365,68 @@ async function rejectWith(t,reason){
   finally{F('kDrawer').classList.remove('busy')}
 }
 setAview(S.aview);
+
+/* ================================================================
+   관리자 '일정' — 월간 달력(2026-11-13). 청구서의 출장일·기간으로 사람별 색 막대를 그린다.
+   한 주는 한 줄: 위에 날짜, 아래로 출장 막대를 겹치지 않게 칸(레인)을 나눠 쌓는다. 주를 넘는 출장은 주마다 이어 그린다.
+   막대를 누르면 보드와 같은 상세 창(openKD). 휴대폰은 달력 대신 날짜별 목록.
+   ================================================================ */
+S.kcal=today().slice(0,7);S.kcalSt='all';
+// 출장 일수 — '1박2일'이면 2일, '1주 이상'이면 7일로 그린다
+const tripDays=p=>/1주/.test(String(p||''))?7:periodDays(p);
+function addDays(v,n){const d=new Date(v+'T00:00');d.setDate(d.getDate()+n);return ymd(d.getFullYear(),d.getMonth()+1,d.getDate())}
+const dayDiff=(a,b)=>Math.round((new Date(b+'T00:00')-new Date(a+'T00:00'))/864e5);
+const KCAL_TABS=[['all','전체'],['wait','승인 대기'],['settle','정산 대기'],['done','정산 완료'],['no','반려']];
+function renderKCal(){
+  if(S.role==='staff')return;
+  const [y,m]=S.kcal.split('-').map(Number),now=today();
+  const first=ymd(y,m,1),last=ymd(y,m,new Date(y,m,0).getDate());
+  const gs=addDays(first,-new Date(first+'T00:00').getDay()),ge=addDays(last,6-new Date(last+'T00:00').getDay());
+  F('kcalTitle').textContent=`${y}년 ${m}월`;
+  // 이번 달에 걸친 출장(상태 필터 전) — 탭 건수·요약·범례용
+  const span=t=>({t,s:t.date,e:addDays(t.date,tripDays(t.period)-1),k:stageOf(t).key});
+  const inMonth=S.trips.filter(t=>/^\d{4}-\d{2}-\d{2}$/.test(String(t.date))).map(span).filter(x=>x.e>=first&&x.s<=last);
+  if(!KCAL_TABS.some(([k])=>k===S.kcalSt))S.kcalSt='all';
+  F('kcalTabs').innerHTML=KCAL_TABS.map(([k,l])=>`<button type="button" role="tab" data-k="${k}" aria-selected="${S.kcalSt===k}">${k==='all'?'':`<i class="kdot k-${k}"></i>`}${l}<span class="num">${inMonth.filter(x=>k==='all'||x.k===k).length}</span></button>`).join('');
+  const shown=inMonth.filter(x=>S.kcalSt==='all'||x.k===S.kcalSt);
+  const people=[...new Set(shown.map(x=>x.t.traveler))].sort((a,b)=>a.localeCompare(b,'ko'));
+  F('kcalSum').textContent=shown.length?`${shown.length}건 · 출장자 ${people.length}명 · ${shown.reduce((a,x)=>a+tripDays(x.t.period),0)}일`:'';
+  F('kcalLegend').innerHTML=people.map(n=>`<span class="lg">${avHtml(n,'xs')}${esc(n)}</span>`).join('');
+  // 달력 — 그리는 범위(앞뒤 주 포함)에 걸친 출장
+  const items=S.trips.filter(t=>/^\d{4}-\d{2}-\d{2}$/.test(String(t.date))).map(span)
+    .filter(x=>x.e>=gs&&x.s<=ge&&(S.kcalSt==='all'||x.k===S.kcalSt))
+    .sort((a,b)=>a.s.localeCompare(b.s)||dayDiff(b.s,b.e)-dayDiff(a.s,a.e)||String(a.t.traveler).localeCompare(String(b.t.traveler),'ko'));
+  let html='';
+  for(let ws=gs;ws<=ge;ws=addDays(ws,7)){
+    const we=addDays(ws,6),lanes=[],segs=[];
+    items.filter(x=>x.e>=ws&&x.s<=we).forEach(x=>{
+      const c0=Math.max(0,dayDiff(ws,x.s)),c1=Math.min(6,dayDiff(ws,x.e));
+      let l=lanes.findIndex(end=>end<c0);if(l<0){l=lanes.length;lanes.push(-1)}lanes[l]=c1;
+      segs.push({x,c0,c1,l});
+    });
+    const rows=Math.max(lanes.length,1);
+    let cells='';
+    for(let i=0;i<7;i++){const d=addDays(ws,i),w=i;
+      cells+=`<div class="kd${d.slice(0,7)!==S.kcal?' out':''}${d===now?' now':''}${w===0?' sun':w===6?' sat':''}" style="grid-column:${i+1};grid-row:1/${rows+3}"><span class="dn num">${+d.slice(8,10)}</span></div>`}
+    const bars=segs.map(({x,c0,c1,l})=>{const t=x.t,cmp=compN(t);
+      return `<button type="button" class="kbar ${pc(t.traveler)} s-${x.k}${x.s<addDays(ws,c0)?' cl':''}${x.e>addDays(ws,c1)?' cr':''}" style="grid-column:${c0+1}/${c1+2};grid-row:${l+2}" data-id="${esc(t.id)}"
+        title="${esc(t.traveler)}${cmp?` 외 ${cmp}명`:''} · ${esc(t.place)} · ${esc(t.date)} ${esc(t.period||'당일')} · ${esc(stageOf(t).label)} · ${won(t.total)}원"><i class="kdot k-${x.k}"></i><b>${esc(t.traveler)}${cmp?`<small> 외 ${cmp}</small>`:''}</b><span>${esc(t.place)}</span></button>`}).join('');
+    html+=`<div class="kw" style="grid-template-rows:30px repeat(${rows},26px) 10px">${cells}${bars}</div>`;
+  }
+  F('kcalGrid').innerHTML=html;
+  // 휴대폰 목록 — 출장 시작일 기준, 날짜순
+  const list=shown.slice().sort((a,b)=>a.s.localeCompare(b.s));
+  const byDay={};list.forEach(x=>{const k=x.s<first?first:x.s;(byDay[k]=byDay[k]||[]).push(x)});
+  F('kcalList').innerHTML=list.length?Object.keys(byDay).sort().map(d=>`<div class="kl-day"><div class="kl-date${d===now?' now':''}"><b class="num">${+d.slice(8,10)}</b><span>${'일월화수목금토'[new Date(d+'T00:00').getDay()]}</span></div>
+      <div class="kl-items">${byDay[d].map(x=>{const t=x.t;return `<button type="button" class="kl-row" data-id="${esc(t.id)}">${avHtml(t.traveler,'xs')}<span class="kl-m"><b>${esc(t.traveler)}${compN(t)?` 외 ${compN(t)}명`:''} · ${esc(t.place)}</b><small class="num">${esc(t.date.slice(5).replace('-','.'))}${tripDays(t.period)>1?` – ${esc(x.e.slice(5).replace('-','.'))}`:''} · ${esc(t.period||'당일')}</small></span><span class="sbadge st-${x.k}">${esc(stageOf(t).label)}</span></button>`}).join('')}</div></div>`).join('')
+    :`<div class="kempty">${S.kcalSt==='all'?'이번 달 출장이 없습니다':'이 상태의 출장이 없습니다'}</div>`;
+}
+function shiftKcal(n){const [y,m]=S.kcal.split('-').map(Number),d=new Date(y,m-1+n,1);S.kcal=ymd(d.getFullYear(),d.getMonth()+1,1).slice(0,7);renderKCal()}
+F('kcalPrev').addEventListener('click',()=>shiftKcal(-1));
+F('kcalNext').addEventListener('click',()=>shiftKcal(1));
+F('kcalToday').addEventListener('click',()=>{S.kcal=today().slice(0,7);renderKCal()});
+F('kcalTabs').addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(!b)return;S.kcalSt=b.dataset.k;renderKCal()});
+[F('kcalGrid'),F('kcalList')].forEach(el=>el.addEventListener('click',e=>{const b=e.target.closest('[data-id]');if(b)openKD(b.dataset.id)}));
 
 /* ---------- 시작 ---------- */
 clearForm();

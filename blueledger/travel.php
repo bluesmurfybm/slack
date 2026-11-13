@@ -238,6 +238,8 @@ $csrf = bl_csrf_token();
       <div class="sfbar" id="sumBar" aria-hidden="true"></div>
       <div class="btns">
         <button class="btn danger" id="btnDel" hidden>삭제</button>
+        <!-- 새 청구(구성원): 작성 중인 청구서 지우기 · 임시 저장 · 대표 승인 요청 -->
+        <button class="btn danger" id="btnDraftDel" hidden>삭제</button>
         <button class="btn" id="btnDraft" hidden>임시 저장</button>
         <button class="btn primary" id="btnSave">청구서 저장</button>
         <!-- 관리자(승인·정산) 화면: 누르면 바로 승인(반려)하고 저장한다. '청구서 저장' 단추와 위쪽 승인 칸을 대신한다 -->
@@ -295,10 +297,28 @@ $csrf = bl_csrf_token();
       <div class="ctabs ktabs" id="kTabs" role="tablist" aria-label="열"></div>
       <div class="kboard" id="kBoard"></div>
     </section>
-    <!-- 일정 — 월간 달력에 사람별 색으로 출장 표시(다음에 만든다) -->
+    <!-- 일정 — 월간 달력. 청구서의 출장일·기간으로 사람별 색 막대를 그린다(2026-11-13). 막대를 누르면 보드와 같은 상세 창 -->
     <section class="kview" id="calView" aria-labelledby="calTitle">
-      <div class="dhead"><div><h2 class="dtitle" id="calTitle">출장 일정</h2><div class="dsub">월간 달력에 사람별 색깔로 출장을 표시합니다</div></div></div>
-      <div class="card kcal-empty"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg><b>일정 보기는 준비 중입니다</b><span>지금은 보드와 통계를 이용해 주세요.</span></div>
+      <div class="dhead">
+        <div><h2 class="dtitle" id="calTitle">출장 일정</h2><div class="dsub">월간 달력에 사람별 색깔로 출장을 표시합니다 · 막대를 누르면 상세가 열립니다</div></div>
+        <div class="kcal-nav">
+          <button type="button" class="btn sm icbtn" id="kcalPrev" aria-label="이전 달"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg></button>
+          <b class="num" id="kcalTitle"></b>
+          <button type="button" class="btn sm icbtn" id="kcalNext" aria-label="다음 달"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg></button>
+          <button type="button" class="btn sm" id="kcalToday">이번 달</button>
+        </div>
+      </div>
+      <div class="kcal-bar">
+        <div class="ctabs" id="kcalTabs" role="tablist" aria-label="상태"></div>
+        <div class="kcal-sum num" id="kcalSum"></div>
+      </div>
+      <div class="kcal-legend" id="kcalLegend" aria-label="출장자"></div>
+      <div class="card kcal">
+        <div class="kcal-wd" aria-hidden="true"><span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span class="sat">토</span></div>
+        <div class="kcal-grid" id="kcalGrid"></div>
+        <!-- 휴대폰: 달력 대신 날짜별 목록 -->
+        <div class="kcal-list" id="kcalList"></div>
+      </div>
     </section>
     <!-- 관리자 '통계' — 예전 '출장경비 관리'(요약 카드·월별·출장자별·청구 목록·출장비 기준). 구성원 화면에서는 숨는다 -->
     <section class="adash" id="adminDash" aria-labelledby="adminTitle">
