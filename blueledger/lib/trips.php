@@ -16,6 +16,7 @@ function bl_trip_out(array $r) {
         'companionCount' => (int)$r['companion_count'], 'date' => $r['trip_date'], 'period' => $r['period'],
         'place' => $r['place'], 'purpose' => $r['purpose'], 'mode' => $r['mode'], 'km' => (float)$r['km'],
         'transport' => (int)$r['transport'], 'toll' => (int)$r['toll'], 'meal' => (int)$r['meal'],
+        'lodging' => (int)($r['lodging'] ?? 0), 'lodgingNights' => (int)($r['lodging_nights'] ?? 0), 'lodgingPeople' => (int)($r['lodging_people'] ?? 0),
         'etc' => (int)$r['etc'], 'etcNote' => $r['etc_note'], 'total' => (int)$r['total'],
         'receipts' => $receipts,
         'approval' => $r['approval'], 'approver' => $r['approver'], 'approvedAt' => $r['approved_at'],
@@ -23,6 +24,7 @@ function bl_trip_out(array $r) {
         'payMethod' => $r['pay_method'], 'note' => $r['note'], 'source' => $r['source'],
         'createdBy' => $r['created_by_name'], 'createdAt' => $r['created_at'], 'updatedAt' => $r['updated_at'],
         'staffUpdatedAt' => $r['staff_updated_at'], 'reviewedAt' => $r['reviewed_at'],
+        'rejectReason' => (string)($r['reject_reason'] ?? ''),
     ];
 }
 
@@ -73,7 +75,7 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
                 'created_by' => $me['email'], 'created_by_name' => $me['name'], 'created_at' => $now,
                 'receipts' => null, 'source' => '', 'staff_updated_at' => '', 'reviewed_at' => '',
                 'approver' => '', 'approved_at' => '', 'handler' => '', 'processed_at' => '',
-                'pay_method' => '', 'note' => '', 'companion_count' => 0,
+                'pay_method' => '', 'note' => '', 'companion_count' => 0, 'reject_reason' => '', 'lodging_nights' => 0, 'lodging_people' => 0,
             ];
         } else {
             $row = $prev;
@@ -105,6 +107,13 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
             $who = $role === ROLE_APPROVER ? $me['name'] : (bl_settings($pdo)['approverName'] ?? '김호영');
             if ($row['approval'] === '승인대기') $row['approver'] = '';
             elseif ($before[0] !== $row['approval'] || $row['approver'] === '') $row['approver'] = $who;
+            // 반려 사유 — 청구자에게 보인다. 새로 반려할 때는 꼭 적어야 하고, 반려가 아니게 되면 비운다(2026-11-13)
+            if ($row['approval'] === '반려') {
+                if (array_key_exists('rejectReason', $data)) $row['reject_reason'] = clip(trim((string)$data['rejectReason']), 500);
+                if ($before[0] !== '반려' && trim((string)($row['reject_reason'] ?? '')) === '') throw new BlError('반려 사유를 입력해 주세요', 400);
+            } else {
+                $row['reject_reason'] = '';
+            }
             if ($before !== [$row['approval'], $row['approver'], $row['approved_at']]) $row['reviewed_at'] = $now;
         }
         if ($role === ROLE_ADMIN) {
@@ -125,7 +134,7 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
         if (trim((string)($row['traveler'] ?? '')) === '' || ($row['trip_date'] ?? '') === '' || trim((string)($row['place'] ?? '')) === '') {
             throw new BlError('출장자, 출장일, 출장지는 꼭 입력해야 합니다', 400);
         }
-        $row['total'] = (int)$row['transport'] + (int)$row['toll'] + (int)$row['meal'] + (int)$row['etc'];
+        $row['total'] = (int)$row['transport'] + (int)$row['toll'] + (int)($row['lodging'] ?? 0) + (int)$row['meal'] + (int)$row['etc'];
         $row['updated_at'] = $now;
 
         bl_write_trip($pdo, $row, (bool)$prev);
@@ -154,6 +163,8 @@ function bl_apply_content(PDO $pdo, array &$row, array $d, array $me, $prev) {
     }
     if (array_key_exists('companionCount', $d)) $row['companion_count'] = max(0, (int)$d['companionCount']);
     if (array_key_exists('km', $d) || !$prev)   $row['km'] = max(0, min(99999, round((float)($d['km'] ?? 0), 1)));
+    if (array_key_exists('lodgingNights', $d) || !$prev) $row['lodging_nights'] = max(0, min(99, (int)($d['lodgingNights'] ?? 0)));
+    if (array_key_exists('lodgingPeople', $d) || !$prev) $row['lodging_people'] = max(0, min(99, (int)($d['lodgingPeople'] ?? 0)));
     foreach (RC_KINDS as $k) {
         if (array_key_exists($k, $d) || !$prev) $row[$k] = to_won($d[$k] ?? 0);
     }
@@ -188,9 +199,11 @@ function bl_clean_receipts(PDO $pdo, $in, array $me, $prev) {
 
 function bl_write_trip(PDO $pdo, array $row, $exists) {
     $cols = ['traveler', 'companions', 'companion_count', 'trip_date', 'period', 'place', 'purpose', 'mode', 'km',
-        'transport', 'toll', 'meal', 'etc', 'etc_note', 'total', 'receipts', 'approval', 'approver', 'approved_at',
+        'transport', 'toll', 'lodging', 'lodging_nights', 'lodging_people', 'meal', 'etc', 'etc_note', 'total', 'receipts', 'approval', 'approver', 'approved_at',
         'status', 'handler', 'processed_at', 'pay_method', 'note', 'source', 'created_by', 'created_by_name',
-        'created_at', 'updated_at', 'staff_updated_at', 'reviewed_at'];
+        'created_at', 'updated_at', 'staff_updated_at', 'reviewed_at', 'reject_reason'];
+    // 나중에 더한 칸을 아직 못 더했으면(ALTER 권한 없음 등) 그 칸은 빼고 저장한다
+    $cols = array_values(array_filter($cols, fn($c) => !bl_col_missing('bl_travel_trips', $c)));
     $vals = array_map(fn($c) => $row[$c] ?? '', $cols);
     if ($exists) {
         $set = implode(',', array_map(fn($c) => "`$c`=?", $cols));
@@ -232,13 +245,13 @@ function bl_send_csv(array $trips, $year) {
     header('Cache-Control: no-store');
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");   // 엑셀이 한글을 깨지 않게
-    fputcsv($out, ['No.', '출장자', '동행자', '동행자수', '출장일', '기간', '출장지', '출장목적', '교통수단', '교통비', '통행료', '식대', '기타', '기타내역', '합계',
+    fputcsv($out, ['No.', '출장자', '동행자', '동행자수', '출장일', '기간', '출장지', '출장목적', '교통수단', '교통비', '통행료', '숙박비', '숙박(박)', '숙박인원', '식대', '기타', '기타내역', '합계',
         '영수증', '승인', '승인자', '승인일', '처리여부', '처리자', '처리일시', '지급방법', '비고']);
     foreach (array_values($trips) as $i => $t) {
         $rc = 0;
         foreach ($t['receipts'] as $list) $rc += count($list);
         fputcsv($out, [$i + 1, $t['traveler'], $t['companions'], $t['companionCount'], $t['date'], $t['period'], $t['place'], $t['purpose'],
-            $t['mode'], $t['transport'], $t['toll'], $t['meal'], $t['etc'], $t['etcNote'], $t['total'],
+            $t['mode'], $t['transport'], $t['toll'], $t['lodging'], $t['lodgingNights'] ?: '', $t['lodgingPeople'] ?: '', $t['meal'], $t['etc'], $t['etcNote'], $t['total'],
             $rc, $t['approval'], $t['approver'], $t['approvedAt'], $t['status'], $t['handler'], $t['processedAt'], $t['payMethod'], $t['note']]);
     }
     fclose($out);

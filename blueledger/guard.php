@@ -26,7 +26,7 @@ const BL_SEED_ROLES = [
 
 const APPROVALS  = ['승인대기', '승인', '반려'];
 const STATUSES   = ['미처리', '처리완료'];
-const RC_KINDS   = ['transport', 'toll', 'meal', 'etc'];
+const RC_KINDS   = ['transport', 'toll', 'lodging', 'meal', 'etc'];   // 숙박비(lodging)는 2026-11-13 추가
 const PERIODS    = ['당일', '1박2일', '2박3일', '3박4일', '4박5일', '1주 이상'];
 const PAY_METHODS = ['', '계좌이체', '법인카드', '현금', '법인카드+계좌이체'];
 
