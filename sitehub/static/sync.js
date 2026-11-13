@@ -155,8 +155,35 @@ function unmatchedRow(opts, h) {
       <div class="t">${typeof historyStatusBadge === "function" ? historyStatusBadge(h.status) : ""}${h.req_at || h.date ? `<span class="sh-hist-date">${esc(h.req_at ? String(h.req_at).slice(0, 16) : h.date)}</span>` : ""}${esc(h.title || "(제목 없음)")}</div>
       <div class="s">${h.site_text && h.site_text !== h.title ? `<span><b>표기</b> ${esc(h.site_text)}</span>` : ""}${h.body ? `<span class="muted">${esc(h.body.length > 60 ? h.body.slice(0, 60) + "…" : h.body)}</span>` : ""}</div>
     </div>
-    <div><select onchange="assignHistory('${esc(h.id)}', this.value, this)">${opts}</select></div>
+    <div class="sh-um-act"><select onchange="assignHistory('${esc(h.id)}', this.value, this)">${opts}</select>${SH.listUrl || SH.canSync ? `<button type="button" class="btn-mini ghost danger" onclick="deleteUnmatched('${esc(h.id)}', this)">삭제</button>` : ""}</div>
   </li>`;
+}
+
+// 지정·삭제로 행이 빠진 뒤 — 빈 목록 안내, 제목 건수, 연도 거르기를 맞춘다
+function unmatchedRowGone(li) {
+  li.remove();
+  const list = $("unmatchedList");
+  if (list && !list.querySelector("li[data-id]")) list.innerHTML = `<li class="empty">미매칭 이력이 없습니다.</li>`;
+  const h2 = document.querySelector("#sheet .sheet-head h2");
+  if (h2) h2.textContent = "미매칭 " + (list ? list.querySelectorAll("li[data-id]").length : 0) + "건";
+  const ys = $("unmatchedYear");
+  if (ys) filterUnmatchedYear(ys.value);
+}
+
+async function deleteUnmatched(id, btn) {
+  const li = btn.closest("li");
+  const label = (li.querySelector(".t")?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40);
+  if (!(await askConfirm("이력 삭제", (label ? "‘" + label + "’ 이력을 " : "이 이력을 ") + "Slack 리스트에서도 지웁니다(하위 작업 포함). 되돌릴 수 없습니다.", "삭제"))) return;
+  btn.disabled = true;
+  try {
+    const j = await postJSON({ action: "history_delete", id });
+    applyMeta(j.meta);
+    unmatchedRowGone(li);
+    showToast("삭제했습니다 (Slack 반영)");
+  } catch (e) {
+    btn.disabled = false;
+    showToast(e.message);
+  }
 }
 
 async function assignHistory(id, siteId, sel) {
@@ -166,14 +193,7 @@ async function assignHistory(id, siteId, sel) {
     const j = await postJSON({ action: "history_assign", id, site_id: Number(siteId) });
     applyMeta(j.meta);
     replaceSite(j.site);
-    const li = sel.closest("li");
-    li.remove();
-    const list = $("unmatchedList");
-    if (list && !list.children.length) list.innerHTML = `<li class="empty">미매칭 이력이 없습니다.</li>`;
-    const h2 = document.querySelector("#sheet .sheet-head h2");
-    if (h2) h2.textContent = "미매칭 " + (list ? list.querySelectorAll("li[data-id]").length : 0) + "건";
-    const ys = $("unmatchedYear");
-    if (ys) filterUnmatchedYear(ys.value);
+    unmatchedRowGone(sel.closest("li"));
     showToast("연결했습니다");
     if (APP.open.id === Number(siteId)) refreshDrawer();
   } catch (e) {
