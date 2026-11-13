@@ -8,6 +8,7 @@ const APP = {
   filter: { q: "", status: "", hosting: "", stack: "", expiry: false },   // expiry: 만료 안내 대상(호스팅·도메인·SSL 30일 안)만
   view: "active",       // active=사용 중 · archive=보관함. 보관된 사이트는 archived=1 — 삭제 대신 여기로 옮긴다
   layout: "list",
+  sort: "contract",     // contract=계약 만료일순 · name=가나다순 · work=신규 유지보수건순
   open: { id: null, tab: "basic" },   // 드로어에 열린 사이트 — 주소 ?site=&tab= 와 같이 움직인다
   notice: {},           // { site_id: 안 읽은 변경 알림 수 } — notice_lib.php::sitehub_notice_unread
 };
@@ -16,6 +17,11 @@ const LAYOUT_KEY = "sitehub-list-layout";
 try {
   const saved = localStorage.getItem(LAYOUT_KEY);
   if (saved === "card" || saved === "list") APP.layout = saved;
+} catch (e) { }
+const SORT_KEY = "sitehub-list-sort";
+try {
+  const saved = localStorage.getItem(SORT_KEY);
+  if (saved === "contract" || saved === "name" || saved === "work") APP.sort = saved;
 } catch (e) { }
 
 const $ = id => document.getElementById(id);

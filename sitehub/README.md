@@ -63,6 +63,9 @@ BlueLab 팀이 유지보수하는 **사이트** 정보를  관리하는 모듈(`
   연속 실패면 장애로 확정하고, 상태가 바뀔 때만 웹훅을 보낸다.
 - 설정은 `lab_sync_meta` 의 `blumo_*`(웹훅 주소는 enc:v1). https 점검은 `monitor/cacert.pem` 으로 인증서를 검증한다 —
   끄면 TLS_FAIL 을 못 잡는다. `monitor/` 는 `.htaccess` 로 막는다.
+- 점검 요청은 브라우저처럼 보낸다(`BLUMO_UA` = 크롬 UA + `Blumo/1.0`, Accept 머리글). 403·406 이면 순수 브라우저 UA 로 한 번 더 열어
+  되면 정상으로 보고 원인에 `Blumo 점검 요청만 차단` 을, 그래도 막히면 `브라우저 UA 로도 403 — IP·서버 설정 차단 · 응답 서버 <IP>` 를 붙인다
+  (`blumo_probe_note`). 응답 서버 IP 가 실제 사이트 IP 와 다르면 점검 서버의 DNS 문제, 같으면 사이트 쪽에서 점검 서버의 나가는 IP(환경 진단)를 허용해야 한다.
 
 ## 포털 등록
 `core/worksystems.json`(`key: sitehub`), 루트 `index.php` 의 `sitehubIcon` · ICONS 맵, 모듈 안의 `need_login=sitehub` ·

@@ -101,7 +101,17 @@ function siteText(s) {
 const STATUS_ORDER = { soon: 0, active: 1, expired: 2, none: 3 };
 const KIND_TIER = { free: 1, case: 2, dev: 2, none: 3 };   // 그 밖(연간·월간)은 0
 const kindTier = cs => KIND_TIER[cs.kind] ?? 0;
+// 신규 유지보수건순: 미완료 요청이 있는 사이트 먼저, 그 안에서 미완료 요청이 최근에 들어온 순 → 나머지는 마지막 요청이 최근인 순
+const byName = (a, b) => a.name.localeCompare(b.name, "ko", { numeric: true });
+function byWork(a, b) {
+  const oa = openCount(a) > 0, ob = openCount(b) > 0;
+  if (oa !== ob) return oa ? -1 : 1;
+  const ta = (oa ? a.history_open_last : a.history_last) || "", tb = (ob ? b.history_open_last : b.history_last) || "";
+  return ta === tb ? byName(a, b) : (ta < tb ? 1 : -1);
+}
 function sortSites(rows) {
+  if (APP.sort === "name") return rows.slice().sort(byName);
+  if (APP.sort === "work") return rows.slice().sort(byWork);
   return rows.slice().sort((a, b) => {
     const ca = a.contract_status || {}, cb = b.contract_status || {};
     if (kindTier(ca) !== kindTier(cb)) return kindTier(ca) - kindTier(cb);
@@ -117,7 +127,7 @@ function visibleSites() {
   const q = f.q.trim().toLowerCase();
   return sortSites(viewSites()).filter(s => {
     if (f.expiry && !(s.expiry_alerts || []).length) return false;
-    if (f.status && (s.contract_status || {}).code !== f.status) return false;
+    if (f.status === "work" ? !openCount(s) : f.status && (s.contract_status || {}).code !== f.status) return false;
     if (f.hosting && !splitTags(s.hosting).some(v => tagKey(v) === f.hosting)) return false;
     if (f.stack && !splitTags(s.stack).some(v => tagKey(v) === f.stack)) return false;
     if (q && !siteText(s).includes(q)) return false;
@@ -138,6 +148,7 @@ function render() {
   $("cntActive").textContent = APP.sites.filter(s => !s.archived).length;
   $("cntArchive").textContent = APP.sites.filter(s => s.archived).length;
   document.querySelectorAll("#viewseg button").forEach(b => b.classList.toggle("on", b.dataset.view === APP.view));
+  $("fSort").value = APP.sort;
   $("list").innerHTML = APP.layout === "card" ? cardsHtml(rows) : listHtml(rows);
   document.querySelectorAll("#viewtoggle button").forEach(b => b.classList.toggle("on", b.dataset.layout === APP.layout));
 }
@@ -173,9 +184,19 @@ function renderStats() {
   const n = { active: 0, soon: 0, expired: 0, none: 0 };
   scope.forEach(s => { const c = (s.contract_status || {}).code; if (n[c] !== undefined) n[c]++; });
   const tiles = [["active", "계약중"], ["soon", "만료 임박 " + SH.soonDays + "일"], ["expired", "만료"], ["none", "미계약"]];
+  const w = { todo: 0, doing: 0, review: 0 };
+  scope.forEach(s => { const o = s.history_open || {}; for (const k in w) w[k] += o[k] | 0; });
+  const total = w.todo + w.doing + w.review;
   $("stats").innerHTML = tiles.map(([code, label]) =>
     `<div class="stat sh-st-${code}${APP.filter.status === code ? " on" : ""}" onclick="toggleStatus('${code}')" title="누르면 이 상태만 봅니다">
-       <span>${esc(label)}</span><b>${n[code]}</b></div>`).join("");
+       <span>${esc(label)}</span><b>${n[code]}</b></div>`).join("")
+    + `<div class="stat sh-st-work${APP.filter.status === "work" ? " on" : ""}" onclick="toggleStatus('work')" title="누르면 남은 작업이 있는 사이트만 봅니다">
+       <span>남은 유지보수 작업</span><b>${total}</b><i class="flat">시작전 ${w.todo} · 진행중 ${w.doing} · 검토중 ${w.review}</i></div>`;
+}
+const openCount = s => { const o = s.history_open || {}; return (o.todo | 0) + (o.doing | 0) + (o.review | 0); };
+function historyLabel(s) {
+  const n = openCount(s);
+  return `<button type="button" class="sh-hlink" onclick="openDrawer(${s.id}, 'history')" title="이력 탭 열기">이력 ${s.history_count}건${n ? `<span class="sh-hopen" title="완료 처리 안 된 이력 ${n}건">N</span>` : ""}</button>`;
 }
 function toggleStatus(code) {
   APP.filter.status = APP.filter.status === code ? "" : code;
@@ -239,7 +260,7 @@ function rowHtml(s) {
         ${urlLink(s.url_ops, s.url_ops.replace(/^https?:\/\//, ""))}
         ${s.url_admin ? `<span class="sep">·</span>${urlLink(s.url_admin, "관리자")}` : ""}
         ${s.stack ? `<span class="sep">·</span><span class="chip">${esc(s.stack)}</span>` : ""}
-        <span class="sep">·</span><span class="muted">이력 ${s.history_count}건</span>
+        <span class="sep">·</span>${historyLabel(s)}
         ${listStamp(s)}
       </div>
     </div>
@@ -299,7 +320,7 @@ function cardHtml(s) {
   return `<li class="card sh-card${s.archived ? " dim" : ""}" data-id="${s.id}">
     <div class="card-top">${statusBadge(s)}${(s.expiry_alerts || []).length ? expiryBadge(s.expiry_alerts[0], true) : ""}${s.hosting ? `<span class="chip ghost">${esc(splitTags(s.hosting)[0])}</span>` : ""}${s.stack ? `<span class="chip">${esc(s.stack)}</span>` : ""}${archiveBadge(s)}</div>
     <div class="card-title"><span class="sh-ct">${monitorDot(s.monitor_status)}<button type="button" class="linkish" onclick="openDrawer(${s.id})">${esc(s.name)}</button>${noticeMark(s)}</span>${s.customer ? `<span class="muted">${esc(s.customer)}</span>` : ""}</div>
-    <div class="card-tags">${tags.map(t => `<span class="chip ghost">${t}</span>`).join("")}<span class="muted">이력 ${s.history_count}건</span>${listStamp(s).replace('<span class="sep">·</span>', "")}</div>
+    <div class="card-tags">${tags.map(t => `<span class="chip ghost">${t}</span>`).join("")}${historyLabel(s)}${listStamp(s).replace('<span class="sep">·</span>', "")}</div>
     <div class="card-foot"><div class="row-act">${accountCopyButtons(s)}${contactCopyButton(s)}</div>
       <div class="row-act">${archiveActBtn(s)}<button type="button" class="btn-mini ghost" onclick="openDrawer(${s.id})">상세</button></div></div>
   </li>`;
@@ -307,6 +328,12 @@ function cardHtml(s) {
 function cardsHtml(rows) {
   if (!rows.length) return listHtml(rows);
   return `<ul class="cards">${rows.map(cardHtml).join("")}</ul>`;
+}
+
+function setSort(v) {
+  APP.sort = ["name", "work"].includes(v) ? v : "contract";
+  try { localStorage.setItem(SORT_KEY, APP.sort); } catch (e) { }
+  render();
 }
 
 function setLayout(v) {

@@ -518,6 +518,7 @@ ul.cards li.empty{grid-column:1/-1;border:1px solid var(--bo-primary);border-rad
 .sh-stats .stat.sh-st-soon b{color:var(--warn30)}
 .sh-stats .stat.sh-st-expired b{color:var(--nega40)}
 .sh-stats .stat.sh-st-none b{color:var(--tx-quinary)}
+.sh-stats .stat.sh-st-work b{color:var(--warn30)}
 
 /* 계약 상태 배지 — 계약중 posi · 만료 임박 warn · 만료 nega · 미계약 점선 */
 .badge.sh-st-active{background:var(--posi95);color:var(--posi40)}
@@ -962,3 +963,6 @@ details.sh-menu > summary::-webkit-details-marker{display:none}
 .sh-bell__all{display:block;border-top:1px solid var(--bo-secondary);margin-top:4px;padding:9px 10px 6px;font-size:12px;color:var(--cos40);text-decoration:none}
 /* 목록의 안 읽은 변경 알림 표시 — 드로어를 열면 읽음 */
 .sh-new{display:inline-block;margin-left:6px;padding:0 5px;border-radius:var(--r4);background:var(--nega50);color:#fff;font-size:10px;font-weight:700;line-height:16px;vertical-align:middle}
+.sh-hlink{background:none;border:0;padding:0;font:inherit;font-size:12.5px;color:var(--tx-quaternary);cursor:pointer}
+.sh-hlink:hover{color:var(--cos50);text-decoration:underline}
+.sh-hopen{display:inline-block;margin-left:4px;padding:0 4px;border-radius:var(--r4);background:var(--warn30);color:#fff;font-size:10px;font-weight:700;line-height:15px;vertical-align:middle}

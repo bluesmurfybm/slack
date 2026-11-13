@@ -28,14 +28,19 @@ include __DIR__ . '/views/head.php';
         <button type="button" class="sh-qclear" id="qClear" title="검색어 지우기" aria-label="검색어 지우기" hidden>×</button>
       </div>
       <div class="filters">
-        <select id="fHosting" title="호스팅으로 거르기"></select>
+        <select id="fHosting" title="호스팅으로 거르기" hidden></select>
         <select id="fStack" title="스택으로 거르기"></select>
+        <select id="fSort" title="정렬" onchange="setSort(this.value)">
+          <option value="contract">계약 만료일순</option>
+          <option value="name">가나다순</option>
+          <option value="work">신규 유지보수건순</option>
+        </select>
       </div>
       <div class="viewtoggle sh-viewseg" id="viewseg" role="tablist">
         <button type="button" data-view="active" onclick="setView('active')" title="사용 중인 사이트">사용 중 <b id="cntActive"></b></button>
         <button type="button" data-view="archive" onclick="setView('archive')" title="보관함 — 미사용·종료된 사이트">보관함 <b id="cntArchive"></b></button>
       </div>
-      <button class="btn-ghost" type="button" id="btnImport" onclick="openImport()" title="호스팅 정보 엑셀(시트별 사이트)을 읽어 넣습니다">엑셀 가져오기</button>
+      <button class="btn-ghost" type="button" id="btnImport" hidden onclick="openImport()" title="호스팅 정보 엑셀(시트별 사이트)을 읽어 넣습니다">엑셀 가져오기</button>
       <button class="btn-ghost" type="button" id="btnSync" onclick="runSync()" hidden>이력 동기화</button>
       <button class="btn-mini" type="button" id="btnUnmatched" onclick="openUnmatched()" hidden></button>
       <div class="viewtoggle" id="viewtoggle">

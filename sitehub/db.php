@@ -766,6 +766,8 @@ function sitehub_load_sites(PDO $pdo, ?array $ids = null, bool $includeArchived 
         foreach (['repo', 'deploy', 'backup', 'caution', 'note', 'archive_note'] as $c) $r[$c] = (string)($r[$c] ?? '');
         $r['accounts'] = $r['contacts'] = $r['contracts'] = $r['costs'] = $r['monitors'] = [];
         $r['history_count'] = 0;
+        $r['history_open'] = ['todo' => 0, 'doing' => 0, 'review' => 0];
+        $r['history_open_last'] = $r['history_last'] = null;
         $sites[$r['id']] = $r;
     }
     if (!$sites) return [];
@@ -794,6 +796,18 @@ function sitehub_load_sites(PDO $pdo, ?array $ids = null, bool $includeArchived 
     // 이력 건수는 요청(최상위 항목)만 — 하위 항목은 그 요청의 세부 작업이다
     foreach ($pdo->query("SELECT site_id, COUNT(*) n FROM lab_history WHERE archived = 0 AND parent_id IS NULL AND site_id IN ({$in}) GROUP BY site_id") as $h) {
         $sites[(int)$h['site_id']]['history_count'] = (int)$h['n'];
+    }
+    // 남은 유지보수 작업 — 처리상태 라벨이 '1_시작전/2_작업중/4_검토중' 처럼 번호가 붙어 있어 LIKE 로 가른다
+    foreach ($pdo->query("SELECT site_id, SUM(status LIKE '%시작전%') todo, SUM(status LIKE '%작업중%' OR status LIKE '%진행중%') doing,
+                                 SUM(status LIKE '%검토중%') review,
+                                 MAX(CASE WHEN status LIKE '%시작전%' OR status LIKE '%작업중%' OR status LIKE '%진행중%' OR status LIKE '%검토중%'
+                                          THEN COALESCE(req_at, date) END) open_last,
+                                 MAX(COALESCE(req_at, date)) last
+                            FROM lab_history WHERE archived = 0 AND parent_id IS NULL AND site_id IN ({$in}) GROUP BY site_id") as $h) {
+        $sid = (int)$h['site_id'];
+        $sites[$sid]['history_open'] = ['todo' => (int)$h['todo'], 'doing' => (int)$h['doing'], 'review' => (int)$h['review']];
+        $sites[$sid]['history_open_last'] = $h['open_last'] === null ? null : (string)$h['open_last'];
+        $sites[$sid]['history_last'] = $h['last'] === null ? null : (string)$h['last'];
     }
     sitehub_monitor_attach($pdo, $sites);
     foreach ($sites as &$s) {
