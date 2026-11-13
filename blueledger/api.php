@@ -13,6 +13,8 @@
  *   POST prices/refresh   오피넷에서 지금 받기 (정산 담당)
  *   POST prices/apply     화면 유가를 주유비 산정 기준으로 (정산 담당)
  *   POST roles            권한 바꾸기 (정산 담당)
+ *   POST draft            작성 중 청구서 저장(본인) — {draft: {...}|null}
+ *   POST draft/redone     [다시 작성하기]로 다시 낸 반려 청구 기억 — {id}
  *
  * POST 는 모두 X-CSRF-Token 머리가 있어야 한다.
  */
@@ -43,6 +45,7 @@ try {
                 'me'       => ['name' => $me['name'], 'email' => $me['email'], 'role' => $me['role'], 'color' => $me['color']],
                 'trips'    => bl_visible_trips($pdo, $me),
                 'settings' => bl_client_settings($pdo, $me),
+                'draft'    => bl_get_draft($pdo, $me),
             ]);
 
         case 'GET receipt':
@@ -85,6 +88,13 @@ try {
             bl_apply_prices($pdo);
             jsend(['ok' => true]);
 
+        case 'POST draft':
+            jsend(['ok' => true, 'savedAt' => bl_save_draft($pdo, $me, body_json()['draft'] ?? null)]);
+
+        case 'POST draft/redone':
+            bl_mark_redone($pdo, $me, (string)(body_json()['id'] ?? ''));
+            jsend(['ok' => true]);
+
         case 'POST roles':
             bl_require_admin($me, '권한 변경');
             bl_set_role($pdo, $me, body_json());
@@ -120,4 +130,38 @@ function bl_set_role(PDO $pdo, array $me, array $body) {
     } else {
         bl_upsert($pdo, 'bl_travel_roles', ['email' => $email, 'role' => $role, 'updated_by' => $me['email'], 'updated_at' => now_stamp()], ['email']);
     }
+}
+
+/* ---------- 작성 중 청구서(제출 전) — 사람마다 한 건, 서버에 둔다 ---------- */
+function bl_draft_row(PDO $pdo, array $me) {
+    $st = $pdo->prepare("SELECT * FROM bl_travel_drafts WHERE email=?");
+    $st->execute([$me['email']]);
+    return $st->fetch() ?: null;
+}
+function bl_get_draft(PDO $pdo, array $me) {
+    $r = bl_draft_row($pdo, $me);
+    $d = $r ? json_decode((string)$r['data'], true) : null;
+    $redone = $r ? json_decode((string)$r['redone'], true) : null;
+    return ['data' => is_array($d) ? $d : null, 'redone' => is_array($redone) ? array_values(array_filter($redone, 'is_string')) : [], 'updatedAt' => $r['updated_at'] ?? ''];
+}
+/** 화면 칸 그대로 받아 둔다(제출할 때 bl_save_trip 이 다시 검사한다). null 이면 지운다 */
+function bl_save_draft(PDO $pdo, array $me, $draft) {
+    $now = now_stamp();
+    $json = null;
+    if ($draft !== null) {
+        if (!is_array($draft)) throw new BlError('작성 중 청구서 형식이 올바르지 않습니다', 400);
+        $json = json_encode($draft, JSON_UNESCAPED_UNICODE);
+        if (strlen($json) > 60000) throw new BlError('작성 중 청구서가 너무 큽니다', 413);
+    }
+    $r = bl_draft_row($pdo, $me);
+    bl_upsert($pdo, 'bl_travel_drafts', ['email' => $me['email'], 'data' => $json, 'redone' => $r['redone'] ?? null, 'updated_at' => $now], ['email']);
+    return $now;
+}
+function bl_mark_redone(PDO $pdo, array $me, $id) {
+    if ($id === '' || strlen($id) > 40) throw new BlError('청구서 번호가 올바르지 않습니다', 400);
+    $r = bl_draft_row($pdo, $me);
+    $list = $r ? (json_decode((string)$r['redone'], true) ?: []) : [];
+    if (!in_array($id, $list, true)) $list[] = $id;
+    $list = array_slice($list, -50);
+    bl_upsert($pdo, 'bl_travel_drafts', ['email' => $me['email'], 'data' => $r['data'] ?? null, 'redone' => json_encode($list), 'updated_at' => $r['updated_at'] ?? now_stamp()], ['email']);
 }

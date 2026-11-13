@@ -31,10 +31,13 @@ const BL_SCHEMA = [
             'km'               => ['DECIMAL(8,1)', 0,     '자가용 편도 거리'],
             'transport'        => ['INT',          0,     ''],
             'toll'             => ['INT',          0,     ''],
+            'lodging'          => ['INT',          0,     '숙박비(2026-11-13 추가)'],
+            'lodging_nights'   => ['INT',          0,     '숙박 박수'],
+            'lodging_people'   => ['INT',          0,     '숙박 인원(출장자 포함)'],
             'meal'             => ['INT',          0,     ''],
             'etc'              => ['INT',          0,     ''],
             'etc_note'         => ['VARCHAR(300)', '',    ''],
-            'total'            => ['INT',          0,     '네 항목 합. 저장할 때 서버가 다시 계산한다'],
+            'total'            => ['INT',          0,     '교통비+통행료+숙박비+식대+기타. 저장할 때 서버가 다시 계산한다'],
             'receipts'         => ['TEXT',         null,  '{"transport":[{id,type,name}],...} — 파일 본체는 bl_travel_files'],
             'approval'         => ['VARCHAR(10)',  '승인대기', '승인대기/승인/반려'],
             'approver'         => ['VARCHAR(60)',  '',    ''],
@@ -54,6 +57,19 @@ const BL_SCHEMA = [
             'reject_reason'    => ['VARCHAR(500)', '',    '반려 사유 — 청구자에게 보인다. 반려가 아니면 빈칸(2026-11-13)'],
         ],
         'keys' => ['ix_trip_date' => ['trip_date'], 'ix_trip_owner' => ['created_by'], 'ix_trip_traveler' => ['traveler']],
+    ],
+    // 작성 중(제출 전) 청구서 — 사람마다 한 건. PC·휴대폰 어디서든 이어서 쓰게 서버에 둔다(2026-11-13).
+    // redone: [다시 작성하기]로 다시 낸 반려 청구 id 목록 — 할 일에서 빼는 데 쓴다
+    'bl_travel_drafts' => [
+        'comment' => '출장여비 작성 중 청구서',
+        'pk' => 'email',
+        'cols' => [
+            'email'      => ['VARCHAR(190)', false, '작성자 이메일'],
+            'data'       => ['MEDIUMTEXT',   null,  '작성 중 청구서 JSON(화면 칸 그대로). 없으면 NULL'],
+            'redone'     => ['TEXT',         null,  '다시 낸 반려 청구 id JSON 배열'],
+            'updated_at' => ['VARCHAR(19)',  '',    ''],
+        ],
+        'keys' => [],
     ],
     // 영수증 파일. 청구서를 저장하기 전에 먼저 올라오므로 trip_id 는 비어 있을 수 있다.
     // 누가 올렸는지를 남겨 두어야 직원이 남의 영수증 번호를 청구서에 끼워 넣지 못한다.
@@ -114,7 +130,7 @@ function bl_db() {
  * 나중에 더한 컬럼. CREATE TABLE IF NOT EXISTS 는 이미 있는 테이블에 칸을 더하지 않으므로,
  * 여기 적은 칸이 없으면 ALTER TABLE 로 더한다(운영 MySQL 에 손으로 넣지 않아도 되게).
  */
-const BL_ADDED_COLS = ['bl_travel_trips' => ['reject_reason']];
+const BL_ADDED_COLS = ['bl_travel_trips' => ['reject_reason', 'lodging', 'lodging_nights', 'lodging_people']];
 $GLOBALS['BL_MISSING_COLS'] = [];
 function bl_add_missing_cols(PDO $pdo) {
     foreach (BL_ADDED_COLS as $table => $names) {
@@ -124,7 +140,7 @@ function bl_add_missing_cols(PDO $pdo) {
             foreach ($names as $name) {
                 if (in_array($name, $have, true)) continue;
                 [$type, $default, $comment] = BL_SCHEMA[$table]['cols'][$name];
-                $sql = "ALTER TABLE `$table` ADD COLUMN `$name` $type NOT NULL DEFAULT " . $pdo->quote((string)$default);
+                $sql = "ALTER TABLE `$table` ADD COLUMN `$name` $type NOT NULL DEFAULT " . (is_int($default) ? $default : $pdo->quote((string)$default));
                 if (!bl_is_sqlite($pdo) && $comment !== '') $sql .= ' COMMENT ' . $pdo->quote($comment);
                 $pdo->exec($sql);
             }

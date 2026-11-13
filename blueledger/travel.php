@@ -173,15 +173,25 @@ $csrf = bl_csrf_token();
               <span class="xamtw"><input id="toll" class="num xamt" inputmode="numeric" placeholder="0" aria-label="통행료"><em>원</em></span></div>
           <div class="xrc"><div class="thumbs" id="th-toll"></div><span class="xrcn" id="rcn-toll"></span><span class="xneed"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5.2M12 16.2h.01"/></svg>영수증을 첨부해 주세요</span><label class="att" data-k="toll">사진 첨부<input type="file" accept="image/*,application/pdf" multiple aria-label="통행료 영수증 첨부"></label></div>
           </div>
+          <!-- 숙박비(2026-11-13 추가) — 박수·인원(출장자+동행)으로 기준(1박 80,000원 + 동행 1명당 10,000원)을 계산해 넘으면 주황 -->
+          <div class="xcard" id="xc-lodging" data-k="lodging">
+            <div class="xrow"><span class="xic"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 18.5V6.5M3 14h18v4.5M21 14v-2.5A2.5 2.5 0 0 0 18.5 9H11v5"/><circle cx="7" cy="11" r="2"/></svg></span><div class="xmain"><b>숙박비</b><span class="xsub" id="lodgingHint"></span></div>
+              <span class="xamtw"><input id="lodging" class="num xamt" inputmode="numeric" placeholder="0" aria-label="숙박비"><em>원</em></span></div>
+            <div class="xbody"><div class="lrow">
+              <label class="lnum"><input id="lodgingNights" class="num" type="number" min="0" max="99" inputmode="numeric" aria-label="숙박 박수"><span>박</span></label>
+              <label class="lnum"><input id="lodgingPeople" class="num" type="number" min="1" max="99" inputmode="numeric" aria-label="숙박 인원(동행 포함)"><span>명</span></label>
+              <span class="hint">인원은 출장자 포함 · 동행자를 넣으면 저절로 바뀝니다</span></div></div>
+          <div class="xrc"><div class="thumbs" id="th-lodging"></div><span class="xrcn" id="rcn-lodging"></span><span class="xneed"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5.2M12 16.2h.01"/></svg>영수증을 첨부해 주세요</span><label class="att" data-k="lodging">사진 첨부<input type="file" accept="image/*,application/pdf" multiple aria-label="숙박비 영수증 첨부"></label></div>
+          </div>
           <div class="xcard" id="xc-meal" data-k="meal">
             <div class="xrow"><span class="xic"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v7a2 2 0 0 0 2 2v9M5 3v4.5M9 3v4.5M17 21V3c-2.2 1.4-3.5 4-3.5 7.5H17"/></svg></span><div class="xmain"><b>식대</b><span class="xsub"><span id="mealHint"></span></span></div>
               <span class="xamtw"><input id="meal" class="num xamt" inputmode="numeric" placeholder="0" aria-label="식대"><em>원</em></span></div>
           <div class="xrc"><div class="thumbs" id="th-meal"></div><span class="xrcn" id="rcn-meal"></span><span class="xneed"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5.2M12 16.2h.01"/></svg>영수증을 첨부해 주세요</span><label class="att" data-k="meal">사진 첨부<input type="file" accept="image/*,application/pdf" multiple aria-label="식대 영수증 첨부"></label></div>
           </div>
           <div class="xcard" id="xc-etc" data-k="etc">
-            <div class="xrow"><span class="xic"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><div class="xmain"><b>기타</b><span class="xsub">숙박비·주차비 등 영수증 실비</span></div>
+            <div class="xrow"><span class="xic"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><div class="xmain"><b>기타</b><span class="xsub">주차비 등 영수증 실비</span></div>
               <span class="xamtw"><input id="etc" class="num xamt" inputmode="numeric" placeholder="0" aria-label="기타"><em>원</em></span></div>
-            <div class="xbody"><input id="etcNote" class="inp" placeholder="기타 내역 (주차비, 숙박비 등)"></div>
+            <div class="xbody"><input id="etcNote" class="inp" placeholder="기타 내역 (주차비 등)"></div>
           <div class="xrc"><div class="thumbs" id="th-etc"></div><span class="xrcn" id="rcn-etc"></span><span class="xneed"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5.2M12 16.2h.01"/></svg>영수증을 첨부해 주세요</span><label class="att" data-k="etc">사진 첨부<input type="file" accept="image/*,application/pdf" multiple aria-label="기타 영수증 첨부"></label></div>
           </div>
         </div>
@@ -275,7 +285,7 @@ $csrf = bl_csrf_token();
          카드를 다음 열로 끌거나 카드의 단추를 누르면 승인·정산이 처리된다(청구서 창과 같은 저장) -->
     <section class="kview" id="boardView" aria-labelledby="boardTitle">
       <div class="dhead">
-        <div><h2 class="dtitle" id="boardTitle">청구 보드</h2><div class="dsub">카드를 다음 단계로 옮기면 승인·정산이 처리됩니다</div></div>
+        <div><h2 class="dtitle" id="boardTitle">청구 보드</h2><div class="dsub" id="boardSub">카드를 끌어 다음 단계로 옮기거나 버튼으로 처리하세요</div></div>
         <div class="ksum">
           <div class="ksumi"><span>승인할 금액</span><b class="num" id="sumApprove">0원</b></div>
           <div class="ksumi"><span>지급 예정</span><b class="num" id="sumPay">0원</b></div>
@@ -342,9 +352,10 @@ $csrf = bl_csrf_token();
     <button type="button" class="slipx kd-x" id="kdClose" aria-label="닫기" title="닫기 (Esc)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
   <div class="kd-body" id="kdBody"></div>
-  <div class="kd-foot"><button type="button" class="btn sm" id="kdOpen">청구서 열기</button><div class="kd-acts" id="kdActs"></div></div>
+  <!-- 아래 고정 처리 영역 — 상태·권한에 따라 반려 사유 + [반려][승인] / [정산 완료 처리] / 사유 + [승인 대기로 되돌리기] -->
+  <div class="kd-foot" id="kdFoot"></div>
 </aside>
-<!-- 반려 사유 — 꼭 적어야 하고, 청구자 화면에 그대로 보인다 -->
+<!-- 반려 사유 — 청구서 창(팝업)의 [반려]가 쓴다. 보드는 상세 창 아래 칸에서 받는다. 꼭 적어야 하고, 청구자 화면에 그대로 보인다 -->
 <dialog id="rejDlg" aria-labelledby="rejDlgTitle">
   <div class="dh" id="rejDlgTitle">반려 사유</div>
   <div class="db">

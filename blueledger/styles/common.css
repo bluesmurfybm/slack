@@ -14,10 +14,12 @@
   --settle-soft:#edeffe; --settle:#2b3587; --settle-dot:#4e61f6;
   --ok-soft:#ecf8ef; --ok:#1f7a35; --ok-dot:#43b75d;
   --no-soft:#fdecec; --no:#c42b26; --no-dot:#c42b26;
-  --orange:#ffaa00; --orange-ink:#a86a00; --over-line:#ffd27a; --over-bg:#fff4dc; --gray-mid:#c3c7d0;
+  --orange:#ffaa00; --orange-ink:#a86a00; --over-line:#ffd27a; --no-line:#f3b4b1; --over-bg:#fff4dc; --gray-mid:#c3c7d0;
   --shadow:0 6px 8px -2px rgba(19,25,39,.06),0 3px 6px -2px rgba(19,25,39,.1);
   /* 그래프 색 — 교통·통행료/숙박·식대·기타 */
   --c1:#4e61f6; --c2:#8f9cfa; --c3:#ffaa00; --c4:#c3c7d0; --bar-soft:#aeb6fb;
+  /* 경비 구성 — 교통 · 숙박 · 식대 · 기타 */
+  --mix-tr:#4e61f6; --mix-lodge:#aeb6fb; --mix-meal:#ffaa00; --mix-etc:#9ea2ae;
   --tape:#ffffff; --banner:#4e61f6;
   /* 사람마다 다른 이니셜 색 */
   --pc0b:#e8ebfe;--pc0i:#2b3587; --pc1b:#fff1d6;--pc1i:#8a5a00; --pc2b:#e3f5e9;--pc2i:#1f7a35; --pc3b:#fde8e7;--pc3i:#a8322a;
@@ -33,9 +35,9 @@
   --settle-soft:#232a52; --settle:#c5cbff; --settle-dot:#7b8afa;
   --ok-soft:#163020; --ok:#5cc782; --ok-dot:#4fbf68;
   --no-soft:#3c1e1a; --no:#f08374; --no-dot:#f08374;
-  --orange:#ffb52e; --orange-ink:#ffc45c; --over-line:#7a5a1c; --over-bg:#33280f; --gray-mid:#4a5160;
+  --orange:#ffb52e; --orange-ink:#ffc45c; --over-line:#7a5a1c; --no-line:#6e2b25; --over-bg:#33280f; --gray-mid:#4a5160;
   --shadow:0 6px 10px -2px rgba(0,0,0,.35),0 3px 6px -2px rgba(0,0,0,.4);
-  --c1:#7b8afa; --c2:#4e5bb8; --c3:#e0a33a; --c4:#4a5160; --bar-soft:#3c4795; --tape:#191d27; --banner:#3c4bc4;
+  --c1:#7b8afa; --c2:#4e5bb8; --c3:#e0a33a; --c4:#4a5160; --bar-soft:#3c4795; --mix-tr:#7b8afa; --mix-lodge:#4e5bb8; --mix-meal:#e0a33a; --mix-etc:#6b7080; --tape:#191d27; --banner:#3c4bc4;
   --pc0b:#262d5c;--pc0i:#c5cbff; --pc1b:#3a2d14;--pc1i:#f0c070; --pc2b:#173022;--pc2i:#7fd49a; --pc3b:#3c1e1a;--pc3i:#f29a8d;
   --pc4b:#2e2348;--pc4i:#c9b2f5; --pc5b:#14313a;--pc5i:#86cfe2; --pc6b:#3a1c2c;--pc6i:#f0a1c9; --pc7b:#272c36;--pc7i:#c3c7d0;
   color-scheme:dark;}}
@@ -47,9 +49,9 @@
   --settle-soft:#232a52; --settle:#c5cbff; --settle-dot:#7b8afa;
   --ok-soft:#163020; --ok:#5cc782; --ok-dot:#4fbf68;
   --no-soft:#3c1e1a; --no:#f08374; --no-dot:#f08374;
-  --orange:#ffb52e; --orange-ink:#ffc45c; --over-line:#7a5a1c; --over-bg:#33280f; --gray-mid:#4a5160;
+  --orange:#ffb52e; --orange-ink:#ffc45c; --over-line:#7a5a1c; --no-line:#6e2b25; --over-bg:#33280f; --gray-mid:#4a5160;
   --shadow:0 6px 10px -2px rgba(0,0,0,.35),0 3px 6px -2px rgba(0,0,0,.4);
-  --c1:#7b8afa; --c2:#4e5bb8; --c3:#e0a33a; --c4:#4a5160; --bar-soft:#3c4795; --tape:#191d27; --banner:#3c4bc4;
+  --c1:#7b8afa; --c2:#4e5bb8; --c3:#e0a33a; --c4:#4a5160; --bar-soft:#3c4795; --mix-tr:#7b8afa; --mix-lodge:#4e5bb8; --mix-meal:#e0a33a; --mix-etc:#6b7080; --tape:#191d27; --banner:#3c4bc4;
   --pc0b:#262d5c;--pc0i:#c5cbff; --pc1b:#3a2d14;--pc1i:#f0c070; --pc2b:#173022;--pc2i:#7fd49a; --pc3b:#3c1e1a;--pc3i:#f29a8d;
   --pc4b:#2e2348;--pc4i:#c9b2f5; --pc5b:#14313a;--pc5i:#86cfe2; --pc6b:#3a1c2c;--pc6i:#f0a1c9; --pc7b:#272c36;--pc7i:#c3c7d0;
   color-scheme:dark;}
@@ -107,3 +109,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font
 .av.pc2{background:var(--pc2b);color:var(--pc2i)}.av.pc3{background:var(--pc3b);color:var(--pc3i)}
 .av.pc4{background:var(--pc4b);color:var(--pc4i)}.av.pc5{background:var(--pc5b);color:var(--pc5i)}
 .av.pc6{background:var(--pc6b);color:var(--pc6i)}.av.pc7{background:var(--pc7b);color:var(--pc7i)}
+
+/* 보드 칸(관리자 청구 보드 .kcol · 구성원 진행 보드 .mcol) — 높이는 내용대로, 빈 칸은 낮은 점선 상자 */
+.kcol,.mcol{background:var(--col-bg);border:1.5px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;min-width:0}
+.kempty{height:56px;display:flex;align-items:center;justify-content:center;border:1.5px dashed var(--gray-mid);border-radius:12px;color:var(--sub);font-size:13px;font-weight:600}

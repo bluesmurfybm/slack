@@ -18,8 +18,8 @@ S.role='local';S.realRole='staff';S.view='member';S.allTrips=[];S.uid=null;
 const REVIEW_KEYS=['approval','approver','approvedAt','status','handler','processedAt','payMethod','note'];
 const isAdmin=()=>S.role!=='staff';
 const isSettler=()=>S.role==='admin';
-function emptyRc(){return {transport:[],toll:[],meal:[],etc:[]}}
-function rcCount(t){const r=t.receipts||{};return ['transport','toll','meal','etc'].reduce((a,k)=>a+((r[k]||[]).length),0)}
+function emptyRc(){return {transport:[],toll:[],lodging:[],meal:[],etc:[]}}
+function rcCount(t){const r=t.receipts||{};return ['transport','toll','lodging','meal','etc'].reduce((a,k)=>a+((r[k]||[]).length),0)}
 
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),2200)}
 
@@ -46,6 +46,7 @@ async function api(path,body){
 async function loadState(){
   const j=await api('state');S.lastLoad=Date.now();
   if(j.me&&j.me.role!==S.realRole){startAs(j.me);return}
+  applyServerDraft(j.draft);
   S.allTrips=j.trips||[];S.trips=viewTrips();S.settings={...structuredClone(DEFAULT_SETTINGS),...(j.settings||{})};
   renderStaff();if(!S.editingId&&!F('traveler').value)presetMe();updateFuelInfo();updateMealHint();render();renderInfo();if(S.editingId)refreshLock();
 }
@@ -221,7 +222,7 @@ F('compChips').addEventListener('click',e=>{const b=e.target.closest('.x');if(!b
 F('compSearch').addEventListener('input',renderSugg);
 F('compSearch').addEventListener('focus',renderSugg);
 F('compSearch').addEventListener('blur',()=>setTimeout(renderSugg,150));
-F('compSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const b=F('compSugg').querySelector('[data-n]');if(b)addComp(b.dataset.n)}if(e.key==='Escape'){F('compSearch').value='';F('compSearch').blur()}});
+F('compSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();const b=F('compSugg').querySelector('[data-n]');if(b)addComp(b.dataset.n)}if(e.key==='Escape'&&!F('compSugg').hidden){e.stopPropagation();F('compSearch').value='';F('compSearch').blur()}});
 // mousedown 으로 받아야 칸의 blur 보다 먼저 잡힌다
 F('compSugg').addEventListener('mousedown',e=>{const b=e.target.closest('[data-n]');if(!b)return;e.preventDefault();addComp(b.dataset.n)});
 F('compExtra').addEventListener('input',updateCompCount);
@@ -276,12 +277,12 @@ F('statusSeg').addEventListener('click',e=>{const b=e.target.closest('button');i
   F('handler').value=handlerName();
   if(S.status==='처리완료'){if(!F('processedAt').value)F('processedAt').value=today();if(!F('payMethod').value)F('payMethod').value='계좌이체'}});
 
-['transport','toll','meal','etc'].forEach(id=>{
+['transport','toll','lodging','meal','etc'].forEach(id=>{
   F(id).addEventListener('input',updateTotal);
   F(id).addEventListener('blur',()=>{const v=parseNum(F(id).value);F(id).value=v?won(v):''});
   F(id).addEventListener('focus',()=>{const v=parseNum(F(id).value);F(id).value=v||''});
 });
-function sum(){return ['transport','toll','meal','etc'].reduce((a,id)=>a+parseNum(F(id).value),0)}
+function sum(){return ['transport','toll','lodging','meal','etc'].reduce((a,id)=>a+parseNum(F(id).value),0)}
 function updateTotal(){F('total').textContent=F('moneyTotal').textContent=F('settleTotal').value=won(sum())+'원';updateMealHint();updateRcState()}
 
 function fuelPrice(mode){const f=S.settings.fuel||{};return mode.includes('휘발유')?f.gas:mode.includes('경유')?f.diesel:mode.includes('LPG')?f.lpg:null}
@@ -327,7 +328,24 @@ function setModeValue(v){
 }
 F('btnFuel').addEventListener('click',()=>{const p=fuelPrice(F('mode').value),km=parseNum(F('km').value);if(!km){F('km').focus();return}
   F('transport').value=won(Math.ceil(km/(S.settings.eff||10)*p*2/1000)*1000);updateTotal()});
+/* 숙박비 — 1박 80,000원(1실), 동행 1명마다 1박 10,000원 추가(작성기준 2. 출장비 기준).
+   박수는 출장 기간에서, 인원은 출장자+동행자로 저절로 채우고, 손으로 고치면 그 값을 둔다 */
+const LODGE_BASE=80000,LODGE_ADD=10000;
+const lodgingLimit=(n,p)=>n>0?(LODGE_BASE+LODGE_ADD*Math.max(0,p-1))*n:0;
+S.lodgeAuto={n:true,p:true};
+function setLodging(o){
+  F('lodgingNights').value=o.lodgingNights||'';F('lodgingPeople').value=o.lodgingPeople||'';
+  S.lodgeAuto={n:!o.lodgingNights,p:!o.lodgingPeople};updateLodging();
+}
+function updateLodging(){
+  if(S.lodgeAuto.n)F('lodgingNights').value=Math.max(0,periodDays(F('period').value)-1)||'';
+  if(S.lodgeAuto.p)F('lodgingPeople').value=1+companionsArr().length;
+  const n=parseNum(F('lodgingNights').value),pp=parseNum(F('lodgingPeople').value)||1,lim=lodgingLimit(n,pp);
+  F('lodgingHint').textContent=n?`기준: 1박 ${won(LODGE_BASE)}원${pp>1?` + 동행 ${pp-1}명 × ${won(LODGE_ADD)}원`:''} × ${n}박 = ${won(lim)}원`:'숙박한 날이 있으면 박수를 넣어 주세요';
+}
+['lodgingNights','lodgingPeople'].forEach(id=>F(id).addEventListener('input',()=>{S.lodgeAuto[id==='lodgingNights'?'n':'p']=false;updateTotal()}));
 function updateMealHint(){
+  updateLodging();
   const people=1+companionsArr().length,days=periodDays(F('period').value),unit=S.settings.mealUnit||15000;
   const limit=unit*people,meal=parseNum(F('meal').value);
   const h=F('mealHint');
@@ -368,7 +386,7 @@ F('cal').addEventListener('click',e=>{
 function clearForm(){
   S.editingId=null;S.companions=new Set();S.approval='승인대기';S.status='미처리';S.receipts=emptyRc();renderThumbs();
   F('form').reset();F('traveler').value='';setDate(today());F('period').value='당일';setModeValue('자가용(휘발유)');
-  ['transport','toll','meal','etc'].forEach(id=>F(id).value='');
+  ['transport','toll','lodging','meal','etc'].forEach(id=>F(id).value='');setLodging({});
   F('approver').value=approverName();F('handler').value=handlerName();renderStatusText();
   setSeg('approvalSeg',S.approval);setSeg('statusSeg',S.status);
   F('formMode').textContent='New';F('btnDel').hidden=true;F('btnSave').textContent='제출';closeCalPop();F('slipTitle').textContent='새 출장비 청구';
@@ -385,8 +403,8 @@ function fillForm(t){
   F('period').value=t.period||'당일';setDate(t.date||'');F('place').value=t.place||'';F('purpose').value=t.purpose||'';
   setModeValue(t.mode);
   F('km').value=t.km||'';
-  ['transport','toll','meal','etc'].forEach(id=>F(id).value=t[id]?won(t[id]):'');
-  F('etcNote').value=t.etcNote||'';
+  ['transport','toll','lodging','meal','etc'].forEach(id=>F(id).value=t[id]?won(t[id]):'');
+  F('etcNote').value=t.etcNote||'';setLodging(t);
   S.approval=t.approval||'승인대기';S.status=t.status||'미처리';setSeg('approvalSeg',S.approval);setSeg('statusSeg',S.status);
   F('approver').value=t.approver||approverName();F('approvedAt').value=t.approvedAt||'';renderStatusText();
   F('handler').value=t.handler||handlerName();F('processedAt').value=t.processedAt||'';F('payMethod').value=t.payMethod||'';F('note').value=t.note||'';renderStatusText();
@@ -426,18 +444,19 @@ async function saveForm(over={},doneMsg=''){
     date:F('date').value,period:F('period').value,place:F('place').value.trim(),purpose:F('purpose').value.trim(),
     mode:modeValue(),km:parseNum(F('km').value)||0,
     transport:parseNum(F('transport').value),toll:parseNum(F('toll').value),meal:parseNum(F('meal').value),etc:parseNum(F('etc').value),etcNote:F('etcNote').value.trim(),
+    lodging:parseNum(F('lodging').value),lodgingNights:parseNum(F('lodgingNights').value),lodgingPeople:parseNum(F('lodgingPeople').value),
     approval:S.approval,approver:F('approver').value.trim(),approvedAt:F('approvedAt').value,
     status:S.status,handler:F('handler').value.trim(),processedAt:F('processedAt').value,payMethod:F('payMethod').value,note:F('note').value.trim(),
     receipts:S.receipts,
     createdAt:prev.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()
   };
   if(comps.length===0&&prev.companionCount&&!prev.companions)data.companionCount=prev.companionCount;
-  data.total=data.transport+data.toll+data.meal+data.etc;
+  data.total=data.transport+data.toll+data.lodging+data.meal+data.etc;
   
   Object.assign(data,over);
   const id=S.editingId||'new_';
   F('btnSave').disabled=F('btnApprove').disabled=F('btnReject').disabled=true;
-  try{await store.save(id,data);if(id==='new_'){writeDraft(null);if(S.redoOf){markRedone(S.redoOf);S.redoOf=''}}toast(doneMsg||(S.editingId?'변경 내용을 저장했습니다':(S.role==='staff'?'청구서를 제출했습니다. 승인·정산 결과는 관리자가 안내합니다':'청구서를 저장했습니다')));S.year=data.date.slice(0,4);
+  try{await store.save(id,data);if(id==='new_'){writeDraft(null,true);if(S.redoOf){markRedone(S.redoOf);S.redoOf=''}}toast(doneMsg||(S.editingId?'변경 내용을 저장했습니다':(S.role==='staff'?'청구서를 제출했습니다. 승인·정산 결과는 관리자가 안내합니다':'청구서를 저장했습니다')));S.year=data.date.slice(0,4);
     // 팝업은 저장한 그 청구서를 계속 보여 주고, 연 창의 목록을 새로 받게 알린다
     if(S.single)afterSingleSave();else{clearForm();closeDrawer()}render()}
   catch(e){toast(e.message||'저장하지 못했습니다')}
@@ -535,6 +554,7 @@ function ruleCheck(t){
   const over=[],comp=String(t.companions||'').split(',').filter(x=>x.trim()).length||t.companionCount||0;
   const unit=S.settings.mealUnit||15000,days=periodDays(t.period);
   if((t.meal||0)>unit*(1+comp)*days*2)over.push('식대');
+  if((t.lodging||0)>lodgingLimit(t.lodgingNights||Math.max(1,days-1),t.lodgingPeople||1+comp))over.push('숙박비');
   const p=isCar(t.mode)?fuelPrice(t.mode):null;
   if(p&&t.km>0&&(t.transport||0)>fuelCost(t.km,p))over.push('주유비');
   return over;
@@ -654,7 +674,7 @@ document.querySelector('.tabs').addEventListener('click',e=>{const b=e.target.cl
 /* ---------- 영수증 ---------- */
 function updateAttUI(){F('attHint').textContent='영수증은 사진(JPG·PNG) 또는 PDF로 올릴 수 있습니다. 사진은 자동으로 줄여서 저장합니다.'}
 function renderThumbs(){
-  ['transport','toll','meal','etc'].forEach(k=>{
+  ['transport','toll','lodging','meal','etc'].forEach(k=>{
     const box=F('th-'+k);if(!box)return;
     box.innerHTML=(S.receipts[k]||[]).map((r,i)=>{
       const href=apiUrl('receipt','id='+encodeURIComponent(r.id));
@@ -669,7 +689,7 @@ function renderThumbs(){
 /* ---------- 영수증 크게 보기 창 ----------
    항목 옆 미리보기의 링크(data-rc="항목:순번")를 누르면 새 탭 대신 이 창에 띄운다.
    ‹ › 와 키보드 ←→ 로 이 청구서의 영수증을 넘겨 본다. Ctrl·가운데 단추로 누르면 예전처럼 새 탭으로 열린다. */
-const RC_LABEL={transport:'교통비',toll:'통행료',meal:'식대',etc:'기타'};
+const RC_LABEL={transport:'교통비',toll:'통행료',lodging:'숙박비',meal:'식대',etc:'기타'};
 let rcList=[],rcPos=0;
 function showReceipt(){
   const {k,r}=rcList[rcPos],href=apiUrl('receipt','id='+encodeURIComponent(r.id));
@@ -681,7 +701,7 @@ function showReceipt(){
   F('rcPrev').hidden=F('rcNext').hidden=rcList.length<2;
 }
 function openReceipt(k,i){
-  rcList=['transport','toll','meal','etc'].flatMap(x=>(S.receipts[x]||[]).map(r=>({k:x,r})));
+  rcList=['transport','toll','lodging','meal','etc'].flatMap(x=>(S.receipts[x]||[]).map(r=>({k:x,r})));
   rcPos=Math.max(0,rcList.findIndex(it=>it.k===k&&it.r===(S.receipts[k]||[])[i]));
   if(!rcList.length)return;
   showReceipt();if(!F('rcDlg').open)F('rcDlg').showModal();
@@ -689,7 +709,7 @@ function openReceipt(k,i){
 // 관리자 '처리할 청구'의 [영수증 보기] — 청구서를 열지 않고 그 건의 영수증을 같은 창에 띄운다
 function openTripReceipts(t,i=0){
   const rc=t.receipts||{};
-  rcList=['transport','toll','meal','etc'].flatMap(x=>(rc[x]||[]).map(r=>({k:x,r})));rcPos=Math.min(Math.max(0,i),Math.max(0,rcList.length-1));
+  rcList=['transport','toll','lodging','meal','etc'].flatMap(x=>(rc[x]||[]).map(r=>({k:x,r})));rcPos=Math.min(Math.max(0,i),Math.max(0,rcList.length-1));
   if(!rcList.length){toast('첨부된 영수증이 없습니다');return}
   showReceipt();if(!F('rcDlg').open)F('rcDlg').showModal();
 }
@@ -815,7 +835,7 @@ document.addEventListener('mousedown',e=>{if(!F('calPop').hidden&&!e.target.clos
 
 /* ---------- 영수증이 필요한 항목 ----------
    금액이 있는데 영수증이 없으면 카드 테두리를 주황색으로. 자가용 주유비(교통비)는 오늘 유가로 계산하므로 영수증이 필요 없다. */
-const RC_KEYS=['transport','toll','meal','etc'];
+const RC_KEYS=['transport','toll','lodging','meal','etc'];
 const isCar=mode=>String(mode||'').startsWith('자가용');
 function rcMissingOf(o){return RC_KEYS.filter(k=>parseNum(o[k])>0&&!((o.receipts||{})[k]||[]).length&&!(k==='transport'&&isCar(o.mode)))}
 function updateRcState(){
@@ -830,6 +850,7 @@ function updateRcState(){
   const people=1+companionsArr().length,unit=S.settings.mealUnit||15000,mode=F('mode').value,fp=isCar(mode)?fuelPrice(mode):null,km=parseNum(F('km').value);
   F('xc-meal').classList.toggle('over',parseNum(F('meal').value)>unit*people*periodDays(F('period').value)*2);
   F('xc-transport').classList.toggle('over',!!(fp&&km>0&&parseNum(F('transport').value)>fuelCost(km,fp)));
+  F('xc-lodging').classList.toggle('over',parseNum(F('lodging').value)>lodgingLimit(parseNum(F('lodgingNights').value),parseNum(F('lodgingPeople').value)||1));
   renderSumBar();
 }
 
@@ -848,16 +869,42 @@ function renderSteps(){
 }
 
 /* ---------- 작성 중(임시 보관) ----------
-   새 청구를 쓰는 동안 입력한 내용을 이 브라우저에 자동으로 보관한다(서버에는 제출할 때만 간다).
-   드로어를 닫았다 다시 열거나 새로고침해도 이어서 쓸 수 있다. 제출하면 지운다. */
+   새 청구를 쓰는 동안 입력한 내용을 서버에 자동으로 보관한다(api.php?p=draft, 사람마다 한 건 — 2026-11-13).
+   PC·휴대폰 어디서든, 새로고침해도 이어서 쓸 수 있다. 제출하면 지운다.
+   화면은 S.draft(마지막으로 받은·쓴 값)를 읽고, 바뀌면 잠깐 모았다가 서버에 보낸다.
+   예전처럼 이 브라우저(localStorage)에 남아 있던 작성 중 청구는 처음 열 때 서버로 옮긴다. */
 const DRAFT_KEY=()=>'bl_travel_draft_v1:'+(S.me||'');
-function readDraft(){try{return JSON.parse(localStorage.getItem(DRAFT_KEY())||'null')}catch(e){return null}}
-function writeDraft(d){try{d?localStorage.setItem(DRAFT_KEY(),JSON.stringify(d)):localStorage.removeItem(DRAFT_KEY())}catch(e){}}
-function draftHasContent(d){return !!d&&!!(d.place||d.purpose||parseNum(d.transport)||parseNum(d.toll)||parseNum(d.meal)||parseNum(d.etc)||rcCount(d))}
+const REDONE_KEY=()=>'bl_travel_redone_v1:'+(S.me||'');
+S.draft=null;S.redoneIds=[];S.draftSavedAt='';S.draftState='';S.draftDirty=false;
+function readDraft(){return S.draft}
+function writeDraft(d,now){S.draft=d||null;S.draftDirty=true;clearTimeout(writeDraft._t);writeDraft._t=setTimeout(syncDraft,now?0:600)}
+async function syncDraft(){
+  const d=S.draft;S.draftState='saving';renderDraftNote();
+  try{const j=await api('draft',{draft:d});if(S.draft===d)S.draftDirty=false;S.draftSavedAt=j.savedAt||'';S.draftState='saved'}
+  catch(e){S.draftState='error';clearTimeout(writeDraft._t);writeDraft._t=setTimeout(syncDraft,8000)}   // 끊겼으면 잠시 뒤 다시
+  renderDraftNote();
+}
+// state 응답의 작성 중 청구서 — 아직 보내지 못한 고침이 있으면 그쪽이 이긴다
+function applyServerDraft(sd){
+  if(!sd)return;
+  S.redoneIds=sd.redone||[];
+  if(!S.draftDirty){S.draft=sd.data||null;S.draftSavedAt=sd.updatedAt||''}
+  // 예전 이 브라우저 보관분 옮기기(한 번)
+  try{
+    const old=JSON.parse(localStorage.getItem(DRAFT_KEY())||'null');
+    if(old&&!S.draft&&draftHasContent(old))writeDraft(old,true);
+    localStorage.removeItem(DRAFT_KEY());
+    const oldR=JSON.parse(localStorage.getItem(REDONE_KEY())||'[]');
+    oldR.filter(id=>!S.redoneIds.includes(id)).forEach(markRedone);
+    localStorage.removeItem(REDONE_KEY());
+  }catch(e){}
+}
+function draftHasContent(d){return !!d&&!!(d.place||d.purpose||RC_KEYS.some(k=>parseNum(d[k]))||rcCount(d))}
 function draftData(){
   return{traveler:F('traveler').value,companions:companionsArr().join(', '),date:F('date').value,period:F('period').value,
     place:F('place').value.trim(),purpose:F('purpose').value.trim(),mode:modeValue(),km:parseNum(F('km').value)||0,
     transport:parseNum(F('transport').value),toll:parseNum(F('toll').value),meal:parseNum(F('meal').value),etc:parseNum(F('etc').value),
+    lodging:parseNum(F('lodging').value),lodgingNights:parseNum(F('lodgingNights').value),lodgingPeople:parseNum(F('lodgingPeople').value),
     etcNote:F('etcNote').value.trim(),receipts:S.receipts,redoOf:S.redoOf||'',savedAt:new Date().toISOString()};
 }
 function saveDraftSoon(){
@@ -871,7 +918,7 @@ function restoreDraft(d){
   S.companions=new Set(comps.filter(n=>staff.includes(n)));F('compExtra').value=comps.filter(n=>!staff.includes(n)).join(', ');
   F('period').value=d.period||'당일';setDate(d.date||today());F('place').value=d.place||'';F('purpose').value=d.purpose||'';
   setModeValue(d.mode||'자가용(휘발유)');F('km').value=d.km||'';
-  RC_KEYS.forEach(k=>F(k).value=parseNum(d[k])?won(parseNum(d[k])):'');F('etcNote').value=d.etcNote||'';
+  RC_KEYS.forEach(k=>F(k).value=parseNum(d[k])?won(parseNum(d[k])):'');F('etcNote').value=d.etcNote||'';setLodging(d);
   S.receipts={...emptyRc(),...structuredClone(d.receipts||{})};S.redoOf=d.redoOf||S.redoOf||'';
   renderThumbs();renderChips();updateFuelInfo();updateTotal();
 }
@@ -882,7 +929,9 @@ function renderDraftNote(){
   if(t){n.textContent=stageOf(t).stage;n.className='draftnote st-'+stageOf(t).key;return}
   const d=readDraft();
   n.className='draftnote st-draft';
-  n.textContent=draftHasContent(d)?`작성 중 · 자동 저장됨 ${d.savedAt?new Date(d.savedAt).toTimeString().slice(0,5):''}`:'작성 중 · 입력하면 자동 저장됩니다';
+  n.textContent=S.draftState==='saving'?'작성 중 · 저장 중…':S.draftState==='error'?'작성 중 · 저장하지 못했습니다(인터넷 연결 확인) — 다시 시도 중':
+    draftHasContent(d)?`작성 중 · 자동 저장됨 ${String(S.draftSavedAt).slice(11,16)}`:'작성 중 · 입력하면 자동 저장됩니다';
+  n.classList.toggle('st-no',S.draftState==='error');
 }
 
 /* ---------- 출장 기준 ---------- */
@@ -899,10 +948,9 @@ F('ruleDlg').addEventListener('click',e=>{if(e.target===F('ruleDlg'))F('ruleDlg'
 const KO_MON=m=>`${+m}월`;
 function daysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return ymd(d.getFullYear(),d.getMonth()+1,d.getDate())}
 // 반려된 청구 — 최근 60일 안에 반려됐고 아직 [다시 작성하기]로 다시 내지 않은 것만 할 일·작성 중 칸에 보인다.
-// 다시 낸 건은 이 브라우저에 기억해 둔다(서버에는 '다시 냈다'는 칸이 없다)
-const REDONE_KEY=()=>'bl_travel_redone_v1:'+(S.me||'');
-function redone(){try{return JSON.parse(localStorage.getItem(REDONE_KEY())||'[]')}catch(e){return []}}
-function markRedone(id){try{const a=redone();if(!a.includes(id)){a.push(id);localStorage.setItem(REDONE_KEY(),JSON.stringify(a.slice(-50)))}}catch(e){}}
+// 다시 낸 건은 서버(작성 중 청구서와 같은 줄)에 기억해 둔다
+function redone(){return S.redoneIds||[]}
+function markRedone(id){if(!id||redone().includes(id))return;S.redoneIds=[...redone(),id];api('draft/redone',{id}).catch(()=>{})}
 function recentRejected(){const cut=daysAgo(60),done=redone();
   return S.trips.filter(t=>t.approval==='반려'&&!done.includes(t.id)&&String(t.approvedAt||t.reviewedAt||t.date).slice(0,10)>=cut)}
 const draftItem=d=>({draft:true,...d,date:d.date||today(),total:RC_KEYS.reduce((x,k)=>x+parseNum(d[k]),0)});
@@ -932,7 +980,7 @@ function renderTodos(d,dHas,wait,rej){
   if(dMiss.length)items.push({c:'no',ic:IC.alert,t:`${d.place?esc(d.place)+' 출장':'작성 중인 청구'} 영수증 첨부`,s:`${missLine(dMiss)} · 아직 제출 전`,b:'첨부하기',act:'attach-draft'});
   wait.forEach(t=>{const m=rcMissingOf(t);if(m.length)items.push({c:'no',ic:IC.alert,t:`${esc(t.place)} 출장 영수증 첨부`,s:`${missLine(m)} · ${esc(shortDate(t.date))} 출장 · 승인 전이라 고칠 수 있어요`,b:'첨부하기',act:'attach',id:t.id})});
   rej.forEach(t=>items.push({c:'no',ic:IC.redo,t:`${esc(t.place)} 출장이 반려됐어요`,s:t.rejectReason?`사유 · ${esc(t.rejectReason)}`:'반려 사유가 적혀 있지 않아요',b:'다시 작성하기',act:'redo',id:t.id}));
-  if(dHas&&!dMiss.length)items.push({c:'draft',ic:IC.doc,t:'작성 중인 청구가 있어요',s:`${esc(d.place||'출장지 미입력')} · ${won(draftItem(d).total)}원 · 이 브라우저에 자동 저장됨`,b:'이어서 작성하기',act:'draft'});
+  if(dHas&&!dMiss.length)items.push({c:'draft',ic:IC.doc,t:'작성 중인 청구가 있어요',s:`${esc(d.place||'출장지 미입력')} · ${won(draftItem(d).total)}원 · 자동 저장됨`,b:'이어서 작성하기',act:'draft'});
   if(wait.length)items.push({c:'wait',ic:IC.clock,t:`대표 승인 대기 ${wait.length}건`,s:`합계 ${won(tot(wait))}원 · 따로 할 일 없음`});
   const todo=items.filter(x=>x.b).length;
   F('todoMeta').textContent=todo?`${todo}건`:'';
@@ -964,9 +1012,9 @@ function rewriteFrom(t){
   toast('반려된 청구 내용을 불러왔습니다. 고칠 곳을 고치고 영수증을 다시 첨부해 주세요');
 }
 
-/* 이번 달 경비 구성 — 도넛. 교통(교통비+통행료) · 숙박·기타(기타 항목) · 식대 */
+/* 이번 달 경비 구성 — 도넛. 교통(교통비+통행료) · 숙박 · 식대 · 기타. 0원인 항목은 목록에서 뺀다 */
 function renderDonut(month){
-  const parts=[['tr','교통',t=>(t.transport||0)+(t.toll||0)],['lodge','숙박·기타',t=>t.etc||0],['meal','식대',t=>t.meal||0]]
+  const parts=[['tr','교통',t=>(t.transport||0)+(t.toll||0)],['lodge','숙박',t=>t.lodging||0],['meal','식대',t=>t.meal||0],['etc','기타',t=>t.etc||0]]
     .map(([k,l,f])=>({k,l,v:month.reduce((x,t)=>x+f(t),0)}));
   const all=parts.reduce((x,p)=>x+p.v,0),R=42,C=2*Math.PI*R;
   let off=0,arcs='';
@@ -974,12 +1022,12 @@ function renderDonut(month){
     arcs+=`<circle class="m-${p.k}" cx="60" cy="60" r="${R}" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"><title>${p.l} ${won(p.v)}원</title></circle>`;off+=len});
   F('mixDonut').innerHTML=`<svg viewBox="0 0 120 120" role="img" aria-label="이번 달 경비 구성"><circle class="dtrack" cx="60" cy="60" r="${R}"/><g transform="rotate(-90 60 60)">${arcs}</g>
     <text x="60" y="55" text-anchor="middle" class="dk">이번 달</text><text x="60" y="73" text-anchor="middle" class="dv num">${all>=1e4?`${+(all/1e4).toFixed(all>=1e6?0:1)}만`:won(all)}원</text></svg>`;
-  F('mixList').innerHTML=all?parts.map(p=>`<div class="mrow"><span><i class="m-${p.k}"></i>${p.l}</span><span class="num">${Math.round(p.v/all*100)}%</span><b class="num">${won(p.v)}원</b></div>`).join('')
+  F('mixList').innerHTML=all?parts.filter(p=>p.v).map(p=>`<div class="mrow"><span><i class="m-${p.k}"></i>${p.l}</span><span class="num">${Math.round(p.v/all*100)}%</span><b class="num">${won(p.v)}원</b></div>`).join('')
     :'<div class="empty">이번 달 청구가 아직 없어요.</div>';
 }
 
-/* 진행 보드 — 작성 중(이 브라우저에 보관 중인 청구 + 반려된 청구) → 대표 승인 대기 → 정산 대기 → 정산 완료(최근 3개월) */
-const MCOLS=[['draft','작성 중','아직 제출 전 · 이 브라우저에 보관'],['wait','대표 승인 대기','제출 완료 · 대표님 확인 중'],['settle','정산 대기','승인 완료 · 지급 준비 중'],['done','정산 완료','지급 완료 · 최근 3개월']];
+/* 진행 보드 — 작성 중(서버에 자동 저장된 청구 + 반려된 청구) → 대표 승인 대기 → 정산 대기 → 정산 완료(최근 3개월) */
+const MCOLS=[['draft','작성 중','아직 제출 전 · 자동 저장됨'],['wait','대표 승인 대기','제출 완료 · 대표님 확인 중'],['settle','정산 대기','승인 완료 · 지급 준비 중'],['done','정산 완료','지급 완료 · 최근 3개월']];
 function renderMBoard(d,dHas,rej){
   const cut=daysAgo(92),c={draft:[...(dHas?[draftItem(d)]:[]),...rej],wait:[],settle:[],done:[]};
   S.trips.forEach(t=>{const k=stageOf(t).key;
@@ -1017,7 +1065,7 @@ F('btnRcFirst').addEventListener('click',()=>{newClaim();setTimeout(()=>{F('fsMo
 
 /* 청구 작성 창 아래 — 합계 옆 항목 비율 막대, [임시 저장] */
 function renderSumBar(){
-  const parts=[['transport','교통비'],['toll','통행료'],['meal','식대'],['etc','기타']].map(([k,l])=>({k,l,v:parseNum(F(k).value)})),all=parts.reduce((x,p)=>x+p.v,0);
+  const parts=[['transport','교통비'],['toll','통행료'],['lodging','숙박비'],['meal','식대'],['etc','기타']].map(([k,l])=>({k,l,v:parseNum(F(k).value)})),all=parts.reduce((x,p)=>x+p.v,0);
   F('sumBar').innerHTML=all?`<div class="sfb">${parts.filter(p=>p.v).map(p=>`<i class="m-${p.k}" style="width:${(p.v/all*100).toFixed(2)}%"></i>`).join('')}</div>
     <div class="sfl">${parts.filter(p=>p.v).map(p=>`<span><i class="m-${p.k}"></i>${p.l} <b class="num">${Math.round(p.v/all*100)}%</b></span>`).join('')}</div>`
     :'<div class="sfb"></div><div class="sfl"><span>금액을 넣으면 항목 비율이 보여요</span></div>';
@@ -1025,7 +1073,7 @@ function renderSumBar(){
 F('btnDraft').addEventListener('click',()=>{
   const d=draftData();
   if(!draftHasContent(d)){toast('저장할 내용이 없습니다');return}
-  writeDraft(d);closeDrawer();renderMemberDash();toast('임시 저장했습니다. 진행 현황의 작성 중 칸에서 이어서 쓸 수 있어요');
+  writeDraft(d,true);closeDrawer();renderMemberDash();toast('임시 저장했습니다. PC·휴대폰 어디서든 작성 중 칸에서 이어서 쓸 수 있어요');
 });
 
 /* ================================================================
@@ -1074,18 +1122,21 @@ function cardActs(t,col){
   if(col==='no'&&canApprove())return `<button type="button" class="btn sm" data-act="revert">승인 대기로 되돌리기</button>`;
   return '';
 }
+// 권한이 없는 자리 — 단추 대신 누가 처리하는지 안내
+function cardWait(col){return col==='wait'&&!canApprove()?'대표자 승인 대기':col==='settle'&&!isSettler()?'정산 담당자 처리 대기':''}
 function kcardHtml(t,col){
   const over=ruleCheck(t),miss=rcMissingOf(t),n=rcCount(t),acts=cardActs(t,col);
   const tags=[n?`<span class="ktag">${IC.clip}영수증 ${n}장</span>`:'',
     over.length?`<span class="ktag over" title="${esc(over.join('·'))} 기준 초과">${IC.alert}기준 초과</span>`:'',
     miss.length?`<span class="ktag miss" title="${esc(miss.map(k=>RC_LABEL[k]).join('·'))} 영수증 없음">${IC.alert}영수증 누락</span>`:'',
     editedAfter(t)?'<span class="ktag miss">승인 후 수정</span>':''].join('');
-  return `<article class="kcard${over.length?' over':''}${t.id===S.kd?' sel':''}" data-id="${esc(t.id)}" draggable="${acts?'true':'false'}" tabindex="0">
+  const wait=cardWait(col);
+  return `<article class="kcard${miss.length?' miss':over.length?' over':''}${t.id===S.kd?' sel':''}" data-id="${esc(t.id)}" draggable="${acts?'true':'false'}" tabindex="0">
     <div class="kc-top">${avHtml(t.traveler)}<div class="kc-who"><b>${esc(t.traveler)}</b><span class="num">${esc(shortDate(t.date))} · ${esc(t.period||'당일')}</span></div><b class="kc-amt num">${won(t.total)}원</b></div>
     <div class="kc-place" title="${esc(t.place)}${t.purpose?' · '+esc(t.purpose):''}"><b>${esc(t.place)}</b>${t.purpose?` · ${esc(t.purpose)}`:''}</div>
     ${tags?`<div class="kc-tags">${tags}</div>`:''}
     ${col==='no'&&t.rejectReason?`<div class="kc-reason" title="${esc(t.rejectReason)}">사유 · ${esc(t.rejectReason)}</div>`:''}
-    ${acts?`<div class="kc-acts">${acts}</div>`:''}
+    ${acts?`<div class="kc-acts">${acts}</div>`:wait?`<div class="kc-wait">${IC.clock}${wait}</div>`:''}
   </article>`;
 }
 let kDrag=null;
@@ -1093,13 +1144,17 @@ function renderBoard(){
   if(S.role==='staff')return;
   if(kDrag){S.boardDirty=true;return}   // 끄는 중에 새 목록이 오면 놓은 뒤에 그린다
   const {c,old}=boardCols();
+  // 안내 문구 — 권한에 맞게(대표자: 승인·반려, 정산 담당: 지급 뒤 정산 완료, 둘 다면 공통 문구)
+  F('boardSub').textContent=canApprove()&&isSettler()?'카드를 끌어 다음 단계로 옮기거나 버튼으로 처리하세요'
+    :canApprove()?'승인 대기 청구를 확인하고 승인하거나 반려하세요'
+    :isSettler()?'승인된 청구를 지급한 뒤 정산 완료로 옮기세요':'카드를 끌어 다음 단계로 옮기거나 버튼으로 처리하세요';
   F('sumApprove').textContent=won(tot(c.wait))+'원';
   F('sumPay').textContent=won(tot(c.settle))+'원';
   const cur=F('kTabs').querySelector('[aria-selected="true"]'),sel=cur?cur.dataset.c:'wait';
   F('kTabs').innerHTML=KCOLS.map(([k,l])=>`<button type="button" role="tab" data-c="${k}" aria-selected="${k===sel}"><i class="kdot k-${k}"></i>${l}<span class="num">${c[k].length}</span></button>`).join('');
   F('kBoard').innerHTML=KCOLS.map(([k,l])=>{
     const list=c[k];
-    const more=k==='done'?`<button type="button" class="linkbtn kmore" data-more="처리완료">이전 정산 내역 보기${old.done?` · ${old.done}건`:''} →</button>`
+    const more=k==='done'?`<button type="button" class="linkbtn kmore" data-more="처리완료">이전 정산 내역 ${old.done}건 보기 →</button>`
       :k==='no'&&old.no?`<button type="button" class="linkbtn kmore" data-more="반려">이전 반려 ${old.no}건 보기 →</button>`:'';
     const sub=k==='done'||k==='no'?'<span class="ksub">이번 달</span>':'';
     return `<section class="kcol" data-col="${k}" aria-label="${l}">
@@ -1120,8 +1175,7 @@ F('kBoard').addEventListener('scroll',()=>{clearTimeout(F('kBoard')._t);F('kBoar
 /* 처리 — 카드 단추·끌어 옮기기·상세 창 단추가 모두 여기로 온다 */
 async function boardAct(t,act){
   let data,msg;
-  if(act==='reject'){const reason=await askReject(t);if(reason==null)return;
-    data={approval:'반려',approvedAt:today(),rejectReason:reason};msg=`${t.traveler} 청구를 반려했습니다`}
+  if(act==='reject'){openKD(t.id,true);toast('반려 사유를 적은 뒤 [반려]를 눌러 주세요');return}
   else if(act==='approve'){data={approval:'승인',approvedAt:today()};msg=`${t.traveler} 청구를 승인했습니다 · 정산 대기로 옮겼습니다`}
   else if(act==='settle'){
     if(!confirm(`${t.traveler} · ${won(t.total)}원을 정산 완료로 처리할까요?\n지급방법: ${t.payMethod||'계좌이체'} · 처리일 ${today()}`))return;
@@ -1189,62 +1243,111 @@ function askReject(t){
 }
 F('rejReason').addEventListener('input',()=>{F('rejOk').disabled=!F('rejReason').value.trim()});
 
-/* 카드 상세 — 오른쪽에서 열리는 창. 출장 정보·항목별 표(기준 초과는 주황)·영수증·처리 기록, 아래에 카드와 같은 단추 */
-S.kd=null;
+/* 카드 상세 — 오른쪽에서 열리는 창(폭 480px).
+   위: 이니셜·이름·상태·기간 / 가운데: 출장 정보 · 경고 상자 · 항목 표(항목 | 내용·기준 | 금액) · 영수증
+   아래 고정 처리 영역: 승인 대기 = 반려 사유(반려할 때 꼭) + [반려][승인] / 정산 대기 = [정산 완료 처리] / 반려 = 사유 + [승인 대기로 되돌리기]
+   권한이 없는 사람에게는 단추 대신 '대표자 승인 대기' · '정산 담당자 처리 대기'를 보인다 */
+S.kd=null;S.kdReason='';
 const kdOn=()=>document.body.classList.contains('kd-open');
-function openKD(id){
+function openKD(id,focusReason){
+  if(S.kd!==id)S.kdReason='';
   S.kd=id;S.kdSig='';renderKD();if(!S.kd)return;
   document.body.classList.add('kd-open');F('kDrawer').setAttribute('aria-hidden','false');F('kdBody').scrollTop=0;
   document.querySelectorAll('.kcard').forEach(c=>c.classList.toggle('sel',c.dataset.id===id));
-  setTimeout(()=>F('kdClose').focus(),60);
+  setTimeout(()=>{const r=F('kdReason');if(focusReason&&r){r.focus();kdErr(false)}else F('kdClose').focus()},80);
 }
 function closeKD(){
   if(!kdOn()&&!S.kd)return;
-  const id=S.kd;S.kd=null;document.body.classList.remove('kd-open');F('kDrawer').setAttribute('aria-hidden','true');
+  const id=S.kd;S.kd=null;S.kdReason='';document.body.classList.remove('kd-open');F('kDrawer').setAttribute('aria-hidden','true');
   document.querySelectorAll('.kcard.sel').forEach(c=>c.classList.remove('sel'));
   const c=id&&F('kBoard').querySelector(`.kcard[data-id="${CSS.escape(id)}"]`);if(c)c.focus({preventScroll:true});
 }
 F('kdClose').addEventListener('click',closeKD);
-F('kdOpen').addEventListener('click',()=>{const t=S.trips.find(x=>x.id===S.kd);if(t)openTrip(t)});
+function kdErr(on){const e=F('kdErr');if(e)e.hidden=!on;const r=F('kdReason');if(r)r.classList.toggle('bad',!!on)}
 function renderKD(){
   if(!S.kd)return;
   const t=S.trips.find(x=>x.id===S.kd);
   if(!t){closeKD();return}
   const sig=JSON.stringify(t)+S.role;if(sig===S.kdSig)return;S.kdSig=sig;
-  const st=stageOf(t),col=st.key==='draft'?'':st.key,over=ruleCheck(t),miss=rcMissingOf(t);
+  const st=stageOf(t),over=ruleCheck(t),miss=rcMissingOf(t);
   F('kdAv').className='av '+pc(t.traveler);F('kdAv').textContent=String(t.traveler||'?').slice(0,1);
   F('kdName').textContent=t.traveler;
-  F('kdSub').innerHTML=`<span class="sbadge st-${st.key}">${esc(st.label)}</span><span class="num">${won(t.total)}원</span>`;
+  F('kdSub').innerHTML=`<span class="sbadge st-${st.key}">${esc(st.label)}</span><span class="num">${esc(t.date)} · ${esc(t.period||'당일')}</span>`;
   const comps=String(t.companions||'').split(',').map(x=>x.trim()).filter(Boolean);
   const ppl=1+(comps.length||t.companionCount||0),days=periodDays(t.period),unit=S.settings.mealUnit||15000;
-  const car=isCar(t.mode),fp=car?fuelPrice(t.mode):null,fuel=car&&fp&&t.km>0?fuelCost(t.km,fp):0;
+  const car=isCar(t.mode),fp=car?fuelPrice(t.mode):null,fuel=car&&fp&&t.km>0?fuelCost(t.km,fp):0,mealMax=unit*ppl*days*2;
+  const lodgeN=t.lodgingNights||Math.max(1,days-1),lodgeP=t.lodgingPeople||ppl;
+  // [항목, 이름, 내용, 기준, 기준 초과, 영수증 없음]
   const rows=[
-    ['transport','교통비',[t.mode||'-',car&&t.km?`편도 ${t.km}km`:''].filter(Boolean).join(' · '),car?(fuel?`주유비 ${won(fuel)}원`:'주유비 계산'):'영수증 실비',over.includes('주유비')],
-    ['toll','통행료','고속도로 통행료·주차비','영수증 실비',false],
-    ['meal','식대',`${ppl}명 · ${days}일`,`${won(unit*ppl*days*2)}원 이내`,over.includes('식대')],
-    ['etc','기타',t.etcNote||'-','영수증 실비',false]];
-  const info=[['출장자',esc(t.traveler)],['기간',`<span class="num">${esc(t.date)}</span> · ${esc(t.period||'당일')}`],['출장지',esc(t.place)],
-    ['목적',esc(t.purpose||'-')],['동행자',comps.length?esc(comps.join(', ')):t.companionCount?`${t.companionCount}명 (기존 기록)`:'없음']];
+    ['transport','교통비',[t.mode||'-',car&&t.km?`편도 ${t.km}km`:''].filter(Boolean).join(' · '),car?(fuel?`주유비 ${won(fuel)}원 이내 · 영수증 불필요`:'주유비 계산식 · 영수증 불필요'):'영수증 실비',over.includes('주유비'),miss.includes('transport')],
+    ['toll','통행료','고속도로 통행료·주차비','영수증 실비',false,miss.includes('toll')],
+    ['lodging','숙박비',`${lodgeN}박 · ${lodgeP}명`,`${won(lodgingLimit(lodgeN,lodgeP))}원 이내 (1박 ${won(LODGE_BASE)}원 + 동행 1명당 ${won(LODGE_ADD)}원)`,over.includes('숙박비'),miss.includes('lodging')],
+    ['meal','식대',`${ppl}명 · ${days}일`,`${won(mealMax)}원 이내 (1인 ${won(unit)}원)`,over.includes('식대'),miss.includes('meal')],
+    ['etc','기타',t.etcNote||'-','영수증 실비',false,miss.includes('etc')]];
+  const info=[['출장지',esc(t.place)],['목적',esc(t.purpose||'-')],['교통수단',esc(t.mode||'-')+(car&&t.km?` <span class="hint">편도 ${esc(String(t.km))}km</span>`:'')],
+    ['동행자',comps.length?esc(comps.join(', ')):t.companionCount?`${t.companionCount}명 (기존 기록)`:'없음']];
   const rc=t.receipts||{},rcs=RC_KEYS.flatMap(k=>(rc[k]||[]).map(r=>({k,r})));
-  const proc=[['승인자',t.approver],['승인일',t.approvedAt],['처리자',t.handler],['처리일',t.processedAt],['지급방법',t.payMethod],['비고',t.note]].filter(([,v])=>v);
+  const warn=[
+    over.length?`<div class="kd-box over">${IC.alert}<div><b>기준 초과 · ${esc(over.join('·'))}</b><span>${over.includes('식대')?`식대 기준 ${won(mealMax)}원(1인 ${won(unit)}원 × ${ppl}명 × ${days}일 × 2)을 넘습니다. `:''}${over.includes('주유비')?`주유비 계산값 ${won(fuel)}원을 넘습니다. `:''}${over.includes('숙박비')?`숙박비 기준 ${won(lodgingLimit(lodgeN,lodgeP))}원(${lodgeN}박 · ${lodgeP}명)을 넘습니다.`:''}</span></div></div>`:'',
+    miss.length?`<div class="kd-box miss">${IC.alert}<div><b>영수증 누락 · ${esc(miss.map(k=>RC_LABEL[k]).join('·'))}</b><span>반려하거나 첨부를 요청하세요.</span></div></div>`:'',
+    !over.length&&!miss.length?`<div class="kd-box ok">${IC.check}<div><b>문제없음</b><span>모든 항목이 산정기준 이내이고 영수증이 첨부되어 있습니다.</span></div></div>`:''].join('');
   F('kdBody').innerHTML=`
-    ${t.approval==='반려'?`<div class="kd-reason"><b>반려 사유</b><p>${t.rejectReason?esc(t.rejectReason):'<span class="hint">적힌 사유가 없습니다(예전 기록).</span>'}</p></div>`:''}
-    ${over.length||miss.length?`<div class="kd-warn">${over.length?`<span class="ktag over">${IC.alert}기준 초과 · ${esc(over.join('·'))}</span>`:''}${miss.length?`<span class="ktag miss">${IC.alert}영수증 누락 · ${esc(miss.map(k=>RC_LABEL[k]).join('·'))}</span>`:''}</div>`:''}
     <dl class="kd-info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
+    <div class="kd-warns">${warn}</div>
     <h3 class="kd-h">경비 항목</h3>
-    <div class="tablewrap"><table class="kd-tbl"><thead><tr><th>항목</th><th>내용</th><th>기준</th><th class="r">금액</th></tr></thead>
-      <tbody>${rows.map(([k,l,what,rule,o])=>`<tr class="${o?'over':''}${t[k]?'':' zero'}"><td><b>${l}</b></td><td>${esc(what)}</td><td class="num">${esc(rule)}${o?' <em>초과</em>':''}</td><td class="r num"><b>${won(t[k])}원</b></td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="3">합계</td><td class="r num">${won(t.total)}원</td></tr></tfoot></table></div>
+    <table class="kd-tbl"><thead><tr><th>항목</th><th>내용 · 기준</th><th class="r">금액</th></tr></thead>
+      <tbody>${rows.map(([k,l,what,rule,o,m])=>`<tr class="${o?'over':m?'miss':''}${t[k]?'':' zero'}"><td><b>${l}</b></td>
+        <td>${esc(what)}<small>${esc(rule)}${o?' <em class="e-over">초과</em>':''}${m?' <em class="e-miss">영수증 없음</em>':''}</small></td>
+        <td class="r num"><b>${won(t[k])}원</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="2">합계</td><td class="r num">${won(t.total)}원</td></tr></tfoot></table>
     <h3 class="kd-h">영수증 <span class="num">${rcs.length}장</span></h3>
     ${rcs.length?`<div class="kd-rc">${rcs.map(({k,r},i)=>{const href=apiUrl('receipt','id='+encodeURIComponent(r.id));
-      return `<button type="button" class="kd-th" data-i="${i}" title="${esc(RC_LABEL[k])}${r.name?' · '+esc(r.name):''}">${r.type==='application/pdf'?'<span class="pdf">PDF</span>':`<img src="${href}" alt="${esc(RC_LABEL[k])} 영수증">`}<span class="lab">${esc(RC_LABEL[k])}</span></button>`}).join('')}</div>`
+      return `<button type="button" class="kd-th" data-i="${i}" title="${esc(RC_LABEL[k])}${r.name?' · '+esc(r.name):''} — 크게 보기">${r.type==='application/pdf'?'<span class="pdf">PDF</span>':`<img src="${href}" alt="${esc(RC_LABEL[k])} 영수증">`}<span class="lab">${esc(RC_LABEL[k])}</span></button>`}).join('')}</div>`
       :'<div class="hint kd-none">첨부된 영수증이 없습니다.</div>'}
-    ${proc.length?`<h3 class="kd-h">처리 기록</h3><dl class="kd-info">${proc.map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`:''}`;
-  const acts=cardActs(t,col);
-  F('kdActs').innerHTML=acts||`<span class="hint">${st.key==='wait'?'대표(승인 관리자)가 승인합니다':st.key==='settle'?'정산 담당이 처리합니다':''}</span>`;
+    <button type="button" class="linkbtn kd-open" id="kdOpen">청구서 창에서 열기 (내용 수정·삭제)</button>`;
+  renderKDFoot(t,st.key);
 }
-F('kdBody').addEventListener('click',e=>{const b=e.target.closest('.kd-th');if(!b)return;const t=S.trips.find(x=>x.id===S.kd);if(t)openTripReceipts(t,+b.dataset.i)});
-F('kdActs').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||F('kDrawer').classList.contains('busy'))return;const t=S.trips.find(x=>x.id===S.kd);if(t)boardAct(t,b.dataset.act)});
+// 아래 고정 처리 영역 — 상태와 권한에 따라
+function renderKDFoot(t,k){
+  let h='';
+  if(k==='wait'){
+    h=canApprove()?`<label class="kd-rl" for="kdReason">반려 사유 <span class="hint">반려할 때 꼭 적어 주세요 · 청구자 화면에 보입니다</span></label>
+      <textarea id="kdReason" rows="2" maxlength="500" placeholder="예: 식대가 기준을 넘습니다. 영수증과 인원을 다시 확인해 주세요."></textarea>
+      <div class="kd-err" id="kdErr" hidden>${IC.alert}반려하려면 사유를 입력해 주세요.</div>
+      <div class="kd-btns"><button type="button" class="btn rej" data-act="reject-go">반려</button><button type="button" class="btn primary" data-act="approve">승인</button></div>`
+      :`<div class="kd-wait">${IC.clock}대표자 승인 대기</div>`;
+  }else if(k==='settle'){
+    h=isSettler()?`<div class="kd-btns"><button type="button" class="btn dark" data-act="settle">정산 완료 처리</button></div>`
+      :`<div class="kd-wait">${IC.clock}정산 담당자 처리 대기</div>`;
+  }else if(k==='no'){
+    h=`<div class="kd-reason"><b>반려 사유</b><p>${t.rejectReason?esc(t.rejectReason):'<span class="hint">적힌 사유가 없습니다(예전 기록).</span>'}</p></div>`
+      +(canApprove()?`<div class="kd-btns"><button type="button" class="btn" data-act="revert">승인 대기로 되돌리기</button></div>`:'');
+  }else if(k==='done'){
+    h=`<div class="kd-wait done">${IC.check}정산 완료 · ${esc(t.processedAt||'')}${t.payMethod?` · ${esc(t.payMethod)}`:''}${t.handler?` · 처리 ${esc(t.handler)}`:''}</div>`;
+  }
+  F('kdFoot').innerHTML=h;
+  const r=F('kdReason');if(r)r.value=S.kdReason||'';
+}
+F('kdFoot').addEventListener('input',e=>{if(e.target.id==='kdReason'){S.kdReason=e.target.value;if(e.target.value.trim())kdErr(false)}});
+F('kdFoot').addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b||F('kDrawer').classList.contains('busy'))return;
+  const t=S.trips.find(x=>x.id===S.kd);if(!t)return;
+  if(b.dataset.act==='reject-go'){
+    const reason=(F('kdReason').value||'').trim();
+    if(!reason){kdErr(true);F('kdReason').focus();return}
+    rejectWith(t,reason);return;
+  }
+  boardAct(t,b.dataset.act);
+});
+F('kdBody').addEventListener('click',e=>{
+  if(e.target.closest('#kdOpen')){const t=S.trips.find(x=>x.id===S.kd);if(t)openTrip(t);return}
+  const b=e.target.closest('.kd-th');if(!b)return;const t=S.trips.find(x=>x.id===S.kd);if(t)openTripReceipts(t,+b.dataset.i)});
+async function rejectWith(t,reason){
+  F('kDrawer').classList.add('busy');
+  try{await store.save(t.id,{approval:'반려',approvedAt:today(),rejectReason:reason});S.kdReason='';toast(`${t.traveler} 청구를 반려했습니다 · 사유는 청구자 화면에 보입니다`)}
+  catch(e){toast(e.message||'반려하지 못했습니다')}
+  finally{F('kDrawer').classList.remove('busy')}
+}
 setAview(S.aview);
 
 /* ---------- 시작 ---------- */
