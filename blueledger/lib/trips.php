@@ -23,6 +23,7 @@ function bl_trip_out(array $r) {
         'payMethod' => $r['pay_method'], 'note' => $r['note'], 'source' => $r['source'],
         'createdBy' => $r['created_by_name'], 'createdAt' => $r['created_at'], 'updatedAt' => $r['updated_at'],
         'staffUpdatedAt' => $r['staff_updated_at'], 'reviewedAt' => $r['reviewed_at'],
+        'rejectReason' => (string)($r['reject_reason'] ?? ''),
     ];
 }
 
@@ -73,7 +74,7 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
                 'created_by' => $me['email'], 'created_by_name' => $me['name'], 'created_at' => $now,
                 'receipts' => null, 'source' => '', 'staff_updated_at' => '', 'reviewed_at' => '',
                 'approver' => '', 'approved_at' => '', 'handler' => '', 'processed_at' => '',
-                'pay_method' => '', 'note' => '', 'companion_count' => 0,
+                'pay_method' => '', 'note' => '', 'companion_count' => 0, 'reject_reason' => '',
             ];
         } else {
             $row = $prev;
@@ -105,6 +106,13 @@ function bl_save_trip(PDO $pdo, array $me, array $body) {
             $who = $role === ROLE_APPROVER ? $me['name'] : (bl_settings($pdo)['approverName'] ?? '김호영');
             if ($row['approval'] === '승인대기') $row['approver'] = '';
             elseif ($before[0] !== $row['approval'] || $row['approver'] === '') $row['approver'] = $who;
+            // 반려 사유 — 청구자에게 보인다. 새로 반려할 때는 꼭 적어야 하고, 반려가 아니게 되면 비운다(2026-11-13)
+            if ($row['approval'] === '반려') {
+                if (array_key_exists('rejectReason', $data)) $row['reject_reason'] = clip(trim((string)$data['rejectReason']), 500);
+                if ($before[0] !== '반려' && trim((string)($row['reject_reason'] ?? '')) === '') throw new BlError('반려 사유를 입력해 주세요', 400);
+            } else {
+                $row['reject_reason'] = '';
+            }
             if ($before !== [$row['approval'], $row['approver'], $row['approved_at']]) $row['reviewed_at'] = $now;
         }
         if ($role === ROLE_ADMIN) {
@@ -190,7 +198,8 @@ function bl_write_trip(PDO $pdo, array $row, $exists) {
     $cols = ['traveler', 'companions', 'companion_count', 'trip_date', 'period', 'place', 'purpose', 'mode', 'km',
         'transport', 'toll', 'meal', 'etc', 'etc_note', 'total', 'receipts', 'approval', 'approver', 'approved_at',
         'status', 'handler', 'processed_at', 'pay_method', 'note', 'source', 'created_by', 'created_by_name',
-        'created_at', 'updated_at', 'staff_updated_at', 'reviewed_at'];
+        'created_at', 'updated_at', 'staff_updated_at', 'reviewed_at', 'reject_reason'];
+    if (bl_col_missing('bl_travel_trips', 'reject_reason')) $cols = array_values(array_diff($cols, ['reject_reason']));
     $vals = array_map(fn($c) => $row[$c] ?? '', $cols);
     if ($exists) {
         $set = implode(',', array_map(fn($c) => "`$c`=?", $cols));

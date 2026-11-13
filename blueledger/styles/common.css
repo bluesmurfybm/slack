@@ -1,0 +1,109 @@
+/* BlueExpense 공통 디자인 기준 (2026-11-13) — 구성원·관리자 화면이 같이 쓴다. travel.css 보다 먼저 읽는다.
+   글꼴 Pretendard → Inter → system-ui · 포인트 #4e61f6 / 연한 배경 #edeffe / 진한 글자 #2b3587
+   본문 #131927 · 보조 #6d717f · 테두리 1.5px #e5e7ea · 페이지 #f3f4f6
+   상태: 작성 중 회색 · 승인 대기 주황 · 정산 대기 파랑 · 정산 완료 초록 · 반려·누락 빨강
+   카드 흰 바탕·모서리 12~16px·은은한 그림자 / 버튼·입력칸 높이 44~52px·모서리 12px / 금액 굵게·자릿수 정렬
+   아이콘은 선 굵기 1.5px 선형 SVG(.ic), 이모지는 쓰지 않는다. */
+:root{
+  --tb:61px;
+  --bg:#f3f4f6; --col-bg:#f9fafb; --panel:#ffffff; --ink:#131927; --sub:#6d717f; --line:#e5e7ea; --soft:#f3f4f6;
+  --blue:#4e61f6; --blue-hover:#3d4fe0; --blue-soft:#edeffe; --blue-ink:#2b3587; --blue-mid:#b6bffb;
+  /* 상태 — 배경(soft) · 글자 · 점(dot) */
+  --draft-bg:#f1f2f4; --draft-ink:#5f6370; --draft-dot:#9ea2ae;
+  --wait-soft:#fff7e6; --wait:#8a5a00; --wait-dot:#ffaa00;
+  --settle-soft:#edeffe; --settle:#2b3587; --settle-dot:#4e61f6;
+  --ok-soft:#ecf8ef; --ok:#1f7a35; --ok-dot:#43b75d;
+  --no-soft:#fdecec; --no:#c42b26; --no-dot:#c42b26;
+  --orange:#ffaa00; --orange-ink:#a86a00; --over-line:#ffd27a; --over-bg:#fff4dc; --gray-mid:#c3c7d0;
+  --shadow:0 6px 8px -2px rgba(19,25,39,.06),0 3px 6px -2px rgba(19,25,39,.1);
+  /* 그래프 색 — 교통·통행료/숙박·식대·기타 */
+  --c1:#4e61f6; --c2:#8f9cfa; --c3:#ffaa00; --c4:#c3c7d0; --bar-soft:#aeb6fb;
+  --tape:#ffffff; --banner:#4e61f6;
+  /* 사람마다 다른 이니셜 색 */
+  --pc0b:#e8ebfe;--pc0i:#2b3587; --pc1b:#fff1d6;--pc1i:#8a5a00; --pc2b:#e3f5e9;--pc2i:#1f7a35; --pc3b:#fde8e7;--pc3i:#a8322a;
+  --pc4b:#efe6fd;--pc4i:#5b3aa8; --pc5b:#ddf1f6;--pc5i:#1b6b80; --pc6b:#fde9f3;--pc6i:#a2366e; --pc7b:#eceef1;--pc7i:#3d4350;
+  --sans:Pretendard,"Pretendard Variable",Inter,system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1219; --col-bg:#141820; --panel:#191d27; --ink:#e8eaf0; --sub:#9aa0ad; --line:#2a303c; --soft:#20252f;
+  --blue:#7b8afa; --blue-hover:#919efb; --blue-soft:#232a52; --blue-ink:#c5cbff; --blue-mid:#3c4795;
+  --draft-bg:#262b36; --draft-ink:#c3c7d0; --draft-dot:#7d8290;
+  --wait-soft:#3a2d14; --wait:#f0b65a; --wait-dot:#ffb52e;
+  --settle-soft:#232a52; --settle:#c5cbff; --settle-dot:#7b8afa;
+  --ok-soft:#163020; --ok:#5cc782; --ok-dot:#4fbf68;
+  --no-soft:#3c1e1a; --no:#f08374; --no-dot:#f08374;
+  --orange:#ffb52e; --orange-ink:#ffc45c; --over-line:#7a5a1c; --over-bg:#33280f; --gray-mid:#4a5160;
+  --shadow:0 6px 10px -2px rgba(0,0,0,.35),0 3px 6px -2px rgba(0,0,0,.4);
+  --c1:#7b8afa; --c2:#4e5bb8; --c3:#e0a33a; --c4:#4a5160; --bar-soft:#3c4795; --tape:#191d27; --banner:#3c4bc4;
+  --pc0b:#262d5c;--pc0i:#c5cbff; --pc1b:#3a2d14;--pc1i:#f0c070; --pc2b:#173022;--pc2i:#7fd49a; --pc3b:#3c1e1a;--pc3i:#f29a8d;
+  --pc4b:#2e2348;--pc4i:#c9b2f5; --pc5b:#14313a;--pc5i:#86cfe2; --pc6b:#3a1c2c;--pc6i:#f0a1c9; --pc7b:#272c36;--pc7i:#c3c7d0;
+  color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0f1219; --col-bg:#141820; --panel:#191d27; --ink:#e8eaf0; --sub:#9aa0ad; --line:#2a303c; --soft:#20252f;
+  --blue:#7b8afa; --blue-hover:#919efb; --blue-soft:#232a52; --blue-ink:#c5cbff; --blue-mid:#3c4795;
+  --draft-bg:#262b36; --draft-ink:#c3c7d0; --draft-dot:#7d8290;
+  --wait-soft:#3a2d14; --wait:#f0b65a; --wait-dot:#ffb52e;
+  --settle-soft:#232a52; --settle:#c5cbff; --settle-dot:#7b8afa;
+  --ok-soft:#163020; --ok:#5cc782; --ok-dot:#4fbf68;
+  --no-soft:#3c1e1a; --no:#f08374; --no-dot:#f08374;
+  --orange:#ffb52e; --orange-ink:#ffc45c; --over-line:#7a5a1c; --over-bg:#33280f; --gray-mid:#4a5160;
+  --shadow:0 6px 10px -2px rgba(0,0,0,.35),0 3px 6px -2px rgba(0,0,0,.4);
+  --c1:#7b8afa; --c2:#4e5bb8; --c3:#e0a33a; --c4:#4a5160; --bar-soft:#3c4795; --tape:#191d27; --banner:#3c4bc4;
+  --pc0b:#262d5c;--pc0i:#c5cbff; --pc1b:#3a2d14;--pc1i:#f0c070; --pc2b:#173022;--pc2i:#7fd49a; --pc3b:#3c1e1a;--pc3i:#f29a8d;
+  --pc4b:#2e2348;--pc4i:#c9b2f5; --pc5b:#14313a;--pc5i:#86cfe2; --pc6b:#3a1c2c;--pc6i:#f0a1c9; --pc7b:#272c36;--pc7i:#c3c7d0;
+  color-scheme:dark;}
+
+/* 바탕 */
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+/* 선형 아이콘 — 선 굵기 1.5px */
+.ic{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* 버튼 — 높이 48px(작은 것 36·30px), 모서리 12px, 테두리 1.5px */
+.btn{height:48px;border:1.5px solid var(--line);border-radius:12px;padding:0 18px;background:var(--panel);color:var(--ink);font:inherit;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.primary:hover{background:var(--blue-hover);border-color:var(--blue-hover);color:#fff}
+.btn.danger{color:var(--no)}
+.btn.danger:hover{border-color:var(--no);color:var(--no)}
+.btn.rej{color:var(--no);border-color:var(--no)}
+.btn.rej:hover{background:var(--no-soft);color:var(--no);border-color:var(--no)}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.btn.dark:hover{opacity:.88;background:var(--ink);border-color:var(--ink);color:var(--panel)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.sm{height:36px;border-radius:10px;padding:0 12px;font-size:13px}
+.btn.xs{height:30px;border-radius:8px;padding:0 10px;font-size:12.5px;font-weight:600}
+/* display 를 정했으니 hidden 속성이 다시 이기도록 */
+.btn[hidden]{display:none!important}
+
+/* 카드 — 흰 바탕, 모서리 16px, 은은한 그림자 */
+.panel,.card{background:var(--panel);border:0;border-radius:16px;box-shadow:var(--shadow)}
+.card{padding:24px;min-width:0}
+
+/* 상태 배지 · 상태 점 */
+.sbadge{justify-self:end;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap}
+.st-draft{background:var(--draft-bg);color:var(--draft-ink)}
+.st-wait{background:var(--wait-soft);color:var(--wait)}
+.st-settle{background:var(--settle-soft);color:var(--settle)}
+.st-done{background:var(--ok-soft);color:var(--ok)}
+.st-no{background:var(--no-soft);color:var(--no)}
+.kdot{display:inline-block;width:9px;height:9px;border-radius:50%;flex:none}
+.k-draft{background:var(--draft-dot)}.k-wait{background:var(--wait-dot)}.k-settle{background:var(--settle-dot)}.k-done{background:var(--ok-dot)}.k-no{background:var(--no-dot)}
+/* 작은 표시(영수증 n장 · 기준 초과 · 영수증 누락) */
+.ktag{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 8px;border-radius:99px;background:var(--soft);color:var(--sub);font-size:12px;font-weight:600;white-space:nowrap}
+.ktag .ic{width:13px;height:13px;stroke-width:2}
+.ktag.over{background:var(--over-bg);color:var(--orange-ink)}
+.ktag.miss{background:var(--no-soft);color:var(--no)}
+
+/* 이니셜 동그라미 — 사람마다 다른 색(pc0~pc7) */
+.av{width:40px;height:40px;border-radius:50%;background:var(--blue-soft);color:var(--blue-ink);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:none}
+.av.xs{width:26px;height:26px;font-size:12px}
+.av.pc0{background:var(--pc0b);color:var(--pc0i)}.av.pc1{background:var(--pc1b);color:var(--pc1i)}
+.av.pc2{background:var(--pc2b);color:var(--pc2i)}.av.pc3{background:var(--pc3b);color:var(--pc3i)}
+.av.pc4{background:var(--pc4b);color:var(--pc4i)}.av.pc5{background:var(--pc5b);color:var(--pc5i)}
+.av.pc6{background:var(--pc6b);color:var(--pc6i)}.av.pc7{background:var(--pc7b);color:var(--pc7i)}

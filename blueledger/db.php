@@ -51,6 +51,7 @@ const BL_SCHEMA = [
             'updated_at'       => ['VARCHAR(19)',  '',    ''],
             'staff_updated_at' => ['VARCHAR(19)',  '',    '직원이 마지막으로 고친 시각 — 승인 뒤에 고쳤는지 표시용'],
             'reviewed_at'      => ['VARCHAR(19)',  '',    '승인 상태를 마지막으로 바꾼 시각'],
+            'reject_reason'    => ['VARCHAR(500)', '',    '반려 사유 — 청구자에게 보인다. 반려가 아니면 빈칸(2026-11-13)'],
         ],
         'keys' => ['ix_trip_date' => ['trip_date'], 'ix_trip_owner' => ['created_by'], 'ix_trip_traveler' => ['traveler']],
     ],
@@ -104,8 +105,38 @@ function bl_db() {
     foreach (BL_SCHEMA as $table => $def) {
         foreach (bl_ddl($pdo, $table, $def) as $sql) $pdo->exec($sql);
     }
+    bl_add_missing_cols($pdo);
     bl_seed($pdo);
     return $pdo;
+}
+
+/**
+ * 나중에 더한 컬럼. CREATE TABLE IF NOT EXISTS 는 이미 있는 테이블에 칸을 더하지 않으므로,
+ * 여기 적은 칸이 없으면 ALTER TABLE 로 더한다(운영 MySQL 에 손으로 넣지 않아도 되게).
+ */
+const BL_ADDED_COLS = ['bl_travel_trips' => ['reject_reason']];
+$GLOBALS['BL_MISSING_COLS'] = [];
+function bl_add_missing_cols(PDO $pdo) {
+    foreach (BL_ADDED_COLS as $table => $names) {
+        // DB 계정에 ALTER 권한이 없는 등으로 실패해도 화면은 열려야 한다 — 기록만 남기고, 없는 칸은 저장에서 뺀다(bl_col_missing)
+        try {
+            $have = array_column($pdo->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_ASSOC), 'Field');
+            foreach ($names as $name) {
+                if (in_array($name, $have, true)) continue;
+                [$type, $default, $comment] = BL_SCHEMA[$table]['cols'][$name];
+                $sql = "ALTER TABLE `$table` ADD COLUMN `$name` $type NOT NULL DEFAULT " . $pdo->quote((string)$default);
+                if (!bl_is_sqlite($pdo) && $comment !== '') $sql .= ' COMMENT ' . $pdo->quote($comment);
+                $pdo->exec($sql);
+            }
+        } catch (Throwable $e) {
+            error_log("[blueledger] $table 칸 추가 실패: " . $e->getMessage());
+            foreach ($names as $name) if (!in_array($name, $have ?? [], true)) $GLOBALS['BL_MISSING_COLS'][$table][] = $name;
+        }
+    }
+}
+/** 나중에 더한 칸을 아직 못 더했으면 true — 저장할 때 그 칸을 뺀다 */
+function bl_col_missing($table, $col) {
+    return in_array($col, $GLOBALS['BL_MISSING_COLS'][$table] ?? [], true);
 }
 
 function bl_is_sqlite(PDO $pdo) {

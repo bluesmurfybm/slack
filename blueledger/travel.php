@@ -26,6 +26,7 @@ $csrf = bl_csrf_token();
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="../styles/topbar.css">
+<link rel="stylesheet" href="styles/common.css?v=<?= (int)@filemtime(__DIR__ . '/styles/common.css') ?>">
 <link rel="stylesheet" href="styles/travel.css?v=<?= (int)@filemtime(__DIR__ . '/styles/travel.css') ?>">
 </head>
 <body>
@@ -55,12 +56,24 @@ $csrf = bl_csrf_token();
   <h1>BlueExpense</h1>
   <!-- 관리자 화면에서만 보인다 -->
   <span class="rolebadge" aria-label="관리자 화면">관리자</span>
+  <!-- 관리자 보기 전환(2026-11-13 칸반 시안): 보드(청구 칸반) · 일정(달력, 준비 중) · 통계(예전 관리자 대시보드) -->
+  <div class="viewseg" id="viewSeg" role="tablist" aria-label="관리자 보기">
+    <button type="button" role="tab" data-v="board" aria-selected="true">보드</button>
+    <button type="button" role="tab" data-v="cal" aria-selected="false">일정</button>
+    <button type="button" role="tab" data-v="stats" aria-selected="false">통계</button>
+  </div>
+  <span class="hspace"></span>
   <!-- 오늘 유가 알약 — 예전 '오늘의 유가' 큰 카드 3개를 대신한다(값은 같은 유가 API) -->
   <span class="fuelpill num" id="fuelPill" hidden></span>
   <!-- 관리자 화면: 마지막 갱신 시각 + 새로고침(예전 '지금 갱신' — 정산 관리자만) -->
   <span class="fuelupd" id="fuelUpd" hidden><span class="num" id="fuelTime"></span>
     <button type="button" class="rbtn admin-only" id="btnFuelRefresh" aria-label="유가 지금 갱신" title="유가 지금 갱신"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v3.8h-3.8"/></svg></button></span>
-  <span class="hspace"></span>
+  <!-- 관리자 화면: 연도(통계 보기에서만) · CSV 내보내기 · 설정(정산 관리자만) -->
+  <div class="hact" id="hAct">
+    <select class="btn selbtn" id="yearSel" aria-label="조회 연도"></select>
+    <button type="button" class="btn" id="btnCsv"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></svg>CSV</button>
+    <button type="button" class="btn icbtn admin-only" id="btnSettings" aria-label="설정" title="설정"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </div>
   <!-- 관리자(승인·정산)만 보인다. 처음엔 구성원 화면으로 열고, 여기서 관리자 화면으로 바꾼다.
        줄의 맨 오른쪽 — 상단바 이름 단추 바로 아래에 선다 -->
   <div class="modeseg" id="modeSeg" role="tablist" aria-label="화면 전환" hidden>
@@ -210,9 +223,12 @@ $csrf = bl_csrf_token();
       <p class="lockmsg" id="lockMsg" hidden></p>
     </form>
     <div class="slip-foot">
-      <div><div class="total-lab">합계</div><div class="total num" id="total">0원</div></div>
+      <div class="sf-sum"><div class="total-lab">합계</div><div class="total num" id="total">0원</div></div>
+      <!-- 항목 비율 막대(구성원 청구 작성 창) -->
+      <div class="sfbar" id="sumBar" aria-hidden="true"></div>
       <div class="btns">
         <button class="btn danger" id="btnDel" hidden>삭제</button>
+        <button class="btn" id="btnDraft" hidden>임시 저장</button>
         <button class="btn primary" id="btnSave">청구서 저장</button>
         <!-- 관리자(승인·정산) 화면: 누르면 바로 승인(반려)하고 저장한다. '청구서 저장' 단추와 위쪽 승인 칸을 대신한다 -->
         <button class="btn danger" id="btnReject" hidden>반려</button>
@@ -222,61 +238,86 @@ $csrf = bl_csrf_token();
   </section>
 
   <div class="col right">
-    <!-- 구성원 첫 화면 '출장경비 대시보드' (2026-11-11 시안). 관리자 화면에서는 숨는다 -->
-    <section class="mdash" id="memberDash" aria-labelledby="dashTitle">
-      <div class="dhead">
-        <div><div class="dmon num" id="dashMonth"></div><h2 class="dtitle" id="dashTitle">출장경비</h2></div>
-        <div class="dact">
-          <button type="button" class="btn outline" id="btnRules"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v15H7.5A2.5 2.5 0 0 0 5 20.5z"/><path d="M5 20.5A2.5 2.5 0 0 1 7.5 18H19v3H7.5"/></svg>출장비 기준</button>
-          <button type="button" class="btn primary" id="btnNewClaim"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>새 출장비 청구</button>
+    <!-- 구성원 첫 화면 '출장경비 대시보드' (2026-11-13 시안). 관리자 화면에서는 숨는다 -->
+    <section class="mdash" id="memberDash" aria-labelledby="mbTitle">
+      <!-- 파란 배너 — 이번 달 청구액과 바로 가기 -->
+      <div class="mbanner">
+        <div class="mb-l">
+          <h2 class="mb-k" id="mbTitle">출장경비</h2>
+          <div class="mb-v num" id="mbAmt">0<small>원</small></div>
+          <div class="mb-s num" id="mbSub"></div>
+        </div>
+        <div class="mb-act">
+          <button type="button" class="btn mb-new" id="btnNewClaim"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>새 출장비 청구</button>
+          <button type="button" class="btn mb-rc" id="btnRcFirst"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>영수증 먼저 올리기</button>
         </div>
       </div>
-      <div class="scards" id="sumCards"></div>
-      <div class="dgrid">
-        <div class="card hcard">
-          <div class="chead"><h3>청구 내역</h3>
-            <div class="ctabs" role="tablist" id="histTabs">
-              <button type="button" role="tab" data-h="all" aria-selected="true">전체</button>
-              <button type="button" role="tab" data-h="going" aria-selected="false">진행 중</button>
-              <button type="button" role="tab" data-h="done" aria-selected="false">완료</button>
-            </div></div>
-          <div class="hist" id="histList"></div>
-        </div>
-        <div class="dside">
-          <div class="card"><div class="chead"><h3>이번 달 경비 구성</h3><span class="meta num" id="mixTotal"></span></div>
-            <div class="mixbar" id="mixBar"></div><div class="mixlist" id="mixList"></div></div>
-          <div class="card" id="ruleCard"><div class="chead"><h3>출장비 기준</h3></div>
-            <ul class="rsum">
-              <li><span>숙박비</span><b class="num">1박 80,000원</b></li>
-              <li><span>식대</span><b class="num">1인 <span class="rbMeal">15,000</span>원</b></li>
-              <li><span>주유비</span><b>거리÷연비×유가×2</b></li>
-              <li><span>기타</span><b>영수증 실비</b></li>
-            </ul>
-            <ul class="rmore" id="ruleMore" hidden>
-              <li>숙박비는 1명 이상 동행하면 1명마다 10,000원씩 더합니다.</li>
-              <li>주유비는 출장지까지 왕복 금액이며, 백원 단위에서 올림합니다.</li>
-              <li>1주 이상 장기 출장은 회사와 협의하고, 협의가 안 되면 단기 출장비 합계의 70%로 산정합니다.</li>
-              <li>신청일은 출장 다음 날 기준이며, 휴일이면 그다음 날로 합니다.</li>
-            </ul>
-            <button type="button" class="linkbtn" id="ruleToggle" aria-expanded="false" aria-controls="ruleMore">전체 보기</button>
-          </div>
-        </div>
+      <!-- 할 일(넓게) + 이번 달 경비 구성(좁게) -->
+      <div class="mgrid">
+        <div class="card"><div class="chead"><h3>할 일</h3><span class="meta num" id="todoMeta"></span></div>
+          <div class="todos" id="todoList"></div></div>
+        <div class="card"><div class="chead"><h3>이번 달 경비 구성</h3></div>
+          <div class="donutw"><div class="donut" id="mixDonut"></div><div class="mixlist" id="mixList"></div></div></div>
       </div>
+      <!-- 출장비 기준 — 알약 한 줄 -->
+      <div class="rpills" aria-label="출장비 기준">
+        <span class="rp"><b>숙박</b>1박 80,000원</span>
+        <span class="rp"><b>식대</b><span class="num">1인 1식 <span class="rbMeal">15,000</span>원</span></span>
+        <span class="rp"><b>주유비</b>오늘 유가로 왕복 자동 계산</span>
+        <span class="rp"><b>기타</b>영수증 실비</span>
+        <button type="button" class="linkbtn" id="btnRules">전체 기준 보기</button>
+      </div>
+      <!-- 진행 보드 — 작성 중 → 대표 승인 대기 → 정산 대기 → 정산 완료 -->
+      <div class="mbhead"><h3>진행 현황</h3><button type="button" class="linkbtn" id="btnAllHist">전체 내역</button></div>
+      <div class="mboard" id="mBoard"></div>
     </section>
-    <!-- 관리자 첫 화면 '출장경비 관리' (2026-11-11 시안). 구성원 화면에서는 숨는다 -->
+    <!-- 관리자 '청구 보드' (2026-11-13 칸반 시안) — 승인 대기 → 정산 대기 → 정산 완료 / 반려.
+         카드를 다음 열로 끌거나 카드의 단추를 누르면 승인·정산이 처리된다(청구서 창과 같은 저장) -->
+    <section class="kview" id="boardView" aria-labelledby="boardTitle">
+      <div class="dhead">
+        <div><h2 class="dtitle" id="boardTitle">청구 보드</h2><div class="dsub">카드를 다음 단계로 옮기면 승인·정산이 처리됩니다</div></div>
+        <div class="ksum">
+          <div class="ksumi"><span>승인할 금액</span><b class="num" id="sumApprove">0원</b></div>
+          <div class="ksumi"><span>지급 예정</span><b class="num" id="sumPay">0원</b></div>
+        </div>
+      </div>
+      <!-- 휴대폰: 열 탭으로 넘긴다(가로로 밀어도 된다) -->
+      <div class="ctabs ktabs" id="kTabs" role="tablist" aria-label="열"></div>
+      <div class="kboard" id="kBoard"></div>
+    </section>
+    <!-- 일정 — 월간 달력에 사람별 색으로 출장 표시(다음에 만든다) -->
+    <section class="kview" id="calView" aria-labelledby="calTitle">
+      <div class="dhead"><div><h2 class="dtitle" id="calTitle">출장 일정</h2><div class="dsub">월간 달력에 사람별 색깔로 출장을 표시합니다</div></div></div>
+      <div class="card kcal-empty"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg><b>일정 보기는 준비 중입니다</b><span>지금은 보드와 통계를 이용해 주세요.</span></div>
+    </section>
+    <!-- 관리자 '통계' — 예전 '출장경비 관리'(요약 카드·월별·출장자별·청구 목록·출장비 기준). 구성원 화면에서는 숨는다 -->
     <section class="adash" id="adminDash" aria-labelledby="adminTitle">
       <div class="dhead">
-        <div><div class="dmon">승인 · 정산 · 통계</div><h2 class="dtitle" id="adminTitle">출장경비 관리</h2></div>
-        <div class="dact">
-          <select class="btn selbtn" id="yearSel" aria-label="조회 연도"></select>
-          <button type="button" class="btn" id="btnCsv"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></svg>CSV 내보내기</button>
-          <button type="button" class="btn icbtn admin-only" id="btnSettings" aria-label="설정" title="설정"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
-        </div>
+        <div><div class="dmon">요약 · 월별 · 출장자별 · 청구 목록</div><h2 class="dtitle" id="adminTitle">출장경비 통계</h2></div>
+        <div class="dact"><span class="meta num" id="statsYear"></span></div>
       </div>
       <div class="scards" id="kpis"></div>
+      <div class="achart">
+        <div class="card"><div class="chead"><h3>월별 출장여비</h3><span class="meta num" id="monthMeta"></span></div>
+          <div class="chart" id="monthChart"></div></div>
+        <div class="card"><div class="chead"><h3>출장자별 합계</h3><span class="meta num" id="personMeta"></span></div>
+          <div class="plist" id="byPerson"></div></div>
+      </div>
       <div class="agrid">
-        <div class="card"><div class="chead"><h3 id="queueTitle">처리할 청구</h3><span class="meta num" id="queueMeta"></span></div>
-          <div class="aq" id="queue"></div></div>
+        <div class="card alist" id="listCard">
+          <div class="chead"><h3>청구 목록</h3><span class="meta num" id="listMeta"></span></div>
+          <div class="ltools">
+            <div class="ctabs" role="tablist" id="fTabs" aria-label="상태"></div>
+            <div class="searchf lsearch"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg><input id="q" placeholder="출장자·출장지 검색" aria-label="출장자·출장지 검색" autocomplete="off"></div>
+          </div>
+          <div class="tablewrap">
+            <table class="atable">
+              <thead><tr><th>출장일</th><th>출장자</th><th>출장지 · 목적</th><th class="r">금액</th><th>상태</th></tr></thead>
+              <tbody id="tbody"></tbody>
+              <tfoot id="tfoot"></tfoot>
+            </table>
+          </div>
+        </div>
         <div class="card" id="aRuleCard"><div class="chead"><h3>출장비 기준</h3><button type="button" class="btn sm rhbtn" id="btnRuleEdit">기준 수정</button></div>
           <ul class="rsum">
             <li><span>숙박비</span><b class="num">1박 80,000원</b></li>
@@ -288,31 +329,31 @@ $csrf = bl_csrf_token();
           <button type="button" class="linkbtn" id="btnRuleAll">전체 기준 보기</button>
         </div>
       </div>
-      <div class="achart">
-        <div class="card"><div class="chead"><h3>월별 출장여비</h3><span class="meta num" id="monthMeta"></span></div>
-          <div class="chart" id="monthChart"></div></div>
-        <div class="card"><div class="chead"><h3>출장자별 합계</h3><span class="meta num" id="personMeta"></span></div>
-          <div class="plist" id="byPerson"></div></div>
-      </div>
-      <div class="card alist" id="listCard">
-        <div class="chead"><h3>청구 목록</h3><span class="meta num" id="listMeta"></span></div>
-        <div class="ltools">
-          <div class="ctabs" role="tablist" id="fTabs" aria-label="상태"></div>
-          <div class="searchf lsearch"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg><input id="q" placeholder="출장자·출장지 검색" aria-label="출장자·출장지 검색" autocomplete="off"></div>
-        </div>
-        <div class="tablewrap">
-          <table class="atable">
-            <thead><tr><th>출장일</th><th>출장자</th><th>출장지 · 목적</th><th class="r">금액</th><th>상태</th></tr></thead>
-            <tbody id="tbody"></tbody>
-            <tfoot id="tfoot"></tfoot>
-          </table>
-        </div>
-      </div>
     </section>
   </div>
 </main>
 
 <div class="scrim" id="scrim"></div>
+<!-- 관리자 보드: 카드를 누르면 오른쪽에서 열리는 상세 창(읽기 전용 + 처리 단추) -->
+<aside class="kdrawer" id="kDrawer" aria-labelledby="kdName" aria-hidden="true">
+  <div class="kd-head">
+    <span class="av" id="kdAv"></span>
+    <div class="kd-t"><h2 id="kdName"></h2><div class="kd-sub" id="kdSub"></div></div>
+    <button type="button" class="slipx kd-x" id="kdClose" aria-label="닫기" title="닫기 (Esc)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="kd-body" id="kdBody"></div>
+  <div class="kd-foot"><button type="button" class="btn sm" id="kdOpen">청구서 열기</button><div class="kd-acts" id="kdActs"></div></div>
+</aside>
+<!-- 반려 사유 — 꼭 적어야 하고, 청구자 화면에 그대로 보인다 -->
+<dialog id="rejDlg" aria-labelledby="rejDlgTitle">
+  <div class="dh" id="rejDlgTitle">반려 사유</div>
+  <div class="db">
+    <div class="rej-who" id="rejWho"></div>
+    <label class="f"><span class="req">사유</span><textarea id="rejReason" rows="4" maxlength="500" placeholder="예: 식대가 기준(1인 15,000원)을 넘습니다. 영수증을 다시 확인해 주세요."></textarea></label>
+    <div class="hint">적은 사유는 청구자 화면에 그대로 보입니다.</div>
+  </div>
+  <div class="df"><button type="button" class="btn" id="rejCancel">취소</button><button type="button" class="btn danger rejgo" id="rejOk">반려</button></div>
+</dialog>
 <!-- [출장비 기준] 전체 — 작성기준과 유가별 주유비 표. 구성원 [출장비 기준], 관리자 [전체 기준 보기]가 연다 -->
 <dialog id="ruleDlg" aria-label="출장비 기준">
   <div class="dh">출장비 기준<button type="button" class="rcx" id="ruleDlgClose" aria-label="닫기"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>

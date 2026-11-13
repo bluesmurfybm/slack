@@ -164,16 +164,17 @@ function refreshLock(){
   // 관리자(승인·정산): 위쪽 승인 칸과 '변경 저장' 대신 아래 [반려][승인]만 둔다.
   // 승인 관리자는 지금 상태와 같은 단추를 '승인됨/반려됨'으로 막는다. 정산 관리자는 [승인]으로 정산 내용도 저장하므로
   // 이미 승인된 건에서도 [승인]을 누를 수 있다(2026-10-26 지안 님 요청: 삭제·승인·반려만)
-  const ap=isAdmin()&&!!S.editingId,cur=t?(t.approval||'승인대기'):'',lockSame=S.role==='approver';
-  if(isAdmin())F('btnSave').hidden=true;
+  const ap=S.role==='approver'&&!!S.editingId,cur=t?(t.approval||'승인대기'):'',lockSame=S.role==='approver';
+  if(S.role==='approver')F('btnSave').hidden=true;
+  if(S.role==='admin')F('btnSave').hidden=!S.editingId;
   F('btnApprove').hidden=F('btnReject').hidden=!ap;
   F('btnApprove').textContent=lockSame&&cur==='승인'?'승인됨':'승인';F('btnApprove').disabled=lockSame&&cur==='승인';
   F('btnReject').textContent=lockSame&&cur==='반려'?'반려됨':'반려';F('btnReject').disabled=lockSame&&cur==='반려';
   const msg=F('lockMsg');
   if(S.role==='approver'){msg.hidden=false;msg.textContent=S.editingId?`지금 ${cur}입니다. 내용과 영수증을 확인하고 아래 승인 또는 반려를 누르면 바로 저장됩니다.`:'목록이나 처리할 청구에서 승인할 건을 눌러 주세요.'}
-  else if(locked){msg.hidden=false;msg.textContent=t.approval==='반려'?'반려된 청구입니다. 내용을 고쳐 새 청구서로 다시 올려 주세요.':'승인된 청구는 수정할 수 없습니다. 고칠 내용이 있으면 관리자에게 알려 주세요.'}
+  else if(locked){msg.hidden=false;msg.textContent=t.approval==='반려'?`반려된 청구입니다.${t.rejectReason?` 반려 사유: ${t.rejectReason.replace(/[.\s]+$/,'')}.`:''} 내용을 고쳐 새 청구서로 다시 올려 주세요.`:'승인된 청구는 수정할 수 없습니다. 고칠 내용이 있으면 관리자에게 알려 주세요.'}
   else if(staff){msg.hidden=false;msg.textContent='승인과 정산은 관리자가 처리합니다. 승인 전까지는 내용을 고칠 수 있습니다.'}
-  else if(ap){msg.hidden=false;msg.textContent=`지금 ${cur}입니다. 고친 내용과 정산 칸은 아래 승인(또는 반려)을 누를 때 함께 저장됩니다.`}
+  else if(S.role==='admin'&&S.editingId){msg.hidden=false;msg.textContent=`지금 ${cur}입니다. 승인·반려는 대표(승인 관리자)가 합니다. 고친 내용과 정산 칸은 아래 [변경 저장]으로 저장됩니다.`}
   else msg.hidden=true;
   document.querySelectorAll('.att').forEach(a=>a.style.visibility=locked?'hidden':'');
   document.querySelectorAll('.th .x').forEach(b=>b.hidden=!!locked);
@@ -399,20 +400,20 @@ F('btnNew').addEventListener('click',()=>{clearForm();switchTab('form');F('trave
 
 /* [승인]·[반려] — 누르면 그 자리에서 저장한다. 승인자·승인일은 서버·오늘 날짜로 채워진다.
    승인 관리자는 승인 상태만 보낸다. 정산 관리자는 청구서에서 고친 내용(정산 칸 포함)까지 같이 저장한다 */
-async function decide(v){
+async function decide(v,reason){
   if(!S.editingId||!isAdmin())return;
   if(S.role==='admin'){const cur=(S.trips.find(x=>x.id===S.editingId)||{}).approval||'승인대기';
     return saveForm({approval:v,approvedAt:today()},cur===v?'저장했습니다':v==='승인'?'승인하고 저장했습니다':'반려하고 저장했습니다')}
   const b=v==='승인'?F('btnApprove'):F('btnReject');b.disabled=true;
   try{
-    await store.save(S.editingId,{approval:v,approvedAt:today()});
+    await store.save(S.editingId,v==='반려'?{approval:v,approvedAt:today(),rejectReason:reason}:{approval:v,approvedAt:today()});
     toast(v==='승인'?'승인했습니다':'반려했습니다');
     if(S.single)afterSingleSave();else clearForm();
     render();
   }catch(e){toast(e.message||'처리하지 못했습니다');refreshLock()}
 }
 F('btnApprove').addEventListener('click',()=>decide('승인'));
-F('btnReject').addEventListener('click',()=>{if(confirm('이 청구를 반려할까요?'))decide('반려')});
+F('btnReject').addEventListener('click',async()=>{const t=S.trips.find(x=>x.id===S.editingId);if(!t)return;const r=await askReject(t);if(r!=null)decide('반려',r)});
 F('btnSave').addEventListener('click',()=>saveForm());
 async function saveForm(over={},doneMsg=''){
   const need=[['traveler','출장자'],['date','출장일'],['place','출장지']].find(([id])=>!F(id).value.trim());
@@ -436,7 +437,7 @@ async function saveForm(over={},doneMsg=''){
   Object.assign(data,over);
   const id=S.editingId||'new_';
   F('btnSave').disabled=F('btnApprove').disabled=F('btnReject').disabled=true;
-  try{await store.save(id,data);if(id==='new_')writeDraft(null);toast(doneMsg||(S.editingId?'변경 내용을 저장했습니다':(S.role==='staff'?'청구서를 제출했습니다. 승인·정산 결과는 관리자가 안내합니다':'청구서를 저장했습니다')));S.year=data.date.slice(0,4);
+  try{await store.save(id,data);if(id==='new_'){writeDraft(null);if(S.redoOf){markRedone(S.redoOf);S.redoOf=''}}toast(doneMsg||(S.editingId?'변경 내용을 저장했습니다':(S.role==='staff'?'청구서를 제출했습니다. 승인·정산 결과는 관리자가 안내합니다':'청구서를 저장했습니다')));S.year=data.date.slice(0,4);
     // 팝업은 저장한 그 청구서를 계속 보여 주고, 연 창의 목록을 새로 받게 알린다
     if(S.single)afterSingleSave();else{clearForm();closeDrawer()}render()}
   catch(e){toast(e.message||'저장하지 못했습니다')}
@@ -478,8 +479,9 @@ function render(){
 
   renderMonthChart(rows);
   renderPeople(rows);
-  renderQueue(waitA,unpaid);
+  F('statsYear').textContent=label;
   renderTable(rows);
+  renderBoard();
   renderMyList();
   renderMemberDash();
 }
@@ -537,51 +539,8 @@ function ruleCheck(t){
   if(p&&t.km>0&&(t.transport||0)>fuelCost(t.km,p))over.push('주유비');
   return over;
 }
-function renderQueue(waitA,unpaid){
-  const items=[...waitA.map(t=>({t,k:'wait'})),...unpaid.map(t=>({t,k:'settle'}))].sort((a,b)=>String(a.t.date).localeCompare(String(b.t.date)));
-  F('queueMeta').textContent=items.length?`승인 ${waitA.length} · 정산 ${unpaid.length}`:'';
-  if(!items.length){F('queue').innerHTML=`<div class="aqempty">${IC.check}<b>처리할 청구가 없습니다</b><span>승인·정산이 모두 끝났습니다.</span></div>`;return}
-  const N=8;
-  F('queue').innerHTML=items.slice(0,N).map(aqRowHtml).join('')
-    +(items.length>N?`<button type="button" class="linkbtn aqmore" data-more="1">외 ${items.length-N}건 · 청구 목록에서 보기</button>`:'');
-}
-function aqRowHtml({t,k}){
-  const st=stageOf(t),over=ruleCheck(t),n=rcCount(t);
-  const acts=k==='wait'
-    ?`<button type="button" class="btn sm rej" data-act="reject">반려</button><button type="button" class="btn sm primary" data-act="approve">승인</button>`
-    :isSettler()?`<button type="button" class="btn sm dark" data-act="settle">정산 완료 처리</button>`:'<span class="hint">정산 담당 처리</span>';
-  return `<div class="aqrow" data-id="${esc(t.id)}">
-    <span class="av">${initial(t.traveler)}</span>
-    <div class="aqm"><div class="aqn"><b>${esc(t.traveler)}</b><span class="sbadge st-${st.key}">${esc(st.label)}</span>${editedAfter(t)?'<span class="sbadge st-no">승인 후 수정</span>':''}</div>
-      <div class="aqd num">${esc(t.date)} · ${esc(t.place)}${t.purpose?` · ${esc(t.purpose)}`:''}</div></div>
-    <b class="aqa num">${won(t.total)}원</b>
-    <div class="aqb">${acts}</div>
-    <div class="aqs"><button type="button" class="btn xs" data-act="rc"${n?'':' disabled'}>${n?`영수증 보기 ${n}`:'영수증 없음'}</button><button type="button" class="btn xs" data-act="open">청구서 상세</button>
-      ${over.length?`<span class="rk over">${IC.alert}기준 초과 · ${over.join('·')}</span>`:`<span class="rk ok">${IC.check}산정기준 이내</span>`}</div>
-  </div>`;
-}
 // 관리자 화면으로 들어올 때 뜨는 팝업의 목록 한 줄
 function qrowHtml({t,k}){return `<div class="qrow" data-id="${esc(t.id)}" tabindex="0"><span class="badge ${k==='승인대기'?'b-wait':'b-none'}">${k}</span><span class="who">${esc(t.traveler)}</span><span class="what">${esc(t.date)} ${esc(t.place)} · ${esc(t.purpose)}</span><span class="num">${won(t.total)}원</span></div>`}
-/* 처리할 청구에서 바로 승인·반려·정산 완료 — 청구서 창의 [승인][반려]·정산 '처리완료'와 같은 값을 저장한다.
-   저장하면 loadState → render 로 요약 카드·처리할 청구·청구 목록이 함께 바뀐다 */
-async function quickAct(t,act,row){
-  if(act==='reject'&&!confirm(`${t.traveler} · ${t.date} ${t.place} 청구를 반려할까요?`))return;
-  if(act==='settle'&&!confirm(`${t.traveler} · ${won(t.total)}원을 정산 완료로 처리할까요?\n지급방법: ${t.payMethod||'계좌이체'} · 처리일 ${today()}`))return;
-  const data=act==='settle'?{status:'처리완료',processedAt:today(),payMethod:t.payMethod||'계좌이체'}:{approval:act==='approve'?'승인':'반려',approvedAt:today()};
-  row.classList.add('busy');row.querySelectorAll('button').forEach(b=>b.disabled=true);
-  try{await store.save(t.id,data);toast(act==='settle'?`${t.traveler} 청구를 정산 완료로 처리했습니다`:act==='approve'?`${t.traveler} 청구를 승인했습니다`:`${t.traveler} 청구를 반려했습니다`)}
-  catch(e){toast(e.message||'처리하지 못했습니다');render()}
-}
-F('queue').addEventListener('click',e=>{
-  if(e.target.closest('[data-more]')){showList('all');return}
-  const row=e.target.closest('.aqrow');if(!row||row.classList.contains('busy'))return;
-  const t=S.trips.find(x=>x.id===row.dataset.id);if(!t)return;
-  const b=e.target.closest('[data-act]'),act=b?b.dataset.act:'open';
-  if(act==='open')openTrip(t);
-  else if(act==='rc')openTripReceipts(t);
-  else quickAct(t,act,row);
-});
-
 /* 관리자 화면으로 들어올 때 대기 건이 있으면 건수를 팝업으로 알린다(연도와 상관없이 전체).
    건수를 누르면 가장 오래된 청구서 창이, 건을 누르면 그 청구서 창이 열린다. 띄웠으면 true */
 function showPending(){
@@ -604,7 +563,7 @@ F('pendList').addEventListener('click',e=>{const r=e.target.closest('.qrow');if(
 [F('pendKpis'),F('pendList')].forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter')e.target.click()}));
 
 /* 청구 목록 — 상태 탭(전체·승인 대기·정산 대기·정산 완료)과 출장자·출장지 검색. 최근 출장부터 */
-const LIST_TABS=[['all','전체'],['승인대기','승인 대기'],['정산대기','정산 대기'],['처리완료','정산 완료']];
+const LIST_TABS=[['all','전체'],['승인대기','승인 대기'],['정산대기','정산 대기'],['처리완료','정산 완료'],['반려','반려']];
 function statusMatch(t,f){
   if(f==='승인대기')return QUEUES.wait.has(t);
   if(f==='정산대기')return QUEUES.settle.has(t);
@@ -728,9 +687,9 @@ function openReceipt(k,i){
   showReceipt();if(!F('rcDlg').open)F('rcDlg').showModal();
 }
 // 관리자 '처리할 청구'의 [영수증 보기] — 청구서를 열지 않고 그 건의 영수증을 같은 창에 띄운다
-function openTripReceipts(t){
+function openTripReceipts(t,i=0){
   const rc=t.receipts||{};
-  rcList=['transport','toll','meal','etc'].flatMap(x=>(rc[x]||[]).map(r=>({k:x,r})));rcPos=0;
+  rcList=['transport','toll','meal','etc'].flatMap(x=>(rc[x]||[]).map(r=>({k:x,r})));rcPos=Math.min(Math.max(0,i),Math.max(0,rcList.length-1));
   if(!rcList.length){toast('첨부된 영수증이 없습니다');return}
   showReceipt();if(!F('rcDlg').open)F('rcDlg').showModal();
 }
@@ -828,20 +787,24 @@ const IC=(()=>{const s=d=>`<svg class="ic" viewBox="0 0 24 24" aria-hidden="true
   x:s('<path d="M6 6l12 12M18 6L6 18"/>'),
   alert:s('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5.2M12 16.2h.01"/>'),
   check:s('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
-  doc:s('<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>')}})();
+  doc:s('<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>'),
+  clock:s('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  redo:s('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v3.8h3.8"/>'),
+  clip:s('<path d="M15.5 7.5l-6.4 6.4a1.8 1.8 0 0 0 2.5 2.5l6.6-6.6a3.4 3.4 0 0 0-4.8-4.8l-6.7 6.7a5 5 0 0 0 7.1 7.1l6-6"/>')}})();
 
 /* ---------- 드로어 ---------- */
 const drawerOn=()=>document.body.classList.contains('drawer-open');
 function openDrawer(){if(S.role!=='staff'||S.single)return;document.body.classList.add('drawer-open');F('form').scrollTop=0}
 function closeDrawer(){if(!drawerOn())return;document.body.classList.remove('drawer-open');closeCalPop();F('compSugg').hidden=true}
-F('scrim').addEventListener('click',closeDrawer);
+F('scrim').addEventListener('click',()=>{closeDrawer();closeKD()});
 document.addEventListener('keydown',e=>{
   if(e.key!=='Escape'||document.querySelector('dialog[open]'))return;
   if(!F('calPop').hidden){closeCalPop();F('dateField').focus();return}
+  if(kdOn()){closeKD();return}
   if(drawerOn())closeDrawer();
 });
 // [+ 새 출장비 청구] — 작성 중이던 청구가 있으면 이어서 쓴다
-function newClaim(){clearForm();const d=readDraft();if(draftHasContent(d))restoreDraft(d);openDrawer();renderDraftNote()}
+function newClaim(){clearForm();S.redoOf='';const d=readDraft();if(draftHasContent(d))restoreDraft(d);openDrawer();renderDraftNote()}
 F('btnNewClaim').addEventListener('click',newClaim);
 
 /* ---------- 출장 기간 달력 팝업 ---------- */
@@ -863,6 +826,11 @@ function updateRcState(){
     card.classList.toggle('free',free);
     F('rcn-'+k).textContent=n?`영수증 ${n}장`:'';
   });
+  // 기준 초과 — 관리자 화면의 ruleCheck 와 같은 식(식대: 1인 기준×인원×일수×2, 자가용: 주유비 계산값)
+  const people=1+companionsArr().length,unit=S.settings.mealUnit||15000,mode=F('mode').value,fp=isCar(mode)?fuelPrice(mode):null,km=parseNum(F('km').value);
+  F('xc-meal').classList.toggle('over',parseNum(F('meal').value)>unit*people*periodDays(F('period').value)*2);
+  F('xc-transport').classList.toggle('over',!!(fp&&km>0&&parseNum(F('transport').value)>fuelCost(km,fp)));
+  renderSumBar();
 }
 
 /* ---------- 진행 단계 ① 청구 — ② 대표 승인 — ③ 정산 ---------- */
@@ -890,7 +858,7 @@ function draftData(){
   return{traveler:F('traveler').value,companions:companionsArr().join(', '),date:F('date').value,period:F('period').value,
     place:F('place').value.trim(),purpose:F('purpose').value.trim(),mode:modeValue(),km:parseNum(F('km').value)||0,
     transport:parseNum(F('transport').value),toll:parseNum(F('toll').value),meal:parseNum(F('meal').value),etc:parseNum(F('etc').value),
-    etcNote:F('etcNote').value.trim(),receipts:S.receipts,savedAt:new Date().toISOString()};
+    etcNote:F('etcNote').value.trim(),receipts:S.receipts,redoOf:S.redoOf||'',savedAt:new Date().toISOString()};
 }
 function saveDraftSoon(){
   if(S.role!=='staff'||S.editingId||!drawerOn())return;
@@ -904,75 +872,380 @@ function restoreDraft(d){
   F('period').value=d.period||'당일';setDate(d.date||today());F('place').value=d.place||'';F('purpose').value=d.purpose||'';
   setModeValue(d.mode||'자가용(휘발유)');F('km').value=d.km||'';
   RC_KEYS.forEach(k=>F(k).value=parseNum(d[k])?won(parseNum(d[k])):'');F('etcNote').value=d.etcNote||'';
-  S.receipts={...emptyRc(),...structuredClone(d.receipts||{})};
+  S.receipts={...emptyRc(),...structuredClone(d.receipts||{})};S.redoOf=d.redoOf||S.redoOf||'';
   renderThumbs();renderChips();updateFuelInfo();updateTotal();
 }
 ['input','change'].forEach(ev=>F('form').addEventListener(ev,saveDraftSoon));
 function renderDraftNote(){
-  const n=F('draftNote'),t=S.trips.find(x=>x.id===S.editingId);
+  const n=F('draftNote'),t=S.trips.find(x=>x.id===S.editingId),fresh=S.role==='staff'&&!S.editingId&&!S.single;
+  F('btnDraft').hidden=!fresh;if(fresh)F('btnSave').textContent='대표 승인 요청';
   if(t){n.textContent=stageOf(t).stage;n.className='draftnote st-'+stageOf(t).key;return}
   const d=readDraft();
   n.className='draftnote st-draft';
   n.textContent=draftHasContent(d)?`작성 중 · 자동 저장됨 ${d.savedAt?new Date(d.savedAt).toTimeString().slice(0,5):''}`:'작성 중 · 입력하면 자동 저장됩니다';
 }
 
-/* ---------- 출장 기준 펼치기 ---------- */
+/* ---------- 출장 기준 ---------- */
 F('ruleShow').addEventListener('click',()=>{const open=F('ruleBox').hidden;F('ruleBox').hidden=!open;F('ruleShow').setAttribute('aria-expanded',String(open));F('ruleShow').textContent=open?'기준 닫기':'기준 보기'});
-F('ruleToggle').addEventListener('click',()=>{const open=F('ruleMore').hidden;F('ruleMore').hidden=!open;F('ruleToggle').setAttribute('aria-expanded',String(open));F('ruleToggle').textContent=open?'접기':'전체 보기'});
 F('btnRules').addEventListener('click',()=>{F('rulePanel').open=true;F('ruleDlg').showModal()});
 F('ruleDlgClose').addEventListener('click',()=>F('ruleDlg').close());
 F('ruleDlg').addEventListener('click',e=>{if(e.target===F('ruleDlg'))F('ruleDlg').close()});
 
-/* ---------- 구성원 대시보드 ---------- */
-S.hist='all';
+/* ================================================================
+   2026-11-13 시안 — 구성원 '출장경비 대시보드'.
+   파란 배너 → 할 일 + 이번 달 경비 구성 → 출장비 기준 알약 → 진행 보드(작성 중 → 대표 승인 대기 → 정산 대기 → 정산 완료).
+   여기는 화면만 그린다. 저장·계산·영수증 올리기는 위의 함수(saveForm·updateTotal·api …)를 그대로 쓴다.
+   ================================================================ */
 const KO_MON=m=>`${+m}월`;
+function daysAgo(n){const d=new Date();d.setDate(d.getDate()-n);return ymd(d.getFullYear(),d.getMonth()+1,d.getDate())}
+// 반려된 청구 — 최근 60일 안에 반려됐고 아직 [다시 작성하기]로 다시 내지 않은 것만 할 일·작성 중 칸에 보인다.
+// 다시 낸 건은 이 브라우저에 기억해 둔다(서버에는 '다시 냈다'는 칸이 없다)
+const REDONE_KEY=()=>'bl_travel_redone_v1:'+(S.me||'');
+function redone(){try{return JSON.parse(localStorage.getItem(REDONE_KEY())||'[]')}catch(e){return []}}
+function markRedone(id){try{const a=redone();if(!a.includes(id)){a.push(id);localStorage.setItem(REDONE_KEY(),JSON.stringify(a.slice(-50)))}}catch(e){}}
+function recentRejected(){const cut=daysAgo(60),done=redone();
+  return S.trips.filter(t=>t.approval==='반려'&&!done.includes(t.id)&&String(t.approvedAt||t.reviewedAt||t.date).slice(0,10)>=cut)}
+const draftItem=d=>({draft:true,...d,date:d.date||today(),total:RC_KEYS.reduce((x,k)=>x+parseNum(d[k]),0)});
+const compN=t=>t.companionCount||String(t.companions||'').split(',').filter(x=>x.trim()).length;
+const tripMeta=t=>[t.period||'당일',t.mode||'',compN(t)?`동행 ${compN(t)}명`:'단독'].filter(Boolean).map(esc).join(' · ');
+// 영수증 누락은 아직 고칠 수 있는 청구(작성 중·승인 대기)만 알린다
+const missOf=t=>(t.draft||(t.approval||'승인대기')==='승인대기')?rcMissingOf(t):[];
+
 function renderMemberDash(){
   if(S.role!=='staff')return;
-  const now=today(),ym=now.slice(0,7),mine=S.trips;
-  F('dashMonth').textContent=`${ym.slice(0,4)}년 ${+ym.slice(5,7)}월`;
-  const d=readDraft(),dHas=draftHasContent(d),miss=dHas?rcMissingOf(d).length:0;
+  const ym=today().slice(0,7),mine=S.trips;
+  const d=readDraft(),dHas=draftHasContent(d),rej=recentRejected();
   const wait=mine.filter(t=>(t.approval||'승인대기')==='승인대기');
-  const done=mine.filter(t=>t.approval==='승인'&&t.status==='처리완료'&&String(t.date).startsWith(ym.slice(0,4)));
   const month=mine.filter(t=>String(t.date).startsWith(ym)&&t.approval!=='반려');
-  const tot=a=>a.reduce((x,t)=>x+(t.total||0),0);
-  F('sumCards').innerHTML=`
-    <button type="button" class="scard" data-act="draft"><span class="sk">작성 중</span><span class="sv num">${dHas?1:0}<small>건</small></span>
-      <span class="ss${miss?' warn':''}">${miss?IC.alert+`영수증 ${miss}개 항목 누락`:dHas?'이어서 작성할 수 있어요':'작성 중인 청구가 없어요'}</span></button>
-    <button type="button" class="scard" data-act="going"><span class="sk">대표 승인 대기</span><span class="sv num">${wait.length}<small>건</small></span><span class="ss num">${won(tot(wait))}원</span></button>
-    <button type="button" class="scard" data-act="done"><span class="sk">정산 완료</span><span class="sv num">${done.length}<small>건</small></span><span class="ss num">${ym.slice(0,4)}년 · ${won(tot(done))}원</span></button>
-    <div class="scard blue"><span class="sk">이번 달 청구액</span><span class="sv num">${won(tot(month))}<small>원</small></span><span class="ss">${month.length}건 청구</span></div>`;
-  renderHist(d,dHas);
-  // 이번 달 경비 구성 — 저장 항목 그대로(교통비·통행료·식대·기타)
-  const parts=[['transport','교통비'],['toll','통행료'],['meal','식대'],['etc','기타']].map(([k,l])=>({k,l,v:month.reduce((x,t)=>x+(t[k]||0),0)}));
-  const all=parts.reduce((x,p)=>x+p.v,0);
-  F('mixTotal').textContent=all?won(all)+'원':'';
-  F('mixBar').innerHTML=all?parts.filter(p=>p.v).map(p=>`<i class="m-${p.k}" style="width:${(p.v/all*100).toFixed(2)}%" title="${p.l} ${won(p.v)}원"></i>`).join(''):'';
-  F('mixBar').classList.toggle('empty',!all);
-  F('mixList').innerHTML=all?parts.map(p=>`<div class="mrow"><span><i class="m-${p.k}"></i>${p.l}</span><span class="num">${all?Math.round(p.v/all*100):0}%</span><b class="num">${won(p.v)}원</b></div>`).join('')
-    :'<div class="empty">이번 달 청구가 아직 없습니다.</div>';
+  F('mbTitle').textContent=`${S.me?S.me+' 님의 ':''}${+ym.slice(5,7)}월 출장경비`;
+  F('mbAmt').innerHTML=`${won(tot(month))}<small>원</small>`;
+  F('mbSub').textContent=`청구 ${month.length}건 · 대표 승인 대기 ${won(tot(wait))}원 · 작성 중 ${(dHas?1:0)+rej.length}건`;
+  renderTodos(d,dHas,wait,rej);
+  renderDonut(month);
+  renderMBoard(d,dHas,rej);
 }
-function renderHist(d,dHas){
-  const rows=[...S.trips].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id)));
-  const items=(dHas?[{draft:true,...d,date:d.date||today(),total:RC_KEYS.reduce((x,k)=>x+parseNum(d[k]),0)}]:[]).concat(rows)
-    .filter(t=>{const k=t.draft?'draft':stageOf(t).key;return S.hist==='all'||(S.hist==='going'?['draft','wait','settle'].includes(k):['done','no'].includes(k))});
-  F('histTabs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-selected',b.dataset.h===S.hist));
-  F('histList').innerHTML=items.length?items.map(t=>{
-    const st=t.draft?stageOf(null):stageOf(t),dt=String(t.date||''),comp=t.companionCount||String(t.companions||'').split(',').filter(x=>x.trim()).length;
-    const meta=[t.period||'당일',t.mode||'',comp?`동행 ${comp}명`:'단독'].filter(Boolean).map(esc).join(' · ');
-    return `<div class="hrow${t.id&&t.id===S.editingId?' sel':''}" ${t.draft?'data-draft="1"':`data-id="${esc(t.id)}"`} tabindex="0">
-      <div class="dbox num"><span>${dt?KO_MON(dt.slice(5,7)):''}</span><b>${esc(dt.slice(8,10)||'—')}</b></div>
-      <div class="hmain"><b>${esc(t.place||'출장지 미입력')}</b>${t.purpose?`<span class="hp"> · ${esc(t.purpose)}</span>`:''}<div class="hmeta">${meta}</div></div>
-      <div class="hprog"><div class="bar3">${st.bars.map(b=>`<i class="${b}"></i>`).join('')}</div><span>${esc(st.stage)}</span></div>
-      <div class="hamt num">${won(t.total)}원</div>
-      <span class="sbadge st-${st.key}">${esc(st.label)}</span></div>`}).join('')
-    :`<div class="empty">${S.hist==='all'?'아직 청구한 출장이 없습니다. [새 출장비 청구]로 시작해 보세요.':'해당하는 청구가 없습니다.'}</div>`;
+
+/* 할 일 — 처리해야 할 것만 모은다: 영수증 누락(빨강) · 반려(빨강) · 작성 중(회색) · 대표 승인 대기(주황, 할 일 없음) */
+function renderTodos(d,dHas,wait,rej){
+  const items=[],missLine=m=>`${m.map(k=>RC_LABEL[k]).join('·')} ${m.length}장 누락`;
+  const dMiss=dHas?rcMissingOf(d):[];
+  if(dMiss.length)items.push({c:'no',ic:IC.alert,t:`${d.place?esc(d.place)+' 출장':'작성 중인 청구'} 영수증 첨부`,s:`${missLine(dMiss)} · 아직 제출 전`,b:'첨부하기',act:'attach-draft'});
+  wait.forEach(t=>{const m=rcMissingOf(t);if(m.length)items.push({c:'no',ic:IC.alert,t:`${esc(t.place)} 출장 영수증 첨부`,s:`${missLine(m)} · ${esc(shortDate(t.date))} 출장 · 승인 전이라 고칠 수 있어요`,b:'첨부하기',act:'attach',id:t.id})});
+  rej.forEach(t=>items.push({c:'no',ic:IC.redo,t:`${esc(t.place)} 출장이 반려됐어요`,s:t.rejectReason?`사유 · ${esc(t.rejectReason)}`:'반려 사유가 적혀 있지 않아요',b:'다시 작성하기',act:'redo',id:t.id}));
+  if(dHas&&!dMiss.length)items.push({c:'draft',ic:IC.doc,t:'작성 중인 청구가 있어요',s:`${esc(d.place||'출장지 미입력')} · ${won(draftItem(d).total)}원 · 이 브라우저에 자동 저장됨`,b:'이어서 작성하기',act:'draft'});
+  if(wait.length)items.push({c:'wait',ic:IC.clock,t:`대표 승인 대기 ${wait.length}건`,s:`합계 ${won(tot(wait))}원 · 따로 할 일 없음`});
+  const todo=items.filter(x=>x.b).length;
+  F('todoMeta').textContent=todo?`${todo}건`:'';
+  F('todoList').innerHTML=todo||items.length?items.map(x=>`<div class="todo t-${x.c}">
+      <span class="tic">${x.ic}</span><div class="tm"><b>${x.t}</b><span title="${x.s.replace(/"/g,'&quot;')}">${x.s}</span></div>
+      ${x.b?`<button type="button" class="btn sm" data-act="${x.act}"${x.id?` data-id="${esc(x.id)}"`:''}>${x.b}</button>`:''}</div>`).join('')
+    :`<div class="todo-empty">${IC.check}<b>처리할 일이 없어요</b><span>출장을 다녀오면 [새 출장비 청구]로 시작하세요.</span></div>`;
 }
-F('histTabs').addEventListener('click',e=>{const b=e.target.closest('[data-h]');if(!b)return;S.hist=b.dataset.h;renderMemberDash()});
-F('histList').addEventListener('click',e=>{const r=e.target.closest('.hrow');if(!r)return;if(r.dataset.draft){newClaim();return}const t=S.trips.find(x=>x.id===r.dataset.id);if(t)fillForm(t)});
-F('histList').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('hrow'))e.target.click()});
-F('sumCards').addEventListener('click',e=>{const c=e.target.closest('[data-act]');if(!c)return;
-  if(c.dataset.act==='draft'){newClaim();return}
-  S.hist=c.dataset.act;renderMemberDash();F('histList').scrollIntoView({behavior:'smooth',block:'nearest'})});
+F('todoList').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;memberAct(b.dataset.act,b.dataset.id)});
+function memberAct(act,id){
+  const t=id&&S.trips.find(x=>x.id===id);
+  if(act==='draft'){newClaim();return}
+  if(act==='attach-draft'){newClaim();focusMissing();return}
+  if(act==='attach'&&t){fillForm(t);focusMissing();return}
+  if(act==='redo'&&t){rewriteFrom(t);return}
+  if(act==='open'&&t)fillForm(t);
+}
+// 청구 작성 창에서 영수증이 빠진 첫 항목으로 가서 잠깐 눈에 띄게
+function focusMissing(){setTimeout(()=>{const c=document.querySelector('.xcard.need')||F('xc-transport');if(!c)return;
+  c.scrollIntoView({block:'center'});c.classList.remove('flash');void c.offsetWidth;c.classList.add('flash');
+  const a=c.querySelector('.att input');if(a)a.focus({preventScroll:true})},260)}
+/* [다시 작성하기] — 반려된 청구 내용을 새 청구로 불러온다. 영수증은 그 청구에 묶여 있어 다시 첨부해야 한다 */
+function rewriteFrom(t){
+  if(draftHasContent(readDraft())&&!confirm('작성 중인 청구가 있습니다. 반려된 청구 내용으로 바꿔 쓸까요?\n작성 중이던 내용은 사라집니다.'))return;
+  clearForm();S.redoOf=t.id;
+  restoreDraft({traveler:t.traveler,companions:t.companions,date:t.date,period:t.period,place:t.place,purpose:t.purpose,mode:t.mode,km:t.km,
+    transport:t.transport,toll:t.toll,meal:t.meal,etc:t.etc,etcNote:t.etcNote,receipts:emptyRc()});
+  openDrawer();writeDraft(draftData());renderDraftNote();renderMemberDash();
+  toast('반려된 청구 내용을 불러왔습니다. 고칠 곳을 고치고 영수증을 다시 첨부해 주세요');
+}
+
+/* 이번 달 경비 구성 — 도넛. 교통(교통비+통행료) · 숙박·기타(기타 항목) · 식대 */
+function renderDonut(month){
+  const parts=[['tr','교통',t=>(t.transport||0)+(t.toll||0)],['lodge','숙박·기타',t=>t.etc||0],['meal','식대',t=>t.meal||0]]
+    .map(([k,l,f])=>({k,l,v:month.reduce((x,t)=>x+f(t),0)}));
+  const all=parts.reduce((x,p)=>x+p.v,0),R=42,C=2*Math.PI*R;
+  let off=0,arcs='';
+  parts.forEach(p=>{if(!p.v)return;const len=p.v/all*C;
+    arcs+=`<circle class="m-${p.k}" cx="60" cy="60" r="${R}" stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"><title>${p.l} ${won(p.v)}원</title></circle>`;off+=len});
+  F('mixDonut').innerHTML=`<svg viewBox="0 0 120 120" role="img" aria-label="이번 달 경비 구성"><circle class="dtrack" cx="60" cy="60" r="${R}"/><g transform="rotate(-90 60 60)">${arcs}</g>
+    <text x="60" y="55" text-anchor="middle" class="dk">이번 달</text><text x="60" y="73" text-anchor="middle" class="dv num">${all>=1e4?`${+(all/1e4).toFixed(all>=1e6?0:1)}만`:won(all)}원</text></svg>`;
+  F('mixList').innerHTML=all?parts.map(p=>`<div class="mrow"><span><i class="m-${p.k}"></i>${p.l}</span><span class="num">${Math.round(p.v/all*100)}%</span><b class="num">${won(p.v)}원</b></div>`).join('')
+    :'<div class="empty">이번 달 청구가 아직 없어요.</div>';
+}
+
+/* 진행 보드 — 작성 중(이 브라우저에 보관 중인 청구 + 반려된 청구) → 대표 승인 대기 → 정산 대기 → 정산 완료(최근 3개월) */
+const MCOLS=[['draft','작성 중','아직 제출 전 · 이 브라우저에 보관'],['wait','대표 승인 대기','제출 완료 · 대표님 확인 중'],['settle','정산 대기','승인 완료 · 지급 준비 중'],['done','정산 완료','지급 완료 · 최근 3개월']];
+function renderMBoard(d,dHas,rej){
+  const cut=daysAgo(92),c={draft:[...(dHas?[draftItem(d)]:[]),...rej],wait:[],settle:[],done:[]};
+  S.trips.forEach(t=>{const k=stageOf(t).key;
+    if(k==='wait'||k==='settle')c[k].push(t);
+    else if(k==='done'&&String(t.processedAt||t.date).slice(0,10)>=cut)c.done.push(t)});
+  const desc=(a,b)=>String(b.date).localeCompare(String(a.date));
+  c.wait.sort(desc);c.settle.sort(desc);c.done.sort((a,b)=>String(b.processedAt||b.date).localeCompare(String(a.processedAt||a.date)));
+  F('mBoard').innerHTML=MCOLS.map(([k,l,s])=>`<section class="mcol" aria-label="${l}">
+    <div class="mhead"><i class="kdot k-${k}"></i><b>${l}</b><span class="kcnt num">${c[k].length}</span></div>
+    <div class="mdesc">${s}</div>
+    <div class="mcards">${c[k].length?c[k].map(t=>mcardHtml(t,k)).join(''):'<div class="kempty">비어 있음</div>'}</div></section>`).join('');
+}
+function mcardHtml(t,col){
+  const miss=missOf(t),rejd=!t.draft&&t.approval==='반려',dt=String(t.date||'');
+  const btn=t.draft?`<button type="button" class="btn sm primary" data-act="draft">이어서 작성하기</button>`
+    :rejd?`<button type="button" class="btn sm" data-act="redo" data-id="${esc(t.id)}">다시 작성하기</button>`
+    :miss.length?`<button type="button" class="btn sm" data-act="attach" data-id="${esc(t.id)}">영수증 첨부하기</button>`:'';
+  return `<article class="mcard${miss.length?' miss':''}${t.draft?' draft':''}${rejd?' rej':''}" ${t.draft?'data-act="draft"':`data-act="open" data-id="${esc(t.id)}"`} tabindex="0">
+    <div class="mc-top"><div class="dbox num"><span>${dt?KO_MON(dt.slice(5,7)):''}</span><b>${esc(dt.slice(8,10)||'—')}</b></div>
+      <div class="mc-main"><div class="mc-pl"><b>${esc(t.place||'출장지 미입력')}</b>${rejd?'<span class="sbadge st-no">반려</span>':t.draft?'<span class="sbadge st-draft">작성 중</span>':''}</div><div class="mc-meta">${tripMeta(t)}</div></div>
+      <b class="mc-amt num">${won(t.total)}원</b></div>
+    ${t.purpose?`<div class="mc-pu" title="${esc(t.purpose)}">${esc(t.purpose)}</div>`:''}
+    ${miss.length?`<div class="mmiss">${IC.alert}영수증 ${miss.length}장이 빠져 있어요</div>`:''}
+    ${rejd?`<div class="kc-reason" title="${esc(t.rejectReason||'')}">사유 · ${esc(t.rejectReason||'적힌 사유가 없어요')}</div>`:''}
+    ${btn?`<div class="mc-act">${btn}</div>`:''}
+  </article>`;
+}
+F('mBoard').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;memberAct(b.dataset.act,b.dataset.id)});
+F('mBoard').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('mcard'))e.target.click()});
+F('btnAllHist').addEventListener('click',()=>{renderMyList();F('myDlg').showModal()});
+// [영수증 먼저 올리기] — 새 청구(또는 작성 중 청구)를 열고 경비 항목으로 간다. 올린 영수증은 작성 중 청구에 자동 저장된다
+F('btnRcFirst').addEventListener('click',()=>{newClaim();setTimeout(()=>{F('fsMoney').scrollIntoView({block:'start'});
+  document.querySelectorAll('.xcard .att').forEach(a=>{a.classList.remove('flash');void a.offsetWidth;a.classList.add('flash')})},260);
+  toast('영수증을 올릴 항목에서 [사진 첨부]를 눌러 주세요. 자동으로 저장됩니다')});
+
+/* 청구 작성 창 아래 — 합계 옆 항목 비율 막대, [임시 저장] */
+function renderSumBar(){
+  const parts=[['transport','교통비'],['toll','통행료'],['meal','식대'],['etc','기타']].map(([k,l])=>({k,l,v:parseNum(F(k).value)})),all=parts.reduce((x,p)=>x+p.v,0);
+  F('sumBar').innerHTML=all?`<div class="sfb">${parts.filter(p=>p.v).map(p=>`<i class="m-${p.k}" style="width:${(p.v/all*100).toFixed(2)}%"></i>`).join('')}</div>
+    <div class="sfl">${parts.filter(p=>p.v).map(p=>`<span><i class="m-${p.k}"></i>${p.l} <b class="num">${Math.round(p.v/all*100)}%</b></span>`).join('')}</div>`
+    :'<div class="sfb"></div><div class="sfl"><span>금액을 넣으면 항목 비율이 보여요</span></div>';
+}
+F('btnDraft').addEventListener('click',()=>{
+  const d=draftData();
+  if(!draftHasContent(d)){toast('저장할 내용이 없습니다');return}
+  writeDraft(d);closeDrawer();renderMemberDash();toast('임시 저장했습니다. 진행 현황의 작성 중 칸에서 이어서 쓸 수 있어요');
+});
+
+/* ================================================================
+   2026-11-13 칸반 시안 — 관리자 '청구 보드'.
+   승인 대기 → 정산 대기 → 정산 완료, 그리고 반려. 카드를 다음 열로 끌거나 카드·상세 창의 단추를 누르면
+   청구서 창과 같은 값을 저장한다(store.save). 화면만 새로 그리고, 저장 규칙은 서버(lib/trips.php)가 그대로 정한다.
+   권한: [승인]·[반려]·[승인 대기로 되돌리기]는 승인 관리자(대표)만, [정산 완료]는 정산 관리자만 보인다.
+   ================================================================ */
+const canApprove=()=>S.role==='approver';
+S.aview=(()=>{try{return localStorage.getItem('bl_admin_view')||'board'}catch(e){return 'board'}})();
+if(!['board','cal','stats'].includes(S.aview))S.aview='board';
+function setAview(v){
+  S.aview=v;document.body.dataset.aview=v;
+  F('viewSeg').querySelectorAll('[data-v]').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v));
+  try{localStorage.setItem('bl_admin_view',v)}catch(e){}
+  if(v!=='board')closeKD();
+  window.scrollTo({top:0});
+}
+F('viewSeg').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b&&b.dataset.v!==S.aview)setAview(b.dataset.v)});
+
+// 사람마다 다른 색 — 이름으로 8가지 중 하나를 고른다(같은 사람은 늘 같은 색)
+function pc(name){let h=0;for(const c of String(name||''))h=(h*31+c.codePointAt(0))>>>0;return 'pc'+(h%8)}
+function avHtml(name,cls=''){return `<span class="av ${pc(name)}${cls?' '+cls:''}">${initial(name)}</span>`}
+const KCOLS=[['wait','승인 대기'],['settle','정산 대기'],['done','정산 완료'],['no','반려']];
+const KMOVES={'wait>settle':'approve','wait>no':'reject','settle>done':'settle','no>wait':'revert'};
+function moveAct(from,to){const a=KMOVES[from+'>'+to];if(!a)return null;return (a==='settle'?isSettler():canApprove())?a:null}
+function shortDate(d){d=String(d||'');return d.slice(0,4)===today().slice(0,4)?d.slice(5).replace('-','.'):d.replace(/-/g,'.')}
+// 정산 완료·반려 열은 이번 달 건만 — 정산 완료는 처리일, 반려는 반려한 날 기준(없으면 출장일)
+const doneMonth=t=>String(t.processedAt||t.date).slice(0,7);
+const rejMonth=t=>String(t.approvedAt||t.reviewedAt||t.date).slice(0,7);
+function boardCols(){
+  const ym=today().slice(0,7),c={wait:[],settle:[],done:[],no:[]},old={done:0,no:0};
+  S.trips.forEach(t=>{const k=stageOf(t).key;
+    if(k==='done'){if(doneMonth(t)===ym)c.done.push(t);else old.done++}
+    else if(k==='no'){if(rejMonth(t)===ym)c.no.push(t);else old.no++}
+    else if(c[k])c[k].push(t)});
+  const asc=(a,b)=>String(a.date).localeCompare(String(b.date))||String(a.id).localeCompare(String(b.id));
+  c.wait.sort(asc);c.settle.sort(asc);
+  c.done.sort((a,b)=>String(b.processedAt||b.date).localeCompare(String(a.processedAt||a.date)));
+  c.no.sort((a,b)=>rejMonth(b).localeCompare(rejMonth(a))||String(b.date).localeCompare(String(a.date)));
+  return {c,old};
+}
+function cardActs(t,col){
+  if(col==='wait'&&canApprove())return `<button type="button" class="btn sm rej" data-act="reject">반려</button><button type="button" class="btn sm primary" data-act="approve">승인 →</button>`;
+  if(col==='settle'&&isSettler())return `<button type="button" class="btn sm dark" data-act="settle">정산 완료 →</button>`;
+  if(col==='no'&&canApprove())return `<button type="button" class="btn sm" data-act="revert">승인 대기로 되돌리기</button>`;
+  return '';
+}
+function kcardHtml(t,col){
+  const over=ruleCheck(t),miss=rcMissingOf(t),n=rcCount(t),acts=cardActs(t,col);
+  const tags=[n?`<span class="ktag">${IC.clip}영수증 ${n}장</span>`:'',
+    over.length?`<span class="ktag over" title="${esc(over.join('·'))} 기준 초과">${IC.alert}기준 초과</span>`:'',
+    miss.length?`<span class="ktag miss" title="${esc(miss.map(k=>RC_LABEL[k]).join('·'))} 영수증 없음">${IC.alert}영수증 누락</span>`:'',
+    editedAfter(t)?'<span class="ktag miss">승인 후 수정</span>':''].join('');
+  return `<article class="kcard${over.length?' over':''}${t.id===S.kd?' sel':''}" data-id="${esc(t.id)}" draggable="${acts?'true':'false'}" tabindex="0">
+    <div class="kc-top">${avHtml(t.traveler)}<div class="kc-who"><b>${esc(t.traveler)}</b><span class="num">${esc(shortDate(t.date))} · ${esc(t.period||'당일')}</span></div><b class="kc-amt num">${won(t.total)}원</b></div>
+    <div class="kc-place" title="${esc(t.place)}${t.purpose?' · '+esc(t.purpose):''}"><b>${esc(t.place)}</b>${t.purpose?` · ${esc(t.purpose)}`:''}</div>
+    ${tags?`<div class="kc-tags">${tags}</div>`:''}
+    ${col==='no'&&t.rejectReason?`<div class="kc-reason" title="${esc(t.rejectReason)}">사유 · ${esc(t.rejectReason)}</div>`:''}
+    ${acts?`<div class="kc-acts">${acts}</div>`:''}
+  </article>`;
+}
+let kDrag=null;
+function renderBoard(){
+  if(S.role==='staff')return;
+  if(kDrag){S.boardDirty=true;return}   // 끄는 중에 새 목록이 오면 놓은 뒤에 그린다
+  const {c,old}=boardCols();
+  F('sumApprove').textContent=won(tot(c.wait))+'원';
+  F('sumPay').textContent=won(tot(c.settle))+'원';
+  const cur=F('kTabs').querySelector('[aria-selected="true"]'),sel=cur?cur.dataset.c:'wait';
+  F('kTabs').innerHTML=KCOLS.map(([k,l])=>`<button type="button" role="tab" data-c="${k}" aria-selected="${k===sel}"><i class="kdot k-${k}"></i>${l}<span class="num">${c[k].length}</span></button>`).join('');
+  F('kBoard').innerHTML=KCOLS.map(([k,l])=>{
+    const list=c[k];
+    const more=k==='done'?`<button type="button" class="linkbtn kmore" data-more="처리완료">이전 정산 내역 보기${old.done?` · ${old.done}건`:''} →</button>`
+      :k==='no'&&old.no?`<button type="button" class="linkbtn kmore" data-more="반려">이전 반려 ${old.no}건 보기 →</button>`:'';
+    const sub=k==='done'||k==='no'?'<span class="ksub">이번 달</span>':'';
+    return `<section class="kcol" data-col="${k}" aria-label="${l}">
+      <div class="khead"><i class="kdot k-${k}"></i><b>${l}</b><span class="kcnt num">${list.length}</span>${sub}<span class="kamt num">${won(tot(list))}원</span></div>
+      <div class="kcards">${list.length?list.map(t=>kcardHtml(t,k)).join(''):'<div class="kempty">비어 있음</div>'}</div>${more}
+    </section>`}).join('');
+  renderKD();
+}
+// 휴대폰 — 열 탭을 누르면 그 열로 넘어가고, 밀어서 넘기면 탭이 따라 바뀐다
+F('kTabs').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;
+  F('kTabs').querySelectorAll('[data-c]').forEach(x=>x.setAttribute('aria-selected',x===b));
+  const col=F('kBoard').querySelector(`[data-col="${b.dataset.c}"]`);if(col)F('kBoard').scrollTo({left:col.offsetLeft-F('kBoard').firstElementChild.offsetLeft})});
+F('kBoard').addEventListener('scroll',()=>{clearTimeout(F('kBoard')._t);F('kBoard')._t=setTimeout(()=>{
+  const b=F('kBoard'),cols=[...b.querySelectorAll('.kcol')];if(!cols.length||b.scrollWidth<=b.clientWidth+4)return;
+  const x=b.scrollLeft+cols[0].offsetLeft,i=cols.reduce((best,c,j)=>Math.abs(c.offsetLeft-x)<Math.abs(cols[best].offsetLeft-x)?j:best,0);
+  F('kTabs').querySelectorAll('[data-c]').forEach(t=>t.setAttribute('aria-selected',t.dataset.c===cols[i].dataset.col))},80)});
+
+/* 처리 — 카드 단추·끌어 옮기기·상세 창 단추가 모두 여기로 온다 */
+async function boardAct(t,act){
+  let data,msg;
+  if(act==='reject'){const reason=await askReject(t);if(reason==null)return;
+    data={approval:'반려',approvedAt:today(),rejectReason:reason};msg=`${t.traveler} 청구를 반려했습니다`}
+  else if(act==='approve'){data={approval:'승인',approvedAt:today()};msg=`${t.traveler} 청구를 승인했습니다 · 정산 대기로 옮겼습니다`}
+  else if(act==='settle'){
+    if(!confirm(`${t.traveler} · ${won(t.total)}원을 정산 완료로 처리할까요?\n지급방법: ${t.payMethod||'계좌이체'} · 처리일 ${today()}`))return;
+    data={status:'처리완료',processedAt:today(),payMethod:t.payMethod||'계좌이체'};msg=`${t.traveler} 청구를 정산 완료로 처리했습니다`}
+  else if(act==='revert'){
+    if(!confirm(`${t.traveler} · ${t.date} ${t.place} 청구를 승인 대기로 되돌릴까요?\n반려 사유는 지워집니다.`))return;
+    data={approval:'승인대기',approvedAt:''};msg=`${t.traveler} 청구를 승인 대기로 되돌렸습니다`}
+  else return;
+  document.querySelectorAll(`.kcard[data-id="${CSS.escape(t.id)}"],#kDrawer`).forEach(el=>el.classList.add('busy'));
+  try{await store.save(t.id,data);toast(msg)}
+  catch(e){toast(e.message||'처리하지 못했습니다');render()}
+  finally{document.querySelectorAll('.kcard.busy,#kDrawer.busy').forEach(el=>el.classList.remove('busy'))}
+}
+F('kBoard').addEventListener('click',e=>{
+  const m=e.target.closest('[data-more]');
+  if(m){setAview('stats');S.fStatus=m.dataset.more;render();F('listCard').scrollIntoView({behavior:'smooth',block:'start'});return}
+  const card=e.target.closest('.kcard');if(!card||card.classList.contains('busy'))return;
+  const t=S.trips.find(x=>x.id===card.dataset.id);if(!t)return;
+  const b=e.target.closest('[data-act]');
+  if(b)boardAct(t,b.dataset.act);else openKD(t.id);
+});
+F('kBoard').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('kcard'))openKD(e.target.dataset.id)});
+
+/* 끌어서 옮기기(PC) — 옮길 수 있는 열만 밝게, 나머지는 흐리게. 놓으면 단추와 같은 처리 */
+F('kBoard').addEventListener('dragstart',e=>{
+  const card=e.target.closest('.kcard[draggable="true"]');if(!card){e.preventDefault();return}
+  const from=card.closest('.kcol').dataset.col;kDrag={id:card.dataset.id,from};
+  e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',card.dataset.id);
+  requestAnimationFrame(()=>card.classList.add('dragging'));
+  F('kBoard').classList.add('dragmode');
+  F('kBoard').querySelectorAll('.kcol').forEach(c=>{const ok=!!moveAct(from,c.dataset.col);c.classList.toggle('can-drop',ok);c.classList.toggle('no-drop',!ok&&c.dataset.col!==from)});
+});
+F('kBoard').addEventListener('dragover',e=>{
+  const col=e.target.closest('.kcol');if(!kDrag||!col||!col.classList.contains('can-drop'))return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';
+  F('kBoard').querySelectorAll('.kcol.over').forEach(c=>{if(c!==col)c.classList.remove('over')});col.classList.add('over');
+});
+F('kBoard').addEventListener('dragleave',e=>{const col=e.target.closest('.kcol');if(col&&!col.contains(e.relatedTarget))col.classList.remove('over')});
+F('kBoard').addEventListener('drop',e=>{
+  const col=e.target.closest('.kcol');if(!kDrag||!col)return;e.preventDefault();
+  const act=moveAct(kDrag.from,col.dataset.col),t=S.trips.find(x=>x.id===kDrag.id);
+  endDrag();
+  if(act&&t)boardAct(t,act);
+});
+function endDrag(){
+  kDrag=null;F('kBoard').classList.remove('dragmode');
+  F('kBoard').querySelectorAll('.kcol').forEach(c=>c.classList.remove('can-drop','no-drop','over'));
+  F('kBoard').querySelectorAll('.kcard.dragging').forEach(c=>c.classList.remove('dragging'));
+  if(S.boardDirty){S.boardDirty=false;renderBoard()}
+}
+F('kBoard').addEventListener('dragend',()=>{if(kDrag)endDrag()});
+
+/* 반려 사유 — 꼭 적어야 한다. 적은 사유를 돌려주고, 취소하면 null */
+function askReject(t){
+  return new Promise(res=>{
+    const dlg=F('rejDlg'),ta=F('rejReason');
+    F('rejWho').innerHTML=`${avHtml(t.traveler,'xs')}<b>${esc(t.traveler)}</b><span class="num">${esc(t.date)} · ${esc(t.place)} · ${won(t.total)}원</span>`;
+    ta.value='';F('rejOk').disabled=true;
+    let done=false;const fin=v=>{if(done)return;done=true;if(dlg.open)dlg.close();res(v)};
+    F('rejOk').onclick=()=>{const v=ta.value.trim();if(!v){ta.focus();return}fin(v)};
+    F('rejCancel').onclick=()=>fin(null);
+    dlg.onclose=()=>fin(null);
+    dlg.showModal();ta.focus();
+  });
+}
+F('rejReason').addEventListener('input',()=>{F('rejOk').disabled=!F('rejReason').value.trim()});
+
+/* 카드 상세 — 오른쪽에서 열리는 창. 출장 정보·항목별 표(기준 초과는 주황)·영수증·처리 기록, 아래에 카드와 같은 단추 */
+S.kd=null;
+const kdOn=()=>document.body.classList.contains('kd-open');
+function openKD(id){
+  S.kd=id;S.kdSig='';renderKD();if(!S.kd)return;
+  document.body.classList.add('kd-open');F('kDrawer').setAttribute('aria-hidden','false');F('kdBody').scrollTop=0;
+  document.querySelectorAll('.kcard').forEach(c=>c.classList.toggle('sel',c.dataset.id===id));
+  setTimeout(()=>F('kdClose').focus(),60);
+}
+function closeKD(){
+  if(!kdOn()&&!S.kd)return;
+  const id=S.kd;S.kd=null;document.body.classList.remove('kd-open');F('kDrawer').setAttribute('aria-hidden','true');
+  document.querySelectorAll('.kcard.sel').forEach(c=>c.classList.remove('sel'));
+  const c=id&&F('kBoard').querySelector(`.kcard[data-id="${CSS.escape(id)}"]`);if(c)c.focus({preventScroll:true});
+}
+F('kdClose').addEventListener('click',closeKD);
+F('kdOpen').addEventListener('click',()=>{const t=S.trips.find(x=>x.id===S.kd);if(t)openTrip(t)});
+function renderKD(){
+  if(!S.kd)return;
+  const t=S.trips.find(x=>x.id===S.kd);
+  if(!t){closeKD();return}
+  const sig=JSON.stringify(t)+S.role;if(sig===S.kdSig)return;S.kdSig=sig;
+  const st=stageOf(t),col=st.key==='draft'?'':st.key,over=ruleCheck(t),miss=rcMissingOf(t);
+  F('kdAv').className='av '+pc(t.traveler);F('kdAv').textContent=String(t.traveler||'?').slice(0,1);
+  F('kdName').textContent=t.traveler;
+  F('kdSub').innerHTML=`<span class="sbadge st-${st.key}">${esc(st.label)}</span><span class="num">${won(t.total)}원</span>`;
+  const comps=String(t.companions||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const ppl=1+(comps.length||t.companionCount||0),days=periodDays(t.period),unit=S.settings.mealUnit||15000;
+  const car=isCar(t.mode),fp=car?fuelPrice(t.mode):null,fuel=car&&fp&&t.km>0?fuelCost(t.km,fp):0;
+  const rows=[
+    ['transport','교통비',[t.mode||'-',car&&t.km?`편도 ${t.km}km`:''].filter(Boolean).join(' · '),car?(fuel?`주유비 ${won(fuel)}원`:'주유비 계산'):'영수증 실비',over.includes('주유비')],
+    ['toll','통행료','고속도로 통행료·주차비','영수증 실비',false],
+    ['meal','식대',`${ppl}명 · ${days}일`,`${won(unit*ppl*days*2)}원 이내`,over.includes('식대')],
+    ['etc','기타',t.etcNote||'-','영수증 실비',false]];
+  const info=[['출장자',esc(t.traveler)],['기간',`<span class="num">${esc(t.date)}</span> · ${esc(t.period||'당일')}`],['출장지',esc(t.place)],
+    ['목적',esc(t.purpose||'-')],['동행자',comps.length?esc(comps.join(', ')):t.companionCount?`${t.companionCount}명 (기존 기록)`:'없음']];
+  const rc=t.receipts||{},rcs=RC_KEYS.flatMap(k=>(rc[k]||[]).map(r=>({k,r})));
+  const proc=[['승인자',t.approver],['승인일',t.approvedAt],['처리자',t.handler],['처리일',t.processedAt],['지급방법',t.payMethod],['비고',t.note]].filter(([,v])=>v);
+  F('kdBody').innerHTML=`
+    ${t.approval==='반려'?`<div class="kd-reason"><b>반려 사유</b><p>${t.rejectReason?esc(t.rejectReason):'<span class="hint">적힌 사유가 없습니다(예전 기록).</span>'}</p></div>`:''}
+    ${over.length||miss.length?`<div class="kd-warn">${over.length?`<span class="ktag over">${IC.alert}기준 초과 · ${esc(over.join('·'))}</span>`:''}${miss.length?`<span class="ktag miss">${IC.alert}영수증 누락 · ${esc(miss.map(k=>RC_LABEL[k]).join('·'))}</span>`:''}</div>`:''}
+    <dl class="kd-info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
+    <h3 class="kd-h">경비 항목</h3>
+    <div class="tablewrap"><table class="kd-tbl"><thead><tr><th>항목</th><th>내용</th><th>기준</th><th class="r">금액</th></tr></thead>
+      <tbody>${rows.map(([k,l,what,rule,o])=>`<tr class="${o?'over':''}${t[k]?'':' zero'}"><td><b>${l}</b></td><td>${esc(what)}</td><td class="num">${esc(rule)}${o?' <em>초과</em>':''}</td><td class="r num"><b>${won(t[k])}원</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3">합계</td><td class="r num">${won(t.total)}원</td></tr></tfoot></table></div>
+    <h3 class="kd-h">영수증 <span class="num">${rcs.length}장</span></h3>
+    ${rcs.length?`<div class="kd-rc">${rcs.map(({k,r},i)=>{const href=apiUrl('receipt','id='+encodeURIComponent(r.id));
+      return `<button type="button" class="kd-th" data-i="${i}" title="${esc(RC_LABEL[k])}${r.name?' · '+esc(r.name):''}">${r.type==='application/pdf'?'<span class="pdf">PDF</span>':`<img src="${href}" alt="${esc(RC_LABEL[k])} 영수증">`}<span class="lab">${esc(RC_LABEL[k])}</span></button>`}).join('')}</div>`
+      :'<div class="hint kd-none">첨부된 영수증이 없습니다.</div>'}
+    ${proc.length?`<h3 class="kd-h">처리 기록</h3><dl class="kd-info">${proc.map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`:''}`;
+  const acts=cardActs(t,col);
+  F('kdActs').innerHTML=acts||`<span class="hint">${st.key==='wait'?'대표(승인 관리자)가 승인합니다':st.key==='settle'?'정산 담당이 처리합니다':''}</span>`;
+}
+F('kdBody').addEventListener('click',e=>{const b=e.target.closest('.kd-th');if(!b)return;const t=S.trips.find(x=>x.id===S.kd);if(t)openTripReceipts(t,+b.dataset.i)});
+F('kdActs').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b||F('kDrawer').classList.contains('busy'))return;const t=S.trips.find(x=>x.id===S.kd);if(t)boardAct(t,b.dataset.act)});
+setAview(S.aview);
 
 /* ---------- 시작 ---------- */
 clearForm();
