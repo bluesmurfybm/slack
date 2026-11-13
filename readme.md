@@ -1166,6 +1166,13 @@ MySQL 하나(`slackapi`)를 portal/slack/gmail이 공유한다. 전부 최초 �
 
 ## 배포 (systemd)
 
+**`amitoa` 브랜치에 푸시하면 서버가 자동으로 pull 한다.** 서버에 들어가 손으로 `git pull` 할 필요가
+없고, 푸시가 곧 운영 반영이다 — 돌지 않는 상태를 이 브랜치에 푸시하지 않는다.
+
+- 따라오는 것은 추적 파일뿐이다. gitignore 대상(`config.php`·`config.local.php`, `var/`, `*.key`)은
+  서버에서 따로 만들거나 옮긴다('로컬에서 새로 만들어야 하는 파일' 절).
+- pull 만 한다. 서버에서 손으로 해야 하는 일(이관 스크립트 실행, nginx·systemd 변경)은 그대로 남는다.
+
 화면 모듈은 전부 PHP 라 systemd 유닛이 없다. **book 의 uvicorn 유닛(`book.service`)은 2026-10 PHP
 이관으로 필요 없어졌다** — 서버에서 이렇게 걷어낸다.
 
