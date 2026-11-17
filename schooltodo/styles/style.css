@@ -9,6 +9,7 @@
   --nega50:#f04438; --nega40:#dc1e11; --nega95:#fbebed;
   --posi40:#188351; --posi95:#e4faf0;
   --info40:#0673e7; --info93:#eaf4fe;
+  --dev40:#6b3fd4; --dev95:#f0eafd;
   --warn30:#9c7500; --warn90:#fff3cd;
 
   --tx-primary:var(--gray10);
@@ -167,6 +168,7 @@ header.site{background:var(--bg-page)}
 .cm-st:hover{border-color:currentColor}
 .cm-st.st-todo{background:var(--warn90);color:var(--warn30)}
 .cm-st.st-doing{background:var(--info93);color:var(--info40)}
+.cm-st.st-dev{background:var(--dev95);color:var(--dev40)}
 .cm-st.st-done{background:var(--posi95);color:var(--posi40)}
 .cm-st.st-excluded{background:var(--gray95);color:var(--tx-quaternary)}
 .cm-bulk input{
@@ -202,6 +204,8 @@ header.site{background:var(--bg-page)}
 .grid tr.st-todo td.c-status select{color:var(--warn30)}
 .grid tr.st-doing td.c-status{background:var(--info93)}
 .grid tr.st-doing td.c-status select{color:var(--info40)}
+.grid tr.st-dev td.c-status{background:var(--dev95)}
+.grid tr.st-dev td.c-status select{color:var(--dev40)}
 .grid tr.st-done td.c-status{background:var(--posi95)}
 .grid tr.st-done td.c-status select{color:var(--posi40)}
 .grid tr.st-excluded td.c-status{background:var(--gray95)}

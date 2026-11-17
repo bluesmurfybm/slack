@@ -36,9 +36,9 @@ final class sheet_test extends TestCase
 
         $this->assertSame(200, $res['status']);
         $this->assertSame(['jQuery', '빈 시트'], array_column($res['data'], 'title'));
-        $this->assertSame(['미조치' => 1, '개발반영' => 0, '운영반영' => 1, '해당없음' => 1], $res['data'][0]['counts']);
+        $this->assertSame(['미조치' => 1, '진행중' => 0, '개발반영' => 0, '운영반영' => 1, '해당없음' => 1], $res['data'][0]['counts']);
         $this->assertSame(3, $res['data'][0]['total']);
-        $this->assertSame(['미조치' => 3, '개발반영' => 0, '운영반영' => 0, '해당없음' => 0], $res['data'][1]['counts']);
+        $this->assertSame(['미조치' => 3, '진행중' => 0, '개발반영' => 0, '운영반영' => 0, '해당없음' => 0], $res['data'][1]['counts']);
     }
 
     /** schooltodo_sheet_create: title, description, created_by 저장 */
@@ -99,7 +99,7 @@ final class sheet_test extends TestCase
             ['school_id' => 2, 'name' => '가대', 'ver' => '3.5', 'status' => '미조치', 'note' => '', 'updated_by' => '', 'updated_at' => ''],
             ['school_id' => 1, 'name' => '나대', 'ver' => '3.9', 'status' => '운영반영', 'note' => '3.5.1 반영', 'updated_by' => '봇', 'updated_at' => '2026-11-17 10:00:00'],
         ], $res['data']['rows']);
-        $this->assertSame(['미조치' => 1, '개발반영' => 0, '운영반영' => 1, '해당없음' => 0], $res['data']['counts']);
+        $this->assertSame(['미조치' => 1, '진행중' => 0, '개발반영' => 0, '운영반영' => 1, '해당없음' => 0], $res['data']['counts']);
     }
 
     /** @return array[] */
@@ -107,6 +107,7 @@ final class sheet_test extends TestCase
     {
         return [
             '미조치' => ['미조치', [1]],
+            '진행중' => ['진행중', [5]],
             '개발반영' => ['개발반영', [2]],
             '운영반영' => ['운영반영', [3]],
             '해당없음' => ['해당없음', [4]],
@@ -118,10 +119,10 @@ final class sheet_test extends TestCase
     public function test_상세_status_필터($status, $schoolIds): void
     {
         $this->pdo->exec("INSERT INTO schools (id, name, ver, active) VALUES
-            (1, '가대', '3.5', 1), (2, '나대', '3.5', 1), (3, '다대', '3.5', 1), (4, '라대', '3.5', 1)");
+            (1, '가대', '3.5', 1), (2, '나대', '3.5', 1), (3, '다대', '3.5', 1), (4, '라대', '3.5', 1), (5, '마대', '3.5', 1)");
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
         $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status) VALUES
-            (10, 2, '개발반영'), (10, 3, '운영반영'), (10, 4, '해당없음')");
+            (10, 2, '개발반영'), (10, 3, '운영반영'), (10, 4, '해당없음'), (10, 5, '진행중')");
 
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
@@ -130,7 +131,7 @@ final class sheet_test extends TestCase
 
         $this->assertSame(200, $res['status']);
         $this->assertSame($schoolIds, array_column($res['data']['rows'], 'school_id'));
-        $this->assertSame(4, $res['data']['total']);
+        $this->assertSame(5, $res['data']['total']);
     }
 
     /** schooltodo_sheet_detail: 목록에 없는 status 조건 오류 */
