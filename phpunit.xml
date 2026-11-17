@@ -11,6 +11,9 @@
         <testsuite name="dti">
             <directory>dti/tests</directory>
         </testsuite>
+        <testsuite name="schooltodo">
+            <directory suffix="_test.php">schooltodo/tests</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
@@ -18,6 +21,10 @@
             <directory>dti/routes</directory>
             <file>dti/db.php</file>
             <file>dti/guard.php</file>
+            <directory>schooltodo/lib</directory>
+            <directory>schooltodo/routes</directory>
+            <file>schooltodo/db.php</file>
+            <file>schooltodo/guard.php</file>
         </include>
     </source>
 </phpunit>
