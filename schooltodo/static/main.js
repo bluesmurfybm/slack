@@ -12,7 +12,7 @@ async function loadSheets() {
 }
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeSheetForm(); closeConfirm(); }
+  if (e.key === "Escape") { closeSheetForm(); closeConfirm(); closeColMenu(); }
 });
 
 loadSheets();

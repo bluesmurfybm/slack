@@ -14,7 +14,8 @@ function renderTabs() {
 
 async function selectSheet(id) {
   APP.sheetId = id;
-  APP.filterStatus = "";
+  APP.filters = { ver: null, status: null };
+  closeColMenu();
   document.getElementById("q").value = "";
   history.replaceState(null, "", "?sheet=" + id);
   renderTabs();

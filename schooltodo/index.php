@@ -103,6 +103,7 @@ $bootJson = json_encode([
           <input id="q" type="text" placeholder="대학 이름·메모 검색" oninput="renderGrid()" autocomplete="off">
         </div>
         <div class="chips" id="statusFilter"></div>
+        <button type="button" class="chip" id="groupBtn" onclick="toggleGroupByVer()">버전별로 나누기</button>
       </div>
 
       <div class="grid-wrap">
@@ -110,11 +111,12 @@ $bootJson = json_encode([
           <thead>
             <tr>
               <th class="c-no"></th>
-              <th class="c-name">대학</th>
-              <th class="c-ver">버전</th>
-              <th class="c-status">상태</th>
-              <th class="c-note">메모</th>
-              <th class="c-by">갱신</th>
+              <?php foreach (['name' => '대학', 'ver' => '버전', 'status' => '상태', 'note' => '메모', 'updated_at' => '갱신'] as $col => $label): ?>
+              <th class="c-<?= $col === 'updated_at' ? 'by' : $col ?>" data-col="<?= $col ?>" onclick="sortBy('<?= $col ?>')">
+                <span class="th-in"><span><?= $label ?> <span class="arrow"></span></span>
+                  <button type="button" class="colbtn" onclick="openColMenu(event, '<?= $col ?>')" aria-label="<?= $label ?> 열 메뉴">▾</button></span>
+              </th>
+              <?php endforeach; ?>
             </tr>
           </thead>
           <tbody id="gridBody"></tbody>
@@ -156,6 +158,8 @@ $bootJson = json_encode([
       </div>
     </div>
   </div>
+
+  <div class="colmenu" id="colMenu"></div>
 
   <div class="toast" id="toast"></div>
 

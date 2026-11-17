@@ -3,7 +3,10 @@ const APP = {
   sheets: [],
   sheetId: null,
   rows: [],
-  filterStatus: "",
+  filters: { ver: null, status: null },
+  menuCol: null,
+  sort: { key: "name", dir: 1 },
+  groupByVer: true,
   editingSheetId: null,
 };
 
