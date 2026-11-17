@@ -190,7 +190,9 @@ header.site{background:var(--bg-page)}
 .grid .c-ver{width:70px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
 .grid .c-vpn{width:120px;font-size:12px;color:var(--tx-quaternary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
 .grid .c-vpn .vpn{display:inline-block;padding:1px 7px;border-radius:999px;background:var(--gray95);border:1px solid var(--gray80);color:var(--tx-secondary);max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
-.grid td.c-status{width:116px;padding:0}
+/* 메모 열이 46% 라 열이 늘면 자동 배치가 상태 열을 눌러 글자가 잘린다 — 최소 너비를 못 박는다 */
+.grid th.c-status,.grid td.c-status{width:116px;min-width:116px}
+.grid td.c-status{padding:0}
 .grid td.c-note{width:46%;padding:0}
 .grid .c-by{width:150px;font-size:12px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
 .grid tbody tr:hover td:not(.c-no){background:var(--gray98)}
@@ -200,7 +202,7 @@ header.site{background:var(--bg-page)}
   width:100%;height:33px;border:none;background:transparent;
   font-family:var(--sans);font-size:13.5px;color:var(--tx-primary);padding:0 10px;
 }
-.grid td.c-status select{font-weight:700;cursor:pointer}
+.grid td.c-status select{font-weight:700;cursor:pointer;min-width:116px}
 .grid td.c-status select:focus,.grid td.c-note input:focus{outline:2px solid var(--xl50);outline-offset:-2px;background:var(--bg-card)}
 .grid tr.st-todo td.c-status{background:var(--warn90)}
 .grid tr.st-todo td.c-status select{color:var(--warn30)}
