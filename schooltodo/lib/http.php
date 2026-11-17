@@ -34,13 +34,7 @@ function schooltodo_request_from_globals() {
         if (!is_array($body)) throw new SchooltodoError('본문을 읽을 수 없습니다', 422);
     }
 
-    return [
-        'method' => $method,
-        'seg' => $seg,
-        'body' => $body,
-        'query' => $_GET,
-        'api_key' => trim((string)($_SERVER['HTTP_X_API_KEY'] ?? '')),
-    ];
+    return ['method' => $method, 'seg' => $seg, 'body' => $body, 'query' => $_GET];
 }
 
 /**
@@ -85,7 +79,7 @@ function schooltodo_handle($ctx, $req) {
  */
 function schooltodo_route($ctx, $req) {
     if (($req['seg'][0] ?? '') === 'whoami') return schooltodo_route_whoami($ctx);
-    if (!$ctx['identity']) throw new SchooltodoError('로그인이나 API 키가 필요합니다', 401);
+    if (!$ctx['identity']) throw new SchooltodoError('로그인이 필요합니다', 401);
 
     return match ($req['seg'][0] ?? '') {
         'sheets' => schooltodo_route_sheets($ctx, $req),

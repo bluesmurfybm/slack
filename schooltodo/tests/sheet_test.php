@@ -30,7 +30,7 @@ final class sheet_test extends TestCase
             (10, 1, '운영반영'), (10, 2, '해당없음'), (10, 4, '운영반영')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'GET', 'seg' => ['sheets'], 'body' => [], 'query' => []]
         );
 
@@ -45,7 +45,7 @@ final class sheet_test extends TestCase
     public function test_등록(): void
     {
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'POST', 'seg' => ['sheets'], 'body' => ['title' => ' jQuery 3.5.1 ', 'description' => '전 대학 반영'], 'query' => []]
         );
 
@@ -60,7 +60,7 @@ final class sheet_test extends TestCase
     public function test_등록_title_없으면_422(): void
     {
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'POST', 'seg' => ['sheets'], 'body' => ['description' => '설명만'], 'query' => []]
         );
 
@@ -73,7 +73,7 @@ final class sheet_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'POST', 'seg' => ['sheets'], 'body' => ['title' => 'jQuery'], 'query' => []]
         );
 
@@ -92,7 +92,7 @@ final class sheet_test extends TestCase
             (10, 1, '운영반영', '3.5.1 반영', '봇', '2026-11-17 10:00:00')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'GET', 'seg' => ['sheets', '10'], 'body' => [], 'query' => []]
         );
 
@@ -127,7 +127,7 @@ final class sheet_test extends TestCase
             (10, 2, '개발반영'), (10, 3, '운영반영'), (10, 4, '해당없음'), (10, 5, '진행중')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'GET', 'seg' => ['sheets', '10'], 'body' => [], 'query' => ['status' => $status]]
         );
 
@@ -142,7 +142,7 @@ final class sheet_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'GET', 'seg' => ['sheets', '10'], 'body' => [], 'query' => ['status' => '보류']]
         );
 
@@ -153,7 +153,7 @@ final class sheet_test extends TestCase
     public function test_상세_없는_id_는_404(): void
     {
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'GET', 'seg' => ['sheets', '999'], 'body' => [], 'query' => []]
         );
 
@@ -166,7 +166,7 @@ final class sheet_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title, description) VALUES (10, 'jQuery', '설명')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10'], 'body' => ['title' => 'jQuery 3.5.1'], 'query' => []]
         );
 
@@ -181,7 +181,7 @@ final class sheet_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title, description) VALUES (10, 'jQuery', '설명')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10'], 'body' => ['description' => '바뀐 설명'], 'query' => []]
         );
 
@@ -196,7 +196,7 @@ final class sheet_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10'], 'body' => ['title' => '  '], 'query' => []]
         );
 
@@ -209,11 +209,11 @@ final class sheet_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery'), (11, '관리자 동시접속')");
 
         $other = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10'], 'body' => ['title' => '관리자 동시접속'], 'query' => []]
         );
         $same = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10'], 'body' => ['title' => 'jQuery'], 'query' => []]
         );
 
@@ -229,26 +229,12 @@ final class sheet_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status) VALUES (10, 1, '운영반영'), (11, 1, '운영반영')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'DELETE', 'seg' => ['sheets', '10'], 'body' => [], 'query' => []]
         );
 
         $this->assertSame(200, $res['status']);
         $this->assertSame(['11'], array_map('strval', $this->pdo->query("SELECT id FROM schooltodo_sheets")->fetchAll(\PDO::FETCH_COLUMN)));
         $this->assertSame(['11'], array_map('strval', $this->pdo->query("SELECT sheet_id FROM schooltodo_cells")->fetchAll(\PDO::FETCH_COLUMN)));
-    }
-
-    /** schooltodo_sheet_delete: bot=true identity 삭제 오류 */
-    public function test_삭제_bot_은_403(): void
-    {
-        $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
-
-        $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
-            ['method' => 'DELETE', 'seg' => ['sheets', '10'], 'body' => [], 'query' => []]
-        );
-
-        $this->assertSame(403, $res['status']);
-        $this->assertSame(1, (int)$this->pdo->query("SELECT COUNT(*) FROM schooltodo_sheets")->fetchColumn());
     }
 }

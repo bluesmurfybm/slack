@@ -1,28 +1,6 @@
 <?php
 
 /**
- * @param array $config
- * @param string $apiKey
- * @return array|null
- */
-function schooltodo_identity($config, $apiKey) {
-    if ($apiKey !== '') return schooltodo_bot_identity($config, $apiKey);
-
-    return schooltodo_session_identity();
-}
-
-/**
- * @param array $config
- * @param string $apiKey
- * @return array|null
- */
-function schooltodo_bot_identity($config, $apiKey) {
-    if ($config['bot_key'] === '' || !hash_equals($config['bot_key'], $apiKey)) return null;
-
-    return ['email' => '', 'name' => SCHOOLTODO_BOT_NAME, 'color' => '', 'bot' => true];
-}
-
-/**
  * @return array|null
  */
 function schooltodo_session_identity() {
@@ -35,7 +13,6 @@ function schooltodo_session_identity() {
         'email' => $user['email'],
         'name' => $user['name'] ?? '',
         'color' => user_color($user),
-        'bot' => false,
     ];
 }
 

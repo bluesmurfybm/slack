@@ -19,7 +19,7 @@ abstract class TestCase extends BaseTestCase
         $db = $portal['db'];
         $db['name'] = getenv('SCHOOLTODO_TEST_DB') ?: 'slackapi_test';
 
-        $this->config = schooltodo_config(['db' => $db, 'bot_key' => 'bot-secret']);
+        $this->config = schooltodo_config(['db' => $db]);
         $this->pdo = schooltodo_connect($this->config);
         schooltodo_migrate($this->pdo);
         $this->pdo->exec("CREATE TABLE IF NOT EXISTS `schools` (

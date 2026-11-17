@@ -14,15 +14,9 @@
 - **표** — 항상 버전별로 나뉜다. 열 머리 ▾ 메뉴에서 정렬·거르기를 하고, 상태·메모 열 메뉴에서는 지금 보이는 대학을 일괄 변경한다.
 - **화면** — 상태는 고르는 즉시, 메모는 칸을 벗어나거나 Enter 를 누르면 저장된다. `엑셀(CSV) 내려받기` 는 지금 탭 전체를 내려받는다.
 
-## 봇 API
-포털 세션 대신 `X-Api-Key` 헤더로 부른다. 키는 `config.local.php` 에 두고 `config.php` 가 넘긴다. 키가 없으면 봇 접근은 꺼진다.
-
-```php
-// config.local.php
-'schooltodo_bot_key' => '<임의의 긴 문자열>',
-// config.php
-'schooltodo_bot_key' => $localCfg['schooltodo_bot_key'] ?? null,
-```
+## API
+화면과 AI 도구가 같은 API 를 쓴다. 따로 발급하는 키는 없다 — AI 도구도 포털 계정으로 `/api/login.php` 에 로그인해
+받은 세션 쿠키로 부른다(EnvHub 를 읽는 issh·safepush·ai-coach 와 같은 방식). 갱신한 사람은 로그인한 계정 이름으로 남는다.
 
 | 호출 | 하는 일 |
 |---|---|
@@ -31,16 +25,19 @@
 | `GET api.php?p=/sheets/{id}` | 탭 + 대학별 행. `&status=미조치` 로 거른다 |
 | `PUT api.php?p=/sheets/{id}` `{title, description}` | 이름·설명 수정 |
 | `PUT api.php?p=/sheets/{id}/cells` `{items: [...]}` | 대학별 상태·메모 채우기 |
-| `DELETE api.php?p=/sheets/{id}` | 탭 삭제. **API 키로는 못 한다**(화면에서만) |
+| `DELETE api.php?p=/sheets/{id}` | 탭 삭제 |
 
 `items` 한 건은 `{school_id}` 또는 `{school, ver}` 로 대학을 가리키고 `status`·`note` 중 보낸 것만 바꾼다.
 이름이 같은 대학이 여럿인데 `ver` 가 없으면 409, 한 건이라도 오류면 전부 저장하지 않고 `items[n]:` 으로 알려 준다.
-갱신한 사람은 `봇` 으로 남는다.
+
+`tools/tasksheet.py` 가 로그인과 호출을 묶어 둔 명령이다. 계정은 `~/.config/safepush/iworks.json`
+(`{"email", "password"}`, `IWORKS_CREDENTIALS` 로 바꾼다), 포털 주소는 `IWORKS_URL` 이다. 시트는 번호나 이름으로 가리킨다.
 
 ```bash
-curl -X PUT 'https://<포털>/schooltodo/api.php?p=/sheets/3/cells' \
-  -H 'X-Api-Key: <키>' -H 'Content-Type: application/json' \
-  -d '{"items":[{"school":"한림대","ver":"3.5","status":"운영반영","note":"3.5.1 반영"}]}'
+python3 schooltodo/tools/tasksheet.py sheets
+python3 schooltodo/tools/tasksheet.py create "jQuery 3.5.1" --description "전 대학 반영"
+python3 schooltodo/tools/tasksheet.py rows "jQuery 3.5.1" --status 미조치
+python3 schooltodo/tools/tasksheet.py fill "jQuery 3.5.1" --school 한림대 --ver 3.5 --status 운영반영 --note "3.5.1 반영"
 ```
 
 ## 포털 등록

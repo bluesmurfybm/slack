@@ -14,7 +14,6 @@ const SCHOOLTODO_STATUSES = [
     SCHOOLTODO_STATUS_OPS,
     SCHOOLTODO_STATUS_EXCLUDED,
 ];
-const SCHOOLTODO_BOT_NAME = '봇';
 
 /**
  * @param array $over
@@ -23,7 +22,6 @@ const SCHOOLTODO_BOT_NAME = '봇';
 function schooltodo_config($over = []) {
     return $over + [
         'db' => [],
-        'bot_key' => '',
         'portal_url' => '..',
     ];
 }
@@ -34,10 +32,7 @@ function schooltodo_config($over = []) {
 function schooltodo_config_from_portal() {
     $portal = require __DIR__ . '/../config.php';
 
-    return schooltodo_config([
-        'db' => $portal['db'],
-        'bot_key' => (string)($portal['schooltodo_bot_key'] ?? ''),
-    ]);
+    return schooltodo_config(['db' => $portal['db']]);
 }
 
 /**

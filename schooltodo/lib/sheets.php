@@ -196,8 +196,6 @@ function schooltodo_want_title($pdo, $value, $exceptId) {
  * @param int $id
  */
 function schooltodo_sheet_delete($ctx, $id) {
-    if ($ctx['identity']['bot']) throw new SchooltodoError('시트 삭제는 화면에서만 할 수 있습니다', 403);
-
     $pdo = $ctx['pdo'];
     schooltodo_sheet_find($pdo, $id);
     $pdo->prepare("DELETE FROM schooltodo_cells WHERE sheet_id = ?")->execute([$id]);

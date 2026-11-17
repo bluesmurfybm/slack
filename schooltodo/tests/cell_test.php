@@ -15,7 +15,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 2, 'status' => '운영반영', 'note' => '3.5.1 반영'],
             ]], 'query' => []]
@@ -26,7 +26,7 @@ final class cell_test extends TestCase
         $this->assertSame(2, $res['data']['rows'][0]['school_id']);
         $this->assertSame('운영반영', $res['data']['rows'][0]['status']);
         $this->assertSame('3.5.1 반영', $res['data']['rows'][0]['note']);
-        $this->assertSame('봇', $res['data']['rows'][0]['updated_by']);
+        $this->assertSame('사용자', $res['data']['rows'][0]['updated_by']);
         $this->assertNotSame('', $res['data']['rows'][0]['updated_at']);
     }
 
@@ -37,7 +37,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1, 'status' => '개발반영'],
                 ['school_id' => 2, 'status' => '해당없음'],
@@ -56,7 +56,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school' => '나대', 'status' => '운영반영'],
             ]], 'query' => []]
@@ -73,7 +73,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school' => '가대', 'ver' => '4.5', 'status' => '운영반영'],
             ]], 'query' => []]
@@ -90,7 +90,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school' => '가대', 'status' => '운영반영'],
             ]], 'query' => []]
@@ -107,7 +107,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school' => '없는대', 'status' => '운영반영'],
             ]], 'query' => []]
@@ -123,7 +123,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 99, 'status' => '운영반영'],
             ]], 'query' => []]
@@ -139,13 +139,13 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $byId = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1, 'status' => '운영반영'],
             ]], 'query' => []]
         );
         $byName = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school' => '가대', 'status' => '운영반영'],
             ]], 'query' => []]
@@ -161,7 +161,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['status' => '운영반영'],
             ]], 'query' => []]
@@ -178,7 +178,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status, note) VALUES (10, 1, '개발반영', '담당자 확인 중')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1, 'status' => '운영반영'],
             ]], 'query' => []]
@@ -199,7 +199,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status, note) VALUES (10, 1, '개발반영', '')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1, 'note' => '금요일 배포'],
             ]], 'query' => []]
@@ -217,7 +217,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1, 'note' => '금요일 배포'],
             ]], 'query' => []]
@@ -235,7 +235,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1],
             ]], 'query' => []]
@@ -251,7 +251,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1, 'status' => 'done'],
             ]], 'query' => []]
@@ -266,7 +266,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => [], 'query' => []]
         );
 
@@ -280,7 +280,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1, 'status' => '운영반영'],
                 ['school_id' => 99, 'status' => '운영반영'],
@@ -298,7 +298,7 @@ final class cell_test extends TestCase
         $this->pdo->exec("INSERT INTO schools (id, name, ver, active) VALUES (1, '가대', '3.5', 1)");
 
         $res = schooltodo_handle(
-            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'PUT', 'seg' => ['sheets', '999', 'cells'], 'body' => ['items' => [
                 ['school_id' => 1, 'status' => '운영반영'],
             ]], 'query' => []]
