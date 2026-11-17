@@ -80,11 +80,13 @@ final class sheet_test extends TestCase
         $this->assertSame(409, $res['status']);
     }
 
-    /** schooltodo_sheet_detail: active=1 대학 rows 를 name 순으로 조회, 셀 없는 대학은 status 미조치 */
+    /** schooltodo_sheet_detail: active=1 대학 rows 를 name 순으로 조회, 셀 없는 대학은 status 미조치,
+     *  vpn 은 school_access 에서(접속정보가 두 벌이면 합치고, 없으면 빈 값) */
     public function test_상세_rows(): void
     {
         $this->pdo->exec("INSERT INTO schools (id, name, ver, active) VALUES
             (1, '나대', '3.9', 1), (2, '가대', '3.5', 1), (3, '다대', '4.5', 0)");
+        $this->pdo->exec("INSERT INTO school_access (school_id, vpn) VALUES (1, 'FortiClient'), (1, 'Arcon'), (1, 'FortiClient')");
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
         $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status, note, updated_by, updated_at) VALUES
             (10, 1, '운영반영', '3.5.1 반영', '봇', '2026-11-17 10:00:00')");
@@ -96,8 +98,8 @@ final class sheet_test extends TestCase
 
         $this->assertSame(200, $res['status']);
         $this->assertSame([
-            ['school_id' => 2, 'name' => '가대', 'ver' => '3.5', 'status' => '미조치', 'note' => '', 'updated_by' => '', 'updated_at' => ''],
-            ['school_id' => 1, 'name' => '나대', 'ver' => '3.9', 'status' => '운영반영', 'note' => '3.5.1 반영', 'updated_by' => '봇', 'updated_at' => '2026-11-17 10:00:00'],
+            ['school_id' => 2, 'name' => '가대', 'ver' => '3.5', 'vpn' => '', 'status' => '미조치', 'note' => '', 'updated_by' => '', 'updated_at' => ''],
+            ['school_id' => 1, 'name' => '나대', 'ver' => '3.9', 'vpn' => 'Arcon, FortiClient', 'status' => '운영반영', 'note' => '3.5.1 반영', 'updated_by' => '봇', 'updated_at' => '2026-11-17 10:00:00'],
         ], $res['data']['rows']);
         $this->assertSame(['미조치' => 1, '진행중' => 0, '개발반영' => 0, '운영반영' => 1, '해당없음' => 0], $res['data']['counts']);
     }

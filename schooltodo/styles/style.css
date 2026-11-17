@@ -188,6 +188,8 @@ header.site{background:var(--bg-page)}
 .grid .c-no{width:44px;text-align:center;background:var(--gray95);color:var(--tx-quaternary);font-size:12px;font-variant-numeric:tabular-nums}
 .grid .c-name{font-weight:600}
 .grid .c-ver{width:70px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
+.grid .c-vpn{width:120px;font-size:12px;color:var(--tx-quaternary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.grid .c-vpn .vpn{display:inline-block;padding:1px 7px;border-radius:999px;background:var(--gray95);border:1px solid var(--gray80);color:var(--tx-secondary);max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
 .grid td.c-status{width:116px;padding:0}
 .grid td.c-note{width:46%;padding:0}
 .grid .c-by{width:150px;font-size:12px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
@@ -258,5 +260,5 @@ header.site{background:var(--bg-page)}
 @media (max-width:820px){
   .brand h1{font-size:22px}
   .sheet-info{flex-direction:column}
-  .grid .c-by,.grid .c-ver{display:none}
+  .grid .c-by,.grid .c-ver,.grid .c-vpn{display:none}
 }

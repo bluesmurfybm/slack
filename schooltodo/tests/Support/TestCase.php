@@ -29,12 +29,20 @@ abstract class TestCase extends BaseTestCase
             `active` TINYINT(1) NOT NULL DEFAULT 1,
             PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        // VPN 열만 쓴다 — 실제 표는 access/db.php 가 만든다
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS `school_access` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `school_id` INT UNSIGNED NOT NULL,
+            `vpn` VARCHAR(80) NOT NULL DEFAULT '',
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         // TRUNCATE 는 InnoDB 에서 테이블을 다시 만드는 DDL 이라 DELETE 보다 훨씬 느리다
         $this->pdo->beginTransaction();
         $this->pdo->exec("DELETE FROM schooltodo_cells");
         $this->pdo->exec("DELETE FROM schooltodo_sheets");
         $this->pdo->exec("DELETE FROM schools");
+        $this->pdo->exec("DELETE FROM school_access");
         $this->pdo->commit();
     }
 }

@@ -74,9 +74,16 @@ function schooltodo_sheet_find($pdo, $id) {
  * @return array[]
  */
 function schooltodo_sheet_rows($pdo, $sheetId) {
-    $st = $pdo->prepare("SELECT s.id AS school_id, s.name, s.ver, c.status, c.note, c.updated_by, c.updated_at
+    // VPN 은 EnvHub(access)의 school_access 에서 가져온다. 한 대학에 접속정보가 두 벌인 경우가 있어
+    // (access/db.php 참고) 값을 모아 하나로 만든다. access 를 아직 설치하지 않은 곳에서는 빈 값.
+    $vpnJoin = schooltodo_has_table($pdo, 'school_access')
+        ? "LEFT JOIN (SELECT school_id, GROUP_CONCAT(DISTINCT vpn ORDER BY vpn SEPARATOR ', ') AS vpn
+                      FROM school_access WHERE vpn <> '' GROUP BY school_id) a ON a.school_id = s.id"
+        : "LEFT JOIN (SELECT NULL AS school_id, NULL AS vpn) a ON 0";
+    $st = $pdo->prepare("SELECT s.id AS school_id, s.name, s.ver, a.vpn, c.status, c.note, c.updated_by, c.updated_at
                          FROM schools s
                          LEFT JOIN schooltodo_cells c ON c.school_id = s.id AND c.sheet_id = ?
+                         {$vpnJoin}
                          WHERE s.active = 1
                          ORDER BY s.name, s.ver, s.id");
     $st->execute([$sheetId]);
@@ -87,6 +94,7 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
             'school_id' => (int)$r['school_id'],
             'name' => (string)$r['name'],
             'ver' => (string)$r['ver'],
+            'vpn' => (string)($r['vpn'] ?? ''),
             'status' => $r['status'] ?? SCHOOLTODO_STATUS_TODO,
             'note' => (string)($r['note'] ?? ''),
             'updated_by' => (string)($r['updated_by'] ?? ''),
@@ -94,6 +102,22 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
         ];
     }
     return $rows;
+}
+
+/**
+ * @param PDO $pdo
+ * @param string $table
+ * @return bool
+ */
+function schooltodo_has_table($pdo, $table) {
+    static $cache = [];
+    if (!isset($cache[$table])) {
+        $st = $pdo->prepare("SELECT COUNT(*) FROM information_schema.tables
+                             WHERE table_schema = DATABASE() AND table_name = ?");
+        $st->execute([$table]);
+        $cache[$table] = (int)$st->fetchColumn() > 0;
+    }
+    return $cache[$table];
 }
 
 /**

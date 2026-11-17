@@ -110,7 +110,7 @@ $bootJson = json_encode([
           <thead>
             <tr>
               <th class="c-no"></th>
-              <?php foreach (['name' => '대학', 'ver' => '버전', 'status' => '상태', 'note' => '메모', 'updated_at' => '갱신'] as $col => $label): ?>
+              <?php foreach (['name' => '대학', 'ver' => '버전', 'vpn' => 'VPN', 'status' => '상태', 'note' => '메모', 'updated_at' => '갱신'] as $col => $label): ?>
               <th class="c-<?= $col === 'updated_at' ? 'by' : $col ?>" data-col="<?= $col ?>" onclick="sortBy('<?= $col ?>')">
                 <span class="th-in"><span><?= $label ?> <span class="arrow"></span></span>
                   <button type="button" class="colbtn" onclick="openColMenu(event, '<?= $col ?>')" aria-label="<?= $label ?> 열 메뉴">▾</button></span>

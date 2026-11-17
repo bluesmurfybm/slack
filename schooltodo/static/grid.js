@@ -3,12 +3,13 @@ const natural = (a, b) => String(a).localeCompare(String(b), "ko", { numeric: tr
 const SORTERS = {
   name: (a, b) => natural(a.name, b.name),
   ver: (a, b) => natural(a.ver, b.ver),
+  vpn: (a, b) => natural(a.vpn, b.vpn),
   status: (a, b) => APP.boot.statuses.indexOf(a.status) - APP.boot.statuses.indexOf(b.status),
   note: (a, b) => natural(a.note, b.note),
   updated_at: (a, b) => natural(a.updated_at, b.updated_at),
 };
 
-const FILTER_COLS = ["ver", "status"];
+const FILTER_COLS = ["ver", "vpn", "status"];
 
 /* ---------- 거르기 · 정렬 ---------- */
 
@@ -31,6 +32,7 @@ function visibleRows() {
   const q = document.getElementById("q").value.trim().toLowerCase();
   const f = APP.filters;
   return APP.rows.filter((r) => (!f.ver || f.ver.has(r.ver))
+    && (!f.vpn || f.vpn.has(r.vpn))
     && (!f.status || f.status.has(r.status))
     && (!q || r.name.toLowerCase().includes(q) || r.note.toLowerCase().includes(q)));
 }
@@ -60,7 +62,7 @@ function renderHeads() {
 function groupHead(ver, rows) {
   const excluded = rows.filter((r) => r.status === APP.boot.status_excluded).length;
   const done = rows.filter((r) => r.status === APP.boot.status_done).length;
-  return `<tr class="group"><td colspan="6">${esc(ver || "버전 없음")}
+  return `<tr class="group"><td colspan="7">${esc(ver || "버전 없음")}
     <span class="n">${esc(APP.boot.status_done)} ${done} / 대상 ${rows.length - excluded}</span></td></tr>`;
 }
 
@@ -69,7 +71,7 @@ function renderGrid() {
   const rows = sortedRows(visibleRows());
   const body = document.getElementById("gridBody");
   if (!rows.length) {
-    body.innerHTML = `<tr><td class="none" colspan="6">${APP.rows.length ? "조건에 맞는 대학이 없어요" : "등록된 대학이 없어요"}</td></tr>`;
+    body.innerHTML = `<tr><td class="none" colspan="7">${APP.rows.length ? "조건에 맞는 대학이 없어요" : "등록된 대학이 없어요"}</td></tr>`;
     return;
   }
   const vers = [...new Set(rows.map((r) => r.ver))].sort(natural);
@@ -87,6 +89,7 @@ function rowsHTML(rows, offset) {
     <td class="c-no">${offset + i + 1}</td>
     <td class="c-name">${esc(r.name)}</td>
     <td class="c-ver">${esc(r.ver)}</td>
+    <td class="c-vpn">${r.vpn ? `<span class="vpn" title="${esc(r.vpn)}">${esc(r.vpn)}</span>` : ""}</td>
     <td class="c-status">
       <select onchange="saveCell(${r.school_id}, {status: this.value})">
         ${APP.boot.statuses.map((st) => `<option${st === r.status ? " selected" : ""}>${esc(st)}</option>`).join("")}
@@ -227,8 +230,8 @@ function downloadCsv() {
   const s = currentSheet();
   if (!s) return;
   const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const lines = [["대학", "버전", "상태", "메모", "갱신한 사람", "갱신 시각"]]
-    .concat(APP.rows.map((r) => [r.name, r.ver, r.status, r.note, r.updated_by, r.updated_at]))
+  const lines = [["대학", "버전", "VPN", "상태", "메모", "갱신한 사람", "갱신 시각"]]
+    .concat(APP.rows.map((r) => [r.name, r.ver, r.vpn, r.status, r.note, r.updated_by, r.updated_at]))
     .map((cols) => cols.map(cell).join(","));
   // BOM 이 없으면 엑셀이 한글을 깨뜨린다
   const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
