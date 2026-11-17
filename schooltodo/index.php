@@ -18,7 +18,7 @@ $bootJson = json_encode([
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>대학 일괄 할일 엑셀</title>
+  <title>Coursemos TaskSheet</title>
   <link rel="icon" type="image/svg+xml" href="../styles/favicons/schooltodo.svg">
   <?php require_once __DIR__ . '/../core/pwa.php'; echo pwa_head_tags('../'); ?>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -57,8 +57,8 @@ $bootJson = json_encode([
   <header class="site">
     <div class="site-inner">
       <div class="brand">
-        <span class="eyebrow">대학마다 하나씩 해야 하는 일 · Bulk To-do</span>
-        <h1>대학 일괄 할일 엑셀</h1>
+        <span class="eyebrow">대학 일괄 할일 · Bulk Tasks</span>
+        <h1>Coursemos TaskSheet</h1>
       </div>
       <div class="site-act">
         <button class="btn-ghost" id="csvBtn" onclick="downloadCsv()">엑셀(CSV) 내려받기</button>

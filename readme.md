@@ -1015,7 +1015,7 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
 | envlog (Coursemos EnvLog · 운영 웹서버 로그 뷰어) | [envlog/README.md](envlog/README.md) |
 | access (Coursemos EnvHub · 학교 접속 정보) | [access/README.md](access/README.md) |
 | sitehub (BlueLab SiteHub) | [sitehub/README.md](sitehub/README.md) |
-| schooltodo (대학 일괄 할일 엑셀) | [schooltodo/README.md](schooltodo/README.md) |
+| schooltodo (Coursemos TaskSheet · 대학 일괄 할일) | [schooltodo/README.md](schooltodo/README.md) |
 | slackai (WorkHub AI · 테스트베드) | [slackai/README.md](slackai/README.md) |
 | bluecart (BlueCart · 물품 요청) | [bluecart/README.md](bluecart/README.md) |
 | blueledger (BlueExpense · 출장여비) | [blueledger/README.md](blueledger/README.md) |

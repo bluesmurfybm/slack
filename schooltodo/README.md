@@ -1,4 +1,4 @@
-# schooltodo (대학 일괄 할일 엑셀)
+# schooltodo (Coursemos TaskSheet · 대학 일괄 할일)
 
 대학마다 하나씩 해야 하는 일(예: 취약점 조치)을 **탭**으로 만들고, 탭 안에서 대학별 조치 상태를 체크한다.
 화면은 `schooltodo/index.php`, 포털 로그인한 사람은 누구나 보고 고친다.
