@@ -449,6 +449,12 @@ $csrf = bl_csrf_token();
   </div>
   <div class="df"><button class="btn primary" id="pendDlgClose">확인</button></div>
 </dialog>
+<!-- 관리자 통계 '출장자별 합계' — 사람을 누르면 그 사람의 청구 목록(건을 누르면 상세 창) -->
+<dialog id="personDlg" aria-labelledby="personDlgTitle">
+  <div class="dh"><span id="pdAv"></span><div class="pd-t"><b id="personDlgTitle"></b><span class="hint num" id="pdMeta"></span></div>
+    <button type="button" class="rcx" id="pdClose" aria-label="닫기"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="db"><div class="pd-sum" id="pdSum"></div><div class="pd-list" id="pdList"></div></div>
+</dialog>
 <dialog id="myDlg" aria-labelledby="myDlgTitle">
   <div class="dh" id="myDlgTitle">My Claims <span class="hint" id="myMeta" style="font-weight:500"></span></div>
   <div class="db mylist" id="myList"></div>

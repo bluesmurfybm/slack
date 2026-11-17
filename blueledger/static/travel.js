@@ -509,45 +509,117 @@ function render(){
 function showList(f){S.fStatus=f;render();F('listCard').scrollIntoView({behavior:'smooth',block:'start'})}
 F('kpis').addEventListener('click',e=>{const k=e.target.closest('[data-f]');if(k)showList(k.dataset.f)});
 
-/* 월별 출장여비 — 1~12월 막대. 이번 달은 포인트 색, 청구가 있는 달은 연한 색, 없는 달은 바닥에 회색 짧은 선 */
+/* 월별 출장여비 — 1~12월 막대. 승인된 건(정산 대기 + 정산 완료)만 더한다 — 반려·승인 대기는 뺀다(2026-11-17).
+   이번 달은 포인트 색, 있는 달은 연한 색, 없는 달은 바닥에 회색 짧은 선.
+   달마다 위아래 전체에 보이지 않는 칸을 두어, 마우스를 대면 바로 금액·건수 말풍선이 뜬다(브라우저 기본 말풍선은 늦게 뜬다) */
+const countedTrip=t=>t.approval==='승인';
 function renderMonthChart(rows){
   const W=640,H=230,pt=26,pb=30,px=6,now=today();
   let labels,buckets,cur=-1;
   if(S.year==='all'){
     labels=[...new Set(S.trips.map(t=>String(t.date).slice(0,4)))].filter(y=>/^\d{4}$/.test(y)).sort();
-    buckets=labels.map(y=>S.trips.filter(t=>String(t.date).startsWith(y)));cur=labels.indexOf(now.slice(0,4));
+    buckets=labels.map(y=>S.trips.filter(t=>String(t.date).startsWith(y)&&countedTrip(t)));cur=labels.indexOf(now.slice(0,4));
     labels=labels.map(y=>y+'년');
   }else{
-    labels=Array.from({length:12},(_,i)=>(i+1)+'월');buckets=labels.map((_,i)=>rows.filter(t=>Number(String(t.date).slice(5,7))===i+1));
+    labels=Array.from({length:12},(_,i)=>(i+1)+'월');buckets=labels.map((_,i)=>rows.filter(t=>Number(String(t.date).slice(5,7))===i+1&&countedTrip(t)));
     if(S.year===now.slice(0,4))cur=Number(now.slice(5,7))-1;
   }
   const sums=buckets.map(tot),max=Math.max(1,...sums);
-  F('monthMeta').textContent=(S.year==='all'?'연도별':S.year+'년')+' · '+won(sums.reduce((a,b)=>a+b,0))+'원';
+  S.monthTip={labels,buckets,sums,year:S.year};
+  F('monthMeta').textContent=(S.year==='all'?'연도별':S.year+'년')+' 승인 건 · '+won(sums.reduce((a,b)=>a+b,0))+'원';
+  F('monthMeta').title='반려·승인 대기는 빼고, 승인된 건(정산 대기·정산 완료)만 더했습니다';
   const ih=H-pt-pb,slot=(W-px*2)/Math.max(1,labels.length),bw=Math.min(30,slot*.56),base=pt+ih;
   const fmt=v=>v>=10000?`${+(v/10000).toFixed(v>=1e6?0:1)}만`:won(v);
   let g=`<line x1="${px}" x2="${W-px}" y1="${base+.5}" y2="${base+.5}" stroke="var(--line)" stroke-width="1.5"/>`;
   labels.forEach((l,i)=>{
     const cx=px+slot*(i+.5),v=sums[i],on=i===cur;
     if(v){const h=Math.max(6,v/max*ih),y=base-h;
-      g+=`<rect x="${cx-bw/2}" y="${y}" width="${bw}" height="${h}" rx="6" fill="${on?'var(--blue)':'var(--bar-soft)'}"><title>${esc(l)} ${won(v)}원 · ${buckets[i].length}건</title></rect>`
+      g+=`<rect class="mbar" data-i="${i}" x="${cx-bw/2}" y="${y}" width="${bw}" height="${h}" rx="6" fill="${on?'var(--blue)':'var(--bar-soft)'}"/>`
         +`<text x="${cx}" y="${y-7}" text-anchor="middle" font-size="11" font-weight="700" fill="${on?'var(--blue)':'var(--sub)'}">${fmt(v)}</text>`;
     }else g+=`<line x1="${cx-bw/2+2}" x2="${cx+bw/2-2}" y1="${base-1.5}" y2="${base-1.5}" stroke="var(--gray-mid)" stroke-width="2" stroke-linecap="round"/>`;
     g+=`<text x="${cx}" y="${H-9}" text-anchor="middle" font-size="11.5" font-weight="${on?700:500}" fill="${on?'var(--ink)':'var(--sub)'}">${esc(l)}</text>`;
   });
-  F('monthChart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="월별 출장여비 막대그래프" style="display:block">${g}</svg>`;
+  // 말풍선용 칸 — 달마다 위아래 전체 높이, 맨 마지막에 그려 막대·글자 위에 놓인다
+  labels.forEach((l,i)=>{g+=`<rect class="mhit" data-tip="m" data-i="${i}" x="${px+slot*i}" y="0" width="${slot}" height="${H}" fill="transparent"/>`});
+  F('monthChart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="월별 출장여비 막대그래프(승인된 건)" style="display:block">${g}</svg>`;
+}
+function monthTipHtml(i){
+  const d=S.monthTip;if(!d||!d.labels[i])return '';
+  const list=d.buckets[i],done=list.filter(t=>t.status==='처리완료'),wait=list.filter(t=>t.status!=='처리완료');
+  const head=`${esc(d.labels[i])}${d.year==='all'?'':` · ${esc(d.year)}년`}`;
+  if(!list.length)return `<b>${head}</b><span class="tl">승인된 출장여비가 없습니다</span>`;
+  return `<b>${head}</b><span class="tv num">${won(d.sums[i])}원 · ${list.length}건</span>`
+    +(done.length?`<span class="tl num"><i class="kdot k-done"></i>정산 완료 ${done.length}건 · ${won(tot(done))}원</span>`:'')
+    +(wait.length?`<span class="tl num"><i class="kdot k-settle"></i>정산 대기 ${wait.length}건 · ${won(tot(wait))}원</span>`:'');
 }
 
-/* 출장자별 합계 — 이름 · 금액 · 건수, 막대는 가장 큰 금액에 견준 비율 */
+/* 출장자별 합계 — 이름 · 금액 · 건수, 막대는 가장 큰 금액에 견준 비율.
+   마우스를 대면 그 사람의 청구가 건별로 바로 뜨고, 누르면 팝업으로 목록이 열린다(건을 누르면 상세 창).
+   월별 그래프와 같이 승인된 건(정산 대기 + 정산 완료)만 더한다 — 반려·승인 대기는 뺀다(2026-11-17) */
 function renderPeople(rows){
-  const m={};rows.forEach(t=>{const p=m[t.traveler]||(m[t.traveler]={c:0,t:0});p.c++;p.t+=t.total||0});
+  const m={};rows.filter(countedTrip).forEach(t=>{const p=m[t.traveler]||(m[t.traveler]={c:0,t:0,list:[]});p.c++;p.t+=t.total||0;p.list.push(t)});
   const arr=Object.entries(m).map(([n,p])=>({n,...p})).sort((a,b)=>b.t-a.t);
-  F('personMeta').textContent=arr.length?`${arr.length}명`:'';
-  if(!arr.length){F('byPerson').innerHTML='<div class="empty">이 기간에 청구된 출장이 없습니다.</div>';return}
+  arr.forEach(p=>p.list.sort((a,b)=>String(b.date).localeCompare(String(a.date))));
+  S.people=Object.fromEntries(arr.map(p=>[p.n,p]));
+  F('personMeta').textContent=arr.length?`승인 건 · ${arr.length}명`:'';
+  F('personMeta').title='반려·승인 대기는 빼고, 승인된 건(정산 대기·정산 완료)만 더했습니다';
+  if(!arr.length){F('byPerson').innerHTML='<div class="empty">이 기간에 승인된 출장이 없습니다.</div>';return}
   const max=arr[0].t||1;
-  F('byPerson').innerHTML=arr.map(p=>`<div class="prow"><span class="av">${initial(p.n)}</span>
+  F('byPerson').innerHTML=arr.map(p=>`<button type="button" class="prow" data-tip="p" data-n="${esc(p.n)}" aria-label="${esc(p.n)} 청구 ${p.c}건 보기">${avHtml(p.n)}
     <div class="pmain"><div class="ptop"><b>${esc(p.n)}</b><span class="num"><b>${won(p.t)}원</b> · ${p.c}건</span></div>
-    <div class="pbar"><i style="width:${Math.max(2,p.t/max*100).toFixed(1)}%"></i></div></div></div>`).join('');
+    <div class="pbar"><i style="width:${Math.max(2,p.t/max*100).toFixed(1)}%"></i></div></div></button>`).join('');
 }
+const tripLine=t=>`${esc(shortDate(t.date))} · ${esc(t.place)}`;
+function personTipHtml(n){
+  const p=(S.people||{})[n];if(!p)return '';
+  const N=8,rows=p.list.slice(0,N).map(t=>{const st=stageOf(t);
+    return `<span class="tr num"><i class="kdot k-${st.key}"></i><em>${tripLine(t)}</em><b>${won(t.total)}원</b></span>`}).join('');
+  return `<b>${esc(n)} · ${p.c}건 · ${won(p.t)}원</b>${rows}${p.list.length>N?`<span class="tl">외 ${p.list.length-N}건 — 눌러서 전체 보기</span>`:'<span class="tl">눌러서 자세히 보기</span>'}`;
+}
+// 출장자 팝업 — 그 사람의 청구 목록(이 기간), 건을 누르면 상세 창
+function openPerson(n){
+  const p=(S.people||{})[n];if(!p)return;
+  hideTip();
+  F('pdAv').innerHTML=avHtml(n);F('personDlgTitle').textContent=n;
+  F('pdMeta').textContent=`${S.year==='all'?'전체 기간':S.year+'년'} · ${p.c}건 · ${won(p.t)}원`;
+  const by=k=>p.list.filter(t=>stageOf(t).key===k);
+  F('pdSum').innerHTML=[['done','정산 완료'],['settle','정산 대기'],['wait','승인 대기'],['no','반려']].map(([k,l])=>{const a=by(k);
+    return a.length?`<span class="pd-s"><i class="kdot k-${k}"></i>${l} <b class="num">${a.length}건 · ${won(tot(a))}원</b></span>`:''}).join('');
+  F('pdList').innerHTML=p.list.map(t=>{const st=stageOf(t);
+    return `<button type="button" class="pd-row" data-id="${esc(t.id)}"><span class="pd-d num">${esc(t.date)}<small>${esc(t.period||'당일')}</small></span>
+      <span class="pd-m"><b>${esc(t.place)}</b>${t.purpose?`<small>${esc(t.purpose)}</small>`:''}</span>
+      <b class="pd-a num">${won(t.total)}원</b><span class="sbadge st-${st.key}">${esc(st.label)}</span></button>`}).join('');
+  F('personDlg').showModal();
+}
+F('pdClose').addEventListener('click',()=>F('personDlg').close());
+F('personDlg').addEventListener('click',e=>{
+  if(e.target===F('personDlg')){F('personDlg').close();return}
+  const r=e.target.closest('.pd-row');if(!r)return;F('personDlg').close();openKD(r.dataset.id);
+});
+F('byPerson').addEventListener('click',e=>{const r=e.target.closest('.prow');if(r)openPerson(r.dataset.n)});
+
+/* 바로 뜨는 말풍선 — 월별 막대·출장자 막대 공통. 마우스 위치를 따라가고 화면 밖으로 나가지 않게 */
+const TIP=document.createElement('div');TIP.className='ctip';TIP.id='cTip';TIP.setAttribute('role','tooltip');TIP.hidden=true;document.body.appendChild(TIP);
+let tipKey='';
+function hideTip(){TIP.hidden=true;tipKey=''}
+function placeTip(x,y){
+  const w=TIP.offsetWidth,h=TIP.offsetHeight,vw=innerWidth,vh=innerHeight;
+  let l=x+14,t=y+14;if(l+w>vw-8)l=x-w-14;if(t+h>vh-8)t=y-h-14;
+  TIP.style.left=Math.max(8,l)+'px';TIP.style.top=Math.max(8,t)+'px';
+}
+[F('monthChart'),F('byPerson')].forEach(box=>{
+  box.addEventListener('pointermove',e=>{
+    const el=e.target.closest('[data-tip]');if(!el){hideTip();return}
+    const key=el.dataset.tip+':'+(el.dataset.i??el.dataset.n);
+    if(key!==tipKey){const html=el.dataset.tip==='m'?monthTipHtml(+el.dataset.i):personTipHtml(el.dataset.n);if(!html){hideTip();return}TIP.innerHTML=html;TIP.hidden=false;tipKey=key}
+    placeTip(e.clientX,e.clientY);
+  });
+  box.addEventListener('pointerleave',hideTip);
+});
+// 휴대폰 — 월별 막대는 눌러서 말풍선(누른 자리), 다른 곳을 누르면 닫힌다
+F('monthChart').addEventListener('click',e=>{const el=e.target.closest('[data-tip="m"]');if(!el)return;TIP.innerHTML=monthTipHtml(+el.dataset.i);TIP.hidden=false;tipKey='m:'+el.dataset.i;placeTip(e.clientX,e.clientY)});
+document.addEventListener('pointerdown',e=>{if(!TIP.hidden&&!e.target.closest('#monthChart,#byPerson'))hideTip()});
+addEventListener('scroll',()=>{if(!TIP.hidden)hideTip()},{passive:true});
 
 /* 산정기준 확인 — 식대(1인 기준 × 인원 × 일수 × 2)와 자가용 주유비(편도 거리로 계산한 금액)를 넘었는지.
    청구서의 식대 '기준' 안내·주유비 계산과 같은 식이다. 숙박·기타는 영수증 실비라 보지 않는다 */
