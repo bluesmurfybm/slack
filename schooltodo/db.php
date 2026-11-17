@@ -3,13 +3,13 @@
 if (is_file(__DIR__ . '/../core/sqlite_compat.php')) require_once __DIR__ . '/../core/sqlite_compat.php';
 
 const SCHOOLTODO_STATUS_TODO = '미조치';
-const SCHOOLTODO_STATUS_DOING = '진행중';
-const SCHOOLTODO_STATUS_DONE = '완료';
+const SCHOOLTODO_STATUS_DEV = '개발반영';
+const SCHOOLTODO_STATUS_OPS = '운영반영';
 const SCHOOLTODO_STATUS_EXCLUDED = '해당없음';
 const SCHOOLTODO_STATUSES = [
     SCHOOLTODO_STATUS_TODO,
-    SCHOOLTODO_STATUS_DOING,
-    SCHOOLTODO_STATUS_DONE,
+    SCHOOLTODO_STATUS_DEV,
+    SCHOOLTODO_STATUS_OPS,
     SCHOOLTODO_STATUS_EXCLUDED,
 ];
 const SCHOOLTODO_BOT_NAME = '봇';
@@ -86,7 +86,7 @@ function schooltodo_schema() {
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `sheet_id` INT UNSIGNED NOT NULL,
             `school_id` INT UNSIGNED NOT NULL COMMENT 'schools.id',
-            `status` VARCHAR(20) NOT NULL DEFAULT '미조치' COMMENT '미조치|진행중|완료|해당없음',
+            `status` VARCHAR(20) NOT NULL DEFAULT '미조치' COMMENT '미조치|개발반영|운영반영|해당없음',
             `note` VARCHAR(2000) NOT NULL DEFAULT '',
             `updated_by` VARCHAR(60) NOT NULL DEFAULT '',
             `updated_at` VARCHAR(19) NOT NULL DEFAULT '',

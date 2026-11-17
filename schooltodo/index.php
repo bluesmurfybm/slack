@@ -8,7 +8,7 @@ $bootJson = json_encode([
     'me' => ['email' => $me['email'], 'name' => $me['name']],
     'statuses' => SCHOOLTODO_STATUSES,
     'status_todo' => SCHOOLTODO_STATUS_TODO,
-    'status_done' => SCHOOLTODO_STATUS_DONE,
+    'status_done' => SCHOOLTODO_STATUS_OPS,
     'status_excluded' => SCHOOLTODO_STATUS_EXCLUDED,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
 ?>
@@ -103,7 +103,6 @@ $bootJson = json_encode([
           <input id="q" type="text" placeholder="대학 이름·메모 검색" oninput="renderGrid()" autocomplete="off">
         </div>
         <div class="chips" id="statusFilter"></div>
-        <button type="button" class="chip" id="groupBtn" onclick="toggleGroupByVer()">버전별로 나누기</button>
       </div>
 
       <div class="grid-wrap">

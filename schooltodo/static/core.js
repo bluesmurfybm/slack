@@ -6,7 +6,6 @@ const APP = {
   filters: { ver: null, status: null },
   menuCol: null,
   sort: { key: "name", dir: 1 },
-  groupByVer: true,
   editingSheetId: null,
 };
 
@@ -34,7 +33,7 @@ const sendJSON = (method, path, body) => api(path, {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const STATUS_CLASS = { "미조치": "st-todo", "진행중": "st-doing", "완료": "st-done", "해당없음": "st-excluded" };
+const STATUS_CLASS = { "미조치": "st-todo", "개발반영": "st-doing", "운영반영": "st-done", "해당없음": "st-excluded" };
 
 function currentSheet() {
   return APP.sheets.find((s) => s.id === APP.sheetId) || null;

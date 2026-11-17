@@ -40,11 +40,6 @@ function sortBy(key, dir) {
   renderGrid();
 }
 
-function toggleGroupByVer() {
-  APP.groupByVer = !APP.groupByVer;
-  renderGrid();
-}
-
 function sortedRows(rows) {
   const { key, dir } = APP.sort;
   return rows.slice().sort((a, b) => dir * SORTERS[key](a, b) || natural(a.name, b.name) || natural(a.ver, b.ver));
@@ -60,14 +55,13 @@ function renderHeads() {
     th.querySelector(".arrow").textContent = on ? (APP.sort.dir > 0 ? "▲" : "▼") : "";
     th.querySelector(".colbtn").classList.toggle("filtered", !!APP.filters[col]);
   });
-  document.getElementById("groupBtn").classList.toggle("on", APP.groupByVer);
 }
 
 function groupHead(ver, rows) {
   const excluded = rows.filter((r) => r.status === APP.boot.status_excluded).length;
   const done = rows.filter((r) => r.status === APP.boot.status_done).length;
   return `<tr class="group"><td colspan="6">${esc(ver || "버전 없음")}
-    <span class="n">완료 ${done} / 대상 ${rows.length - excluded}</span></td></tr>`;
+    <span class="n">${esc(APP.boot.status_done)} ${done} / 대상 ${rows.length - excluded}</span></td></tr>`;
 }
 
 function renderGrid() {
@@ -76,10 +70,6 @@ function renderGrid() {
   const body = document.getElementById("gridBody");
   if (!rows.length) {
     body.innerHTML = `<tr><td class="none" colspan="6">${APP.rows.length ? "조건에 맞는 대학이 없어요" : "등록된 대학이 없어요"}</td></tr>`;
-    return;
-  }
-  if (!APP.groupByVer) {
-    body.innerHTML = rowsHTML(rows, 0);
     return;
   }
   const vers = [...new Set(rows.map((r) => r.ver))].sort(natural);

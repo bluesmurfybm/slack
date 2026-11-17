@@ -51,7 +51,7 @@ function renderSheet() {
   document.getElementById("progressBar").style.width = pct + "%";
   const excluded = s.counts[APP.boot.status_excluded];
   document.getElementById("progressText").textContent =
-    `완료 ${p.done} / 대상 ${p.target} (${pct}%)` + (excluded ? ` · 해당없음 ${excluded}` : "");
+    `${APP.boot.status_done} ${p.done} / 대상 ${p.target} (${pct}%)` + (excluded ? ` · 해당없음 ${excluded}` : "");
 
   renderStatusFilter();
   renderGrid();

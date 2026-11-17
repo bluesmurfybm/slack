@@ -17,14 +17,14 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school_id' => 2, 'status' => '완료', 'note' => '3.5.1 반영'],
+                ['school_id' => 2, 'status' => '운영반영', 'note' => '3.5.1 반영'],
             ]], 'query' => []]
         );
 
         $this->assertSame(200, $res['status']);
         $this->assertSame(1, $res['data']['updated']);
         $this->assertSame(2, $res['data']['rows'][0]['school_id']);
-        $this->assertSame('완료', $res['data']['rows'][0]['status']);
+        $this->assertSame('운영반영', $res['data']['rows'][0]['status']);
         $this->assertSame('3.5.1 반영', $res['data']['rows'][0]['note']);
         $this->assertSame('봇', $res['data']['rows'][0]['updated_by']);
         $this->assertNotSame('', $res['data']['rows'][0]['updated_at']);
@@ -39,14 +39,14 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school_id' => 1, 'status' => '진행중'],
+                ['school_id' => 1, 'status' => '개발반영'],
                 ['school_id' => 2, 'status' => '해당없음'],
             ]], 'query' => []]
         );
 
         $this->assertSame(200, $res['status']);
         $this->assertSame(2, $res['data']['updated']);
-        $this->assertSame(['진행중', '해당없음'], array_column($res['data']['rows'], 'status'));
+        $this->assertSame(['개발반영', '해당없음'], array_column($res['data']['rows'], 'status'));
     }
 
     /** schooltodo_school_resolve: school 이름으로 대학 조회 */
@@ -58,7 +58,7 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school' => '나대', 'status' => '완료'],
+                ['school' => '나대', 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
@@ -75,7 +75,7 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school' => '가대', 'ver' => '4.5', 'status' => '완료'],
+                ['school' => '가대', 'ver' => '4.5', 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
@@ -92,7 +92,7 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school' => '가대', 'status' => '완료'],
+                ['school' => '가대', 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
@@ -109,7 +109,7 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school' => '없는대', 'status' => '완료'],
+                ['school' => '없는대', 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
@@ -125,7 +125,7 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school_id' => 99, 'status' => '완료'],
+                ['school_id' => 99, 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
@@ -141,13 +141,13 @@ final class cell_test extends TestCase
         $byId = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school_id' => 1, 'status' => '완료'],
+                ['school_id' => 1, 'status' => '운영반영'],
             ]], 'query' => []]
         );
         $byName = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school' => '가대', 'status' => '완료'],
+                ['school' => '가대', 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
@@ -163,7 +163,7 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['status' => '완료'],
+                ['status' => '운영반영'],
             ]], 'query' => []]
         );
 
@@ -175,17 +175,17 @@ final class cell_test extends TestCase
     {
         $this->pdo->exec("INSERT INTO schools (id, name, ver, active) VALUES (1, '가대', '3.5', 1)");
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
-        $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status, note) VALUES (10, 1, '진행중', '담당자 확인 중')");
+        $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status, note) VALUES (10, 1, '개발반영', '담당자 확인 중')");
 
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school_id' => 1, 'status' => '완료'],
+                ['school_id' => 1, 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
         $this->assertSame(200, $res['status']);
-        $this->assertSame('완료', $res['data']['rows'][0]['status']);
+        $this->assertSame('운영반영', $res['data']['rows'][0]['status']);
         $this->assertSame('담당자 확인 중', $res['data']['rows'][0]['note']);
         $this->assertSame('사용자', $res['data']['rows'][0]['updated_by']);
         $this->assertSame(1, (int)$this->pdo->query("SELECT COUNT(*) FROM schooltodo_cells")->fetchColumn());
@@ -196,7 +196,7 @@ final class cell_test extends TestCase
     {
         $this->pdo->exec("INSERT INTO schools (id, name, ver, active) VALUES (1, '가대', '3.5', 1)");
         $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
-        $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status, note) VALUES (10, 1, '진행중', '')");
+        $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status, note) VALUES (10, 1, '개발반영', '')");
 
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '', 'bot' => false]],
@@ -206,7 +206,7 @@ final class cell_test extends TestCase
         );
 
         $this->assertSame(200, $res['status']);
-        $this->assertSame('진행중', $res['data']['rows'][0]['status']);
+        $this->assertSame('개발반영', $res['data']['rows'][0]['status']);
         $this->assertSame('금요일 배포', $res['data']['rows'][0]['note']);
     }
 
@@ -282,8 +282,8 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'], 'body' => ['items' => [
-                ['school_id' => 1, 'status' => '완료'],
-                ['school_id' => 99, 'status' => '완료'],
+                ['school_id' => 1, 'status' => '운영반영'],
+                ['school_id' => 99, 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
@@ -300,7 +300,7 @@ final class cell_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => '', 'name' => '봇', 'color' => '', 'bot' => true]],
             ['method' => 'PUT', 'seg' => ['sheets', '999', 'cells'], 'body' => ['items' => [
-                ['school_id' => 1, 'status' => '완료'],
+                ['school_id' => 1, 'status' => '운영반영'],
             ]], 'query' => []]
         );
 
