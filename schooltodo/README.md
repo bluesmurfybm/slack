@@ -10,7 +10,10 @@
   여럿이면 행도 여럿이다. **VPN** 열은 EnvHub 의 `school_access.vpn` 을 보여 주기만 한다(접속정보가 두 벌이면 합쳐서,
   표가 없으면 빈 값). 고치려면 EnvHub 에서 고친다. 대학 이름 뒤 괄호의 **학교 코드**(`code`)는 `school_access.repo` 의
   저장소 이름이고, 없으면 `schools.dev` 의 moodler.kr 앞머리다.
-- **표는 둘** — `schooltodo_sheets`(탭), `schooltodo_cells`(탭 × 대학의 상태·메모). 셀 행이 없는 대학은 `미조치` 다.
+- **표는 셋** — `schooltodo_sheets`(탭), `schooltodo_cells`(탭 × 대학의 상태·메모), `schooltodo_cell_history`(셀이
+  바뀌기 전 상태·메모·갱신한 사람·시각). 셀 행이 없는 대학은 `미조치` 다.
+- **이력** — 상태나 메모가 실제로 바뀔 때만 바뀌기 전 값을 남기고, 셀마다 최근 10건(`SCHOOLTODO_HISTORY_MAX`)만 둔다.
+  같은 값을 다시 보내면 이력도 갱신 시각도 그대로다. 화면에서는 갱신 열을 누르면 보인다.
 - **상태** — `미조치` → `진행중` → `개발반영` → `운영반영`, 그리고 `해당없음`. 진행률은 `운영반영 / (전체 − 해당없음)`.
 - **탭** — 탭마다 ⋮ 메뉴에서 이름·설명 수정, 링크 복사, 보관, 삭제를 한다. 보관한 탭은 탭 줄에서 빠지고
   머리의 **보관함** 에서 보고, 꺼내거나 지운다. 목록 API(`GET /sheets`)는 보관한 것을 빼고 주므로 봇·스킬(apply-svn-projects 등)에는
@@ -32,6 +35,7 @@
 | `GET api.php?p=/sheets/{id}` | 탭 + 대학별 행. `&status=미조치` 로 거른다 |
 | `PUT api.php?p=/sheets/{id}` `{title, description, archived}` | 이름·설명 수정. `archived: true/false` 로 보관·꺼내기(`archived_at` 에 시각) |
 | `PUT api.php?p=/sheets/{id}/cells` `{items: [...]}` | 대학별 상태·메모 채우기 |
+| `GET api.php?p=/sheets/{id}/cells/{school_id}/history` | 그 대학 셀의 이전 값, 최근 것부터 |
 | `DELETE api.php?p=/sheets/{id}` | 탭 삭제 |
 
 `items` 한 건은 `{school_id}` 또는 `{school, ver}` 로 대학을 가리키고 `status`·`note` 중 보낸 것만 바꾼다.

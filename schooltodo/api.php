@@ -7,6 +7,7 @@
  *   PUT    /sheets/{id}           시트 이름·설명 수정
  *   DELETE /sheets/{id}           시트 삭제
  *   PUT    /sheets/{id}/cells     대학별 상태 채우기 {items: [{school_id | school[, ver], status, note}]}
+ *   GET    /sheets/{id}/cells/{school_id}/history   셀이 바뀌기 전 값 (최근 10건)
  */
 
 require_once __DIR__ . '/bootstrap.php';

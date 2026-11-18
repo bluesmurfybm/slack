@@ -6,6 +6,7 @@ const APP = {
   filters: { ver: null, status: null },
   menuCol: null,
   menuSheetId: null,
+  historySchool: null,
   sort: { key: "name", dir: 1 },
   editingSheetId: null,
   deletingSheetId: null,

@@ -21,6 +21,9 @@ function schooltodo_route_sheets($ctx, $req) {
     if (($seg[2] ?? '') === 'cells' && !isset($seg[3]) && $method === 'PUT') {
         return schooltodo_json(schooltodo_cells_fill($ctx, $id, $req['body']));
     }
+    if (($seg[2] ?? '') === 'cells' && isset($seg[3]) && ($seg[4] ?? '') === 'history' && !isset($seg[5]) && $method === 'GET') {
+        return schooltodo_json(schooltodo_cell_history($ctx, $id, (int)$seg[3]));
+    }
     if (isset($seg[2])) throw new SchooltodoError('없는 API 입니다', 404);
 
     if ($method === 'GET') {

@@ -10,6 +10,7 @@ $bootJson = json_encode([
     'status_todo' => SCHOOLTODO_STATUS_TODO,
     'status_done' => SCHOOLTODO_STATUS_OPS,
     'status_excluded' => SCHOOLTODO_STATUS_EXCLUDED,
+    'history_max' => SCHOOLTODO_HISTORY_MAX,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
 ?>
 <!DOCTYPE html>
@@ -177,6 +178,7 @@ $bootJson = json_encode([
 
   <div class="colmenu" id="colMenu"></div>
   <div class="colmenu" id="tabMenu"></div>
+  <div class="colmenu histmenu" id="histMenu"></div>
 
   <div class="toast" id="toast"></div>
 

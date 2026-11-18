@@ -90,7 +90,7 @@ function schooltodo_cell_save($pdo, $sheetId, $schoolId, $item, $by, $now) {
     $hasNote = array_key_exists('note', $item);
     if (!$hasStatus && !$hasNote) throw new SchooltodoError('status 나 note 중 하나는 있어야 합니다', 422);
 
-    $st = $pdo->prepare("SELECT id, status, note FROM schooltodo_cells WHERE sheet_id = ? AND school_id = ?");
+    $st = $pdo->prepare("SELECT id, status, note, updated_by, updated_at FROM schooltodo_cells WHERE sheet_id = ? AND school_id = ?");
     $st->execute([$sheetId, $schoolId]);
     $cell = $st->fetch();
 
@@ -98,10 +98,52 @@ function schooltodo_cell_save($pdo, $sheetId, $schoolId, $item, $by, $now) {
     $note = $hasNote ? schooltodo_want_text($item['note'], 'note', 2000) : ($cell['note'] ?? '');
 
     if ($cell) {
+        // 같은 값을 다시 보내면(일괄 변경 등) 이력이 중복으로 차서 앞선 이력이 밀려난다
+        if ($cell['status'] === $status && $cell['note'] === $note) return;
+
+        schooltodo_history_push($pdo, $sheetId, $schoolId, $cell);
         $pdo->prepare("UPDATE schooltodo_cells SET `status` = ?, `note` = ?, `updated_by` = ?, `updated_at` = ? WHERE id = ?")
             ->execute([$status, $note, $by, $now, $cell['id']]);
         return;
     }
     $pdo->prepare("INSERT INTO schooltodo_cells (`sheet_id`, `school_id`, `status`, `note`, `updated_by`, `updated_at`) VALUES (?, ?, ?, ?, ?, ?)")
         ->execute([$sheetId, $schoolId, $status, $note, $by, $now]);
+}
+
+/**
+ * @param PDO $pdo
+ * @param int $sheetId
+ * @param int $schoolId
+ * @param array $cell
+ */
+function schooltodo_history_push($pdo, $sheetId, $schoolId, $cell) {
+    $pdo->prepare("INSERT INTO schooltodo_cell_history (`sheet_id`, `school_id`, `status`, `note`, `updated_by`, `updated_at`) VALUES (?, ?, ?, ?, ?, ?)")
+        ->execute([$sheetId, $schoolId, $cell['status'], $cell['note'], $cell['updated_by'], $cell['updated_at']]);
+
+    $st = $pdo->prepare("SELECT id FROM schooltodo_cell_history WHERE sheet_id = ? AND school_id = ?
+                         ORDER BY id DESC LIMIT 1 OFFSET " . SCHOOLTODO_HISTORY_MAX);
+    $st->execute([$sheetId, $schoolId]);
+    $cut = $st->fetchColumn();
+    if ($cut === false) return;
+
+    $pdo->prepare("DELETE FROM schooltodo_cell_history WHERE sheet_id = ? AND school_id = ? AND id <= ?")
+        ->execute([$sheetId, $schoolId, $cut]);
+}
+
+/**
+ * @param array $ctx
+ * @param int $sheetId
+ * @param int $schoolId
+ * @return array
+ */
+function schooltodo_cell_history($ctx, $sheetId, $schoolId) {
+    $pdo = $ctx['pdo'];
+    schooltodo_sheet_find($pdo, $sheetId);
+    $schoolId = schooltodo_school_resolve($pdo, ['school_id' => $schoolId]);
+
+    $st = $pdo->prepare("SELECT status, note, updated_by, updated_at FROM schooltodo_cell_history
+                         WHERE sheet_id = ? AND school_id = ? ORDER BY id DESC");
+    $st->execute([$sheetId, $schoolId]);
+
+    return ['school_id' => $schoolId, 'history' => $st->fetchAll()];
 }

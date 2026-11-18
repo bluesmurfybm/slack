@@ -14,6 +14,7 @@ const SCHOOLTODO_STATUSES = [
     SCHOOLTODO_STATUS_OPS,
     SCHOOLTODO_STATUS_EXCLUDED,
 ];
+const SCHOOLTODO_HISTORY_MAX = 10;
 
 /**
  * @param array $over
@@ -117,5 +118,17 @@ function schooltodo_schema() {
             UNIQUE KEY `uq_sheet_school` (`sheet_id`, `school_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='시트의 대학별 상태. 행이 없으면 미조치'",
+        "CREATE TABLE IF NOT EXISTS `schooltodo_cell_history` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `sheet_id` INT UNSIGNED NOT NULL,
+            `school_id` INT UNSIGNED NOT NULL COMMENT 'schools.id',
+            `status` VARCHAR(20) NOT NULL DEFAULT '',
+            `note` VARCHAR(2000) NOT NULL DEFAULT '',
+            `updated_by` VARCHAR(60) NOT NULL DEFAULT '',
+            `updated_at` VARCHAR(19) NOT NULL DEFAULT '',
+            PRIMARY KEY (`id`),
+            KEY `ix_sheet_school` (`sheet_id`, `school_id`, `id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='셀이 바뀌기 전 값. 셀마다 최근 SCHOOLTODO_HISTORY_MAX 건'",
     ];
 }

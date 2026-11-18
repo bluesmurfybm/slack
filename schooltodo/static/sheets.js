@@ -36,6 +36,7 @@ async function selectSheet(id) {
   closeColMenu();
   closeTabMenu();
   closeArchive();
+  closeHistory();
   document.getElementById("q").value = "";
   history.replaceState(null, "", "?sheet=" + id);
   renderTabs();
@@ -87,6 +88,7 @@ function renderSheet() {
 function openTabMenu(e, id) {
   e.stopPropagation();
   closeColMenu();
+  closeHistory();
   const s = APP.sheets.find((x) => x.id === id);
   if (!s) return;
   APP.menuSheetId = id;

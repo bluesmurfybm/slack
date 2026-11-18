@@ -228,6 +228,7 @@ function schooltodo_want_title($pdo, $value, $exceptId) {
 function schooltodo_sheet_delete($ctx, $id) {
     $pdo = $ctx['pdo'];
     schooltodo_sheet_find($pdo, $id);
+    $pdo->prepare("DELETE FROM schooltodo_cell_history WHERE sheet_id = ?")->execute([$id]);
     $pdo->prepare("DELETE FROM schooltodo_cells WHERE sheet_id = ?")->execute([$id]);
     $pdo->prepare("DELETE FROM schooltodo_sheets WHERE id = ?")->execute([$id]);
 }

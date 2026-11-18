@@ -101,7 +101,8 @@ function rowsHTML(rows, offset) {
     </td>
     <td class="c-note"><input type="text" value="${esc(r.note)}" maxlength="2000"
       onchange="saveCell(${r.school_id}, {note: this.value})" onkeydown="if(event.key==='Enter')this.blur()"></td>
-    <td class="c-by">${r.updated_at ? `${esc(r.updated_by)} · ${esc(r.updated_at.slice(5, 16))}` : ""}</td>
+    <td class="c-by">${r.updated_at ? `<button type="button" class="by-btn" title="이력 보기"
+      onclick="openHistory(event, ${r.school_id})">${esc(r.updated_by)} · ${esc(r.updated_at.slice(5, 16))}</button>` : ""}</td>
   </tr>`).join("");
 }
 
@@ -141,6 +142,7 @@ function columnValues(col) {
 
 function openColMenu(e, col) {
   e.stopPropagation();
+  closeHistory();
   APP.menuCol = col;
   renderColMenu();
   const menu = document.getElementById("colMenu");
@@ -254,6 +256,62 @@ async function copySheetLink(id) {
     prompt("복사가 막혀 있어요. 직접 복사해 주세요:", url);
   }
 }
+
+/* ---------- 이력 ---------- */
+
+async function openHistory(e, schoolId) {
+  e.stopPropagation();
+  closeColMenu();
+  closeTabMenu();
+  const sheetId = APP.sheetId;
+  const at = e.currentTarget.getBoundingClientRect();
+  const menu = document.getElementById("histMenu");
+  APP.historySchool = schoolId;
+  menu.innerHTML = `<div class="hist-empty">불러오는 중…</div>`;
+  menu.classList.add("open");
+  placeHistory(menu, at);
+
+  let res;
+  try {
+    res = await api(`/sheets/${sheetId}/cells/${schoolId}/history`);
+  } catch (err) {
+    closeHistory();
+    if (err.message !== "unauthenticated") showToast(err.message);
+    return;
+  }
+  if (APP.sheetId !== sheetId || APP.historySchool !== schoolId) return;
+  const row = APP.rows.find((r) => r.school_id === schoolId);
+  if (!row) { closeHistory(); return; }
+  menu.innerHTML = historyHTML(row, res.history);
+  placeHistory(menu, at);
+}
+
+function placeHistory(menu, at) {
+  const below = at.bottom + 4;
+  menu.style.top = (below + menu.offsetHeight > window.innerHeight - 8
+    ? Math.max(8, at.top - menu.offsetHeight - 4) : below) + "px";
+  menu.style.left = Math.max(8, Math.min(at.left, window.innerWidth - menu.offsetWidth - 8)) + "px";
+}
+
+function closeHistory() {
+  APP.historySchool = null;
+  document.getElementById("histMenu").classList.remove("open");
+}
+
+function historyHTML(row, history) {
+  const item = (h, now) => `<div class="hist-item${now ? " now" : ""}">
+    <div class="hist-head"><span class="hist-st ${STATUS_CLASS[h.status] || ""}">${esc(h.status)}</span>
+      <span>${h.updated_at ? `${esc(h.updated_by)} · ${esc(h.updated_at.slice(0, 16))}` : "기록 없음"}</span>
+      ${now ? `<span class="hist-now">현재</span>` : ""}</div>
+    <div class="hist-note${h.note ? "" : " blank"}">${h.note ? esc(h.note) : "메모 없음"}</div></div>`;
+  return `<div class="cm-title">${esc(schoolLabel(row))} · ${esc(row.ver)} 이력</div>`
+    + item(row, true)
+    + (history.length ? history.map((h) => item(h, false)).join("") : `<div class="hist-empty">이전 값이 없어요</div>`)
+    + `<div class="hist-foot">바뀌기 전 값을 최근 ${APP.boot.history_max}건까지 보관합니다</div>`;
+}
+
+document.getElementById("histMenu").addEventListener("click", (e) => e.stopPropagation());
+document.addEventListener("click", () => { if (APP.historySchool !== null) closeHistory(); });
 
 /* ---------- 내려받기 ---------- */
 

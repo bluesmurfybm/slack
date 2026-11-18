@@ -41,6 +41,7 @@ abstract class TestCase extends BaseTestCase
 
         // TRUNCATE 는 InnoDB 에서 테이블을 다시 만드는 DDL 이라 DELETE 보다 훨씬 느리다
         $this->pdo->beginTransaction();
+        $this->pdo->exec("DELETE FROM schooltodo_cell_history");
         $this->pdo->exec("DELETE FROM schooltodo_cells");
         $this->pdo->exec("DELETE FROM schooltodo_sheets");
         $this->pdo->exec("DELETE FROM schools");
