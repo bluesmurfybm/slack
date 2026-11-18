@@ -228,6 +228,33 @@ async function bulkApply(patch, what) {
 document.getElementById("colMenu").addEventListener("click", (e) => e.stopPropagation());
 document.addEventListener("click", () => { if (APP.menuCol) closeColMenu(); });
 
+/* ---------- 링크 복사 ---------- */
+
+// PWA(설치형)로 열면 주소창이 없어 탭의 주소를 가져갈 길이 없다
+async function copySheetLink(id) {
+  id = id || APP.sheetId;
+  if (!id) return;
+  const url = new URL(location.pathname + "?sheet=" + id, location.href).href;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      // http 로 띄운 개발 PC 에서는 clipboard API 가 막혀 있다
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    showToast("링크를 복사했습니다");
+  } catch (e) {
+    prompt("복사가 막혀 있어요. 직접 복사해 주세요:", url);
+  }
+}
+
 /* ---------- 내려받기 ---------- */
 
 function downloadCsv() {

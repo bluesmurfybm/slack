@@ -72,6 +72,9 @@ def main():
     rows.add_argument("sheet", help="시트 번호 또는 이름")
     rows.add_argument("--status")
 
+    for name, help_text in (("archive", "시트를 보관함으로"), ("unarchive", "보관함에서 꺼내기")):
+        commands.add_parser(name, help=help_text).add_argument("sheet", help="시트 번호 또는 이름")
+
     fill = commands.add_parser("fill", help="대학의 상태·메모 채우기")
     fill.add_argument("sheet", help="시트 번호 또는 이름")
     fill.add_argument("--school", required=True, help="대학 이름")
@@ -89,6 +92,8 @@ def main():
     elif args.command == "rows":
         query = {"status": args.status} if args.status else None
         result = api(opener, "GET", f"/sheets/{sheet_id(opener, args.sheet)}", query=query)
+    elif args.command in ("archive", "unarchive"):
+        result = api(opener, "PUT", f"/sheets/{sheet_id(opener, args.sheet)}", {"archived": args.command == "archive"})
     else:
         item = {key: value for key, value in
                 {"school": args.school, "ver": args.ver, "status": args.status, "note": args.note}.items()

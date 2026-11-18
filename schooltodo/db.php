@@ -62,6 +62,13 @@ function schooltodo_migrate($pdo) {
     foreach (schooltodo_schema() as $sql) {
         $pdo->exec($sql);
     }
+    // 보관(archived_at)은 나중에 붙은 열 — 이미 있으면 42S21(중복 열) 로 넘어간다
+    try {
+        $pdo->exec("ALTER TABLE `schooltodo_sheets` ADD COLUMN `archived_at` VARCHAR(19) NOT NULL DEFAULT ''
+                    COMMENT '보관한 시각. 비어 있으면 탭에 보인다' AFTER `created_at`");
+    } catch (PDOException $e) {
+        if ($e->getCode() !== '42S21') throw $e;
+    }
 }
 
 /**
@@ -75,6 +82,7 @@ function schooltodo_schema() {
             `description` VARCHAR(2000) NOT NULL DEFAULT '',
             `created_by` VARCHAR(60) NOT NULL DEFAULT '',
             `created_at` VARCHAR(19) NOT NULL DEFAULT '',
+            `archived_at` VARCHAR(19) NOT NULL DEFAULT '' COMMENT '보관한 시각. 비어 있으면 탭에 보인다',
             PRIMARY KEY (`id`),
             UNIQUE KEY `uq_title` (`title`(191))
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

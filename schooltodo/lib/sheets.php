@@ -50,6 +50,7 @@ function schooltodo_sheet_out($row, $counts) {
         'description' => (string)$row['description'],
         'created_by' => (string)$row['created_by'],
         'created_at' => (string)$row['created_at'],
+        'archived_at' => (string)($row['archived_at'] ?? ''),
         'total' => array_sum($counts),
         'counts' => $counts,
     ];
@@ -186,8 +187,16 @@ function schooltodo_sheet_update($ctx, $id, $body) {
         ? schooltodo_want_text($body['description'], 'description', 2000)
         : $sheet['description'];
 
-    $pdo->prepare("UPDATE schooltodo_sheets SET `title` = ?, `description` = ? WHERE id = ?")
-        ->execute([$title, $description, $id]);
+    // archived: true 면 보관(시각 기록), false 면 꺼내기. 이미 그 상태면 시각을 덮어쓰지 않는다.
+    $archivedAt = (string)($sheet['archived_at'] ?? '');
+    if (array_key_exists('archived', $body)) {
+        if (!is_bool($body['archived'])) throw new SchooltodoError('archived 는 true/false 여야 합니다', 422);
+        if ($body['archived'] && $archivedAt === '') $archivedAt = date('Y-m-d H:i:s');
+        if (!$body['archived']) $archivedAt = '';
+    }
+
+    $pdo->prepare("UPDATE schooltodo_sheets SET `title` = ?, `description` = ?, `archived_at` = ? WHERE id = ?")
+        ->execute([$title, $description, $archivedAt, $id]);
 
     return schooltodo_sheet_detail($pdo, $id, null);
 }

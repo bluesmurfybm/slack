@@ -5,8 +5,10 @@ const APP = {
   rows: [],
   filters: { ver: null, status: null },
   menuCol: null,
+  menuSheetId: null,
   sort: { key: "name", dir: 1 },
   editingSheetId: null,
+  deletingSheetId: null,
 };
 
 async function api(path, opts) {

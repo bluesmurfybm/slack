@@ -241,6 +241,29 @@ final class sheet_test extends TestCase
         $this->assertSame('바뀐 설명', $res['data']['description']);
     }
 
+    /** schooltodo_sheet_update: archived true 면 archived_at 기록, 다시 true 여도 시각 유지, false 면 비움 */
+    public function test_보관_꺼내기(): void
+    {
+        $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
+        $ctx = ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']];
+        $put = fn($body) => schooltodo_handle($ctx, ['method' => 'PUT', 'seg' => ['sheets', '10'], 'body' => $body, 'query' => []]);
+
+        $res = $put(['archived' => true]);
+        $this->assertSame(200, $res['status']);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/', $res['data']['archived_at']);
+        $this->assertSame('jQuery', $res['data']['title']);
+
+        $at = $res['data']['archived_at'];
+        $this->assertSame($at, $put(['archived' => true])['data']['archived_at']);
+        $this->assertSame($at, $put(['description' => '설명만'])['data']['archived_at']);
+
+        $this->assertSame('', $put(['archived' => false])['data']['archived_at']);
+        $this->assertSame(422, $put(['archived' => 'yes'])['status']);
+
+        $list = schooltodo_handle($ctx, ['method' => 'GET', 'seg' => ['sheets'], 'body' => [], 'query' => []]);
+        $this->assertSame('', $list['data'][0]['archived_at']);
+    }
+
     /** schooltodo_sheet_update: 빈 title 수정 오류 */
     public function test_수정_title_비면_422(): void
     {

@@ -62,6 +62,7 @@ $bootJson = json_encode([
       </div>
       <div class="site-act">
         <button class="btn-ghost" id="csvBtn" onclick="downloadCsv()">엑셀(CSV) 내려받기</button>
+        <button class="btn-ghost archive" id="archiveBtn" onclick="openArchive()" title="보관한 할일 보기">📦 보관함 <span class="n">0</span></button>
         <button class="btn-new" onclick="openSheetForm()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M5 12h14" />
@@ -81,17 +82,21 @@ $bootJson = json_encode([
     </div>
 
     <div id="sheetArea">
+      <div class="archived-note" id="archivedNote" style="display:none">
+        <span class="an-icon">📦</span>
+        <span class="an-sub"></span>
+        <button type="button" class="btn-mini" onclick="openArchive()">보관함</button>
+        <button type="button" class="btn-mini" onclick="setArchived(APP.sheetId, false)">꺼내기</button>
+      </div>
       <div class="sheet-info">
         <div class="sheet-desc" id="sheetDesc"></div>
-        <div class="sheet-act">
-          <button class="btn-mini" onclick="openSheetForm(APP.sheetId)">이름·설명 수정</button>
-          <button class="btn-mini danger" onclick="askDeleteSheet()">삭제</button>
-        </div>
       </div>
 
       <div class="progress">
         <div class="bar"><i id="progressBar"></i></div>
         <span class="progress-text" id="progressText"></span>
+        <button type="button" class="sync-ind" id="syncInd" onclick="syncNow(true)" title="다른 사람이 바꾼 것을 30초마다 받아 옵니다. 누르면 바로 받습니다.">
+          <span class="ico">↻</span><span class="txt"></span></button>
       </div>
 
       <div class="toolbar">
@@ -158,12 +163,23 @@ $bootJson = json_encode([
     </div>
   </div>
 
+  <div class="overlay" id="archiveOverlay" onclick="if(event.target===this)closeArchive()">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>보관함</h2>
+        <button class="x" onclick="closeArchive()" aria-label="닫기">×</button>
+      </div>
+      <div class="arc-list" id="archiveList"></div>
+    </div>
+  </div>
+
   <div class="colmenu" id="colMenu"></div>
+  <div class="colmenu" id="tabMenu"></div>
 
   <div class="toast" id="toast"></div>
 
   <script>const SCHOOLTODO_BOOT = <?= $bootJson ?>;</script>
-  <?php foreach (['core', 'sheets', 'grid', 'main'] as $script): ?>
+  <?php foreach (['core', 'sheets', 'grid', 'main', 'sync'] as $script): ?>
   <script src="<?= schooltodo_asset("static/{$script}.js") ?>"></script>
   <?php endforeach; ?>
 </body>
