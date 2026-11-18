@@ -26,14 +26,16 @@ abstract class TestCase extends BaseTestCase
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `name` VARCHAR(200) NOT NULL,
             `ver` VARCHAR(20) NOT NULL DEFAULT '',
+            `dev` VARCHAR(500) NOT NULL DEFAULT '',
             `active` TINYINT(1) NOT NULL DEFAULT 1,
             PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-        // VPN 열만 쓴다 — 실제 표는 access/db.php 가 만든다
+        // VPN·repo 열만 쓴다
         $this->pdo->exec("CREATE TABLE IF NOT EXISTS `school_access` (
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `school_id` INT UNSIGNED NOT NULL,
             `vpn` VARCHAR(80) NOT NULL DEFAULT '',
+            `repo` TEXT NULL,
             PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 

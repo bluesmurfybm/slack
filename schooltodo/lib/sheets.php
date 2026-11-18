@@ -80,7 +80,13 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
         ? "LEFT JOIN (SELECT school_id, GROUP_CONCAT(DISTINCT vpn ORDER BY vpn SEPARATOR ', ') AS vpn
                       FROM school_access WHERE vpn <> '' GROUP BY school_id) a ON a.school_id = s.id"
         : "LEFT JOIN (SELECT NULL AS school_id, NULL AS vpn) a ON 0";
-    $st = $pdo->prepare("SELECT s.id AS school_id, s.name, s.ver, a.vpn, c.status, c.note, c.updated_by, c.updated_at
+    $repos = [];
+    if (schooltodo_has_table($pdo, 'school_access')) {
+        foreach ($pdo->query("SELECT school_id, repo FROM school_access WHERE repo <> '' ORDER BY id") as $r) {
+            $repos[(int)$r['school_id']] = ($repos[(int)$r['school_id']] ?? '') . $r['repo'] . "\n";
+        }
+    }
+    $st = $pdo->prepare("SELECT s.id AS school_id, s.name, s.ver, s.dev, a.vpn, c.status, c.note, c.updated_by, c.updated_at
                          FROM schools s
                          LEFT JOIN schooltodo_cells c ON c.school_id = s.id AND c.sheet_id = ?
                          {$vpnJoin}
@@ -93,6 +99,7 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
         $rows[] = [
             'school_id' => (int)$r['school_id'],
             'name' => (string)$r['name'],
+            'code' => schooltodo_school_code($repos[(int)$r['school_id']] ?? '', (string)$r['dev']),
             'ver' => (string)$r['ver'],
             'vpn' => (string)($r['vpn'] ?? ''),
             'status' => $r['status'] ?? SCHOOLTODO_STATUS_TODO,
@@ -102,6 +109,17 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
         ];
     }
     return $rows;
+}
+
+/**
+ * @param string $repo
+ * @param string $dev
+ * @return string
+ */
+function schooltodo_school_code($repo, $dev) {
+    if (preg_match('~(?:svn://[^/\s]+|/(?:ub)?git)/([A-Za-z0-9_-]+?)(?:\.git)?(?![\w.-])~', $repo, $m)) return $m[1];
+    if (preg_match('~^https?://([a-z0-9-]+)\.moodler\.kr~i', $dev, $m)) return $m[1];
+    return '';
 }
 
 /**

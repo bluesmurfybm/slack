@@ -34,7 +34,7 @@ function visibleRows() {
   return APP.rows.filter((r) => (!f.ver || f.ver.has(r.ver))
     && (!f.vpn || f.vpn.has(r.vpn))
     && (!f.status || f.status.has(r.status))
-    && (!q || r.name.toLowerCase().includes(q) || r.note.toLowerCase().includes(q)));
+    && (!q || schoolLabel(r).toLowerCase().includes(q) || r.note.toLowerCase().includes(q)));
 }
 
 function sortBy(key, dir) {
@@ -84,10 +84,14 @@ function renderGrid() {
   }).join("");
 }
 
+function schoolLabel(r) {
+  return r.code ? `${r.name}(${r.code})` : r.name;
+}
+
 function rowsHTML(rows, offset) {
   return rows.map((r, i) => `<tr class="${STATUS_CLASS[r.status]}" data-school="${r.school_id}">
     <td class="c-no">${offset + i + 1}</td>
-    <td class="c-name">${esc(r.name)}</td>
+    <td class="c-name">${esc(schoolLabel(r))}</td>
     <td class="c-ver">${esc(r.ver)}</td>
     <td class="c-vpn">${r.vpn ? `<span class="vpn" title="${esc(r.vpn)}">${esc(r.vpn)}</span>` : ""}</td>
     <td class="c-status">
@@ -231,7 +235,7 @@ function downloadCsv() {
   if (!s) return;
   const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [["대학", "버전", "VPN", "상태", "메모", "갱신한 사람", "갱신 시각"]]
-    .concat(APP.rows.map((r) => [r.name, r.ver, r.vpn, r.status, r.note, r.updated_by, r.updated_at]))
+    .concat(APP.rows.map((r) => [schoolLabel(r), r.ver, r.vpn, r.status, r.note, r.updated_by, r.updated_at]))
     .map((cols) => cols.map(cell).join(","));
   // BOM 이 없으면 엑셀이 한글을 깨뜨린다
   const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
