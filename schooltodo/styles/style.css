@@ -121,6 +121,11 @@ div.tab{padding:0 0 0 14px}
 .arc-title:hover{color:var(--xl50);text-decoration:underline}
 .arc-sub{font-size:12px;color:var(--tx-quaternary);margin-top:2px;font-variant-numeric:tabular-nums}
 .arc-act{display:flex;gap:6px;flex:none}
+.sync-auto{
+  flex:none;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;
+  color:var(--tx-quaternary);cursor:pointer;white-space:nowrap;user-select:none;
+}
+.sync-auto input{width:14px;height:14px;margin:0;accent-color:var(--xl50);cursor:pointer}
 .sync-ind{
   flex:none;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;
   font-family:var(--sans);font-size:12px;font-weight:600;color:var(--tx-tertiary);
@@ -131,7 +136,7 @@ div.tab{padding:0 0 0 14px}
 .sync-ind:active{background:var(--gray90)}
 .sync-ind .ico{font-size:14px;display:inline-block;color:var(--xl50)}
 .sync-ind .txt::after{content:" · 지금 갱신";font-weight:500;color:var(--tx-quinary)}
-.sync-ind.busy .txt::after,.sync-ind.fresh .txt::after,.sync-ind.paused .txt::after{content:""}
+.sync-ind.busy .txt::after,.sync-ind.fresh .txt::after,.sync-ind.paused .txt::after,.sync-ind.manual .txt::after{content:""}
 .sync-ind.busy .ico{animation:sync-spin .8s linear infinite}
 .sync-ind.paused{opacity:.6}
 .sync-ind.fresh{color:var(--posi40);border-color:var(--posi40);background:var(--posi95)}

@@ -95,7 +95,9 @@ $bootJson = json_encode([
       <div class="progress">
         <div class="bar"><i id="progressBar"></i></div>
         <span class="progress-text" id="progressText"></span>
-        <button type="button" class="sync-ind" id="syncInd" onclick="syncNow(true)" title="다른 사람이 바꾼 것을 30초마다 받아 옵니다. 누르면 바로 받습니다.">
+        <label class="sync-auto" title="켜 두면 다른 사람이 바꾼 것을 30초마다 받아 옵니다">
+          <input type="checkbox" id="syncAuto" onchange="setSyncAuto(this.checked)"> 자동 갱신</label>
+        <button type="button" class="sync-ind" id="syncInd" onclick="syncNow(true)" title="누르면 바로 받습니다">
           <span class="ico">↻</span><span class="txt"></span></button>
       </div>
 

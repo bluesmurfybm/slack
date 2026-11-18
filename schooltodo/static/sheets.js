@@ -49,6 +49,7 @@ async function selectSheet(id) {
     return;
   }
   renderSheet();
+  if (typeof resetSyncCountdown === "function") resetSyncCountdown();
 }
 
 function syncCurrentSheet(detail) {

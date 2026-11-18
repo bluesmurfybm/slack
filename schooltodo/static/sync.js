@@ -10,6 +10,17 @@ let syncLeft = SYNC_EVERY_S;
 let syncBusy = false;
 let syncPending = false;
 let syncFreshT = null;
+let syncAuto = false;      // 자동 갱신 체크박스. 기본은 끔, 켠 적이 있으면 브라우저에 기억한다
+
+function loadSyncAuto() {
+  try { syncAuto = localStorage.getItem("schooltodo.syncAuto") === "1"; } catch (e) { syncAuto = false; }
+  document.getElementById("syncAuto").checked = syncAuto;
+}
+function setSyncAuto(on) {
+  syncAuto = !!on;
+  try { localStorage.setItem("schooltodo.syncAuto", syncAuto ? "1" : "0"); } catch (e) { }
+  if (syncAuto) { syncNow(); startSync(); } else stopSync();
+}
 
 /* 표시: "27초 후 갱신" → 받는 동안 "갱신 중" → 바뀐 게 있으면 "N곳 갱신" 잠깐, 아니면 바로 다시 센다 */
 function showSyncState(state, text) {
@@ -17,10 +28,12 @@ function showSyncState(state, text) {
   el.classList.toggle("busy", state === "busy");
   el.classList.toggle("paused", state === "paused");
   el.classList.toggle("fresh", state === "fresh");
+  el.classList.toggle("manual", state === "manual");
   el.querySelector(".txt").textContent = text;
 }
 function showSyncCountdown() {
   if (syncBusy || syncFreshT) return;
+  if (!syncAuto) { showSyncState("manual", "지금 갱신"); return; }
   showSyncState("", `${syncLeft}초 후 갱신`);
 }
 
@@ -113,8 +126,16 @@ function applySync(list, detail) {
   return changedRows;
 }
 
+// 탭을 옮기면 그 탭의 행을 방금 받은 것이니 30초부터 다시 센다 (selectSheet 가 부른다)
+function resetSyncCountdown() {
+  syncLeft = SYNC_EVERY_S;
+  clearTimeout(syncFreshT); syncFreshT = null;
+  if (!syncBusy) showSyncCountdown();
+}
+
 function startSync() {
   stopSync();
+  if (!syncAuto) { showSyncCountdown(); return; }
   syncLeft = SYNC_EVERY_S;
   showSyncCountdown();
   syncTimer = setInterval(() => {
@@ -127,7 +148,7 @@ function startSync() {
 function stopSync() {
   if (syncTimer) clearInterval(syncTimer);
   syncTimer = null;
-  showSyncState("paused", "멈춤");
+  if (syncAuto) showSyncState("paused", "멈춤"); else showSyncCountdown();
 }
 
 // 칸을 벗어나면 미뤄 둔 그리기를 한다. 다른 칸으로 바로 옮겨 가는 경우는 다음 벗어남까지 또 미룬다.
@@ -142,7 +163,8 @@ document.getElementById("gridBody").addEventListener("focusout", () => {
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stopSync();
-  else { syncNow(); startSync(); }
+  else if (syncAuto) { syncNow(); startSync(); }
 });
 
+loadSyncAuto();
 startSync();
