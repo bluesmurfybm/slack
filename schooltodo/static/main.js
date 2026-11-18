@@ -1,6 +1,6 @@
 async function loadSheets() {
   try {
-    APP.sheets = await api("/sheets");
+    APP.sheets = await api("/sheets?all=1");   // 보관한 것까지 (보관함)
   } catch (e) {
     if (e.message !== "unauthenticated") showToast(e.message);
     return;

@@ -69,6 +69,23 @@ function schooltodo_migrate($pdo) {
     } catch (PDOException $e) {
         if ($e->getCode() !== '42S21') throw $e;
     }
+    // 인덱스는 중복 오류코드가 42S21 이 아니라 정보스키마로 있는지 보고 건다 (access/db.php 와 같은 요령)
+    if (!schooltodo_has_index($pdo, 'schooltodo_sheets', 'ix_archived')) {
+        $pdo->exec("ALTER TABLE `schooltodo_sheets` ADD INDEX `ix_archived` (`archived_at`)");
+    }
+}
+
+/**
+ * @param PDO $pdo
+ * @param string $table
+ * @param string $index
+ * @return bool
+ */
+function schooltodo_has_index($pdo, $table, $index) {
+    $st = $pdo->prepare("SELECT COUNT(*) FROM information_schema.statistics
+                         WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?");
+    $st->execute([$table, $index]);
+    return (int)$st->fetchColumn() > 0;
 }
 
 /**
@@ -84,7 +101,8 @@ function schooltodo_schema() {
             `created_at` VARCHAR(19) NOT NULL DEFAULT '',
             `archived_at` VARCHAR(19) NOT NULL DEFAULT '' COMMENT '보관한 시각. 비어 있으면 탭에 보인다',
             PRIMARY KEY (`id`),
-            UNIQUE KEY `uq_title` (`title`(191))
+            UNIQUE KEY `uq_title` (`title`(191)),
+            KEY `ix_archived` (`archived_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='대학 일괄 할일 시트'",
         "CREATE TABLE IF NOT EXISTS `schooltodo_cells` (

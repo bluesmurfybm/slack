@@ -1,10 +1,12 @@
 <?php
 
 /**
+ * 보관한 시트는 기본으로 뺀다 — 봇·스킬이 목록을 받을 때 끝난 할일이 후보로 섞이지 않게. 화면은 all=1 로 전부 받는다.
  * @param PDO $pdo
+ * @param bool $withArchived
  * @return array[]
  */
-function schooltodo_sheets_all($pdo) {
+function schooltodo_sheets_all($pdo, $withArchived = false) {
     $total = (int)$pdo->query("SELECT COUNT(*) FROM schools WHERE active = 1")->fetchColumn();
 
     $counted = [];
@@ -17,7 +19,8 @@ function schooltodo_sheets_all($pdo) {
     }
 
     $sheets = [];
-    foreach ($pdo->query("SELECT * FROM schooltodo_sheets ORDER BY id") as $r) {
+    $where = $withArchived ? '' : "WHERE archived_at = ''";
+    foreach ($pdo->query("SELECT * FROM schooltodo_sheets {$where} ORDER BY id") as $r) {
         $sheets[] = schooltodo_sheet_out($r, schooltodo_counts($counted[(int)$r['id']] ?? [], $total));
     }
     return $sheets;

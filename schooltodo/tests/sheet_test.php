@@ -257,11 +257,15 @@ final class sheet_test extends TestCase
         $this->assertSame($at, $put(['archived' => true])['data']['archived_at']);
         $this->assertSame($at, $put(['description' => '설명만'])['data']['archived_at']);
 
+        // 보관 중: 목록에서 빠지고 all=1 이면 들어온다 (봇·스킬이 끝난 할일을 후보로 보지 않게)
+        $list = fn($query) => schooltodo_handle($ctx, ['method' => 'GET', 'seg' => ['sheets'], 'body' => [], 'query' => $query]);
+        $this->assertSame([], $list([])['data']);
+        $this->assertSame([10], array_column($list(['all' => '1'])['data'], 'id'));
+        $this->assertSame($at, $list(['all' => '1'])['data'][0]['archived_at']);
+
         $this->assertSame('', $put(['archived' => false])['data']['archived_at']);
         $this->assertSame(422, $put(['archived' => 'yes'])['status']);
-
-        $list = schooltodo_handle($ctx, ['method' => 'GET', 'seg' => ['sheets'], 'body' => [], 'query' => []]);
-        $this->assertSame('', $list['data'][0]['archived_at']);
+        $this->assertSame([10], array_column($list([])['data'], 'id'));
     }
 
     /** schooltodo_sheet_update: 빈 title 수정 오류 */

@@ -56,7 +56,7 @@ async function syncNow(manual) {
   const sheetId = APP.sheetId;
   let n = 0;
   try {
-    const [list, detail] = await Promise.all([api("/sheets"), sheetId ? api(`/sheets/${sheetId}`) : null]);
+    const [list, detail] = await Promise.all([api("/sheets?all=1"), sheetId ? api(`/sheets/${sheetId}`) : null]);
     if (APP.sheetId !== sheetId) return;   // 받는 사이에 탭을 옮겼다
     n = applySync(list, detail);
   } catch (e) {

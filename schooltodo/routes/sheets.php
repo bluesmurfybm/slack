@@ -12,7 +12,7 @@ function schooltodo_route_sheets($ctx, $req) {
     $id = isset($seg[1]) ? (int)$seg[1] : null;
 
     if ($id === null) {
-        if ($method === 'GET') return schooltodo_json(schooltodo_sheets_all($pdo));
+        if ($method === 'GET') return schooltodo_json(schooltodo_sheets_all($pdo, !empty($req['query']['all'])));
         if ($method === 'POST') return schooltodo_json(schooltodo_sheet_create($ctx, $req['body']), 201);
         throw new SchooltodoError('없는 API 입니다', 404);
     }

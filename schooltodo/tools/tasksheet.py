@@ -52,7 +52,8 @@ def api(opener, method, path, body=None, query=None):
 def sheet_id(opener, sheet):
     if sheet.isdigit():
         return int(sheet)
-    found = [s for s in api(opener, "GET", "/sheets") if s["title"] == sheet]
+    # 이름으로 찾을 때는 보관한 것도 본다 (unarchive 가 이름으로 가리킬 수 있게)
+    found = [s for s in api(opener, "GET", "/sheets", query={"all": 1}) if s["title"] == sheet]
     if not found:
         raise Fail(f"없는 시트입니다: {sheet}")
     return found[0]["id"]
@@ -62,7 +63,8 @@ def main():
     parser = argparse.ArgumentParser(description="Coursemos TaskSheet 조회·채우기 (iWorks 계정으로 로그인)")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    commands.add_parser("sheets", help="시트 목록과 상태별 대학 수")
+    commands.add_parser("sheets", help="시트 목록과 상태별 대학 수 (보관한 시트는 --all 일 때만)") \
+        .add_argument("--all", action="store_true", help="보관한 시트도 포함")
 
     create = commands.add_parser("create", help="시트 만들기")
     create.add_argument("title")
@@ -86,7 +88,7 @@ def main():
     opener = login()
 
     if args.command == "sheets":
-        result = api(opener, "GET", "/sheets")
+        result = api(opener, "GET", "/sheets", query={"all": 1} if args.all else None)
     elif args.command == "create":
         result = api(opener, "POST", "/sheets", {"title": args.title, "description": args.description})
     elif args.command == "rows":
