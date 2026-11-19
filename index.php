@@ -30,6 +30,9 @@ require_once __DIR__ . '/core/board.php';
 // 공지·일정을 등록할 수 있는 사람인지 서버가 먼저 판정한다. 화면을 그린 뒤
 // 자바스크립트가 버튼을 붙였다 떼면 한 번 번쩍인다.
 $__isAdmin = $__u ? board_is_admin($__u['email']) : false;
+// 서버 일괄 배포 가능 사용자에게만 '허용' 메뉴를 보여 준다. 실제 차단은 api/deploy.php 가 다시 한다.
+require_once __DIR__ . '/core/deploy.php';
+$__canDeploy = $__u ? deploy_is_member($__u['email']) : false;
 // 화면에 적는 첨부 한계는 php.ini 를 반영한 실제 값이어야 한다.
 // 20MB 라 적어 놓고 2MB 에서 막히면 "왜 안 되지" 가 된다.
 $__uploadMax = board_max_upload_label();
@@ -153,6 +156,9 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           </div>
           <div class="dd-menu" id="userDd">
             <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
+<?php if ($__canDeploy): ?>
+            <a href="javascript:void(0)" onclick="closeUserMenu();showDeploy()">🚀 서버 일괄 배포 허용</a>
+<?php endif; ?>
             <a href="javascript:void(0)" onclick="closeUserMenu();showNotices(1)">📢 공지사항</a>
 <?php if ($__isAdmin): ?>
             <a href="javascript:void(0)" onclick="closeUserMenu();showManage('events')">⚙️ 포털 관리</a>
@@ -264,6 +270,16 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
     <div class="pager" id="nf-pager"></div>
   </div>
 
+  <!-- 서버 일괄 배포 허용 — 배포 가능 사용자가 직접 켜고 끈다. API 는 api/deploy.php -->
+  <div id="view-deploy" class="wrap hidden">
+    <div class="page-head">
+      <h1>서버 일괄 배포 허용</h1>
+      <span style="flex:1"></span>
+      <button class="btn-sm" onclick="showDash()">대시보드</button>
+    </div>
+    <div id="dp-body"></div>
+  </div>
+
   <!-- 포털 관리 -->
   <div id="view-manage" class="wrap hidden">
     <div class="page-head">
@@ -276,6 +292,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
       <button role="tab" data-mtab="notices"  aria-selected="false" onclick="showManage('notices')">공지</button>
       <button role="tab" data-mtab="tiles"    aria-selected="false" onclick="showManage('tiles')">카드 묶음</button>
       <button role="tab" data-mtab="admins"   aria-selected="false" onclick="showManage('admins')">관리자</button>
+      <button role="tab" data-mtab="deploy"   aria-selected="false" onclick="showManage('deploy')">일괄 배포</button>
     </div>
     <div id="mg-body"></div>
   </div>
@@ -694,7 +711,7 @@ document.addEventListener("click",(e)=>{
 /* ---- views ---- */
 /* 화면이 늘어나면서 "이것만 보이고 나머지는 숨긴다"를 한 곳에서 처리한다.
    화면마다 서로를 숨기게 두면 하나 추가할 때마다 빠뜨리는 곳이 생긴다. */
-const VIEWS=["view-dash","view-profile","view-notices","view-notifs","view-manage"];
+const VIEWS=["view-dash","view-profile","view-notices","view-notifs","view-manage","view-deploy"];
 function showView(id){
   VIEWS.forEach(v=>{
     const el=document.getElementById(v);
@@ -2089,6 +2106,7 @@ function showManage(tab){
   if(tab==="events")  return renderManageEvents(box);
   if(tab==="notices") return renderManageNotices(box);
   if(tab==="tiles")   return renderManageTiles(box);
+  if(tab==="deploy")  return renderManageDeploy(box);
   return renderManageAdmins(box);
 }
 
@@ -2337,6 +2355,98 @@ async function renderManageAdmins(box){
       :`<div class="panel-empty">포털 계정 전원이 이미 관리자입니다.</div>`)+
       `<div class="hintline" style="margin-top:12px">관리자는 공지와 중요 일정을 등록·수정·삭제할 수 있습니다. '고정' 은 코드에 박아 둔 사람이라 화면에서 뺄 수 없습니다.</div>`;
   }catch(e){ box.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
+}
+
+/* ---- 서버 일괄 배포 ----
+   blue-app 의 deploy-svn-projects 스킬은 api/deploy.php 의 allowed 가 true 일 때만 돈다.
+   관리자는 '누가 할 수 있는지' 만 정하고, 켜고 끄는 것은 본인이 한다. */
+async function renderManageDeploy(box){
+  try{
+    const d=await bapi("api/deploy_users.php");
+    const picked=d.rows.map(r=>r.email.toLowerCase());
+    const opts=d.members.filter(m=>!picked.includes(m.email.toLowerCase()))
+      .map(m=>`<option value="${esc(m.email)}">${esc(m.name)} · ${esc(m.email)}</option>`).join("");
+    box.innerHTML=
+      (d.rows.length?`<div class="list-card" style="margin-bottom:16px">`+d.rows.map(r=>`
+        <div class="mrow">
+          <span class="tt">
+            <div class="nm">${esc(r.name)} ${r.allowed?`<span class="tag-owner">허용 중 · ${esc((r.until||"").slice(11,16))} 까지</span>`:""}</div>
+            <div class="sub">${esc(r.email)}</div>
+          </span>
+          <span class="btns">
+            <button class="btn-sm danger" onclick="removeDeployUser('${esc(r.email)}')">빼기</button>
+          </span>
+        </div>`).join("")+`</div>`
+      :`<div class="panel-empty" style="margin-bottom:16px">일괄 배포 가능 사용자가 없습니다.</div>`)+
+      (opts?`<div class="mrow" style="background:var(--card);border:1px solid var(--line);border-radius:16px">
+         <span class="tt"><select id="mg-newdeploy" style="width:100%;font-family:var(--sans);font-size:14px;padding:9px 11px;border:1.5px solid var(--line);border-radius:10px;background:#FBFCFF">${opts}</select></span>
+         <span class="btns"><button class="btn-sm" onclick="addDeployUser()">배포 가능 사용자로 추가</button></span>
+       </div>`:"")+
+      `<div class="hintline" style="margin-top:12px">여기에 넣은 사람에게만 사용자 메뉴에 '서버 일괄 배포 허용' 이 보입니다. 넣는 것만으로는 배포할 수 없고, 본인이 그 메뉴에서 허용을 켜야 합니다(켠 뒤 ${esc(String(d.hours))}시간이 지나면 저절로 꺼집니다).</div>`;
+  }catch(e){ box.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
+}
+
+async function addDeployUser(){
+  const sel=document.getElementById("mg-newdeploy");
+  if(!sel || !sel.value) return;
+  try{
+    await bapi("api/deploy_users.php",{method:"POST",body:JSON.stringify({email:sel.value})});
+    toast("배포 가능 사용자로 추가했습니다");
+    showManage("deploy");
+  }catch(e){ toast(e.message); }
+}
+
+async function removeDeployUser(email){
+  if(!confirm(`${email} 를 일괄 배포 가능 사용자에서 뺄까요?`)) return;
+  try{
+    await bapi(`api/deploy_users.php?email=${encodeURIComponent(email)}`,{method:"DELETE"});
+    toast("배포 가능 사용자에서 뺐습니다");
+    showManage("deploy");
+  }catch(e){ toast(e.message); }
+}
+
+/* 내 허용 상태 화면 */
+async function showDeploy(){
+  showView("view-deploy");
+  const box=document.getElementById("dp-body");
+  box.innerHTML=`<div class="panel-empty">불러오는 중…</div>`;
+  try{ renderDeploy(await bapi("api/deploy.php")); }
+  catch(e){ box.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
+}
+function renderDeploy(d){
+  const box=document.getElementById("dp-body");
+  if(!d.member){
+    box.innerHTML=`<div class="panel-empty">일괄 배포 가능 사용자가 아닙니다. 포털 관리자에게 요청하세요.</div>`;
+    return;
+  }
+  box.innerHTML=`<div class="list-card"><div class="mrow">
+      <span class="tt">
+        <div class="nm">${d.allowed?`허용 중 — ${esc((d.until||"").slice(0,16))} 까지`:"미허용"}</div>
+        <div class="sub">${d.allowed?"이 시각이 지나면 저절로 꺼집니다. 배포가 끝나면 바로 꺼 주세요.":"꺼져 있는 동안에는 일괄 배포 스킬이 실행되지 않습니다."}</div>
+      </span>
+      <span class="btns">
+        <label class="check"><input type="checkbox" ${d.allowed?"checked":""} onchange="setDeployAllowed(this)"> <span>허용</span></label>
+        ${d.allowed?`<button class="btn-sm" onclick="extendDeployAllowed()">${esc(String(d.hours))}시간 연장</button>`:""}
+      </span>
+    </div></div>
+    <div class="hintline" style="margin-top:12px">blue-app 의 <b>deploy-svn-projects</b> 스킬(여러 대학 운영 서버에 소스를 한꺼번에 올림)을 내 계정으로 실행할 수 있게 합니다. 켜면 ${esc(String(d.hours))}시간 동안만 허용됩니다.</div>`;
+}
+async function setDeployAllowed(input){
+  input.disabled=true;
+  try{
+    renderDeploy(await bapi("api/deploy.php",{method:"PUT",body:JSON.stringify({enabled:input.checked})}));
+    toast(input.checked ? "일괄 배포를 허용했습니다" : "일괄 배포 허용을 껐습니다");
+  }catch(e){
+    input.checked=!input.checked;
+    input.disabled=false;
+    toast(e.message);
+  }
+}
+async function extendDeployAllowed(){
+  try{
+    renderDeploy(await bapi("api/deploy.php",{method:"PUT",body:JSON.stringify({enabled:true})}));
+    toast("허용 시간을 연장했습니다");
+  }catch(e){ toast(e.message); }
 }
 
 async function addAdmin(){

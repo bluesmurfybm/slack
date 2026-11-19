@@ -76,6 +76,22 @@ function portal_db() {
           COMMENT='포털 공지·일정을 관리할 수 있는 사람'
     ");
 
+    // 서버 일괄 배포 허용(core/deploy.php). 관리자가 명단에 넣고, 본인이 켜 둔 동안에만 허용된다.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS `portal_deploy_user` (
+            `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `email`         VARCHAR(190) NOT NULL COMMENT 'portal_users.email',
+            `added_by`      VARCHAR(190) NULL     COMMENT '추가한 사람',
+            `created_at`    DATETIME     NOT NULL,
+            `enabled`       TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '본인이 허용을 켰는가',
+            `enabled_until` DATETIME     NULL     COMMENT '이 시각이 지나면 저절로 미허용',
+            `updated_at`    DATETIME     NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uq_deploy_email` (`email`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+          COMMENT='서버 일괄 배포(deploy-svn-projects)를 할 수 있는 사람'
+    ");
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `portal_notice` (
             `id`           INT UNSIGNED NOT NULL AUTO_INCREMENT,
