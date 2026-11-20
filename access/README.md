@@ -178,3 +178,21 @@
 - 엑셀의 `plink` 전용 칸은 거의 비어 있고 실제 터널링 명령은 **학사 DB · 운영 DB 설명 안에**
   섞여 있다. 그래서 목록의 plink 복사 버튼은 그 칸들까지 훑어서 명령 줄만 뽑아 준다.
 - 엑셀의 나머지 시트(표절 · 보안취약점조치 · 참고 사이트)는 아직 안 가져온다.
+
+## 외부 조회 API (`access/api_schools.php`)
+
+포털 세션 없이 서버·스크립트에서 모든 대학의 이름·버전·저장소 주소·테스트 서버 정보를 JSON 으로 받는 읽기 전용 API.
+
+```
+curl -H "Authorization: Bearer <토큰>" https://<포털>/access/api_schools.php
+```
+
+- **토큰**: 루트 `config.php` 의 `'envhub_api_token' => '…'` (없으면 환경변수 `ENVHUB_API_TOKEN`).
+  둘 다 비어 있으면 503 으로 꺼진다. 비교는 `hash_equals()`.
+- **응답**: `{ok, count, rows:[{name, ver, repo, test_server:{ip, port, username, password, project_root}}]}`.
+  `test_server` 는 `test_srv` 칸(아이피[:포트] ⏎ 아이디 / 비밀번호 ⏎ 폴더)을 `access_parse_test_srv()` 로
+  나눈 것이다. `--` 주석 줄은 버리고, 비었거나 형식이 안 맞는 칸은 `''`, 포트를 안 적었으면 `null`
+  (기본값 22 는 쓰는 쪽이 정한다). **비밀번호가 평문으로 실리므로** HTTPS 요청만 받는다
+  (`X-Forwarded-Proto: https` 인정, localhost 는 예외).
+- **쿼리**: `all=1`(미사용 포함) · `ver=4.5`(정확히 일치) · `q=강원`(대학명 포함) · `school_id=12`.
+- 읽기 전용이라 GET 외에는 405. 오류 원문은 응답에 싣지 않고 `error_log` 에 `[envhub api_schools]` 로 남긴다.

@@ -430,6 +430,31 @@ function access_norm_test_srv($v) {
 }
 
 /**
+ * 저장된 테스트 서버 정보(access_norm_test_srv() 형식)를 칸별로 나눈다 — 외부 API 용.
+ * 이미 저장된 값을 읽기만 하므로 형식이 틀려도 예외를 던지지 않고 읽히는 칸만 채운다.
+ * '--' 주석 줄은 버린다. 포트가 없으면 null(호출 쪽이 22 등 기본값을 정한다).
+ */
+function access_parse_test_srv($v) {
+    $out = ['ip' => '', 'port' => null, 'username' => '', 'password' => '', 'project_root' => ''];
+    $lines = array_values(array_filter(
+        array_map('trim', explode("\n", str_replace("\r", '', (string)$v))),
+        fn($l) => $l !== '' && strncmp($l, '--', 2) !== 0
+    ));
+    if (isset($lines[0]) && preg_match('/^(\d{1,3}(?:\.\d{1,3}){3})(?:\s*:\s*(\d{1,5}))?$/', $lines[0], $m)) {
+        $out['ip']   = $m[1];
+        $out['port'] = isset($m[2]) && $m[2] !== '' ? (int)$m[2] : null;
+    }
+    if (isset($lines[1]) && preg_match('#^([^/\s]+)\s*/\s*(.+)$#', $lines[1], $a)) {   // 비밀번호의 '/' 는 살린다
+        $out['username'] = $a[1];
+        $out['password'] = $a[2];
+    }
+    if (isset($lines[2]) && preg_match('#^(?:/|~|[A-Za-z]:[\\\\/])#', $lines[2])) {
+        $out['project_root'] = $lines[2];
+    }
+    return $out;
+}
+
+/**
  * 배포 방법·비고 본문에서 테스트 서버 접속 정보를 찾아 기본값을 만든다.
  * 엑셀에 자유 서술로 적힌 것이라 확실한 모양만 집는다 — 엉뚱한 서버를 넣느니 비워 두는 게 낫다.
  *
