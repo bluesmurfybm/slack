@@ -232,3 +232,62 @@ function schooltodo_sheet_delete($ctx, $id) {
     $pdo->prepare("DELETE FROM schooltodo_cells WHERE sheet_id = ?")->execute([$id]);
     $pdo->prepare("DELETE FROM schooltodo_sheets WHERE id = ?")->execute([$id]);
 }
+
+/**
+ * 한 시트의 대학별 상태·갱신 날짜를 버전별로 묶는다 — 외부 조회용(GET /sheets/{id}/versions).
+ * 버전 순서는 숫자 순(2.9 → 3.2 → … → 4.5), 버전이 빈 학교는 맨 뒤. 버전마다 상태별 개수를 함께 준다.
+ * @param PDO $pdo
+ * @param int $id
+ * @param string|null $status 이 상태인 학교만
+ * @param string|null $ver    이 버전만
+ * @return array
+ */
+function schooltodo_sheet_by_version($pdo, $id, $status, $ver) {
+    $sheet = schooltodo_sheet_find($pdo, $id);
+    $rows = schooltodo_sheet_rows($pdo, $id);
+    $counts = schooltodo_counts(array_count_values(array_column($rows, 'status')), count($rows));
+
+    $groups = [];
+    foreach ($rows as $r) {
+        if ($ver !== null && $r['ver'] !== $ver) continue;
+        $groups[$r['ver']][] = $r;
+    }
+    uksort($groups, function ($a, $b) {
+        $a = (string)$a; $b = (string)$b;
+        if ($a === '' || $b === '') return ($a === '') <=> ($b === '');
+        return version_compare($a, $b);
+    });
+
+    $versions = [];
+    foreach ($groups as $v => $list) {
+        $schools = [];
+        foreach ($list as $r) {
+            if ($status !== null && $r['status'] !== $status) continue;
+            $schools[] = [
+                'school_id' => $r['school_id'],
+                'name' => $r['name'],
+                'code' => $r['code'],
+                'status' => $r['status'],
+                'updated_at' => $r['updated_at'],
+                'updated_by' => $r['updated_by'],
+            ];
+        }
+        $versions[] = [
+            'ver' => (string)$v,
+            // 개수는 status 로 거르기 전 전체 기준 — 진행률을 볼 때 거른 결과에 휘둘리지 않게
+            'total' => count($list),
+            'counts' => schooltodo_counts(array_count_values(array_column($list, 'status')), count($list)),
+            'schools' => $schools,
+        ];
+    }
+
+    return [
+        'id' => (int)$sheet['id'],
+        'title' => (string)$sheet['title'],
+        'description' => (string)$sheet['description'],
+        'archived_at' => (string)($sheet['archived_at'] ?? ''),
+        'total' => array_sum($counts),
+        'counts' => $counts,
+        'versions' => $versions,
+    ];
+}

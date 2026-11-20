@@ -24,6 +24,7 @@ function schooltodo_config($over = []) {
     return $over + [
         'db' => [],
         'portal_url' => '..',
+        'api_token' => '',   // 버전별 조회(GET /sheets/{id}/versions) 전용 Bearer 토큰. 비면 토큰 호출 꺼짐
     ];
 }
 
@@ -33,7 +34,10 @@ function schooltodo_config($over = []) {
 function schooltodo_config_from_portal() {
     $portal = require __DIR__ . '/../config.php';
 
-    return schooltodo_config(['db' => $portal['db']]);
+    $token = trim((string)($portal['schooltodo_api_token'] ?? ''));
+    if ($token === '') $token = trim((string)getenv('SCHOOLTODO_API_TOKEN'));
+
+    return schooltodo_config(['db' => $portal['db'], 'api_token' => $token]);
 }
 
 /**

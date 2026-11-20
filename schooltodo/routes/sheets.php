@@ -24,6 +24,11 @@ function schooltodo_route_sheets($ctx, $req) {
     if (($seg[2] ?? '') === 'cells' && isset($seg[3]) && ($seg[4] ?? '') === 'history' && !isset($seg[5]) && $method === 'GET') {
         return schooltodo_json(schooltodo_cell_history($ctx, $id, (int)$seg[3]));
     }
+    if (($seg[2] ?? '') === 'versions' && !isset($seg[3]) && $method === 'GET') {
+        $status = isset($req['query']['status']) ? schooltodo_want_status($req['query']['status'], 'status') : null;
+        $ver = isset($req['query']['ver']) ? schooltodo_want_text($req['query']['ver'], 'ver', 20) : null;
+        return schooltodo_json(schooltodo_sheet_by_version($pdo, $id, $status, $ver === '' ? null : $ver));
+    }
     if (isset($seg[2])) throw new SchooltodoError('없는 API 입니다', 404);
 
     if ($method === 'GET') {
