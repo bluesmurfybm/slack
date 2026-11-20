@@ -36,7 +36,7 @@
 | `PUT api.php?p=/sheets/{id}` `{title, description, archived}` | 이름·설명 수정. `archived: true/false` 로 보관·꺼내기(`archived_at` 에 시각) |
 | `PUT api.php?p=/sheets/{id}/cells` `{items: [...]}` | 대학별 상태·메모 채우기 |
 | `GET api.php?p=/sheets/{id}/cells/{school_id}/history` | 그 대학 셀의 이전 값, 최근 것부터 |
-| `GET api.php?p=/sheets/{id}/versions` | 버전별 대학 상태·갱신 날짜. `&ver=4.5`·`&status=미조치` 로 거른다. **토큰으로도 부를 수 있다**(아래) |
+| `GET api.php?p=/sheets/{id}/versions` | 버전별 대학 상태·갱신 날짜(키·상태는 영문 코드). `&ver=4.5`·`&status=todo` 로 거른다. **토큰으로도 부를 수 있다**(아래) |
 | `DELETE api.php?p=/sheets/{id}` | 탭 삭제 |
 
 `items` 한 건은 `{school_id}` 또는 `{school, ver}` 로 대학을 가리키고 `status`·`note` 중 보낸 것만 바꾼다.
@@ -52,17 +52,28 @@
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p=/sheets/1/versions"
-curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p=/sheets/1/versions&ver=4.5&status=%EB%AF%B8%EC%A1%B0%EC%B9%98"
+curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p=/sheets/1/versions&ver=4.5&status=todo"
 ```
 
 응답 — 버전은 숫자 순(3.9 → 3.10 → 4.5), 버전이 빈 학교는 맨 뒤. `total`·`counts` 는 `status` 로 거르기 전 기준이다.
-셀이 없는 대학은 `미조치`, `updated_at`·`updated_by` 는 빈 값이다.
+셀이 없는 대학은 `todo`, `updated_at`·`updated_by` 는 빈 값이다.
+
+**키와 상태는 영문 코드다**(이 경로만 — 화면이 쓰는 다른 API 는 한글 그대로). 한글 이름은 `status_label` 에 있고,
+`?status=` 는 영문 코드와 한글을 둘 다 받는다(`SCHOOLTODO_STATUS_CODES`).
+
+| 코드 | 상태 |
+|---|---|
+| `todo` | 미조치 |
+| `in_progress` | 진행중 |
+| `dev_applied` | 개발반영 |
+| `prod_applied` | 운영반영 |
+| `not_applicable` | 해당없음 |
 ```json
 {"id": 1, "title": "jQuery 3.5.1", "description": "", "archived_at": "", "total": 260,
- "counts": {"미조치": 120, "진행중": 10, "개발반영": 5, "운영반영": 100, "해당없음": 25},
+ "counts": {"todo": 120, "in_progress": 10, "dev_applied": 5, "prod_applied": 100, "not_applicable": 25},
  "versions": [
-   {"ver": "3.9", "total": 80, "counts": {"미조치": 30, …},
-    "schools": [{"school_id": 12, "name": "가대", "code": "gadae", "status": "운영반영",
+   {"ver": "3.9", "total": 80, "counts": {"todo": 30, …},
+    "schools": [{"school_id": 12, "name": "가대", "code": "gadae", "status": "prod_applied", "status_label": "운영반영",
                  "updated_at": "2026-11-20 10:00:00", "updated_by": "홍길동"}, …]}
  ]}
 ```

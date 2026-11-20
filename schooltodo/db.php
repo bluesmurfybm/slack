@@ -15,6 +15,14 @@ const SCHOOLTODO_STATUSES = [
     SCHOOLTODO_STATUS_EXCLUDED,
 ];
 const SCHOOLTODO_HISTORY_MAX = 10;
+/** 외부 API(/sheets/{id}/versions)용 영문 상태 코드. 화면용 API 는 한글 상태를 그대로 쓴다. */
+const SCHOOLTODO_STATUS_CODES = [
+    SCHOOLTODO_STATUS_TODO => 'todo',
+    SCHOOLTODO_STATUS_DOING => 'in_progress',
+    SCHOOLTODO_STATUS_DEV => 'dev_applied',
+    SCHOOLTODO_STATUS_OPS => 'prod_applied',
+    SCHOOLTODO_STATUS_EXCLUDED => 'not_applicable',
+];
 
 /**
  * @param array $over

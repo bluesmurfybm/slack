@@ -25,7 +25,7 @@ function schooltodo_route_sheets($ctx, $req) {
         return schooltodo_json(schooltodo_cell_history($ctx, $id, (int)$seg[3]));
     }
     if (($seg[2] ?? '') === 'versions' && !isset($seg[3]) && $method === 'GET') {
-        $status = isset($req['query']['status']) ? schooltodo_want_status($req['query']['status'], 'status') : null;
+        $status = isset($req['query']['status']) ? schooltodo_want_status_any($req['query']['status']) : null;
         $ver = isset($req['query']['ver']) ? schooltodo_want_text($req['query']['ver'], 'ver', 20) : null;
         return schooltodo_json(schooltodo_sheet_by_version($pdo, $id, $status, $ver === '' ? null : $ver));
     }

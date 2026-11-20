@@ -39,22 +39,26 @@ final class version_test extends TestCase
 
         $v45 = $res['data']['versions'][2];
         $this->assertSame(2, $v45['total']);
-        $this->assertSame(1, $v45['counts']['운영반영']);
-        $this->assertSame(1, $v45['counts']['미조치']);
-        $this->assertSame(['school_id' => 1, 'name' => '가대', 'code' => '', 'status' => '운영반영',
+        $this->assertSame(['todo' => 1, 'in_progress' => 0, 'dev_applied' => 0, 'prod_applied' => 1, 'not_applicable' => 0],
+                          $v45['counts']);
+        $this->assertSame(['school_id' => 1, 'name' => '가대', 'code' => '', 'status' => 'prod_applied', 'status_label' => '운영반영',
                            'updated_at' => '2026-11-20 10:00:00', 'updated_by' => '사용자'], $v45['schools'][0]);
-        $this->assertSame(['미조치', ''], [$v45['schools'][1]['status'], $v45['schools'][1]['updated_at']]);
+        $this->assertSame(['todo', ''], [$v45['schools'][1]['status'], $v45['schools'][1]['updated_at']]);
+        $this->assertSame(['todo', 'in_progress', 'dev_applied', 'prod_applied', 'not_applicable'],
+                          array_keys($res['data']['counts']));
     }
 
-    /** ?ver, ?status 로 거른다. 개수는 거르기 전 기준 */
+    /** ?ver, ?status 로 거른다(영문 코드·한글 둘 다). 개수는 거르기 전 기준 */
     public function test_거르기(): void
     {
         $this->seed();
-        $res = $this->call(['token_ok' => true], ['ver' => '4.5', 'status' => '미조치']);
+        foreach (['todo', '미조치'] as $status) {
+            $res = $this->call(['token_ok' => true], ['ver' => '4.5', 'status' => $status]);
 
-        $this->assertSame(['4.5'], array_column($res['data']['versions'], 'ver'));
-        $this->assertSame(['다대'], array_column($res['data']['versions'][0]['schools'], 'name'));
-        $this->assertSame(2, $res['data']['versions'][0]['total']);
+            $this->assertSame(['4.5'], array_column($res['data']['versions'], 'ver'));
+            $this->assertSame(['다대'], array_column($res['data']['versions'][0]['schools'], 'name'));
+            $this->assertSame(2, $res['data']['versions'][0]['total']);
+        }
     }
 
     /** 로그인 세션으로도 부를 수 있다 */
