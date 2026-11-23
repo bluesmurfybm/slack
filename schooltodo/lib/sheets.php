@@ -232,3 +232,86 @@ function schooltodo_sheet_delete($ctx, $id) {
     $pdo->prepare("DELETE FROM schooltodo_cells WHERE sheet_id = ?")->execute([$id]);
     $pdo->prepare("DELETE FROM schooltodo_sheets WHERE id = ?")->execute([$id]);
 }
+
+/**
+ * 한 시트의 대학별 상태·갱신 날짜를 버전별로 묶는다 — 외부 조회용(GET /sheets/{id}/versions).
+ * 버전 순서는 숫자 순(2.9 → 3.2 → … → 4.5), 버전이 빈 학교는 맨 뒤. 버전마다 상태별 개수를 함께 준다.
+ * @param PDO $pdo
+ * @param int $id
+ * 응답의 상태는 영문 코드(SCHOOLTODO_STATUS_CODES)로 주고, 한글 이름은 status_label 에 둔다.
+ * @param string|null $status 이 상태인 학교만 (한글 상태)
+ * @param string|null $ver    이 버전만
+ * @return array
+ */
+function schooltodo_sheet_by_version($pdo, $id, $status, $ver) {
+    $sheet = schooltodo_sheet_find($pdo, $id);
+    $rows = schooltodo_sheet_rows($pdo, $id);
+    $counts = schooltodo_counts(array_count_values(array_column($rows, 'status')), count($rows));
+
+    $groups = [];
+    foreach ($rows as $r) {
+        if ($ver !== null && $r['ver'] !== $ver) continue;
+        $groups[$r['ver']][] = $r;
+    }
+    uksort($groups, function ($a, $b) {
+        $a = (string)$a; $b = (string)$b;
+        if ($a === '' || $b === '') return ($a === '') <=> ($b === '');
+        return version_compare($a, $b);
+    });
+
+    $versions = [];
+    foreach ($groups as $v => $list) {
+        $schools = [];
+        foreach ($list as $r) {
+            if ($status !== null && $r['status'] !== $status) continue;
+            $schools[] = [
+                'school_id' => $r['school_id'],
+                'name' => $r['name'],
+                'code' => $r['code'],
+                'status' => SCHOOLTODO_STATUS_CODES[$r['status']] ?? $r['status'],
+                'status_label' => $r['status'],
+                'updated_at' => $r['updated_at'],
+                'updated_by' => $r['updated_by'],
+            ];
+        }
+        $versions[] = [
+            'ver' => (string)$v,
+            // 개수는 status 로 거르기 전 전체 기준 — 진행률을 볼 때 거른 결과에 휘둘리지 않게
+            'total' => count($list),
+            'counts' => schooltodo_counts_en(schooltodo_counts(array_count_values(array_column($list, 'status')), count($list))),
+            'schools' => $schools,
+        ];
+    }
+
+    return [
+        'id' => (int)$sheet['id'],
+        'title' => (string)$sheet['title'],
+        'description' => (string)$sheet['description'],
+        'archived_at' => (string)($sheet['archived_at'] ?? ''),
+        'total' => array_sum($counts),
+        'counts' => schooltodo_counts_en($counts),
+        'versions' => $versions,
+    ];
+}
+
+/**
+ * 한글 상태 키 개수표 → 영문 코드 키 (todo, in_progress, dev_applied, prod_applied, not_applicable)
+ * @param int[] $counts
+ * @return int[]
+ */
+function schooltodo_counts_en($counts) {
+    $out = [];
+    foreach (SCHOOLTODO_STATUS_CODES as $ko => $en) $out[$en] = (int)($counts[$ko] ?? 0);
+    return $out;
+}
+
+/**
+ * ?status= 값 — 영문 코드(todo …)와 한글 상태(미조치 …) 둘 다 받아 한글 상태로 돌려준다.
+ * @param mixed $value
+ * @return string
+ */
+function schooltodo_want_status_any($value) {
+    if (is_string($value) && ($ko = array_search($value, SCHOOLTODO_STATUS_CODES, true)) !== false) return $ko;
+    if (is_string($value) && isset(SCHOOLTODO_STATUS_CODES[$value])) return $value;
+    throw new SchooltodoError('status 는 ' . implode(', ', SCHOOLTODO_STATUS_CODES) . ' 중 하나여야 합니다', 422);
+}

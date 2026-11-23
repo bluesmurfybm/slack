@@ -15,6 +15,14 @@ const SCHOOLTODO_STATUSES = [
     SCHOOLTODO_STATUS_EXCLUDED,
 ];
 const SCHOOLTODO_HISTORY_MAX = 10;
+/** 외부 API(/sheets/{id}/versions)용 영문 상태 코드. 화면용 API 는 한글 상태를 그대로 쓴다. */
+const SCHOOLTODO_STATUS_CODES = [
+    SCHOOLTODO_STATUS_TODO => 'todo',
+    SCHOOLTODO_STATUS_DOING => 'in_progress',
+    SCHOOLTODO_STATUS_DEV => 'dev_applied',
+    SCHOOLTODO_STATUS_OPS => 'prod_applied',
+    SCHOOLTODO_STATUS_EXCLUDED => 'not_applicable',
+];
 
 /**
  * @param array $over
@@ -24,6 +32,7 @@ function schooltodo_config($over = []) {
     return $over + [
         'db' => [],
         'portal_url' => '..',
+        'api_token' => '',   // 버전별 조회(GET /sheets/{id}/versions) 전용 Bearer 토큰. 비면 토큰 호출 꺼짐
     ];
 }
 
@@ -33,7 +42,10 @@ function schooltodo_config($over = []) {
 function schooltodo_config_from_portal() {
     $portal = require __DIR__ . '/../config.php';
 
-    return schooltodo_config(['db' => $portal['db']]);
+    $token = trim((string)($portal['schooltodo_api_token'] ?? ''));
+    if ($token === '') $token = trim((string)getenv('SCHOOLTODO_API_TOKEN'));
+
+    return schooltodo_config(['db' => $portal['db'], 'api_token' => $token]);
 }
 
 /**

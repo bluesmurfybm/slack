@@ -36,10 +36,47 @@
 | `PUT api.php?p=/sheets/{id}` `{title, description, archived}` | 이름·설명 수정. `archived: true/false` 로 보관·꺼내기(`archived_at` 에 시각) |
 | `PUT api.php?p=/sheets/{id}/cells` `{items: [...]}` | 대학별 상태·메모 채우기 |
 | `GET api.php?p=/sheets/{id}/cells/{school_id}/history` | 그 대학 셀의 이전 값, 최근 것부터 |
+| `GET api.php?p=/sheets/{id}/versions` | 버전별 대학 상태·갱신 날짜(키·상태는 영문 코드). `&ver=4.5`·`&status=todo` 로 거른다. **토큰으로도 부를 수 있다**(아래) |
 | `DELETE api.php?p=/sheets/{id}` | 탭 삭제 |
 
 `items` 한 건은 `{school_id}` 또는 `{school, ver}` 로 대학을 가리키고 `status`·`note` 중 보낸 것만 바꾼다.
 이름이 같은 대학이 여럿인데 `ver` 가 없으면 409, 한 건이라도 오류면 전부 저장하지 않고 `items[n]:` 으로 알려 준다.
+
+### 버전별 조회 토큰 (`/sheets/{id}/versions` 전용)
+대시보드·외부 서버처럼 포털 계정으로 로그인하기 어려운 곳을 위해 **이 읽기 전용 경로 하나만** Bearer 토큰을 받는다.
+시트 목록·쓰기·삭제 등 나머지는 지금처럼 로그인 세션만 받는다(`schooltodo_is_token_route()`).
+
+- 토큰: 루트 `config.php` 의 `'schooltodo_api_token' => '…'` (없으면 환경변수 `SCHOOLTODO_API_TOKEN`). 비면 토큰 호출은 꺼진다.
+  EnvHub 토큰(`envhub_api_token`)과 따로 둔다 — 이쪽은 상태만 보는 토큰이라 비밀번호가 실리는 EnvHub 와 섞지 않는다.
+- HTTPS 요청만 인정한다(localhost 예외). 비교는 `hash_equals()`.
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p=/sheets/1/versions"
+curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p=/sheets/1/versions&ver=4.5&status=todo"
+```
+
+응답 — 버전은 숫자 순(3.9 → 3.10 → 4.5), 버전이 빈 학교는 맨 뒤. `total`·`counts` 는 `status` 로 거르기 전 기준이다.
+셀이 없는 대학은 `todo`, `updated_at`·`updated_by` 는 빈 값이다.
+
+**키와 상태는 영문 코드다**(이 경로만 — 화면이 쓰는 다른 API 는 한글 그대로). 한글 이름은 `status_label` 에 있고,
+`?status=` 는 영문 코드와 한글을 둘 다 받는다(`SCHOOLTODO_STATUS_CODES`).
+
+| 코드 | 상태 |
+|---|---|
+| `todo` | 미조치 |
+| `in_progress` | 진행중 |
+| `dev_applied` | 개발반영 |
+| `prod_applied` | 운영반영 |
+| `not_applicable` | 해당없음 |
+```json
+{"id": 1, "title": "jQuery 3.5.1", "description": "", "archived_at": "", "total": 260,
+ "counts": {"todo": 120, "in_progress": 10, "dev_applied": 5, "prod_applied": 100, "not_applicable": 25},
+ "versions": [
+   {"ver": "3.9", "total": 80, "counts": {"todo": 30, …},
+    "schools": [{"school_id": 12, "name": "가대", "code": "gadae", "status": "prod_applied", "status_label": "운영반영",
+                 "updated_at": "2026-11-20 10:00:00", "updated_by": "홍길동"}, …]}
+ ]}
+```
 
 `tools/tasksheet.py` 가 로그인과 호출을 묶어 둔 명령이다. 계정은 `~/.config/safepush/iworks.json`
 (`{"email", "password"}`, `IWORKS_CREDENTIALS` 로 바꾼다), 포털 주소는 `IWORKS_URL` 이다. 시트는 번호나 이름으로 가리킨다.
