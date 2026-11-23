@@ -26,7 +26,7 @@ envlogd.py — Coursemos EnvLog 의 SSH 로그 엔진 (포털 서버에서 상�
   를 읽고, test_srv 복호화 키도 그 서버의 config.local.php / config.php 에서 읽는다(로컬에 아무것도 안 남김).
   SSH 비밀번호(키 파일이 없을 때)와 DB 비밀번호는 실행할 때 콘솔에서 묻는다(환경변수로도 줄 수 있음).
   api.php 는 로컬 시험(SQLite) 포털이면 자동으로 ?a=schools 와 접속(school_id)을 데몬에 넘긴다.
-    설정: 환경변수 또는 인자 — ENVLOG_BASTION / --bastion  amitoa@35.184.155.46[:22]
+    설정: 환경변수 또는 인자 — ENVLOG_BASTION / --bastion  amitoa@8.230.4.174[:22]
           ENVLOG_BASTION_KEY / --key  …/gcp_key.ppk     ENVLOG_BASTION_PASSWORD (키 대신)
           ENVLOG_REMOTE_ROOT / --remote-root  /home/blueapp_core (서버의 포털 루트)
           ENVLOG_DB / --db  slack_db    ENVLOG_DB_USER / --db-user  root    ENVLOG_DB_PASSWORD
@@ -269,7 +269,7 @@ def parse_test_srv(text):
 class SchoolDB:
     """배스천(iWorks 서버) SSH → 127.0.0.1:3306 포워딩 → pymysql. 복호화 키는 서버의 config 에서 읽는다."""
     def __init__(self):
-        spec = os.environ.get('ENVLOG_BASTION', 'amitoa@35.184.155.46')
+        spec = os.environ.get('ENVLOG_BASTION', 'amitoa@8.230.4.174')
         m = re.match(r'^(?:([^@]+)@)?([^:]+)(?::(\d+))?$', spec)
         self.user, self.host, self.port = (m.group(1) or 'amitoa'), m.group(2), int(m.group(3) or 22)
         self.key = os.environ.get('ENVLOG_BASTION_KEY', '')

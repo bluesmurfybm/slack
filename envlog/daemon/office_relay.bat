@@ -12,7 +12,9 @@ rem  서버 sshd 는 기본값(AllowTcpForwarding yes)이면 된다. 터널은 �
 rem  엔진 출력은 var\relay.log 에 남는다 (접속 실패 원인을 나중에 볼 수 있게).
 rem ============================================================================
 setlocal
-set PORTAL_HOST=35.184.155.46
+set PORTAL_HOST=8.230.4.174
+rem 서버 호스트키 지문 — 서버를 옮기면 IP 와 함께 바꾼다. -batch 는 저장된 호스트키가 없으면 바로 끝나므로 여기서 직접 준다
+set PORTAL_HOSTKEY=SHA256:t9uUFRBZRUsfqdKuD3mIY5+QkCdXhedQYOXzmjQxGLI
 set PORTAL_USER=amitoa
 set PORTAL_KEY=G:\01_Bluesoft\0000_iWorks\02_산출물\gcp_key.ppk
 set PORT=8766
@@ -50,7 +52,7 @@ start "EnvLog 엔진 (envlogd)" /min cmd /c "venv\Scripts\python.exe envlogd.py 
 rem ② 역방향 터널 — 끊기면 10초 뒤 다시 연결
 :loop
 echo [%date% %time%] 터널 연결...
-"%PLINK%" -batch -N -i "%PORTAL_KEY%" -R 127.0.0.1:%PORT%:127.0.0.1:%PORT% %PORTAL_USER%@%PORTAL_HOST%
-echo [%date% %time%] 터널이 끊겼습니다. 10초 뒤 다시 연결합니다. (Ctrl+C 로 종료)
+"%PLINK%" -ssh -batch -N -hostkey "%PORTAL_HOSTKEY%" -i "%PORTAL_KEY%" -R 127.0.0.1:%PORT%:127.0.0.1:%PORT% %PORTAL_USER%@%PORTAL_HOST%
+echo [%date% %time%] 터널이 끊겼습니다 ^(plink 종료 코드 %errorlevel%^). 10초 뒤 다시 연결합니다. (Ctrl+C 로 종료)
 timeout /t 10 /nobreak >nul
 goto loop

@@ -10,14 +10,14 @@
 #    1) 포털 서버 키를 OpenSSH 형식으로: gcp_key.ppk 는 PuTTY 형식이라 그대로는 못 쓴다
 #         sudo apt install putty-tools   (또는 dnf install putty)
 #         puttygen gcp_key.ppk -O private-openssh -o ~/.ssh/gcp_key && chmod 600 ~/.ssh/gcp_key
-#    2) 호스트키 저장:  ssh -i ~/.ssh/gcp_key amitoa@35.184.155.46 exit   (yes 입력)
+#    2) 호스트키 저장:  ssh -i ~/.ssh/gcp_key amitoa@8.230.4.174 exit   (yes 입력)
 #    3) 포털 서버 config.php 에 'envlog_autostart' => false
 #  실행:  ./office_relay.sh            (앞에서 돌며 로그를 찍는다. systemd 유닛은 README 참고)
 #  환경변수로 바꿀 수 있다: PORTAL_HOST PORTAL_USER PORTAL_KEY PORT
 # ============================================================================
 set -u
 cd "$(dirname "$(readlink -f "$0")")"
-PORTAL_HOST=${PORTAL_HOST:-35.184.155.46}
+PORTAL_HOST=${PORTAL_HOST:-8.230.4.174}
 PORTAL_USER=${PORTAL_USER:-amitoa}
 PORTAL_KEY=${PORTAL_KEY:-$HOME/.ssh/gcp_key}
 PORT=${PORT:-8766}
