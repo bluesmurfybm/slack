@@ -80,7 +80,8 @@ function access_db() {
             `os`          VARCHAR(60)  NOT NULL DEFAULT 'Rocky 8' COMMENT '서버 OS 버전',
             `ops_os`      VARCHAR(60)  NOT NULL DEFAULT '' COMMENT '운영 서버 OS 버전',
             `ops_cnt`     VARCHAR(10)  NOT NULL DEFAULT '' COMMENT '운영 서버 대수 (빈 칸 = 모름)',
-            `opened`      VARCHAR(120) NOT NULL DEFAULT '' COMMENT '사업시작/최초운영오픈년월',
+            `ops_sso`     VARCHAR(80)  NOT NULL DEFAULT '' COMMENT '운영 SSO 제품명 (빈 칸 = 미입력)',
+            `opened`     VARCHAR(120) NOT NULL DEFAULT '' COMMENT '사업시작/최초운영오픈년월',
             `vpn`         VARCHAR(80)  NOT NULL DEFAULT '' COMMENT 'VPN/접근제어 프로그램명. 비어 있으면 별도 실행 불필요',
             `vpn_note`    TEXT         NULL COMMENT 'VPN 접속 방법 / 판정 근거가 된 문장',
             `test_srv`    TEXT         NULL COMMENT '테스트 서버 정보(암호화)',
@@ -206,6 +207,11 @@ function access_db() {
     // 저장 경로가 모든 칸을 문자열로 다룬다. 숫자인지는 access_norm_count() 가 거른다.
     if (!access_has_column($pdo, 'ops_cnt')) {
         add_column_if_missing($pdo, "ALTER TABLE `school_access` ADD COLUMN `ops_cnt` VARCHAR(10) NOT NULL DEFAULT '' COMMENT '운영 서버 대수 (빈 칸 = 모름)' AFTER `ops_os`");
+    }
+    // 운영 SSO 제품명. SSO 는 운영에만 붙으므로 운영 쪽 칸 하나만 둔다. VPN 처럼 자유 입력이고
+    // 화면의 SSO 필터가 이 값으로 거른다.
+    if (!access_has_column($pdo, 'ops_sso')) {
+        add_column_if_missing($pdo, "ALTER TABLE `school_access` ADD COLUMN `ops_sso` VARCHAR(80) NOT NULL DEFAULT '' COMMENT '운영 SSO 제품명 (빈 칸 = 미입력)' AFTER `ops_cnt`");
     }
 
     // 접속 정보는 DB에 평문으로 두지 않는다.
@@ -810,11 +816,48 @@ function access_norm_count($v) {
     return (string)(int)$m[1];
 }
 
+/**
+ * SSO 제품명 표기 맞추기 — 같은 제품이 'KSign' · 'ksign' · 'K Sign' 처럼 갈려 필터 후보가
+ * 여럿 생기지 않게, 다른 학교에 이미 적힌 표기가 있으면 그 표기로 바꿔 저장한다.
+ * 대소문자·공백만 다른 것을 같은 제품으로 본다. 표기가 여럿이면 가장 많이 쓰인 쪽을 따른다.
+ * 쉼표로 여럿 적으면 하나하나 맞추고, 같은 제품이 두 번 나오면 하나만 남긴다.
+ * $exceptId(지금 고치는 행)는 기준에서 뺀다 — 그 제품을 쓰는 곳이 여기뿐이면 표기를 고칠 수 있게.
+ */
+function access_norm_sso(PDO $pdo, $v, $exceptId = 0) {
+    $norm  = fn($s) => mb_strtolower(preg_replace('/\s+/u', '', $s), 'UTF-8');
+    $parts = array_values(array_filter(array_map(
+        fn($s) => trim(preg_replace('/\s+/u', ' ', $s)), explode(',', (string)$v)), 'strlen'));
+    if (!$parts) return '';
+
+    $cnt = [];   // 정규화 키 => [표기 => 쓰인 횟수]
+    $st = $pdo->prepare("SELECT ops_sso FROM school_access WHERE ops_sso <> '' AND id <> ?");
+    $st->execute([(int)$exceptId]);
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $row) {
+        foreach (explode(',', $row) as $p) {
+            $p = trim($p);
+            if ($p === '') continue;
+            $k = $norm($p);
+            $cnt[$k][$p] = ($cnt[$k][$p] ?? 0) + 1;
+        }
+    }
+
+    $out = [];
+    foreach ($parts as $p) {
+        $k = $norm($p);
+        if (isset($cnt[$k])) {
+            arsort($cnt[$k]);
+            $p = (string)array_key_first($cnt[$k]);
+        }
+        $out[$k] = $out[$k] ?? $p;
+    }
+    return implode(', ', $out);
+}
+
 /** school_access 에서 사용자가 편집할 수 있는 컬럼 (school_id/sort_no 는 제외) */
 function access_cols() {
     return ['os','ops_os','ops_cnt','opened','vpn','vpn_note','repo','test_srv','deploy','note',
             'login_dev_id','login_dev','dev_note','dev_db',
-            'login_ops_id','login_ops','ops_note','ops_db','haksa_db'];
+            'login_ops_id','login_ops','ops_sso','ops_note','ops_db','haksa_db'];
 }
 
 /**
@@ -824,6 +867,7 @@ function access_cols() {
  *   type  input=한 줄, pw=가림(눈 아이콘), rich=Editor.js(굵기·색·취소선·목록)
  *   copy  1이면 값 옆에 복사 버튼
  *   num   1이면 숫자 칸(휴대폰에서 숫자 자판). 값 검사는 access_api.php 가 한다.
+ *   suggest 1이면 이미 입력된 값들을 자동 완성 후보(datalist)로 띄운다. 후보는 화면이 만든다.
  *   rows  area 의 줄 수(기본 3). placeholder 가 그보다 길면 늘려야 안내가 잘리지 않는다.
  *   check 켬/끔 체크 (학교명 옆 '사용' = schools.active)
  * 'master' => 1 은 schools 값이라는 표시다(학교명·사용 여부). 상세에서 고치면 schools 를 고치고,
@@ -866,6 +910,9 @@ function access_field_groups() {
             ['key' => 'ops',          'label' => '운영 URL',  'type' => 'url',   'copy' => 1],
             ['key' => 'login_ops_id', 'label' => '아이디',    'type' => 'input'],
             ['key' => 'login_ops',    'label' => '비밀번호',  'type' => 'pw',    'copy' => 1],
+            // SSO 는 운영에만 붙는다 — 테스트 서버 묶음에는 이 칸이 없다
+            // suggest: 다른 학교에 적힌 값을 자동 완성 후보로 띄운다(표기가 갈리지 않게)
+            ['key' => 'ops_sso',      'label' => 'SSO 제품',  'type' => 'input', 'suggest' => 1],
             ['key' => 'ops_note',     'label' => '메모',      'type' => 'rich'],
             ['key' => 'ops_db',       'label' => '운영 DB',   'type' => 'rich',  'copy' => 1],
             ['key' => 'haksa_db',     'label' => '학사 DB',   'type' => 'rich',  'copy' => 1],

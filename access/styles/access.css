@@ -41,7 +41,7 @@ button:disabled { opacity:.5; cursor:default; }
 
 /* 툴바 */
 .tools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
-.tools #fvpn { max-width:190px; }
+.tools #fvpn, .tools #fsso { max-width:190px; }
 .chip { height:30px; padding:0 12px; border:1px solid var(--line); border-radius:16px;
         background:var(--bg); color:var(--muted); font-size:13px; }
 .chip.on { background:var(--info-bg); border-color:var(--info); color:var(--info); font-weight:600; }
@@ -108,13 +108,19 @@ tr.r.ended, .card.ended { opacity:.6; }
 .atag { display:inline-block; flex:none; font-size:10px; font-weight:700; border-radius:5px;
         padding:1px 6px; line-height:1.5; margin:2px 4px 2px 0; vertical-align:middle;
         max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.atag.csms  { color:#1b6b4a; background:#e3f4ec; border:1px solid #bfe3d2; }
-.atag.admin { color:#2f5aa8; background:#e6edfb; border:1px solid #c6d6f2; }
-.atag.other { color:#a1442b; background:#fceae4; border:1px solid #f2c9bb; }
+/* 계정 칩 색 = 서버. 운영은 붉은 계열(조심), 테스트는 파란 계열. 버튼 테두리도 같은 색을 띤다
+   — 아이디가 비어 칩이 없는 곳도 어느 서버 버튼인지 보이게. */
+.atag.ops { color:#a1442b; background:#fceae4; border:1px solid #f2c9bb; }
+.atag.dev { color:#2f5aa8; background:#e6edfb; border:1px solid #c6d6f2; }
+.lgrp { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+.lgrp > .atag, .lgrp > .cp { margin:0; }
+.lgrp.ops > .cp:not(:hover):not(.done):not(.fail) { border-color:#f2c9bb; }
+.lgrp.dev > .cp:not(:hover):not(.done):not(.fail) { border-color:#c6d6f2; }
 @media (prefers-color-scheme: dark) {
-  .atag.csms  { color:#7fd4ab; background:#12301f; border-color:#204a33; }
-  .atag.admin { color:#9dbdf2; background:#182740; border-color:#2a4162; }
-  .atag.other { color:#f0a58b; background:#3a1f16; border-color:#5b3225; }
+  .atag.ops { color:#f0a58b; background:#3a1f16; border-color:#5b3225; }
+  .atag.dev { color:#9dbdf2; background:#182740; border-color:#2a4162; }
+  .lgrp.ops > .cp:not(:hover):not(.done):not(.fail) { border-color:#5b3225; }
+  .lgrp.dev > .cp:not(:hover):not(.done):not(.fail) { border-color:#2a4162; }
 }
 .mono { font-family:Consolas, "D2Coding", monospace; font-size:12px; color:var(--txt);
         display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

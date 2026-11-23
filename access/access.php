@@ -59,6 +59,7 @@ $__bwCurrent = 'access';
   <div class="tools">
     <span class="spacer"></span>
     <select id="fvpn" title="VPN 프로그램으로 거르기"></select>
+    <select id="fsso" title="운영 SSO 제품으로 거르기"></select>
     <label class="fchk"><input type="checkbox" id="onlyMissing"> 접속정보 없는 곳만</label>
     <label class="fchk"><input type="checkbox" id="showOff"> 미사용 대학 포함</label>
     <button id="btnNew" class="primary" type="button">+ 대학 추가</button>
@@ -109,6 +110,8 @@ $__bwCurrent = 'access';
 </div>
 
 <div class="toast" id="toast" hidden></div>
+<!-- SSO 제품 자동 완성 후보 — buildSsoFilter 가 채운다 -->
+<datalist id="dl-ops_sso"></datalist>
 
 <script>
 /* 상세/편집 화면 구성(공통 / 테스트 서버 / 운영 서버)은 PHP 에서 내려받아 한 곳에서만 관리한다 */
@@ -128,7 +131,7 @@ const flatPw = s => (s || "").replace(/\s*\n+\s*/g, " ");
    접속정보가 있으면 그 id, 아직 없으면 학교 id 로 구분한다. */
 const rowKey = r => (r.access_id ? "a" + r.access_id : "s" + r.school_id);
 
-let DATA = [], fver = "all", fvpn = "all", openKey = "";
+let DATA = [], fver = "all", fvpn = "all", fsso = "all", openKey = "";
 /* 리스트/카드 보기. 취향 문제라 이 브라우저에만 남긴다(읽기 실패해도 리스트로 동작). */
 let view = "list";
 try { if (localStorage.getItem("access_view") === "card") view = "card"; } catch (e) {}
@@ -336,6 +339,7 @@ async function load() {
   buildVers();
   buildOsFilter();
   buildVpnFilter();
+  buildSsoFilter();
   render();
 }
 
@@ -423,9 +427,41 @@ function vpnMatch(r) {
   return ps.includes(fvpn.slice(2));
 }
 
+/* SSO 필터 — 운영 서버의 'SSO 제품' 칸(ops_sso). VPN 과 같은 방식이다: 자유 입력이라 실제로
+   들어온 값만 후보가 되고, 쉼표로 여럿 적으면 하나하나로 고른다. 대소문자만 다른 값은
+   한 후보로 묶는다(먼저 나온 표기를 보여 준다). 저장 뒤에도 다시 만든다(saveCell). */
+const ssoList = r => (r.ops_sso || "").split(",").map(t => t.trim()).filter(Boolean);
+function buildSsoFilter() {
+  const n = {}, label = {};
+  let none = 0;
+  for (const r of DATA) {
+    const ps = [...new Set(ssoList(r).map(p => p.toLowerCase()))];
+    if (!ps.length) { none++; continue; }
+    for (const p of ssoList(r)) if (!label[p.toLowerCase()]) label[p.toLowerCase()] = p;
+    for (const p of ps) n[p] = (n[p] || 0) + 1;
+  }
+  // 고른 제품이 더는 없으면(이름을 고쳤거나 지웠을 때) 전체로 되돌린다
+  if (fsso.indexOf("p:") === 0 && !n[fsso.slice(2)]) fsso = "all";
+  const opts = [
+    ["all",  `SSO 전체 (${DATA.length})`],
+    ["none", `SSO 미입력 (${none})`],
+    ...Object.keys(n).sort().map(p => ["p:" + p, `${label[p]} (${n[p]})`]),
+  ];
+  $("fsso").innerHTML = opts.map(([v, l]) =>
+    `<option value="${escA(v)}"${v === fsso ? " selected" : ""}>${esc(l)}</option>`).join("");
+  // 입력칸 자동 완성 후보도 같은 목록으로 — 이미 있는 제품은 골라 넣게 해서 표기를 하나로 모은다
+  $("dl-ops_sso").innerHTML = Object.keys(n).sort().map(p => `<option value="${escA(label[p])}">`).join("");
+}
+function ssoMatch(r) {
+  if (fsso === "all")  return true;
+  const ps = ssoList(r).map(p => p.toLowerCase());
+  if (fsso === "none") return ps.length === 0;
+  return ps.includes(fsso.slice(2));
+}
+
 function matches(r, q) {
   if (!q) return true;
-  return [r.name, r.ver, r.os, r.ops_os, r.vpn, r.dev, r.ops, r.repo,
+  return [r.name, r.ver, r.os, r.ops_os, r.vpn, r.ops_sso, r.dev, r.ops, r.repo,
           r.login_ops_id, r.login_ops, r.login_dev_id, r.login_dev,
           val(r, "note"), val(r, "dev_db"), val(r, "ops_db"), val(r, "haksa_db")]
     .some(v => (v || "").toLowerCase().includes(q));
@@ -521,6 +557,7 @@ function applyFilter() {
                (fver === "all" || (r.ver || "") === fver) &&
                osMatch(r) &&
                vpnMatch(r) &&
+               ssoMatch(r) &&
                (!onlyMissing || !r.access_id) &&
                matches(r, q);
     const el = ROWEL.get(key);
@@ -593,12 +630,10 @@ function rowParts(r) {
   ].filter(Boolean).join("");
 
   // 사이트 주소는 복사 대상이 아니다 — '사이트' 칸의 링크를 누르면 되기 때문
-  // 운영·테스트 계정이 같으면(대부분) 칩 하나로 묶고, 다르면 각 버튼 앞에 따로 붙인다
-  const oneAcct = r.login_ops_id && r.login_ops_id === r.login_dev_id;
+  // 계정 칩은 서버(운영/테스트)별 색이라 계정이 같아도 버튼마다 따로 붙인다
   const quick = [
-    oneAcct ? acctChip(r.login_ops_id) : "",
-    r.login_ops ? (oneAcct ? "" : acctChip(r.login_ops_id)) + cpBtn(r.login_ops, "운영 로그인") : "",
-    r.login_dev ? (oneAcct ? "" : acctChip(r.login_dev_id)) + cpBtn(r.login_dev, "테스트 로그인") : "",
+    r.login_ops ? loginGrp("ops", r.login_ops_id, r.login_ops, "운영 로그인") : "",
+    r.login_dev ? loginGrp("dev", r.login_dev_id, r.login_dev, "테스트 로그인") : "",
     ...PLINK_SRC.map(([k, label]) => { const c = plinkCmd(val(r, k)); return c ? cpBtn(c, label) : ""; }),
   ].filter(Boolean).join("");
 
@@ -650,12 +685,16 @@ function rowHtml(r) {
   </tr>`;
 }
 
-/* 계정 칩 — 사이트 대부분이 csmsathena 아니면 admin 이라, 그 둘과 '그 외 고유 계정'을
-   색으로 갈라 두면 목록에서 훑기만 해도 어느 계정으로 붙어야 하는지 바로 보인다. */
-function acctChip(id) {
+/* 계정 칩 — 색은 계정 이름이 아니라 서버로 가른다(운영 = 붉은 계열, 테스트 = 파란 계열).
+   운영 비밀번호를 테스트로 착각해 붙여 넣는 일이 없게, 어느 서버 것인지가 먼저 보여야 한다. */
+function acctChip(id, env) {
   if (!id) return "";
-  const k = /^csmsathena$/i.test(id) ? "csms" : (/^admin$/i.test(id) ? "admin" : "other");
-  return `<span class="atag ${k}" title="계정 ${escA(id)}">${esc(id)}</span>`;
+  return `<span class="atag ${env}" title="${env === "ops" ? "운영" : "테스트"} 계정 ${escA(id)}">${esc(id)}</span>`;
+}
+
+/* 계정 칩 + 로그인 복사 버튼 한 벌. 줄이 넘어가도 둘이 떨어지지 않게 묶는다. */
+function loginGrp(env, id, pw, label) {
+  return `<span class="lgrp ${env}">${acctChip(id, env)}${cpBtn(pw, label)}</span>`;
 }
 
 /* 복사 버튼 — 값은 data-cp 에 담고, 클릭은 위임으로 한 번만 잡는다 */
@@ -730,7 +769,7 @@ function cellControl(f, v, r) {
     return `<textarea class="dedit" rows="${f.rows || 3}"${ph} data-orig="${escA(v)}">${esc(v)}</textarea>`;
   }
   // 학교명 중 26곳은 엑셀에서 온 줄바꿈이 들어 있다. input 은 줄바꿈을 못 담으므로 펴서 보여 준다.
-  const input = `<input class="dedit" type="text"${f.num ? ' inputmode="numeric"' : ""} value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
+  const input = `<input class="dedit" type="text"${f.num ? ' inputmode="numeric"' : ""}${f.suggest ? ` list="dl-${escA(f.key)}" autocomplete="off"` : ""} value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
   const parts = partsOf(f);
   if (!parts.length) return input;
   return `<div class="dpair">${input}${parts.map(p => subControl(p, r)).join("")}</div>`;
@@ -863,7 +902,8 @@ async function saveCell(cell, r) {
       if (j.access_id && !r.access_id) { r.access_id = j.access_id; openKey = "a" + j.access_id; }
     }
     if (jobs.length) toast("저장했습니다");
-    resetDetail();          // 저장된 값으로 상세를 새로 그린다
+    if (jobs.some(([k]) => k === "ops_sso")) buildSsoFilter();   // 새 제품명이 필터 후보에 바로 뜨게
+    resetDetail();         // 저장된 값으로 상세를 새로 그린다
     render();
   } catch (e) {
     toast("저장 실패: " + e.message);
@@ -966,6 +1006,12 @@ function numOf(key) {
   return f && f.num ? ' inputmode="numeric"' : "";
 }
 
+/* 자동 완성 칸(SSO 제품)은 후보 목록(datalist)을 붙인다 */
+function suggestOf(key) {
+  const f = ALLF.find(x => x.key === key);
+  return f && f.suggest ? ` list="dl-${escA(key)}" autocomplete="off"` : "";
+}
+
 function cellHtml(key, label, type, value) {
   // 서식 칸은 <label> 로 감싸지 않는다 — 라벨 클릭이 에디터 포커스를 가로챈다
   if (type === "rich" || RICH.has(key)) {
@@ -987,7 +1033,7 @@ function cellHtml(key, label, type, value) {
   return `<label class="ecell${type === "area" ? " full" : ""}">
     <span>${esc(label)}</span>
     ${type === "area" ? `<textarea data-k="${escA(key)}" rows="${(ALLF.find(x => x.key === key) || {}).rows || 3}"${placeholderOf(key)}>${v}</textarea>`
-                      : `<input data-k="${escA(key)}" type="text"${numOf(key)} value="${escA(value || "")}">`}
+                      : `<input data-k="${escA(key)}" type="text"${numOf(key)}${suggestOf(key)} value="${escA(value || "")}">`}
   </label>`;
 }
 
@@ -1250,7 +1296,7 @@ async function save() {
     if (isNew) {
       // 추가한 행을 바로 펼쳐서 무엇이 들어갔는지 확인할 수 있게 한다
       openKey = "a" + j.access_id;
-      fver = "all"; fvpn = "all";
+      fver = "all"; fvpn = "all"; fsso = "all";
       $("search").value = "";
     }
     await load();
@@ -1337,6 +1383,7 @@ $("searchClear").addEventListener("click", () => {
 // 들어오자마자 바로 학교명을 칠 수 있게
 $("search").focus();
 $("fvpn").addEventListener("change", () => { fvpn = $("fvpn").value; applyFilter(); });
+$("fsso").addEventListener("change", () => { fsso = $("fsso").value; applyFilter(); });
 $("onlyMissing").addEventListener("change", applyFilter);
 $("showOff").addEventListener("change", load);
 

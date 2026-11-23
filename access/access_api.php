@@ -71,6 +71,10 @@ try {
     if (array_key_exists('ops_cnt', $in)) $in['ops_cnt'] = access_norm_count($in['ops_cnt']);
     if (($in['key'] ?? '') === 'ops_cnt') $in['value'] = access_norm_count($in['value'] ?? '');
 
+    // SSO 제품명은 이미 쓰이는 표기로 맞춘다(대소문자·공백만 다른 입력이 다른 제품처럼 보이지 않게)
+    if (array_key_exists('ops_sso', $in)) $in['ops_sso'] = access_norm_sso($pdo, $in['ops_sso'], $accessId);
+    if (($in['key'] ?? '') === 'ops_sso') $in['value'] = access_norm_sso($pdo, $in['value'] ?? '', $accessId);
+
     if ($action === 'notice_seen') {
         access_notice_seen((int)$me['id'], $schoolId);
         echo json_encode(['ok' => true]);
