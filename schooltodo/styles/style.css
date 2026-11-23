@@ -121,11 +121,6 @@ div.tab{padding:0 0 0 14px}
 .arc-title:hover{color:var(--xl50);text-decoration:underline}
 .arc-sub{font-size:12px;color:var(--tx-quaternary);margin-top:2px;font-variant-numeric:tabular-nums}
 .arc-act{display:flex;gap:6px;flex:none}
-.sync-auto{
-  flex:none;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;
-  color:var(--tx-quaternary);cursor:pointer;white-space:nowrap;user-select:none;
-}
-.sync-auto input{width:14px;height:14px;margin:0;accent-color:var(--xl50);cursor:pointer}
 .sync-ind{
   flex:none;display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;
   font-family:var(--sans);font-size:12px;font-weight:600;color:var(--tx-tertiary);
@@ -172,6 +167,35 @@ div.tab{padding:0 0 0 14px}
 .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--tx-quinary)}
 
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+/* 보기 줄 오른쪽 — 해당없음 숨기기 | 버전별 일괄 변경 */
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:10px;padding-left:10px;border-left:1px solid var(--bo-secondary)}
+.btn-mini.bulk{color:var(--xl40);border-color:var(--xl50)}
+.btn-mini.bulk:hover{background:var(--xl95);border-color:var(--xl50)}
+/* 진행률 줄 오른쪽 — 갱신 단추 + 자동 체크 */
+.sync-box{flex:none;display:inline-flex;align-items:center;gap:8px}
+.sync-auto{
+  display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;
+  color:var(--tx-quaternary);cursor:pointer;white-space:nowrap;user-select:none;
+}
+.sync-auto input{width:14px;height:14px;margin:0;accent-color:var(--xl50);cursor:pointer}
+.vb-list{display:flex;flex-direction:column;gap:2px;max-height:40vh;overflow:auto;border:1px solid var(--bo-tertiary);border-radius:var(--r8);padding:6px}
+.vb-row{display:grid;grid-template-columns:auto 64px 44px 1fr;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--r6);cursor:pointer;font-size:13px}
+.vb-row:hover{background:var(--bg-subtle)}
+.vb-row input{width:15px;height:15px;margin:0;accent-color:var(--xl50)}
+.vb-ver{font-weight:700}
+.vb-n{color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
+.vb-by{font-size:11.5px;color:var(--tx-quinary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet-body select{
+  width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;
+  border:1px solid var(--bo-tertiary);border-radius:var(--r8);background:var(--bg-card);color:var(--tx-primary);
+}
+.vb-count{margin-right:auto;align-self:center;font-size:12.5px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
+.btn-submit:disabled{opacity:.5;cursor:default}
+.hide-ex{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;
+  color:var(--tx-quaternary);cursor:pointer;white-space:nowrap;user-select:none;
+}
+.hide-ex input{width:14px;height:14px;margin:0;accent-color:var(--xl50);cursor:pointer}
+.hide-ex:has(input:disabled){opacity:.5;cursor:default}
 .chip{
   display:inline-flex;align-items:center;gap:6px;padding:0 10px;height:30px;cursor:pointer;
   border:1px solid var(--bo-secondary);border-radius:var(--r8);background:var(--bg-card);
@@ -242,6 +266,12 @@ div.tab{padding:0 0 0 14px}
   height:30px;border-top:1px solid var(--gray80);
 }
 .grid tr.group .n{font-weight:500;margin-left:8px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}
+.grid tr.group .grp-in{display:inline-flex;align-items:center}
+.grid tr.group .grp-btn{
+  width:20px;height:20px;margin-left:8px;padding:0;font-size:11px;line-height:1;
+  background:var(--bg-card);color:var(--xl40);border:1px solid var(--gray80);border-radius:var(--r6);cursor:pointer;opacity:.7;
+}
+.grid tr.group .grp-btn:hover,.grid tr.group:hover .grp-btn{opacity:1;background:var(--xl50);border-color:var(--xl50);color:#fff}
 .grid .c-no{width:44px;text-align:center;background:var(--gray95);color:var(--tx-quaternary);font-size:12px;font-variant-numeric:tabular-nums}
 .grid .c-name{font-weight:600}
 .grid .c-ver{width:70px;color:var(--tx-quaternary);font-variant-numeric:tabular-nums}

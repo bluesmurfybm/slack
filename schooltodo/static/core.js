@@ -5,6 +5,7 @@ const APP = {
   rows: [],
   filters: { ver: null, status: null },
   menuCol: null,
+  menuVer: null,
   menuSheetId: null,
   historySchool: null,
   sort: { key: "name", dir: 1 },

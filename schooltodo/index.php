@@ -62,7 +62,7 @@ $bootJson = json_encode([
         <h1>Coursemos TaskSheet</h1>
       </div>
       <div class="site-act">
-        <button class="btn-ghost" id="csvBtn" onclick="downloadCsv()">엑셀(CSV) 내려받기</button>
+        <button class="btn-ghost" id="csvBtn" onclick="downloadCsv()" title="지금 탭 전체를 CSV 로 내려받습니다">엑셀(CSV) 내려받기</button>
         <button class="btn-ghost archive" id="archiveBtn" onclick="openArchive()" title="보관한 할일 보기">📦 보관함 <span class="n">0</span></button>
         <button class="btn-new" onclick="openSheetForm()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -96,10 +96,12 @@ $bootJson = json_encode([
       <div class="progress">
         <div class="bar"><i id="progressBar"></i></div>
         <span class="progress-text" id="progressText"></span>
-        <label class="sync-auto" title="켜 두면 다른 사람이 바꾼 것을 30초마다 받아 옵니다">
-          <input type="checkbox" id="syncAuto" onchange="setSyncAuto(this.checked)"> 자동 갱신</label>
-        <button type="button" class="sync-ind" id="syncInd" onclick="syncNow(true)" title="누르면 바로 받습니다">
-          <span class="ico">↻</span><span class="txt"></span></button>
+        <span class="sync-box">
+          <button type="button" class="sync-ind" id="syncInd" onclick="syncNow(true)" title="누르면 다른 사람이 바꾼 것을 바로 받습니다">
+            <span class="ico">↻</span><span class="txt"></span></button>
+          <label class="sync-auto" title="켜 두면 30초마다 받아 옵니다 (브라우저에 기억)">
+            <input type="checkbox" id="syncAuto" onchange="setSyncAuto(this.checked)"> 자동</label>
+        </span>
       </div>
 
       <div class="toolbar">
@@ -111,6 +113,11 @@ $bootJson = json_encode([
           <input id="q" type="text" placeholder="대학 이름·메모 검색" oninput="renderGrid()" autocomplete="off">
         </div>
         <div class="chips" id="statusFilter"></div>
+        <div class="toolbar-right">
+          <label class="hide-ex" title="해당없음 대학을 표에서 감춥니다. 상태에서 해당없음을 고르면 그때는 보입니다">
+            <input type="checkbox" id="hideExcluded" onchange="setHideExcluded(this.checked)"> 해당없음 숨기기</label>
+          <button type="button" class="btn-mini bulk" onclick="openVerBulk()" title="무들 버전을 골라 그 버전 대학 전부의 상태를 바꿉니다">🧩 버전별 일괄 변경</button>
+        </div>
       </div>
 
       <div class="grid-wrap">
@@ -173,6 +180,30 @@ $bootJson = json_encode([
         <button class="x" onclick="closeArchive()" aria-label="닫기">×</button>
       </div>
       <div class="arc-list" id="archiveList"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="verBulkOverlay" onclick="if(event.target===this)closeVerBulk()">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2>버전별 일괄 변경</h2>
+        <button class="x" onclick="closeVerBulk()" aria-label="닫기">×</button>
+      </div>
+      <div class="sheet-body">
+        <div class="field">
+          <label>무들 버전 (고른 버전의 대학 전부 — 거르기·숨김과 무관)</label>
+          <div class="vb-list" id="vbList"></div>
+        </div>
+        <div class="field">
+          <label for="vbStatus">바꿀 상태</label>
+          <select id="vbStatus"></select>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <span class="vb-count" id="vbCount"></span>
+        <button class="btn-ghost" onclick="closeVerBulk()">취소</button>
+        <button class="btn-submit" id="vbApply" onclick="applyVerBulk()">바꾸기</button>
+      </div>
     </div>
   </div>
 

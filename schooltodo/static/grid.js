@@ -28,12 +28,27 @@ function filterByStatus(status) {
   renderGrid();
 }
 
+/* 해당없음 숨기기 — 기본 켬, 브라우저에 기억. 상태 거르기에서 해당없음을 직접 고르면 그때는 보여 준다. */
+function hideExcluded() {
+  try { return localStorage.getItem("schooltodo.hideExcluded") !== "0"; } catch (e) { return true; }
+}
+function setHideExcluded(on) {
+  try { localStorage.setItem("schooltodo.hideExcluded", on ? "1" : "0"); } catch (e) { }
+  renderGrid();
+}
+function excludedHidden() {
+  const f = APP.filters.status;
+  return hideExcluded() && !(f && f.has(APP.boot.status_excluded));
+}
+
 function visibleRows() {
   const q = document.getElementById("q").value.trim().toLowerCase();
   const f = APP.filters;
+  const hideEx = excludedHidden();
   return APP.rows.filter((r) => (!f.ver || f.ver.has(r.ver))
     && (!f.vpn || f.vpn.has(r.vpn))
     && (!f.status || f.status.has(r.status))
+    && !(hideEx && r.status === APP.boot.status_excluded)
     && (!q || schoolLabel(r).toLowerCase().includes(q) || r.note.toLowerCase().includes(q)));
 }
 
@@ -62,12 +77,82 @@ function renderHeads() {
 function groupHead(ver, rows) {
   const excluded = rows.filter((r) => r.status === APP.boot.status_excluded).length;
   const done = rows.filter((r) => r.status === APP.boot.status_done).length;
-  return `<tr class="group"><td colspan="7">${esc(ver || "버전 없음")}
-    <span class="n">${esc(APP.boot.status_done)} ${done} / 대상 ${rows.length - excluded}</span></td></tr>`;
+  return `<tr class="group"><td colspan="7"><span class="grp-in">${esc(ver || "버전 없음")}
+    <span class="n">${esc(APP.boot.status_done)} ${done} / 대상 ${rows.length - excluded}</span>
+    <button type="button" class="grp-btn" onclick="openGroupMenu(event, ${JSON.stringify(ver)})"
+      title="이 버전 대학 일괄 변경" aria-label="${esc(ver || "버전 없음")} 일괄 변경">▾</button></span></td></tr>`;
+}
+
+/* 버전 묶음 머리줄 ▾ — 그 버전의 대학 전부(거르기·숨김과 무관)를 한 번에 바꾼다 (예: 3.2 전부 해당없음) */
+function openGroupMenu(e, ver) {
+  e.stopPropagation();
+  closeHistory();
+  APP.menuCol = null;
+  APP.menuVer = ver;
+  const rows = APP.rows.filter((r) => r.ver === ver);
+  const menu = document.getElementById("colMenu");
+  menu.innerHTML = `<div class="cm-title">${esc(ver || "버전 없음")} 대학 ${rows.length}곳 전부 일괄 변경</div><div class="cm-bulk">`
+    + APP.boot.statuses.map((st, i) => `<button type="button" class="cm-st ${STATUS_CLASS[st]}" onclick="bulkStatusVer(${i})">${esc(st)}</button>`).join("")
+    + `</div>`;
+  const at = e.currentTarget.getBoundingClientRect();
+  menu.classList.add("open");
+  menu.style.top = at.bottom + 4 + "px";
+  menu.style.left = Math.max(8, Math.min(at.left, window.innerWidth - menu.offsetWidth - 8)) + "px";
+}
+
+function bulkStatusVer(index) {
+  const status = APP.boot.statuses[index];
+  const ver = APP.menuVer;
+  return bulkApply({ status }, `상태를 "${status}"(으)로 바꿉니다.`, APP.rows.filter((r) => r.ver === ver), `${ver || "버전 없음"} 대학 전부 — `);
+}
+
+/* ---------- 버전별 일괄 변경 창 ---------- */
+
+function openVerBulk() {
+  closeColMenu();
+  const vers = [...new Set(APP.rows.map((r) => r.ver))].sort(natural);
+  const countOf = (ver) => {
+    const rows = APP.rows.filter((r) => r.ver === ver);
+    const by = APP.boot.statuses.map((st) => `${st} ${rows.filter((r) => r.status === st).length}`).join(" · ");
+    return { n: rows.length, by };
+  };
+  document.getElementById("vbList").innerHTML = vers.map((ver, i) => {
+    const c = countOf(ver);
+    return `<label class="vb-row"><input type="checkbox" value="${esc(ver)}" onchange="renderVerBulkCount()">
+      <span class="vb-ver">${esc(ver || "버전 없음")}</span><span class="vb-n">${c.n}곳</span>
+      <span class="vb-by">${esc(c.by)}</span></label>`;
+  }).join("");
+  const sel = document.getElementById("vbStatus");
+  sel.innerHTML = APP.boot.statuses.map((st) => `<option value="${esc(st)}"${st === APP.boot.status_excluded ? " selected" : ""}>${esc(st)}</option>`).join("");
+  renderVerBulkCount();
+  document.getElementById("verBulkOverlay").classList.add("open");
+}
+function closeVerBulk() {
+  document.getElementById("verBulkOverlay").classList.remove("open");
+}
+function verBulkPicked() {
+  return [...document.querySelectorAll("#vbList input:checked")].map((el) => el.value);
+}
+function renderVerBulkCount() {
+  const vers = new Set(verBulkPicked());
+  const n = APP.rows.filter((r) => vers.has(r.ver)).length;
+  document.getElementById("vbCount").textContent = vers.size ? `${vers.size}개 버전 · 대학 ${n}곳` : "버전을 고르세요";
+  document.getElementById("vbApply").disabled = !vers.size;
+}
+async function applyVerBulk() {
+  const vers = new Set(verBulkPicked());
+  const status = document.getElementById("vbStatus").value;
+  const rows = APP.rows.filter((r) => vers.has(r.ver));
+  const label = [...vers].map((v) => v || "버전 없음").join(", ");
+  closeVerBulk();
+  return bulkApply({ status }, `상태를 "${status}"(으)로 바꿉니다.`, rows, `${label} 대학 전부 — `);
 }
 
 function renderGrid() {
   renderHeads();
+  const hideBox = document.getElementById("hideExcluded");
+  hideBox.checked = hideExcluded();
+  hideBox.disabled = !!(APP.filters.status && APP.filters.status.has(APP.boot.status_excluded));
   const rows = sortedRows(visibleRows());
   const body = document.getElementById("gridBody");
   if (!rows.length) {
@@ -154,6 +239,7 @@ function openColMenu(e, col) {
 
 function closeColMenu() {
   APP.menuCol = null;
+  APP.menuVer = null;
   document.getElementById("colMenu").classList.remove("open");
 }
 
@@ -216,10 +302,10 @@ function bulkNote() {
   return bulkApply({ note }, note ? `메모를 "${note}"(으)로 채웁니다.` : "메모를 지웁니다.");
 }
 
-async function bulkApply(patch, what) {
-  const rows = visibleRows();
+async function bulkApply(patch, what, rows, scope) {
+  rows = rows || visibleRows();
   if (!rows.length) { showToast("바꿀 대학이 없어요"); return; }
-  if (!confirm(`지금 보이는 ${rows.length}곳의 ${what}\n계속할까요?`)) return;
+  if (!confirm(`${scope || "지금 보이는 "}${rows.length}곳의 ${what}\n계속할까요?`)) return;
   closeColMenu();
   if (await saveCells(rows.map((r) => ({ school_id: r.school_id, ...patch })))) {
     showToast(`${rows.length}곳을 바꿨습니다`);
@@ -228,7 +314,7 @@ async function bulkApply(patch, what) {
 
 // 메뉴를 다시 그리면 눌린 요소가 문서에서 빠져 contains 로는 안쪽 클릭을 가릴 수 없다
 document.getElementById("colMenu").addEventListener("click", (e) => e.stopPropagation());
-document.addEventListener("click", () => { if (APP.menuCol) closeColMenu(); });
+document.addEventListener("click", () => { if (APP.menuCol || APP.menuVer != null) closeColMenu(); });
 
 /* ---------- 링크 복사 ---------- */
 
