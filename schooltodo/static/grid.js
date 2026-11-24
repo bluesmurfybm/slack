@@ -213,8 +213,10 @@ async function saveCells(items) {
     if (i >= 0) APP.rows[i] = row;
   }
   const s = currentSheet();
+  const wasComplete = isComplete(s.counts);
   for (const st of APP.boot.statuses) s.counts[st] = APP.rows.filter((r) => r.status === st).length;
   renderSheet();
+  if (!wasComplete && isComplete(s.counts)) celebrate(s.title);
   return true;
 }
 
