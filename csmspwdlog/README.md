@@ -87,7 +87,7 @@ Description=csmspwdlog slack bot
 After=network-online.target
 
 [Service]
-User=nginx
+User=apache
 WorkingDirectory=/var/www/repos/slack/csmspwdlog/bot
 ExecStart=/var/www/repos/slack/csmspwdlog/bot/venv/bin/python bot.py
 Restart=always
@@ -98,7 +98,7 @@ WantedBy=multi-user.target
 ```
 
 - 실행 계정이 `bot/var/` 에 쓸 수 있어야 한다(로그 `bot/var/bot.log`, 1MB 회전).
-- nginx 에서 `location ^~ /csmspwdlog/bot/ { deny all; }` 로 막는다(`.env` 와 CLI 가 여기 있다).
+- `bot/` 은 웹에서 열리면 안 된다(`.env` 와 CLI 가 여기 있다). Apache 는 `bot/.htaccess`(`Require all denied`)가 막는다 — `AllowOverride` 가 꺼져 있으면 읽히지 않으니 배포 뒤 `…/csmspwdlog/bot/.env.example` 이 403 인지 확인한다. nginx 로 서비스한다면 `location ^~ /csmspwdlog/bot/ { deny all; }` 를 넣는다.
 - 개발 PC(Windows)는 `bot\start_bot.bat`.
 
 ## 점검
