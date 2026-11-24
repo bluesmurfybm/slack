@@ -213,8 +213,17 @@ $bootJson = json_encode([
 
   <div class="toast" id="toast"></div>
 
+  <div class="celebrate" id="celebrate" onclick="closeCelebrate()">
+    <div class="celebrate-card">
+      <div class="celebrate-emoji">🎉</div>
+      <h3>와! 시트를 전부 채웠어요!</h3>
+      <p id="celebrateSheet"></p>
+      <span class="celebrate-hint">아무 데나 누르면 닫혀요</span>
+    </div>
+  </div>
+
   <script>const SCHOOLTODO_BOOT = <?= $bootJson ?>;</script>
-  <?php foreach (['core', 'sheets', 'grid', 'main', 'sync'] as $script): ?>
+  <?php foreach (['core', 'sheets', 'grid', 'celebrate', 'main', 'sync'] as $script): ?>
   <script src="<?= schooltodo_asset("static/{$script}.js") ?>"></script>
   <?php endforeach; ?>
 </body>

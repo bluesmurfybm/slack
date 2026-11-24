@@ -10,6 +10,8 @@
  *   GET    /sheets/{id}/cells/{school_id}/history   셀이 바뀌기 전 값 (최근 10건)
  *   GET    /sheets/{id}/versions  버전별 대학 상태·갱신 날짜 (?ver=4.5 ?status=미조치)
  *                                 — 로그인 대신 Authorization: Bearer <schooltodo_api_token> 도 받는다
+ *   PUT    /sheets/{id}/status    대학별 상태 변경 {items: [{school_id | school[, ver], status, note}], by}
+ *                                 — status 는 영문 코드·한글 둘 다. 로그인 대신 Bearer <schooltodo_api_token> 도 받는다
  */
 
 require_once __DIR__ . '/bootstrap.php';

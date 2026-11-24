@@ -32,7 +32,7 @@ function schooltodo_config($over = []) {
     return $over + [
         'db' => [],
         'portal_url' => '..',
-        'api_token' => '',   // 버전별 조회(GET /sheets/{id}/versions) 전용 Bearer 토큰. 비면 토큰 호출 꺼짐
+        'api_token' => '',   // 버전별 조회·상태 변경(GET versions, PUT status) Bearer 토큰. 비면 토큰 호출 꺼짐
     ];
 }
 
