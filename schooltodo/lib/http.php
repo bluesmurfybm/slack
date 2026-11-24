@@ -79,8 +79,11 @@ function schooltodo_handle($ctx, $req) {
  */
 function schooltodo_route($ctx, $req) {
     if (($req['seg'][0] ?? '') === 'whoami') return schooltodo_route_whoami($ctx);
-    // 토큰은 읽기 전용 버전별 조회에서만 로그인 대신 받는다 — 쓰기 API 는 계속 포털 계정으로만
-    $byToken = !empty($ctx['token_ok']) && schooltodo_is_token_route($req);
+    // 읽기 토큰은 버전별 조회만, 쓰기 토큰은 그것과 상태 변경(PUT /sheets/{id}/status)만 로그인 대신 받는다.
+    // 시트 만들기·수정·삭제와 화면용 /cells 는 계속 포털 계정으로만
+    $read = !empty($ctx['token_ok']) || !empty($ctx['write_token_ok']);
+    $byToken = ($read && schooltodo_is_token_route($req))
+        || (!empty($ctx['write_token_ok']) && schooltodo_is_write_token_route($req));
     if (!$ctx['identity'] && !$byToken) throw new SchooltodoError('로그인이 필요합니다', 401);
 
     return match ($req['seg'][0] ?? '') {
@@ -101,6 +104,20 @@ function schooltodo_is_token_route($req) {
         && $seg[0] === 'sheets'
         && ctype_digit((string)$seg[1])
         && $seg[2] === 'versions';
+}
+
+/**
+ * 쓰기 토큰으로 부를 수 있는 경로인가 — PUT /sheets/{id}/status 하나뿐.
+ * @param array $req
+ * @return bool
+ */
+function schooltodo_is_write_token_route($req) {
+    $seg = $req['seg'];
+    return $req['method'] === 'PUT'
+        && count($seg) === 3
+        && $seg[0] === 'sheets'
+        && ctype_digit((string)$seg[1])
+        && $seg[2] === 'status';
 }
 
 /**

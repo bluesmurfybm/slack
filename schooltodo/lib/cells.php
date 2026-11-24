@@ -13,7 +13,7 @@ function schooltodo_cells_fill($ctx, $sheetId, $body) {
     $items = $body['items'] ?? null;
     if (!is_array($items) || !$items) throw new SchooltodoError('items 를 한 건 이상 보내 주세요', 422);
 
-    $by = $ctx['identity']['name'];
+    $by = $ctx['by'] ?? $ctx['identity']['name'];
     $now = date('Y-m-d H:i:s');
     $schoolIds = [];
 
@@ -146,4 +146,53 @@ function schooltodo_cell_history($ctx, $sheetId, $schoolId) {
     $st->execute([$sheetId, $schoolId]);
 
     return ['school_id' => $schoolId, 'history' => $st->fetchAll()];
+}
+
+/**
+ * 외부(토큰) 호출용 상태 변경. /cells 와 같지만 status 가 꼭 있어야 하고 영문 코드(todo…)·한글 둘 다 받으며,
+ * 응답도 /versions 처럼 영문 코드로 준다. 로그인 없이 토큰으로 부르면 갱신한 사람은 본문 by(없으면 'API')다.
+ * @param array $ctx
+ * @param int $sheetId
+ * @param array $body
+ * @return array
+ */
+function schooltodo_status_change($ctx, $sheetId, $body) {
+    $items = $body['items'] ?? null;
+    if (!is_array($items) || !$items) throw new SchooltodoError('items 를 한 건 이상 보내 주세요', 422);
+
+    $fill = [];
+    foreach (array_values($items) as $i => $item) {
+        try {
+            if (!is_array($item)) throw new SchooltodoError('객체여야 합니다', 422);
+            if (!array_key_exists('status', $item)) throw new SchooltodoError('status 가 필요합니다', 422);
+            $item['status'] = schooltodo_want_status_any($item['status']);
+        } catch (SchooltodoError $e) {
+            throw new SchooltodoError("items[{$i}]: " . $e->getMessage(), $e->status());
+        }
+        $fill[] = $item;
+    }
+
+    if ($ctx['identity']) {
+        $by = $ctx['identity']['name'];
+    } else {
+        $by = schooltodo_want_text($body['by'] ?? '', 'by', 60);
+        if ($by === '') $by = 'API';
+    }
+
+    $res = schooltodo_cells_fill(['by' => $by] + $ctx, $sheetId, ['items' => $fill]);
+
+    return [
+        'updated' => $res['updated'],
+        'schools' => array_map(fn($r) => [
+            'school_id' => $r['school_id'],
+            'name' => $r['name'],
+            'ver' => $r['ver'],
+            'code' => $r['code'],
+            'status' => SCHOOLTODO_STATUS_CODES[$r['status']] ?? $r['status'],
+            'status_label' => $r['status'],
+            'note' => $r['note'],
+            'updated_at' => $r['updated_at'],
+            'updated_by' => $r['updated_by'],
+        ], $res['rows']),
+    ];
 }
