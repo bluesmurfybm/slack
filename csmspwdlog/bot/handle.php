@@ -47,6 +47,10 @@ try {
 
     $results = [];
     foreach ($hosts as $h) {
+        // 등록되지 않은 주소는 요청이 아니다 — DM 도 기록도 남기지 않는다
+        $schools = csmspwdlog_find($pdo, $h['host']);
+        if (!$schools) { $results[] = ['host' => $h['host'], 'result' => 'ignored']; continue; }
+
         $id = null;
         if (!$dry) {
             // 같은 메시지를 두 번 받아도(Socket Mode 재전송·재기동) DM 은 한 번만 나가야 한다
@@ -59,20 +63,14 @@ try {
             $id = (int)$pdo->lastInsertId();
         }
 
-        $schools = csmspwdlog_find($pdo, $h['host']);
         $blocks = []; $hasAccount = false;
         foreach ($schools as $s) {
             $acc = csmspwdlog_accounts($pdo, $s['school_id'], $s['env']);
             if ($acc) $hasAccount = true;
             $blocks[] = csmspwdlog_dm_text($s, $acc, $dry);
         }
-        if (!$schools) {
-            $result = 'not_found';
-            $dm = '`' . csmspwdlog_slack_esc($h['host']) . "` — EnvHub 에 등록된 대학을 찾지 못했습니다.\n운영 또는 테스트 사이트 주소를 그대로 입력해 주세요.";
-        } else {
-            $result = $hasAccount ? 'sent' : 'no_info';
-            $dm = implode("\n\n", $blocks);
-        }
+        $result = $hasAccount ? 'sent' : 'no_info';
+        $dm = implode("\n\n", $blocks);
 
         $detail = count($schools) > 1 ? '대학 ' . count($schools) . '곳 일치' : '';
         if ($dry) {
@@ -87,10 +85,10 @@ try {
             $detail = trim($detail . ' ' . $err);
         }
 
-        $first = $schools[0] ?? null;
+        $first = $schools[0];
         $pdo->prepare("UPDATE csmspwdlog SET env = ?, school_id = ?, school_name = ?, ver = ?, result = ?, detail = ? WHERE id = ?")
-            ->execute([$first['env'] ?? '', $first['school_id'] ?? null,
-                       mb_substr(implode(', ', array_column($schools, 'name')), 0, 200), $first['ver'] ?? '',
+            ->execute([$first['env'], $first['school_id'],
+                       mb_substr(implode(', ', array_column($schools, 'name')), 0, 200), $first['ver'],
                        $result, mb_substr($detail, 0, 500), $id]);
         $results[] = ['host' => $h['host'], 'result' => $result];
     }

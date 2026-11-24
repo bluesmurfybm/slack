@@ -13,7 +13,6 @@ require_once __DIR__ . '/../access/db.php';
 
 const CSMSPWDLOG_RESULTS = [
     'sent'      => '전송',
-    'not_found' => '대학 없음',
     'no_info'   => '계정 없음',
     'dm_failed' => 'DM 실패',
     'pending'   => '처리 중',
@@ -39,7 +38,7 @@ function csmspwdlog_table(PDO $pdo): void {
             `school_id`     INT UNSIGNED NULL COMMENT 'schools.id',
             `school_name`   VARCHAR(200) NOT NULL DEFAULT '' COMMENT '요청 시점 대학명',
             `ver`           VARCHAR(20)  NOT NULL DEFAULT '' COMMENT '요청 시점 버전',
-            `result`        VARCHAR(20)  NOT NULL DEFAULT 'pending' COMMENT 'pending|sent|not_found|no_info|dm_failed',
+            `result`        VARCHAR(20)  NOT NULL DEFAULT 'pending' COMMENT 'pending|sent|no_info|dm_failed',
             `detail`        VARCHAR(500) NOT NULL DEFAULT '' COMMENT '오류코드 등',
             PRIMARY KEY (`id`),
             UNIQUE KEY `uq_msg_host` (`channel`, `msg_ts`, `host`),
@@ -62,19 +61,24 @@ function csmspwdlog_host(string $u): string {
 /**
  * 슬랙 메시지 본문에서 사이트 주소를 뽑는다 → [['raw'=>원문, 'host'=>호스트], …]
  * 슬랙이 링크로 바꾼 <url|라벨> 과, 링크가 안 걸린 맨 도메인을 둘 다 본다.
+ * 주소만 올린 글일 때만 돌려준다 — 문장에 섞인 주소·멘션이 붙은 글은 대화로 보고 [] 를 돌려준다.
  */
 function csmspwdlog_hosts_in(string $text): array {
     $found = [];
-    if (preg_match_all('~<(https?://[^|>\s]+)(?:\|[^>]*)?>~i', $text, $m)) {
+    $text = str_replace('`', ' ', $text);   // `주소` 처럼 코드 표기로 올리면 슬랙이 링크 미리보기를 붙이지 않는다
+    $linkRe ='~<(https?://[^|>\s]+)(?:\|[^>]*)?>~i';
+    if (preg_match_all($linkRe, $text, $m)) {
         foreach ($m[1] as $raw) $found[] = html_entity_decode($raw, ENT_QUOTES);
     }
-    $rest = preg_replace('~<[^>]*>~', ' ', $text);   // 멘션·채널·mailto 링크는 주소가 아니다
+    $rest = (string)preg_replace($linkRe, ' ', $text);
+    if (strpos($rest, '<') !== false) return [];   // 멘션·채널·mailto 가 붙은 글
 
     // 링크가 안 걸린 글에서는 파일 이름(index.php 등)이 도메인처럼 보인다
     $notTld = ['php', 'html', 'htm', 'js', 'css', 'txt', 'log', 'md', 'json', 'xml', 'sql', 'zip', 'png', 'jpg',
                'jpeg', 'gif', 'pdf', 'xlsx', 'xls', 'docx', 'pptx', 'hwp', 'sh', 'py', 'bat', 'conf', 'ini', 'yml', 'yaml'];
     $re = '~(?<![\w@.\-/])((?:https?://)?(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,24}|\d{1,3}(?:\.\d{1,3}){3})(?::\d{2,5})?(?:[/?#]\S*)?)~i';
-    if (preg_match_all($re, (string)$rest, $m)) {
+    if (trim((string)preg_replace($re, ' ', $rest), " \t\r\n,") !== '') return [];   // 주소 말고 다른 글이 있다
+    if (preg_match_all($re, $rest, $m)) {
         foreach ($m[1] as $raw) {
             if (!preg_match('~^https?://~i', $raw)) {
                 $h = csmspwdlog_host($raw);

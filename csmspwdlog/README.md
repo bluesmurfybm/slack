@@ -40,7 +40,9 @@ DB 는 `portal_db()` 로 붙는다. `access_db()` 는 부를 때마다 EnvHub �
 
 - 슬랙이 링크로 바꾼 주소와 링크가 안 걸린 맨 도메인을 둘 다 읽는다. 메시지 하나에 최대 5개.
 - 스킴·`www.`·포트·경로를 떼고 소문자로 만든 호스트를, 사용 중인 대학(`schools.active=1`)의 운영(`ops`)·테스트(`dev`) 주소 호스트와 **완전 일치**로 비교한다.
-- 주소가 없는 글은 무시한다. 주소가 있는데 대학을 못 찾으면 그 사실을 DM 으로 알리고 `대학 없음` 으로 남긴다.
+- **주소만 올린 글에만 반응한다.** 문장에 섞인 주소, 멘션이 붙은 글은 대화로 보고 무시한다(주소 여러 개를 공백·쉼표로 나열한 글은 받는다).
+- 주소를 백틱으로 감싸 코드 표기(`` `cyber.○○.ac.kr` ``)로 올려도 받는다. 이렇게 올리면 슬랙이 링크 미리보기를 붙이지 않는다.
+- **등록되지 않은 주소는 조용히 무시한다.** DM 도 보내지 않고 이력에도 남기지 않는다. 채널에 다른 링크가 올라와도 반응하지 않게 하려는 것이다.
 - 같은 메시지는 한 번만 처리한다(`UNIQUE(channel, msg_ts, host)`).
 
 ## 표 `csmspwdlog`
@@ -51,9 +53,9 @@ DB 는 `portal_db()` 로 붙는다. `access_db()` 는 부를 때마다 EnvHub �
 | `channel`, `msg_ts` | 슬랙 채널 ID, 메시지 ts |
 | `slack_user_id`, `slack_name`, `slack_email` | 요청자 |
 | `url_raw`, `host` | 입력한 주소 원문, 정규화한 호스트 |
-| `env` | 입력한 주소가 어느 쪽인지: `ops` 운영 / `dev` 테스트 / 빈 값은 대학을 못 찾음 |
+| `env` | 입력한 주소가 어느 쪽인지: `ops` 운영 / `dev` 테스트 |
 | `school_id`, `school_name`, `ver` | 대학. 이름·버전은 요청 시점 값 |
-| `result`, `detail` | `sent` 전송 / `not_found` 대학 없음 / `no_info` 계정 없음 / `dm_failed` DM 실패 / `pending` 처리 중, 오류코드 |
+| `result`, `detail` | `sent` 전송 / `no_info` 계정 없음 / `dm_failed` DM 실패 / `pending` 처리 중, 오류코드 |
 
 화면의 요청자 이름은 `slack_email` 을 포털 사용자(`portal_users.slack_email`, 비어 있으면 `email`)와 맞춰 보여 준다.
 
