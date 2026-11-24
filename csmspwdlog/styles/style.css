@@ -1,0 +1,49 @@
+/* Coursemos PwdLog 전용 스타일.
+ * :root 변수 / body / .badge / .empty / .err 는 ../slack/styles/common.css, 상단바는 ../slack/styles/header.css. */
+
+.wrap { width:100%; margin:0; padding:24px 24px 40px; }
+
+.head { margin-bottom:14px; }
+.head h1 { font-size:18px; font-weight:600; margin:0; display:flex; align-items:center; gap:10px; }
+.head .desc { margin:6px 0 0; font-size:13px; color:var(--muted); }
+
+input, button, select {
+  font-family:inherit; border:1px solid var(--line); border-radius:8px;
+  background:var(--bg); color:var(--txt); font-size:13px; padding:0 10px; height:32px;
+}
+button { cursor:pointer; }
+button:disabled { opacity:.5; cursor:default; }
+
+.tools { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+.tools #fq { width:240px; max-width:100%; }
+.spacer { flex:1; }
+.muted { color:var(--muted); }
+
+.box { background:var(--bg); border:1px solid var(--line); border-radius:12px; overflow-x:auto; }
+table { width:100%; min-width:860px; border-collapse:collapse; font-size:13px; }
+th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+th { background:var(--bg2); color:var(--muted); font-weight:600; font-size:12px; white-space:nowrap; }
+tbody tr:last-child td { border-bottom:0; }
+tbody tr:hover { background:var(--bg2); }
+.c-at { width:140px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.c-ver { width:70px; white-space:nowrap; }
+.c-env { width:80px; }
+.c-res { width:170px; }
+.c-url { word-break:break-all; color:var(--muted); }
+.nm { font-weight:500; }
+.sub { font-size:12px; color:var(--hint); word-break:break-all; }
+
+.tag { display:inline-block; font-size:11px; padding:2px 9px; border-radius:8px; white-space:nowrap;
+       background:var(--bg2); color:var(--muted); }
+.tag.env-ops { background:#fdecea; color:#b3261e; }
+.tag.env-dev { background:var(--info-bg); color:var(--info); }
+.tag.res-sent { background:#e6f4ea; color:#1e6b34; }
+.tag.res-dm_failed { background:#fdecea; color:#b3261e; }
+.tag.res-not_found, .tag.res-no_info { background:#fff4e0; color:#8a5a00; }
+@media (prefers-color-scheme: dark) {
+  .tag.env-ops, .tag.res-dm_failed { background:#3d1f1c; color:#f2a59f; }
+  .tag.res-sent { background:#1a3323; color:#8fd3a3; }
+  .tag.res-not_found, .tag.res-no_info { background:#3a2e12; color:#e6c170; }
+}
+
+.pager { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-top:10px; font-size:13px; color:var(--muted); }

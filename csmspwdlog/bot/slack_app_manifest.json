@@ -1,0 +1,32 @@
+{
+  "display_information": {
+    "name": "Coursemos PwdLog",
+    "description": "채널에 대학 사이트 주소를 올리면 관리자 계정을 DM 으로 보냅니다",
+    "background_color": "#4a2f5c"
+  },
+  "features": {
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": true
+    },
+    "bot_user": {
+      "display_name": "Coursemos PwdLog",
+      "always_online": true
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["channels:history", "groups:history", "chat:write", "users:read", "users:read.email"]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "bot_events": ["message.channels", "message.groups"]
+    },
+    "interactivity": { "is_enabled": false },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": true,
+    "token_rotation_enabled": false
+  }
+}

@@ -38,5 +38,8 @@
     "desc": "유지보수 사이트의 URL·계정·담당자·계약·처리 이력을 한곳에서 찾아 복사합니다.", "color": "#B7472A",
     "badge": "inbox" },
   { "key": "schooltodo", "emoji": "✅", "label": "Coursemos TaskSheet", "path": "schooltodo/index.php",
-    "desc": "대학마다 하나씩 해야 하는 일을 탭으로 만들고 대학별 조치 상태를 체크합니다.", "color": "#1D7044" }
+    "desc": "대학마다 하나씩 해야 하는 일을 탭으로 만들고 대학별 조치 상태를 체크합니다.", "color": "#1D7044" },
+  { "key": "csmspwdlog", "emoji": "🔐", "label": "Coursemos PwdLog", "path": "csmspwdlog/index.php",
+    "desc": "슬랙에서 대학 관리자 계정을 요청해 받아 간 이력을 확인합니다.", "color": "#7A4B8F",
+    "group": "Coursemos" }
 ]

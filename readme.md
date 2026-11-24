@@ -1016,6 +1016,7 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
 | access (Coursemos EnvHub · 학교 접속 정보) | [access/README.md](access/README.md) |
 | sitehub (BlueLab SiteHub) | [sitehub/README.md](sitehub/README.md) |
 | schooltodo (Coursemos TaskSheet · 대학 일괄 할일) | [schooltodo/README.md](schooltodo/README.md) |
+| csmspwdlog (Coursemos PwdLog · 슬랙 관리자 계정 요청 이력) | [csmspwdlog/README.md](csmspwdlog/README.md) |
 | slackai (WorkHub AI · 테스트베드) | [slackai/README.md](slackai/README.md) |
 | bluecart (BlueCart · 물품 요청) | [bluecart/README.md](bluecart/README.md) |
 | blueledger (BlueExpense · 출장여비) | [blueledger/README.md](blueledger/README.md) |
@@ -1028,6 +1029,7 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
 | 파일 | 용도 | 비고 |
 |---|---|---|
 | `slackai/worker/.env` | slackai 워커 설정(PHP 경로, Slack 앱 토큰 xapp/xoxb, 개인 xoxp 토큰, API 키, 예산) | `slackai/worker/.env.example` 복사. `config.php` 에 `'slackai'` 절도 추가 |
+| `csmspwdlog/bot/.env` | csmspwdlog 봇 설정(Slack 앱 토큰 xapp/xoxb, 채널 ID, PHP 경로) | `csmspwdlog/bot/.env.example` 복사 |
 | `config.local.php` (루트) | 포털 SSO 토큰 암호화 키 | **자동 생성됨**(최초 실행 시) |
 | `sso_secret.key` (루트) | book과 공유하는 SSO 서명 키 | **자동 생성됨**(최초 실행 시) |
 | `vapid.key` (루트) | 웹 푸시 서명 키쌍 | **자동 생성됨**(첫 알림 사용 시). 서버를 옮기면 같이 옮겨야 구독이 유지된다 |
@@ -1195,6 +1197,7 @@ PHP 모듈은 프록시 블록이 필요 없다. 대신 **문서루트 아래에
 location ^~ /moodle/watch/  { deny all; }
 location ^~ /learn/var/     { deny all; }
 location ^~ /envlog/daemon/ { deny all; }
+location ^~ /csmspwdlog/bot/ { deny all; }
 location ^~ /book/tools/    { deny all; }
 location ~ \.db$            { deny all; }
 ```
