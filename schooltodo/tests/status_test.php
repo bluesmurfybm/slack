@@ -32,11 +32,11 @@ final class status_test extends TestCase
         return $st->fetch();
     }
 
-    /** 쓰기 토큰으로 영문 코드·한글 상태를 바꾸고, 응답은 영문 코드로 준다 */
-    public function test_쓰기_토큰으로_상태_변경(): void
+    /** 토큰으로 영문 코드·한글 상태를 바꾸고, 응답은 영문 코드로 준다 */
+    public function test_토큰으로_상태_변경(): void
     {
         $this->seed();
-        $res = $this->put(['write_token_ok' => true], ['by' => 'safepush', 'items' => [
+        $res = $this->put(['token_ok' => true], ['by' => 'safepush', 'items' => [
             ['school_id' => 1, 'status' => 'prod_applied', 'note' => '반영 끝'],
             ['school' => '나대', 'ver' => '3.9', 'status' => '해당없음'],
         ]]);
@@ -60,7 +60,7 @@ final class status_test extends TestCase
     public function test_메모_유지와_기본_by(): void
     {
         $this->seed();
-        $res = $this->put(['write_token_ok' => true], ['items' => [['school_id' => 1, 'status' => 'dev_applied']]]);
+        $res = $this->put(['token_ok' => true], ['items' => [['school_id' => 1, 'status' => 'dev_applied']]]);
 
         $this->assertSame(200, $res['status']);
         $this->assertSame(['status' => '개발반영', 'note' => '작업중', 'updated_by' => 'API'], $this->cell(1));
@@ -77,22 +77,21 @@ final class status_test extends TestCase
         $this->assertSame('사용자2', $this->cell(1)['updated_by']);
     }
 
-    /** 읽기 토큰·인증 없음은 401 */
-    public function test_읽기_토큰은_쓰기_불가(): void
+    /** 토큰도 세션도 없으면 401 */
+    public function test_인증_없으면_401(): void
     {
         $this->seed();
         $body = ['items' => [['school_id' => 1, 'status' => 'todo']]];
 
-        $this->assertSame(401, $this->put(['token_ok' => true], $body)['status']);
         $this->assertSame(401, $this->put([], $body)['status']);
         $this->assertSame('진행중', $this->cell(1)['status']);
     }
 
-    /** 쓰기 토큰은 상태 변경·버전별 조회만 — 시트 목록·/cells·삭제는 여전히 401 */
-    public function test_쓰기_토큰_허용_범위(): void
+    /** 토큰은 상태 변경·버전별 조회만 — 시트 목록·/cells·삭제는 여전히 401 */
+    public function test_토큰_허용_범위(): void
     {
         $this->seed();
-        $ctx = ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => null, 'write_token_ok' => true];
+        $ctx = ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => null, 'token_ok' => true];
 
         $versions = schooltodo_handle($ctx, ['method' => 'GET', 'seg' => ['sheets', '10', 'versions'], 'body' => [], 'query' => []]);
         $list = schooltodo_handle($ctx, ['method' => 'GET', 'seg' => ['sheets'], 'body' => [], 'query' => []]);
@@ -107,7 +106,7 @@ final class status_test extends TestCase
     public function test_오류(): void
     {
         $this->seed();
-        $ctx = ['write_token_ok' => true];
+        $ctx = ['token_ok' => true];
 
         $this->assertSame(422, $this->put($ctx, [])['status']);
         $this->assertSame(404, $this->put($ctx, ['items' => [['school_id' => 1, 'status' => 'todo']]], 99)['status']);

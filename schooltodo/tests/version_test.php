@@ -76,7 +76,7 @@ final class version_test extends TestCase
         $this->assertSame(401, $this->call([])['status']);
     }
 
-    /** 토큰은 이 경로에서만 통한다 — 시트 목록·쓰기는 여전히 401 */
+    /** 토큰은 versions·status 에서만 통한다 — 시트 목록·/cells·삭제는 여전히 401 */
     public function test_토큰은_다른_경로에_안_통함(): void
     {
         $this->seed();

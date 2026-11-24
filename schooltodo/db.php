@@ -32,8 +32,7 @@ function schooltodo_config($over = []) {
     return $over + [
         'db' => [],
         'portal_url' => '..',
-        'api_token' => '',   // 버전별 조회(GET /sheets/{id}/versions) 전용 Bearer 토큰. 비면 토큰 호출 꺼짐
-        'write_token' => '', // 상태 변경(PUT /sheets/{id}/status) + 버전별 조회용 Bearer 토큰. 비면 꺼짐
+        'api_token' => '',   // 버전별 조회·상태 변경(GET versions, PUT status) Bearer 토큰. 비면 토큰 호출 꺼짐
     ];
 }
 
@@ -46,10 +45,7 @@ function schooltodo_config_from_portal() {
     $token = trim((string)($portal['schooltodo_api_token'] ?? ''));
     if ($token === '') $token = trim((string)getenv('SCHOOLTODO_API_TOKEN'));
 
-    $write = trim((string)($portal['schooltodo_api_write_token'] ?? ''));
-    if ($write === '') $write = trim((string)getenv('SCHOOLTODO_API_WRITE_TOKEN'));
-
-    return schooltodo_config(['db' => $portal['db'], 'api_token' => $token, 'write_token' => $write]);
+    return schooltodo_config(['db' => $portal['db'], 'api_token' => $token]);
 }
 
 /**

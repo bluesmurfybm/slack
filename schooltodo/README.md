@@ -42,19 +42,18 @@
 | `PUT api.php?p=/sheets/{id}/cells` `{items: [...]}` | 대학별 상태·메모 채우기 |
 | `GET api.php?p=/sheets/{id}/cells/{school_id}/history` | 그 대학 셀의 이전 값, 최근 것부터 |
 | `GET api.php?p=/sheets/{id}/versions` | 버전별 대학 상태·갱신 날짜(키·상태는 영문 코드). `&ver=4.5`·`&status=todo` 로 거른다. **토큰으로도 부를 수 있다**(아래) |
-| `PUT api.php?p=/sheets/{id}/status` `{items: [...], by}` | 대학별 상태 변경(외부용, 상태는 영문 코드·한글 둘 다). **쓰기 토큰으로도 부를 수 있다**(아래) |
+| `PUT api.php?p=/sheets/{id}/status` `{items: [...], by}` | 대학별 상태 변경(외부용, 상태는 영문 코드·한글 둘 다). **토큰으로도 부를 수 있다**(아래) |
 | `DELETE api.php?p=/sheets/{id}` | 탭 삭제 |
 
 `items` 한 건은 `{school_id}` 또는 `{school, ver}` 로 대학을 가리키고 `status`·`note` 중 보낸 것만 바꾼다.
 이름이 같은 대학이 여럿인데 `ver` 가 없으면 409, 한 건이라도 오류면 전부 저장하지 않고 `items[n]:` 으로 알려 준다.
 
-### 버전별 조회 토큰 (`/sheets/{id}/versions` 전용)
-대시보드·외부 서버처럼 포털 계정으로 로그인하기 어려운 곳을 위해 **이 읽기 전용 경로 하나만** Bearer 토큰을 받는다.
+### API 토큰 (`/sheets/{id}/versions`·`/sheets/{id}/status` 전용)
+대시보드·봇·외부 서버처럼 포털 계정으로 로그인하기 어려운 곳을 위해 **버전별 조회와 상태 변경 두 경로만** Bearer 토큰을 받는다.
 시트 목록·쓰기·삭제 등 나머지는 지금처럼 로그인 세션만 받는다(`schooltodo_is_token_route()`).
-상태를 바꾸려면 아래 **상태 변경 토큰**(쓰기 토큰)을 따로 쓴다.
 
 - 토큰: 루트 `config.php` 의 `'schooltodo_api_token' => '…'` (없으면 환경변수 `SCHOOLTODO_API_TOKEN`). 비면 토큰 호출은 꺼진다.
-  EnvHub 토큰(`envhub_api_token`)과 따로 둔다 — 이쪽은 상태만 보는 토큰이라 비밀번호가 실리는 EnvHub 와 섞지 않는다.
+  EnvHub 토큰(`envhub_api_token`)과 따로 둔다 — 이쪽은 조치 상태만 다루는 토큰이라 비밀번호가 실리는 EnvHub 와 섞지 않는다.
 - HTTPS 요청만 인정한다(localhost 예외). 비교는 `hash_equals()`.
 
 ```bash
@@ -86,13 +85,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p
  ]}
 ```
 
-### 상태 변경 토큰 (`PUT /sheets/{id}/status`)
-봇·배포 스크립트가 로그인 없이 조치 상태를 바꿀 수 있게 **쓰기 토큰**을 따로 둔다. 읽기 토큰으로는 바꿀 수 없다.
-
-- 토큰: 루트 `config.php` 의 `'schooltodo_api_write_token' => '…'` (없으면 환경변수 `SCHOOLTODO_API_WRITE_TOKEN`). 비면 꺼진다.
-- 쓰기 토큰으로 부를 수 있는 것은 `PUT /sheets/{id}/status` 와 `GET /sheets/{id}/versions` 둘뿐이다
-  (`schooltodo_is_write_token_route()`). 시트 만들기·수정·삭제·화면용 `/cells` 는 로그인 세션만 받는다.
-- HTTPS(또는 localhost)만, 비교는 `hash_equals()` — 읽기 토큰과 같다.
+### 상태 변경 (`PUT /sheets/{id}/status`)
+봇·배포 스크립트가 로그인 없이 조치 상태를 바꿀 때 쓴다. 위와 같은 `schooltodo_api_token` 으로 부른다.
 
 `items` 한 건은 `/cells` 처럼 `{school_id}` 또는 `{school, ver}` 로 대학을 가리키고, **`status` 는 꼭 있어야 한다**
 (영문 코드 `todo`·`in_progress`·`dev_applied`·`prod_applied`·`not_applicable` 또는 한글). `note` 는 보낼 때만 바꾼다.
@@ -100,7 +94,7 @@ curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p
 한 건이라도 오류면 전부 저장하지 않고 `items[n]:` 으로 알려 주며, 이력은 화면에서 바꿀 때와 똑같이 남는다.
 
 ```bash
-curl -s -X PUT -H "Authorization: Bearer $WRITE_TOKEN" -H "Content-Type: application/json" \
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   "https://<포털>/schooltodo/api.php?p=/sheets/1/status" \
   -d '{"by": "safepush", "items": [
         {"school_id": 12, "status": "prod_applied", "note": "3.5.1 반영"},
