@@ -193,14 +193,15 @@
 
 ## 외부 조회 API (`access/api_schools.php`)
 
-포털 세션 없이 서버·스크립트에서 모든 대학의 이름·버전·저장소 주소·테스트 서버 정보를 JSON 으로 받는 읽기 전용 API.
+스크립트에서 모든 대학의 이름·버전·저장소 주소·테스트 서버 정보를 JSON 으로 받는 읽기 전용 API.
 
 ```
-curl -H "Authorization: Bearer <토큰>" https://<포털>/access/api_schools.php
+curl -H "Authorization: Bearer <개인 API 토큰>" https://<포털>/access/api_schools.php
 ```
 
-- **토큰**: 루트 `config.php` 의 `'envhub_api_token' => '…'` (없으면 환경변수 `ENVHUB_API_TOKEN`).
-  둘 다 비어 있으면 503 으로 꺼진다. 비교는 `hash_equals()`.
+- **인증**: 포털 공통 개인 API 토큰(마이페이지 → API 토큰, 루트 `readme.md` 의 "개인 API 토큰")이나 로그인 세션.
+  둘 다 없으면 401. 예전 공용 토큰(`config.php` 의 공용 키)은 없앴다 — 누가 비밀번호를 받아 갔는지 남지 않았다.
+  서버·봇처럼 사람이 아닌 호출자는 봇 계정을 만들어 그 계정의 토큰을 쓴다.
 - **응답**: `{ok, count, rows:[{name, ver, repo, test_server:{ip, port, username, password, project_root}}]}`.
   `test_server` 는 `test_srv` 칸(아이피[:포트] ⏎ 아이디 / 비밀번호 ⏎ 폴더)을 `access_parse_test_srv()` 로
   나눈 것이다. `--` 주석 줄은 버리고, 비었거나 형식이 안 맞는 칸은 `''`, 포트를 안 적었으면 `null`

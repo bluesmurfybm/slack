@@ -31,7 +31,7 @@ final class version_test extends TestCase
     public function test_버전별_묶음(): void
     {
         $this->seed();
-        $res = $this->call(['token_ok' => true]);
+        $res = $this->call(['identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']]);
 
         $this->assertSame(200, $res['status']);
         $this->assertSame(['3.9', '3.10', '4.5'], array_column($res['data']['versions'], 'ver'));
@@ -53,7 +53,7 @@ final class version_test extends TestCase
     {
         $this->seed();
         foreach (['todo', '미조치'] as $status) {
-            $res = $this->call(['token_ok' => true], ['ver' => '4.5', 'status' => $status]);
+            $res = $this->call(['identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']], ['ver' => '4.5', 'status' => $status]);
 
             $this->assertSame(['4.5'], array_column($res['data']['versions'], 'ver'));
             $this->assertSame(['다대'], array_column($res['data']['versions'][0]['schools'], 'name'));
@@ -76,47 +76,19 @@ final class version_test extends TestCase
         $this->assertSame(401, $this->call([])['status']);
     }
 
-    /** 토큰은 versions·status 에서만 통한다 — 시트 목록·/cells·삭제는 여전히 401 */
-    public function test_토큰은_다른_경로에_안_통함(): void
+    /** schooltodo_route: identity 없으면 token_ok 가 있어도 401 */
+    public function test_identity_없으면_401(): void
     {
         $this->seed();
-        $ctx = ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => null, 'token_ok' => true];
-
-        $list = schooltodo_handle($ctx, ['method' => 'GET', 'seg' => ['sheets'], 'body' => [], 'query' => []]);
-        $put = schooltodo_handle($ctx, ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'],
-                                        'body' => ['items' => [['school_id' => 1, 'status' => '미조치']]], 'query' => []]);
-        $del = schooltodo_handle($ctx, ['method' => 'DELETE', 'seg' => ['sheets', '10'], 'body' => [], 'query' => []]);
-
-        $this->assertSame([401, 401, 401], [$list['status'], $put['status'], $del['status']]);
+        $this->assertSame(401, $this->call(['token_ok' => true])['status']);
     }
 
     /** 없는 시트는 404, 잘못된 상태는 422 */
     public function test_오류(): void
     {
         $this->seed();
-        $this->assertSame(404, $this->call(['token_ok' => true], [], 99)['status']);
-        $this->assertSame(422, $this->call(['token_ok' => true], ['status' => '끝'])['status']);
-    }
-
-    /** schooltodo_bearer_ok: 토큰 일치·HTTPS 여부 */
-    public function test_bearer_검사(): void
-    {
-        $keep = $_SERVER;
-        try {
-            $_SERVER['HTTP_HOST'] = 'iworks.example.com';
-            $_SERVER['HTTPS'] = 'on';
-            $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer abc123';
-            $this->assertTrue(schooltodo_bearer_ok('abc123'));
-            $this->assertFalse(schooltodo_bearer_ok('other'));
-            $this->assertFalse(schooltodo_bearer_ok(''));          // 설정 안 하면 꺼짐
-
-            unset($_SERVER['HTTPS']);
-            $this->assertFalse(schooltodo_bearer_ok('abc123'));    // http 는 거절
-
-            $_SERVER['HTTP_HOST'] = 'localhost:8080';
-            $this->assertTrue(schooltodo_bearer_ok('abc123'));     // 개발용 localhost 는 허용
-        } finally {
-            $_SERVER = $keep;
-        }
+        $identity = ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => ''];
+        $this->assertSame(404, $this->call(['identity' => $identity], [], 99)['status']);
+        $this->assertSame(422, $this->call(['identity' => $identity], ['status' => '끝'])['status']);
     }
 }

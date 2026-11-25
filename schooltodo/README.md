@@ -30,8 +30,8 @@
   `자동 갱신` 체크는 기본이 꺼져 있어 `지금 갱신` 단추로만 받고, 켜면 30초마다 받는다(브라우저에 기억).
 
 ## API
-화면과 AI 도구가 같은 API 를 쓴다. 따로 발급하는 키는 없다 — AI 도구도 포털 계정으로 `/api/login.php` 에 로그인해
-받은 세션 쿠키로 부른다(EnvHub 를 읽는 issh·safepush·ai-coach 와 같은 방식). 갱신한 사람은 로그인한 계정 이름으로 남는다.
+화면과 AI 도구가 같은 API 를 쓴다. 화면은 포털 로그인 세션으로, 도구는 **개인 API 토큰**으로 부른다
+(아래 "개인 API 토큰"). 둘 다 같은 사람으로 처리되므로 모든 경로가 열리고, 갱신한 사람은 언제나 그 계정 이름으로 남는다.
 
 | 호출 | 하는 일 |
 |---|---|
@@ -41,20 +41,17 @@
 | `PUT api.php?p=/sheets/{id}` `{title, description, archived}` | 이름·설명 수정. `archived: true/false` 로 보관·꺼내기(`archived_at` 에 시각) |
 | `PUT api.php?p=/sheets/{id}/cells` `{items: [...]}` | 대학별 상태·메모 채우기 |
 | `GET api.php?p=/sheets/{id}/cells/{school_id}/history` | 그 대학 셀의 이전 값, 최근 것부터 |
-| `GET api.php?p=/sheets/{id}/versions` | 버전별 대학 상태·갱신 날짜(키·상태는 영문 코드). `&ver=4.5`·`&status=todo` 로 거른다. **토큰으로도 부를 수 있다**(아래) |
-| `PUT api.php?p=/sheets/{id}/status` `{items: [...], by}` | 대학별 상태 변경(외부용, 상태는 영문 코드·한글 둘 다). **토큰으로도 부를 수 있다**(아래) |
+| `GET api.php?p=/sheets/{id}/versions` | 버전별 대학 상태·갱신 날짜(키·상태는 영문 코드). `&ver=4.5`·`&status=todo` 로 거른다 |
+| `PUT api.php?p=/sheets/{id}/status` `{items: [...]}` | 대학별 상태 변경(도구용, 상태는 영문 코드·한글 둘 다) |
 | `DELETE api.php?p=/sheets/{id}` | 탭 삭제 |
 
 `items` 한 건은 `{school_id}` 또는 `{school, ver}` 로 대학을 가리키고 `status`·`note` 중 보낸 것만 바꾼다.
 이름이 같은 대학이 여럿인데 `ver` 가 없으면 409, 한 건이라도 오류면 전부 저장하지 않고 `items[n]:` 으로 알려 준다.
 
-### API 토큰 (`/sheets/{id}/versions`·`/sheets/{id}/status` 전용)
-대시보드·봇·외부 서버처럼 포털 계정으로 로그인하기 어려운 곳을 위해 **버전별 조회와 상태 변경 두 경로만** Bearer 토큰을 받는다.
-시트 목록·쓰기·삭제 등 나머지는 지금처럼 로그인 세션만 받는다(`schooltodo_is_token_route()`).
-
-- 토큰: 루트 `config.php` 의 `'schooltodo_api_token' => '…'` (없으면 환경변수 `SCHOOLTODO_API_TOKEN`). 비면 토큰 호출은 꺼진다.
-  EnvHub 토큰(`envhub_api_token`)과 따로 둔다 — 이쪽은 조치 상태만 다루는 토큰이라 비밀번호가 실리는 EnvHub 와 섞지 않는다.
-- HTTPS 요청만 인정한다(localhost 예외). 비교는 `hash_equals()`.
+### 개인 API 토큰
+도구·스크립트는 iWorks **마이페이지 → API 토큰**에서 받은 자기 토큰을 `Authorization: Bearer` 로 보낸다.
+포털 공통 규칙(루트 `readme.md` 의 "개인 API 토큰")을 그대로 따르고, 이 모듈에 따로 두는 토큰은 없다.
+봇·서버처럼 사람이 아닌 호출자는 봇 계정을 만들어 그 계정의 토큰을 쓴다.
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p=/sheets/1/versions"
@@ -86,17 +83,17 @@ curl -s -H "Authorization: Bearer $TOKEN" "https://<포털>/schooltodo/api.php?p
 ```
 
 ### 상태 변경 (`PUT /sheets/{id}/status`)
-봇·배포 스크립트가 로그인 없이 조치 상태를 바꿀 때 쓴다. 위와 같은 `schooltodo_api_token` 으로 부른다.
+배포 스크립트가 조치 상태를 바꿀 때 쓴다. 개인 API 토큰으로 부른다.
 
 `items` 한 건은 `/cells` 처럼 `{school_id}` 또는 `{school, ver}` 로 대학을 가리키고, **`status` 는 꼭 있어야 한다**
 (영문 코드 `todo`·`in_progress`·`dev_applied`·`prod_applied`·`not_applicable` 또는 한글). `note` 는 보낼 때만 바꾼다.
-갱신한 사람은 토큰 호출이면 본문 `by`(60자까지, 없으면 `API`), 로그인 세션이면 `by` 를 무시하고 계정 이름이다.
+갱신한 사람은 토큰 주인(또는 로그인한 사람)의 계정 이름이다. 본문의 `by` 는 받지 않는다.
 한 건이라도 오류면 전부 저장하지 않고 `items[n]:` 으로 알려 주며, 이력은 화면에서 바꿀 때와 똑같이 남는다.
 
 ```bash
 curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   "https://<포털>/schooltodo/api.php?p=/sheets/1/status" \
-  -d '{"by": "safepush", "items": [
+  -d '{"items": [
         {"school_id": 12, "status": "prod_applied", "note": "3.5.1 반영"},
         {"school": "한림대", "ver": "3.5", "status": "dev_applied"}]}'
 ```
@@ -105,11 +102,11 @@ curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/j
 ```json
 {"updated": 2,
  "schools": [{"school_id": 12, "name": "가대", "ver": "3.9", "code": "gadae", "status": "prod_applied",
-              "status_label": "운영반영", "note": "3.5.1 반영", "updated_at": "2026-11-24 10:00:00", "updated_by": "safepush"}, …]}
+              "status_label": "운영반영", "note": "3.5.1 반영", "updated_at": "2026-11-24 10:00:00", "updated_by": "홍길동"}, …]}
 ```
 
-`tools/tasksheet.py` 가 로그인과 호출을 묶어 둔 명령이다. 계정은 `~/.config/safepush/iworks.json`
-(`{"email", "password"}`, `IWORKS_CREDENTIALS` 로 바꾼다), 포털 주소는 `IWORKS_URL` 이다. 시트는 번호나 이름으로 가리킨다.
+`tools/tasksheet.py` 가 호출을 묶어 둔 명령이다. 토큰은 환경변수 `IWORKS_API_TOKEN`(마이페이지 → API 토큰),
+포털 주소는 `IWORKS_URL`(기본 `https://iworks.bizblue.co.kr`)이다. 시트는 번호나 이름으로 가리킨다.
 
 ```bash
 python3 schooltodo/tools/tasksheet.py sheets            # --all 이면 보관한 시트도

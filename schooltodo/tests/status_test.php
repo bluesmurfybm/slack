@@ -32,11 +32,11 @@ final class status_test extends TestCase
         return $st->fetch();
     }
 
-    /** 토큰으로 영문 코드·한글 상태를 바꾸고, 응답은 영문 코드로 준다 */
-    public function test_토큰으로_상태_변경(): void
+    /** schooltodo_status_change: 영문 코드·한글 status 변경, 응답은 영문 코드, updated_by 는 identity name */
+    public function test_상태_변경(): void
     {
         $this->seed();
-        $res = $this->put(['token_ok' => true], ['by' => 'safepush', 'items' => [
+        $res = $this->put(['identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자2', 'color' => '']], ['items' => [
             ['school_id' => 1, 'status' => 'prod_applied', 'note' => '반영 끝'],
             ['school' => '나대', 'ver' => '3.9', 'status' => '해당없음'],
         ]]);
@@ -44,26 +44,27 @@ final class status_test extends TestCase
         $this->assertSame(200, $res['status']);
         $this->assertSame(2, $res['data']['updated']);
         $byId = array_column($res['data']['schools'], null, 'school_id');
-        $this->assertSame(['prod_applied', '운영반영', '반영 끝', 'safepush'],
+        $this->assertSame(['prod_applied', '운영반영', '반영 끝', '사용자2'],
             [$byId[1]['status'], $byId[1]['status_label'], $byId[1]['note'], $byId[1]['updated_by']]);
         $this->assertSame('not_applicable', $byId[2]['status']);
 
-        $this->assertSame(['status' => '운영반영', 'note' => '반영 끝', 'updated_by' => 'safepush'], $this->cell(1));
-        $this->assertSame(['status' => '해당없음', 'note' => '', 'updated_by' => 'safepush'], $this->cell(2));
+        $this->assertSame(['status' => '운영반영', 'note' => '반영 끝', 'updated_by' => '사용자2'], $this->cell(1));
+        $this->assertSame(['status' => '해당없음', 'note' => '', 'updated_by' => '사용자2'], $this->cell(2));
 
         // 바뀌기 전 값은 이력으로 남는다
         $history = $this->pdo->query("SELECT status, note FROM schooltodo_cell_history WHERE sheet_id = 10 AND school_id = 1")->fetchAll();
         $this->assertSame([['status' => '진행중', 'note' => '작업중']], $history);
     }
 
-    /** note 를 안 보내면 기존 메모를 그대로 둔다. by 가 없으면 'API' */
-    public function test_메모_유지와_기본_by(): void
+    /** schooltodo_status_change: note 를 안 보내면 기존 note 유지 */
+    public function test_메모_유지(): void
     {
         $this->seed();
-        $res = $this->put(['token_ok' => true], ['items' => [['school_id' => 1, 'status' => 'dev_applied']]]);
+        $res = $this->put(['identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자2', 'color' => '']],
+                          ['items' => [['school_id' => 1, 'status' => 'dev_applied']]]);
 
         $this->assertSame(200, $res['status']);
-        $this->assertSame(['status' => '개발반영', 'note' => '작업중', 'updated_by' => 'API'], $this->cell(1));
+        $this->assertSame(['status' => '개발반영', 'note' => '작업중', 'updated_by' => '사용자2'], $this->cell(1));
     }
 
     /** 로그인 세션으로 부르면 by 를 무시하고 로그인 이름으로 남긴다 */
@@ -87,26 +88,22 @@ final class status_test extends TestCase
         $this->assertSame('진행중', $this->cell(1)['status']);
     }
 
-    /** 토큰은 상태 변경·버전별 조회만 — 시트 목록·/cells·삭제는 여전히 401 */
-    public function test_토큰_허용_범위(): void
+    /** schooltodo_route: identity 없으면 token_ok 가 있어도 401, status 그대로 */
+    public function test_identity_없으면_401(): void
     {
         $this->seed();
-        $ctx = ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => null, 'token_ok' => true];
 
-        $versions = schooltodo_handle($ctx, ['method' => 'GET', 'seg' => ['sheets', '10', 'versions'], 'body' => [], 'query' => []]);
-        $list = schooltodo_handle($ctx, ['method' => 'GET', 'seg' => ['sheets'], 'body' => [], 'query' => []]);
-        $cells = schooltodo_handle($ctx, ['method' => 'PUT', 'seg' => ['sheets', '10', 'cells'],
-                                          'body' => ['items' => [['school_id' => 1, 'status' => '미조치']]], 'query' => []]);
-        $del = schooltodo_handle($ctx, ['method' => 'DELETE', 'seg' => ['sheets', '10'], 'body' => [], 'query' => []]);
+        $res = $this->put(['token_ok' => true], ['by' => 'safepush', 'items' => [['school_id' => 1, 'status' => 'todo']]]);
 
-        $this->assertSame([200, 401, 401, 401], [$versions['status'], $list['status'], $cells['status'], $del['status']]);
+        $this->assertSame(401, $res['status']);
+        $this->assertSame('진행중', $this->cell(1)['status']);
     }
 
     /** 오류 — 한 건이라도 틀리면 아무것도 저장하지 않는다 */
     public function test_오류(): void
     {
         $this->seed();
-        $ctx = ['token_ok' => true];
+        $ctx = ['identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']];
 
         $this->assertSame(422, $this->put($ctx, [])['status']);
         $this->assertSame(404, $this->put($ctx, ['items' => [['school_id' => 1, 'status' => 'todo']]], 99)['status']);

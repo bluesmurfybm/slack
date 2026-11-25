@@ -371,6 +371,28 @@ push_send([
      를 건다. book·learn 은 `../styles/favicons/<key>.svg`, dti 는 `dti_asset($page, '../styles/favicons/dti.svg')`.
   포털 루트(blue-iWorks)만 `styles/favicon.ico`(세 줄)를 그대로 쓴다.
 
+## 개인 API 토큰
+
+blue-aidd 스킬처럼 사람 대신 iWorks API 를 부르는 도구용이다. 도구에 이메일·비밀번호를 저장하지 않고,
+사람마다 받은 토큰으로 부른다. 토큰을 붙인 요청은 **그 토큰 주인이 로그인한 것과 똑같이** 처리된다.
+
+- **발급**: 마이페이지 → API 토큰. 사람당 하나이고 만료는 없다. 같은 화면에서 다시 보기·복사,
+  갱신(새 값으로 바꾸면 이전 값은 곧바로 무효), 폐기를 한다. 발급·마지막 갱신·마지막 사용 시각과 IP 가 보인다.
+- **보내는 법**: `Authorization: Bearer iwk_…`. 모든 모듈의 API 가 받는다(`core/auth.php::current_portal_user()`).
+  ```bash
+  curl -H "Authorization: Bearer $IWORKS_API_TOKEN" https://iworks.bizblue.co.kr/api/me.php
+  ```
+  `GET api/me.php` 로 "이 토큰이 누구 것인지" 확인할 수 있다.
+- **HTTPS 로만** 받는다. http 로 보내면 토큰이 맞아도 401 이다(`localhost`·`127.0.0.1`·`*.localhost` 는 개발용으로 예외,
+  리버스 프록시 뒤면 `X-Forwarded-Proto: https` 를 본다).
+- **Bearer 가 있으면 토큰으로만 판단한다.** 세션 쿠키가 같이 와도 보지 않고, 세션 파일·쿠키를 만들지 않는다.
+  `iwk_` 형식이 아닌 값(예전 공용 토큰 등)은 DB 를 찾지 않고 401 이다.
+- **토큰으로 못 하는 일**: 비밀번호 등 계정 변경(`PUT api/me.php`)과 토큰 발급·갱신·폐기(`api/token.php`)는 403 이다
+  (`require_session_login()`). 토큰이 새도 그것으로 계정을 빼앗을 수 없게 하려는 것이다.
+- **저장**: `portal_api_token` 테이블. 요청 검사는 sha256 해시로 찾고, 다시 보여 주려고 원문은 `enc_token()` 으로
+  암호화해 둔다. 마지막 사용 기록은 1분보다 자주 고치지 않는다.
+- 봇·서버처럼 사람이 아닌 호출자는 봇 계정을 만들어 그 계정의 토큰을 쓴다.
+
 ---
 
 ## 알림판 (주요 공지 · 중요 일정)

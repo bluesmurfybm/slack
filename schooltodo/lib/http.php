@@ -79,27 +79,12 @@ function schooltodo_handle($ctx, $req) {
  */
 function schooltodo_route($ctx, $req) {
     if (($req['seg'][0] ?? '') === 'whoami') return schooltodo_route_whoami($ctx);
-    // 토큰은 버전별 조회(GET /sheets/{id}/versions)와 상태 변경(PUT /sheets/{id}/status)에서만 로그인 대신 받는다.
-    // 시트 만들기·수정·삭제와 화면용 /cells 는 계속 포털 계정으로만
-    $byToken = !empty($ctx['token_ok']) && schooltodo_is_token_route($req);
-    if (!$ctx['identity'] && !$byToken) throw new SchooltodoError('로그인이 필요합니다', 401);
+    if (!$ctx['identity']) throw new SchooltodoError('로그인이 필요합니다', 401);
 
     return match ($req['seg'][0] ?? '') {
         'sheets' => schooltodo_route_sheets($ctx, $req),
         default => throw new SchooltodoError('없는 API 입니다', 404),
     };
-}
-
-/**
- * 토큰으로 부를 수 있는 경로인가 — GET /sheets/{id}/versions 와 PUT /sheets/{id}/status 둘뿐.
- * @param array $req
- * @return bool
- */
-function schooltodo_is_token_route($req) {
-    $seg = $req['seg'];
-    if (count($seg) !== 3 || $seg[0] !== 'sheets' || !ctype_digit((string)$seg[1])) return false;
-    return ($req['method'] === 'GET' && $seg[2] === 'versions')
-        || ($req['method'] === 'PUT' && $seg[2] === 'status');
 }
 
 /**

@@ -5,11 +5,9 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from http.cookiejar import CookieJar
-from pathlib import Path
 
-BASE_URL = os.environ.get("IWORKS_URL", "http://iworks.bizblue.co.kr").rstrip("/")
-CREDENTIALS = Path(os.environ.get("IWORKS_CREDENTIALS", Path.home() / ".config" / "safepush" / "iworks.json"))
+# 토큰은 HTTPS 로만 받는다
+BASE_URL = os.environ.get("IWORKS_URL", "https://iworks.bizblue.co.kr").rstrip("/")
 TIMEOUT = 20
 
 
@@ -17,13 +15,12 @@ class Fail(Exception):
     pass
 
 
-def login():
-    if not CREDENTIALS.is_file():
-        raise Fail(f"iWorks 계정 파일이 없습니다: {CREDENTIALS}")
-    account = json.loads(CREDENTIALS.read_text(encoding="utf-8"))
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
-    send(opener, "POST", f"{BASE_URL}/api/login.php",
-         {"email": account.get("email"), "password": account.get("password"), "remember": False})
+def token_opener():
+    token = os.environ.get("IWORKS_API_TOKEN", "").strip()
+    if not token:
+        raise Fail("환경변수 IWORKS_API_TOKEN 이 없습니다. iWorks 마이페이지 → API 토큰에서 발급받아 넣어 주세요.")
+    opener = urllib.request.build_opener()
+    opener.addheaders = [("Authorization", f"Bearer {token}")]
     return opener
 
 
@@ -60,7 +57,7 @@ def sheet_id(opener, sheet):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Coursemos TaskSheet 조회·채우기 (iWorks 계정으로 로그인)")
+    parser = argparse.ArgumentParser(description="Coursemos TaskSheet 조회·채우기 (환경변수 IWORKS_API_TOKEN 의 개인 API 토큰으로)")
     commands = parser.add_subparsers(dest="command", required=True)
 
     commands.add_parser("sheets", help="시트 목록과 상태별 대학 수 (보관한 시트는 --all 일 때만)") \
@@ -85,7 +82,7 @@ def main():
     fill.add_argument("--note")
 
     args = parser.parse_args()
-    opener = login()
+    opener = token_opener()
 
     if args.command == "sheets":
         result = api(opener, "GET", "/sheets", query={"all": 1} if args.all else None)

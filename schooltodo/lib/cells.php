@@ -149,8 +149,7 @@ function schooltodo_cell_history($ctx, $sheetId, $schoolId) {
 }
 
 /**
- * 외부(토큰) 호출용 상태 변경. /cells 와 같지만 status 가 꼭 있어야 하고 영문 코드(todo…)·한글 둘 다 받으며,
- * 응답도 /versions 처럼 영문 코드로 준다. 로그인 없이 토큰으로 부르면 갱신한 사람은 본문 by(없으면 'API')다.
+ * 도구용 대학별 상태 변경.
  * @param array $ctx
  * @param int $sheetId
  * @param array $body
@@ -172,14 +171,7 @@ function schooltodo_status_change($ctx, $sheetId, $body) {
         $fill[] = $item;
     }
 
-    if ($ctx['identity']) {
-        $by = $ctx['identity']['name'];
-    } else {
-        $by = schooltodo_want_text($body['by'] ?? '', 'by', 60);
-        if ($by === '') $by = 'API';
-    }
-
-    $res = schooltodo_cells_fill(['by' => $by] + $ctx, $sheetId, ['items' => $fill]);
+    $res = schooltodo_cells_fill(['by' => $ctx['identity']['name']] + $ctx, $sheetId, ['items' => $fill]);
 
     return [
         'updated' => $res['updated'],

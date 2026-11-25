@@ -49,23 +49,3 @@ function schooltodo_asset($rel) {
 function schooltodo_h($s) {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 }
-
-/**
- * Authorization: Bearer 토큰이 설정값과 맞는가. 토큰이 설정되지 않았으면 언제나 false.
- * 평문 http 로 토큰이 오가지 않게 HTTPS(또는 localhost) 요청만 인정한다.
- * @param string $token
- * @return bool
- */
-function schooltodo_bearer_ok($token) {
-    if ($token === '') return false;
-
-    $https = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
-        || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
-    $host = strtolower(preg_replace('~:\d+$~', '', $_SERVER['HTTP_HOST'] ?? ''));
-    $local = in_array($host, ['localhost', '127.0.0.1', '::1'], true) || str_ends_with($host, '.localhost');
-    if (!$https && !$local) return false;
-
-    $h = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-    if (!preg_match('~^\s*Bearer\s+(\S+)\s*$~i', $h, $m)) return false;
-    return hash_equals($token, $m[1]);
-}
