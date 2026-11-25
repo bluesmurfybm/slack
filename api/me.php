@@ -33,6 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
     if (!empty($body['password'])) {
         $fields[] = 'pw_hash=?';
         $vals[]   = password_hash($body['password'], PASSWORD_DEFAULT);
+        // 비밀번호가 샜을 때 그사이 만들어 둔 토큰으로 계속 들어오지 못하게 한다
+        portal_api_token_delete(portal_db(), $u['id']);
     }
     if (isset($body['slack_token']) && trim((string)$body['slack_token']) !== '') {
         $fields[] = 'slack_token_enc=?';

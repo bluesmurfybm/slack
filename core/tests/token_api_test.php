@@ -168,6 +168,54 @@ final class token_api_test extends TestCase
         $this->assertFalse($after['has']);
     }
 
+    /** api/me.php: 세션 PUT password → 토큰 폐기 */
+    public function test_me_비밀번호_변경_토큰_폐기(): void
+    {
+        $pdo = portal_db();
+        $pdo->prepare("INSERT INTO portal_users (name, email, pw_hash, created_at) VALUES ('김세션', 's@token.test', ?, '2026-11-25 09:00:00')")
+            ->execute([password_hash('pw1234', PASSWORD_DEFAULT)]);
+        $uid = (int)$pdo->lastInsertId();
+        $token = portal_api_token_ensure($pdo, $uid);
+        [, , $headers] = $this->http('POST', 'api/login.php', [], ['email' => 's@token.test', 'password' => 'pw1234']);
+        preg_match('~^Set-Cookie:\s*(BLUEIWORK_SESSID=[^;]+)~mi', implode("\n", $headers), $m);
+
+        [$status] = $this->http('PUT', 'api/me.php', ['Cookie: ' . $m[1]], ['password' => 'new5678']);
+        [$old] = $this->http('GET', 'api/me.php', ['Authorization: Bearer ' . $token]);
+
+        $this->assertSame([200, 401], [$status, $old]);
+        $this->assertFalse(portal_api_token_get($pdo, $uid)['has']);
+    }
+
+    /** api/me.php: 세션 PUT name → 토큰 유지 */
+    public function test_me_이름_변경_토큰_유지(): void
+    {
+        $pdo = portal_db();
+        $pdo->prepare("INSERT INTO portal_users (name, email, pw_hash, created_at) VALUES ('김세션', 's@token.test', ?, '2026-11-25 09:00:00')")
+            ->execute([password_hash('pw1234', PASSWORD_DEFAULT)]);
+        $uid = (int)$pdo->lastInsertId();
+        $token = portal_api_token_ensure($pdo, $uid);
+        [, , $headers] = $this->http('POST', 'api/login.php', [], ['email' => 's@token.test', 'password' => 'pw1234']);
+        preg_match('~^Set-Cookie:\s*(BLUEIWORK_SESSID=[^;]+)~mi', implode("\n", $headers), $m);
+
+        [$status] = $this->http('PUT', 'api/me.php', ['Cookie: ' . $m[1]], ['name' => '김바뀜']);
+
+        $this->assertSame(200, $status);
+        $this->assertSame($token, portal_api_token_get($pdo, $uid)['token']);
+    }
+
+    /** api/admins.php: Bearer POST → 403 */
+    public function test_admins_bearer_403(): void
+    {
+        $pdo = portal_db();
+        $pdo->exec("INSERT INTO portal_users (name, email, pw_hash, created_at) VALUES ('김토큰', 't@token.test', 'x', '2026-11-25 09:00:00')");
+        $token = portal_api_token_ensure($pdo, (int)$pdo->lastInsertId());
+
+        [$status, $body] = $this->http('POST', 'api/admins.php', ['Authorization: Bearer ' . $token], ['email' => 'x@token.test']);
+
+        $this->assertSame(403, $status);
+        $this->assertSame('이 작업은 브라우저 로그인으로만 할 수 있습니다', $body['error']);
+    }
+
     /** api/token.php: POST action 이 ensure·rotate 가 아니면 400 */
     public function test_token_알_수_없는_action(): void
     {

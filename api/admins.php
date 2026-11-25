@@ -9,7 +9,7 @@
 require_once __DIR__ . '/../core/board.php';
 header('Content-Type: application/json; charset=utf-8');
 
-$u      = require_portal_login();
+$u      = require_session_login();
 $method = $_SERVER['REQUEST_METHOD'];
 
 try {
