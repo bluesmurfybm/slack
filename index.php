@@ -514,6 +514,12 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         </div>
       </div>
 
+      <div class="fld" id="pf-apitoken">
+        <label>API 토큰 (blue-aidd 등 도구용)</label>
+        <div id="pf-apitoken-body"></div>
+        <div class="hintline">* 갱신하면 이전 토큰을 쓰던 PC는 새 값을 넣어야 합니다.</div>
+      </div>
+
       <div class="token-note">
         🔒 <b>슬랙 연동 토큰</b>은 민감정보입니다. 본인만 입력·수정하며, 저장 후에는 화면에 원문이 다시 표시되지 않습니다.
         토큰이 유출되면 즉시 재발급하세요.
@@ -793,6 +799,7 @@ function showProfile(alertMsg, forceEdit){
   setProfileMode(!!(current && current.needs_setup) || !!forceEdit);
   if(alertMsg) toast(alertMsg);
   loadPushPanel();
+  loadApiToken();
 }
 
 /* ---- 앱 설치 메뉴 ---- 설치할 수 있게 되면(pwa.js) 사용자 메뉴에 항목을 보인다 */
@@ -908,6 +915,72 @@ async function deleteReadNotifs(){
     paintNotifBadge(d.unread, d.tiles);
     showNotifs();
   }catch(e){ toast(e.message); }
+}
+
+/* ---- 개인 API 토큰 (마이페이지) ---- */
+let apiToken=null, apiTokenShown=false;
+async function loadApiToken(){
+  const el=document.getElementById("pf-apitoken-body");
+  try{
+    apiToken=await bapi("api/token.php");
+  }catch(e){
+    el.textContent="API 토큰을 불러오지 못했습니다: "+e.message;
+    return;
+  }
+  apiTokenShown=false;
+  renderApiToken();
+}
+function renderApiToken(){
+  const el=document.getElementById("pf-apitoken-body");
+  if(!apiToken.has){
+    el.innerHTML=`<div class="push-dev-empty">발급한 토큰이 없습니다. 도구에서 iWorks 를 쓰려면 발급해 주세요.</div>
+      <button type="button" class="btn-ghost" onclick="apiTokenAction('ensure')">발급</button>`;
+    return;
+  }
+  const t=apiToken.token;
+  const shown = apiTokenShown ? t : t.slice(0,4)+"•".repeat(24)+t.slice(-4);
+  const used = apiToken.last_used_at ? `${esc(apiToken.last_used_at.slice(0,16))} (${esc(apiToken.last_used_ip||"")})` : "-";
+  el.innerHTML=`<div class="push-dev">
+      <code class="push-dev-nm" style="word-break:break-all">${esc(shown)}</code>
+      <button type="button" class="btn-sm" onclick="toggleApiToken()">${apiTokenShown?"가리기":"보기"}</button>
+      <button type="button" class="btn-sm" onclick="copyApiToken()">복사</button>
+    </div>
+    <div class="hintline">발급 ${fmtDateDot(apiToken.created_at)} · 마지막 갱신 ${apiToken.rotated_at?fmtDateDot(apiToken.rotated_at):"-"} · 마지막 사용 ${used}</div>
+    <div class="push-device">
+      <button type="button" class="btn-sm" onclick="apiTokenAction('rotate')">갱신</button>
+      <button type="button" class="btn-sm danger" onclick="apiTokenAction('delete')">폐기</button>
+    </div>`;
+}
+function toggleApiToken(){
+  apiTokenShown=!apiTokenShown;
+  renderApiToken();
+}
+async function copyApiToken(){
+  try{
+    await navigator.clipboard.writeText(apiToken.token);
+    toast("API 토큰을 복사했습니다");
+  }catch(e){
+    // https 가 아닌 주소에서는 브라우저가 클립보드를 막는다
+    toast("복사하지 못했습니다. [보기]를 눌러 직접 복사해 주세요");
+  }
+}
+const API_TOKEN_ACTIONS={
+  ensure: {req:{method:"POST",body:JSON.stringify({action:"ensure"})}, done:"API 토큰을 발급했습니다"},
+  rotate: {req:{method:"POST",body:JSON.stringify({action:"rotate"})}, done:"새 토큰으로 바꿨습니다",
+           ask:"갱신하면 지금 토큰을 쓰는 PC는 새 값을 넣어야 합니다. 갱신할까요?"},
+  delete: {req:{method:"DELETE"}, done:"API 토큰을 폐기했습니다",
+           ask:"폐기하면 이 토큰을 쓰는 도구가 모두 멈춥니다. 폐기할까요?"},
+};
+async function apiTokenAction(action){
+  const a=API_TOKEN_ACTIONS[action];
+  if(a.ask && !confirm(a.ask)) return;
+  try{
+    await bapi("api/token.php", a.req);
+    toast(a.done);
+  }catch(e){
+    toast(e.message);
+  }
+  await loadApiToken();
 }
 
 /* ---- 웹 푸시 알림 (마이페이지) ----
