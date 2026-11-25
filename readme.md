@@ -26,6 +26,7 @@ Bluesoft 사내 포털. 로그인 하나로 **BlueBooks(book, 도서구매신청
 ├── api/                         login.php, logout.php, me.php
 │                                notices.php, notice_file.php, events.php, event_words.php, admins.php, push.php, notifications.php
 │                                my_systems.php, tile_groups.php
+├── apidocs/                     API 문서(Swagger UI) — openapi.json 은 spec.php 가 로그인 확인 뒤 내준다
 ├── styles/                      default.css, board.css, wxfx.css, favicon.ico, logo-blue.png
 │                                icons/(카드 아이콘) · favicons/(시스템별 탭 파비콘, gen_favicons.py)
 ├── dev/                         gen_tiles.py(날씨 타일 생성기) · cheer_test.php · kind_test.php(일정 분류 시험)
@@ -395,6 +396,10 @@ blue-aidd 스킬처럼 사람 대신 iWorks API 를 부르는 도구용이다. �
 - **저장**: `portal_api_token` 테이블. 요청 검사는 sha256 해시로 찾고, 다시 보여 주려고 원문은 `enc_token()` 으로
   암호화해 둔다. 마지막 사용 기록은 1분보다 자주 고치지 않는다.
 - 봇·서버처럼 사람이 아닌 호출자는 봇 계정을 만들어 그 계정의 토큰을 쓴다.
+
+**API 문서**: 토큰으로 부를 수 있는 API(내 계정·EnvHub·TaskSheet)는 `apidocs/`(마이페이지 API 토큰 칸의 "API 문서" 링크)에
+Swagger UI 로 정리해 두었다. 로그인해야 열리고, 같은 화면에서 바로 호출해 볼 수 있다. 명세는 `apidocs/openapi.json` 을
+손으로 고친다 — API 를 바꾸면 여기도 같이 고친다. `core/tests/apidocs_test.php` 가 명세의 파일 경로와 인증 표시를 검사한다.
 
 ---
 
@@ -1224,6 +1229,7 @@ location ^~ /learn/var/     { deny all; }
 location ^~ /envlog/daemon/ { deny all; }
 location ^~ /csmspwdlog/bot/ { deny all; }
 location ^~ /book/tools/    { deny all; }
+location = /apidocs/openapi.json { deny all; }
 location ~ \.db$            { deny all; }
 ```
 

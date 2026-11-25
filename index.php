@@ -518,6 +518,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
         <label>API 토큰 (blue-aidd 등 도구용)</label>
         <div id="pf-apitoken-body"></div>
         <div class="hintline">* 갱신하면 이전 토큰을 쓰던 PC는 새 값을 넣어야 합니다.</div>
+        <div class="hintline">* 토큰으로 부를 수 있는 API 는 <a href="apidocs/" target="_blank" rel="noopener">API 문서</a>에 있습니다.</div>
       </div>
 
       <div class="token-note">
