@@ -3,9 +3,9 @@ require_once __DIR__ . '/../core/auth.php';
 require_once __DIR__ . '/../core/board.php';   // board_bg_pref()
 header('Content-Type: application/json; charset=utf-8');
 
-$u = require_portal_login();
-
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    // 토큰으로는 누구 것인지 조회만 한다
+    $u = require_portal_login();
     echo json_encode([
         'name'        => $u['name'],
         'email'       => $u['email'],
@@ -16,11 +16,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'needs_setup' => needs_setup($u),
         'color'       => user_color($u),
         'bg_pref'     => board_bg_pref($u),
+        'has_api_token' => portal_api_token_get(portal_db(), $u['id'])['has'],
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
+    // 토큰이 새도 비밀번호 등 계정을 바꿀 수 없어야 한다
+    $u = require_session_login();
     $body   = json_decode(file_get_contents('php://input'), true) ?: [];
     $fields = [];
     $vals   = [];
