@@ -1,3 +1,8 @@
+<?php
+/**
+ * API 문서 명세(OpenAPI JSON). .json 파일로 두면 nginx 가 로그인 없이 내주므로 PHP 안에 둔다.
+ */
+return <<<'JSON'
 {
   "openapi": "3.0.3",
   "info": {
@@ -1165,3 +1170,4 @@
     }
   }
 }
+JSON;

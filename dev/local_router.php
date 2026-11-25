@@ -23,7 +23,6 @@ $deny = [
     '#/\.#',                                    // .sessions, .git, .htaccess …
     '#^/(var|learn/var|dti/var|studio/var|blueledger/var)(/|$)#i',
     '#^/(blueledger/(tools|lib)|learn/tools|dti/tools|book/tools|slackai/(tools|worker)|moodle/watch|envlog/daemon|csmspwdlog/bot|core)(/|$)#i',
-    '#^/apidocs/openapi\.json$#i',
 ];
 foreach ($deny as $re) {
     if (preg_match($re, $path)) {

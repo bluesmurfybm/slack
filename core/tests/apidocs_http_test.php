@@ -87,7 +87,15 @@ final class apidocs_http_test extends TestCase
         $this->assertSame(401, $status);
     }
 
-    /** apidocs/spec.php: Bearer → 200, application/json, no-store, openapi.json 그대로 */
+    /** apidocs/openapi.php: 로그인 없이 직접 GET → 본문 비어 있음 */
+    public function test_openapi_직접_요청(): void
+    {
+        [, $raw] = $this->http('GET', 'apidocs/openapi.php');
+
+        $this->assertSame('', $raw);
+    }
+
+    /** apidocs/spec.php: Bearer → 200, application/json, no-store, openapi.php 명세 그대로 */
     public function test_spec_bearer(): void
     {
         $pdo = portal_db();
@@ -99,7 +107,7 @@ final class apidocs_http_test extends TestCase
         $this->assertSame(200, $status);
         $this->assertContains('Content-Type: application/json; charset=utf-8', $headers);
         $this->assertContains('Cache-Control: no-store', $headers);
-        $this->assertSame(file_get_contents(dirname(__DIR__, 2) . '/apidocs/openapi.json'), $raw);
+        $this->assertSame(require dirname(__DIR__, 2) . '/apidocs/openapi.php', $raw);
     }
 
     /** apidocs/spec.php: 세션 로그인 → 200 */
