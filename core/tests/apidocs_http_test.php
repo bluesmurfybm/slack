@@ -126,7 +126,7 @@ final class apidocs_http_test extends TestCase
         $this->assertContains('Location: ../index.php?need_login=apidocs', $headers);
     }
 
-    /** apidocs/index.php: Bearer → 200, swagger-ui 5.32.15, url spec.php */
+    /** apidocs/index.php: Bearer → 200, swagger-ui 5.32.15, url spec.php, supportedSubmitMethods get */
     public function test_index_bearer(): void
     {
         $pdo = portal_db();
@@ -138,5 +138,6 @@ final class apidocs_http_test extends TestCase
         $this->assertSame(200, $status);
         $this->assertStringContainsString('https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.32.15/swagger-ui-bundle.min.js', $raw);
         $this->assertStringContainsString('url: "spec.php"', $raw);
+        $this->assertStringContainsString('supportedSubmitMethods: ["get"]', $raw);
     }
 }

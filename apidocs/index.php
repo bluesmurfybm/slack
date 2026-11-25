@@ -36,6 +36,8 @@ if (!current_portal_user()) {
       dom_id: "#swagger-ui",
       deepLinking: true,
       validatorUrl: null,
+      // 운영 데이터를 내 계정으로 바꾸게 되므로 쓰기 요청은 이 화면에서 보내지 않는다
+      supportedSubmitMethods: ["get"],
       // 토큰이 브라우저 저장소에 남지 않게 한다
       persistAuthorization: false,
     });
