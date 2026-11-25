@@ -17,7 +17,8 @@ require_once __DIR__ . '/crypto.php';   // enc_token(), dec_token()
 // 로그인 유지(자동로그인): 로그아웃 전까지 30일 슬라이딩 만료 — 방문할 때마다 갱신.
 $SESS_LIFETIME = 60 * 60 * 24 * 30;
 
-if (session_status() === PHP_SESSION_NONE) {
+// 개인 API 토큰으로 온 요청은 세션 파일·쿠키를 만들지 않는다
+if (!portal_auth_via_token() && session_status() === PHP_SESSION_NONE) {
     // 세션 저장 경로는 포털 루트다. core/ 로 옮기면 열려 있던 세션을 못 찾아
         // 전원이 로그아웃된다.
         $sessDir = dirname(__DIR__) . '/.sessions';
@@ -57,7 +58,58 @@ function set_session_persistence($remember) {
     ]);
 }
 
+/**
+ * Authorization 헤더의 Bearer 값. 없으면 ''.
+ * @return string
+ */
+function portal_bearer_token() {
+    // Apache CGI·FPM 은 헤더를 REDIRECT_ 로 옮긴다
+    $h = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+    if ($h === '' && function_exists('getallheaders')) {
+        $h = array_change_key_case(getallheaders())['authorization'] ?? '';
+    }
+    return preg_match('~^\s*Bearer\s+(\S+)\s*$~i', $h, $m) ? $m[1] : '';
+}
+
+/**
+ * 토큰이 평문으로 오가지 않을 요청인가.
+ * @return bool
+ */
+function portal_request_is_https() {
+    // X-Forwarded-Proto 는 리버스 프록시 뒤에서 온다
+    if ((!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+        || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') return true;
+    // localhost 는 개발용으로 인정한다
+    $host = trim(strtolower((string)parse_url('http://' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST)), '[]');
+    return in_array($host, ['localhost', '127.0.0.1', '::1'], true) || str_ends_with($host, '.localhost');
+}
+
+/**
+ * 이번 요청이 개인 API 토큰으로 들어왔는가.
+ * @return bool
+ */
+function portal_auth_via_token() {
+    return portal_bearer_token() !== '';
+}
+
+/**
+ * 개인 API 토큰의 주인.
+ * @return array|null
+ */
+function portal_token_user() {
+    static $user = false;
+    if ($user === false) {
+        $token = portal_bearer_token();
+        $user = ($token !== '' && portal_request_is_https())
+            ? portal_api_token_user(portal_db(), $token, $_SERVER['REMOTE_ADDR'] ?? '')
+            : null;
+    }
+    return $user;
+}
+
 function current_portal_user() {
+    if (portal_auth_via_token()) return portal_token_user();
+
     $uid = $_SESSION['portal_uid'] ?? null;
     if (!$uid) return null;
     $stmt = portal_db()->prepare("SELECT * FROM portal_users WHERE id = ?");
@@ -150,4 +202,18 @@ function require_portal_login() {
         exit;
     }
     return $u;
+}
+
+/**
+ * 브라우저 세션으로 로그인한 사용자 행.
+ * @return array
+ */
+function require_session_login() {
+    if (portal_auth_via_token()) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => '이 작업은 브라우저 로그인으로만 할 수 있습니다'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    return require_portal_login();
 }
