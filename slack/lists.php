@@ -209,6 +209,7 @@ const TEAM = {
 };
 function teamColor(s){ return TEAM[s] || {bg:"#eceff1", fg:"#455a64"}; }
 let DATA = [], openId = null, filter = "";
+let openIn = null;       // 상세를 그릴 목록("list"/"unlist") — 미지정 항목은 두 목록에 다 있어서 누른 쪽 한 곳에만 그린다
 let fboardTab = "all";   // 상단 리스트 탭 (all/블루소프트/와이오즈)
 let archivedMode = false, archPage = 0, archPageSize = 300, archTotal = 0, archLoading = false;   // 보관 보기(페이지네이션)
 const BOARDS_F = ["블루소프트","와이오즈"];
@@ -450,8 +451,8 @@ function filteredItems(){   return DATA.filter(r => visible(r) && matchBase(r, t
 const INIT_STATUS = { "블루소프트":"등록", "와이오즈":"시작 전" };   // 보드별 '미지정 대상' 초기상태
 function unassignedItems(){ return DATA.filter(r => visible(r) && matchBase(r, false) && (!r.asg || r.asg === '—') && r.status === (INIT_STATUS[r.board] || '등록')); }
 
-function rowHtml(r){
-  const p = pal(r.status), open = openId === r.id, unread = !r.is_read;
+function rowHtml(r, detailId){   // detailId = 이 목록에서 상세를 펼칠 항목(없으면 null)
+  const p = pal(r.status), open = detailId === r.id, unread = !r.is_read;
   const row = `
     <div class="row${unread?' unread':' read'}${r.is_pinned?' pinned':''}${r.is_hidden?' hid':''}${open?' open':''}" data-id="${esc(r.id)}" ${open?'style="background:var(--bg2)"':''}>
       <input type="checkbox" class="chk" data-id="${esc(r.id)}" ${selected.has(r.id)?'checked':''}>
@@ -1078,6 +1079,7 @@ function bindRows(box){
       const id = el.dataset.id;
       const opening = (openId !== id);
       openId = opening ? id : null;
+      openIn = box.id === "unlist" ? "unlist" : "list";
       if(opening){
         const r = DATA.find(x=>x.id===id);   // 댓글 패널 상태는 마지막 값 유지(showCmts)
         if(r && !r.is_read && loadUi().autoRead!==false) markRead(id, 1, false);   // 설정: 열면 자동 읽음
@@ -1226,9 +1228,9 @@ function bindLightbox(scope){
   });
 }
 
-function paint(box, items){
+function paint(box, items, detailId){
   if(items.length === 0){ box.innerHTML = '<div class="err">표시할 항목이 없습니다.</div>'; return; }
-  box.innerHTML = items.map(rowHtml).join("");
+  box.innerHTML = items.map(r => rowHtml(r, detailId)).join("");
   bindRows(box);
   resolveMentions(box);   // 본문 멘션 이름 해석
 }
@@ -1334,12 +1336,17 @@ function render(){
   const uc = DATA.filter(r=>!r.is_read && !r.is_hidden).length;
   document.title = (uc>0 ? `(${uc}) ` : "") + "유지보수 요청";
   updateSelUI(items);   // 선택 개수/액션 버튼/전체선택 체크 상태 갱신
-  paint(document.getElementById("list"), items);
+  const showUn = splitOn && !archivedMode;      // 미지정 패널(좌측) — 보관 모드에선 숨김
+  const un = showUn ? unassignedItems() : [];
+  // 미지정 항목은 전체 목록과 미지정 패널 양쪽에 있다. 상세를 두 곳에 그리면 모달 뒤 목록도 같이 펼쳐지고,
+  // 댓글 영역 id(cmts-…)가 겹쳐 댓글이 안 보이는 쪽에 채워진다(모달은 '불러오는 중'에서 멈춤) → 누른 쪽 한 곳에만
+  const inList = !!openId && items.some(r=>r.id===openId), inUn = !!openId && un.some(r=>r.id===openId);
+  const detailIn = inUn && (openIn==="unlist" || !inList) ? "unlist" : (inList ? "list" : null);
+  paint(document.getElementById("list"), items, detailIn==="list" ? openId : null);
 
-  if(splitOn && !archivedMode){                 // 미지정 패널(좌측) — 보관 모드에선 숨김
-    const un = unassignedItems();
+  if(showUn){
     document.getElementById("uncount").textContent = un.length + "건";
-    paint(document.getElementById("unlist"), un);
+    paint(document.getElementById("unlist"), un, detailIn==="unlist" ? openId : null);
   }
   applyCmtSize();   // 댓글 영역 사용자 지정 크기 복원
   placeDetail();    // 상세 보기: 모달 모드면 상세를 팝업으로 이동
@@ -1999,7 +2006,7 @@ function openRecent(id){
   document.getElementById("recentDd").classList.remove("open");
   const r = DATA.find(x=>x.id===id);
   if(!r){ alert("목록에 없는 항목입니다. 동기화 후 다시 시도하세요."); return; }
-  openId = id;
+  openId = id; openIn = "list";   // 미지정 항목이어도 전체 목록 쪽에 펼친다
   // 현재 필터/탭/검색에 안 보이면 필터를 풀어 강제로 보이게
   if(!filteredItems().some(x=>x.id===id)){
     FILT = { priority:emptyFilt(), team:emptyFilt(), kind:emptyFilt(), status:emptyFilt(), asg:emptyFilt() };
@@ -2011,7 +2018,8 @@ function openRecent(id){
   if(r && !r.is_read && loadUi().autoRead!==false) markRead(id, 1, false);
   render();
   if(showCmts) loadComments(id);
-  setTimeout(()=>{ const el=document.querySelector('.row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]'); if(el) el.scrollIntoView({behavior:"smooth", block:"center"}); }, 60);
+  setTimeout(()=>{ const sel='.row[data-id="'+(window.CSS&&CSS.escape?CSS.escape(id):id)+'"]';
+    const el=document.querySelector(sel+'.open') || document.querySelector(sel); if(el) el.scrollIntoView({behavior:"smooth", block:"center"}); }, 60);   // 상세가 펼쳐진 쪽 행으로
 }
 (function(){
   const dd=document.getElementById("recentDd");
