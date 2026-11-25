@@ -12,6 +12,7 @@
 date_default_timezone_set('Asia/Seoul');
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/crypto.php';   // enc_token(), dec_token()
 
 // 로그인 유지(자동로그인): 로그아웃 전까지 30일 슬라이딩 만료 — 방문할 때마다 갱신.
 $SESS_LIFETIME = 60 * 60 * 24 * 30;
@@ -149,27 +150,4 @@ function require_portal_login() {
         exit;
     }
     return $u;
-}
-
-/** 슬랙 토큰 암호화 (AES-256-GCM). 원문은 DB/응답 어디에도 남기지 않음. */
-function enc_token($plain) {
-    if ($plain === null || $plain === '') return null;
-    $cfg = require dirname(__DIR__) . '/config.php';
-    $key = base64_decode($cfg['key']);
-    $iv  = random_bytes(12);
-    $tag = '';
-    $cipher = openssl_encrypt($plain, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
-    return base64_encode($iv . $tag . $cipher);
-}
-
-function dec_token($enc) {
-    if (!$enc) return '';
-    $cfg = require dirname(__DIR__) . '/config.php';
-    $key = base64_decode($cfg['key']);
-    $raw = base64_decode($enc);
-    $iv     = substr($raw, 0, 12);
-    $tag    = substr($raw, 12, 16);
-    $cipher = substr($raw, 28);
-    $plain  = openssl_decrypt($cipher, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
-    return $plain === false ? '' : $plain;
 }

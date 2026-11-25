@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/sqlite_compat.php';   // 로컬 시험(SQLite)일 때만 끼어든다. 운영은 new PDO 그대로
+require_once __DIR__ . '/api_token.php';
 /**
  * 포털(blue-iWorks) DB 연결.
  *  - slack 모듈과 같은 slackapi DB를 그대로 씀. 여기서는 포털 전용 테이블만 관리.
@@ -277,6 +278,7 @@ function portal_db() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
           COMMENT='웹 푸시 구독. 기기마다 한 줄'
     ");
+    portal_api_token_migrate($pdo);
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `portal_push_pref` (
             `user_id`    INT UNSIGNED NOT NULL,

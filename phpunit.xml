@@ -14,6 +14,9 @@
         <testsuite name="schooltodo">
             <directory suffix="_test.php">schooltodo/tests</directory>
         </testsuite>
+        <testsuite name="core">
+            <directory suffix="_test.php">core/tests</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
@@ -25,6 +28,8 @@
             <directory>schooltodo/routes</directory>
             <file>schooltodo/db.php</file>
             <file>schooltodo/guard.php</file>
+            <file>core/api_token.php</file>
+            <file>core/crypto.php</file>
         </include>
     </source>
 </phpunit>
