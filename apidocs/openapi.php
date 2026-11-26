@@ -322,7 +322,7 @@ return <<<'JSON'
       "post": {
         "tags": ["블루 클러스터"],
         "summary": "조각 시도 끝",
-        "description": "`result`, `patch`, `log` 는 서버 `files_dir` 에 원본 그대로 저장되어 수 MB 일 수 있습니다. 이미 끝난 시도이거나 `node_id` 가 시도의 노드가 아니면 `ok: false` 입니다. `status` 는 `done`, `stopped_by_owner`, `lost` 만 받습니다(그 밖은 400).",
+        "description": "`result`, `patch`, `log` 는 서버 `files_dir` 에 원본 그대로 저장되어 수 MB 일 수 있습니다. 시도를 시작한 토큰 주인이 아니면 403, 이미 끝난 시도이거나 `node_id` 가 시도의 노드가 아니면 `ok: false` 입니다. `status` 는 `done`, `stopped_by_owner`, `lost` 만 받습니다(그 밖은 400).",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/jobs/job-1/pieces/p1/finish"}}],
         "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["node_id", "attempt_no", "status", "result", "patch", "log"], "properties": {
@@ -338,6 +338,7 @@ return <<<'JSON'
           "200": {"description": "OK", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BclOk"}}}},
           "400": {"$ref": "#/components/responses/BclError"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/BclError"},
           "404": {"$ref": "#/components/responses/BclError"}
         }
       }
@@ -378,7 +379,7 @@ return <<<'JSON'
       "post": {
         "tags": ["블루 클러스터"],
         "summary": "노드 하트비트",
-        "description": "`attempts` 는 이 노드가 실행 중인 시도이고 각 항목은 `<job_id>/<piece_id>/<attempt_no>` 입니다.",
+        "description": "`attempts` 는 이 노드가 실행 중인 시도이고 각 항목은 `<job_id>/<piece_id>/<attempt_no>` 입니다. 같은 `node_id` 가 다른 토큰 주인으로 살아 있으면(마지막 하트비트 3초 안) 403 입니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/nodes/heartbeat"}}],
         "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["node_id", "account", "addr", "free_cpu", "free_mem", "running", "attempts"], "properties": {
@@ -393,7 +394,8 @@ return <<<'JSON'
         "responses": {
           "200": {"description": "OK", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BclOk"}}}},
           "400": {"$ref": "#/components/responses/BclError"},
-          "401": {"$ref": "#/components/responses/Unauthorized"}
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/BclError"}
         }
       }
     },

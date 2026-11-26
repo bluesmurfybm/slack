@@ -1060,6 +1060,28 @@ final class api_test extends TestCase
         $this->assertFalse(is_dir($this->filesDir . '/' . $job));
     }
 
+    /** bcl_piece_finish: 시도의 token_user 가 아닌 user 는 403, 조각·attempt running, 파일 없음 */
+    public function testFinishFromOtherUser403()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+        bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
+        bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'p1', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+        bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/start', json_encode(['node_id' => 'PC-B', 'account' => 'acc']));
+
+        $ctx['user'] = ['email' => 'user2@bluesoft.co.kr'];
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
+            'node_id' => 'PC-B', 'attempt_no' => 1, 'status' => 'done', 'result' => 'r', 'patch' => 'p', 'log' => [],
+        ]));
+
+        $this->assertSame(['status' => 403, 'data' => ['reason' => '다른 사용자의 시도']], $res);
+        $piece = bcl_job_get($this->pdo, $job)['pieces'][0];
+        $this->assertSame(['running', 'running'], [$piece['state'], $piece['attempts'][0]['status']]);
+        $this->assertFalse(is_dir($this->filesDir . '/' . $job));
+    }
+
     /** bcl_piece_finish: 이미 끝난 시도는 ok false, attempt status 그대로 */
     public function testFinishEndedAttemptRejected()
     {
@@ -1487,7 +1509,6 @@ final class api_test extends TestCase
         ]));
 
         $ctx['now'] = 1001;
-        $ctx['user'] = ['email' => 'user2@bluesoft.co.kr'];
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc2', 'addr' => '127.0.0.1:2', 'free_cpu' => 40, 'free_mem' => 30, 'running' => 0, 'attempts' => [],
         ]));
@@ -1496,7 +1517,49 @@ final class api_test extends TestCase
         $this->assertSame([[
             'node_id' => 'PC-A', 'account' => 'acc2', 'addr' => '127.0.0.1:2', 'free_cpu' => 40.0, 'free_mem' => 30, 'running' => 0, 'attempts' => [], 'last_seen' => 1001,
         ]], bcl_nodes_live($this->pdo, 1001));
-        $this->assertSame(['user2@bluesoft.co.kr'], $this->pdo->query("SELECT token_user FROM bcl_nodes")->fetchAll(\PDO::FETCH_COLUMN));
+        $this->assertSame(['user1@bluesoft.co.kr'], $this->pdo->query("SELECT token_user FROM bcl_nodes")->fetchAll(\PDO::FETCH_COLUMN));
+    }
+
+    /** bcl_node_heartbeat: 살아 있는 다른 token_user 의 node_id 는 403, 노드 그대로 */
+    public function testHeartbeatOtherUserLiveNode403()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $ctx['now'] = 1003;
+        $ctx['user'] = ['email' => 'user2@bluesoft.co.kr'];
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc2', 'addr' => '10.0.0.9:1', 'free_cpu' => 40, 'free_mem' => 30, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 403, 'data' => ['reason' => '다른 사용자의 노드']], $res);
+        $this->assertSame([['user1@bluesoft.co.kr', '127.0.0.1:1', 1000]], array_map(
+            fn($row) => [$row['token_user'], $row['addr'], (int)$row['last_seen']],
+            $this->pdo->query("SELECT token_user, addr, last_seen FROM bcl_nodes")->fetchAll()
+        ));
+    }
+
+    /** bcl_node_heartbeat: last_seen 이 BCL_NODE_TTL_S 보다 오래된 다른 token_user 의 node_id 는 넘겨받음 */
+    public function testHeartbeatOtherUserStaleNodeTakenOver()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $ctx['now'] = 1004;
+        $ctx['user'] = ['email' => 'user2@bluesoft.co.kr'];
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc2', 'addr' => '10.0.0.9:1', 'free_cpu' => 40, 'free_mem' => 30, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 200, 'data' => ['ok' => true]], $res);
+        $this->assertSame([['user2@bluesoft.co.kr', '10.0.0.9:1', 1004]], array_map(
+            fn($row) => [$row['token_user'], $row['addr'], (int)$row['last_seen']],
+            $this->pdo->query("SELECT token_user, addr, last_seen FROM bcl_nodes")->fetchAll()
+        ));
     }
 
     /** bcl_node_heartbeat: 대소문자만 다른 node_id 는 다른 노드 */

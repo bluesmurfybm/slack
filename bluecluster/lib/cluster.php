@@ -193,15 +193,17 @@ function bcl_piece_start($pdo, $job_key, $piece_key, $node_id, $account, $token_
  * @param string $files_dir
  * @param string $job_key
  * @param string $piece_key
- * @param array $finish ['node_id' => 노드, 'attempt_no' => 시도 번호, 'status' => 상태, 'result' => 결과, 'patch' => 패치, 'log_json' => 로그 JSON, 'redactions_json' => 가린 횟수 JSON]
+ * @param array $finish ['node_id' => 노드, 'token_user' => 요청한 토큰의 주인 이메일, 'attempt_no' => 시도 번호, 'status' => 상태, 'result' => 결과, 'patch' => 패치, 'log_json' => 로그 JSON, 'redactions_json' => 가린 횟수 JSON]
  * @param int $now
  * @return array ['ok' => bool]
+ * @throws BclApiError 다른 사용자의 시도
  */
 function bcl_piece_finish($pdo, $files_dir, $job_key, $piece_key, $finish, $now)
 {
     return bcl_with_job_lock($pdo, $job_key, function ($job) use ($pdo, $files_dir, $piece_key, $finish, $now) {
         $piece = bcl_piece_row($pdo, $job, $piece_key);
         $attempt = bcl_attempt_row($pdo, $piece, $finish['attempt_no']);
+        if ($attempt['token_user'] !== $finish['token_user']) throw new BclApiError(403, '다른 사용자의 시도');
         if ($attempt['status'] !== 'running' || $attempt['node_id'] !== $finish['node_id']) return ['ok' => false];
 
         $paths = bcl_files_save_attempt($files_dir, $job['job_key'], $piece['piece_key'], (int)$attempt['attempt_no'],
@@ -264,16 +266,32 @@ function bcl_job_finish($pdo, $job_key, $node_id, $epoch, $summary, $now)
  * @param array $beat 하트비트 본문
  * @param string $token_user 요청한 토큰의 주인 이메일
  * @param int $now
+ * @throws BclApiError 다른 사용자의 노드
  */
 function bcl_node_heartbeat($pdo, $beat, $token_user, $now)
 {
-    $pdo->prepare("INSERT INTO bcl_nodes (node_id, account, token_user, addr, free_cpu, free_mem, running, attempts, last_seen)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON DUPLICATE KEY UPDATE account = VALUES(account), token_user = VALUES(token_user), addr = VALUES(addr),
-                       free_cpu = VALUES(free_cpu), free_mem = VALUES(free_mem), running = VALUES(running),
-                       attempts = VALUES(attempts), last_seen = VALUES(last_seen)")
-        ->execute([
-            $beat['node_id'], $beat['account'], $token_user, $beat['addr'], $beat['free_cpu'], $beat['free_mem'], $beat['running'],
-            json_encode($beat['attempts'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $now,
-        ]);
+    $pdo->beginTransaction();
+    try {
+        $st = $pdo->prepare("SELECT token_user, last_seen FROM bcl_nodes WHERE node_id = ? FOR UPDATE");
+        $st->execute([$beat['node_id']]);
+        $node = $st->fetch();
+        // 꺼진 노드의 이름은 다른 사용자가 넘겨받을 수 있다
+        if ($node && $node['token_user'] !== $token_user && (int)$node['last_seen'] >= $now - BCL_NODE_TTL_S) {
+            throw new BclApiError(403, '다른 사용자의 노드');
+        }
+
+        $pdo->prepare("INSERT INTO bcl_nodes (node_id, account, token_user, addr, free_cpu, free_mem, running, attempts, last_seen)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON DUPLICATE KEY UPDATE account = VALUES(account), token_user = VALUES(token_user), addr = VALUES(addr),
+                           free_cpu = VALUES(free_cpu), free_mem = VALUES(free_mem), running = VALUES(running),
+                           attempts = VALUES(attempts), last_seen = VALUES(last_seen)")
+            ->execute([
+                $beat['node_id'], $beat['account'], $token_user, $beat['addr'], $beat['free_cpu'], $beat['free_mem'], $beat['running'],
+                json_encode($beat['attempts'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $now,
+            ]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
 }

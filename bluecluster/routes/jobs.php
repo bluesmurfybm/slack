@@ -162,6 +162,7 @@ function bcl_route_piece_finish($ctx, $id, $pid, $req)
 
     return bcl_piece_finish($ctx['pdo'], $ctx['files_dir'], $id, $pid, [
         'node_id' => $body['node_id'],
+        'token_user' => $ctx['user']['email'],
         'attempt_no' => $body['attempt_no'],
         'status' => $body['status'],
         'result' => $body['result'],
