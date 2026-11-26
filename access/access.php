@@ -430,7 +430,11 @@ function vpnMatch(r) {
 /* SSO 필터 — 운영 서버의 'SSO 제품' 칸(ops_sso). VPN 과 같은 방식이다: 자유 입력이라 실제로
    들어온 값만 후보가 되고, 쉼표로 여럿 적으면 하나하나로 고른다. 대소문자만 다른 값은
    한 후보로 묶는다(먼저 나온 표기를 보여 준다). 저장 뒤에도 다시 만든다(saveCell). */
-const ssoList = r => (r.ops_sso || "").split(",").map(t => t.trim()).filter(Boolean);
+/* 값의 형태는 '업체명 (실제 구현된 폴더 및 파일)' 이다 — 케이사인 (ksign).
+   제품을 가르는 건 괄호 앞 업체명이라 필터·자동 완성 후보는 그것만 쓴다.
+   괄호 안에 쉼표로 파일을 여럿 적을 수 있어 괄호 밖의 쉼표로만 나눈다. */
+const ssoBase = p => { const b = p.replace(/[(（].*$/, "").trim(); return b || p; };
+const ssoList = r => (r.ops_sso || "").split(/,(?![^(（]*[)）])/).map(t => ssoBase(t.trim())).filter(Boolean);
 function buildSsoFilter() {
   const n = {}, label = {};
   let none = 0;
@@ -771,8 +775,9 @@ function cellControl(f, v, r) {
   // 학교명 중 26곳은 엑셀에서 온 줄바꿈이 들어 있다. input 은 줄바꿈을 못 담으므로 펴서 보여 준다.
   const input = `<input class="dedit" type="text"${f.num ? ' inputmode="numeric"' : ""}${f.suggest ? ` list="dl-${escA(f.key)}" autocomplete="off"` : ""} value="${escA(flatPw(v))}" data-orig="${escA(v)}">`;
   const parts = partsOf(f);
-  if (!parts.length) return input;
-  return `<div class="dpair">${input}${parts.map(p => subControl(p, r)).join("")}</div>`;
+  const hint = f.hint ? `<div class="fhint">${esc(f.hint)}</div>` : "";
+  if (!parts.length) return input + hint;
+  return `<div class="dpair">${input}${parts.map(p => subControl(p, r)).join("")}</div>` + hint;
 }
 
 /* 같은 칸에 붙는 칸(정의의 'in') — 학교명 옆 '사용' 체크, 운영 서버 OS 버전 옆 대수.
@@ -1006,6 +1011,12 @@ function numOf(key) {
   return f && f.num ? ' inputmode="numeric"' : "";
 }
 
+/* 칸 정의의 hint — 입력칸 아래에 늘 보이는 안내 문구 */
+function hintOf(key) {
+  const f = ALLF.find(x => x.key === key);
+  return f && f.hint ? `<div class="fhint">${esc(f.hint)}</div>` : "";
+}
+
 /* 자동 완성 칸(SSO 제품)은 후보 목록(datalist)을 붙인다 */
 function suggestOf(key) {
   const f = ALLF.find(x => x.key === key);
@@ -1034,6 +1045,7 @@ function cellHtml(key, label, type, value) {
     <span>${esc(label)}</span>
     ${type === "area" ? `<textarea data-k="${escA(key)}" rows="${(ALLF.find(x => x.key === key) || {}).rows || 3}"${placeholderOf(key)}>${v}</textarea>`
                       : `<input data-k="${escA(key)}" type="text"${numOf(key)}${suggestOf(key)} value="${escA(value || "")}">`}
+    ${hintOf(key)}
   </label>`;
 }
 

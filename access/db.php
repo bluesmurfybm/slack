@@ -80,7 +80,7 @@ function access_db() {
             `os`          VARCHAR(60)  NOT NULL DEFAULT 'Rocky 8' COMMENT '서버 OS 버전',
             `ops_os`      VARCHAR(60)  NOT NULL DEFAULT '' COMMENT '운영 서버 OS 버전',
             `ops_cnt`     VARCHAR(10)  NOT NULL DEFAULT '' COMMENT '운영 서버 대수 (빈 칸 = 모름)',
-            `ops_sso`     VARCHAR(80)  NOT NULL DEFAULT '' COMMENT '운영 SSO 제품명 (빈 칸 = 미입력)',
+            `ops_sso`     VARCHAR(255) NOT NULL DEFAULT '' COMMENT '운영 SSO — 업체명 (실제 구현된 폴더 및 파일)',
             `opened`     VARCHAR(120) NOT NULL DEFAULT '' COMMENT '사업시작/최초운영오픈년월',
             `vpn`         VARCHAR(80)  NOT NULL DEFAULT '' COMMENT 'VPN/접근제어 프로그램명. 비어 있으면 별도 실행 불필요',
             `vpn_note`    TEXT         NULL COMMENT 'VPN 접속 방법 / 판정 근거가 된 문장',
@@ -211,7 +211,18 @@ function access_db() {
     // 운영 SSO 제품명. SSO 는 운영에만 붙으므로 운영 쪽 칸 하나만 둔다. VPN 처럼 자유 입력이고
     // 화면의 SSO 필터가 이 값으로 거른다.
     if (!access_has_column($pdo, 'ops_sso')) {
-        add_column_if_missing($pdo, "ALTER TABLE `school_access` ADD COLUMN `ops_sso` VARCHAR(80) NOT NULL DEFAULT '' COMMENT '운영 SSO 제품명 (빈 칸 = 미입력)' AFTER `ops_cnt`");
+        add_column_if_missing($pdo, "ALTER TABLE `school_access` ADD COLUMN `ops_sso` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '운영 SSO — 업체명 (실제 구현된 폴더 및 파일)' AFTER `ops_cnt`");
+    }
+    // 처음엔 제품명만 적는 80자 칸이었다. 괄호 안에 폴더·파일까지 적게 되면서 255자로 늘린다.
+    // (로컬 시험용 SQLite 는 길이 정보가 없어 조회가 실패한다 — 길이 제한도 없으니 그냥 넘어간다.)
+    try {
+        $len = (int)$pdo->query("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS
+                                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'school_access'
+                                   AND COLUMN_NAME = 'ops_sso' LIMIT 1")->fetchColumn();
+        if ($len > 0 && $len < 255) {
+            $pdo->exec("ALTER TABLE `school_access` MODIFY `ops_sso` VARCHAR(255) NOT NULL DEFAULT '' COMMENT '운영 SSO — 업체명 (실제 구현된 폴더 및 파일)'");
+        }
+    } catch (Throwable $e) {
     }
 
     // 접속 정보는 DB에 평문으로 두지 않는다.
@@ -822,19 +833,23 @@ function access_norm_count($v) {
  * 대소문자·공백만 다른 것을 같은 제품으로 본다. 표기가 여럿이면 가장 많이 쓰인 쪽을 따른다.
  * 쉼표로 여럿 적으면 하나하나 맞추고, 같은 제품이 두 번 나오면 하나만 남긴다.
  * $exceptId(지금 고치는 행)는 기준에서 뺀다 — 그 제품을 쓰는 곳이 여기뿐이면 표기를 고칠 수 있게.
+ *
+ * 값의 형태는 '업체명 (실제 구현된 폴더 및 파일)' 이다 — 케이사인 (ksign).
+ * 제품을 가르는 건 괄호 앞 업체명뿐이라 그쪽만 맞추고, 괄호 안은 대학마다 다른 값이므로 적은 대로 둔다.
+ * 괄호 안에 쉼표로 파일을 여럿 적을 수 있어서, 제품을 나누는 쉼표는 괄호 밖의 것만 본다.
  */
 function access_norm_sso(PDO $pdo, $v, $exceptId = 0) {
     $norm  = fn($s) => mb_strtolower(preg_replace('/\s+/u', '', $s), 'UTF-8');
     $parts = array_values(array_filter(array_map(
-        fn($s) => trim(preg_replace('/\s+/u', ' ', $s)), explode(',', (string)$v)), 'strlen'));
+        fn($s) => trim(preg_replace('/\s+/u', ' ', $s)), access_sso_parts($v)), 'strlen'));
     if (!$parts) return '';
 
     $cnt = [];   // 정규화 키 => [표기 => 쓰인 횟수]
     $st = $pdo->prepare("SELECT ops_sso FROM school_access WHERE ops_sso <> '' AND id <> ?");
     $st->execute([(int)$exceptId]);
     foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $row) {
-        foreach (explode(',', $row) as $p) {
-            $p = trim($p);
+        foreach (access_sso_parts($row) as $p) {
+            $p = trim(access_sso_split($p)[0]);
             if ($p === '') continue;
             $k = $norm($p);
             $cnt[$k][$p] = ($cnt[$k][$p] ?? 0) + 1;
@@ -843,14 +858,30 @@ function access_norm_sso(PDO $pdo, $v, $exceptId = 0) {
 
     $out = [];
     foreach ($parts as $p) {
-        $k = $norm($p);
+        [$base, $custom] = access_sso_split($p);
+        $k = $norm($base);
         if (isset($cnt[$k])) {
             arsort($cnt[$k]);
-            $p = (string)array_key_first($cnt[$k]);
+            $base = (string)array_key_first($cnt[$k]);
         }
-        $out[$k] = $out[$k] ?? $p;
+        $p = $base . ($custom !== '' ? ' (' . $custom . ')' : '');
+        $out[$norm($p)] = $out[$norm($p)] ?? $p;
     }
     return implode(', ', $out);
+}
+
+/** 쉼표로 여러 제품을 나눈다 — 괄호 안의 쉼표(파일 나열)는 나누지 않는다 */
+function access_sso_parts($v) {
+    return preg_split('/,(?![^(（]*[)）])/u', (string)$v) ?: [];
+}
+
+/** 'KSign (sso)' → ['KSign', 'sso']. 괄호가 없으면 ['KSign', '']. 괄호 앞이 업체명이다. */
+function access_sso_split($p) {
+    $p = trim((string)$p);
+    if (preg_match('/^([^(（]*)[(（]\s*(.*?)\s*[)）]?$/u', $p, $m) && trim($m[1]) !== '') {
+        return [trim($m[1]), $m[2]];
+    }
+    return [$p, ''];
 }
 
 /** school_access 에서 사용자가 편집할 수 있는 컬럼 (school_id/sort_no 는 제외) */
@@ -867,6 +898,7 @@ function access_cols() {
  *   type  input=한 줄, pw=가림(눈 아이콘), rich=Editor.js(굵기·색·취소선·목록)
  *   copy  1이면 값 옆에 복사 버튼
  *   num   1이면 숫자 칸(휴대폰에서 숫자 자판). 값 검사는 access_api.php 가 한다.
+ *   hint  입력칸 아래에 늘 보이는 안내 문구(줄바꿈 가능). placeholder 와 달리 값을 채워도 남는다.
  *   suggest 1이면 이미 입력된 값들을 자동 완성 후보(datalist)로 띄운다. 후보는 화면이 만든다.
  *   rows  area 의 줄 수(기본 3). placeholder 가 그보다 길면 늘려야 안내가 잘리지 않는다.
  *   check 켬/끔 체크 (학교명 옆 '사용' = schools.active)
@@ -912,7 +944,8 @@ function access_field_groups() {
             ['key' => 'login_ops',    'label' => '비밀번호',  'type' => 'pw',    'copy' => 1],
             // SSO 는 운영에만 붙는다 — 테스트 서버 묶음에는 이 칸이 없다
             // suggest: 다른 학교에 적힌 값을 자동 완성 후보로 띄운다(표기가 갈리지 않게)
-            ['key' => 'ops_sso',      'label' => 'SSO 제품',  'type' => 'input', 'suggest' => 1],
+            ['key' => 'ops_sso',      'label' => 'SSO 제품',  'type' => 'input', 'suggest' => 1,
+             'hint' => "업체명 (실제 구현된 폴더 및 파일) 형태로 적습니다\n예: 케이사인 (ksign)"],
             ['key' => 'ops_note',     'label' => '메모',      'type' => 'rich'],
             ['key' => 'ops_db',       'label' => '운영 DB',   'type' => 'rich',  'copy' => 1],
             ['key' => 'haksa_db',     'label' => '학사 DB',   'type' => 'rich',  'copy' => 1],
