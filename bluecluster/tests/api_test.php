@@ -258,6 +258,64 @@ final class api_test extends TestCase
         $this->assertSame(['status' => 400, 'data' => ['reason' => '필수 값 없음: node_id']], $res);
     }
 
+    /** bcl_route_job_claim: 문자열이 아닌 node_id 는 400 */
+    public function testClaimNumberNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 5]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류: 5']], $res);
+        $this->assertNull(bcl_job_get($this->pdo, $job)['leader']);
+    }
+
+    /** bcl_route_job_claim: 빈 node_id 는 400 */
+    public function testClaimEmptyNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => '']));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류: ']], $res);
+    }
+
+    /** bcl_route_job_claim: 앞에 공백이 있는 node_id 는 400 */
+    public function testClaimLeadingSpaceNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => ' PC-A']));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류:  PC-A']], $res);
+    }
+
+    /** bcl_route_job_claim: 뒤에 공백이 있는 node_id 는 400 */
+    public function testClaimTrailingSpaceNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => "PC-A\t"]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => "node_id 값 오류: PC-A\t"]], $res);
+    }
+
+    /** bcl_route_job_claim: node_id 는 BCL_NODE_ID_MAX(80) 글자까지, 81 글자는 400 */
+    public function testClaimNodeIdLength()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $long = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => str_repeat('가', 81)]));
+        $fit = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => str_repeat('가', 80)]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류: ' . str_repeat('가', 81)]], $long);
+        $this->assertSame(['status' => 200, 'data' => ['ok' => true, 'leader' => str_repeat('가', 80), 'epoch' => 1]], $fit);
+    }
+
     /** bcl_job_claim: 다른 연결의 claim 이 commit 되기 전에 들어온 claim 은 기다렸다가 ok false */
     public function testClaimConcurrentOnlyOneWins()
     {
@@ -365,6 +423,17 @@ final class api_test extends TestCase
         $this->assertSame(['status' => 400, 'data' => ['reason' => '필수 값 없음: epoch']], $res);
     }
 
+    /** bcl_route_job_lease: node_id 형식 오류 */
+    public function testLeaseBadNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/lease', json_encode(['node_id' => 'PC-A ', 'epoch' => 1]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류: PC-A ']], $res);
+    }
+
     /** bcl_jobs_open: leader 없는 작업과 lease_until 이 지난 작업, state done 제외 */
     public function testOpenJobsExcludesLedAndDone()
     {
@@ -429,6 +498,19 @@ final class api_test extends TestCase
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode(['node_id' => 'PC-A', 'epoch' => 1]));
 
         $this->assertSame(['status' => 400, 'data' => ['reason' => '필수 값 없음: pieces']], $res);
+    }
+
+    /** bcl_route_job_pieces: node_id 형식 오류 */
+    public function testPiecesBadNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => ['PC-A'], 'epoch' => 1, 'pieces' => [['piece_id' => 'p1', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류: ["PC-A"]']], $res);
     }
 
     /** bcl_job_pieces: pieces 가 배열이 아니면 400 */
@@ -533,7 +615,7 @@ final class api_test extends TestCase
         $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: 5']], $res);
     }
 
-    /** bcl_job_pieces: piece_id 는 BCL_PIECE_ID_MAX(80) 글자까지 등록, 81 글자는 400 */
+    /** bcl_job_pieces: piece_id 는 80 글자까지 등록, 81 글자는 400 */
     public function testPiecesPieceIdLength()
     {
         $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
@@ -541,15 +623,157 @@ final class api_test extends TestCase
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
         $long = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
-            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => str_repeat('가', 81), 'repo' => 'r', 'desc' => 'd']],
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => str_repeat('a', 81), 'repo' => 'r', 'desc' => 'd']],
         ]));
         $fit = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
-            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => str_repeat('가', 80), 'repo' => 'r', 'desc' => 'd']],
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => str_repeat('a', 80), 'repo' => 'r', 'desc' => 'd']],
         ]));
 
-        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: ' . str_repeat('가', 81)]], $long);
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: ' . str_repeat('a', 81)]], $long);
         $this->assertSame(['status' => 200, 'data' => ['ok' => true]], $fit);
-        $this->assertSame([str_repeat('가', 80)], array_column(bcl_job_get($this->pdo, $job)['pieces'], 'piece_id'));
+        $this->assertSame([str_repeat('a', 80)], array_column(bcl_job_get($this->pdo, $job)['pieces'], 'piece_id'));
+    }
+
+    /** bcl_job_pieces: 영문·숫자 밖의 글자가 든 piece_id 는 400 */
+    public function testPiecesKoreanPieceId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => '조각1', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: 조각1']], $res);
+    }
+
+    /** bcl_job_pieces: piece_id .. 는 400 */
+    public function testPiecesDotDotPieceId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => '..', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: ..']], $res);
+    }
+
+    /** bcl_job_pieces: 드라이브 문자가 든 piece_id C:x 는 400 */
+    public function testPiecesDrivePieceId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'C:x', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: C:x']], $res);
+    }
+
+    /** bcl_job_pieces: Windows 예약 이름 piece_id CON 은 400 */
+    public function testPiecesReservedPieceId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'CON', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: CON']], $res);
+    }
+
+    /** bcl_job_pieces: 확장자가 붙은 소문자 예약 이름 piece_id con.txt 는 400 */
+    public function testPiecesReservedWithExtensionPieceId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'con.txt', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: con.txt']], $res);
+    }
+
+    /** bcl_job_pieces: 예약 이름 COM1·LPT9 도 400, COM10 은 등록 */
+    public function testPiecesReservedComLptPieceId()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+        bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
+
+        $com = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'com1', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+        $lpt = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'LPT9.log', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+        $fit = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'COM10', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: com1']], $com);
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: LPT9.log']], $lpt);
+        $this->assertSame(['status' => 200, 'data' => ['ok' => true]], $fit);
+    }
+
+    /** bcl_job_pieces: 점으로 끝나는 piece_id 는 400 */
+    public function testPiecesTrailingDotPieceId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'p1.', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: p1.']], $res);
+    }
+
+    /** bcl_job_pieces: - 로 시작하는 piece_id 는 400 */
+    public function testPiecesLeadingDashPieceId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => '-p1', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'piece_id 값 오류: -p1']], $res);
+    }
+
+    /** bcl_job_pieces: 줄바꿈으로 끝나는 piece_id 는 400 */
+    public function testPiecesTrailingNewlinePieceId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => "p1\n", 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => "piece_id 값 오류: p1\n"]], $res);
+    }
+
+    /** bcl_job_pieces: 영문·숫자·. _ - 로 된 piece_id 와 한 글자 piece_id 는 등록 */
+    public function testPiecesValidPieceId()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+        bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1,
+            'pieces' => [['piece_id' => 'Lms-a.part_2', 'repo' => 'r', 'desc' => 'd'], ['piece_id' => '7', 'repo' => 'r', 'desc' => 'e']],
+        ]));
+
+        $this->assertSame(['status' => 200, 'data' => ['ok' => true]], $res);
+        $this->assertSame(['Lms-a.part_2', '7'], array_column(bcl_job_get($this->pdo, $job)['pieces'], 'piece_id'));
     }
 
     /** bcl_job_pieces: 다른 epoch 는 ok false, pieces 없음 */
@@ -645,6 +869,17 @@ final class api_test extends TestCase
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/start', json_encode(['node_id' => 'PC-B']));
 
         $this->assertSame(['status' => 400, 'data' => ['reason' => '필수 값 없음: account']], $res);
+    }
+
+    /** bcl_route_piece_start: node_id 형식 오류 */
+    public function testStartBadNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/start', json_encode(['node_id' => ' PC-B', 'account' => 'acc']));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류:  PC-B']], $res);
     }
 
     /** bcl_piece_start: running 조각은 ok false, attempt_no null, 시도 추가 없음 */
@@ -981,6 +1216,19 @@ final class api_test extends TestCase
         $this->assertSame(['status' => 400, 'data' => ['reason' => '필수 값 없음: log']], $res);
     }
 
+    /** bcl_route_piece_finish: node_id 형식 오류 */
+    public function testFinishBadNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
+            'node_id' => '', 'attempt_no' => 1, 'status' => 'done', 'result' => '', 'patch' => '', 'log' => [],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류: ']], $res);
+    }
+
     /** bcl_piece_finish: 없는 시도 404 */
     public function testFinishUnknownAttempt404()
     {
@@ -1088,6 +1336,19 @@ final class api_test extends TestCase
         ]));
 
         $this->assertSame(['status' => 400, 'data' => ['reason' => '필수 값 없음: attempt_no']], $res);
+    }
+
+    /** bcl_route_piece_close: node_id 형식 오류 */
+    public function testCloseBadNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/close', json_encode([
+            'node_id' => null, 'epoch' => 1, 'attempt_no' => 1, 'status' => 'lost',
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류: null']], $res);
     }
 
     /** bcl_piece_close: 없는 시도 404 */
@@ -1206,6 +1467,17 @@ final class api_test extends TestCase
         $this->assertSame(['status' => 400, 'data' => ['reason' => '필수 값 없음: summary']], $res);
     }
 
+    /** bcl_route_job_finish: node_id 형식 오류 */
+    public function testJobFinishBadNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/finish', json_encode(['node_id' => "PC-A\n", 'epoch' => 1, 'summary' => 's']));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => "node_id 값 오류: PC-A\n"]], $res);
+    }
+
     /** bcl_node_heartbeat: 같은 node_id 는 마지막 하트비트로 바뀌고 token_user 는 user email */
     public function testHeartbeatRecordsTokenUser()
     {
@@ -1272,6 +1544,130 @@ final class api_test extends TestCase
         ]));
 
         $this->assertSame(['status' => 400, 'data' => ['reason' => '필수 값 없음: attempts']], $res);
+    }
+
+    /** bcl_route_heartbeat: node_id 형식 오류, 노드 기록 없음 */
+    public function testHeartbeatBadNodeId400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A ', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'node_id 값 오류: PC-A ']], $res);
+        $this->assertSame([], bcl_nodes_live($this->pdo, 1000));
+    }
+
+    /** bcl_route_heartbeat: 문자열이 아닌 account 는 400 */
+    public function testHeartbeatAccountNotString400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => ['acc'], 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'account 값 오류: ["acc"]']], $res);
+    }
+
+    /** bcl_route_heartbeat: 문자열이 아닌 addr 는 400 */
+    public function testHeartbeatAddrNotString400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => 8080, 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'addr 값 오류: 8080']], $res);
+    }
+
+    /** bcl_route_heartbeat: 숫자가 아닌 free_cpu 는 400 */
+    public function testHeartbeatFreeCpuNotNumber400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => '50', 'free_mem' => 50, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'free_cpu 값 오류: 50']], $res);
+    }
+
+    /** bcl_route_heartbeat: true 인 free_mem 은 400 */
+    public function testHeartbeatFreeMemBool400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => true, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'free_mem 값 오류: 1']], $res);
+    }
+
+    /** bcl_route_heartbeat: null 인 running 은 400 */
+    public function testHeartbeatRunningNull400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => null, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'running 값 오류: null']], $res);
+    }
+
+    /** bcl_route_heartbeat: 소수 free_cpu·free_mem 은 받음 */
+    public function testHeartbeatFloatNumbers()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 12.5, 'free_mem' => 40.4, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 200, 'data' => ['ok' => true]], $res);
+        $live = bcl_nodes_live($this->pdo, 1000);
+        $this->assertSame([12.5, 40], [$live[0]['free_cpu'], $live[0]['free_mem']]);
+    }
+
+    /** bcl_route_heartbeat: 목록이 아닌 attempts 는 400, 노드 기록 없음 */
+    public function testHeartbeatAttemptsNotList400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => ['a' => 'job-1/p1/1'],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'attempts 값 오류: {"a":"job-1/p1/1"}']], $res);
+        $this->assertSame([], bcl_nodes_live($this->pdo, 1000));
+    }
+
+    /** bcl_route_heartbeat: 문자열 목록이 아닌 attempts 는 400 */
+    public function testHeartbeatAttemptsItemNotString400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => ['job-1/p1/1', 7],
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'attempts 값 오류: ["job-1/p1/1",7]']], $res);
+    }
+
+    /** bcl_route_heartbeat: 문자열인 attempts 는 400 */
+    public function testHeartbeatAttemptsString400()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => 'job-1/p1/1',
+        ]));
+
+        $this->assertSame(['status' => 400, 'data' => ['reason' => 'attempts 값 오류: job-1/p1/1']], $res);
     }
 
     /** bcl_files_dir: config 의 bluecluster.files_dir */

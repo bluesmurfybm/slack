@@ -26,6 +26,27 @@ function bcl_route_nodes($ctx, $req)
 function bcl_route_heartbeat($ctx, $body)
 {
     bcl_api_require($body, ['node_id', 'account', 'addr', 'free_cpu', 'free_mem', 'running', 'attempts']);
+    bcl_route_heartbeat_check($body);
     bcl_node_heartbeat($ctx['pdo'], $body, $ctx['user']['email'], $ctx['now']);
     return ['ok' => true];
+}
+
+/**
+ * 하트비트 본문 값의 형식을 확인한다.
+ * @param array $body
+ * @throws BclApiError
+ */
+function bcl_route_heartbeat_check($body)
+{
+    bcl_api_check_node_id($body['node_id']);
+    foreach (['account', 'addr'] as $field) {
+        if (!is_string($body[$field])) throw bcl_api_bad_value($field, $body[$field]);
+    }
+    foreach (['free_cpu', 'free_mem', 'running'] as $field) {
+        if (!is_int($body[$field]) && !is_float($body[$field])) throw bcl_api_bad_value($field, $body[$field]);
+    }
+    $attempts = $body['attempts'];
+    if (!is_array($attempts) || !array_is_list($attempts) || array_filter($attempts, fn($item) => !is_string($item))) {
+        throw bcl_api_bad_value('attempts', $attempts);
+    }
 }

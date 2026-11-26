@@ -293,7 +293,7 @@ return <<<'JSON'
         "description": "현재 리더·epoch 가 아니면 `ok: false`. 이미 조각이 있으면 바꾸지 않고 `ok: true` 입니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/jobs/job-1/pieces"}}],
-        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["node_id", "epoch", "pieces"], "properties": {"node_id": {"type": "string"}, "epoch": {"type": "integer"}, "pieces": {"type": "array", "items": {"type": "object", "required": ["piece_id", "repo", "desc"], "properties": {"piece_id": {"type": "string"}, "repo": {"type": "string"}, "desc": {"type": "string"}}}}}}}}},
+        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["node_id", "epoch", "pieces"], "properties": {"node_id": {"type": "string"}, "epoch": {"type": "integer"}, "pieces": {"type": "array", "items": {"type": "object", "required": ["piece_id", "repo", "desc"], "properties": {"piece_id": {"type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,78}[A-Za-z0-9])?$", "description": "Windows 예약 이름(CON, PRN, AUX, NUL, COM1~9, LPT1~9, 확장자가 붙어도)은 안 됩니다"}, "repo": {"type": "string"}, "desc": {"type": "string"}}}}}}}}},
         "responses": {
           "200": {"description": "OK", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BclOk"}}}},
           "400": {"$ref": "#/components/responses/BclError"},
@@ -423,7 +423,7 @@ return <<<'JSON'
     "responses": {
       "Unauthorized": {"description": "토큰 없음·틀림"},
       "SessionOnly": {"description": "토큰으로는 불가"},
-      "BclError": {"description": "`{\"reason\": \"...\"}` (필수 값 없음·JSON 형식 오류·등록되지 않은 작업·없는 조각·없는 시도 등)", "content": {"application/json": {"schema": {"type": "object", "properties": {"reason": {"type": "string"}}}}}}
+      "BclError": {"description": "`{\"reason\": \"...\"}` (필수 값 없음·값 오류·JSON 형식 오류·등록되지 않은 작업·없는 조각·없는 시도 등). `node_id` 는 앞뒤 공백 없는 1~80 글자 문자열이어야 합니다", "content": {"application/json": {"schema": {"type": "object", "properties": {"reason": {"type": "string"}}}}}}
     },
     "schemas": {
       "BclOk": {"type": "object", "properties": {"ok": {"type": "boolean", "description": "false 는 오류가 아니라 거절(상태 200)"}}},

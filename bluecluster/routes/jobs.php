@@ -59,6 +59,7 @@ function bcl_route_job_create($ctx, $body)
 function bcl_route_job_claim($ctx, $id, $body)
 {
     bcl_api_require($body, ['node_id']);
+    bcl_api_check_node_id($body['node_id']);
     return bcl_job_claim($ctx['pdo'], $id, $body['node_id'], $ctx['now']);
 }
 
@@ -71,6 +72,7 @@ function bcl_route_job_claim($ctx, $id, $body)
 function bcl_route_job_lease($ctx, $id, $body)
 {
     bcl_api_require($body, ['node_id', 'epoch']);
+    bcl_api_check_node_id($body['node_id']);
     return bcl_job_lease($ctx['pdo'], $id, $body['node_id'], $body['epoch'], $ctx['now']);
 }
 
@@ -83,6 +85,7 @@ function bcl_route_job_lease($ctx, $id, $body)
 function bcl_route_job_pieces($ctx, $id, $body)
 {
     bcl_api_require($body, ['node_id', 'epoch', 'pieces']);
+    bcl_api_check_node_id($body['node_id']);
     bcl_route_pieces_check($body['pieces']);
     return bcl_job_pieces($ctx['pdo'], $id, $body['node_id'], $body['epoch'], $body['pieces']);
 }
@@ -99,7 +102,7 @@ function bcl_route_pieces_check($pieces)
         bcl_api_require($piece, ['piece_id', 'repo', 'desc']);
         $key = $piece['piece_id'];
         // piece_id 가 결과 파일 이름이 된다
-        if (!is_string($key) || $key === '' || mb_strlen($key) > BCL_PIECE_ID_MAX || strpbrk($key, "/\\\0") !== false) {
+        if (!is_string($key) || !preg_match(BCL_PIECE_ID_PATTERN, $key) || preg_match(BCL_RESERVED_NAME_PATTERN, $key)) {
             throw bcl_api_bad_value('piece_id', $key);
         }
     }
@@ -118,6 +121,7 @@ function bcl_route_pieces_check($pieces)
 function bcl_route_job_finish($ctx, $id, $body)
 {
     bcl_api_require($body, ['node_id', 'epoch', 'summary']);
+    bcl_api_check_node_id($body['node_id']);
     return bcl_job_finish($ctx['pdo'], $id, $body['node_id'], $body['epoch'], $body['summary'], $ctx['now']);
 }
 
@@ -131,6 +135,7 @@ function bcl_route_job_finish($ctx, $id, $body)
 function bcl_route_piece_start($ctx, $id, $pid, $body)
 {
     bcl_api_require($body, ['node_id', 'account']);
+    bcl_api_check_node_id($body['node_id']);
     return bcl_piece_start($ctx['pdo'], $id, $pid, $body['node_id'], $body['account'], $ctx['user']['email'], $ctx['now']);
 }
 
@@ -145,6 +150,7 @@ function bcl_route_piece_finish($ctx, $id, $pid, $req)
 {
     $body = $req['body'];
     bcl_api_require($body, ['node_id', 'attempt_no', 'status', 'result', 'patch', 'log']);
+    bcl_api_check_node_id($body['node_id']);
     if (!in_array($body['status'], BCL_FINISH_STATUSES, true)) throw bcl_api_bad_value('status', $body['status']);
     foreach (['result', 'patch'] as $field) {
         if (!is_string($body[$field])) throw bcl_api_bad_value($field, $body[$field]);
@@ -175,6 +181,7 @@ function bcl_route_piece_finish($ctx, $id, $pid, $req)
 function bcl_route_piece_close($ctx, $id, $pid, $body)
 {
     bcl_api_require($body, ['node_id', 'epoch', 'attempt_no', 'status']);
+    bcl_api_check_node_id($body['node_id']);
     if (!in_array($body['status'], BCL_CLOSE_STATUSES, true)) throw bcl_api_bad_value('status', $body['status']);
     return bcl_piece_close($ctx['pdo'], $id, $pid, $body['node_id'], $body['epoch'], $body['attempt_no'], $body['status'], $ctx['now']);
 }

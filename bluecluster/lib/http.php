@@ -121,3 +121,15 @@ function bcl_api_bad_value($field, $value)
     return new BclApiError(400, "{$field} 값 오류: "
         . (is_scalar($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
 }
+
+/**
+ * node_id 가 올바른지 확인한다.
+ * @param mixed $node_id
+ * @throws BclApiError
+ */
+function bcl_api_check_node_id($node_id)
+{
+    if (!is_string($node_id) || $node_id === '' || trim($node_id) !== $node_id || mb_strlen($node_id) > BCL_NODE_ID_MAX) {
+        throw bcl_api_bad_value('node_id', $node_id);
+    }
+}
