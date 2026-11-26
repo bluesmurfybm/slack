@@ -19,11 +19,7 @@ function bcl_page_head($me, $title)
 <?php require_once BCL_PORTAL_ROOT . '/core/pwa.php'; echo pwa_head_tags('../'); ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="../styles/topbar.css">
-<style>
-body { font-family: Pretendard, sans-serif; margin: 0; background: #F4F6FB; color: #1B2333; }
-.bcl-main { max-width: 960px; margin: 24px auto; padding: 0 16px; }
-.bcl-empty { background: #fff; border-radius: 12px; padding: 48px 16px; text-align: center; color: #5A667F; }
-</style>
+<link rel="stylesheet" href="assets/bluecluster.css?v=<?= bcl_asset_v('assets/bluecluster.css') ?>">
 </head>
 <body>
 <div class="topbar">

@@ -21,6 +21,26 @@ function bcl_asset_v($rel)
 }
 
 /**
+ * 세션 CSRF 토큰.
+ * @return string
+ */
+function bcl_csrf_token()
+{
+    if (empty($_SESSION['bcl_csrf'])) $_SESSION['bcl_csrf'] = bin2hex(random_bytes(32));
+    return $_SESSION['bcl_csrf'];
+}
+
+/**
+ * 보낸 CSRF 토큰이 세션 것과 같은지.
+ * @param string $sent
+ * @return bool
+ */
+function bcl_csrf_valid($sent)
+{
+    return $sent !== '' && hash_equals($_SESSION['bcl_csrf'] ?? '', $sent);
+}
+
+/**
  * 화면용 로그인 확인.
  * @return array
  */
