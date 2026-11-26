@@ -138,6 +138,49 @@ final class page_test extends TestCase
         $this->assertGreaterThan(0, $job['created_at']);
     }
 
+    /** bcl_page_job: 시도 여러 건의 files 가 시도마다 존재하는 files_dir 안 파일만 */
+    public function test_job_시도_여러_건_files()
+    {
+        $dir = $this->filesDir . '/job-1';
+        $outside = sys_get_temp_dir() . '/bcl_page_outside.txt';
+        file_put_contents($outside, '비밀');
+        $key = bcl_job_create($this->pdo, '제목', 'a@bluesoft.co.kr', ['r'], '지시');
+        $this->pdo->exec("INSERT INTO bcl_pieces (job_id, piece_key, repo, piece_desc) SELECT id, 'p1', 'r', 'd' FROM bcl_jobs WHERE job_key = '{$key}'");
+        $insert = $this->pdo->prepare("INSERT INTO bcl_attempts (piece_id, attempt_no, node_id, account, status, started, result_path, patch_path, log_path)
+            SELECT id, ?, 'pc-1', 'acc', 'done', 1700000000, ?, ?, ? FROM bcl_pieces WHERE piece_key = 'p1'");
+        file_put_contents("{$dir}/p1-1.result.txt", 'x');
+        file_put_contents("{$dir}/p1-1.patch", 'x');
+        file_put_contents("{$dir}/p1-2.log.json", 'x');
+        $insert->execute([1, "{$dir}/p1-1.result.txt", "{$dir}/p1-1.patch", null]);
+        $insert->execute([2, null, $outside, "{$dir}/p1-2.log.json"]);
+        $insert->execute([3, "{$dir}/../../bcl_page_outside.txt", "{$dir}/없음.patch", null]);
+
+        $job = bcl_page_job($this->pdo, $key, $this->filesDir);
+
+        $attempts = $job['pieces'][0]['attempts'];
+        $this->assertSame(['result', 'patch'], $attempts[0]['files']);
+        $this->assertSame(['log'], $attempts[1]['files']);
+        $this->assertSame([], $attempts[2]['files']);
+    }
+
+    /** bcl_page_job_merge: extra·times 에 시도·작업이 없어도 빈 값으로 만들어짐 */
+    public function test_job_merge_extra_없음()
+    {
+        $job = [
+            'job_id' => 'job-9',
+            'pieces' => [['piece_id' => 'p1', 'attempts' => [['attempt_no' => 1]]]],
+        ];
+
+        $merged = bcl_page_job_merge($job, [], [], $this->filesDir);
+
+        $attempt = $merged['pieces'][0]['attempts'][0];
+        $this->assertNull($attempt['attempt_id']);
+        $this->assertSame('', $attempt['token_user']);
+        $this->assertSame([], $attempt['files']);
+        $this->assertNull($merged['created_at']);
+        $this->assertNull($merged['finished_at']);
+    }
+
     /** bcl_page_job: 없는 job_key 는 null */
     public function test_job_없는_키()
     {

@@ -90,7 +90,7 @@ function bcl_page_jobs($pdo, $state)
     $jobs = bcl_jobs_list($pdo, $state);
     $times = bcl_page_job_times($pdo, array_column($jobs, 'job_id'));
 
-    return array_map(fn($job) => $job + $times[$job['job_id']], $jobs);
+    return array_map(fn($job) => $job + ($times[$job['job_id']] ?? ['created_at' => null, 'finished_at' => null]), $jobs);
 }
 
 /**
@@ -105,28 +105,45 @@ function bcl_page_job($pdo, $job_key, $files_dir = null)
     $job = bcl_job_get($pdo, $job_key);
     if (!$job) return null;
 
-    $st = $pdo->prepare("SELECT a.id, p.piece_key, a.attempt_no, a.token_user
+    $st = $pdo->prepare("SELECT a.id, p.piece_key, a.attempt_no, a.token_user, a.result_path, a.patch_path, a.log_path
                          FROM bcl_attempts a JOIN bcl_pieces p ON p.id = a.piece_id JOIN bcl_jobs j ON j.id = p.job_id
                          WHERE j.job_key = ?");
     $st->execute([$job_key]);
     $extra = [];
     foreach ($st->fetchAll() as $row) {
-        $extra[$row['piece_key']][(int)$row['attempt_no']] = ['attempt_id' => (int)$row['id'], 'token_user' => $row['token_user']];
+        $extra[$row['piece_key']][(int)$row['attempt_no']] = $row;
     }
+
+    return bcl_page_job_merge($job, $extra, bcl_page_job_times($pdo, [$job_key]), $files_dir);
+}
+
+/**
+ * 작업에 시도별 추가 정보와 시각을 합친다. 추가 정보가 빠진 시도·작업은 빈 값으로 둔다.
+ * @param array $job bcl_job_get 결과
+ * @param array[] $extra piece_key => attempt_no => bcl_attempts 행(id, token_user, *_path)
+ * @param array[] $times job_key => 시각
+ * @param string|null $files_dir 시도 결과 폴더
+ * @return array
+ */
+function bcl_page_job_merge($job, $extra, $times, $files_dir = null)
+{
+    $base = realpath($files_dir ?? bcl_files_dir());
 
     foreach ($job['pieces'] as &$piece) {
         foreach ($piece['attempts'] as &$attempt) {
-            $attempt += $extra[$piece['piece_id']][$attempt['attempt_no']];
-            $attempt['files'] = array_values(array_filter(
-                array_keys(BCL_DOWNLOAD_KINDS),
-                fn($kind) => bcl_page_download_path($pdo, $attempt['attempt_id'], $kind, $files_dir) !== null
-            ));
+            $row = $extra[$piece['piece_id']][$attempt['attempt_no']] ?? null;
+            $attempt['attempt_id'] = $row ? (int)$row['id'] : null;
+            $attempt['token_user'] = $row['token_user'] ?? '';
+            $attempt['files'] = [];
+            foreach (BCL_DOWNLOAD_KINDS as $kind => $spec) {
+                if ($row && bcl_page_safe_path($row[$spec['column']], $base) !== null) $attempt['files'][] = $kind;
+            }
         }
         unset($attempt);
     }
     unset($piece);
 
-    return $job + bcl_page_job_times($pdo, [$job_key])[$job_key];
+    return $job + ($times[$job['job_id']] ?? ['created_at' => null, 'finished_at' => null]);
 }
 
 /**
@@ -171,9 +188,21 @@ function bcl_page_download_path($pdo, $attempt_id, $kind, $files_dir = null)
     $stored = $st->fetchColumn();
     if (!$stored) return null;
 
-    $base = realpath($files_dir ?? bcl_files_dir());
+    return bcl_page_safe_path($stored, realpath($files_dir ?? bcl_files_dir()));
+}
+
+/**
+ * 저장된 경로가 기준 폴더 안의 실제 파일이면 그 경로를 돌려준다.
+ * @param string|null $stored 저장된 경로
+ * @param string|false $base 기준 폴더의 realpath
+ * @return string|null
+ */
+function bcl_page_safe_path($stored, $base)
+{
+    if (!$stored || $base === false) return null;
+
     $path = realpath($stored);
-    if ($base === false || $path === false) return null;
+    if ($path === false) return null;
 
     return strpos($path, $base . DIRECTORY_SEPARATOR) === 0 && is_file($path) ? $path : null;
 }
