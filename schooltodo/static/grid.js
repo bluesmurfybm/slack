@@ -1,14 +1,5 @@
 const natural = (a, b) => String(a).localeCompare(String(b), "ko", { numeric: true });
 
-const SORTERS = {
-  name: (a, b) => natural(a.name, b.name),
-  ver: (a, b) => natural(a.ver, b.ver),
-  vpn: (a, b) => natural(a.vpn, b.vpn),
-  status: (a, b) => APP.boot.statuses.indexOf(a.status) - APP.boot.statuses.indexOf(b.status),
-  note: (a, b) => natural(a.note, b.note),
-  updated_at: (a, b) => natural(a.updated_at, b.updated_at),
-};
-
 const FILTER_COLS = ["ver", "vpn", "status"];
 
 /* ---------- 거르기 · 정렬 ---------- */
@@ -52,14 +43,54 @@ function visibleRows() {
     && (!q || schoolLabel(r).toLowerCase().includes(q) || r.note.toLowerCase().includes(q)));
 }
 
-function sortBy(key, dir) {
+async function sortBy(key, dir) {
   APP.sort = { key, dir: dir || (APP.sort.key === key ? -APP.sort.dir : 1) };
+  const id = APP.sheetId;
+  try {
+    const detail = await api(sheetPath(id));
+    if (APP.sheetId !== id) return;
+    APP.rows = detail.rows;
+  } catch (e) {
+    if (e.message !== "unauthenticated") showToast(e.message);
+    return;
+  }
   renderGrid();
 }
 
-function sortedRows(rows) {
-  const { key, dir } = APP.sort;
-  return rows.slice().sort((a, b) => dir * SORTERS[key](a, b) || natural(a.name, b.name) || natural(a.ver, b.ver));
+function sortParam() {
+  return (APP.sort.dir < 0 ? "-" : "") + APP.sort.key;
+}
+
+function sheetPath(id) {
+  return `/sheets/${id}?sort=${encodeURIComponent(sortParam())}`;
+}
+
+/* 정렬·거르기·검색어를 주소에 남겨 새로고침해도 그대로 보이게 한다 */
+const URL_FILTERS = ["ver", "vpn", "status"];
+
+function writeUrl() {
+  const p = new URLSearchParams();
+  if (APP.sheetId) p.set("sheet", APP.sheetId);
+  if (sortParam() !== "ver") p.set("sort", sortParam());
+  for (const col of URL_FILTERS) {
+    for (const v of APP.filters[col] || []) p.append(col, v);
+  }
+  const q = document.getElementById("q").value.trim();
+  if (q) p.set("q", q);
+  const qs = p.toString();
+  history.replaceState(null, "", qs ? "?" + qs : location.pathname);
+}
+
+function readUrl() {
+  const p = new URLSearchParams(location.search);
+  const sort = p.get("sort") || "";
+  const key = sort.replace(/^-/, "");
+  if (APP.boot.sorts.includes(key)) APP.sort = { key, dir: sort.startsWith("-") ? -1 : 1 };
+  for (const col of URL_FILTERS) {
+    const values = p.getAll(col);
+    APP.filters[col] = values.length ? new Set(values) : null;
+  }
+  document.getElementById("q").value = p.get("q") || "";
 }
 
 /* ---------- 표 ---------- */
@@ -149,17 +180,23 @@ async function applyVerBulk() {
 }
 
 function renderGrid() {
+  writeUrl();
   renderHeads();
   const hideBox = document.getElementById("hideExcluded");
   hideBox.checked = hideExcluded();
   hideBox.disabled = !!(APP.filters.status && APP.filters.status.has(APP.boot.status_excluded));
-  const rows = sortedRows(visibleRows());
+  const rows = visibleRows();
   const body = document.getElementById("gridBody");
   if (!rows.length) {
     body.innerHTML = `<tr><td class="none" colspan="7">${APP.rows.length ? "조건에 맞는 대학이 없어요" : "등록된 대학이 없어요"}</td></tr>`;
     return;
   }
-  const vers = [...new Set(rows.map((r) => r.ver))].sort(natural);
+  // 버전 정렬일 때만 버전으로 묶는다. 다른 열은 묶으면 버전 안에서만 정렬된다.
+  if (APP.sort.key !== "ver") {
+    body.innerHTML = rowsHTML(rows, 0);
+    return;
+  }
+  const vers = [...new Set(rows.map((r) => r.ver))];
   let no = 0;
   body.innerHTML = vers.map((ver) => {
     const group = rows.filter((r) => r.ver === ver);

@@ -30,7 +30,7 @@ function renderTabs() {
   document.getElementById("csvBtn").style.display = has && APP.sheetId ? "" : "none";
 }
 
-async function selectSheet(id) {
+async function selectSheet(id, fromUrl) {
   APP.sheetId = id;
   APP.filters = { ver: null, status: null };
   closeColMenu();
@@ -38,10 +38,11 @@ async function selectSheet(id) {
   closeArchive();
   closeHistory();
   document.getElementById("q").value = "";
-  history.replaceState(null, "", "?sheet=" + id);
+  if (fromUrl) readUrl();
+  writeUrl();
   renderTabs();
   try {
-    const detail = await api(`/sheets/${id}`);
+    const detail = await api(sheetPath(id));
     if (APP.sheetId !== id) return;
     APP.rows = detail.rows;
     syncCurrentSheet(detail);

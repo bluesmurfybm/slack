@@ -11,6 +11,7 @@ $bootJson = json_encode([
     'status_done' => SCHOOLTODO_STATUS_OPS,
     'status_excluded' => SCHOOLTODO_STATUS_EXCLUDED,
     'history_max' => SCHOOLTODO_HISTORY_MAX,
+    'sorts' => SCHOOLTODO_SORTS,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
 ?>
 <!DOCTYPE html>

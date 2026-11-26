@@ -146,9 +146,10 @@ function schooltodo_has_table($pdo, $table) {
  * @param PDO $pdo
  * @param int $id
  * @param string|null $status
+ * @param string|null $sort
  * @return array
  */
-function schooltodo_sheet_detail($pdo, $id, $status) {
+function schooltodo_sheet_detail($pdo, $id, $status, $sort = null) {
     $sheet = schooltodo_sheet_find($pdo, $id);
     $rows = schooltodo_sheet_rows($pdo, $id);
     $counts = schooltodo_counts(array_count_values(array_column($rows, 'status')), count($rows));
@@ -156,7 +157,27 @@ function schooltodo_sheet_detail($pdo, $id, $status) {
     if ($status !== null) {
         $rows = array_values(array_filter($rows, fn($r) => $r['status'] === $status));
     }
+    if ($sort !== null) $rows = schooltodo_rows_sort($rows, $sort);
     return schooltodo_sheet_out($sheet, $counts) + ['rows' => $rows];
+}
+
+/**
+ * 대학 행을 정렬한다.
+ * @param array[] $rows
+ * @param string $sort
+ * @return array[]
+ */
+function schooltodo_rows_sort($rows, $sort) {
+    $desc = str_starts_with($sort, '-');
+    $key = $desc ? substr($sort, 1) : $sort;
+    if (!in_array($key, SCHOOLTODO_SORTS, true)) {
+        throw new SchooltodoError('sort 는 ' . implode(', ', SCHOOLTODO_SORTS) . ' 중 하나여야 합니다(내림차순은 앞에 -)', 422);
+    }
+    $value = $key === 'status' ? fn($r) => array_search($r['status'], SCHOOLTODO_STATUSES, true) : fn($r) => $r[$key];
+    usort($rows, fn($a, $b) => ($desc ? -1 : 1) * strnatcmp((string)$value($a), (string)$value($b))
+        ?: strnatcmp($a['ver'], $b['ver'])
+        ?: strnatcmp($a['name'], $b['name']));
+    return $rows;
 }
 
 /**

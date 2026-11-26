@@ -36,7 +36,7 @@ function schooltodo_route_sheets($ctx, $req) {
 
     if ($method === 'GET') {
         $status = isset($req['query']['status']) ? schooltodo_want_status($req['query']['status'], 'status') : null;
-        return schooltodo_json(schooltodo_sheet_detail($pdo, $id, $status));
+        return schooltodo_json(schooltodo_sheet_detail($pdo, $id, $status, $req['query']['sort'] ?? null));
     }
     if ($method === 'PUT') return schooltodo_json(schooltodo_sheet_update($ctx, $id, $req['body']));
     if ($method === 'DELETE') {

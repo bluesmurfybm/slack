@@ -130,7 +130,8 @@ return <<<'JSON'
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [
           {"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/sheets/1"}},
-          {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/StatusKo"}}
+          {"name": "status", "in": "query", "schema": {"$ref": "#/components/schemas/StatusKo"}},
+          {"name": "sort", "in": "query", "description": "열 이름, 앞에 `-` 면 내림차순", "schema": {"type": "string", "example": "-updated_at"}}
         ],
         "responses": {
           "200": {"description": "OK", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SheetDetail"}}}},

@@ -8,7 +8,7 @@ const APP = {
   menuVer: null,
   menuSheetId: null,
   historySchool: null,
-  sort: { key: "name", dir: 1 },
+  sort: { key: "ver", dir: 1 },
   editingSheetId: null,
   deletingSheetId: null,
 };

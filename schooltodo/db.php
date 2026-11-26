@@ -15,6 +15,7 @@ const SCHOOLTODO_STATUSES = [
     SCHOOLTODO_STATUS_EXCLUDED,
 ];
 const SCHOOLTODO_HISTORY_MAX = 10;
+const SCHOOLTODO_SORTS = ['name', 'ver', 'vpn', 'status', 'note', 'updated_at'];
 /** 외부 API(/sheets/{id}/versions)용 영문 상태 코드. 화면용 API 는 한글 상태를 그대로 쓴다. */
 const SCHOOLTODO_STATUS_CODES = [
     SCHOOLTODO_STATUS_TODO => 'todo',
