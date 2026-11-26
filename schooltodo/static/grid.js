@@ -15,8 +15,11 @@ function renderStatusFilter() {
     + stages().map((st) => chip(st, st, s.counts[st], !!f && f.size === 1 && f.has(st))).join("");
 }
 
+/* 이미 고른 상태를 다시 누르면 거르기를 푼다. */
 function filterByStatus(status) {
-  APP.filters.status = status ? new Set([status]) : null;
+  const f = APP.filters.status;
+  const again = f && f.size === 1 && f.has(status);
+  APP.filters.status = status && !again ? new Set([status]) : null;
   renderStatusFilter();
   renderGrid();
 }
@@ -322,12 +325,14 @@ function setColFilterAll(checked) {
   afterColFilter();
 }
 
+/* 거르기가 없을 때 누르면 그 값만 남기고, 남은 하나를 다시 누르면 거르기를 푼다. */
 function setColFilterValue(index, checked) {
   const col = APP.menuCol;
   const values = columnValues(col);
-  const picked = new Set(APP.filters[col] || values);
-  if (checked) picked.add(values[index]); else picked.delete(values[index]);
-  APP.filters[col] = picked.size === values.length ? null : picked;
+  const f = APP.filters[col];
+  const picked = f ? new Set(f) : new Set();
+  if (!f || checked) picked.add(values[index]); else picked.delete(values[index]);
+  APP.filters[col] = picked.size === 0 || picked.size === values.length ? null : picked;
   afterColFilter();
 }
 
