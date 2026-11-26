@@ -274,7 +274,7 @@ function repMakeSection(s) {
   const t = REP.data.tpl;
   const presets = [["next", "다음 기간", !!repNextPeriod()], ["last3", "직전 3개월", true], ["lastmonth", "지난달", true], ["thismonth", "이번 달", true]]
     .filter(p => p[2]).map(([k, l]) => `<button type="button" class="btn-mini ghost" onclick="repPreset('${k}')">${l}</button>`).join("");
-  return repCard(2, "내역서 만들기", "기간을 고르고 불러와 행을 확인·수정한 뒤 hwpx · pdf 로 받습니다", "", `
+  return repCard(2, "내역서 만들기", "기간을 고르고 불러와 행을 확인·수정한 뒤 만들고, 만든 내역서 목록에서 hwpx · pdf 를 받습니다", "", `
     <div class="sh-rep-period">
       <input type="date" id="repFrom" value="${esc(REP.from)}"><span>~</span><input type="date" id="repTo" value="${esc(REP.to)}">
       <button type="button" class="btn-mini primary" onclick="repPreview(this)">불러오기</button>
@@ -388,9 +388,7 @@ async function repBuild(btn) {
     REP.data.reports = j.reports;
     REP.dirty = false;
     renderReport();
-    showToast(j.pdf_error ? `hwpx 는 만들었지만 PDF 는 실패했습니다 — ${j.pdf_error}` : `만들었습니다 — ${j.rows}줄 (hwpx · pdf)`);
-    await repDownload("?report_file=" + j.id, j.file_name);
-    if (!j.pdf_error) setTimeout(() => repDownload(`?report_file=${j.id}&fmt=pdf`, j.pdf_name), 700);   // 브라우저가 '여러 파일 받기' 허용을 물을 수 있다
+    showToast(j.pdf_error ? `hwpx 는 만들었지만 PDF 는 실패했습니다 — ${j.pdf_error}` : `만들었습니다 — ${j.rows}줄. 아래 목록의 HWPX · PDF 버튼으로 받으세요`);
   } catch (e) { showToast(e.message); } finally { btn.disabled = false; }
 }
 

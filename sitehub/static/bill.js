@@ -165,7 +165,7 @@ function billMakeSection() {
   const lr = BILL.data.last_report;
   const presets = [["report", "내역서와 같은 기간", !!lr, lr ? `${lr.period_from} ~ ${lr.period_to}` : ""], ["next", "다음 기간", !!billNextPeriod(), ""], ["last3", "직전 3개월", true, ""], ["lastmonth", "지난달", true, ""]]
     .filter(p => p[2]).map(([k, l, , tip]) => `<button type="button" class="btn-mini ghost" onclick="billPreset('${k}')"${tip ? ` title="${esc(tip)}"` : ""}>${l}</button>`).join("");
-  return repCard(2, "청구서 만들기", "기간을 고르고 불러와 수신·건명·품목·금액을 확인한 뒤 xlsx · pdf 로 받습니다", "", `
+  return repCard(2, "청구서 만들기", "기간을 고르고 불러와 수신·건명·품목·금액을 확인한 뒤 만들고, 만든 청구서 목록에서 xlsx · pdf 를 받습니다", "", `
     <div class="sh-rep-period">
       <input type="date" id="billFrom" value="${esc(BILL.from)}" aria-label="청구 기간 시작"><span>~</span><input type="date" id="billTo" value="${esc(BILL.to)}" aria-label="청구 기간 끝">
       <button type="button" class="btn-mini primary" onclick="billPreview(this)">불러오기</button>
@@ -290,9 +290,7 @@ async function billBuild(btn) {
     BILL.data.bills = j.bills;
     BILL.dirty = false;
     renderBill();
-    showToast(j.pdf_error ? `xlsx 는 만들었지만 PDF 는 실패했습니다 — ${j.pdf_error}` : `만들었습니다 — 합계 ${billWon(j.total)}원 (xlsx · pdf)`);
-    await repDownload("?bill_file=" + j.id, j.file_name);
-    if (!j.pdf_error) setTimeout(() => repDownload(`?bill_file=${j.id}&fmt=pdf`, j.pdf_name), 700);
+    showToast(j.pdf_error ? `xlsx 는 만들었지만 PDF 는 실패했습니다 — ${j.pdf_error}` : `만들었습니다 — 합계 ${billWon(j.total)}원. 아래 목록의 XLSX · PDF 버튼으로 받으세요`);
   } catch (e) { showToast(e.message); } finally { btn.disabled = false; }
 }
 
