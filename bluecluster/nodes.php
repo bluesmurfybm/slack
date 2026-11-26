@@ -33,8 +33,8 @@ bcl_page_head($me, 'PC 목록 · 블루 클러스터 에이전트');
         <td><?= h($node['node_id']) ?></td>
         <td><?= h($node['account']) ?></td>
         <td><?= h($node['addr']) ?></td>
-        <td><?= h($node['free_cpu']) ?></td>
-        <td><?= h(round($node['free_mem'] / 1048576)) ?> MB</td>
+        <td><?= h(bcl_page_percent($node['free_cpu'])) ?></td>
+        <td><?= h(bcl_page_percent($node['free_mem'])) ?></td>
         <td><?= h($node['running']) ?></td>
         <td><?= h(bcl_page_time($node['last_seen'])) ?></td>
       </tr>

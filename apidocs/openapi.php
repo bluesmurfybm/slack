@@ -386,8 +386,8 @@ return <<<'JSON'
           "node_id": {"type": "string"},
           "account": {"type": "string"},
           "addr": {"type": "string"},
-          "free_cpu": {"type": "number"},
-          "free_mem": {"type": "integer", "description": "바이트"},
+          "free_cpu": {"type": "number", "description": "남은 CPU %"},
+          "free_mem": {"type": "number", "description": "남은 메모리 %"},
           "running": {"type": "integer"},
           "attempts": {"type": "array", "items": {"type": "string", "example": "job-1/p1/1"}}
         }}}}},

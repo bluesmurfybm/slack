@@ -45,6 +45,16 @@ function bcl_page_time($ts)
 }
 
 /**
+ * 퍼센트 값을 화면 표기로 바꾼다.
+ * @param int|float $value
+ * @return string
+ */
+function bcl_page_percent($value)
+{
+    return round($value) . ' %';
+}
+
+/**
  * 가린 횟수를 화면 문구로 바꾼다.
  * @param array|stdClass|null $redactions 종류별 횟수
  * @return string

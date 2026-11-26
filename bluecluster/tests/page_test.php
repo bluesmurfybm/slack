@@ -213,6 +213,14 @@ final class page_test extends TestCase
         $this->assertSame('-', bcl_page_time(null));
     }
 
+    /** bcl_page_percent: free_cpu·free_mem 퍼센트를 반올림한 정수 % 로 */
+    public function test_percent()
+    {
+        $this->assertSame('37 %', bcl_page_percent(37));
+        $this->assertSame('38 %', bcl_page_percent(37.5));
+        $this->assertSame('0 %', bcl_page_percent(0.0));
+    }
+
     /** bcl_page_download_path: files_dir 안의 result·patch·log 경로를 돌려줌 */
     public function test_download_kind_세_가지()
     {
