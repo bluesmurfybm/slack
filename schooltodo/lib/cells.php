@@ -8,7 +8,9 @@
  */
 function schooltodo_cells_fill($ctx, $sheetId, $body) {
     $pdo = $ctx['pdo'];
-    schooltodo_sheet_find($pdo, $sheetId);
+    $sheet = schooltodo_sheet_find($pdo, $sheetId);
+    $stages = schooltodo_stages($sheet);
+    $envs = schooltodo_school_envs($pdo);
 
     $items = $body['items'] ?? null;
     if (!is_array($items) || !$items) throw new SchooltodoError('items 를 한 건 이상 보내 주세요', 422);
@@ -23,7 +25,7 @@ function schooltodo_cells_fill($ctx, $sheetId, $body) {
             try {
                 if (!is_array($item)) throw new SchooltodoError('객체여야 합니다', 422);
                 $schoolId = schooltodo_school_resolve($pdo, $item);
-                schooltodo_cell_save($pdo, $sheetId, $schoolId, $item, $by, $now);
+                schooltodo_cell_save($pdo, $sheetId, $schoolId, $item, $by, $now, schooltodo_school_stages($stages, $envs[$schoolId]));
             } catch (SchooltodoError $e) {
                 throw new SchooltodoError("items[{$i}]: " . $e->getMessage(), $e->status());
             }
@@ -35,11 +37,9 @@ function schooltodo_cells_fill($ctx, $sheetId, $body) {
         throw $e;
     }
 
-    $rows = array_values(array_filter(
-        schooltodo_sheet_rows($pdo, $sheetId),
-        fn($r) => in_array($r['school_id'], $schoolIds, true)
-    ));
-    return ['updated' => count($rows), 'rows' => $rows];
+    $all = schooltodo_sheet_rows($pdo, $sheetId);
+    $rows = array_values(array_filter($all, fn($r) => in_array($r['school_id'], $schoolIds, true)));
+    return ['updated' => count($rows), 'rows' => $rows, 'sheet' => schooltodo_sheet_out($sheet, schooltodo_summary($stages, $all))];
 }
 
 /**
@@ -84,8 +84,9 @@ function schooltodo_school_resolve($pdo, $item) {
  * @param array $item
  * @param string $by
  * @param string $now
+ * @param string[] $allowed 그 대학이 고를 수 있는 단계
  */
-function schooltodo_cell_save($pdo, $sheetId, $schoolId, $item, $by, $now) {
+function schooltodo_cell_save($pdo, $sheetId, $schoolId, $item, $by, $now, $allowed) {
     $hasStatus = array_key_exists('status', $item);
     $hasNote = array_key_exists('note', $item);
     if (!$hasStatus && !$hasNote) throw new SchooltodoError('status 나 note 중 하나는 있어야 합니다', 422);
@@ -94,7 +95,7 @@ function schooltodo_cell_save($pdo, $sheetId, $schoolId, $item, $by, $now) {
     $st->execute([$sheetId, $schoolId]);
     $cell = $st->fetch();
 
-    $status = $hasStatus ? schooltodo_want_status($item['status'], 'status') : ($cell['status'] ?? SCHOOLTODO_STATUS_TODO);
+    $status = $hasStatus ? schooltodo_want_stage($item['status'], $allowed) : ($cell['status'] ?? SCHOOLTODO_STATUS_TODO);
     $note = $hasNote ? schooltodo_want_text($item['note'], 'note', 2000) : ($cell['note'] ?? '');
 
     if ($cell) {

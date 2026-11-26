@@ -7,46 +7,31 @@
  * @return array[]
  */
 function schooltodo_sheets_all($pdo, $withArchived = false) {
-    $total = (int)$pdo->query("SELECT COUNT(*) FROM schools WHERE active = 1")->fetchColumn();
-
-    $counted = [];
-    $sql = "SELECT c.sheet_id, c.status, COUNT(*) AS n
-            FROM schooltodo_cells c
-            JOIN schools s ON s.id = c.school_id AND s.active = 1
-            GROUP BY c.sheet_id, c.status";
-    foreach ($pdo->query($sql) as $r) {
-        $counted[(int)$r['sheet_id']][$r['status']] = (int)$r['n'];
+    $envs = schooltodo_school_envs($pdo);
+    $cells = [];
+    foreach ($pdo->query("SELECT sheet_id, school_id, `status` FROM schooltodo_cells") as $r) {
+        $cells[(int)$r['sheet_id']][(int)$r['school_id']] = $r['status'];
     }
 
     $sheets = [];
     $where = $withArchived ? '' : "WHERE archived_at = ''";
     foreach ($pdo->query("SELECT * FROM schooltodo_sheets {$where} ORDER BY id") as $r) {
-        $sheets[] = schooltodo_sheet_out($r, schooltodo_counts($counted[(int)$r['id']] ?? [], $total));
+        $stages = schooltodo_stages($r);
+        $rows = [];
+        foreach ($envs as $schoolId => $env) {
+            $rows[] = schooltodo_stage_row($stages, $env, $cells[(int)$r['id']][$schoolId] ?? SCHOOLTODO_STATUS_TODO);
+        }
+        $sheets[] = schooltodo_sheet_out($r, schooltodo_summary($stages, $rows));
     }
     return $sheets;
 }
 
 /**
- * @param int[] $counted
- * @param int $total
- * @return int[]
- */
-function schooltodo_counts($counted, $total) {
-    $counts = array_fill_keys(SCHOOLTODO_STATUSES, 0);
-    foreach ($counted as $status => $n) {
-        if (isset($counts[$status])) $counts[$status] = $n;
-    }
-    $counts[SCHOOLTODO_STATUS_TODO] = 0;
-    $counts[SCHOOLTODO_STATUS_TODO] = $total - array_sum($counts);
-    return $counts;
-}
-
-/**
  * @param array $row
- * @param int[] $counts
+ * @param array $summary 단계와 단계별 대학 수
  * @return array
  */
-function schooltodo_sheet_out($row, $counts) {
+function schooltodo_sheet_out($row, $summary) {
     return [
         'id' => (int)$row['id'],
         'title' => (string)$row['title'],
@@ -54,9 +39,7 @@ function schooltodo_sheet_out($row, $counts) {
         'created_by' => (string)$row['created_by'],
         'created_at' => (string)$row['created_at'],
         'archived_at' => (string)($row['archived_at'] ?? ''),
-        'total' => array_sum($counts),
-        'counts' => $counts,
-    ];
+    ] + $summary;
 }
 
 /**
@@ -78,8 +61,9 @@ function schooltodo_sheet_find($pdo, $id) {
  * @return array[]
  */
 function schooltodo_sheet_rows($pdo, $sheetId) {
+    $stages = schooltodo_stages(schooltodo_sheet_find($pdo, $sheetId));
     $access = schooltodo_school_access($pdo);
-    $st = $pdo->prepare("SELECT s.id AS school_id, s.name, s.ver, s.dev, c.status, c.note, c.updated_by, c.updated_at
+    $st = $pdo->prepare("SELECT s.id AS school_id, s.name, s.ver, s.dev, s.ops, c.status, c.note, c.updated_by, c.updated_at
                          FROM schools s
                          LEFT JOIN schooltodo_cells c ON c.school_id = s.id AND c.sheet_id = ?
                          WHERE s.active = 1
@@ -88,7 +72,7 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
 
     $rows = [];
     foreach ($st as $r) {
-        $a = $access[(int)$r['school_id']] ?? ['vpn' => [], 'repo' => ''];
+        $a = $access[(int)$r['school_id']] ?? ['vpn' => [], 'repo' => '', 'test_srv' => false];
         sort($a['vpn']);
         $rows[] = [
             'school_id' => (int)$r['school_id'],
@@ -96,7 +80,7 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
             'code' => schooltodo_school_code($a['repo'], (string)$r['dev']),
             'ver' => (string)$r['ver'],
             'vpn' => implode(', ', array_unique($a['vpn'])),
-            'status' => $r['status'] ?? SCHOOLTODO_STATUS_TODO,
+        ] + schooltodo_stage_row($stages, schooltodo_school_env($r, $a), $r['status'] ?? SCHOOLTODO_STATUS_TODO) + [
             'note' => (string)($r['note'] ?? ''),
             'updated_by' => (string)($r['updated_by'] ?? ''),
             'updated_at' => (string)($r['updated_at'] ?? ''),
@@ -108,16 +92,17 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
 /**
  * 대학별 EnvHub 접속 정보. 한 대학에 접속 정보가 두 벌일 수 있어 모아서 준다.
  * @param PDO $pdo
- * @return array[] school_id => ['vpn' => string[], 'repo' => string]
+ * @return array[] school_id => 접속 정보
  */
 function schooltodo_school_access($pdo) {
     if (!schooltodo_has_table($pdo, 'school_access')) return [];
     $out = [];
-    foreach ($pdo->query("SELECT school_id, vpn, repo FROM school_access ORDER BY id") as $r) {
+    foreach ($pdo->query("SELECT school_id, vpn, repo, test_srv FROM school_access ORDER BY id") as $r) {
         $id = (int)$r['school_id'];
-        $out[$id] ??= ['vpn' => [], 'repo' => ''];
+        $out[$id] ??= ['vpn' => [], 'repo' => '', 'test_srv' => false];
         if ((string)$r['vpn'] !== '') $out[$id]['vpn'][] = $r['vpn'];
         if ((string)$r['repo'] !== '') $out[$id]['repo'] .= $r['repo'] . "\n";
+        $out[$id]['test_srv'] = $out[$id]['test_srv'] || (string)$r['test_srv'] !== '';
     }
     return $out;
 }
@@ -158,29 +143,32 @@ function schooltodo_has_table($pdo, $table) {
  */
 function schooltodo_sheet_detail($pdo, $id, $status, $sort = null) {
     $sheet = schooltodo_sheet_find($pdo, $id);
+    $stages = schooltodo_stages($sheet);
     $rows = schooltodo_sheet_rows($pdo, $id);
-    $counts = schooltodo_counts(array_count_values(array_column($rows, 'status')), count($rows));
+    $summary = schooltodo_summary($stages, $rows);
 
     if ($status !== null) {
+        schooltodo_want_stage($status, $stages);
         $rows = array_values(array_filter($rows, fn($r) => $r['status'] === $status));
     }
-    if ($sort !== null) $rows = schooltodo_rows_sort($rows, $sort);
-    return schooltodo_sheet_out($sheet, $counts) + ['rows' => $rows];
+    if ($sort !== null) $rows = schooltodo_rows_sort($rows, $sort, $stages);
+    return schooltodo_sheet_out($sheet, $summary) + ['rows' => $rows];
 }
 
 /**
  * 대학 행을 정렬한다.
  * @param array[] $rows
  * @param string $sort
+ * @param string[] $stages 시트의 단계
  * @return array[]
  */
-function schooltodo_rows_sort($rows, $sort) {
+function schooltodo_rows_sort($rows, $sort, $stages) {
     $desc = str_starts_with($sort, '-');
     $key = $desc ? substr($sort, 1) : $sort;
     if (!in_array($key, SCHOOLTODO_SORTS, true)) {
         throw new SchooltodoError('sort 는 ' . implode(', ', SCHOOLTODO_SORTS) . ' 중 하나여야 합니다(내림차순은 앞에 -)', 422);
     }
-    $value = $key === 'status' ? fn($r) => array_search($r['status'], SCHOOLTODO_STATUSES, true) : fn($r) => $r[$key];
+    $value = $key === 'status' ? fn($r) => array_search($r['status'], $stages, true) : fn($r) => $r[$key];
     usort($rows, fn($a, $b) => ($desc ? -1 : 1) * strnatcmp((string)$value($a), (string)$value($b))
         ?: strnatcmp($a['ver'], $b['ver'])
         ?: strnatcmp($a['name'], $b['name']));
@@ -197,8 +185,10 @@ function schooltodo_sheet_create($ctx, $body) {
     $title = schooltodo_want_title($pdo, $body['title'] ?? '', 0);
     $description = schooltodo_want_text($body['description'] ?? '', 'description', 2000);
 
-    $pdo->prepare("INSERT INTO schooltodo_sheets (`title`, `description`, `created_by`, `created_at`) VALUES (?, ?, ?, ?)")
-        ->execute([$title, $description, $ctx['identity']['name'], date('Y-m-d H:i:s')]);
+    $stages = array_key_exists('stages', $body) ? schooltodo_want_stages($body['stages']) : SCHOOLTODO_STAGES_DEFAULT;
+
+    $pdo->prepare("INSERT INTO schooltodo_sheets (`title`, `description`, `stages`, `created_by`, `created_at`) VALUES (?, ?, ?, ?, ?)")
+        ->execute([$title, $description, json_encode($stages, JSON_UNESCAPED_UNICODE), $ctx['identity']['name'], date('Y-m-d H:i:s')]);
 
     return schooltodo_sheet_detail($pdo, (int)$pdo->lastInsertId(), null);
 }
@@ -226,8 +216,16 @@ function schooltodo_sheet_update($ctx, $id, $body) {
         if (!$body['archived']) $archivedAt = '';
     }
 
-    $pdo->prepare("UPDATE schooltodo_sheets SET `title` = ?, `description` = ?, `archived_at` = ? WHERE id = ?")
-        ->execute([$title, $description, $archivedAt, $id]);
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("UPDATE schooltodo_sheets SET `title` = ?, `description` = ?, `archived_at` = ? WHERE id = ?")
+            ->execute([$title, $description, $archivedAt, $id]);
+        if (array_key_exists('stages', $body)) schooltodo_stages_save($pdo, $sheet, $body['stages'], $body['renames'] ?? []);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
 
     return schooltodo_sheet_detail($pdo, $id, null);
 }
@@ -273,8 +271,10 @@ function schooltodo_sheet_delete($ctx, $id) {
  */
 function schooltodo_sheet_by_version($pdo, $id, $status, $ver) {
     $sheet = schooltodo_sheet_find($pdo, $id);
+    $stages = schooltodo_stages($sheet);
     $rows = schooltodo_sheet_rows($pdo, $id);
-    $counts = schooltodo_counts(array_count_values(array_column($rows, 'status')), count($rows));
+    $summary = schooltodo_summary($stages, $rows);
+    if ($status !== null) schooltodo_want_stage($status, $stages);
 
     $groups = [];
     foreach ($rows as $r) {
@@ -306,7 +306,7 @@ function schooltodo_sheet_by_version($pdo, $id, $status, $ver) {
             'ver' => (string)$v,
             // 개수는 status 로 거르기 전 전체 기준 — 진행률을 볼 때 거른 결과에 휘둘리지 않게
             'total' => count($list),
-            'counts' => schooltodo_counts_en(schooltodo_counts(array_count_values(array_column($list, 'status')), count($list))),
+            'counts' => schooltodo_counts_en(schooltodo_summary($stages, $list)['counts']),
             'schools' => $schools,
         ];
     }
@@ -316,30 +316,30 @@ function schooltodo_sheet_by_version($pdo, $id, $status, $ver) {
         'title' => (string)$sheet['title'],
         'description' => (string)$sheet['description'],
         'archived_at' => (string)($sheet['archived_at'] ?? ''),
-        'total' => array_sum($counts),
-        'counts' => schooltodo_counts_en($counts),
+        'total' => $summary['total'],
+        'counts' => schooltodo_counts_en($summary['counts']),
         'versions' => $versions,
     ];
 }
 
 /**
- * 한글 상태 키 개수표 → 영문 코드 키 (todo, in_progress, dev_applied, prod_applied, not_applicable)
+ * 단계 이름 키 개수표를 영문 코드 키 개수표로 바꾼다.
  * @param int[] $counts
  * @return int[]
  */
 function schooltodo_counts_en($counts) {
     $out = [];
-    foreach (SCHOOLTODO_STATUS_CODES as $ko => $en) $out[$en] = (int)($counts[$ko] ?? 0);
+    foreach ($counts as $ko => $n) $out[SCHOOLTODO_STATUS_CODES[$ko] ?? $ko] = $n;
     return $out;
 }
 
 /**
- * ?status= 값 — 영문 코드(todo …)와 한글 상태(미조치 …) 둘 다 받아 한글 상태로 돌려준다.
+ * 영문 코드나 단계 이름을 단계 이름으로 바꾼다.
  * @param mixed $value
  * @return string
  */
 function schooltodo_want_status_any($value) {
-    if (is_string($value) && ($ko = array_search($value, SCHOOLTODO_STATUS_CODES, true)) !== false) return $ko;
-    if (is_string($value) && isset(SCHOOLTODO_STATUS_CODES[$value])) return $value;
-    throw new SchooltodoError('status 는 ' . implode(', ', SCHOOLTODO_STATUS_CODES) . ' 중 하나여야 합니다', 422);
+    if (!is_string($value)) throw new SchooltodoError('status 는 글자여야 합니다', 422);
+    $ko = array_search($value, SCHOOLTODO_STATUS_CODES, true);
+    return $ko === false ? $value : $ko;
 }

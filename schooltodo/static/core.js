@@ -38,15 +38,16 @@ const sendJSON = (method, path, body) => api(path, {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const STATUS_CLASS = { "미조치": "st-todo", "진행중": "st-doing", "개발반영": "st-dev", "운영반영": "st-done", "해당없음": "st-excluded" };
+const statusClass = (st) => STATUS_CLASS[st] || "st-custom";
+// 대학이 그 대학의 마지막 단계까지 갔으면 완료 색으로 보인다
+const rowClass = (r) => (r.done ? "st-done" : statusClass(r.status));
 
 function currentSheet() {
   return APP.sheets.find((s) => s.id === APP.sheetId) || null;
 }
 
-// 대상은 해당없음을 뺀 대학이다
-function progressOf(counts) {
-  const target = Object.values(counts).reduce((a, b) => a + b, 0) - counts[APP.boot.status_excluded];
-  return { done: counts[APP.boot.status_done], target };
+function percentOf(s) {
+  return s.target ? Math.round((s.done / s.target) * 100) : 0;
 }
 
 let toastT;

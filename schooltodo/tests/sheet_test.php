@@ -98,8 +98,10 @@ final class sheet_test extends TestCase
 
         $this->assertSame(200, $res['status']);
         $this->assertSame([
-            ['school_id' => 2, 'name' => '가대', 'code' => '', 'ver' => '3.5', 'vpn' => '', 'status' => '미조치', 'note' => '', 'updated_by' => '', 'updated_at' => ''],
-            ['school_id' => 1, 'name' => '나대', 'code' => '', 'ver' => '3.9', 'vpn' => 'Arcon, FortiClient', 'status' => '운영반영', 'note' => '3.5.1 반영', 'updated_by' => '봇', 'updated_at' => '2026-11-17 10:00:00'],
+            ['school_id' => 2, 'name' => '가대', 'code' => '', 'ver' => '3.5', 'vpn' => '', 'status' => '미조치',
+                'stages' => ['미조치', '진행중', '개발반영', '운영반영', '해당없음'], 'done' => false, 'note' => '', 'updated_by' => '', 'updated_at' => ''],
+            ['school_id' => 1, 'name' => '나대', 'code' => '', 'ver' => '3.9', 'vpn' => 'Arcon, FortiClient', 'status' => '운영반영',
+                'stages' => ['미조치', '진행중', '개발반영', '운영반영', '해당없음'], 'done' => true, 'note' => '3.5.1 반영', 'updated_by' => '봇', 'updated_at' => '2026-11-17 10:00:00'],
         ], $res['data']['rows']);
         $this->assertSame(['미조치' => 1, '진행중' => 0, '개발반영' => 0, '운영반영' => 1, '해당없음' => 0], $res['data']['counts']);
     }

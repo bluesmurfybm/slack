@@ -116,7 +116,7 @@ return <<<'JSON'
         "tags": ["TaskSheet"],
         "summary": "시트 만들기",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
-        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["title"], "properties": {"title": {"type": "string"}, "description": {"type": "string"}}}}}},
+        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["title"], "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "stages": {"$ref": "#/components/schemas/Stages"}}}}}},
         "responses": {
           "201": {"description": "OK", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SheetDetail"}}}},
           "401": {"$ref": "#/components/responses/Unauthorized"}
@@ -143,7 +143,13 @@ return <<<'JSON'
         "summary": "시트 수정·보관",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/sheets/1"}}],
-        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "archived": {"type": "boolean"}}}}}},
+        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "archived": {"type": "boolean"},
+          "stages": {"$ref": "#/components/schemas/Stages"},
+          "renames": {"type": "object", "additionalProperties": {"type": "string"}, "description": "이전 단계 이름 → 새 이름", "example": {"검수": "검수완료"}}
+        }}}}},
         "responses": {
           "200": {"description": "OK", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SheetDetail"}}}},
           "401": {"$ref": "#/components/responses/Unauthorized"}
@@ -159,7 +165,7 @@ return <<<'JSON'
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/sheets/1/cells"}}],
         "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/CellItems"}}}},
         "responses": {
-          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"updated": {"type": "integer"}, "rows": {"type": "array", "items": {"$ref": "#/components/schemas/SheetRow"}}}}}}},
+          "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"updated": {"type": "integer"}, "rows": {"type": "array", "items": {"$ref": "#/components/schemas/SheetRow"}}, "sheet": {"$ref": "#/components/schemas/Sheet"}}}}}},
           "401": {"$ref": "#/components/responses/Unauthorized"}
         }
       }
@@ -196,7 +202,7 @@ return <<<'JSON'
       "put": {
         "tags": ["TaskSheet"],
         "summary": "대학별 상태 변경(도구용)",
-        "description": "`cells` 와 같지만 `status` 가 필수이고 영문 코드도 받습니다.",
+        "description": "`cells` 와 같지만 `status` 가 필수이고 영문 코드도 받습니다. 추가한 단계는 이름 그대로 씁니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/sheets/1/status"}}],
         "requestBody": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/StatusItems"}}}},
@@ -296,6 +302,12 @@ return <<<'JSON'
           }
         }
       },
+      "Stages": {
+        "type": "array",
+        "items": {"type": "string", "maxLength": 20},
+        "description": "미조치·해당없음 사이 단계. 진행중·개발반영·운영반영은 이 순서로 꼭 들어가고, 나머지는 어디든 넣는다.",
+        "example": ["진행중", "개발반영", "운영반영", "검수완료"]
+      },
       "StatusKo": {"type": "string", "enum": ["미조치", "진행중", "개발반영", "운영반영", "해당없음"]},
       "StatusCode": {"type": "string", "enum": ["todo", "in_progress", "dev_applied", "prod_applied", "not_applicable"]},
       "Status": {"oneOf": [{"$ref": "#/components/schemas/StatusCode"}, {"$ref": "#/components/schemas/StatusKo"}]},
@@ -328,8 +340,11 @@ return <<<'JSON'
           "title": {"type": "string"},
           "description": {"type": "string"},
           "archived_at": {"type": "string"},
+          "stages": {"type": "array", "items": {"type": "string"}},
           "total": {"type": "integer"},
-          "counts": {"type": "object", "additionalProperties": {"type": "integer"}}
+          "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+          "done": {"type": "integer"},
+          "target": {"type": "integer", "description": "해당없음을 뺀 대학 수"}
         }
       },
       "School": {
@@ -350,7 +365,11 @@ return <<<'JSON'
         }
       },
       "SheetRow": {
-        "allOf": [{"$ref": "#/components/schemas/School"}, {"$ref": "#/components/schemas/Cell"}]
+        "allOf": [
+          {"$ref": "#/components/schemas/School"},
+          {"$ref": "#/components/schemas/Cell"},
+          {"properties": {"stages": {"type": "array", "items": {"type": "string"}, "description": "이 대학이 고를 수 있는 단계"}, "done": {"type": "boolean"}}}
+        ]
       },
       "SchoolStatus": {
         "allOf": [

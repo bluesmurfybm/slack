@@ -2,6 +2,8 @@ const natural = (a, b) => String(a).localeCompare(String(b), "ko", { numeric: tr
 
 const FILTER_COLS = ["ver", "vpn", "status"];
 
+const stages = () => currentSheet().stages;
+
 /* ---------- 거르기 · 정렬 ---------- */
 
 function renderStatusFilter() {
@@ -10,7 +12,7 @@ function renderStatusFilter() {
   const chip = (value, label, n, on) => `<button type="button" class="chip pick${on ? " on" : ""}"
     onclick="filterByStatus('${esc(value)}')">${esc(label)} <span class="n">${n}</span></button>`;
   document.getElementById("statusFilter").innerHTML = chip("", "전체", APP.rows.length, !f)
-    + APP.boot.statuses.map((st) => chip(st, st, s.counts[st], !!f && f.size === 1 && f.has(st))).join("");
+    + stages().map((st) => chip(st, st, s.counts[st], !!f && f.size === 1 && f.has(st))).join("");
 }
 
 function filterByStatus(status) {
@@ -43,18 +45,23 @@ function visibleRows() {
     && (!q || schoolLabel(r).toLowerCase().includes(q) || r.note.toLowerCase().includes(q)));
 }
 
-async function sortBy(key, dir) {
+function sortBy(key, dir) {
   APP.sort = { key, dir: dir || (APP.sort.key === key ? -APP.sort.dir : 1) };
+  return reloadRows();
+}
+
+async function reloadRows() {
   const id = APP.sheetId;
   try {
     const detail = await api(sheetPath(id));
     if (APP.sheetId !== id) return;
     APP.rows = detail.rows;
+    syncCurrentSheet(detail);
   } catch (e) {
     if (e.message !== "unauthenticated") showToast(e.message);
     return;
   }
-  renderGrid();
+  renderSheet();
 }
 
 function sortParam() {
@@ -107,9 +114,9 @@ function renderHeads() {
 
 function groupHead(ver, rows) {
   const excluded = rows.filter((r) => r.status === APP.boot.status_excluded).length;
-  const done = rows.filter((r) => r.status === APP.boot.status_done).length;
+  const done = rows.filter((r) => r.done).length;
   return `<tr class="group"><td colspan="7"><span class="grp-in">${esc(ver || "버전 없음")}
-    <span class="n">${esc(APP.boot.status_done)} ${done} / 대상 ${rows.length - excluded}</span>
+    <span class="n">완료 ${done} / 대상 ${rows.length - excluded}</span>
     <button type="button" class="grp-btn" onclick="openGroupMenu(event, ${JSON.stringify(ver)})"
       title="이 버전 대학 일괄 변경" aria-label="${esc(ver || "버전 없음")} 일괄 변경">▾</button></span></td></tr>`;
 }
@@ -123,7 +130,7 @@ function openGroupMenu(e, ver) {
   const rows = APP.rows.filter((r) => r.ver === ver);
   const menu = document.getElementById("colMenu");
   menu.innerHTML = `<div class="cm-title">${esc(ver || "버전 없음")} 대학 ${rows.length}곳 전부 일괄 변경</div><div class="cm-bulk">`
-    + APP.boot.statuses.map((st, i) => `<button type="button" class="cm-st ${STATUS_CLASS[st]}" onclick="bulkStatusVer(${i})">${esc(st)}</button>`).join("")
+    + stages().map((st, i) => `<button type="button" class="cm-st ${statusClass(st)}" onclick="bulkStatusVer(${i})">${esc(st)}</button>`).join("")
     + `</div>`;
   const at = e.currentTarget.getBoundingClientRect();
   menu.classList.add("open");
@@ -132,7 +139,7 @@ function openGroupMenu(e, ver) {
 }
 
 function bulkStatusVer(index) {
-  const status = APP.boot.statuses[index];
+  const status = stages()[index];
   const ver = APP.menuVer;
   return bulkApply({ status }, `상태를 "${status}"(으)로 바꿉니다.`, APP.rows.filter((r) => r.ver === ver), `${ver || "버전 없음"} 대학 전부 — `);
 }
@@ -144,7 +151,7 @@ function openVerBulk() {
   const vers = [...new Set(APP.rows.map((r) => r.ver))].sort(natural);
   const countOf = (ver) => {
     const rows = APP.rows.filter((r) => r.ver === ver);
-    const by = APP.boot.statuses.map((st) => `${st} ${rows.filter((r) => r.status === st).length}`).join(" · ");
+    const by = stages().map((st) => `${st} ${rows.filter((r) => r.status === st).length}`).join(" · ");
     return { n: rows.length, by };
   };
   document.getElementById("vbList").innerHTML = vers.map((ver, i) => {
@@ -154,7 +161,7 @@ function openVerBulk() {
       <span class="vb-by">${esc(c.by)}</span></label>`;
   }).join("");
   const sel = document.getElementById("vbStatus");
-  sel.innerHTML = APP.boot.statuses.map((st) => `<option value="${esc(st)}"${st === APP.boot.status_excluded ? " selected" : ""}>${esc(st)}</option>`).join("");
+  sel.innerHTML = stages().map((st) => `<option value="${esc(st)}"${st === APP.boot.status_excluded ? " selected" : ""}>${esc(st)}</option>`).join("");
   renderVerBulkCount();
   document.getElementById("verBulkOverlay").classList.add("open");
 }
@@ -211,14 +218,14 @@ function schoolLabel(r) {
 }
 
 function rowsHTML(rows, offset) {
-  return rows.map((r, i) => `<tr class="${STATUS_CLASS[r.status]}" data-school="${r.school_id}">
+  return rows.map((r, i) => `<tr class="${rowClass(r)}" data-school="${r.school_id}">
     <td class="c-no">${offset + i + 1}</td>
     <td class="c-name">${esc(schoolLabel(r))}</td>
     <td class="c-ver">${esc(r.ver)}</td>
     <td class="c-vpn">${r.vpn ? `<span class="vpn" title="${esc(r.vpn)}">${esc(r.vpn)}</span>` : ""}</td>
     <td class="c-status">
       <select onchange="saveCell(${r.school_id}, {status: this.value})">
-        ${APP.boot.statuses.map((st) => `<option${st === r.status ? " selected" : ""}>${esc(st)}</option>`).join("")}
+        ${(r.stages.includes(r.status) ? r.stages : [r.status, ...r.stages]).map((st) => `<option${st === r.status ? " selected" : ""}>${esc(st)}</option>`).join("")}
       </select>
     </td>
     <td class="c-note"><input type="text" value="${esc(r.note)}" maxlength="2000"
@@ -249,18 +256,17 @@ async function saveCells(items) {
     const i = APP.rows.findIndex((r) => r.school_id === row.school_id);
     if (i >= 0) APP.rows[i] = row;
   }
-  const s = currentSheet();
-  const wasComplete = isComplete(s.counts);
-  for (const st of APP.boot.statuses) s.counts[st] = APP.rows.filter((r) => r.status === st).length;
+  const wasComplete = isComplete(currentSheet());
+  syncCurrentSheet(res.sheet);
   renderSheet();
-  if (!wasComplete && isComplete(s.counts)) celebrate(s.title);
+  if (!wasComplete && isComplete(res.sheet)) celebrate(res.sheet.title);
   return true;
 }
 
 /* ---------- 열 머리 메뉴 ---------- */
 
 function columnValues(col) {
-  if (col === "status") return APP.boot.statuses;
+  if (col === "status") return stages();
   return [...new Set(APP.rows.map((r) => r[col]))].sort(natural);
 }
 
@@ -299,7 +305,7 @@ function renderColMenu() {
   }
   if (col === "status") {
     html += `<div class="cm-sep"></div><div class="cm-title">지금 보이는 ${n}곳 일괄 변경</div><div class="cm-bulk">`
-      + APP.boot.statuses.map((st, i) => `<button type="button" class="cm-st ${STATUS_CLASS[st]}" onclick="bulkStatus(${i})">${esc(st)}</button>`).join("")
+      + stages().map((st, i) => `<button type="button" class="cm-st ${statusClass(st)}" onclick="bulkStatus(${i})">${esc(st)}</button>`).join("")
       + `</div>`;
   }
   if (col === "note") {
@@ -332,7 +338,7 @@ function afterColFilter() {
 }
 
 function bulkStatus(index) {
-  const status = APP.boot.statuses[index];
+  const status = stages()[index];
   return bulkApply({ status }, `상태를 "${status}"(으)로 바꿉니다.`);
 }
 
@@ -343,8 +349,12 @@ function bulkNote() {
 
 async function bulkApply(patch, what, rows, scope) {
   rows = rows || visibleRows();
+  // 그 단계를 고를 수 없는 대학(개발·운영 서버가 없는 곳)은 뺀다
+  const all = rows.length;
+  if (patch.status) rows = rows.filter((r) => r.stages.includes(patch.status));
   if (!rows.length) { showToast("바꿀 대학이 없어요"); return; }
-  if (!confirm(`${scope || "지금 보이는 "}${rows.length}곳의 ${what}\n계속할까요?`)) return;
+  const skipped = all > rows.length ? `\n(${all - rows.length}곳은 이 단계가 없어 뺍니다)` : "";
+  if (!confirm(`${scope || "지금 보이는 "}${rows.length}곳의 ${what}${skipped}\n계속할까요?`)) return;
   closeColMenu();
   if (await saveCells(rows.map((r) => ({ school_id: r.school_id, ...patch })))) {
     showToast(`${rows.length}곳을 바꿨습니다`);

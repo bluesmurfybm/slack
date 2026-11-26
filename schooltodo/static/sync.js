@@ -37,9 +37,10 @@ function showSyncCountdown() {
   showSyncState("", `${syncLeft}초 후 갱신`);
 }
 
-const ROW_KEYS = ["name", "code", "ver", "vpn", "status", "note", "updated_by", "updated_at"];
-const sameRow = (a, b) => ROW_KEYS.every((k) => a[k] === b[k]);
+const ROW_KEYS = ["name", "code", "ver", "vpn", "status", "done", "note", "updated_by", "updated_at"];
+const sameRow = (a, b) => ROW_KEYS.every((k) => a[k] === b[k]) && String(a.stages) === String(b.stages);
 const sameSheet = (a, b) => a.title === b.title && a.description === b.description && a.archived_at === b.archived_at
+  && a.done === b.done && a.target === b.target && String(a.stages) === String(b.stages)
   && JSON.stringify(a.counts) === JSON.stringify(b.counts);
 
 function editingGrid() {

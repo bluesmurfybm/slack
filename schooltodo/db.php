@@ -14,6 +14,8 @@ const SCHOOLTODO_STATUSES = [
     SCHOOLTODO_STATUS_OPS,
     SCHOOLTODO_STATUS_EXCLUDED,
 ];
+/** 시트마다 늘 있는 가운데 단계 */
+const SCHOOLTODO_STAGES_DEFAULT = [SCHOOLTODO_STATUS_DOING, SCHOOLTODO_STATUS_DEV, SCHOOLTODO_STATUS_OPS];
 const SCHOOLTODO_HISTORY_MAX = 10;
 const SCHOOLTODO_SORTS = ['name', 'ver', 'vpn', 'status', 'note', 'updated_at'];
 /** 외부 API(/sheets/{id}/versions)용 영문 상태 코드. 화면용 API 는 한글 상태를 그대로 쓴다. */
@@ -71,12 +73,17 @@ function schooltodo_migrate($pdo) {
     foreach (schooltodo_schema() as $sql) {
         $pdo->exec($sql);
     }
-    // 보관(archived_at)은 나중에 붙은 열 — 이미 있으면 42S21(중복 열) 로 넘어간다
-    try {
-        $pdo->exec("ALTER TABLE `schooltodo_sheets` ADD COLUMN `archived_at` VARCHAR(19) NOT NULL DEFAULT ''
-                    COMMENT '보관한 시각. 비어 있으면 탭에 보인다' AFTER `created_at`");
-    } catch (PDOException $e) {
-        if ($e->getCode() !== '42S21') throw $e;
+    // 나중에 붙은 열 — 이미 있으면 42S21(중복 열) 로 넘어간다
+    $added = [
+        "`archived_at` VARCHAR(19) NOT NULL DEFAULT '' COMMENT '보관한 시각. 비어 있으면 탭에 보인다' AFTER `created_at`",
+        "`stages` VARCHAR(2000) NOT NULL DEFAULT '' COMMENT '미조치·해당없음 사이 단계(JSON). 비어 있으면 기본 단계' AFTER `description`",
+    ];
+    foreach ($added as $column) {
+        try {
+            $pdo->exec("ALTER TABLE `schooltodo_sheets` ADD COLUMN {$column}");
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '42S21') throw $e;
+        }
     }
     // 인덱스는 중복 오류코드가 42S21 이 아니라 정보스키마로 있는지 보고 건다 (access/db.php 와 같은 요령)
     if (!schooltodo_has_index($pdo, 'schooltodo_sheets', 'ix_archived')) {
@@ -106,6 +113,7 @@ function schooltodo_schema() {
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `title` VARCHAR(200) NOT NULL COMMENT '할일 이름',
             `description` VARCHAR(2000) NOT NULL DEFAULT '',
+            `stages` VARCHAR(2000) NOT NULL DEFAULT '' COMMENT '미조치·해당없음 사이 단계(JSON). 비어 있으면 기본 단계',
             `created_by` VARCHAR(60) NOT NULL DEFAULT '',
             `created_at` VARCHAR(19) NOT NULL DEFAULT '',
             `archived_at` VARCHAR(19) NOT NULL DEFAULT '' COMMENT '보관한 시각. 비어 있으면 탭에 보인다',

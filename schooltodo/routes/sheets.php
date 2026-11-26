@@ -35,7 +35,7 @@ function schooltodo_route_sheets($ctx, $req) {
     if (isset($seg[2])) throw new SchooltodoError('없는 API 입니다', 404);
 
     if ($method === 'GET') {
-        $status = isset($req['query']['status']) ? schooltodo_want_status($req['query']['status'], 'status') : null;
+        $status = isset($req['query']['status']) ? schooltodo_want_text($req['query']['status'], 'status', 20) : null;
         return schooltodo_json(schooltodo_sheet_detail($pdo, $id, $status, $req['query']['sort'] ?? null));
     }
     if ($method === 'PUT') return schooltodo_json(schooltodo_sheet_update($ctx, $id, $req['body']));
