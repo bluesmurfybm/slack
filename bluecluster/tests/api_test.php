@@ -65,10 +65,40 @@ final class api_test extends TestCase
         $this->assertSame('{"reason":"인증 필요"}', $raw);
     }
 
+    /** api.php: form 으로 보낸 POST 는 415 JSON reason */
+    public function testApiFormPostReturns415Json()
+    {
+        $server = proc_open([PHP_BINARY, '-S', '127.0.0.1:18084', '-t', dirname(__DIR__, 2)],
+            [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+        try {
+            for ($i = 0; $i < 50 && !($sock = @fsockopen('127.0.0.1', 18084)); $i++) {
+                usleep(100000);
+            }
+            $this->assertNotFalse($sock, 'PHP 내장 서버가 뜨지 않았습니다');
+            fclose($sock);
+
+            $raw = file_get_contents('http://127.0.0.1:18084/bluecluster/api.php?p=/jobs', false, stream_context_create(['http' => [
+                'method' => 'POST',
+                'header' => 'Content-Type: application/x-www-form-urlencoded',
+                'content' => 'title=t',
+                'ignore_errors' => true,
+                'follow_location' => 0,
+            ]]));
+            $headers = $http_response_header;
+        } finally {
+            proc_terminate($server);
+            proc_close($server);
+        }
+
+        $this->assertMatchesRegularExpression('~^HTTP/\S+ 415~', $headers[0]);
+        $this->assertContains('Content-Type: application/json; charset=utf-8', $headers);
+        $this->assertSame('{"reason":"Content-Type 은 application/json 이어야 함"}', $raw);
+    }
+
     /** bcl_api_handle: user 가 null 이면 401 reason 인증 필요 */
     public function testHandleWithoutUser401()
     {
-        $res = bcl_api_handle(['pdo' => $this->pdo, 'user' => null, 'now' => 1000, 'files_dir' => $this->filesDir], 'GET', '/jobs/open', '');
+        $res = bcl_api_handle(['pdo' => $this->pdo, 'user' => null, 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'], 'GET', '/jobs/open', '');
 
         $this->assertSame(['status' => 401, 'data' => ['reason' => '인증 필요']], $res);
     }
@@ -76,7 +106,7 @@ final class api_test extends TestCase
     /** bcl_api_handle: 없는 경로는 404 reason 없는 경로 */
     public function testUnknownPath404()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $this->assertSame(['status' => 404, 'data' => ['reason' => '없는 경로']], bcl_api_handle($ctx, 'GET', '/nope', ''));
         $this->assertSame(['status' => 404, 'data' => ['reason' => '없는 경로']], bcl_api_handle($ctx, 'GET', '', ''));
@@ -85,7 +115,7 @@ final class api_test extends TestCase
     /** bcl_api_handle: 경로는 있지만 method 가 다르면 404 reason 없는 경로 */
     public function testWrongMethod404()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'GET', '/jobs/' . $job . '/claim', '');
@@ -96,16 +126,57 @@ final class api_test extends TestCase
     /** bcl_api_handle: 본문이 JSON 이 아니면 400 reason JSON 형식 오류 */
     public function testBadJson400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $this->assertSame(['status' => 400, 'data' => ['reason' => 'JSON 형식 오류']], bcl_api_handle($ctx, 'POST', '/jobs', '{"title":'));
         $this->assertSame(['status' => 400, 'data' => ['reason' => 'JSON 형식 오류']], bcl_api_handle($ctx, 'POST', '/jobs', '"title"'));
     }
 
+    /** bcl_api_handle: POST content_type text/plain 은 415, 작업을 만들지 않음 */
+    public function testPostTextPlain415()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'text/plain'];
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode(['title' => 't', 'repos' => ['r'], 'instructions' => 'i']));
+
+        $this->assertSame(['status' => 415, 'data' => ['reason' => 'Content-Type 은 application/json 이어야 함']], $res);
+        $this->assertSame(0, (int)$this->pdo->query("SELECT COUNT(*) FROM bcl_jobs")->fetchColumn());
+    }
+
+    /** bcl_api_handle: POST content_type 이 비면 415 */
+    public function testPostWithoutContentType415()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => ''];
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode(['title' => 't', 'repos' => ['r'], 'instructions' => 'i']));
+
+        $this->assertSame(['status' => 415, 'data' => ['reason' => 'Content-Type 은 application/json 이어야 함']], $res);
+    }
+
+    /** bcl_api_handle: POST content_type 은 대소문자와 charset 에 상관없이 application/json 이면 받음 */
+    public function testPostJsonWithCharset()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'Application/JSON; charset=utf-8'];
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode(['title' => 't', 'repos' => ['r'], 'instructions' => 'i']));
+
+        $this->assertSame(200, $res['status']);
+    }
+
+    /** bcl_api_handle: GET 은 content_type 이 비어도 받음 */
+    public function testGetWithoutContentType()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => ''];
+
+        $res = bcl_api_handle($ctx, 'GET', '/jobs/open', '');
+
+        $this->assertSame(['status' => 200, 'data' => ['jobs' => []]], $res);
+    }
+
     /** bcl_api_handle: 본문이 없으면 첫 필수 값 title 이 없는 400 */
     public function testPostWithoutBody400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs', '');
 
@@ -115,7 +186,7 @@ final class api_test extends TestCase
     /** bcl_route_job_create: submitter 는 본문 값이 아니라 user email, 응답은 job_id 만 */
     public function testPostJobsSubmitterIsUser()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode([
             'title' => '출석부 수정', 'submitter' => 'other@bluesoft.co.kr', 'repos' => ['lms-a'], 'instructions' => '결석 표시를 고친다',
@@ -134,7 +205,7 @@ final class api_test extends TestCase
     /** bcl_route_job_create: title 없음 */
     public function testPostJobsWithoutTitle400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode(['repos' => ['r'], 'instructions' => 'i']));
 
@@ -144,7 +215,7 @@ final class api_test extends TestCase
     /** bcl_route_job_create: repos 없음 */
     public function testPostJobsWithoutRepos400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode(['title' => 't', 'instructions' => 'i']));
 
@@ -154,7 +225,7 @@ final class api_test extends TestCase
     /** bcl_route_job_create: instructions 없음 */
     public function testPostJobsWithoutInstructions400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode(['title' => 't', 'repos' => ['r']]));
 
@@ -164,7 +235,7 @@ final class api_test extends TestCase
     /** bcl_route_job_create: 빈 title 은 400, 작업을 만들지 않음 */
     public function testPostJobsEmptyTitle400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode(['title' => ' ', 'repos' => ['r'], 'instructions' => 'i']));
 
@@ -175,7 +246,7 @@ final class api_test extends TestCase
     /** bcl_route_job_create: 빈 repos 는 400, 작업을 만들지 않음 */
     public function testPostJobsEmptyRepos400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs', json_encode(['title' => 't', 'repos' => [], 'instructions' => 'i']));
 
@@ -186,7 +257,7 @@ final class api_test extends TestCase
     /** bcl_route_jobs: GET 미등록 작업 404 */
     public function testGetUnregisteredJob404()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'GET', '/jobs/nope', '');
 
@@ -196,7 +267,7 @@ final class api_test extends TestCase
     /** bcl_job_claim: 먼저 온 node_id 가 leader, epoch 1, lease_until now + BCL_LEASE_S */
     public function testClaimFirstWins()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $a = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
@@ -210,7 +281,7 @@ final class api_test extends TestCase
     /** bcl_job_claim: lease_until 전에는 거절, lease_until 부터 다른 node_id 가 epoch 2 leader */
     public function testClaimAfterLeaseExpiry()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -226,7 +297,7 @@ final class api_test extends TestCase
     /** bcl_job_claim: state done 작업은 리스가 끝나도 거절 */
     public function testClaimDoneJobRejected()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/finish', json_encode(['node_id' => 'PC-A', 'epoch' => 1, 'summary' => 's']));
@@ -240,7 +311,7 @@ final class api_test extends TestCase
     /** bcl_job_claim: 미등록 작업 404 */
     public function testClaimUnregisteredJob404()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/nope/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -250,7 +321,7 @@ final class api_test extends TestCase
     /** bcl_job_claim: node_id 없음 */
     public function testClaimWithoutNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(new \stdClass()));
@@ -261,7 +332,7 @@ final class api_test extends TestCase
     /** bcl_route_job_claim: 문자열이 아닌 node_id 는 400 */
     public function testClaimNumberNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 5]));
@@ -273,7 +344,7 @@ final class api_test extends TestCase
     /** bcl_route_job_claim: 빈 node_id 는 400 */
     public function testClaimEmptyNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => '']));
@@ -284,7 +355,7 @@ final class api_test extends TestCase
     /** bcl_route_job_claim: 앞에 공백이 있는 node_id 는 400 */
     public function testClaimLeadingSpaceNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => ' PC-A']));
@@ -295,7 +366,7 @@ final class api_test extends TestCase
     /** bcl_route_job_claim: 뒤에 공백이 있는 node_id 는 400 */
     public function testClaimTrailingSpaceNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => "PC-A\t"]));
@@ -306,7 +377,7 @@ final class api_test extends TestCase
     /** bcl_route_job_claim: node_id 는 BCL_NODE_ID_MAX(80) 글자까지, 81 글자는 400 */
     public function testClaimNodeIdLength()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $long = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => str_repeat('가', 81)]));
@@ -358,7 +429,7 @@ final class api_test extends TestCase
     /** bcl_job_lease: 갱신하면 lease_until 이 now + BCL_LEASE_S 로 늘어 다른 node_id 의 claim 거절 */
     public function testLeaseRenewExtends()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -375,7 +446,7 @@ final class api_test extends TestCase
     /** bcl_job_lease: 리스가 끝났어도 다른 claim 전이면 같은 leader·epoch 는 ok true */
     public function testLeaseAfterExpiryBeforeOtherClaim()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -389,7 +460,7 @@ final class api_test extends TestCase
     /** bcl_job_lease: 다른 epoch 는 ok false, lease_until 그대로 */
     public function testLeaseWrongEpoch()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -403,7 +474,7 @@ final class api_test extends TestCase
     /** bcl_job_lease: leader 가 아닌 node_id 는 ok false */
     public function testLeaseWrongNode()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -415,7 +486,7 @@ final class api_test extends TestCase
     /** bcl_job_lease: epoch 없음 */
     public function testLeaseWithoutEpoch400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/lease', json_encode(['node_id' => 'PC-A']));
@@ -426,7 +497,7 @@ final class api_test extends TestCase
     /** bcl_route_job_lease: node_id 형식 오류 */
     public function testLeaseBadNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/lease', json_encode(['node_id' => 'PC-A ', 'epoch' => 1]));
@@ -437,7 +508,7 @@ final class api_test extends TestCase
     /** bcl_jobs_open: leader 없는 작업과 lease_until 이 지난 작업, state done 제외 */
     public function testOpenJobsExcludesLedAndDone()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $free = bcl_job_create($this->pdo, 'free', 'user1@bluesoft.co.kr', ['r'], 'i');
         $led = bcl_job_create($this->pdo, 'led', 'user1@bluesoft.co.kr', ['r'], 'i');
         $done = bcl_job_create($this->pdo, 'done', 'user1@bluesoft.co.kr', ['r'], 'i');
@@ -457,7 +528,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 두 번째 등록은 ok true 이지만 pieces 변경 없음, 등록 직후 state pending */
     public function testPiecesRegisteredOnce()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -477,7 +548,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: leader 가 아니면 ok false, pieces 없음 */
     public function testPiecesFromNonLeaderRejected()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -492,7 +563,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: pieces 없음 */
     public function testPiecesWithoutPieces400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode(['node_id' => 'PC-A', 'epoch' => 1]));
@@ -503,7 +574,7 @@ final class api_test extends TestCase
     /** bcl_route_job_pieces: node_id 형식 오류 */
     public function testPiecesBadNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -516,7 +587,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: pieces 가 배열이 아니면 400 */
     public function testPiecesNotArray400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode(['node_id' => 'PC-A', 'epoch' => 1, 'pieces' => 'p1']));
@@ -527,7 +598,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: pieces 항목에 desc 없음 */
     public function testPiecesItemWithoutDesc400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -540,7 +611,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: pieces 항목이 객체가 아니면 piece_id 없음 */
     public function testPiecesItemNotObject400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode(['node_id' => 'PC-A', 'epoch' => 1, 'pieces' => ['p1']]));
@@ -551,7 +622,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: piece_id 에 / 가 있으면 400, pieces 없음 */
     public function testPiecesSlashInPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -566,7 +637,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 역슬래시가 있는 piece_id 는 400 */
     public function testPiecesBackslashInPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -579,7 +650,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 빈 piece_id 는 400 */
     public function testPiecesEmptyPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -592,7 +663,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: NUL 이 있는 piece_id 는 400 */
     public function testPiecesNulInPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -605,7 +676,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 문자열이 아닌 piece_id 는 400 */
     public function testPiecesNumberPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -618,7 +689,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: piece_id 는 80 글자까지 등록, 81 글자는 400 */
     public function testPiecesPieceIdLength()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -637,7 +708,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 영문·숫자 밖의 글자가 든 piece_id 는 400 */
     public function testPiecesKoreanPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -650,7 +721,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: piece_id .. 는 400 */
     public function testPiecesDotDotPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -663,7 +734,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 드라이브 문자가 든 piece_id C:x 는 400 */
     public function testPiecesDrivePieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -676,7 +747,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: Windows 예약 이름 piece_id CON 은 400 */
     public function testPiecesReservedPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -689,7 +760,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 확장자가 붙은 소문자 예약 이름 piece_id con.txt 는 400 */
     public function testPiecesReservedWithExtensionPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -702,7 +773,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 예약 이름 COM1·LPT9 도 400, COM10 은 등록 */
     public function testPiecesReservedComLptPieceId()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -724,7 +795,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 점으로 끝나는 piece_id 는 400 */
     public function testPiecesTrailingDotPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -737,7 +808,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: - 로 시작하는 piece_id 는 400 */
     public function testPiecesLeadingDashPieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -750,7 +821,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 줄바꿈으로 끝나는 piece_id 는 400 */
     public function testPiecesTrailingNewlinePieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -763,7 +834,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 영문·숫자·. _ - 로 된 piece_id 와 한 글자 piece_id 는 등록 */
     public function testPiecesValidPieceId()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -779,7 +850,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 다른 epoch 는 ok false, pieces 없음 */
     public function testPiecesWrongEpochRejected()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -794,7 +865,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 같은 piece_id 가 두 번 오면 400, pieces 없음 */
     public function testPiecesDuplicatePieceId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -810,7 +881,7 @@ final class api_test extends TestCase
     /** bcl_job_pieces: 대소문자만 다른 piece_id 는 다른 조각, start 도 그 조각만 */
     public function testPiecesCaseSensitivePieceId()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -829,7 +900,7 @@ final class api_test extends TestCase
     /** bcl_piece_start: attempt_no 1, 조각 running, attempt status running·started now, token_user 는 user email */
     public function testStartRecordsTokenUser()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -852,7 +923,7 @@ final class api_test extends TestCase
     /** bcl_piece_start: 없는 조각 404 */
     public function testStartUnknownPiece404()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p9/start', json_encode(['node_id' => 'PC-B', 'account' => 'acc']));
@@ -863,7 +934,7 @@ final class api_test extends TestCase
     /** bcl_piece_start: account 없음 */
     public function testStartWithoutAccount400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/start', json_encode(['node_id' => 'PC-B']));
@@ -874,7 +945,7 @@ final class api_test extends TestCase
     /** bcl_route_piece_start: node_id 형식 오류 */
     public function testStartBadNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/start', json_encode(['node_id' => ' PC-B', 'account' => 'acc']));
@@ -885,7 +956,7 @@ final class api_test extends TestCase
     /** bcl_piece_start: running 조각은 ok false, attempt_no null, 시도 추가 없음 */
     public function testStartRejectedWhenRunning()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -903,7 +974,7 @@ final class api_test extends TestCase
     /** bcl_piece_start: done 조각은 ok false, 시도 추가 없음 */
     public function testStartRejectedWhenDone()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -925,7 +996,7 @@ final class api_test extends TestCase
     /** bcl_piece_start: state done 작업의 pending 조각도 ok false, 시도 추가 없음 */
     public function testStartRejectedWhenJobDone()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -943,7 +1014,7 @@ final class api_test extends TestCase
     public function testStartRejectedWhenFilesDirNotWritable()
     {
         file_put_contents($this->filesDir, 'x');
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir . '/sub'];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir . '/sub', 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -960,7 +1031,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: 1 MB 넘는 result·patch·log 원본 파일 저장, attempt 에는 result_path·patch_path·log_path 만 */
     public function testFinishSavesOriginalFiles()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -999,7 +1070,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: 작업 폴더에 쓸 수 없으면 경로 없는 500 reason, 경로는 error_log, attempt 는 running 그대로 */
     public function testFinishNotWritable500()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1027,7 +1098,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: status lost 는 조각 pending, attempt lost */
     public function testFinishLostReturnsToPending()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1047,7 +1118,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: status stopped_by_owner 는 조각 pending, attempt stopped_by_owner */
     public function testFinishStoppedByOwnerReturnsToPending()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1067,7 +1138,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: 시도의 node_id 가 아니면 ok false, 조각·attempt running 그대로 */
     public function testFinishFromOtherNodeRejected()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1088,7 +1159,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: 시도의 token_user 가 아닌 user 는 403, 조각·attempt running, 파일 없음 */
     public function testFinishFromOtherUser403()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1110,7 +1181,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: 이미 끝난 시도는 ok false, attempt status 그대로 */
     public function testFinishEndedAttemptRejected()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1133,7 +1204,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: 현재(마지막)가 아닌 attempt 는 attempt 만 done, 조각 running 그대로 */
     public function testFinishNonCurrentAttemptKeepsPiece()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1156,7 +1227,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: redactions 를 그대로 기록, 끝나기 전에는 null */
     public function testFinishStoresRedactions()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1177,7 +1248,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: redactions 가 없으면 '{}' 로 기록해 {} 로 나감 */
     public function testFinishWithoutRedactions()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1196,7 +1267,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: 빈 redactions {} 도 '{}' 로 기록 */
     public function testFinishEmptyRedactions()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1214,7 +1285,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: status 값 오류 */
     public function testFinishWrongStatus400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
@@ -1227,7 +1298,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: result 가 문자열이 아니면 400 */
     public function testFinishResultNotString400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
@@ -1240,7 +1311,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: patch 가 문자열이 아니면 400 */
     public function testFinishPatchNotString400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
@@ -1253,7 +1324,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: log 없음 */
     public function testFinishWithoutLog400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
@@ -1266,7 +1337,7 @@ final class api_test extends TestCase
     /** bcl_route_piece_finish: node_id 형식 오류 */
     public function testFinishBadNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
@@ -1279,7 +1350,7 @@ final class api_test extends TestCase
     /** bcl_piece_finish: 없는 시도 404 */
     public function testFinishUnknownAttempt404()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1296,7 +1367,7 @@ final class api_test extends TestCase
     /** bcl_piece_close: leader 가 닫으면 조각 pending, attempt lost, closed_by leader node_id, ended now, redactions null */
     public function testCloseByLeader()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1320,7 +1391,7 @@ final class api_test extends TestCase
     /** bcl_piece_close: leader 가 아니면 ok false, 조각·attempt running, closed_by null */
     public function testCloseRejectedFromNonLeader()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1340,7 +1411,7 @@ final class api_test extends TestCase
     /** bcl_piece_close: 같은 leader 라도 지난 epoch 는 ok false */
     public function testCloseRejectedWithOldEpoch()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1362,7 +1433,7 @@ final class api_test extends TestCase
     /** bcl_piece_close: status 는 lost 만, done 은 400 */
     public function testCloseWrongStatus400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/close', json_encode([
@@ -1375,7 +1446,7 @@ final class api_test extends TestCase
     /** bcl_piece_close: attempt_no 없음 */
     public function testCloseWithoutAttemptNo400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/close', json_encode([
@@ -1388,7 +1459,7 @@ final class api_test extends TestCase
     /** bcl_route_piece_close: node_id 형식 오류 */
     public function testCloseBadNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/close', json_encode([
@@ -1401,7 +1472,7 @@ final class api_test extends TestCase
     /** bcl_piece_close: 없는 시도 404 */
     public function testCloseUnknownAttempt404()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1418,7 +1489,7 @@ final class api_test extends TestCase
     /** bcl_piece_close: 이미 끝난 시도는 ok false, 조각·attempt done, closed_by null */
     public function testCloseEndedAttemptRejected()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1441,7 +1512,7 @@ final class api_test extends TestCase
     /** bcl_piece_close: 현재(마지막)가 아닌 attempt 는 attempt 만 lost, 조각 running 그대로 */
     public function testCloseNonCurrentAttemptKeepsPiece()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
@@ -1464,7 +1535,7 @@ final class api_test extends TestCase
     /** bcl_job_finish: leader 가 끝내면 state done, summary 기록, finished_at now */
     public function testJobFinishByLeader()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -1480,7 +1551,7 @@ final class api_test extends TestCase
     /** bcl_job_finish: 지난 epoch 는 ok false, state open */
     public function testJobFinishWrongEpochRejected()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -1493,7 +1564,7 @@ final class api_test extends TestCase
     /** bcl_job_finish: leader 가 아닌 node_id 는 ok false, state open */
     public function testJobFinishWrongNodeRejected()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
 
@@ -1506,7 +1577,7 @@ final class api_test extends TestCase
     /** bcl_job_finish: summary 없음 */
     public function testJobFinishWithoutSummary400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/finish', json_encode(['node_id' => 'PC-A', 'epoch' => 1]));
@@ -1517,7 +1588,7 @@ final class api_test extends TestCase
     /** bcl_route_job_finish: node_id 형식 오류 */
     public function testJobFinishBadNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
 
         $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/finish', json_encode(['node_id' => "PC-A\n", 'epoch' => 1, 'summary' => 's']));
@@ -1528,7 +1599,7 @@ final class api_test extends TestCase
     /** bcl_node_heartbeat: 같은 node_id 는 마지막 하트비트로 바뀌고 token_user 는 user email */
     public function testHeartbeatRecordsTokenUser()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 1, 'attempts' => ['job-1/p1/1'],
         ]));
@@ -1548,7 +1619,7 @@ final class api_test extends TestCase
     /** bcl_node_heartbeat: 살아 있는 다른 token_user 의 node_id 는 403, 노드 그대로 */
     public function testHeartbeatOtherUserLiveNode403()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
         ]));
@@ -1569,7 +1640,7 @@ final class api_test extends TestCase
     /** bcl_node_heartbeat: last_seen 이 BCL_NODE_TTL_S 보다 오래된 다른 token_user 의 node_id 는 넘겨받음 */
     public function testHeartbeatOtherUserStaleNodeTakenOver()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
         ]));
@@ -1590,7 +1661,7 @@ final class api_test extends TestCase
     /** bcl_node_heartbeat: 대소문자만 다른 node_id 는 다른 노드 */
     public function testHeartbeatCaseSensitiveNodeId()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'pc-a', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
         ]));
@@ -1607,7 +1678,7 @@ final class api_test extends TestCase
     /** bcl_nodes_live: last_seen 이 BCL_NODE_TTL_S 안인 노드만, attempts 포함 */
     public function testLiveNodesTtl()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
         bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 1, 'attempts' => ['job-1/p1/1'],
         ]));
@@ -1625,7 +1696,7 @@ final class api_test extends TestCase
     /** bcl_node_heartbeat: attempts 없음 */
     public function testHeartbeatWithoutAttempts400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0,
@@ -1637,7 +1708,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: node_id 형식 오류, 노드 기록 없음 */
     public function testHeartbeatBadNodeId400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A ', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
@@ -1650,7 +1721,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: 문자열이 아닌 account 는 400 */
     public function testHeartbeatAccountNotString400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => ['acc'], 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
@@ -1662,7 +1733,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: 문자열이 아닌 addr 는 400 */
     public function testHeartbeatAddrNotString400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => 8080, 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
@@ -1674,7 +1745,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: 숫자가 아닌 free_cpu 는 400 */
     public function testHeartbeatFreeCpuNotNumber400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => '50', 'free_mem' => 50, 'running' => 0, 'attempts' => [],
@@ -1686,7 +1757,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: true 인 free_mem 은 400 */
     public function testHeartbeatFreeMemBool400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => true, 'running' => 0, 'attempts' => [],
@@ -1698,7 +1769,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: null 인 running 은 400 */
     public function testHeartbeatRunningNull400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => null, 'attempts' => [],
@@ -1710,7 +1781,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: 소수 free_cpu·free_mem 은 받음 */
     public function testHeartbeatFloatNumbers()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 12.5, 'free_mem' => 40.4, 'running' => 0, 'attempts' => [],
@@ -1724,7 +1795,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: 목록이 아닌 attempts 는 400, 노드 기록 없음 */
     public function testHeartbeatAttemptsNotList400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => ['a' => 'job-1/p1/1'],
@@ -1737,7 +1808,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: 문자열 목록이 아닌 attempts 는 400 */
     public function testHeartbeatAttemptsItemNotString400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => ['job-1/p1/1', 7],
@@ -1749,7 +1820,7 @@ final class api_test extends TestCase
     /** bcl_route_heartbeat: 문자열인 attempts 는 400 */
     public function testHeartbeatAttemptsString400()
     {
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir, 'content_type' => 'application/json'];
 
         $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
             'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => 'job-1/p1/1',

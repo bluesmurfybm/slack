@@ -33,14 +33,18 @@ require_once BCL_ROOT . '/routes/nodes.php';
 
 try {
     $user = current_portal_user();
-    $res = $user
-        ? bcl_api_handle(
-            ['pdo' => bcl_db(), 'user' => $user, 'now' => time(), 'files_dir' => bcl_files_dir()],
-            $_SERVER['REQUEST_METHOD'],
-            (string)($_GET['p'] ?? ''),
-            file_get_contents('php://input')
-        )
-        : bcl_api_error(401, '인증 필요');
+    $res = bcl_api_handle(
+        [
+            'pdo' => $user ? bcl_db() : null,
+            'user' => $user,
+            'now' => time(),
+            'files_dir' => bcl_files_dir(),
+            'content_type' => (string)($_SERVER['CONTENT_TYPE'] ?? ''),
+        ],
+        $_SERVER['REQUEST_METHOD'],
+        (string)($_GET['p'] ?? ''),
+        file_get_contents('php://input')
+    );
 } catch (Throwable $e) {
     error_log('[bluecluster] ' . $e);
     $res = bcl_api_error(500, '서버 오류');

@@ -50,7 +50,7 @@ function bcl_api_send($res)
 
 /**
  * 요청 하나를 처리한다.
- * @param array $ctx ['pdo' => PDO, 'user' => 포털 사용자|null, 'now' => unix 초, 'files_dir' => 결과 폴더]
+ * @param array $ctx ['pdo' => PDO|null, 'user' => 포털 사용자|null, 'now' => unix 초, 'files_dir' => 결과 폴더, 'content_type' => 요청 Content-Type]
  * @param string $method
  * @param string $path 예: /jobs/job-1/claim
  * @param string $raw 요청 본문
@@ -59,6 +59,10 @@ function bcl_api_send($res)
 function bcl_api_handle($ctx, $method, $path, $raw)
 {
     try {
+        // 다른 사이트의 폼이 로그인 세션으로 API 를 부르지 못하게 한다
+        if ($method === 'POST' && !bcl_api_is_json($ctx['content_type'])) {
+            throw new BclApiError(415, 'Content-Type 은 application/json 이어야 함');
+        }
         if (!$ctx['user']) throw new BclApiError(401, '인증 필요');
         $req = [
             'method' => $method,
@@ -78,6 +82,16 @@ function bcl_api_handle($ctx, $method, $path, $raw)
         error_log('[bluecluster] ' . $e);
         return bcl_api_error(500, '서버 오류');
     }
+}
+
+/**
+ * Content-Type 이 JSON 인지.
+ * @param string $content_type
+ * @return bool
+ */
+function bcl_api_is_json($content_type)
+{
+    return strtolower(trim(explode(';', $content_type)[0])) === 'application/json';
 }
 
 /**

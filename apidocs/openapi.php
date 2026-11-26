@@ -425,7 +425,7 @@ return <<<'JSON'
     "responses": {
       "Unauthorized": {"description": "토큰 없음·틀림"},
       "SessionOnly": {"description": "토큰으로는 불가"},
-      "BclError": {"description": "`{\"reason\": \"...\"}` (필수 값 없음·값 오류·JSON 형식 오류·등록되지 않은 작업·없는 조각·없는 시도 등). `node_id` 는 앞뒤 공백 없는 1~80 글자 문자열이어야 합니다", "content": {"application/json": {"schema": {"type": "object", "properties": {"reason": {"type": "string"}}}}}}
+      "BclError": {"description": "`{\"reason\": \"...\"}` (필수 값 없음·값 오류·JSON 형식 오류·등록되지 않은 작업·없는 조각·없는 시도 등). `node_id` 는 앞뒤 공백 없는 1~80 글자 문자열이어야 합니다. POST 는 `Content-Type: application/json` 만 받습니다(그 밖은 415)", "content": {"application/json": {"schema": {"type": "object", "properties": {"reason": {"type": "string"}}}}}}
     },
     "schemas": {
       "BclOk": {"type": "object", "properties": {"ok": {"type": "boolean", "description": "false 는 오류가 아니라 거절(상태 200)"}}},
