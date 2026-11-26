@@ -217,9 +217,10 @@ return <<<'JSON'
       "post": {
         "tags": ["블루 클러스터"],
         "summary": "작업 등록",
+        "description": "등록자(submitter)는 본문으로 받지 않고 인증된 사용자(토큰 주인)로 정해집니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/jobs"}}],
-        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["title", "submitter", "repos", "instructions"], "properties": {"title": {"type": "string"}, "submitter": {"type": "string"}, "repos": {"type": "array", "items": {"type": "string"}}, "instructions": {"type": "string"}}}}}},
+        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["title", "repos", "instructions"], "properties": {"title": {"type": "string"}, "repos": {"type": "array", "items": {"type": "string"}}, "instructions": {"type": "string"}}}}}},
         "responses": {
           "200": {"description": "OK", "content": {"application/json": {"schema": {"type": "object", "properties": {"job_id": {"type": "string"}}}}}},
           "400": {"$ref": "#/components/responses/BclError"},

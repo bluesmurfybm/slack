@@ -26,4 +26,5 @@
 
 1. `files_dir` 폴더를 만들고 PHP 실행 사용자가 쓸 수 있게 한다. 기본은 `/var/www/iworks-data/bluecluster` 이고, 바꾸려면 `config.php` 의 `bluecluster.files_dir` 에 적는다. 웹 루트 밖에 둔다.
 2. 조각 `finish` 본문(결과·패치·로그)이 수 MB 일 수 있으니 nginx `client_max_body_size`, PHP `post_max_size`, `memory_limit` 이 그보다 큰지 확인한다.
-3. `amitoa` 브랜치에 푸시하면 운영에 바로 배포되므로 확인이 끝나기 전에는 푸시하지 않는다.
+3. 노드는 iWorks 를 HTTPS 로 불러야 한다. Bearer 개인 토큰은 localhost 가 아니면 http 로는 거절되어, 노드가 http 주소를 쓰면 401 `인증 필요` 가 온다. 노드의 기준 주소는 `https://<iWorks 주소>/bluecluster/api.php?p=` 형태다.
+4. `amitoa` 브랜치에 푸시하면 운영에 바로 배포되므로 확인이 끝나기 전에는 푸시하지 않는다.
