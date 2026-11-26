@@ -41,5 +41,7 @@
     "desc": "대학마다 하나씩 해야 하는 일을 탭으로 만들고 대학별 조치 상태를 체크합니다.", "color": "#1D7044" },
   { "key": "csmspwdlog", "emoji": "🔐", "label": "Coursemos PwdLog", "path": "csmspwdlog/index.php",
     "desc": "슬랙에서 대학 관리자 계정을 요청해 받아 간 이력을 확인합니다.", "color": "#7A4B8F",
-    "group": "Coursemos" }
+    "group": "Coursemos" },
+  { "key": "bluecluster", "emoji": "🧩", "label": "블루 클러스터 에이전트 (test)", "path": "bluecluster/index.php",
+    "desc": "사무실 PC들이 Claude 작업을 나눠 처리합니다.", "color": "#0E7490" }
 ]

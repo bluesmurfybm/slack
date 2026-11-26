@@ -1,0 +1,25 @@
+<?php
+/**
+ * 출력·로그인 확인.
+ */
+
+if (!function_exists('h')) {
+    function h($s)
+    {
+        return htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+}
+
+/**
+ * 화면용 로그인 확인.
+ * @return array
+ */
+function bcl_require_login()
+{
+    $u = current_portal_user();
+    if (!$u) {
+        header('Location: ../index.php?need_login=' . BCL_MODULE_KEY);
+        exit;
+    }
+    return $u;
+}
