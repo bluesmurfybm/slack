@@ -37,7 +37,6 @@ function bcl_with_job_lock($pdo, $job_key, $fn)
  */
 function bcl_is_leader($job, $node_id, $epoch)
 {
-    // 열 정렬 규칙이 대소문자를 가리지 않으므로 PHP 에서 비교한다
     return $job['leader'] !== null && $job['leader'] === $node_id && $epoch === (int)$job['epoch'];
 }
 

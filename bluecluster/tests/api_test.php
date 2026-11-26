@@ -583,6 +583,25 @@ final class api_test extends TestCase
         $this->assertSame([], bcl_job_get($this->pdo, $job)['pieces']);
     }
 
+    /** bcl_job_pieces: 대소문자만 다른 piece_id 는 다른 조각, start 도 그 조각만 */
+    public function testPiecesCaseSensitivePieceId()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+        bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1,
+            'pieces' => [['piece_id' => 'p1', 'repo' => 'r', 'desc' => '소문자'], ['piece_id' => 'P1', 'repo' => 'r', 'desc' => '대문자']],
+        ]));
+        $started = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/P1/start', json_encode(['node_id' => 'PC-B', 'account' => 'acc']));
+
+        $this->assertSame(['status' => 200, 'data' => ['ok' => true]], $res);
+        $this->assertSame(['status' => 200, 'data' => ['ok' => true, 'attempt_no' => 1]], $started);
+        $pieces = bcl_job_get($this->pdo, $job)['pieces'];
+        $this->assertSame([['p1', 'pending'], ['P1', 'running']], array_map(fn($piece) => [$piece['piece_id'], $piece['state']], $pieces));
+    }
+
     /** bcl_piece_start: attempt_no 1, 조각 running, attempt status running·started now, token_user 는 user email */
     public function testStartRecordsTokenUser()
     {
@@ -1206,6 +1225,23 @@ final class api_test extends TestCase
             'node_id' => 'PC-A', 'account' => 'acc2', 'addr' => '127.0.0.1:2', 'free_cpu' => 40.0, 'free_mem' => 30, 'running' => 0, 'attempts' => [], 'last_seen' => 1001,
         ]], bcl_nodes_live($this->pdo, 1001));
         $this->assertSame(['user2@bluesoft.co.kr'], $this->pdo->query("SELECT token_user FROM bcl_nodes")->fetchAll(\PDO::FETCH_COLUMN));
+    }
+
+    /** bcl_node_heartbeat: 대소문자만 다른 node_id 는 다른 노드 */
+    public function testHeartbeatCaseSensitiveNodeId()
+    {
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
+        bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'pc-a', 'account' => 'acc', 'addr' => '127.0.0.1:1', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $res = bcl_api_handle($ctx, 'POST', '/nodes/heartbeat', json_encode([
+            'node_id' => 'PC-A', 'account' => 'acc', 'addr' => '127.0.0.1:2', 'free_cpu' => 50, 'free_mem' => 50, 'running' => 0, 'attempts' => [],
+        ]));
+
+        $this->assertSame(['status' => 200, 'data' => ['ok' => true]], $res);
+        $this->assertSame([['PC-A', '127.0.0.1:2'], ['pc-a', '127.0.0.1:1']],
+            array_map(fn($node) => [$node['node_id'], $node['addr']], bcl_nodes_live($this->pdo, 1000)));
     }
 
     /** bcl_nodes_live: last_seen 이 BCL_NODE_TTL_S 안인 노드만, attempts 포함 */
