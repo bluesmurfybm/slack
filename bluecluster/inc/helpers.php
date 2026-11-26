@@ -11,6 +11,16 @@ if (!function_exists('h')) {
 }
 
 /**
+ * 정적 파일 판 번호.
+ * @param string $rel 모듈 안 상대 경로
+ * @return string
+ */
+function bcl_asset_v($rel)
+{
+    return (string)(@filemtime(BCL_ROOT . '/' . ltrim($rel, '/')) ?: 0);
+}
+
+/**
  * 화면용 로그인 확인.
  * @return array
  */

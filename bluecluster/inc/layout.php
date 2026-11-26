@@ -32,7 +32,7 @@ body { font-family: Pretendard, sans-serif; margin: 0; background: #F4F6FB; colo
     <div class="top-right">
       <?= work_systems_bell('../', BCL_MODULE_KEY) ?>
       <div class="user-menu" id="hdrUserMenu">
-        <div class="user-chip" title="메뉴">
+        <div class="user-chip" onclick="bclToggleMenu(event)" title="메뉴">
           <span class="avatar" style="background:<?= h(user_color($me)) ?>"><?= h(mb_substr($me['name'], 0, 1)) ?></span>
           <span class="nm"><?= h($me['name']) ?></span>
           <span class="user-caret">▾</span>
@@ -56,6 +56,7 @@ body { font-family: Pretendard, sans-serif; margin: 0; background: #F4F6FB; colo
 function bcl_page_foot()
 {
     ?>
+<script src="assets/bluecluster.js?v=<?= bcl_asset_v('assets/bluecluster.js') ?>"></script>
 </body>
 </html>
 <?php
