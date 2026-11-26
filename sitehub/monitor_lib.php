@@ -57,7 +57,7 @@ function sitehub_monitor_one(array $m, ?array $st): array {
 function sitehub_monitor_status(array $site): ?array {
     if (!(int)$site['monitor']) return null;
     $ms = $site['monitors'] ?? [];
-    if (!$ms) return ['code' => 'empty', 'text' => '감시 주소가 없습니다 — 감시 설정에서 추가하세요', 'n' => 0];
+    if (!$ms) return ['code' => 'empty', 'text' => '감시 주소가 없습니다 — 감시 탭에서 추가하세요', 'n' => 0];
     $codes = array_map(fn($m) => $m['watch']['code'], $ms);
     if (in_array('down', $codes, true)) $code = 'down';
     elseif (!array_diff($codes, ['up'])) $code = 'up';

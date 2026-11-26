@@ -604,7 +604,7 @@ function sitehub_field_groups() {
             ['key' => 'our_staff',   'label' => '블루소프트 담당자', 'type' => 'staff'],
             ['key' => 'slack_names', 'label' => 'Slack 표기',      'type' => 'input', 'hint' => '리스트에서 이 사이트를 부르는 이름. 여러 개면 쉼표 — 이력 매칭에 쓴다'],
         ]],
-        ['key' => 'method', 'title' => '유지보수 방법', 'fields' => [
+        ['key' => 'method', 'title' => '작업 방법', 'fields' => [
             ['key' => 'deploy',  'label' => '배포 방법',        'type' => 'area', 'copy' => 1],
             ['key' => 'backup',  'label' => '백업 위치·방법',   'type' => 'area'],
             ['key' => 'caution', 'label' => '작업 시 주의사항', 'type' => 'area'],
@@ -720,7 +720,7 @@ function sitehub_sub_fields($table = null) {
 }
 
 /* ── 처리 절차(런북) ─────────────────────────────────────────────────────────
-   site_id=0 은 공통 절차 — 모든 사이트의 '유지보수 방법' 탭에 같이 보인다. 하위 테이블 공통 경로(sub_save)를 안 타고 proc_* 액션을 쓴다. */
+   site_id=0 은 공통 절차 — 모든 사이트의 '작업 방법' 탭에 같이 보인다. 하위 테이블 공통 경로(sub_save)를 안 타고 proc_* 액션을 쓴다. */
 
 function sitehub_procedure_categories() {
     return ['content' => '콘텐츠 수정', 'account' => '계정·권한', 'board' => '게시판·회원', 'deploy' => '배포·서버',

@@ -545,9 +545,10 @@ ul.cards li.card.sh-card{min-height:200px}
 /* 드로어 — 탭 + 섹션 */
 .drawer{width:min(640px,100%)}
 .drawer .tabs{margin:14px 0 0;padding:0 22px}
-.drawer .tabs a{cursor:pointer;padding:10px 12px;font-size:13px;white-space:nowrap;flex:none}
-.drawer .tabs{overflow-x:auto;scrollbar-width:none}
-.drawer .tabs::-webkit-scrollbar{display:none}
+.drawer .tabs a{cursor:pointer;padding:10px 9px;font-size:13px;white-space:nowrap;flex:none}
+.drawer .tabs{overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;scrollbar-color:var(--bo-tertiary) transparent}
+.drawer .tabs::-webkit-scrollbar{height:4px}
+.drawer .tabs::-webkit-scrollbar-thumb{background:var(--bo-tertiary);border-radius:2px}
 .drawer .d-body{padding-top:6px}
 .drawer .d-sec:first-child{margin-top:12px}
 .kv{grid-template-columns:118px 1fr}

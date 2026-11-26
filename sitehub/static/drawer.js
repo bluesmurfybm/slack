@@ -1,6 +1,6 @@
 // 상세 드로어 — 사이트 한 곳의 모든 것. 탭은 TABS, 주소 ?site=<id>&tab=<key> 와 같이 움직인다.
 
-const TABS = [["basic", "기본"], ["accounts", "접속 정보"], ["contacts", "담당자"], ["contracts", "계약"], ["costs", "비용"], ["method", "유지보수 방법"], ["monitor", "감시 설정"], ["history", "이력"], ["report", "내역서"], ["changes", "변경 이력"]];
+const TABS = [["basic", "기본"], ["accounts", "접속 정보"], ["contacts", "담당자"], ["contracts", "계약"], ["costs", "비용"], ["method", "작업 방법"], ["monitor", "감시"], ["history", "이력"], ["report", "보고서"], ["changes", "변경 이력"]];
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
 
 function openDrawer(id, tab, push = true) {
@@ -18,6 +18,7 @@ function openDrawer(id, tab, push = true) {
   const d = $("drawer");
   const scrollTop = wasOpen ? (d.querySelector(".d-body") || {}).scrollTop || 0 : 0;
   d.innerHTML = drawerHtml(s);
+  wheelScrollTabs(d.querySelector(".tabs"));
   d.classList.add("open");
   d.setAttribute("aria-hidden", "false");
   $("scrim").classList.add("open");
@@ -31,6 +32,14 @@ function revealTab() {
   const nav = document.querySelector("#drawer .tabs"), on = nav && nav.querySelector("a.on");
   if (!on) return;
   if (on.offsetLeft + on.offsetWidth > nav.scrollLeft + nav.clientWidth || on.offsetLeft < nav.scrollLeft) nav.scrollLeft = on.offsetLeft - 22;
+}
+
+function wheelScrollTabs(nav) {
+  nav.addEventListener("wheel", e => {
+    if (nav.scrollWidth <= nav.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    e.preventDefault();
+    nav.scrollLeft += e.deltaY;
+  }, { passive: false });
 }
 
 function hideDrawer() {

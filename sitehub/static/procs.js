@@ -1,4 +1,4 @@
-// 처리 절차(런북) — '유지보수 방법' 탭의 "자주 있는 처리"와 이력↔절차 연결. 칸 정의는 SH.procFields / SH.procCats.
+// 처리 절차(런북) — '작업 방법' 탭의 "자주 있는 처리"와 이력↔절차 연결. 칸 정의는 SH.procFields / SH.procCats.
 // site_id=0 은 공통 절차: 모든 사이트에서 보이고, "이 사이트용으로 복사"로 사이트 전용 절차를 만든다.
 
 APP.procs = null;       // GET ?procedures=1 — 공통 + 사이트별 전체 (use_count·last_used 포함)
@@ -175,7 +175,7 @@ function openProcLink(historyId, siteId) {
       ${rows.length ? `<ul class="sh-rows">${rows.map(p => `<li>
         <label class="check" style="height:auto"><input type="checkbox" value="${p.id}"${on.has(p.id) ? " checked" : ""} onchange="toggleProcUse(this)">
           <span><span class="chip">${esc(procCatLabel(p.category))}</span> ${esc(p.title)}${p.site_id === 0 ? ` <span class="muted">공통</span>` : ""}</span></label><span></span></li>`).join("")}</ul>`
-        : `<p class="sh-synced">연결할 절차가 없습니다. '유지보수 방법' 탭에서 절차를 먼저 추가하세요.</p>`}
+        : `<p class="sh-synced">연결할 절차가 없습니다. '작업 방법' 탭에서 절차를 먼저 추가하세요.</p>`}
     </div>
     <div class="sheet-foot"><button type="button" class="btn-submit" onclick="closeSheet()">닫기</button></div>`);
 }

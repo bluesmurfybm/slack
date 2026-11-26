@@ -132,7 +132,7 @@ async function monOpenDetail(id) {
       <dt>SSL</dt><dd>${st.cert_days !== null && st.cert_days !== undefined ? st.cert_days + "일 남음" : (/^https/.test(m.url) ? "—" : "http (SSL 없음)")}</dd>
       <dt>사이트 용량</dt><dd>${monUsageDd(m, st)}</dd>
       <dt>정상 판정 문구</dt><dd>${m.expect ? `<code>${esc(m.expect)}</code>` : `<span class="muted">없음 — 응답 크기로만 백지 판정</span>`}</dd>
-      <dt>에이전트</dt><dd>${m.agent ? `연결 · <a href="api.php?agent=${m.id}">키 포함 blumo-agent.php 내려받기</a>` : `<span class="muted">없음 — 외부 증상까지만 판별 (감시 설정에서 주소·키를 넣으면 원인까지)</span>`}</dd>
+      <dt>에이전트</dt><dd>${m.agent ? `연결 · <a href="api.php?agent=${m.id}">키 포함 blumo-agent.php 내려받기</a>` : `<span class="muted">없음 — 외부 증상까지만 판별 (감시 탭에서 주소·키를 넣으면 원인까지)</span>`}</dd>
       ${m.mute_until ? `<dt>알림 무음</dt><dd>${esc(String(m.mute_until).slice(5, 16))}까지 — 점검·기록은 계속</dd>` : ""}
     </dl>
     ${monBars(j.checks)}
@@ -190,7 +190,7 @@ function monUsageDd(m, st) {
   parts.push(`파일 ${monN(u.files)}개`);
   if (u.free_mb !== null) parts.push(`서버 디스크 여유 ${monMB(u.free_mb)}${u.used_pct !== null ? ` (사용 ${u.used_pct}%)` : ""}`);
   if (u.measured_at) parts.push(`<span class="muted">${esc(String(u.measured_at).slice(5, 16))} 측정</span>`);
-  const quota = m.disk_quota_mb ? "" : `<br><span class="muted">용량 한도가 없어 알리지 않습니다 — 감시 설정에서 한도를 넣으면 ${m.disk_warn_pct}% 를 넘을 때 알립니다</span>`;
+  const quota = m.disk_quota_mb ? "" : `<br><span class="muted">용량 한도가 없어 알리지 않습니다 — 감시 탭에서 한도를 넣으면 ${m.disk_warn_pct}% 를 넘을 때 알립니다</span>`;
   return parts.join(" · ") + quota;
 }
 
@@ -349,7 +349,7 @@ function monRender() {
   list.sort((a, b) => rank[monSev(a)] - rank[monSev(b)]);   // 장애·경고가 위로 (같은 단계는 원래 순서 유지)
   if (!rows.length) {
     $("monBody").innerHTML = `<ul class="list"><li class="empty"><div class="big">감시 중인 사이트가 없습니다</div>
-      사이트 상세의 <b>감시 설정</b> 탭에서 감시를 켜세요.${SH.canManage ? ` 예전 BLUMO 에 있던 31곳은 <button type="button" class="linkish" style="color:var(--cos45)" onclick="openBlumoLink()">한 번에 연결</button>할 수 있습니다.` : ""}</li></ul>`;
+      사이트 상세의 <b>감시</b> 탭에서 감시를 켜세요.${SH.canManage ? ` 예전 BLUMO 에 있던 31곳은 <button type="button" class="linkish" style="color:var(--cos45)" onclick="openBlumoLink()">한 번에 연결</button>할 수 있습니다.` : ""}</li></ul>`;
     return;
   }
   $("monBody").innerHTML = list.length ? `<ul class="list sh-mlist">${list.map(monRow).join("")}</ul>`
@@ -369,7 +369,7 @@ function monRow(r) {
   return `<li class="row sh-mrow${sev === "off" ? " dim" : ""}" data-id="${r.id}">
     <div class="row-lead">${monSevTag(sev)}${st.class && st.class !== "OK" ? `<span class="sh-mclass">${esc(st.class)}</span>` : ""}${muted}</div>
     <div class="row-main">
-      <div class="row-title">${watchDot(r.watch)}<a class="linkish" href="index.php?site=${r.site_id}&tab=monitor" title="사이트 상세 — 감시 설정">${esc(r.site_name)}</a>
+      <div class="row-title">${watchDot(r.watch)}<a class="linkish" href="index.php?site=${r.site_id}&tab=monitor" title="사이트 상세 — 감시">${esc(r.site_name)}</a>
         ${r.label ? `<span class="chip ghost">${esc(r.label)}</span>` : ""}${r.agent ? `<span class="chip" title="에이전트 연결 — DB·디스크·세션·에러로그까지 원인 판별">에이전트</span>` : ""}</div>
       <div class="row-sub"><a href="${esc(r.url)}" target="_blank" rel="noopener" class="muted">${esc(monHost(r.url))}</a>${sub.length ? `<span class="sep">·</span>` + sub.join(`<span class="sep">·</span>`) : ""}</div>
     </div>
