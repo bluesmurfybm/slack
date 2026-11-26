@@ -78,34 +78,24 @@ function schooltodo_sheet_find($pdo, $id) {
  * @return array[]
  */
 function schooltodo_sheet_rows($pdo, $sheetId) {
-    // VPN 은 EnvHub(access)의 school_access 에서 가져온다. 한 대학에 접속정보가 두 벌인 경우가 있어
-    // (access/db.php 참고) 값을 모아 하나로 만든다. access 를 아직 설치하지 않은 곳에서는 빈 값.
-    $vpnJoin = schooltodo_has_table($pdo, 'school_access')
-        ? "LEFT JOIN (SELECT school_id, GROUP_CONCAT(DISTINCT vpn ORDER BY vpn SEPARATOR ', ') AS vpn
-                      FROM school_access WHERE vpn <> '' GROUP BY school_id) a ON a.school_id = s.id"
-        : "LEFT JOIN (SELECT NULL AS school_id, NULL AS vpn) a ON 0";
-    $repos = [];
-    if (schooltodo_has_table($pdo, 'school_access')) {
-        foreach ($pdo->query("SELECT school_id, repo FROM school_access WHERE repo <> '' ORDER BY id") as $r) {
-            $repos[(int)$r['school_id']] = ($repos[(int)$r['school_id']] ?? '') . $r['repo'] . "\n";
-        }
-    }
-    $st = $pdo->prepare("SELECT s.id AS school_id, s.name, s.ver, s.dev, a.vpn, c.status, c.note, c.updated_by, c.updated_at
+    $access = schooltodo_school_access($pdo);
+    $st = $pdo->prepare("SELECT s.id AS school_id, s.name, s.ver, s.dev, c.status, c.note, c.updated_by, c.updated_at
                          FROM schools s
                          LEFT JOIN schooltodo_cells c ON c.school_id = s.id AND c.sheet_id = ?
-                         {$vpnJoin}
                          WHERE s.active = 1
                          ORDER BY s.name, s.ver, s.id");
     $st->execute([$sheetId]);
 
     $rows = [];
     foreach ($st as $r) {
+        $a = $access[(int)$r['school_id']] ?? ['vpn' => [], 'repo' => ''];
+        sort($a['vpn']);
         $rows[] = [
             'school_id' => (int)$r['school_id'],
             'name' => (string)$r['name'],
-            'code' => schooltodo_school_code($repos[(int)$r['school_id']] ?? '', (string)$r['dev']),
+            'code' => schooltodo_school_code($a['repo'], (string)$r['dev']),
             'ver' => (string)$r['ver'],
-            'vpn' => (string)($r['vpn'] ?? ''),
+            'vpn' => implode(', ', array_unique($a['vpn'])),
             'status' => $r['status'] ?? SCHOOLTODO_STATUS_TODO,
             'note' => (string)($r['note'] ?? ''),
             'updated_by' => (string)($r['updated_by'] ?? ''),
@@ -113,6 +103,23 @@ function schooltodo_sheet_rows($pdo, $sheetId) {
         ];
     }
     return $rows;
+}
+
+/**
+ * 대학별 EnvHub 접속 정보. 한 대학에 접속 정보가 두 벌일 수 있어 모아서 준다.
+ * @param PDO $pdo
+ * @return array[] school_id => ['vpn' => string[], 'repo' => string]
+ */
+function schooltodo_school_access($pdo) {
+    if (!schooltodo_has_table($pdo, 'school_access')) return [];
+    $out = [];
+    foreach ($pdo->query("SELECT school_id, vpn, repo FROM school_access ORDER BY id") as $r) {
+        $id = (int)$r['school_id'];
+        $out[$id] ??= ['vpn' => [], 'repo' => ''];
+        if ((string)$r['vpn'] !== '') $out[$id]['vpn'][] = $r['vpn'];
+        if ((string)$r['repo'] !== '') $out[$id]['repo'] .= $r['repo'] . "\n";
+    }
+    return $out;
 }
 
 /**
