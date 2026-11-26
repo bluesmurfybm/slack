@@ -14,7 +14,7 @@ return <<<'JSON'
   "tags": [
     {"name": "계정"},
     {"name": "EnvHub", "description": "응답에 비밀번호가 평문으로 들어 있습니다."},
-    {"name": "TaskSheet", "description": "`schooltodo/api.php?p=<경로>` 로 부릅니다."}
+    {"name": "TaskSheet"}
   ],
   "paths": {
     "/api/me.php": {
