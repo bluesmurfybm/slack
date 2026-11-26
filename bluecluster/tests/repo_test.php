@@ -263,7 +263,7 @@ final class repo_test extends TestCase
         $this->assertSame([$second, $first], array_column($jobs, 'job_id'));
     }
 
-    /** bcl_nodes_live: last_seen 이 now 보다 NODE_TTL_S 앞이면 생존 */
+    /** bcl_nodes_live: last_seen 이 now 보다 BCL_NODE_TTL_S 앞이면 생존 */
     public function test_nodes_live_경계()
     {
         $this->pdo->exec("INSERT INTO bcl_nodes (node_id, account, token_user, addr, free_cpu, free_mem, running, attempts, last_seen)
@@ -283,7 +283,7 @@ final class repo_test extends TestCase
         ]], $nodes);
     }
 
-    /** bcl_nodes_live: last_seen 이 now 보다 NODE_TTL_S 넘게 앞이면 제외 */
+    /** bcl_nodes_live: last_seen 이 now 보다 BCL_NODE_TTL_S 넘게 앞이면 제외 */
     public function test_nodes_live_만료()
     {
         $this->pdo->exec("INSERT INTO bcl_nodes (node_id, account, token_user, addr, free_cpu, free_mem, running, attempts, last_seen)

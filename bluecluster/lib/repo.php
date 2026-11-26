@@ -89,7 +89,7 @@ function bcl_jobs_list($pdo, $state)
 function bcl_nodes_live($pdo, $now)
 {
     $st = $pdo->prepare("SELECT * FROM bcl_nodes WHERE last_seen >= ? ORDER BY node_id");
-    $st->execute([$now - NODE_TTL_S]);
+    $st->execute([$now - BCL_NODE_TTL_S]);
 
     return array_map(function ($row) {
         return [
