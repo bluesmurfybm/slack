@@ -8,7 +8,7 @@ async function loadSheets() {
   // 링크로 온 탭은 보관한 것이어도 연다. 아니면 보관하지 않은 첫 탭.
   const linked = parseInt(new URLSearchParams(location.search).get("sheet") || "", 10);
   const first = APP.sheets.find((s) => s.id === linked) || activeSheets()[0];
-  if (first) await selectSheet(first.id);
+  if (first) await selectSheet(first.id, first.id === linked);
   else renderTabs();
 }
 

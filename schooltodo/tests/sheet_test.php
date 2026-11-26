@@ -98,8 +98,10 @@ final class sheet_test extends TestCase
 
         $this->assertSame(200, $res['status']);
         $this->assertSame([
-            ['school_id' => 2, 'name' => '가대', 'code' => '', 'ver' => '3.5', 'vpn' => '', 'status' => '미조치', 'note' => '', 'updated_by' => '', 'updated_at' => ''],
-            ['school_id' => 1, 'name' => '나대', 'code' => '', 'ver' => '3.9', 'vpn' => 'Arcon, FortiClient', 'status' => '운영반영', 'note' => '3.5.1 반영', 'updated_by' => '봇', 'updated_at' => '2026-11-17 10:00:00'],
+            ['school_id' => 2, 'name' => '가대', 'code' => '', 'ver' => '3.5', 'vpn' => '', 'status' => '미조치',
+                'stages' => ['미조치', '진행중', '개발반영', '운영반영', '해당없음'], 'done' => false, 'note' => '', 'updated_by' => '', 'updated_at' => ''],
+            ['school_id' => 1, 'name' => '나대', 'code' => '', 'ver' => '3.9', 'vpn' => 'Arcon, FortiClient', 'status' => '운영반영',
+                'stages' => ['미조치', '진행중', '개발반영', '운영반영', '해당없음'], 'done' => true, 'note' => '3.5.1 반영', 'updated_by' => '봇', 'updated_at' => '2026-11-17 10:00:00'],
         ], $res['data']['rows']);
         $this->assertSame(['미조치' => 1, '진행중' => 0, '개발반영' => 0, '운영반영' => 1, '해당없음' => 0], $res['data']['counts']);
     }
@@ -195,6 +197,71 @@ final class sheet_test extends TestCase
         $res = schooltodo_handle(
             ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
             ['method' => 'GET', 'seg' => ['sheets', '10'], 'body' => [], 'query' => ['status' => '보류']]
+        );
+
+        $this->assertSame(422, $res['status']);
+    }
+
+    /** @return array[] */
+    public static function sorts(): array
+    {
+        return [
+            'name' => ['name', [1, 2, 3]],
+            '-name' => ['-name', [3, 2, 1]],
+            'ver' => ['ver', [1, 3, 2]],
+            '-ver' => ['-ver', [2, 3, 1]],
+            'vpn' => ['vpn', [2, 3, 1]],
+            '-vpn' => ['-vpn', [1, 3, 2]],
+            'status' => ['status', [3, 1, 2]],
+            '-status' => ['-status', [2, 1, 3]],
+            'note' => ['note', [2, 1, 3]],
+            '-note' => ['-note', [3, 1, 2]],
+            'updated_at' => ['updated_at', [3, 2, 1]],
+            '-updated_at' => ['-updated_at', [1, 2, 3]],
+        ];
+    }
+
+    /** schooltodo_sheet_detail: sort 조건별 rows 순서 조회 */
+    #[DataProvider('sorts')]
+    public function test_상세_sort($sort, $schoolIds): void
+    {
+        $this->pdo->exec("INSERT INTO schools (id, name, ver, active) VALUES (1, '가대', '3.9', 1), (2, '나대', '4.5', 1), (3, '다대', '3.10', 1)");
+        $this->pdo->exec("INSERT INTO school_access (school_id, vpn) VALUES (1, 'FortiClient'), (3, 'Arcon')");
+        $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
+        $this->pdo->exec("INSERT INTO schooltodo_cells (sheet_id, school_id, status, note, updated_at) VALUES
+            (10, 1, '개발반영', 'b', '2026-11-03 09:00:00'), (10, 2, '운영반영', 'a', '2026-11-02 09:00:00'), (10, 3, '진행중', 'c', '2026-11-01 09:00:00')");
+
+        $res = schooltodo_handle(
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
+            ['method' => 'GET', 'seg' => ['sheets', '10'], 'body' => [], 'query' => ['sort' => $sort]]
+        );
+
+        $this->assertSame(200, $res['status']);
+        $this->assertSame($schoolIds, array_column($res['data']['rows'], 'school_id'));
+    }
+
+    /** schooltodo_sheet_detail: sort 값이 같은 행은 ver, name 순 조회 */
+    public function test_상세_sort_같은_값(): void
+    {
+        $this->pdo->exec("INSERT INTO schools (id, name, ver, active) VALUES (1, '나대', '4.5', 1), (2, '가대', '4.5', 1), (3, '다대', '3.9', 1)");
+        $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
+
+        $res = schooltodo_handle(
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
+            ['method' => 'GET', 'seg' => ['sheets', '10'], 'body' => [], 'query' => ['sort' => '-status']]
+        );
+
+        $this->assertSame([3, 2, 1], array_column($res['data']['rows'], 'school_id'));
+    }
+
+    /** schooltodo_sheet_detail: 목록에 없는 sort 조건 오류 */
+    public function test_상세_sort_잘못되면_422(): void
+    {
+        $this->pdo->exec("INSERT INTO schooltodo_sheets (id, title) VALUES (10, 'jQuery')");
+
+        $res = schooltodo_handle(
+            ['config' => $this->config, 'pdo' => $this->pdo, 'identity' => ['email' => 'user1@bluesoft.co.kr', 'name' => '사용자', 'color' => '']],
+            ['method' => 'GET', 'seg' => ['sheets', '10'], 'body' => [], 'query' => ['sort' => 'code']]
         );
 
         $this->assertSame(422, $res['status']);

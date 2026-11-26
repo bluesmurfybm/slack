@@ -1,8 +1,7 @@
 const CONFETTI_COLORS = ["#0075f8", "#1d7044", "#f04438", "#6b3fd4", "#ffb800", "#00b8d9", "#ff6fa8"];
 
-function isComplete(counts) {
-  const p = progressOf(counts);
-  return p.target > 0 && p.done === p.target;
+function isComplete(s) {
+  return s.target > 0 && s.done === s.target;
 }
 
 let celebrateT;

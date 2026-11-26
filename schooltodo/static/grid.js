@@ -1,15 +1,8 @@
 const natural = (a, b) => String(a).localeCompare(String(b), "ko", { numeric: true });
 
-const SORTERS = {
-  name: (a, b) => natural(a.name, b.name),
-  ver: (a, b) => natural(a.ver, b.ver),
-  vpn: (a, b) => natural(a.vpn, b.vpn),
-  status: (a, b) => APP.boot.statuses.indexOf(a.status) - APP.boot.statuses.indexOf(b.status),
-  note: (a, b) => natural(a.note, b.note),
-  updated_at: (a, b) => natural(a.updated_at, b.updated_at),
-};
-
 const FILTER_COLS = ["ver", "vpn", "status"];
+
+const stages = () => currentSheet().stages;
 
 /* ---------- 거르기 · 정렬 ---------- */
 
@@ -19,11 +12,14 @@ function renderStatusFilter() {
   const chip = (value, label, n, on) => `<button type="button" class="chip pick${on ? " on" : ""}"
     onclick="filterByStatus('${esc(value)}')">${esc(label)} <span class="n">${n}</span></button>`;
   document.getElementById("statusFilter").innerHTML = chip("", "전체", APP.rows.length, !f)
-    + APP.boot.statuses.map((st) => chip(st, st, s.counts[st], !!f && f.size === 1 && f.has(st))).join("");
+    + stages().map((st) => chip(st, st, s.counts[st], !!f && f.size === 1 && f.has(st))).join("");
 }
 
+/* 이미 고른 상태를 다시 누르면 거르기를 푼다. */
 function filterByStatus(status) {
-  APP.filters.status = status ? new Set([status]) : null;
+  const f = APP.filters.status;
+  const again = f && f.size === 1 && f.has(status);
+  APP.filters.status = status && !again ? new Set([status]) : null;
   renderStatusFilter();
   renderGrid();
 }
@@ -54,12 +50,57 @@ function visibleRows() {
 
 function sortBy(key, dir) {
   APP.sort = { key, dir: dir || (APP.sort.key === key ? -APP.sort.dir : 1) };
-  renderGrid();
+  return reloadRows();
 }
 
-function sortedRows(rows) {
-  const { key, dir } = APP.sort;
-  return rows.slice().sort((a, b) => dir * SORTERS[key](a, b) || natural(a.name, b.name) || natural(a.ver, b.ver));
+async function reloadRows() {
+  const id = APP.sheetId;
+  try {
+    const detail = await api(sheetPath(id));
+    if (APP.sheetId !== id) return;
+    APP.rows = detail.rows;
+    syncCurrentSheet(detail);
+  } catch (e) {
+    if (e.message !== "unauthenticated") showToast(e.message);
+    return;
+  }
+  renderSheet();
+}
+
+function sortParam() {
+  return (APP.sort.dir < 0 ? "-" : "") + APP.sort.key;
+}
+
+function sheetPath(id) {
+  return `/sheets/${id}?sort=${encodeURIComponent(sortParam())}`;
+}
+
+/* 정렬·거르기·검색어를 주소에 남겨 새로고침해도 그대로 보이게 한다 */
+const URL_FILTERS = ["ver", "vpn", "status"];
+
+function writeUrl() {
+  const p = new URLSearchParams();
+  if (APP.sheetId) p.set("sheet", APP.sheetId);
+  if (sortParam() !== "ver") p.set("sort", sortParam());
+  for (const col of URL_FILTERS) {
+    for (const v of APP.filters[col] || []) p.append(col, v);
+  }
+  const q = document.getElementById("q").value.trim();
+  if (q) p.set("q", q);
+  const qs = p.toString();
+  history.replaceState(null, "", qs ? "?" + qs : location.pathname);
+}
+
+function readUrl() {
+  const p = new URLSearchParams(location.search);
+  const sort = p.get("sort") || "";
+  const key = sort.replace(/^-/, "");
+  if (APP.boot.sorts.includes(key)) APP.sort = { key, dir: sort.startsWith("-") ? -1 : 1 };
+  for (const col of URL_FILTERS) {
+    const values = p.getAll(col);
+    APP.filters[col] = values.length ? new Set(values) : null;
+  }
+  document.getElementById("q").value = p.get("q") || "";
 }
 
 /* ---------- 표 ---------- */
@@ -76,9 +117,9 @@ function renderHeads() {
 
 function groupHead(ver, rows) {
   const excluded = rows.filter((r) => r.status === APP.boot.status_excluded).length;
-  const done = rows.filter((r) => r.status === APP.boot.status_done).length;
+  const done = rows.filter((r) => r.done).length;
   return `<tr class="group"><td colspan="7"><span class="grp-in">${esc(ver || "버전 없음")}
-    <span class="n">${esc(APP.boot.status_done)} ${done} / 대상 ${rows.length - excluded}</span>
+    <span class="n">완료 ${done} / 대상 ${rows.length - excluded}</span>
     <button type="button" class="grp-btn" onclick="openGroupMenu(event, ${JSON.stringify(ver)})"
       title="이 버전 대학 일괄 변경" aria-label="${esc(ver || "버전 없음")} 일괄 변경">▾</button></span></td></tr>`;
 }
@@ -92,7 +133,7 @@ function openGroupMenu(e, ver) {
   const rows = APP.rows.filter((r) => r.ver === ver);
   const menu = document.getElementById("colMenu");
   menu.innerHTML = `<div class="cm-title">${esc(ver || "버전 없음")} 대학 ${rows.length}곳 전부 일괄 변경</div><div class="cm-bulk">`
-    + APP.boot.statuses.map((st, i) => `<button type="button" class="cm-st ${STATUS_CLASS[st]}" onclick="bulkStatusVer(${i})">${esc(st)}</button>`).join("")
+    + stages().map((st, i) => `<button type="button" class="cm-st ${statusClass(st)}" onclick="bulkStatusVer(${i})">${esc(st)}</button>`).join("")
     + `</div>`;
   const at = e.currentTarget.getBoundingClientRect();
   menu.classList.add("open");
@@ -101,7 +142,7 @@ function openGroupMenu(e, ver) {
 }
 
 function bulkStatusVer(index) {
-  const status = APP.boot.statuses[index];
+  const status = stages()[index];
   const ver = APP.menuVer;
   return bulkApply({ status }, `상태를 "${status}"(으)로 바꿉니다.`, APP.rows.filter((r) => r.ver === ver), `${ver || "버전 없음"} 대학 전부 — `);
 }
@@ -113,7 +154,7 @@ function openVerBulk() {
   const vers = [...new Set(APP.rows.map((r) => r.ver))].sort(natural);
   const countOf = (ver) => {
     const rows = APP.rows.filter((r) => r.ver === ver);
-    const by = APP.boot.statuses.map((st) => `${st} ${rows.filter((r) => r.status === st).length}`).join(" · ");
+    const by = stages().map((st) => `${st} ${rows.filter((r) => r.status === st).length}`).join(" · ");
     return { n: rows.length, by };
   };
   document.getElementById("vbList").innerHTML = vers.map((ver, i) => {
@@ -123,7 +164,7 @@ function openVerBulk() {
       <span class="vb-by">${esc(c.by)}</span></label>`;
   }).join("");
   const sel = document.getElementById("vbStatus");
-  sel.innerHTML = APP.boot.statuses.map((st) => `<option value="${esc(st)}"${st === APP.boot.status_excluded ? " selected" : ""}>${esc(st)}</option>`).join("");
+  sel.innerHTML = stages().map((st) => `<option value="${esc(st)}"${st === APP.boot.status_excluded ? " selected" : ""}>${esc(st)}</option>`).join("");
   renderVerBulkCount();
   document.getElementById("verBulkOverlay").classList.add("open");
 }
@@ -149,17 +190,23 @@ async function applyVerBulk() {
 }
 
 function renderGrid() {
+  writeUrl();
   renderHeads();
   const hideBox = document.getElementById("hideExcluded");
   hideBox.checked = hideExcluded();
   hideBox.disabled = !!(APP.filters.status && APP.filters.status.has(APP.boot.status_excluded));
-  const rows = sortedRows(visibleRows());
+  const rows = visibleRows();
   const body = document.getElementById("gridBody");
   if (!rows.length) {
     body.innerHTML = `<tr><td class="none" colspan="7">${APP.rows.length ? "조건에 맞는 대학이 없어요" : "등록된 대학이 없어요"}</td></tr>`;
     return;
   }
-  const vers = [...new Set(rows.map((r) => r.ver))].sort(natural);
+  // 버전 정렬일 때만 버전으로 묶는다. 다른 열은 묶으면 버전 안에서만 정렬된다.
+  if (APP.sort.key !== "ver") {
+    body.innerHTML = rowsHTML(rows, 0);
+    return;
+  }
+  const vers = [...new Set(rows.map((r) => r.ver))];
   let no = 0;
   body.innerHTML = vers.map((ver) => {
     const group = rows.filter((r) => r.ver === ver);
@@ -174,14 +221,14 @@ function schoolLabel(r) {
 }
 
 function rowsHTML(rows, offset) {
-  return rows.map((r, i) => `<tr class="${STATUS_CLASS[r.status]}" data-school="${r.school_id}">
+  return rows.map((r, i) => `<tr class="${rowClass(r)}" data-school="${r.school_id}">
     <td class="c-no">${offset + i + 1}</td>
     <td class="c-name">${esc(schoolLabel(r))}</td>
     <td class="c-ver">${esc(r.ver)}</td>
     <td class="c-vpn">${r.vpn ? `<span class="vpn" title="${esc(r.vpn)}">${esc(r.vpn)}</span>` : ""}</td>
     <td class="c-status">
       <select onchange="saveCell(${r.school_id}, {status: this.value})">
-        ${APP.boot.statuses.map((st) => `<option${st === r.status ? " selected" : ""}>${esc(st)}</option>`).join("")}
+        ${(r.stages.includes(r.status) ? r.stages : [r.status, ...r.stages]).map((st) => `<option${st === r.status ? " selected" : ""}>${esc(st)}</option>`).join("")}
       </select>
     </td>
     <td class="c-note"><input type="text" value="${esc(r.note)}" maxlength="2000"
@@ -212,18 +259,17 @@ async function saveCells(items) {
     const i = APP.rows.findIndex((r) => r.school_id === row.school_id);
     if (i >= 0) APP.rows[i] = row;
   }
-  const s = currentSheet();
-  const wasComplete = isComplete(s.counts);
-  for (const st of APP.boot.statuses) s.counts[st] = APP.rows.filter((r) => r.status === st).length;
+  const wasComplete = isComplete(currentSheet());
+  syncCurrentSheet(res.sheet);
   renderSheet();
-  if (!wasComplete && isComplete(s.counts)) celebrate(s.title);
+  if (!wasComplete && isComplete(res.sheet)) celebrate(res.sheet.title);
   return true;
 }
 
 /* ---------- 열 머리 메뉴 ---------- */
 
 function columnValues(col) {
-  if (col === "status") return APP.boot.statuses;
+  if (col === "status") return stages();
   return [...new Set(APP.rows.map((r) => r[col]))].sort(natural);
 }
 
@@ -262,7 +308,7 @@ function renderColMenu() {
   }
   if (col === "status") {
     html += `<div class="cm-sep"></div><div class="cm-title">지금 보이는 ${n}곳 일괄 변경</div><div class="cm-bulk">`
-      + APP.boot.statuses.map((st, i) => `<button type="button" class="cm-st ${STATUS_CLASS[st]}" onclick="bulkStatus(${i})">${esc(st)}</button>`).join("")
+      + stages().map((st, i) => `<button type="button" class="cm-st ${statusClass(st)}" onclick="bulkStatus(${i})">${esc(st)}</button>`).join("")
       + `</div>`;
   }
   if (col === "note") {
@@ -279,12 +325,14 @@ function setColFilterAll(checked) {
   afterColFilter();
 }
 
+/* 거르기가 없을 때 누르면 그 값만 남기고, 남은 하나를 다시 누르면 거르기를 푼다. */
 function setColFilterValue(index, checked) {
   const col = APP.menuCol;
   const values = columnValues(col);
-  const picked = new Set(APP.filters[col] || values);
-  if (checked) picked.add(values[index]); else picked.delete(values[index]);
-  APP.filters[col] = picked.size === values.length ? null : picked;
+  const f = APP.filters[col];
+  const picked = f ? new Set(f) : new Set();
+  if (!f || checked) picked.add(values[index]); else picked.delete(values[index]);
+  APP.filters[col] = picked.size === 0 || picked.size === values.length ? null : picked;
   afterColFilter();
 }
 
@@ -295,7 +343,7 @@ function afterColFilter() {
 }
 
 function bulkStatus(index) {
-  const status = APP.boot.statuses[index];
+  const status = stages()[index];
   return bulkApply({ status }, `상태를 "${status}"(으)로 바꿉니다.`);
 }
 
@@ -306,8 +354,12 @@ function bulkNote() {
 
 async function bulkApply(patch, what, rows, scope) {
   rows = rows || visibleRows();
+  // 그 단계를 고를 수 없는 대학(개발·운영 서버가 없는 곳)은 뺀다
+  const all = rows.length;
+  if (patch.status) rows = rows.filter((r) => r.stages.includes(patch.status));
   if (!rows.length) { showToast("바꿀 대학이 없어요"); return; }
-  if (!confirm(`${scope || "지금 보이는 "}${rows.length}곳의 ${what}\n계속할까요?`)) return;
+  const skipped = all > rows.length ? `\n(${all - rows.length}곳은 이 단계가 없어 뺍니다)` : "";
+  if (!confirm(`${scope || "지금 보이는 "}${rows.length}곳의 ${what}${skipped}\n계속할까요?`)) return;
   closeColMenu();
   if (await saveCells(rows.map((r) => ({ school_id: r.school_id, ...patch })))) {
     showToast(`${rows.length}곳을 바꿨습니다`);

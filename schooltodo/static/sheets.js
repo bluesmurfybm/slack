@@ -7,12 +7,11 @@ function renderTabs() {
   const cur = currentSheet();
   const shown = activeSheets().concat(cur && isArchived(cur) ? [cur] : []);
   const tab = (s) => {
-    const p = progressOf(s.counts);
-    const complete = p.target > 0 && p.done === p.target;
+    const complete = isComplete(s);
     const on = s.id === APP.sheetId;
     const archived = isArchived(s);
     return `<div class="tab${on ? " on" : ""}${complete ? " complete" : ""}${archived ? " archived" : ""}" data-sheet="${s.id}">
-      <button type="button" class="tab-main" onclick="selectSheet(${s.id})">${archived ? "📦 " : ""}${esc(s.title)} <span class="n">${p.done}/${p.target}</span></button>
+      <button type="button" class="tab-main" onclick="selectSheet(${s.id})">${archived ? "📦 " : ""}${esc(s.title)} <span class="n">${s.done}/${s.target}</span></button>
       <button type="button" class="tab-more" onclick="openTabMenu(event, ${s.id})" aria-label="${esc(s.title)} 메뉴" title="메뉴">⋮</button>
     </div>`;
   };
@@ -30,7 +29,7 @@ function renderTabs() {
   document.getElementById("csvBtn").style.display = has && APP.sheetId ? "" : "none";
 }
 
-async function selectSheet(id) {
+async function selectSheet(id, fromUrl) {
   APP.sheetId = id;
   APP.filters = { ver: null, status: null };
   closeColMenu();
@@ -38,10 +37,11 @@ async function selectSheet(id) {
   closeArchive();
   closeHistory();
   document.getElementById("q").value = "";
-  history.replaceState(null, "", "?sheet=" + id);
+  if (fromUrl) readUrl();
+  writeUrl();
   renderTabs();
   try {
-    const detail = await api(`/sheets/${id}`);
+    const detail = await api(sheetPath(id));
     if (APP.sheetId !== id) return;
     APP.rows = detail.rows;
     syncCurrentSheet(detail);
@@ -72,12 +72,11 @@ function renderSheet() {
   note.style.display = isArchived(s) ? "" : "none";
   if (isArchived(s)) note.querySelector(".an-sub").textContent = `${s.archived_at.slice(0, 16)} 에 보관한 할일입니다. 보관한 채로 보고 고칠 수 있습니다.`;
 
-  const p = progressOf(s.counts);
-  const pct = p.target ? Math.round((p.done / p.target) * 100) : 0;
+  const pct = percentOf(s);
   document.getElementById("progressBar").style.width = pct + "%";
   const excluded = s.counts[APP.boot.status_excluded];
   document.getElementById("progressText").textContent =
-    `${APP.boot.status_done} ${p.done} / 대상 ${p.target} (${pct}%)` + (excluded ? ` · 해당없음 ${excluded}` : "");
+    `완료 ${s.done} / 대상 ${s.target} (${pct}%)` + (excluded ? ` · 해당없음 ${excluded}` : "");
 
   renderStatusFilter();
   renderGrid();
@@ -155,13 +154,11 @@ function renderArchive() {
     return;
   }
   el.innerHTML = list.map((s) => {
-    const p = progressOf(s.counts);
-    const pct = p.target ? Math.round((p.done / p.target) * 100) : 0;
     // 줄 어디를 눌러도 보관한 채로 그대로 본다(꺼내지 않는다). 단추 클릭은 줄 클릭으로 번지지 않게 막는다.
     return `<div class="arc-row${s.id === APP.sheetId ? " on" : ""}" onclick="selectSheet(${s.id})" title="보관한 채로 보기">
       <div class="arc-main">
         <button type="button" class="arc-title">${esc(s.title)}</button>
-        <div class="arc-sub">${esc(APP.boot.status_done)} ${p.done} / 대상 ${p.target} (${pct}%) · ${esc(s.archived_at.slice(0, 16))} 보관</div>
+        <div class="arc-sub">완료 ${s.done} / 대상 ${s.target} (${percentOf(s)}%) ·${esc(s.archived_at.slice(0, 16))} 보관</div>
       </div>
       <div class="arc-act" onclick="event.stopPropagation()">
         <button type="button" class="btn-mini primary" onclick="selectSheet(${s.id})">보기</button>
@@ -181,6 +178,9 @@ function openSheetForm(id) {
   document.getElementById("sheetFormTitle").textContent = s ? "이름·설명 수정" : "새 할일";
   document.getElementById("f-title").value = s ? s.title : "";
   document.getElementById("f-desc").value = s ? s.description : "";
+  const fixed = APP.boot.stages_fixed;
+  APP.formStages = (s ? s.stages.slice(1, -1) : fixed).map((name) => ({ name, was: s ? name : null, fixed: fixed.includes(name) }));
+  renderStageForm();
   document.getElementById("sheetOverlay").classList.add("open");
   document.getElementById("f-title").focus();
 }
@@ -188,19 +188,51 @@ function closeSheetForm() {
   document.getElementById("sheetOverlay").classList.remove("open");
 }
 
+/* 기본 단계는 이름·순서를 바꿀 수 없고, 추가한 단계는 어디로든 옮기거나 지울 수 있다 */
+function renderStageForm() {
+  const last = APP.formStages.length - 1;
+  document.getElementById("f-stages").innerHTML = APP.formStages.map((st, i) => `<div class="stage-row${st.fixed ? " fixed" : ""}">
+    <input type="text" maxlength="20" value="${esc(st.name)}" ${st.fixed ? "readonly" : ""}
+      oninput="APP.formStages[${i}].name = this.value" placeholder="단계 이름">
+    ${st.fixed ? "" : `<button type="button" class="btn-mini" onclick="moveStage(${i}, -1)" ${i ? "" : "disabled"} aria-label="위로">↑</button>
+    <button type="button" class="btn-mini" onclick="moveStage(${i}, 1)" ${i < last ? "" : "disabled"} aria-label="아래로">↓</button>
+    <button type="button" class="btn-mini danger" onclick="removeStage(${i})" aria-label="지우기">×</button>`}
+  </div>`).join("");
+}
+function addStage() {
+  APP.formStages.push({ name: "", was: null, fixed: false });
+  renderStageForm();
+  document.querySelector("#f-stages .stage-row:last-child input").focus();
+}
+function moveStage(i, d) {
+  const list = APP.formStages;
+  [list[i], list[i + d]] = [list[i + d], list[i]];
+  renderStageForm();
+}
+function removeStage(i) {
+  APP.formStages.splice(i, 1);
+  renderStageForm();
+}
+
 async function submitSheetForm() {
+  const id = APP.editingSheetId;
   const body = {
     title: document.getElementById("f-title").value.trim(),
     description: document.getElementById("f-desc").value.trim(),
+    stages: APP.formStages.map((st) => st.name.trim()),
   };
   if (!body.title) { showToast("이름을 입력해 주세요"); return; }
+  if (id) {
+    body.renames = Object.fromEntries(APP.formStages
+      .filter((st) => st.was && !st.fixed && st.was !== st.name.trim())
+      .map((st) => [st.was, st.name.trim()]));
+  }
   try {
-    const id = APP.editingSheetId;
     const detail = id ? await sendJSON("PUT", `/sheets/${id}`, body) : await sendJSON("POST", "/sheets", body);
     syncCurrentSheet(detail);
     closeSheetForm();
     if (!id) await selectSheet(detail.id);
-    else if (id === APP.sheetId) renderSheet();
+    else if (id === APP.sheetId) await reloadRows();
     else renderTabs();
     if (document.getElementById("archiveOverlay").classList.contains("open")) renderArchive();
   } catch (e) {

@@ -8,9 +8,10 @@ $bootJson = json_encode([
     'me' => ['email' => $me['email'], 'name' => $me['name']],
     'statuses' => SCHOOLTODO_STATUSES,
     'status_todo' => SCHOOLTODO_STATUS_TODO,
-    'status_done' => SCHOOLTODO_STATUS_OPS,
+    'stages_fixed' => SCHOOLTODO_STAGES_DEFAULT,
     'status_excluded' => SCHOOLTODO_STATUS_EXCLUDED,
     'history_max' => SCHOOLTODO_HISTORY_MAX,
+    'sorts' => SCHOOLTODO_SORTS,
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
 ?>
 <!DOCTYPE html>
@@ -153,6 +154,11 @@ $bootJson = json_encode([
         <div class="field">
           <label for="f-desc">설명</label>
           <textarea id="f-desc" maxlength="2000" placeholder="무엇을 해야 끝인지, 참고 링크 등"></textarea>
+        </div>
+        <div class="field">
+          <label>단계 <span class="hint">미조치 → … → 해당없음</span></label>
+          <div class="stage-list" id="f-stages"></div>
+          <button type="button" class="btn-mini" onclick="addStage()">+ 단계 추가</button>
         </div>
       </div>
       <div class="sheet-foot">

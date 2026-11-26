@@ -252,6 +252,7 @@ div.tab{padding:0 0 0 14px}
 .cm-st.st-dev,.hist-st.st-dev{background:var(--dev95);color:var(--dev40)}
 .cm-st.st-done,.hist-st.st-done{background:var(--posi95);color:var(--posi40)}
 .cm-st.st-excluded,.hist-st.st-excluded{background:var(--gray95);color:var(--tx-quaternary)}
+.cm-st.st-custom,.hist-st.st-custom{background:var(--xl95);color:var(--xl40)}
 .cm-bulk input{
   flex:1;min-width:0;font-family:var(--sans);font-size:13px;height:30px;padding:0 8px;
   border:1px solid var(--bo-tertiary);border-radius:var(--r6);
@@ -318,6 +319,8 @@ div.tab{padding:0 0 0 14px}
 .grid tr.st-excluded td.c-status{background:var(--gray95)}
 .grid tr.st-excluded td.c-status select{color:var(--tx-quaternary)}
 .grid tr.st-excluded .c-name{color:var(--tx-quinary);font-weight:500}
+.grid tr.st-custom td.c-status{background:var(--xl95)}
+.grid tr.st-custom td.c-status select{color:var(--xl40)}
 
 /* ---------- 겹창 ---------- */
 .overlay{
@@ -339,6 +342,12 @@ div.tab{padding:0 0 0 14px}
 .sheet-foot{padding:16px 24px 22px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--bo-primary)}
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-size:12.5px;font-weight:600;color:var(--tx-tertiary)}
+.field label .hint{font-weight:400;color:var(--tx-quaternary);margin-left:4px}
+.stage-list{display:flex;flex-direction:column;gap:6px}
+.stage-row{display:flex;gap:6px;align-items:center}
+.sheet-body .stage-row input{flex:1;padding:6px 10px;font-size:13px}
+.sheet-body .stage-row.fixed input{background:var(--bg-subtle);color:var(--tx-tertiary)}
+.field > .btn-mini{align-self:flex-start}
 .sheet-body input,.sheet-body textarea{
   width:100%;font-family:var(--sans);font-size:14px;padding:10px 12px;
   border:1px solid var(--bo-tertiary);border-radius:var(--r8);background:var(--bg-card);color:var(--tx-primary);

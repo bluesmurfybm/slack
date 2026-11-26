@@ -101,15 +101,3 @@ function schooltodo_want_text($value, $label, $max) {
     }
     return $text;
 }
-
-/**
- * @param mixed $value
- * @param string $label
- * @return string
- */
-function schooltodo_want_status($value, $label) {
-    if (!is_string($value) || !in_array($value, SCHOOLTODO_STATUSES, true)) {
-        throw new SchooltodoError("{$label} 은(는) " . implode(', ', SCHOOLTODO_STATUSES) . ' 중 하나여야 합니다', 422);
-    }
-    return $value;
-}
