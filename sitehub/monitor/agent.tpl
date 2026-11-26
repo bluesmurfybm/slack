@@ -1,6 +1,6 @@
 <?php
 /**
- * blumo-agent.php  v1.0  —  BLUMO 사이트 에이전트 (CodeIgniter 3 / XpressEngine·Rhymix 공용)
+ * blumo-agent.php  v1.1  —  BLUMO 사이트 에이전트 (CodeIgniter 3 / XpressEngine·Rhymix 공용)
  * (주)블루소프트
  *
  * 설치 : 사이트 최상위(index.php 와 같은 위치)에 업로드
@@ -12,7 +12,11 @@
  *    설정 파일만 "파싱"해서 DB에 직접 붙는다.
  *  - 어떤 경우에도 HTTP 200 + JSON 으로 응답한다. (HTTP 코드는 외부 프로브가 따로 본다)
  *  - 자격증명·절대경로 등 민감정보는 출력하지 않는다.
+ *  - 폴더 용량(usage)은 하루 한 번만 새로 잰다. 파일이 많으면 한 번 호출에 usage_budget_s 초까지만 훑고
+ *    다음 호출에서 이어 간다(진행 상태는 쓰기 가능한 폴더의 .blumo_usage.php). 그동안은 직전 결과를 돌려준다.
  */
+
+define('H_AGENT_VER', '1.1');
 
 /* ======================= 설정 ======================= */
 $CFG = array(
@@ -34,6 +38,12 @@ $CFG = array(
     'db_timeout'    => 5,
     // DB 설정 파일을 직접 지정 (CI3·XE 가 아닌 사이트). 이 파일 기준 상대경로 가능. 예: 'config/config.php'
     'db_config'     => '',
+    // 사이트 폴더 용량을 다시 재는 간격 (시간)
+    'usage_every_h' => 24,
+    // 용량을 잴 때 한 번 호출에 쓰는 최대 시간 (초). BLUMO 에이전트 대기 한도(기본 20초) 안에 끝나야 한다
+    'usage_budget_s' => 8,
+    // 업로드 폴더 (사이트 최상위 기준). 비우면 uploads · files · data 중 있는 것
+    'upload_dirs'   => array(),
 );
 /* ==================================================== */
 
@@ -75,6 +85,7 @@ $checks['filesystem'] = h_check_fs($root, $cms, $CFG);
 $checks['session']    = h_check_session();
 $checks['database']   = h_check_db($cms, $CFG);
 $checks['errorlog']   = h_check_errorlog($root, $cms, $CFG);
+$checks['usage']      = h_check_usage($root, $cms, $CFG);
 
 h_output($cms, $checks, $H_T0, 'full');
 
@@ -421,9 +432,7 @@ function h_check_php() {
     );
 }
 
-function h_check_fs($root, $cms, $CFG) {
-    $r = array('status' => 'ok');
-
+function h_fs_candidates($root, $cms) {
     $cands = array();
     if ($cms['type'] === 'ci3' && $cms['config']) {
         $app = dirname(dirname($cms['config']));
@@ -434,14 +443,23 @@ function h_check_fs($root, $cms, $CFG) {
         $cands[] = $root . '/files';
     }
     $cands[] = $root;
+    return $cands;
+}
 
-    $dir = null;
-    foreach ($cands as $d) { if (is_dir($d) && is_writable($d)) { $dir = $d; break; } }
+function h_writable_dir($root, $cms) {
+    foreach (h_fs_candidates($root, $cms) as $d) { if (is_dir($d) && is_writable($d)) return $d; }
+    return null;
+}
+
+function h_check_fs($root, $cms, $CFG) {
+    $r = array('status' => 'ok');
+
+    $dir = h_writable_dir($root, $cms);
 
     if ($dir === null) {
         $r['status'] = 'fail';
         $r['error']  = 'no writable directory';
-        $r['tried']  = count($cands);
+        $r['tried']  = count(h_fs_candidates($root, $cms));
         return $r;
     }
 
@@ -479,6 +497,112 @@ function h_check_fs($root, $cms, $CFG) {
         $r['error']  = 'slow disk I/O';
     }
     return $r;
+}
+
+/* ---------- 폴더 용량 ---------- */
+function h_check_usage($root, $cms, $CFG) {
+    $r = array('status' => 'ok');
+    $uploads = h_upload_dirs($root, $CFG);
+    $r['upload_dirs'] = $uploads;
+
+    $dir = h_writable_dir($root, $cms);
+    if ($dir === null) { $r['error'] = 'no writable directory'; return $r; }
+    // .php 로 두고 첫 줄에서 exit — 웹에서 열어도 진행 상태(상대경로 목록)가 보이지 않는다
+    $fp = @fopen($dir . '/.blumo_usage.php', 'c+');
+    if (!$fp) { $r['error'] = 'state file not writable'; return $r; }
+
+    // 다른 요청이 재는 중이면 기다리지 않고 직전 결과만 돌려준다
+    $locked = @flock($fp, LOCK_EX | LOCK_NB);
+    $st = h_usage_load($fp);
+    if ($locked) {
+        $due = !$st['result'] || $st['result']['measured_at'] < time() - $CFG['usage_every_h'] * 3600;
+        if ($st['scan'] || $due) {
+            if (!$st['scan']) {
+                $st['scan'] = array('started' => time(), 'bytes' => 0, 'upload_bytes' => 0, 'files' => 0, 'skipped' => 0, 'calls' => 0, 'stack' => array(''));
+            }
+            $done = h_usage_walk($root, $uploads, $st['scan'], $CFG['usage_budget_s']);
+            $st['scan']['calls']++;
+            if ($done) {
+                $s = $st['scan'];
+                $st['result'] = array('bytes' => $s['bytes'], 'upload_bytes' => $s['upload_bytes'], 'files' => $s['files'],
+                                      'skipped' => $s['skipped'], 'calls' => $s['calls'], 'measured_at' => time());
+                $st['scan'] = null;
+            }
+            h_usage_save($fp, $st);
+        }
+        @flock($fp, LOCK_UN);
+    }
+    fclose($fp);
+
+    if ($st['result']) {
+        $res = $st['result'];
+        $r['site_mb']     = round($res['bytes'] / 1048576, 1);
+        $r['upload_mb']   = round($res['upload_bytes'] / 1048576, 1);
+        $r['files']       = (int)$res['files'];
+        $r['measured_at'] = date('c', $res['measured_at']);
+        if ($res['skipped'] > 0) $r['skipped_dirs'] = (int)$res['skipped'];   // 권한이 없어 못 연 폴더 — 실제보다 작게 잰다
+    } else {
+        $r['note'] = 'first measurement in progress';
+    }
+    if ($st['scan']) {
+        $r['scanning']   = true;
+        $r['scan_files'] = (int)$st['scan']['files'];
+    }
+    return $r;
+}
+
+function h_upload_dirs($root, $CFG) {
+    $names = $CFG['upload_dirs'] ? $CFG['upload_dirs'] : array('uploads', 'files', 'data');
+    $out = array();
+    foreach ($names as $n) {
+        $n = trim(str_replace('\\', '/', (string)$n), '/');
+        if ($n !== '' && strpos($n, '..') === false && is_dir($root . '/' . $n)) $out[] = $n;
+    }
+    return $out;
+}
+
+/** 깊이 우선으로 훑는다. 예산 시간을 넘기면 false — $s['stack'] 에 남은 폴더부터 다음 호출이 잇는다 */
+function h_usage_walk($root, $uploads, &$s, $budget) {
+    $t0 = microtime(true);
+    while ($s['stack']) {
+        $rel = array_pop($s['stack']);
+        $abs = $rel === '' ? $root : $root . '/' . $rel;
+        $inUpload = false;
+        foreach ($uploads as $u) { if ($rel === $u || strpos($rel, $u . '/') === 0) { $inUpload = true; break; } }
+        $dh = @opendir($abs);
+        if (!$dh) { $s['skipped']++; continue; }
+        while (($e = readdir($dh)) !== false) {
+            if ($e === '.' || $e === '..') continue;
+            $p = $abs . '/' . $e;
+            if (is_link($p)) continue;   // 링크는 따라가지 않는다 — 다른 폴더를 두 번 세거나 순환한다
+            if (is_dir($p)) { $s['stack'][] = $rel === '' ? $e : $rel . '/' . $e; continue; }
+            $sz = @filesize($p);
+            if ($sz === false) continue;
+            $s['bytes'] += $sz;
+            $s['files']++;
+            if ($inUpload) $s['upload_bytes'] += $sz;
+        }
+        closedir($dh);
+        if (microtime(true) - $t0 > $budget) return !$s['stack'];
+    }
+    return true;
+}
+
+function h_usage_load($fp) {
+    rewind($fp);
+    $raw = stream_get_contents($fp);
+    $p = strpos((string)$raw, "\n");
+    $j = $p === false ? null : json_decode(substr($raw, $p + 1), true);
+    if (!is_array($j)) $j = array();
+    return array('result' => isset($j['result']) && is_array($j['result']) ? $j['result'] : null,
+                 'scan'   => isset($j['scan']) && is_array($j['scan']) ? $j['scan'] : null);
+}
+
+function h_usage_save($fp, $st) {
+    rewind($fp);
+    ftruncate($fp, 0);
+    fwrite($fp, "<?php exit; ?>\n" . json_encode($st));
+    fflush($fp);
 }
 
 function h_check_session() {
@@ -805,6 +929,7 @@ function h_output($cms, $checks, $t0, $mode) {
         'ok'      => ($status !== 'fail'),
         'status'  => $status,
         'mode'    => $mode,
+        'agent'   => H_AGENT_VER,
         'cms'     => $cms['type'],
         'cms_ver' => $cms['version'],
         'fails'   => $fails,

@@ -60,4 +60,4 @@ include __DIR__ . '/views/head.php';
     </div>
     <div id="list"><ul class="list"><li class="empty">불러오는 중…</li></ul></div>
   </main>
-<?php $scripts = ['core', 'list', 'drawer', 'form', 'procs', 'sync', 'monitor']; include __DIR__ . '/views/foot.php'; ?>
+<?php $scripts = ['core', 'list', 'drawer', 'form', 'procs', 'sync', 'monitor', 'report', 'bill']; include __DIR__ . '/views/foot.php'; ?>

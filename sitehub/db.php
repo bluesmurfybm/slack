@@ -10,6 +10,8 @@
  *    - lab_site_monitors   BLUMO 감시 주소 N건 (monitor=1 인 사이트의 것을 monitor_run.php 가 점검) — monitor_*.php
  *    - lab_monitor_state / _checks / _incidents   감시 상태(목록의 초록/빨강 원) · 점검 기록 · 확정된 장애
  *    - lab_history         Slack 리스트 'BlueLab-유지보수처리목록' 동기화 결과 (site_id 로 매칭, NULL 이면 미매칭)
+ *    - lab_report_templates / lab_reports   유지보수 내역서 양식(.hwpx, 사이트당 하나)과 만든 내역서 — report_lib.php
+ *    - lab_bill_settings / lab_bills        대금청구서 사이트별 채우기 규칙과 만든 청구서 (양식은 공통 templates/bill.xlsx) — bill_lib.php
  *    - lab_sync_meta       동기화 워터마크
  *  FK 는 걸지 않고 site_id + JOIN 으로 다룬다(저장소 관례). 계약 상태는 저장하지 않고 종료일로 파생한다.
  *
@@ -184,6 +186,7 @@ function sitehub_schema() {
                 'slow_ms'    => "INT NULL COMMENT '느림 기준 ms (NULL=BLUMO 기본값)'",
                 'timeout'    => "INT NULL COMMENT '대기 한도 초 (NULL=BLUMO 기본값)'",
                 'min_size'   => "INT NULL COMMENT '최소 응답 크기 bytes (NULL=BLUMO 기본값)'",
+                'disk_quota_mb' => "INT NULL COMMENT '호스팅 용량 한도 MB — 에이전트가 잰 사이트 폴더 용량을 이것과 비교해 알린다 (NULL=용량 알림 없음)'",
                 'note'       => "TEXT NULL COMMENT '메모'",
                 'enabled'    => "TINYINT(1) NOT NULL DEFAULT 1 COMMENT '0=자동 점검 멈춤 (사이트 감시는 켠 채 이 주소만 잠깐 뺄 때)'",
                 'mute_until' => "DATETIME NULL COMMENT '이 시각까지 알림 무음 — 점검·기록은 계속'",
@@ -209,6 +212,7 @@ function sitehub_schema() {
                 'code'       => "INT NULL COMMENT 'HTTP 상태 코드'",
                 'total_ms'   => "INT NULL COMMENT '응답 시간 ms'",
                 'cert_days'  => "INT NULL COMMENT 'SSL 인증서 남은 날'",
+                'disk_level' => "VARCHAR(10) NOT NULL DEFAULT '' COMMENT '용량 단계 — 빈값=정상 · warn=경고 비율 넘음 · over=한도 넘음. 단계가 오를 때만 알린다 (blumo_usage)'",
                 'checked_at' => "DATETIME NULL COMMENT '마지막 점검 시각'",
                 'updated_at' => "DATETIME NULL COMMENT '이 행을 바꾼 시각'",
             ],
@@ -235,6 +239,22 @@ function sitehub_schema() {
                 'snippet'    => "TEXT NULL COMMENT '오류 당시 화면 앞부분 (정상이면 NULL)'",
             ],
             'keys' => ['PRIMARY KEY (`id`)', 'KEY `ix_monitor_at` (`monitor_id`, `at`)', 'KEY `ix_at` (`at`)'],
+        ],
+        'lab_monitor_usage' => [
+            'comment' => '감시 주소별 사이트 폴더 용량 — 하루 한 행(그날 마지막 값). 에이전트 v1.1 이상이 잰 값. 추이 그래프용, 2년 지나면 지운다',
+            'cols' => [
+                'monitor_id'  => "INT UNSIGNED NOT NULL COMMENT 'lab_site_monitors.id'",
+                'day'         => "DATE NOT NULL COMMENT '날짜'",
+                'site_id'     => "INT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'lab_sites.id'",
+                'site_mb'     => "DECIMAL(12,1) NOT NULL DEFAULT 0 COMMENT '사이트 폴더(에이전트가 있는 폴더) 전체 MB'",
+                'upload_mb'   => "DECIMAL(12,1) NOT NULL DEFAULT 0 COMMENT '업로드 폴더(uploads·files·data) MB'",
+                'files'       => "INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '파일 수'",
+                'free_mb'     => "BIGINT NULL COMMENT '디스크 여유 MB (서버 디스크 전체 기준 — 계정 한도가 아님)'",
+                'used_pct'    => "DECIMAL(5,1) NULL COMMENT '디스크 사용률 % (서버 디스크 전체 기준)'",
+                'measured_at' => "DATETIME NULL COMMENT '에이전트가 용량을 잰 시각'",
+                'updated_at'  => "DATETIME NOT NULL COMMENT '이 행을 바꾼 점검 시각'",
+            ],
+            'keys' => ['PRIMARY KEY (`monitor_id`, `day`)', 'KEY `ix_site` (`site_id`)'],
         ],
         'lab_monitor_incidents' => [
             'comment' => '확정된 장애 — 시작·복구. 점검 기록을 지워도 이건 남긴다',
@@ -340,6 +360,70 @@ function sitehub_schema() {
             ],
             'keys' => ['PRIMARY KEY (`id`)', 'KEY `ix_site_at` (`site_id`, `at`)'],
         ],
+        'lab_report_templates' => [
+            'comment' => '유지보수 내역서 양식 — 사이트당 하나. 고객사에 내던 한글(.hwpx) 내역서를 올려 두고 기간을 채워 만든다 (report_lib.php)',
+            'cols' => [
+                'site_id'    => "INT UNSIGNED NOT NULL COMMENT 'lab_sites.id'",
+                'file_name'  => "VARCHAR(255) NOT NULL DEFAULT '' COMMENT '올린 파일 이름'",
+                'file_path'  => "VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'var/sitehub/reports/tpl/ 안의 저장 이름'",
+                'file_size'  => "INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '파일 크기 bytes'",
+                'analysis'   => "MEDIUMTEXT NULL COMMENT '양식에서 찾은 것 JSON — 제목·표 칸 수·견본 행·이름표 값'",
+                'settings'   => "MEDIUMTEXT NULL COMMENT '채우기 규칙 JSON — 정기 점검 요일·문구·결과, 월 정기점검 문구, 이력 상태·기준일, 점검자 등'",
+                'created_at' => "DATETIME NOT NULL COMMENT '처음 올린 시각'",
+                'updated_at' => "DATETIME NULL COMMENT '마지막으로 올리거나 규칙을 바꾼 시각'",
+                'updated_by' => "VARCHAR(200) NULL COMMENT '마지막 수정자 portal_users.email'",
+            ],
+            'keys' => ['PRIMARY KEY (`site_id`)'],
+        ],
+        'lab_reports' => [
+            'comment' => '만든 유지보수 내역서 — 기간·행·파일. 다시 받거나 불러와 고쳐 만들 수 있다',
+            'cols' => [
+                'id'           => "INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '내역서 id'",
+                'site_id'      => "INT UNSIGNED NOT NULL COMMENT 'lab_sites.id'",
+                'period_from'  => "DATE NOT NULL COMMENT '기간 시작'",
+                'period_to'    => "DATE NOT NULL COMMENT '기간 끝'",
+                'report_date'  => "DATE NULL COMMENT '내역서의 일자 칸'",
+                'title'        => "VARCHAR(300) NOT NULL DEFAULT '' COMMENT '채운 제목'",
+                'items'        => "MEDIUMTEXT NULL COMMENT '내용 행 JSON [{date, lines[], result}]'",
+                'fields'       => "TEXT NULL COMMENT '머리 칸 JSON {target, inspector, remark}'",
+                'row_count'    => "INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '내용 행 수'",
+                'file_name'    => "VARCHAR(255) NOT NULL DEFAULT '' COMMENT '내려받을 파일 이름'",
+                'file_path'    => "VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'var/sitehub/reports/out/ 안의 저장 이름'",
+                'created_at'   => "DATETIME NOT NULL COMMENT '만든 시각'",
+                'created_by'   => "VARCHAR(200) NOT NULL DEFAULT '' COMMENT '만든 사람 portal_users.email'",
+                'created_name' => "VARCHAR(100) NOT NULL DEFAULT '' COMMENT '만든 사람 이름 (그때 이름)'",
+            ],
+            'keys' => ['PRIMARY KEY (`id`)', 'KEY `ix_site` (`site_id`, `period_to`)'],
+        ],
+        'lab_bill_settings' => [
+            'comment' => '대금청구서 사이트별 채우기 규칙 — 수신·참조·건명/품명 틀·월 단가·담당자 등. 양식은 모든 사이트 공통(templates/bill.xlsx, bill_lib.php)',
+            'cols' => [
+                'site_id'    => "INT UNSIGNED NOT NULL COMMENT 'lab_sites.id'",
+                'settings'   => "MEDIUMTEXT NULL COMMENT '채우기 규칙 JSON — recipient, ref, org, subject, item, spec, unit, manager, price(월 단가, 0=계약에서), q_start, day_blank, rounding, font'",
+                'updated_at' => "DATETIME NULL COMMENT '마지막으로 규칙을 바꾼 시각'",
+                'updated_by' => "VARCHAR(200) NULL COMMENT '마지막 수정자 portal_users.email'",
+            ],
+            'keys' => ['PRIMARY KEY (`site_id`)'],
+        ],
+        'lab_bills' => [
+            'comment' => '만든 대금청구서 — 기간·채운 값·합계·파일. 다시 받거나 불러와 고쳐 만들 수 있다',
+            'cols' => [
+                'id'           => "INT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '청구서 id'",
+                'site_id'      => "INT UNSIGNED NOT NULL COMMENT 'lab_sites.id'",
+                'period_from'  => "DATE NOT NULL COMMENT '청구 기간 시작'",
+                'period_to'    => "DATE NOT NULL COMMENT '청구 기간 끝'",
+                'bill_date'    => "DATE NULL COMMENT '청구 날짜 (일을 비우는 설정이면 연·월만 쓴다)'",
+                'subject'      => "VARCHAR(300) NOT NULL DEFAULT '' COMMENT '건명'",
+                'data'         => "MEDIUMTEXT NULL COMMENT '채운 값 JSON {recipient, ref, subject, manager, items[{name, spec, unit, qty, price}], bill_date, day_blank}'",
+                'total'        => "BIGINT NOT NULL DEFAULT 0 COMMENT '합계 (원, VAT 포함)'",
+                'file_name'    => "VARCHAR(255) NOT NULL DEFAULT '' COMMENT '내려받을 파일 이름'",
+                'file_path'    => "VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'var/sitehub/reports/bill/ 안의 저장 이름'",
+                'created_at'   => "DATETIME NOT NULL COMMENT '만든 시각'",
+                'created_by'   => "VARCHAR(200) NOT NULL DEFAULT '' COMMENT '만든 사람 portal_users.email'",
+                'created_name' => "VARCHAR(100) NOT NULL DEFAULT '' COMMENT '만든 사람 이름 (그때 이름)'",
+            ],
+            'keys' => ['PRIMARY KEY (`id`)', 'KEY `ix_site` (`site_id`, `period_to`)'],
+        ],
         'lab_sync_meta' => [
             'comment' => 'sitehub 동기화 워터마크 — updated_max_<listId>, last_sync_at, schema_comments',
             'cols' => [
@@ -393,6 +477,8 @@ function sitehub_migrate(PDO $pdo) {
         }
         $pdo->exec("INSERT INTO lab_sync_meta (k, v) VALUES ('audit_seed', '1') ON DUPLICATE KEY UPDATE v = '1'");
     }
+    add_column_if_missing($pdo, "ALTER TABLE lab_site_monitors ADD COLUMN `disk_quota_mb` {$schema['lab_site_monitors']['cols']['disk_quota_mb']} AFTER `min_size`");
+    add_column_if_missing($pdo, "ALTER TABLE lab_monitor_state ADD COLUMN `disk_level` {$schema['lab_monitor_state']['cols']['disk_level']} AFTER `cert_days`");
     foreach (['parent_id', 'priority', 'channel', 'paid', 'remark', 'req_at'] as $c) {
         add_column_if_missing($pdo, "ALTER TABLE lab_history ADD COLUMN `{$c}` {$schema['lab_history']['cols'][$c]}");
     }
@@ -624,6 +710,8 @@ function sitehub_sub_fields($table = null) {
             ['key' => 'slow_ms',    'label' => '느림 기준(ms)',  'type' => 'number', 'hint' => '비우면 BLUMO 기본값'],
             ['key' => 'timeout',    'label' => '대기 한도(초)',  'type' => 'number', 'hint' => '비우면 BLUMO 기본값'],
             ['key' => 'min_size',   'label' => '최소 응답 크기(bytes)', 'type' => 'number', 'hint' => '이보다 작으면 백지로 본다. 비우면 기본값'],
+            ['key' => 'disk_quota_mb', 'label' => '용량 한도(MB)', 'type' => 'number',
+             'hint' => '호스팅 계약 용량 — 10GB 면 10240. 에이전트(v1.1 이상)가 잰 사이트 폴더 용량이 이 값의 경고 비율(BLUMO 설정)을 넘으면 알린다. 비우면 용량 알림 없음'],
             ['key' => 'note',       'label' => '메모',           'type' => 'area'],
         ]],
     ];

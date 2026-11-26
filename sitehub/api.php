@@ -40,10 +40,26 @@
  *   ── 지정 계정만 (sitehub_can_stats) ──
  *   GET  ?blumo=1 · POST {action:blumo_import, items:[{blumo_id, site_id}]} → 예전 BLUMO 31곳을 감시 주소로
  *   POST {action:monitor_settings_save, …} / monitor_pause {on} / monitor_test_webhook / monitor_doctor
+ *   ── 유지보수 내역서 (report_lib.php) ──
+ *   GET  ?report=<site_id>           → 양식(찾은 것·채우기 규칙) + 만든 내역서 목록 + 양식이 있는 다른 사이트
+ *   GET  ?report_tpl_file=<site_id>  → 올린 양식 내려받기 / ?report_file=<id>[&fmt=pdf] → 만든 내역서(.hwpx · .pdf) / ?report_detail=<id> → 그 내역서의 행
+ *   POST multipart {action:report_tpl_upload, site_id, file}   → 양식(.hwpx) 올리기·바꾸기 (표를 읽어 규칙을 뽑는다)
+ *   POST {action:report_settings, site_id, settings} / report_tpl_delete {site_id} / report_tpl_copy {site_id, from}
+ *   POST {action:report_holidays, text}   → 추가 휴일·임시공휴일 (모든 사이트 공통, lab_sync_meta.report_holidays)
+ *   POST {action:report_preview, site_id, from, to, settings?} → 기간의 정기 점검 줄 + Slack 이력 (저장 안 함)
+ *   POST {action:report_build, site_id, from, to, report_date, target, inspector, remark, file_name, rows} → 파일 만들고 기록 / report_delete {id}
+ *   ── 대금청구서 (bill_lib.php, 양식은 공통 templates/bill.xlsx) ──
+ *   GET  ?bill=<site_id>          → 공통 양식에서 찾은 것 + 이 사이트 채우기 규칙 + 만든 청구서 목록 + 최근 내역서 기간
+ *   GET  ?bill_tpl_file=1         → 공통 양식 내려받기 / ?bill_file=<id>[&fmt=pdf] → 만든 청구서(.xlsx · .pdf) / ?bill_detail=<id> → 그 청구서의 값
+ *   POST {action:bill_settings, site_id, settings} → 채우기 규칙 저장
+ *   POST {action:bill_preview, site_id, from, to}  → 기간의 수신·건명·품목·금액(계약 탭에서) (저장 안 함)
+ *   POST {action:bill_build, site_id, from, to, recipient, ref, subject, manager, items, bill_date, day_blank, file_name} → 파일 만들고 기록 / bill_delete {id}
  * 쓰기 응답에는 바뀐 사이트 한 건(site)을 실어 보내서 화면이 전체를 다시 안 받아도 되게 한다.
  */
 require_once __DIR__ . '/guard.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/report_lib.php';
+require_once __DIR__ . '/bill_lib.php';
 
 $me = current_portal_user();
 if (!$me) {
@@ -166,6 +182,61 @@ try {
                          'ranges' => BLUMO_RANGES, 'meta' => sitehub_blumo_meta($pdo), 'php_cli' => blumo_php_cli(), 'ca' => is_file($cfg['ca_bundle']),
                          'run_cmd' => 'php ' . str_replace('\\', '/', __DIR__) . '/monitor_run.php']);
         }
+        if (isset($_GET['report'])) {
+            $sid = (int)$_GET['report'];
+            if ($sid <= 0) throw new Exception('사이트를 선택하세요.');
+            sitehub_out(['ok' => true, 'tpl' => sitehub_report_tpl($pdo, $sid), 'reports' => sitehub_report_list($pdo, $sid),
+                         'others' => sitehub_report_tpl_sites($pdo, $sid), 'defaults' => SITEHUB_REPORT_DEFAULTS, 'weekdays' => SITEHUB_REPORT_WEEKDAYS,
+                         'holiday_extra' => sitehub_report_holiday_extra($pdo)]);
+        }
+        if (isset($_GET['report_tpl_file'])) {
+            $t = sitehub_report_tpl($pdo, (int)$_GET['report_tpl_file']);
+            if (!$t) throw new Exception('올린 양식이 없습니다.');
+            sitehub_report_send(sitehub_report_dir('tpl') . '/' . $t['file_path'], $t['file_name']);
+        }
+        if (isset($_GET['report_file']) || isset($_GET['report_detail'])) {
+            $st = $pdo->prepare("SELECT * FROM lab_reports WHERE id = ?");
+            $st->execute([(int)($_GET['report_file'] ?? $_GET['report_detail'])]);
+            $rep = $st->fetch();
+            if (!$rep) throw new Exception('내역서를 찾을 수 없습니다.');
+            if (isset($_GET['report_file'])) {
+                $hwpx = sitehub_report_dir('out') . '/' . $rep['file_path'];
+                if (($_GET['fmt'] ?? '') !== 'pdf') sitehub_report_send($hwpx, $rep['file_name']);
+                $pdf = sitehub_report_pdf_name($hwpx);
+                // 만들 때 실패했거나 PDF 를 그리는 코드가 그 뒤에 바뀌었으면(그림·글꼴 등) 지금 다시 만든다
+                if (is_file($hwpx) && (!is_file($pdf) || filemtime($pdf) < filemtime(__DIR__ . '/report_pdf.php'))) sitehub_report_make_pdf($hwpx, (string)$rep['title']);
+                sitehub_report_send($pdf, sitehub_report_pdf_name($rep['file_name']));
+            }
+            sitehub_out(['ok' => true, 'report' => ['id' => (int)$rep['id'], 'from' => $rep['period_from'], 'to' => $rep['period_to'], 'report_date' => $rep['report_date'],
+                         'file_name' => $rep['file_name'], 'rows' => json_decode((string)$rep['items'], true) ?: [], 'fields' => json_decode((string)$rep['fields'], true) ?: []]]);
+        }
+        if (isset($_GET['bill'])) {
+            $sid = (int)$_GET['bill'];
+            if ($sid <= 0) throw new Exception('사이트를 선택하세요.');
+            $st = $pdo->prepare("SELECT period_from, period_to FROM lab_reports WHERE site_id = ? ORDER BY period_to DESC, id DESC LIMIT 1");
+            $st->execute([$sid]);
+            sitehub_out(['ok' => true, 'tpl' => sitehub_bill_tpl_info(), 'cfg' => sitehub_bill_cfg($pdo, $sid), 'bills' => sitehub_bill_list($pdo, $sid),
+                         'defaults' => SITEHUB_BILL_DEFAULTS, 'tokens' => SITEHUB_BILL_TOKENS, 'last_report' => $st->fetch() ?: null]);
+        }
+        if (isset($_GET['bill_tpl_file'])) sitehub_report_send(SITEHUB_BILL_TPL, '대금청구서.xlsx');
+        if (isset($_GET['bill_file']) || isset($_GET['bill_detail'])) {
+            $st = $pdo->prepare("SELECT * FROM lab_bills WHERE id = ?");
+            $st->execute([(int)($_GET['bill_file'] ?? $_GET['bill_detail'])]);
+            $bill = $st->fetch();
+            if (!$bill) throw new Exception('청구서를 찾을 수 없습니다.');
+            if (isset($_GET['bill_file'])) {
+                $xlsx = sitehub_report_dir('bill') . '/' . $bill['file_path'];
+                if (($_GET['fmt'] ?? '') !== 'pdf') sitehub_report_send($xlsx, $bill['file_name']);
+                $pdf = sitehub_bill_pdf_name($xlsx);
+                // 만들 때 실패했거나 PDF 를 그리는 코드가 그 뒤에 바뀌었으면 지금 다시 만든다
+                if (is_file($xlsx) && (!is_file($pdf) || filemtime($pdf) < filemtime(__DIR__ . '/bill_pdf.php') || filemtime($pdf) < filemtime(__DIR__ . '/report_pdf.php'))) {
+                    sitehub_bill_make_pdf($xlsx, (string)$bill['subject']);
+                }
+                sitehub_report_send($pdf, sitehub_bill_pdf_name($bill['file_name']));
+            }
+            sitehub_out(['ok' => true, 'bill' => ['id' => (int)$bill['id'], 'from' => $bill['period_from'], 'to' => $bill['period_to'], 'file_name' => $bill['file_name'],
+                         'total' => (int)$bill['total'], 'data' => json_decode((string)$bill['data'], true) ?: []]]);
+        }
         if (isset($_GET['unmatched'])) {
             // 하위 항목은 부모를 따라가므로 미매칭 목록에는 요청(최상위)만 — 부모를 지정하면 하위도 같이 간다
             sitehub_out(['ok' => true, 'rows' => sitehub_history_rows($pdo, 'site_id IS NULL AND archived = 0 AND parent_id IS NULL', []),
@@ -186,6 +257,16 @@ try {
         $staff = $pdo->query("SELECT email, name FROM portal_users ORDER BY name, email")->fetchAll();
         sitehub_out(['ok' => true, 'sites' => $sites, 'staff' => $staff, 'meta' => sitehub_meta($pdo, $me), 'seeded' => $seeded,
                      'notice' => sitehub_notice_unread((int)$me['id']) ?: new stdClass()]);
+    }
+
+    // 양식 올리기만 multipart — 나머지 쓰기는 JSON
+    if (($_POST['action'] ?? '') === 'report_tpl_upload') {
+        $sid = (int)($_POST['site_id'] ?? 0);
+        $st = $pdo->prepare("SELECT id FROM lab_sites WHERE id = ?");
+        $st->execute([$sid]);
+        if (!$st->fetchColumn()) throw new Exception('사이트를 찾을 수 없습니다.');
+        $tpl = sitehub_report_tpl_save($pdo, $me, $sid, $_FILES['file'] ?? []);
+        sitehub_out(['ok' => true, 'tpl' => $tpl, 'site' => sitehub_load_site($pdo, $sid)]);
     }
 
     $in     = json_decode(file_get_contents('php://input'), true) ?: [];
@@ -705,6 +786,122 @@ try {
         }
         sitehub_children_follow($pdo);   // 그 요청의 하위 항목도 같이
         sitehub_out(['ok' => true, 'meta' => sitehub_meta($pdo, $me), 'site' => $siteId > 0 ? sitehub_load_site($pdo, $siteId) : null]);
+    }
+
+    // ── 유지보수 내역서 ──────────────────────────────────────────────────
+    if (strncmp($action, 'report_', 7) === 0) {
+        $site = null;
+        if ($action !== 'report_delete') {
+            $st = $pdo->prepare("SELECT * FROM lab_sites WHERE id = ?");
+            $st->execute([$siteId]);
+            $site = $st->fetch();
+            if (!$site) throw new Exception('사이트를 찾을 수 없습니다.');
+        }
+        $tpl = $site ? sitehub_report_tpl($pdo, $siteId) : null;
+        if ($action === 'report_settings') {
+            if (!$tpl) throw new Exception('먼저 양식을 올리세요.');
+            $s = sitehub_report_clean_settings((array)($in['settings'] ?? []), $tpl['settings']);
+            $pdo->prepare("UPDATE lab_report_templates SET settings = ?, updated_at = NOW(), updated_by = ? WHERE site_id = ?")
+                ->execute([json_encode($s, JSON_UNESCAPED_UNICODE), (string)($me['email'] ?? ''), $siteId]);
+            sitehub_audit($pdo, $me, $siteId, 'update', 'report_tpl', null, '내역서 양식', [], '채우기 규칙');
+            sitehub_out(['ok' => true, 'tpl' => sitehub_report_tpl($pdo, $siteId)]);
+        }
+        if ($action === 'report_holidays') {
+            // 날짜로 시작하는 줄만 남긴다 (YYYY-MM-DD 이름 / -YYYY-MM-DD)
+            $lines = array_filter(array_map('trim', preg_split('/\r?\n/', (string)($in['text'] ?? ''))), fn($l) => (bool)preg_match('/^-?\s*\d{4}-\d{2}-\d{2}\b/', $l));
+            $text = mb_substr(implode("\n", $lines), 0, 5000);
+            $pdo->prepare("INSERT INTO lab_sync_meta (k, v) VALUES ('report_holidays', ?) ON DUPLICATE KEY UPDATE v = VALUES(v)")->execute([$text]);
+            sitehub_out(['ok' => true, 'text' => $text]);
+        }
+        if ($action === 'report_tpl_delete') {
+            if ($tpl) {
+                @unlink(sitehub_report_dir('tpl') . '/' . $tpl['file_path']);
+                $pdo->prepare("DELETE FROM lab_report_templates WHERE site_id = ?")->execute([$siteId]);
+                sitehub_audit($pdo, $me, $siteId, 'delete', 'report_tpl', null, '내역서 양식', [], $tpl['file_name']);
+            }
+            sitehub_out(['ok' => true, 'tpl' => null]);
+        }
+        if ($action === 'report_tpl_copy') {
+            // 다른 사이트 양식을 그대로 가져다 쓴다 — 유지보수대상은 이 사이트 운영 URL 로
+            $src = sitehub_report_tpl($pdo, (int)($in['from'] ?? 0));
+            if (!$src || !$src['exists']) throw new Exception('가져올 양식이 없습니다.');
+            $dir = sitehub_report_dir('tpl');
+            $stored = 'site' . $siteId . '_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)) . '.hwpx';
+            if (!@copy($dir . '/' . $src['file_path'], $dir . '/' . $stored)) throw new Exception('양식 파일을 복사할 수 없습니다.');
+            if ($tpl) @unlink($dir . '/' . $tpl['file_path']);
+            $s = $src['settings'];
+            $s['target'] = (string)$site['url_ops'];
+            $pdo->prepare("INSERT INTO lab_report_templates (site_id, file_name, file_path, file_size, analysis, settings, created_at, updated_at, updated_by)
+                           VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)
+                           ON DUPLICATE KEY UPDATE file_name = VALUES(file_name), file_path = VALUES(file_path), file_size = VALUES(file_size),
+                               analysis = VALUES(analysis), settings = VALUES(settings), updated_at = NOW(), updated_by = VALUES(updated_by)")
+                ->execute([$siteId, $src['file_name'], $stored, $src['file_size'], json_encode($src['analysis'], JSON_UNESCAPED_UNICODE),
+                           json_encode($s, JSON_UNESCAPED_UNICODE), (string)($me['email'] ?? '')]);
+            sitehub_audit($pdo, $me, $siteId, $tpl ? 'update' : 'create', 'report_tpl', null, '내역서 양식', [], '다른 사이트 양식 가져옴: ' . $src['file_name']);
+            sitehub_out(['ok' => true, 'tpl' => sitehub_report_tpl($pdo, $siteId)]);
+        }
+        if ($action === 'report_preview') {
+            $from = (string)($in['from'] ?? ''); $to = (string)($in['to'] ?? '');
+            if (!sitehub_report_parse_date($from) || !sitehub_report_parse_date($to) || $from > $to) throw new Exception('기간을 확인하세요.');
+            if ((strtotime($to) - strtotime($from)) / 86400 > 400) throw new Exception('기간은 1년 남짓까지만 됩니다.');
+            $s = sitehub_report_clean_settings((array)($in['settings'] ?? []), $tpl['settings'] ?? SITEHUB_REPORT_DEFAULTS);
+            $out = sitehub_report_rows($pdo, $site, $from, $to, $s);
+            sitehub_out(['ok' => true] + $out + ['file_name' => sitehub_report_file_name($site, $tpl, $from, $to)]);
+        }
+        if ($action === 'report_build') {
+            sitehub_out(['ok' => true] + sitehub_report_build($pdo, $me, $site, $in) + ['reports' => sitehub_report_list($pdo, $siteId)]);
+        }
+        if ($action === 'report_delete') {
+            $st = $pdo->prepare("SELECT * FROM lab_reports WHERE id = ?");
+            $st->execute([(int)($in['id'] ?? 0)]);
+            $rep = $st->fetch();
+            if (!$rep) throw new Exception('내역서를 찾을 수 없습니다.');
+            @unlink(sitehub_report_dir('out') . '/' . $rep['file_path']);
+            @unlink(sitehub_report_pdf_name(sitehub_report_dir('out') . '/' . $rep['file_path']));
+            $pdo->prepare("DELETE FROM lab_reports WHERE id = ?")->execute([(int)$rep['id']]);
+            sitehub_audit($pdo, $me, (int)$rep['site_id'], 'delete', 'reports', (int)$rep['id'], (string)$rep['file_name'], [], $rep['period_from'] . ' ~ ' . $rep['period_to']);
+            sitehub_out(['ok' => true, 'reports' => sitehub_report_list($pdo, (int)$rep['site_id'])]);
+        }
+    }
+
+    // ── 대금청구서 ──────────────────────────────────────────────────────
+    if (strncmp($action, 'bill_', 5) === 0) {
+        $site = null;
+        if ($action !== 'bill_delete') {
+            $st = $pdo->prepare("SELECT * FROM lab_sites WHERE id = ?");
+            $st->execute([$siteId]);
+            $site = $st->fetch();
+            if (!$site) throw new Exception('사이트를 찾을 수 없습니다.');
+        }
+        if ($action === 'bill_settings') {
+            $old = sitehub_bill_cfg($pdo, $siteId);
+            $s = sitehub_bill_clean_settings((array)($in['settings'] ?? []), $old['settings']);
+            $pdo->prepare("INSERT INTO lab_bill_settings (site_id, settings, updated_at, updated_by) VALUES (?, ?, NOW(), ?)
+                           ON DUPLICATE KEY UPDATE settings = VALUES(settings), updated_at = NOW(), updated_by = VALUES(updated_by)")
+                ->execute([$siteId, json_encode($s, JSON_UNESCAPED_UNICODE), (string)($me['email'] ?? '')]);
+            sitehub_audit($pdo, $me, $siteId, $old['saved'] ? 'update' : 'create', 'bill_cfg', null, '청구서 채우기 규칙', [], '');
+            sitehub_out(['ok' => true, 'cfg' => sitehub_bill_cfg($pdo, $siteId)]);
+        }
+        if ($action === 'bill_preview') {
+            $from = (string)($in['from'] ?? ''); $to = (string)($in['to'] ?? '');
+            if (!sitehub_report_parse_date($from) || !sitehub_report_parse_date($to) || $from > $to) throw new Exception('기간을 확인하세요.');
+            if ((strtotime($to) - strtotime($from)) / 86400 > 400) throw new Exception('기간은 1년 남짓까지만 됩니다.');
+            sitehub_out(['ok' => true] + sitehub_bill_preview($pdo, $site, $from, $to));
+        }
+        if ($action === 'bill_build') {
+            sitehub_out(['ok' => true] + sitehub_bill_build($pdo, $me, $site, $in) + ['bills' => sitehub_bill_list($pdo, $siteId)]);
+        }
+        if ($action === 'bill_delete') {
+            $st = $pdo->prepare("SELECT * FROM lab_bills WHERE id = ?");
+            $st->execute([(int)($in['id'] ?? 0)]);
+            $bill = $st->fetch();
+            if (!$bill) throw new Exception('청구서를 찾을 수 없습니다.');
+            @unlink(sitehub_report_dir('bill') . '/' . $bill['file_path']);
+            @unlink(sitehub_bill_pdf_name(sitehub_report_dir('bill') . '/' . $bill['file_path']));
+            $pdo->prepare("DELETE FROM lab_bills WHERE id = ?")->execute([(int)$bill['id']]);
+            sitehub_audit($pdo, $me, (int)$bill['site_id'], 'delete', 'bills', (int)$bill['id'], (string)$bill['file_name'], [], $bill['period_from'] . ' ~ ' . $bill['period_to']);
+            sitehub_out(['ok' => true, 'bills' => sitehub_bill_list($pdo, (int)$bill['site_id'])]);
+        }
     }
 
     if (in_array($action, ['history_add', 'history_update', 'history_delete'], true)) {

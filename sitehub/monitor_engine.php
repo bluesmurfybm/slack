@@ -20,11 +20,11 @@
 const BLUMO_DEFAULTS = [
     'timeout' => 15, 'health_timeout' => 20, 'slow_ms' => 5000, 'cert_warn_days' => 14,
     'confirm_failures' => 2, 'repeat_alert_min' => 60, 'alert_on_warn' => 0, 'webhook_format' => 'slack',
-    'retention_days' => 180,
+    'retention_days' => 180, 'disk_warn_pct' => 85,
 ];
 const BLUMO_RANGES = [   // 설정 화면에서 받는 값의 범위
     'timeout' => [3, 60], 'health_timeout' => [3, 60], 'slow_ms' => [500, 60000], 'cert_warn_days' => [1, 90],
-    'confirm_failures' => [1, 10], 'repeat_alert_min' => [5, 1440], 'retention_days' => [30, 730],
+    'confirm_failures' => [1, 10], 'repeat_alert_min' => [5, 1440], 'retention_days' => [30, 730], 'disk_warn_pct' => [50, 99],
 ];
 const BLUMO_UP_CLASSES = ['OK', 'SLOW', 'TLS_EXPIRING'];   // 이 셋은 '살아 있음' — 장애가 아니다
 // 'Blumo/1.0' 만 보내면 Mozilla 로 시작하지 않는 UA·Accept 없는 요청을 막는 사이트(.htaccess 봇 차단)가 멀쩡해도 403 을 준다
@@ -101,7 +101,7 @@ function blumo_target_row(array $m): array {
     $m['name'] = trim($m['site_name'] . ($m['label'] !== '' ? ' (' . $m['label'] . ')' : ''));
     $m['url'] = sitehub_monitor_url($m['url']);
     $m['health_key'] = sitehub_dec((string)$m['health_key']);
-    foreach (['slow_ms', 'timeout', 'min_size'] as $c) $m[$c] = $m[$c] === null ? null : (int)$m[$c];
+    foreach (['slow_ms', 'timeout', 'min_size', 'disk_quota_mb'] as $c) $m[$c] = $m[$c] === null ? null : (int)$m[$c];
     return $m;
 }
 
@@ -310,6 +310,7 @@ function blumo_check(PDO $pdo, array $m, array $cfg): array {
     $r['cause'] = blumo_cause($r) . blumo_probe_note($r);
     blumo_store($pdo, $m, $r);
     blumo_state($pdo, $cfg, $m, $r);
+    blumo_usage($pdo, $cfg, $m, $r);
     return $r;
 }
 
@@ -367,6 +368,74 @@ function blumo_state(PDO $pdo, array $cfg, array $m, array $r): void {
                      cert_days=VALUES(cert_days), checked_at=VALUES(checked_at), updated_at=NOW()")
         ->execute([$m['id'], $m['site_id'], $status, date('Y-m-d H:i:s', $since), $fail, $alert ? date('Y-m-d H:i:s', $alert) : null,
                    $r['class'], mb_substr($r['cause'], 0, 500), $r['code'], $r['total_ms'], $r['cert_days'], date('Y-m-d H:i:s', $r['ts'])]);
+}
+
+/* ── 폴더 용량 ─────────────────────────────────────────────────────────────────
+   판정(class)·장애와는 따로 간다 — 용량이 차도 사이트는 살아 있으니 장애 이력에 넣지 않는다.
+   에이전트 v1.1 의 checks.usage 를 하루 한 행으로 남기고, 한도(disk_quota_mb)의 경고 비율·100% 를
+   처음 넘을 때만 웹훅. 단계가 내려가면(정리했으면) 해소 알림. 무음이면 단계만 바꾸고 보내지 않는다. */
+
+/** 에이전트 응답의 용량 — 아직 한 번도 다 못 쟀거나 옛 에이전트면 null */
+function blumo_usage_of(array $r): ?array {
+    $c = is_array($r['health'] ?? null) ? ($r['health']['checks'] ?? null) : null;
+    $u = is_array($c) ? ($c['usage'] ?? null) : null;
+    if (!is_array($u) || !isset($u['site_mb'])) return null;
+    $fs = is_array($c['filesystem'] ?? null) ? $c['filesystem'] : [];
+    $at = isset($u['measured_at']) ? strtotime((string)$u['measured_at']) : false;
+    return ['site_mb' => (float)$u['site_mb'], 'upload_mb' => (float)($u['upload_mb'] ?? 0), 'files' => (int)($u['files'] ?? 0),
+            'free_mb' => isset($fs['free_mb']) ? (int)$fs['free_mb'] : null, 'used_pct' => isset($fs['used_pct']) ? (float)$fs['used_pct'] : null,
+            'measured_at' => $at ? date('Y-m-d H:i:s', $at) : null];
+}
+
+/** 한도 대비 단계 — '' · warn · over */
+function blumo_disk_level(?int $quota, float $siteMb, int $warnPct): string {
+    if (!$quota || $quota <= 0) return '';
+    $pct = $siteMb / $quota * 100;
+    if ($pct >= 100) return 'over';
+    return $pct >= $warnPct ? 'warn' : '';
+}
+
+function blumo_mb(float $mb): string {
+    return $mb >= 1024 ? rtrim(rtrim(number_format($mb / 1024, 1), '0'), '.') . 'GB' : number_format($mb, $mb < 10 ? 1 : 0) . 'MB';
+}
+
+function blumo_usage(PDO $pdo, array $cfg, array $m, array $r): void {
+    $u = blumo_usage_of($r);
+    if (!$u) return;
+    $pdo->prepare("INSERT INTO lab_monitor_usage (monitor_id, day, site_id, site_mb, upload_mb, files, free_mb, used_pct, measured_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)
+                   ON DUPLICATE KEY UPDATE site_id=VALUES(site_id), site_mb=VALUES(site_mb), upload_mb=VALUES(upload_mb), files=VALUES(files),
+                     free_mb=VALUES(free_mb), used_pct=VALUES(used_pct), measured_at=VALUES(measured_at), updated_at=VALUES(updated_at)")
+        ->execute([$m['id'], date('Y-m-d', $r['ts']), $m['site_id'], $u['site_mb'], $u['upload_mb'], $u['files'], $u['free_mb'], $u['used_pct'],
+                   $u['measured_at'], date('Y-m-d H:i:s', $r['ts'])]);
+
+    $quota = $m['disk_quota_mb'] ?? null;
+    $level = blumo_disk_level($quota, $u['site_mb'], (int)$cfg['disk_warn_pct']);
+    $st = $pdo->prepare("SELECT disk_level FROM lab_monitor_state WHERE monitor_id = ?");
+    $st->execute([$m['id']]);
+    $old = (string)$st->fetchColumn();
+    if ($level === $old) return;
+    $pdo->prepare("UPDATE lab_monitor_state SET disk_level = ? WHERE monitor_id = ?")->execute([$level, $m['id']]);
+    if (!$quota) return;   // 한도를 지운 것 — 해소 알림을 보내면 오해한다
+
+    $muted = !empty($m['mute_until']) && strtotime($m['mute_until']) > time();
+    if ($muted) return;
+    $rank = ['' => 0, 'warn' => 1, 'over' => 2];
+    $pct = round($u['site_mb'] / $quota * 100, 1);
+    $body = blumo_usage_msg($m, $u, $quota, $pct);
+    if ($rank[$level] > $rank[$old]) {
+        blumo_webhook($cfg, ($level === 'over' ? '용량 한도 초과 · ' : '용량 경고 · ') . $m['name'], $body, $level === 'over' ? 'down' : 'warn');
+    } else {
+        blumo_webhook($cfg, ($level === '' ? '용량 경고 해소 · ' : '용량 한도 아래로 · ') . $m['name'], $body, $level === '' ? 'up' : 'warn');
+    }
+}
+
+function blumo_usage_msg(array $m, array $u, int $quota, float $pct): string {
+    $l = [$m['name'] . ' — 사이트 폴더 ' . blumo_mb($u['site_mb']) . ' / 한도 ' . blumo_mb((float)$quota) . ' (' . $pct . '%)', 'URL: ' . $m['url']];
+    if ($u['upload_mb'] > 0) $l[] = '업로드 폴더 ' . blumo_mb($u['upload_mb']) . ' · 파일 ' . number_format($u['files']) . '개';
+    if ($u['free_mb'] !== null) $l[] = '서버 디스크 여유 ' . blumo_mb((float)$u['free_mb']) . ($u['used_pct'] !== null ? ' (사용 ' . $u['used_pct'] . '%)' : '');
+    if ($u['measured_at']) $l[] = '측정 시각: ' . $u['measured_at'];
+    return implode("\n", $l);
 }
 
 function blumo_msg(array $m, array $r, ?string $dur): string {
@@ -493,6 +562,7 @@ function blumo_prune(PDO $pdo, array $cfg): void {
     if (blumo_meta_get($pdo, 'pruned_on') === date('Y-m-d')) return;
     blumo_meta_set($pdo, 'pruned_on', date('Y-m-d'));
     $pdo->prepare("DELETE FROM lab_monitor_checks WHERE at < ?")->execute([date('Y-m-d H:i:s', time() - $cfg['retention_days'] * 86400)]);
+    $pdo->prepare("DELETE FROM lab_monitor_usage WHERE day < ?")->execute([date('Y-m-d', time() - 730 * 86400)]);
 }
 
 /** 화면의 '전체 지금 점검' — 웹 요청이 길어지지 않게 CLI 를 뒤로 띄운다. 띄웠으면 true, 아니면 오류 문장 */

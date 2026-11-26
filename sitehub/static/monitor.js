@@ -16,6 +16,16 @@ function monSev(r) {
 const monSevTag = sev => `<span class="badge sh-sev sh-sev-${sev}">${MON_SEV[sev]}</span>`;
 const monHost = u => String(u || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
 const monN = n => Number(n).toLocaleString("ko-KR");
+const monMB = mb => mb >= 1024 ? (Math.round(mb / 102.4) / 10).toLocaleString("ko-KR") + "GB" : (mb < 10 ? Math.round(mb * 10) / 10 : Math.round(mb)).toLocaleString("ko-KR") + "MB";
+
+/* 사이트 폴더 용량 한 줄 — 한도가 있으면 비율까지. 경고 단계(disk_level)는 서버가 정한 것을 그대로 쓴다 */
+function monUsageText(st, quota) {
+  const u = st && st.usage;
+  if (!u) return "";
+  const txt = `용량 ${monMB(u.site_mb)}${quota ? ` / ${monMB(quota)} (${Math.round(u.site_mb / quota * 1000) / 10}%)` : ""}`;
+  if (!st.disk_level) return esc(txt);
+  return `<span class="sh-mon-warn" title="${st.disk_level === "over" ? "용량 한도를 넘었습니다" : "용량 경고 비율을 넘었습니다"}">${esc(txt)}</span>`;
+}
 
 /* ── 공통 동작 (감시 현황 · 감시 설정 탭) ── */
 
@@ -120,11 +130,13 @@ async function monOpenDetail(id) {
       <dt>상태 지속</dt><dd>${st.since ? `${st.status === "down" ? "<b class=\"sh-neg\">장애</b>" : "정상"} ${esc(String(st.since).slice(5, 16))}부터 (${esc(agoText(st.since).replace(" 전", ""))})` : "—"}</dd>
       <dt>가용률</dt><dd>24시간 ${pct(j.day)} · 7일 ${pct(j.week)} · 평균 ${j.week.avg_ms === null ? "—" : monN(j.week.avg_ms) + "ms"}</dd>
       <dt>SSL</dt><dd>${st.cert_days !== null && st.cert_days !== undefined ? st.cert_days + "일 남음" : (/^https/.test(m.url) ? "—" : "http (SSL 없음)")}</dd>
+      <dt>사이트 용량</dt><dd>${monUsageDd(m, st)}</dd>
       <dt>정상 판정 문구</dt><dd>${m.expect ? `<code>${esc(m.expect)}</code>` : `<span class="muted">없음 — 응답 크기로만 백지 판정</span>`}</dd>
       <dt>에이전트</dt><dd>${m.agent ? `연결 · <a href="api.php?agent=${m.id}">키 포함 blumo-agent.php 내려받기</a>` : `<span class="muted">없음 — 외부 증상까지만 판별 (감시 설정에서 주소·키를 넣으면 원인까지)</span>`}</dd>
       ${m.mute_until ? `<dt>알림 무음</dt><dd>${esc(String(m.mute_until).slice(5, 16))}까지 — 점검·기록은 계속</dd>` : ""}
     </dl>
     ${monBars(j.checks)}
+    ${monUsageBars(j.usage || [], m.disk_quota_mb, m.disk_warn_pct)}
     ${j.incidents.length ? `<h4 class="sh-sheet-h">장애 이력</h4><div class="sh-tablewrap"><table class="sh-table"><thead><tr><th>시작</th><th>복구</th><th>지속</th><th>구분</th><th>원인</th></tr></thead><tbody>
       ${j.incidents.map(i => `<tr><td>${esc(String(i.started).slice(5, 16))}</td><td>${i.ended ? esc(String(i.ended).slice(5, 16)) : `<span class="badge sh-sev sh-sev-down">진행 중</span>`}</td>
         <td class="num">${esc(monDur(i.started, i.ended))}</td><td><span class="badge sh-sev sh-sev-down">${esc(i.class)}</span></td><td class="sh-mcause">${esc(i.cause)}</td></tr>`).join("")}
@@ -164,6 +176,38 @@ function monBars(checks) {
         <i class="${sev(c)}" style="height:${Math.max(2, Math.round((c.total_ms || 0) / mx * 100))}%"></i></span>`).join("")}
     </div>
     <div class="sh-mbars-x"><span>${esc(String(s[0].at).slice(5, 16))}</span><span>${esc(String(s[s.length - 1].at).slice(5, 16))}</span></div></div>`;
+}
+
+function monUsageDd(m, st) {
+  if (!m.agent) return `<span class="muted">에이전트가 없으면 재지 못합니다</span>`;
+  const u = st.usage;
+  if (!u) {
+    if (m.agent_ver && m.agent_ver < "1.1") return `<span class="sh-mon-warn">에이전트 v${esc(m.agent_ver)} 는 용량을 재지 않습니다</span> — <a href="api.php?agent=${m.id}">새 blumo-agent.php</a>를 받아 다시 올리세요`;
+    return `<span class="muted">아직 잰 값이 없습니다 — 파일이 많으면 첫 측정이 점검 몇 번에 걸쳐 끝납니다</span>`;
+  }
+  const parts = [monUsageText(st, m.disk_quota_mb)];
+  if (u.upload_mb > 0) parts.push(`업로드 ${monMB(u.upload_mb)}`);
+  parts.push(`파일 ${monN(u.files)}개`);
+  if (u.free_mb !== null) parts.push(`서버 디스크 여유 ${monMB(u.free_mb)}${u.used_pct !== null ? ` (사용 ${u.used_pct}%)` : ""}`);
+  if (u.measured_at) parts.push(`<span class="muted">${esc(String(u.measured_at).slice(5, 16))} 측정</span>`);
+  const quota = m.disk_quota_mb ? "" : `<br><span class="muted">용량 한도가 없어 알리지 않습니다 — 감시 설정에서 한도를 넣으면 ${m.disk_warn_pct}% 를 넘을 때 알립니다</span>`;
+  return parts.join(" · ") + quota;
+}
+
+/* 사이트 폴더 용량 추이 — 막대 하나 = 하루(그날 마지막 값). 한도가 있으면 경고 비율·한도로 색을 나눈다 */
+function monUsageBars(rows, quota, warnPct) {
+  if (!rows.length) return "";
+  const mx = Math.max(1, quota || 0, ...rows.map(r => r.site_mb));
+  const sev = r => !quota ? "ok" : (r.site_mb >= quota ? "down" : (r.site_mb / quota * 100 >= warnPct ? "warn" : "ok"));
+  const first = rows[0], last = rows[rows.length - 1];
+  const diff = last.site_mb - first.site_mb;
+  return `<div class="sh-mbars-wrap"><div class="sh-mbars-head"><b>사이트 폴더 용량</b><span class="muted">${rows.length}일${quota ? ` · 한도 ${monMB(quota)}` : ""}${rows.length > 1 ? ` · ${diff >= 0 ? "+" : "−"}${monMB(Math.abs(diff))}` : ""}</span>
+      ${quota ? `<span class="sh-mbars-key"><i class="ok"></i>정상 <i class="warn"></i>${warnPct}% 넘음 <i class="down"></i>한도 넘음</span>` : ""}</div>
+    <div class="sh-mbars" role="img" aria-label="날짜별 사이트 폴더 용량 막대 — 최신 값은 위 사이트 용량 칸에 있습니다">
+      ${rows.map(r => `<span class="slot" tabindex="0" data-tip-v="${esc(monMB(r.site_mb))}" data-tip-l="${esc(String(r.day).slice(5) + (r.upload_mb > 0 ? " · 업로드 " + monMB(r.upload_mb) : ""))}">
+        <i class="${sev(r)}" style="height:${Math.max(2, Math.round(r.site_mb / mx * 100))}%"></i></span>`).join("")}
+    </div>
+    <div class="sh-mbars-x"><span>${esc(String(first.day).slice(5))}</span><span>${esc(String(last.day).slice(5))}</span></div></div>`;
 }
 
 /* 툴팁 — 값이 먼저(굵게), 이름이 뒤. 글자는 textContent 로만 */
@@ -319,6 +363,7 @@ function monRow(r) {
   if (st.cause && sev !== "ok") sub.push(`<span class="sh-mcause">${esc(st.cause)}</span>`);
   if (st.total_ms !== null && st.total_ms !== undefined) sub.push(`${monN(st.total_ms)}ms`);
   if (st.avail_24h !== null && st.avail_24h !== undefined) sub.push(`24h ${st.avail_24h}%`);
+  if (st.usage) sub.push(monUsageText(st, r.disk_quota_mb));
   if (st.cert_days !== null && st.cert_days !== undefined) sub.push(st.cert_days <= 14 ? `<span class="sh-mon-warn">SSL ${st.cert_days}일</span>` : `SSL ${st.cert_days}일`);
   if (st.checked_at) sub.push(`<span class="muted">${esc(agoText(st.checked_at))} 점검</span>`);
   return `<li class="row sh-mrow${sev === "off" ? " dim" : ""}" data-id="${r.id}">
@@ -417,7 +462,8 @@ async function monSettings() {
       <div class="sh-panel-head" style="margin-top:8px"><h3>판정 기준</h3><p>감시 주소마다 따로 정하지 않으면 이 값</p></div>
       <div class="two">${num("slow_ms", "느림 기준 (ms)")}${num("timeout", "페이지 대기 한도 (초)")}</div>
       <div class="two">${num("health_timeout", "에이전트 대기 한도 (초)")}${num("cert_warn_days", "SSL 만료 경고 (일 전)")}</div>
-      <div class="two">${num("retention_days", "점검 기록 보관 (일)", "지난 기록은 하루 한 번 지웁니다. 장애 이력은 남습니다")}</div>
+      <div class="two">${num("retention_days", "점검 기록 보관 (일)", "지난 기록은 하루 한 번 지웁니다. 장애 이력은 남습니다")}
+        ${num("disk_warn_pct", "용량 경고 (%)", "용량 한도를 넣은 감시 주소만 — 사이트 폴더가 한도의 이 비율을 넘으면 한 번, 한도를 넘으면 한 번 더 알립니다")}</div>
       <div><button type="button" class="btn-submit" onclick="monSaveSettings(this)">설정 저장</button></div>
     </div>
     <div class="sh-mset-side">

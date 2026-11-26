@@ -78,7 +78,18 @@ function sitehub_monitor_states(PDO $pdo, array $ids): array {
                          FROM lab_monitor_checks WHERE monitor_id IN ({$in}) AND at >= ? GROUP BY monitor_id");
     $st->execute([date('Y-m-d H:i:s', time() - 86400)]);
     foreach ($st as $r) if (isset($out[(int)$r['monitor_id']]) && $r['n']) $out[(int)$r['monitor_id']]['avail_24h'] = round($r['ok'] / $r['n'] * 100, 2);
+    foreach ($pdo->query("SELECT u.* FROM lab_monitor_usage u
+                          JOIN (SELECT monitor_id, MAX(day) d FROM lab_monitor_usage WHERE monitor_id IN ({$in}) GROUP BY monitor_id) x
+                            ON x.monitor_id = u.monitor_id AND x.d = u.day") as $r) {
+        if (isset($out[(int)$r['monitor_id']])) $out[(int)$r['monitor_id']]['usage'] = sitehub_monitor_usage_out($r);
+    }
     return $out;
+}
+
+function sitehub_monitor_usage_out(array $r): array {
+    return ['day' => $r['day'], 'site_mb' => (float)$r['site_mb'], 'upload_mb' => (float)$r['upload_mb'], 'files' => (int)$r['files'],
+            'free_mb' => $r['free_mb'] === null ? null : (int)$r['free_mb'], 'used_pct' => $r['used_pct'] === null ? null : (float)$r['used_pct'],
+            'measured_at' => $r['measured_at']];
 }
 
 function sitehub_monitor_state_out(?array $raw): ?array {
@@ -86,6 +97,7 @@ function sitehub_monitor_state_out(?array $raw): ?array {
     $i = fn($k) => $raw[$k] === null ? null : (int)$raw[$k];
     return ['status' => $raw['status'], 'class' => $raw['class'], 'cause' => $raw['cause'], 'code' => $i('code'),
             'total_ms' => $i('total_ms'), 'cert_days' => $i('cert_days'), 'avail_24h' => $raw['avail_24h'] ?? null,
+            'disk_level' => (string)($raw['disk_level'] ?? ''), 'usage' => $raw['usage'] ?? null,
             'since' => $raw['since'], 'checked_at' => $raw['checked_at']];
 }
 
@@ -97,7 +109,7 @@ function sitehub_monitor_attach(PDO $pdo, array &$sites): void {
     foreach ($sites as &$s) {
         foreach ($s['monitors'] as &$m) {
             $m['health_key'] = sitehub_dec($m['health_key']);
-            foreach (['slow_ms', 'timeout', 'min_size', 'blumo_id'] as $c) $m[$c] = $m[$c] === null ? null : (int)$m[$c];
+            foreach (['slow_ms', 'timeout', 'min_size', 'disk_quota_mb', 'blumo_id'] as $c) $m[$c] = $m[$c] === null ? null : (int)$m[$c];
             $m['enabled'] = (int)$m['enabled'];
             if ($m['mute_until'] && strtotime($m['mute_until']) <= time()) $m['mute_until'] = null;
             $raw = $states[(int)$m['id']] ?? null;
@@ -153,6 +165,7 @@ function sitehub_monitor_board(PDO $pdo): array {
         $out[] = ['id' => (int)$m['id'], 'site_id' => (int)$m['site_id'], 'site_name' => $m['site_name'], 'customer' => $m['customer'],
                   'label' => $m['label'], 'url' => $m['url'], 'expect' => $m['expect'], 'agent' => $m['health'] !== '' && $m['health_key'] !== null && $m['health_key'] !== '',
                   'note' => (string)$m['note'], 'enabled' => (int)$m['enabled'], 'mute_until' => $m['mute_until'],
+                  'disk_quota_mb' => $m['disk_quota_mb'] === null ? null : (int)$m['disk_quota_mb'],
                   'state' => sitehub_monitor_state_out($raw), 'watch' => sitehub_monitor_one($m, $raw)];
     }
     return $out;
@@ -180,10 +193,16 @@ function sitehub_monitor_detail(PDO $pdo, int $id): array {
         return ['n' => (int)$r['n'], 'pct' => $r['n'] ? round($r['ok'] / $r['n'] * 100, 2) : null, 'avg_ms' => $r['n'] ? (int)round($r['a']) : null];
     };
     $raw = sitehub_monitor_states($pdo, [$id])[$id] ?? null;
+    $st = $pdo->prepare("SELECT * FROM lab_monitor_usage WHERE monitor_id = ? AND day >= ? ORDER BY day");
+    $st->execute([$id, date('Y-m-d', time() - 89 * 86400)]);
+    $agentVer = null;
+    foreach ($checks as $c) if (is_array($c['health']) && isset($c['health']['checks'])) { $agentVer = (string)($c['health']['agent'] ?? '1.0'); break; }
     return ['monitor' => ['id' => $m['id'], 'site_id' => $m['site_id'], 'name' => $m['name'], 'url' => $m['url'], 'expect' => $m['expect'],
                           'agent' => $m['health'] !== '' && $m['health_key'] !== '', 'enabled' => (int)$m['enabled'], 'mute_until' => $m['mute_until'],
+                          'disk_quota_mb' => $m['disk_quota_mb'], 'agent_ver' => $agentVer, 'disk_warn_pct' => (int)blumo_cfg($pdo)['disk_warn_pct'],
                           'state' => sitehub_monitor_state_out($raw), 'watch' => sitehub_monitor_one($m, $raw)],
-            'checks' => $checks, 'incidents' => $inc, 'day' => $avail(86400), 'week' => $avail(86400 * 7)];
+            'checks' => $checks, 'incidents' => $inc, 'day' => $avail(86400), 'week' => $avail(86400 * 7),
+            'usage' => array_map('sitehub_monitor_usage_out', $st->fetchAll())];
 }
 
 function sitehub_monitor_incidents(PDO $pdo, int $limit = 300): array {

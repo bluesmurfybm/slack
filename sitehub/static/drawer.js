@@ -1,6 +1,6 @@
-// 상세 드로어 — 사이트 한 곳의 모든 것. 탭 여덟 개, 주소 ?site=<id>&tab=<key> 와 같이 움직인다.
+// 상세 드로어 — 사이트 한 곳의 모든 것. 탭은 TABS, 주소 ?site=<id>&tab=<key> 와 같이 움직인다.
 
-const TABS = [["basic", "기본"], ["accounts", "접속 정보"], ["contacts", "담당자"], ["contracts", "계약"], ["costs", "비용"], ["method", "유지보수 방법"], ["monitor", "감시 설정"], ["history", "이력"], ["changes", "변경 이력"]];
+const TABS = [["basic", "기본"], ["accounts", "접속 정보"], ["contacts", "담당자"], ["contracts", "계약"], ["costs", "비용"], ["method", "유지보수 방법"], ["monitor", "감시 설정"], ["history", "이력"], ["report", "내역서"], ["changes", "변경 이력"]];
 const ICON_PENCIL = `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`;
 
 function openDrawer(id, tab, push = true) {
@@ -99,6 +99,7 @@ function renderTab(s) {
   else if (tab === "method") body.innerHTML = kvSection(s, "method") + procSection(s);
   else if (tab === "history") { body.innerHTML = `<div class="d-sec"><div class="sh-synced">불러오는 중…</div></div>`; loadHistory(s); }
   else if (tab === "changes") { body.innerHTML = `<div class="d-sec"><div class="sh-synced">불러오는 중…</div></div>`; loadChanges(s); }
+  else if (tab === "report") { body.innerHTML = `<div class="d-sec"><div class="sh-synced">불러오는 중…</div></div>`; loadReport(s); }
   else if (tab === "monitor") { body.innerHTML = monitorSection(s); if (SH.canManage && !APP.blumoLink) loadBlumoLink().then(() => { if (APP.open.id === s.id && APP.open.tab === "monitor") refreshDrawer(); }); }
   else body.innerHTML = subSection(s, tab);
 }
@@ -322,11 +323,12 @@ function monitorRow(s, m, on) {
     if (st.total_ms !== null) parts.push(`${Number(st.total_ms).toLocaleString("ko-KR")}ms`);
     if (st.cert_days !== null) parts.push(`SSL ${st.cert_days}일`);
     if (st.avail_24h !== null && st.avail_24h !== undefined) parts.push(`24시간 ${st.avail_24h}%`);
+    if (st.usage) parts.push(monUsageText(st, m.disk_quota_mb));
     if (st.checked_at) parts.push(`${esc(agoText(st.checked_at))} 점검`);
     line = parts.join(" · ");
   }
   if (m.mute_until) line += ` <span class="badge off" title="알림만 끔 — 점검은 계속">알림 무음 ~${esc(String(m.mute_until).slice(5, 16))}</span>`;
-  const opts = [m.slow_ms ? `느림 ${Number(m.slow_ms).toLocaleString("ko-KR")}ms` : "", m.timeout ? `대기 ${m.timeout}초` : "", m.min_size ? `최소 ${Number(m.min_size).toLocaleString("ko-KR")}bytes` : ""].filter(Boolean);
+  const opts = [m.slow_ms ? `느림 ${Number(m.slow_ms).toLocaleString("ko-KR")}ms` : "", m.timeout ? `대기 ${m.timeout}초` : "", m.min_size ? `최소 ${Number(m.min_size).toLocaleString("ko-KR")}bytes` : "", m.disk_quota_mb ? `용량 한도 ${monMB(m.disk_quota_mb)}` : ""].filter(Boolean);
   const shown = (m.url || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
   return `<li>
     <div>
@@ -522,7 +524,7 @@ async function deleteHist(id) {
 
 /* ── 변경 이력 — api.php?changes=<id> (audit_lib.php). 한 번 저장에 칸이 여럿 바뀌면 한 묶음으로 보인다. ── */
 const CHG_ACTION = { create: "추가", update: "수정", delete: "삭제", archive: "보관", restore: "복원", import: "엑셀 가져오기" };
-const CHG_TARGET = { site: "사이트", accounts: "접속 정보", contacts: "담당자", contracts: "계약", costs: "비용", monitors: "감시 주소", procedures: "처리 절차" };
+const CHG_TARGET = { site: "사이트", accounts: "접속 정보", contacts: "담당자", contracts: "계약", costs: "비용", monitors: "감시 주소", procedures: "처리 절차", report_tpl: "내역서 양식", reports: "유지보수 내역서", bill_cfg: "청구서 규칙", bills: "청구서" };
 
 async function loadChanges(s) {
   try {
