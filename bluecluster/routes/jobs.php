@@ -136,7 +136,7 @@ function bcl_route_piece_start($ctx, $id, $pid, $body)
 {
     bcl_api_require($body, ['node_id', 'account']);
     bcl_api_check_node_id($body['node_id']);
-    return bcl_piece_start($ctx['pdo'], $id, $pid, $body['node_id'], $body['account'], $ctx['user']['email'], $ctx['now']);
+    return bcl_piece_start($ctx['pdo'], $ctx['files_dir'], $id, $pid, $body['node_id'], $body['account'], $ctx['user']['email'], $ctx['now']);
 }
 
 /**

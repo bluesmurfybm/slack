@@ -306,7 +306,7 @@ return <<<'JSON'
       "post": {
         "tags": ["블루 클러스터"],
         "summary": "조각 시도 시작",
-        "description": "조각이 `pending` 이 아니거나 작업이 `done` 이면 `ok: false`, `attempt_no: null` 이고 시도를 만들지 않습니다.",
+        "description": "조각이 `pending` 이 아니거나 작업이 `done` 이거나 서버가 결과 파일을 저장할 수 없으면 `ok: false`, `attempt_no: null` 이고 시도를 만들지 않습니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/jobs/job-1/pieces/p1/start"}}],
         "requestBody": {"content": {"application/json": {"schema": {"type": "object", "required": ["node_id", "account"], "properties": {"node_id": {"type": "string"}, "account": {"type": "string"}}}}}},

@@ -939,6 +939,24 @@ final class api_test extends TestCase
         $this->assertSame([], bcl_job_get($this->pdo, $job)['pieces'][0]['attempts']);
     }
 
+    /** bcl_piece_start: files_dir 에 쓸 수 없으면 ok false, attempt_no null, 시도 추가 없음 */
+    public function testStartRejectedWhenFilesDirNotWritable()
+    {
+        file_put_contents($this->filesDir, 'x');
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir . '/sub'];
+        $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
+        bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
+        bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
+            'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'p1', 'repo' => 'r', 'desc' => 'd']],
+        ]));
+
+        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/start', json_encode(['node_id' => 'PC-B', 'account' => 'acc']));
+
+        $this->assertSame(['status' => 200, 'data' => ['ok' => false, 'attempt_no' => null]], $res);
+        $piece = bcl_job_get($this->pdo, $job)['pieces'][0];
+        $this->assertSame(['pending', []], [$piece['state'], $piece['attempts']]);
+    }
+
     /** bcl_piece_finish: 1 MB 넘는 result·patch·log 원본 파일 저장, attempt 에는 result_path·patch_path·log_path 만 */
     public function testFinishSavesOriginalFiles()
     {
@@ -978,23 +996,30 @@ final class api_test extends TestCase
         ], [$attempt['result_path'], $attempt['patch_path'], $attempt['log_path']]);
     }
 
-    /** bcl_piece_finish: files_dir 에 쓸 수 없으면 500 reason, attempt 는 running 그대로 */
+    /** bcl_piece_finish: 작업 폴더에 쓸 수 없으면 경로 없는 500 reason, 경로는 error_log, attempt 는 running 그대로 */
     public function testFinishNotWritable500()
     {
-        file_put_contents($this->filesDir, 'x');
-        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir . '/sub'];
+        $ctx = ['pdo' => $this->pdo, 'user' => ['email' => 'user1@bluesoft.co.kr'], 'now' => 1000, 'files_dir' => $this->filesDir];
         $job = bcl_job_create($this->pdo, 't', 'user1@bluesoft.co.kr', ['r'], 'i');
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/claim', json_encode(['node_id' => 'PC-A']));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces', json_encode([
             'node_id' => 'PC-A', 'epoch' => 1, 'pieces' => [['piece_id' => 'p1', 'repo' => 'r', 'desc' => 'd']],
         ]));
         bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/start', json_encode(['node_id' => 'PC-B', 'account' => 'acc']));
+        file_put_contents($this->filesDir . '/' . $job, 'x');
+        $log = $this->filesDir . '/error.log';
+        $previous = ini_set('error_log', $log);
 
-        $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
-            'node_id' => 'PC-B', 'attempt_no' => 1, 'status' => 'done', 'result' => 'r', 'patch' => 'p', 'log' => [],
-        ]));
+        try {
+            $res = bcl_api_handle($ctx, 'POST', '/jobs/' . $job . '/pieces/p1/finish', json_encode([
+                'node_id' => 'PC-B', 'attempt_no' => 1, 'status' => 'done', 'result' => 'r', 'patch' => 'p', 'log' => [],
+            ]));
+        } finally {
+            ini_set('error_log', $previous);
+        }
 
-        $this->assertSame(['status' => 500, 'data' => ['reason' => '결과 파일을 저장할 폴더에 쓸 수 없습니다: ' . $this->filesDir . '/sub/' . $job]], $res);
+        $this->assertSame(['status' => 500, 'data' => ['reason' => '결과 파일을 저장하지 못했습니다']], $res);
+        $this->assertStringContainsString($this->filesDir . '/' . $job, file_get_contents($log));
         $piece = bcl_job_get($this->pdo, $job)['pieces'][0];
         $this->assertSame(['running', 'running', null], [$piece['state'], $piece['attempts'][0]['status'], $piece['attempts'][0]['result_path']]);
     }

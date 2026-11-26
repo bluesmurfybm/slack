@@ -163,6 +163,7 @@ function bcl_job_pieces($pdo, $job_key, $node_id, $epoch, $pieces)
 /**
  * 조각 시도를 시작한다.
  * @param PDO $pdo
+ * @param string $files_dir
  * @param string $job_key
  * @param string $piece_key
  * @param string $node_id
@@ -171,11 +172,14 @@ function bcl_job_pieces($pdo, $job_key, $node_id, $epoch, $pieces)
  * @param int $now
  * @return array ['ok' => bool, 'attempt_no' => int|null]
  */
-function bcl_piece_start($pdo, $job_key, $piece_key, $node_id, $account, $token_user, $now)
+function bcl_piece_start($pdo, $files_dir, $job_key, $piece_key, $node_id, $account, $token_user, $now)
 {
-    return bcl_with_job_lock($pdo, $job_key, function ($job) use ($pdo, $piece_key, $node_id, $account, $token_user, $now) {
+    return bcl_with_job_lock($pdo, $job_key, function ($job) use ($pdo, $files_dir, $piece_key, $node_id, $account, $token_user, $now) {
         $piece = bcl_piece_row($pdo, $job, $piece_key);
-        if ($job['state'] === 'done' || $piece['state'] !== 'pending') return ['ok' => false, 'attempt_no' => null];
+        // 끝내도 결과를 저장할 수 없는 시도는 만들지 않는다
+        if ($job['state'] === 'done' || $piece['state'] !== 'pending' || !bcl_files_prepare_dir($files_dir)) {
+            return ['ok' => false, 'attempt_no' => null];
+        }
 
         $st = $pdo->prepare("SELECT COALESCE(MAX(attempt_no), 0) + 1 FROM bcl_attempts WHERE piece_id = ?");
         $st->execute([$piece['id']]);
