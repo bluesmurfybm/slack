@@ -47,12 +47,12 @@ final class menu_test extends TestCase
         $this->assertFileExists(dirname(__DIR__, 2) . '/styles/favicons/bluecluster.svg');
     }
 
-    /** bcl_page_head: 사용자 칩 onclick 과 bluecluster.js 스크립트 태그 */
+    /** bcl_page_head: 공통 사용자 메뉴(core/usermenu.php)와 bluecluster.js 스크립트 태그 */
     public function test_layout_사용자_메뉴_스크립트()
     {
         $layout = file_get_contents(dirname(__DIR__) . '/inc/layout.php');
 
-        $this->assertStringContainsString('onclick="bclToggleMenu(event)"', $layout);
+        $this->assertStringContainsString("portal_user_menu('../', BCL_MODULE_KEY)", $layout);
         $this->assertStringContainsString('<script src="assets/bluecluster.js?v=', $layout);
         $this->assertFileExists(dirname(__DIR__) . '/assets/bluecluster.js');
     }
