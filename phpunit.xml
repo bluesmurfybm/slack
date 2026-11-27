@@ -17,6 +17,9 @@
         <testsuite name="core">
             <directory suffix="_test.php">core/tests</directory>
         </testsuite>
+        <testsuite name="bluecluster">
+            <directory suffix="_test.php">bluecluster/tests</directory>
+        </testsuite>
     </testsuites>
     <source>
         <include>
