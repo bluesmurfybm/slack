@@ -1,0 +1,11 @@
+# 모듈 내부 디렉터리 직접 접근 차단 — onwatch/.htaccess 와 같은 방식.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(inc|lib|routes|tests|var)(/|$) - [R=404,L]
+  RewriteRule \.md$ - [R=404,L]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+  RedirectMatch 404 /(inc|lib|routes|tests|var)/
+  RedirectMatch 404 \.md$
+</IfModule>
