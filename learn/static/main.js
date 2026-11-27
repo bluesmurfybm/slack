@@ -1,12 +1,3 @@
-function toggleUserMenu(e) {
-  if (e) e.stopPropagation();
-  document.getElementById("hdrUserMenu").classList.toggle("open");
-}
-document.addEventListener("click", e => {
-  const um = document.getElementById("hdrUserMenu");
-  if (um && !um.contains(e.target)) um.classList.remove("open");
-});
-
 function setMode(mode) {
   APP.view.mode = mode;
   document.getElementById("modeUser").classList.toggle("on", mode === "user");
@@ -23,12 +14,7 @@ async function loadWhoami() {
   document.body.classList.toggle("is-admin", !!APP.me.is_admin);
   const portalUrl = (APP.me.portal_url || "").replace(/\/+$/, "");
   document.getElementById("hdrBrand").href = portalUrl || "#";
-  document.getElementById("dd-mypage").href = portalUrl ? `${portalUrl}/?view=profile` : "#";
-  document.getElementById("dd-logout").href = portalUrl ? `${portalUrl}/api/logout.php` : "#";
-  document.getElementById("hdrName").textContent = APP.me.name || "(로그인 필요)";
-  const av = document.getElementById("hdrAvatar");
-  av.textContent = (APP.me.name || "?").slice(0, 1);
-  av.style.background = APP.me.color || colorFor(APP.me.name).fg;
+  // 이름 칩과 드롭다운은 서버가 그린다(core/usermenu.php)
 }
 
 async function reload({ keepDrawer = false } = {}) {

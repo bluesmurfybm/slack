@@ -28,7 +28,7 @@ $bootJson = json_encode([
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet"
     href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-  <link rel="stylesheet" href="../styles/topbar.css">
+  <link rel="stylesheet" href="../styles/topbar.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/topbar.css') ?>">
   <link rel="stylesheet" href="<?= schooltodo_asset('styles/style.css') ?>">
 </head>
 
@@ -38,20 +38,7 @@ $bootJson = json_encode([
       <a class="logo" href="<?= schooltodo_h($page['portal']) ?>/" style="text-decoration:none"><b>blue</b><span
           class="dash">-</span>iWorks</a>
       <div class="top-right">
-        <div class="user-menu" id="hdrUserMenu">
-          <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
-            <span class="avatar" style="background:<?= schooltodo_h($me['color'] ?: '#606D79') ?>"><?= schooltodo_h(mb_substr($me['name'], 0, 1)) ?></span>
-            <span class="nm"><?= schooltodo_h($me['name']) ?></span>
-            <span class="user-caret">▾</span>
-          </div>
-          <div class="dd-menu" id="hdrUserDd">
-            <a href="<?= schooltodo_h($page['portal']) ?>/?view=profile">👤 마이페이지</a>
-            <div class="dd-sep"></div>
-            <?= work_systems_menu('../', 'schooltodo') ?>
-            <div class="dd-sep"></div>
-            <a href="<?= schooltodo_h($page['portal']) ?>/api/logout.php">🚪 로그아웃</a>
-          </div>
-        </div>
+        <?= portal_user_menu('../', 'schooltodo') ?>
       </div>
     </div>
   </div>

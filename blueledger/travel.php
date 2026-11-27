@@ -25,7 +25,7 @@ $csrf = bl_csrf_token();
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="../styles/topbar.css">
+<link rel="stylesheet" href="../styles/topbar.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/topbar.css') ?>">
 <link rel="stylesheet" href="styles/common.css?v=<?= (int)@filemtime(__DIR__ . '/styles/common.css') ?>">
 <link rel="stylesheet" href="styles/travel.css?v=<?= (int)@filemtime(__DIR__ . '/styles/travel.css') ?>">
 </head>
@@ -35,20 +35,7 @@ $csrf = bl_csrf_token();
     <a class="logo" href="../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
     <div class="top-right">
       <?= work_systems_bell('../', 'blueledger') ?>
-      <div class="user-menu" id="hdrUserMenu">
-        <div class="user-chip" id="hdrChip" title="메뉴">
-          <span class="avatar" style="background:<?= htmlspecialchars(user_color($u)) ?>"><?= htmlspecialchars(mb_substr($u['name'], 0, 1)) ?></span>
-          <span class="nm"><?= htmlspecialchars($u['name']) ?></span>
-          <span class="user-caret">▾</span>
-        </div>
-        <div class="dd-menu">
-          <a href="../index.php?view=profile">👤 마이페이지</a>
-          <div class="dd-sep"></div>
-          <?= work_systems_menu('../', 'blueledger') ?>
-          <div class="dd-sep"></div>
-          <a href="../api/logout.php">🚪 로그아웃</a>
-        </div>
-      </div>
+      <?= portal_user_menu('../', 'blueledger') ?>
     </div>
   </div>
 </div>

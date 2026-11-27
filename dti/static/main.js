@@ -1,12 +1,3 @@
-function toggleUserMenu(e) {
-  if (e) e.stopPropagation();
-  document.getElementById("hdrUserMenu").classList.toggle("open");
-}
-document.addEventListener("click", e => {
-  const um = document.getElementById("hdrUserMenu");
-  if (um && !um.contains(e.target)) um.classList.remove("open");
-});
-
 function setLayout(layout) {
   APP.view.layout = layout;
   try { localStorage.setItem(LAYOUT_KEY, layout); } catch (e) { }

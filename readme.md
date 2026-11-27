@@ -353,6 +353,12 @@ push_send([
   그리는 book·dti·learn 이 시각적으로 동일한 blue-iWorks 상단바(로고+사용자명+로그아웃)를 그린다.
   slack 하위 폴더 페이지는 include 전에 `$__bwBase = '../';`를 반드시 설정해야 링크가 안
   깨진다(폴더 깊이 보정용).
+- **상단바 사용자 메뉴(이름 칩 + 드롭다운)**: 포털 메인과 전 모듈이 `core/usermenu.php::portal_user_menu($base, $current)`
+  하나로 그린다(`worksystems.php` 가 같이 불러 준다). 항목은 메인 기준 — 마이페이지 · [서버 일괄 배포 허용] ·
+  공지사항 · [포털 관리] · 업무 시스템 · [앱으로 설치] · 로그아웃. 항목을 더하거나 빼려면 이 파일만 고친다.
+  여닫는 스크립트도 여기서 한 번 붙으므로 모듈에 `toggleUserMenu` 같은 것을 두지 않는다. 모듈에서는
+  포털의 `?view=profile|deploy|notices|manage` 로 넘어가고(`index.php::enterApp`), 메인에서는 `data-um` 을 보고
+  화면만 갈아 끼운다. 모듈 전용 항목은 `$opt['extra']`(studio 의 '내 프로파일').
 - **상단바 드롭다운의 "업무 시스템" 목록**: 원본은 `worksystems.json` 하나다(key·이모지·라벨 +
   포털 루트 기준 경로). 시스템이 늘거나 이름이 바뀌면 여기만 고치면 전 모듈 상단바와 포털
   대시보드 타일이 같이 바뀐다.

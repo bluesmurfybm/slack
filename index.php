@@ -30,9 +30,7 @@ require_once __DIR__ . '/core/board.php';
 // 공지·일정을 등록할 수 있는 사람인지 서버가 먼저 판정한다. 화면을 그린 뒤
 // 자바스크립트가 버튼을 붙였다 떼면 한 번 번쩍인다.
 $__isAdmin = $__u ? board_is_admin($__u['email']) : false;
-// 서버 일괄 배포 가능 사용자에게만 '허용' 메뉴를 보여 준다. 실제 차단은 api/deploy.php 가 다시 한다.
-require_once __DIR__ . '/core/deploy.php';
-$__canDeploy = $__u ? deploy_is_member($__u['email']) : false;
+// 사용자 메뉴의 '서버 일괄 배포 허용'·'포털 관리' 를 보일지는 core/usermenu.php 가 정한다(모든 모듈 공통).
 // 화면에 적는 첨부 한계는 php.ini 를 반영한 실제 값이어야 한다.
 // 20MB 라 적어 놓고 2MB 에서 막히면 "왜 안 되지" 가 된다.
 $__uploadMax = board_max_upload_label();
@@ -85,7 +83,7 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
-<link rel="stylesheet" href="styles/topbar.css">
+<link rel="stylesheet" href="styles/topbar.css?v=<?= (int)@filemtime(__DIR__ . '/styles/topbar.css') ?>">
 <link rel="stylesheet" href="styles/default.css">
 <link rel="stylesheet" href="styles/chatbot.css">
 <link rel="stylesheet" href="styles/board.css">
@@ -148,29 +146,8 @@ $__notice = need_login_notice(isset($_GET['need_login']) ? (string)$_GET['need_l
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
           <span class="nf-badge hidden" id="nf-badge"></span>
         </button>
-        <div class="user-menu" id="userMenu">
-          <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
-            <span class="avatar" id="tb-avatar"></span>
-            <span class="nm" id="tb-name"></span>
-            <span class="user-caret">▾</span>
-          </div>
-          <div class="dd-menu" id="userDd">
-            <a href="javascript:void(0)" onclick="closeUserMenu();showProfile()">👤 마이페이지</a>
-<?php if ($__canDeploy): ?>
-            <a href="javascript:void(0)" onclick="closeUserMenu();showDeploy()">🚀 서버 일괄 배포 허용</a>
-<?php endif; ?>
-            <a href="javascript:void(0)" onclick="closeUserMenu();showNotices(1)">📢 공지사항</a>
-<?php if ($__isAdmin): ?>
-            <a href="javascript:void(0)" onclick="closeUserMenu();showManage('events')">⚙️ 포털 관리</a>
-<?php endif; ?>
-            <div class="dd-sep"></div>
-            <?= work_systems_menu('', '', true) ?>
-            <div class="dd-sep"></div>
-            <!-- 설치할 수 있을 때만 보인다(pwa.js 의 bluePwa). 안내 띠에서 '다음에' 를 눌렀어도 여기서 다시 설치할 수 있다 -->
-            <a href="javascript:void(0)" id="menu-install" class="hidden" onclick="closeUserMenu();bluePwa.install()">📲 앱으로 설치</a>
-            <a href="javascript:void(0)" onclick="closeUserMenu();logout()">🚪 로그아웃</a>
-          </div>
-        </div>
+        <!-- 사용자 메뉴는 모든 모듈과 같은 것(core/usermenu.php). 여기서는 화면을 갈아 끼운다 — 아래 USER_MENU_ACTIONS -->
+        <?= portal_user_menu('', '', ['portal' => true]) ?>
       </div>
     </div>
   </div>
@@ -677,6 +654,13 @@ function enterApp(){
     showProfile();
     return;
   }
+  // 모듈의 사용자 메뉴(core/usermenu.php)에서 넘어온 경우 — 메인에서 고른 것과 같은 화면을 연다
+  const jump={deploy:()=>showDeploy(), notices:()=>showNotices(1), manage:()=>showManage("events")}[params.get("view")];
+  if(jump){
+    history.replaceState(null,"",location.pathname);
+    jump();
+    return;
+  }
   showDash();
 }
 
@@ -693,9 +677,9 @@ async function logout(){
 
 function renderShell(){
   const first=current.name.slice(0,1);
-  const av=document.getElementById("tb-avatar");
+  const av=document.querySelector("#hdrUserMenu .avatar");
   av.textContent=first; av.style.background=current.color||avatarColor(current.name);
-  document.getElementById("tb-name").textContent=current.name;
+  document.querySelector("#hdrUserMenu .nm").textContent=current.name;
   document.getElementById("hero-hi").textContent=`${current.name}님, 환영합니다`;
   // 로그인 직후에도 맞게 — 서버가 그린 값은 로그인 전 상태일 수 있다
   const nfBtn=document.getElementById("nfBtn");
@@ -703,16 +687,21 @@ function renderShell(){
   refreshNotifBadge();
 }
 
-function toggleUserMenu(e){
-  if(e) e.stopPropagation();
-  document.getElementById("userMenu").classList.toggle("open");
-}
-function closeUserMenu(){
-  document.getElementById("userMenu").classList.remove("open");
-}
+/* 사용자 메뉴 — 마크업과 여닫기는 core/usermenu.php. 모듈에서는 같은 항목이 ?view=… 로
+   넘어오지만(enterApp), 여기서는 새로 읽지 않고 화면만 갈아 끼운다. */
+const USER_MENU_ACTIONS={
+  profile:()=>showProfile(),
+  deploy: ()=>showDeploy(),
+  notices:()=>showNotices(1),
+  manage: ()=>showManage("events"),
+  logout: ()=>logout(),
+};
 document.addEventListener("click",(e)=>{
-  const um=document.getElementById("userMenu");
-  if(um && !um.contains(e.target)) um.classList.remove("open");
+  const a=e.target.closest("#hdrUserMenu a[data-um]");
+  const act=a && USER_MENU_ACTIONS[a.dataset.um];
+  if(!act) return;
+  e.preventDefault();
+  act();
 });
 
 /* ---- views ---- */
@@ -802,14 +791,6 @@ function showProfile(alertMsg, forceEdit){
   loadPushPanel();
   loadApiToken();
 }
-
-/* ---- 앱 설치 메뉴 ---- 설치할 수 있게 되면(pwa.js) 사용자 메뉴에 항목을 보인다 */
-function syncInstallMenu(){
-  const el=document.getElementById("menu-install");
-  if(el) el.classList.toggle("hidden", !(window.bluePwa && bluePwa.available()));
-}
-document.addEventListener("bluepwa:change", syncInstallMenu);
-window.addEventListener("load", syncInstallMenu);
 
 /* ---- 알림함 ----
    서버는 api/notifications.php. 알림을 눌러 열면 sw.js 가 읽음으로 바꾸고,

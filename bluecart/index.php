@@ -54,7 +54,7 @@ $roleLabels = array_map(
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <?php if ($inPortal): ?>
-<link rel="stylesheet" href="../styles/topbar.css">
+<link rel="stylesheet" href="../styles/topbar.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/topbar.css') ?>">
 <?php else: ?>
 <link rel="stylesheet" href="assets/topbar-fallback.css?v=<?= bc_asset_v('assets/topbar-fallback.css') ?>">
 <?php endif; ?>
@@ -70,6 +70,10 @@ $roleLabels = array_map(
     </a>
     <div class="top-right">
       <?= $inPortal ? work_systems_bell('../', $moduleKey) : '' ?>
+      <?php if ($inPortal): ?>
+      <?php // 포털·다른 모듈과 같은 사용자 메뉴(core/usermenu.php) ?>
+      <?= portal_user_menu('../', $moduleKey) ?>
+      <?php else: ?>
       <div class="user-menu" id="hdrUserMenu">
         <div class="user-chip" onclick="bcToggleUserMenu(event)" title="메뉴">
           <span class="avatar" style="background:<?= h($avatarColor) ?>"><?= h($avatarChar) ?></span>
@@ -77,18 +81,11 @@ $roleLabels = array_map(
           <span class="user-caret">&#9662;</span>
         </div>
         <div class="dd-menu" id="hdrUserDd">
-          <?php if ($inPortal): ?>
-            <a href="../index.php">&#128100; 마이페이지</a>
-            <div class="dd-sep"></div>
-            <?= work_systems_menu('../', $moduleKey) ?>
-            <div class="dd-sep"></div>
-            <a href="../api/logout.php">&#128682; 로그아웃</a>
-          <?php else: ?>
-            <div class="dd-label">개발 환경</div>
-            <a href="/dev/logout">&#128682; 계정 바꾸기</a>
-          <?php endif; ?>
+          <div class="dd-label">개발 환경</div>
+          <a href="/dev/logout">&#128682; 계정 바꾸기</a>
         </div>
       </div>
+      <?php endif; ?>
     </div>
   </div>
 </div>
@@ -140,8 +137,9 @@ $roleLabels = array_map(
   <div class="bc-toast" id="bc-toast" role="status" hidden></div>
 </div>
 
+<?php if (!$inPortal): ?>
 <script>
-// 상단바 드롭다운 — 포털/다른 모듈과 같은 동작.
+// 단독 실행(개발)용 드롭다운. 포털 안에서는 core/usermenu.php 가 여닫는다.
 function bcToggleUserMenu(e) {
   if (e) e.stopPropagation();
   document.getElementById('hdrUserMenu').classList.toggle('open');
@@ -151,6 +149,7 @@ document.addEventListener('click', function (e) {
   if (um && !um.contains(e.target)) um.classList.remove('open');
 });
 </script>
+<?php endif; ?>
 <script src="assets/app.js?v=<?= bc_asset_v('assets/app.js') ?>"></script>
 </body>
 </html>

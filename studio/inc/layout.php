@@ -24,7 +24,6 @@ function bs_layout_head(
     string $desc = '',
     string $nav = ''
 ): void {
-    $avatarChar  = mb_substr($user['name'] !== '' ? $user['name'] : '?', 0, 1);
     $avatarColor = $user['color'] ?? '#63719A';
     ?>
 <!DOCTYPE html>
@@ -39,7 +38,7 @@ function bs_layout_head(
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="../styles/topbar.css">
+<link rel="stylesheet" href="../styles/topbar.css?v=<?= (int)@filemtime(__DIR__ . '/../../styles/topbar.css') ?>">
 <link rel="stylesheet" href="assets/assign.css?v=<?= bs_asset_v('assets/assign.css') ?>">
 </head>
 <body>
@@ -52,23 +51,16 @@ function bs_layout_head(
     </a>
     <div class="top-right">
       <?= bs_layout_bell() ?>
-      <div class="user-menu" id="hdrUserMenu">
-        <div class="user-chip" onclick="baToggleUserMenu(event)" title="메뉴">
-          <span class="avatar" style="background:<?= h($avatarColor) ?>"><?= h($avatarChar) ?></span>
-          <span class="nm"><?= h($user['name']) ?></span>
-          <span class="user-caret">&#9662;</span>
-        </div>
-        <div class="dd-menu" id="hdrUserDd">
-          <a href="../index.php">&#128100; 마이페이지</a>
-          <?php // 구성원 목록이 관리자 묶음으로 가서(2026-10-16) 본인 프로파일 가는 길을 여기 둔다. ?>
-          <a href="member_profile.php">&#128202; 내 프로파일</a>
-          <div class="dd-sep"></div>
-          <?php // core/worksystems.php — studio 가 현재 위치로 표시된다 ?>
-          <?= work_systems_menu('../', BS_MODULE_KEY) ?>
-          <div class="dd-sep"></div>
-          <a href="javascript:void(0)" onclick="baLogout()">&#128682; 로그아웃</a>
-        </div>
-      </div>
+      <?php
+      // 포털·다른 모듈과 같은 사용자 메뉴(core/usermenu.php). 이름·색은 studio 가 아는 값을 넘긴다 —
+      // '사용자로 보기' 중에는 포털 로그인과 다를 수 있다.
+      // 구성원 목록이 관리자 묶음으로 가서(2026-10-16) 본인 프로파일 가는 길을 여기 둔다.
+      ?>
+      <?= portal_user_menu('../', BS_MODULE_KEY, [
+          'name'  => $user['name'] !== '' ? $user['name'] : '?',
+          'color' => $avatarColor,
+          'extra' => [['label' => '📊 내 프로파일', 'href' => 'member_profile.php']],
+      ]) ?>
     </div>
   </div>
 </div>
@@ -269,23 +261,6 @@ function bs_layout_foot(array $extraScripts = []): void
   <div class="ba-toast" id="ba-toast" role="status" hidden></div>
 </div>
 
-<script>
-// 상단바 드롭다운 — 포털/BlueCart 와 같은 동작.
-function baToggleUserMenu(e) {
-  if (e) e.stopPropagation();
-  document.getElementById('hdrUserMenu').classList.toggle('open');
-}
-document.addEventListener('click', function (e) {
-  var um = document.getElementById('hdrUserMenu');
-  if (um && !um.contains(e.target)) um.classList.remove('open');
-});
-// 로그아웃은 포털 엔드포인트를 그대로 쓴다(포털 index.php 와 같은 방식).
-function baLogout() {
-  fetch('../api/logout.php', { method: 'POST' })
-    .catch(function () {})
-    .then(function () { location.href = '../index.php'; });
-}
-</script>
 <script src="assets/assign.js?v=<?= bs_asset_v('assets/assign.js') ?>"></script>
 <?php foreach ($extraScripts as $src): ?>
 <script src="<?= h($src) ?>?v=<?= bs_asset_v($src) ?>"></script>

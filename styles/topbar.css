@@ -31,18 +31,26 @@ html{scrollbar-gutter:stable}
 .topbar .dd-menu{position:absolute;right:0;top:calc(100% + 8px);min-width:190px;background:#fff;
   border:1px solid #E2E9F6;border-radius:14px;box-shadow:0 1px 2px rgba(16,35,90,.05), 0 12px 32px -18px rgba(16,35,90,.35);
   padding:6px;opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .12s ease,transform .12s ease;z-index:60;
-  font-family:'Pretendard',system-ui,sans-serif}
+  font-family:'Pretendard',system-ui,sans-serif;
+  /* 메뉴 전체가 화면 높이를 넘지 않게 한다. 넘치는 만큼은 업무 시스템 칸(.dd-systems)이 줄어들며
+     스크롤하고, 위아래 항목(마이페이지·로그아웃 등)은 늘 보인다. 80px = 상단바 + 아래 여백.
+     화면이 아주 낮아 그래도 안 담기면 메뉴 전체가 스크롤한다. */
+  display:flex;flex-direction:column;box-sizing:border-box;
+  max-height:calc(100vh - 80px);max-height:calc(100dvh - 80px);overflow-y:auto;overscroll-behavior:contain}
+.topbar .dd-menu > *{flex-shrink:0}
 .topbar .user-menu.open .dd-menu{opacity:1;visibility:visible;transform:none}
 .topbar .dd-menu a{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:9px;
   font-size:13.5px;color:#16223B;text-decoration:none;white-space:nowrap}
 .topbar .dd-menu a:hover{background:#EEF3FB}
+/* 조건부 항목(앱으로 설치) — display:flex 가 hidden 속성을 이기지 않게 */
+.topbar .dd-menu a[hidden]{display:none}
 .topbar .dd-menu .dd-sep{height:1px;background:#E2E9F6;margin:5px 6px}
 .topbar .dd-menu .dd-label{font-size:11px;color:#63719A;padding:6px 11px 2px}
 /* 지금 보고 있는 업무 시스템 — 드롭다운에서 자기 자리를 표시한다 */
 .topbar .dd-menu a.on{background:#EEF3FB;color:#1C5DE5;font-weight:600}
 /* 업무 시스템 — 메인 카드와 같은 묶음·순서(core/worksystems.php::work_systems_menu_data).
    묶음이 늘면 메뉴가 길어지므로 이 칸만 스크롤한다. 마이페이지·로그아웃은 늘 보인다. */
-.topbar .dd-menu .dd-systems{max-height:calc(100vh - 260px);overflow-y:auto;overscroll-behavior:contain;
+.topbar .dd-menu .dd-systems{flex:0 1 auto;min-height:96px;overflow-y:auto;overscroll-behavior:contain;
   scrollbar-width:thin;scrollbar-color:transparent transparent;transition:scrollbar-color .15s ease}
 /* 스크롤 막대는 가늘게, 평소엔 숨겼다가 메뉴에 손이 갈 때만 옅게 보인다.
    크롬·엣지 121+ 와 파이어폭스는 위 scrollbar-* 를, 그 전 웹킷은 아래 규칙을 쓴다. */

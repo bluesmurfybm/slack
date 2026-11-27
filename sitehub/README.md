@@ -125,4 +125,4 @@ BlueLab 팀이 유지보수하는 **사이트** 정보를  관리하는 모듈(`
 
 ## 포털 등록
 `core/worksystems.json`(`key: sitehub`), 루트 `index.php` 의 `sitehubIcon` · ICONS 맵, 모듈 안의 `need_login=sitehub` ·
-`work_systems_menu(..., 'sitehub')` 세 곳을 함께 고친다.
+`portal_user_menu(..., 'sitehub')` 세 곳을 함께 고친다.

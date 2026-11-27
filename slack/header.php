@@ -16,34 +16,16 @@ $__bwBase = isset($__bwBase) ? $__bwBase : '';
 $__bwCurrent = isset($__bwCurrent) ? $__bwCurrent : '';
 $__bwUser = function_exists('current_portal_user') ? current_portal_user() : null;
 ?>
+<?php // header.css 가 @import 하는 topbar.css 는 브라우저에 옛것이 남는다 — 바뀌면 새로 받게 여기서 한 번 더 건다 ?>
+<link rel="stylesheet" href="<?= $__bwBase ?>../styles/topbar.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/topbar.css') ?>">
 <div class="topbar">
   <div class="topbar-in">
     <a class="logo" href="<?= $__bwBase ?>../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
     <div class="top-right">
       <?php if ($__bwUser): ?>
       <?= work_systems_bell($__bwBase . '../', $__bwCurrent) ?>
-      <div class="user-menu" id="hdrUserMenu">
-        <div class="user-chip" onclick="__hdrToggleMenu(event)" title="메뉴">
-          <span class="avatar" style="background:<?= htmlspecialchars(user_color($__bwUser), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(mb_substr($__bwUser['name'], 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
-          <span class="nm"><?= htmlspecialchars($__bwUser['name'], ENT_QUOTES, 'UTF-8') ?></span>
-          <span class="user-caret">▾</span>
-        </div>
-        <div class="dd-menu" id="hdrUserDd">
-          <a href="<?= $__bwBase ?>../index.php?view=profile">👤 마이페이지</a>
-          <div class="dd-sep"></div>
-          <?= work_systems_menu($__bwBase . '../', $__bwCurrent) ?>
-          <div class="dd-sep"></div>
-          <a href="<?= $__bwBase ?>logout.php">🚪 로그아웃</a>
-        </div>
-      </div>
+      <?= portal_user_menu($__bwBase . '../', $__bwCurrent) ?>
       <?php endif; ?>
     </div>
   </div>
 </div>
-<script>
-function __hdrToggleMenu(e){ if(e) e.stopPropagation(); document.getElementById("hdrUserMenu").classList.toggle("open"); }
-document.addEventListener("click", function(e){
-  var um = document.getElementById("hdrUserMenu");
-  if(um && !um.contains(e.target)) um.classList.remove("open");
-});
-</script>

@@ -112,7 +112,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-<link rel="stylesheet" href="../styles/topbar.css">
+<link rel="stylesheet" href="../styles/topbar.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/topbar.css') ?>">
 <link rel="stylesheet" href="styles/moodle.css">
 </head>
 <body>
@@ -121,22 +121,7 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
     <a class="logo" href="../index.php" style="text-decoration:none"><b>blue</b><span class="dash">-</span>iWorks</a>
     <div class="top-right">
       <?= work_systems_bell('../', 'moodle') ?>
-      <div class="user-menu" id="hdrUserMenu">
-        <div class="user-chip" onclick="__hdrToggleMenu(event)" title="메뉴">
-          <span class="avatar" style="background:<?= h(user_color($me)) ?>"><?= h(mb_substr($me['name'], 0, 1)) ?></span>
-          <span class="nm"><?= h($me['name']) ?></span>
-          <span class="user-caret">▾</span>
-        </div>
-        <div class="dd-menu" id="hdrUserDd">
-          <a href="../index.php?view=profile">👤 마이페이지</a>
-          <div class="dd-sep"></div>
-          <a href="../index.php">🏠 대시보드</a>
-          <div class="dd-sep"></div>
-          <?= work_systems_menu('../', 'moodle') ?>
-          <div class="dd-sep"></div>
-          <a href="../api/logout.php">🚪 로그아웃</a>
-        </div>
-      </div>
+      <?= portal_user_menu('../', 'moodle') ?>
     </div>
   </div>
 </div>
@@ -383,11 +368,6 @@ $stale = $busy && (($refresh['state'] === 'pending' && $waitMin >= 3) || ($refre
 </div>
 
 <script>
-function __hdrToggleMenu(e){ if(e) e.stopPropagation(); document.getElementById("hdrUserMenu").classList.toggle("open"); }
-document.addEventListener("click", function(e){
-  var um = document.getElementById("hdrUserMenu");
-  if(um && !um.contains(e.target)) um.classList.remove("open");
-});
 
 // 필터 칩: 서버가 그려 둔 항목을 data-* 로 걸러 보인다. 새 요청은 없다.
 (function(){

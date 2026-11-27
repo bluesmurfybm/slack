@@ -22,7 +22,7 @@ learn_require_page_login();
     rel="stylesheet">
   <link rel="stylesheet"
     href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-  <link rel="stylesheet" href="../styles/topbar.css">
+  <link rel="stylesheet" href="../styles/topbar.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/topbar.css') ?>">
   <link rel="stylesheet" href="styles/style.css">
 </head>
 
@@ -33,20 +33,7 @@ learn_require_page_login();
           class="dash">-</span>iWorks</a>
       <div class="top-right">
         <?= work_systems_bell('../', 'learn') ?>
-        <div class="user-menu" id="hdrUserMenu">
-          <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
-            <span class="avatar" id="hdrAvatar"></span>
-            <span class="nm" id="hdrName"></span>
-            <span class="user-caret">▾</span>
-          </div>
-          <div class="dd-menu" id="hdrUserDd">
-            <a href="#" id="dd-mypage">👤 마이페이지</a>
-            <div class="dd-sep"></div>
-            <?= work_systems_menu('../', 'learn') ?>
-            <div class="dd-sep"></div>
-            <a href="#" id="dd-logout">🚪 로그아웃</a>
-          </div>
-        </div>
+        <?= portal_user_menu('../', 'learn') ?>
       </div>
     </div>
   </div>
@@ -443,7 +430,8 @@ learn_require_page_login();
   <script src="static/manage.js"></script>
   <script src="static/stats.js"></script>
   <script src="static/admin.js"></script>
-  <script src="static/main.js"></script>
+  <?php // 상단바 마크업이 바뀌면 옛 main.js 가 없는 요소를 찾다 멈춘다 — 파일이 바뀌면 새로 받게 한다 ?>
+  <script src="static/main.js?v=<?= (int)@filemtime(__DIR__ . '/static/main.js') ?>"></script>
 </body>
 
 </html>

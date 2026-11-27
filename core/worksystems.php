@@ -232,3 +232,7 @@ function work_systems_bell(string $base, string $key): string {
         . '<a class="tb-bell__all" href="' . $h($base) . 'index.php">포털 알림함에서 모두 보기</a>'
         . '</div></div>';
 }
+
+// 사용자 메뉴(이름 칩 + 드롭다운) — portal_user_menu(). 이 파일을 부르는 화면은 모두 상단바를
+// 그리므로 같이 불러 둔다.
+require_once __DIR__ . '/usermenu.php';

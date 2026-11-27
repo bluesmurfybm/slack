@@ -6,13 +6,8 @@
   var CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
 
   /* ---- 공통 ---- */
-  window.owToggleMenu = function (e) {
-    if (e) e.stopPropagation();
-    document.getElementById("hdrUserMenu").classList.toggle("open");
-  };
+  // 사용자 메뉴 여닫기는 core/usermenu.php 가 한다
   document.addEventListener("click", function (e) {
-    var um = document.getElementById("hdrUserMenu");
-    if (um && !um.contains(e.target)) um.classList.remove("open");
     document.querySelectorAll(".more.open").forEach(function (m) {
       if (!m.contains(e.target)) { m.classList.remove("open"); m.querySelector("[data-menu]").setAttribute("aria-expanded", "false"); }
     });

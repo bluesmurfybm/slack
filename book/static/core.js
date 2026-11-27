@@ -101,11 +101,3 @@ function showToast(m) {
   toastT = setTimeout(() => el.classList.remove("show"), 2200);
 }
 
-function toggleUserMenu(e) {
-  if (e) e.stopPropagation();
-  document.getElementById("hdrUserMenu").classList.toggle("open");
-}
-document.addEventListener("click", (e) => {
-  const um = document.getElementById("hdrUserMenu");
-  if (um && !um.contains(e.target)) um.classList.remove("open");
-});

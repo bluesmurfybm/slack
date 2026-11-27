@@ -139,8 +139,6 @@ F('btnSlipClose').addEventListener('click',()=>S.single?closeSingle():closeDrawe
 S.lastLoad=0;
 window.addEventListener('focus',()=>{if(!S.single&&Date.now()-S.lastLoad>2000)loadState().catch(()=>{})});
 // 상단바 사용자 메뉴
-F('hdrChip').addEventListener('click',e=>{e.stopPropagation();F('hdrUserMenu').classList.toggle('open')});
-document.addEventListener('click',e=>{if(!F('hdrUserMenu').contains(e.target))F('hdrUserMenu').classList.remove('open')});
 function pick(o,keys){const r={};keys.forEach(k=>{if(o[k]!==undefined)r[k]=o[k]});return r}
 function omit(o,keys){const r={...o};keys.forEach(k=>delete r[k]);return r}
 function presetMe(){if(isAdmin())return;const me=S.me||'';

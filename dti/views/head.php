@@ -34,20 +34,7 @@ $admin = $page['admin'];
           class="dash">-</span>iWorks</a>
       <div class="top-right">
         <?= work_systems_bell($base . '../', 'dti') ?>
-        <div class="user-menu" id="hdrUserMenu">
-          <div class="user-chip" onclick="toggleUserMenu(event)" title="메뉴">
-            <span class="avatar" style="background:<?= dti_h($me['color'] ?? '#606D79') ?>"><?= dti_h(mb_substr($me['name'], 0, 1)) ?></span>
-            <span class="nm"><?= dti_h($me['name']) ?></span>
-            <span class="user-caret">▾</span>
-          </div>
-          <div class="dd-menu" id="hdrUserDd">
-            <a href="<?= dti_h($page['portal']) ?>/?view=profile">👤 마이페이지</a>
-            <div class="dd-sep"></div>
-            <?= work_systems_menu($base . '../', 'dti') ?>
-            <div class="dd-sep"></div>
-            <a href="<?= dti_h($page['portal']) ?>/api/logout.php">🚪 로그아웃</a>
-          </div>
-        </div>
+        <?= portal_user_menu($base . '../', 'dti') ?>
       </div>
     </div>
   </div>
