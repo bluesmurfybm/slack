@@ -2,10 +2,11 @@
 /**
  * 서버 일괄 배포 허용.
  *
- * blue-app 의 deploy-svn-projects 스킬은 여러 대학 운영 서버에 한꺼번에 소스를 올린다.
+ * blue-app 의 deploy-svn-projects·deploy-lxp-projects 스킬은 여러 대학 운영 서버에 한꺼번에 소스를 올린다.
  * 늘 열려 있으면 위험하므로 두 번 막는다.
- *   1) 포털 관리자가 '배포 가능 사용자' 로 넣은 사람만
- *   2) 그 사람이 직접 '허용' 을 켜 둔 동안에만 — 켠 뒤 DEPLOY_ALLOW_HOURS 시간이 지나면 저절로 꺼진다
+ *   1) 허용을 켜고 끌 수 있는 것은 포털 관리자가 '배포 가능 사용자' 로 넣은 사람뿐
+ *   2) 그중 한 사람이라도 '허용' 을 켜 둔 동안에만 — 켠 뒤 DEPLOY_ALLOW_HOURS 시간이 지나면 저절로 꺼진다
+ * 켜져 있는 동안에는 포털에 로그인한 팀원 누구나 스킬을 실행할 수 있다(팀원을 명단에 넣을 필요가 없다).
  *
  * 스킬은 실행 직전에 api/deploy.php 를 읽어 allowed 가 true 일 때만 진행한다.
  */
@@ -39,17 +40,45 @@ function deploy_row_allowed($row)
         && !empty($row['enabled_until']) && $row['enabled_until'] > deploy_now();
 }
 
-/** 한 사람의 상태. 스킬과 화면이 같은 꼴을 받는다. */
+/**
+ * 지금 허용을 켜 둔 배포 가능 사용자 가운데 기한이 가장 늦은 한 사람 {email, name, enabled_until}. 없으면 null.
+ * 한 사람이라도 켜 두면 그동안 포털에 로그인한 팀원 누구나 일괄 배포를 실행할 수 있다.
+ */
+function deploy_open()
+{
+    $st = portal_db()->prepare(
+        "SELECT d.email, d.enabled_until, u.name
+           FROM portal_deploy_user d
+           LEFT JOIN portal_users u ON u.email = d.email
+          WHERE d.enabled = 1 AND d.enabled_until > ?
+          ORDER BY d.enabled_until DESC
+          LIMIT 1"
+    );
+    $st->execute([deploy_now()]);
+    $row = $st->fetch();
+    return $row ?: null;
+}
+
+/**
+ * 한 사람이 보는 상태. 스킬과 화면이 같은 꼴을 받는다.
+ *   allowed / until / by   지금 일괄 배포를 실행할 수 있는가(배포 가능 사용자 중 누군가 켜 둠), 언제까지, 누가 켰는가
+ *   member                 이 사람이 허용을 켜고 끌 수 있는가(배포 가능 사용자)
+ *   own / own_until        이 사람이 직접 켜 둔 상태인가, 언제까지
+ */
 function deploy_state($email)
 {
-    $row     = deploy_row($email);
-    $allowed = deploy_row_allowed($row);
+    $row  = deploy_row($email);
+    $own  = deploy_row_allowed($row);
+    $open = deploy_open();
     return [
-        'member'  => $row !== null,
-        'allowed' => $allowed,
-        'until'   => $allowed ? $row['enabled_until'] : null,
-        'hours'   => DEPLOY_ALLOW_HOURS,
-        'now'     => deploy_now(),
+        'member'    => $row !== null,
+        'allowed'   => $open !== null,
+        'until'     => $open ? $open['enabled_until'] : null,
+        'by'        => $open ? ($open['name'] ?: $open['email']) : null,
+        'own'       => $own,
+        'own_until' => $own ? $row['enabled_until'] : null,
+        'hours'     => DEPLOY_ALLOW_HOURS,
+        'now'       => deploy_now(),
     ];
 }
 

@@ -2456,7 +2456,7 @@ async function renderManageDeploy(box){
          <span class="tt"><select id="mg-newdeploy" style="width:100%;font-family:var(--sans);font-size:14px;padding:9px 11px;border:1.5px solid var(--line);border-radius:10px;background:#FBFCFF">${opts}</select></span>
          <span class="btns"><button class="btn-sm" onclick="addDeployUser()">배포 가능 사용자로 추가</button></span>
        </div>`:"")+
-      `<div class="hintline" style="margin-top:12px">여기에 넣은 사람에게만 사용자 메뉴에 '서버 일괄 배포 허용' 이 보입니다. 넣는 것만으로는 배포할 수 없고, 본인이 그 메뉴에서 허용을 켜야 합니다(켠 뒤 ${esc(String(d.hours))}시간이 지나면 저절로 꺼집니다).</div>`;
+      `<div class="hintline" style="margin-top:12px">여기에 넣은 사람에게만 사용자 메뉴에 '서버 일괄 배포 허용' 이 보이고, 이 사람들만 허용을 켜고 끌 수 있습니다. 이 중 한 사람이라도 켜 두면 그동안 포털에 로그인한 팀원 누구나 일괄 배포를 실행할 수 있습니다(팀원을 여기에 넣을 필요는 없습니다). 켠 뒤 ${esc(String(d.hours))}시간이 지나면 저절로 꺼집니다.</div>`;
   }catch(e){ box.innerHTML=`<div class="panel-empty">${esc(e.message)}</div>`; }
 }
 
@@ -2493,17 +2493,21 @@ function renderDeploy(d){
     box.innerHTML=`<div class="panel-empty">일괄 배포 가능 사용자가 아닙니다. 포털 관리자에게 요청하세요.</div>`;
     return;
   }
+  // own = 내가 켜 둔 상태, allowed = 누군가(나 또는 다른 배포 가능 사용자) 켜 두어 팀원이 실행할 수 있는 상태
+  const others=d.allowed && !d.own;
   box.innerHTML=`<div class="list-card"><div class="mrow">
       <span class="tt">
-        <div class="nm">${d.allowed?`허용 중 — ${esc((d.until||"").slice(0,16))} 까지`:"미허용"}</div>
-        <div class="sub">${d.allowed?"이 시각이 지나면 저절로 꺼집니다. 배포가 끝나면 바로 꺼 주세요.":"꺼져 있는 동안에는 일괄 배포 스킬이 실행되지 않습니다."}</div>
+        <div class="nm">${d.own?`허용 중 — ${esc((d.own_until||"").slice(0,16))} 까지`:"미허용"}</div>
+        <div class="sub">${d.own?"이 시각이 지나면 저절로 꺼집니다. 배포가 끝나면 바로 꺼 주세요."
+          :others?`지금은 ${esc(d.by||"다른 사용자")} 님이 켜 두어 ${esc((d.until||"").slice(0,16))} 까지 일괄 배포를 실행할 수 있습니다.`
+          :"꺼져 있는 동안에는 일괄 배포 스킬이 실행되지 않습니다."}</div>
       </span>
       <span class="btns">
-        <label class="check"><input type="checkbox" ${d.allowed?"checked":""} onchange="setDeployAllowed(this)"> <span>허용</span></label>
-        ${d.allowed?`<button class="btn-sm" onclick="extendDeployAllowed()">${esc(String(d.hours))}시간 연장</button>`:""}
+        <label class="check"><input type="checkbox" ${d.own?"checked":""} onchange="setDeployAllowed(this)"> <span>허용</span></label>
+        ${d.own?`<button class="btn-sm" onclick="extendDeployAllowed()">${esc(String(d.hours))}시간 연장</button>`:""}
       </span>
     </div></div>
-    <div class="hintline" style="margin-top:12px">blue-app 의 <b>deploy-svn-projects</b> 스킬(여러 대학 운영 서버에 소스를 한꺼번에 올림)을 내 계정으로 실행할 수 있게 합니다. 켜면 ${esc(String(d.hours))}시간 동안만 허용됩니다.</div>`;
+    <div class="hintline" style="margin-top:12px">blue-app 의 일괄 배포 스킬(<b>deploy-svn-projects</b>·<b>deploy-lxp-projects</b>, 여러 대학 운영 서버에 소스를 한꺼번에 올림)을 실행할 수 있게 합니다. <b>켜 두는 동안에는 포털에 로그인한 팀원 누구나 실행할 수 있습니다.</b> 켜면 ${esc(String(d.hours))}시간 동안만 허용됩니다.</div>`;
 }
 async function setDeployAllowed(input){
   input.disabled=true;
