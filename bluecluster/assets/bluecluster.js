@@ -1,4 +1,4 @@
-/* 블루 클러스터 에이전트 화면 동작. */
+/* ClusterAgent 화면 동작. */
 (function () {
   "use strict";
 

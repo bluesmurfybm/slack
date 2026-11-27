@@ -1,6 +1,6 @@
 <?php
 /**
- * 블루 클러스터 에이전트 — 살아 있는 PC 목록.
+ * ClusterAgent — 살아 있는 PC 목록.
  */
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
@@ -13,10 +13,10 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 $nodes = bcl_nodes_live(bcl_db(), time());
 
-bcl_page_head($me, 'PC 목록 · 블루 클러스터 에이전트');
+bcl_page_head($me, 'PC 목록 · ClusterAgent');
 ?>
 <div class="wrap" data-refresh="3">
-  <div class="crumb"><a href="index.php">블루 클러스터 에이전트</a> <span>›</span> <span>PC 목록</span></div>
+  <div class="crumb"><a href="index.php">ClusterAgent</a> <span>›</span> <span>PC 목록</span></div>
   <h1 class="sec-h">살아 있는 PC <span class="muted"><?= count($nodes) ?>대 · 마지막 신호 <?= h(BCL_NODE_TTL_S) ?>초 안</span></h1>
 
 <?php if (!$nodes): ?>

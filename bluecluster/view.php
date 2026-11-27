@@ -1,6 +1,6 @@
 <?php
 /**
- * 블루 클러스터 에이전트 — 작업 상세. 조각별 시도 목록과 결과 내려받기.
+ * ClusterAgent — 작업 상세. 조각별 시도 목록과 결과 내려받기.
  */
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
@@ -15,16 +15,16 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 $job = bcl_page_job(bcl_db(), (string)($_GET['id'] ?? ''));
 if (!$job) {
     http_response_code(404);
-    bcl_page_head($me, '블루 클러스터 에이전트');
+    bcl_page_head($me, 'ClusterAgent');
     echo '<div class="wrap narrow"><div class="card empty"><h2>작업을 찾을 수 없습니다</h2><p>지워졌거나 주소가 틀렸습니다. <a href="index.php">목록으로</a></p></div></div>';
     bcl_page_foot();
     exit;
 }
 
-bcl_page_head($me, $job['title'] . ' · 블루 클러스터 에이전트');
+bcl_page_head($me, $job['title'] . ' · ClusterAgent');
 ?>
 <div class="wrap" <?= $job['state'] === 'open' ? 'data-refresh="5"' : '' ?>>
-  <div class="crumb"><a href="index.php">블루 클러스터 에이전트</a> <span>›</span> <span><?= h($job['job_id']) ?></span></div>
+  <div class="crumb"><a href="index.php">ClusterAgent</a> <span>›</span> <span><?= h($job['job_id']) ?></span></div>
 
   <header class="vhead card">
     <div class="vtitle">

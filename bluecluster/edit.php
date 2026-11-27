@@ -1,6 +1,6 @@
 <?php
 /**
- * 블루 클러스터 에이전트 — 새 작업 등록.
+ * ClusterAgent — 새 작업 등록.
  */
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
@@ -27,10 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-bcl_page_head($me, '새 작업 · 블루 클러스터 에이전트');
+bcl_page_head($me, '새 작업 · ClusterAgent');
 ?>
 <div class="wrap narrow">
-  <div class="crumb"><a href="index.php">블루 클러스터 에이전트</a> <span>›</span> <span>새 작업</span></div>
+  <div class="crumb"><a href="index.php">ClusterAgent</a> <span>›</span> <span>새 작업</span></div>
 
   <?php if ($errors): ?>
     <div class="banner bad" role="alert"><?php foreach ($errors as $error): ?><span><?= h($error) ?></span><?php endforeach; ?></div>

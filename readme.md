@@ -1046,7 +1046,7 @@ DELETE api/event_words.php?kind=…       한 종류를 기본값으로         
 | access (Coursemos EnvHub · 학교 접속 정보) | [access/README.md](access/README.md) |
 | sitehub (BlueLab SiteHub) | [sitehub/README.md](sitehub/README.md) |
 | schooltodo (Coursemos TaskSheet · 대학 일괄 할일) | [schooltodo/README.md](schooltodo/README.md) |
-| bluecluster (블루 클러스터 에이전트 · 작성 중) | [bluecluster/README.md](bluecluster/README.md) |
+| bluecluster (ClusterAgent · 작성 중) | [bluecluster/README.md](bluecluster/README.md) |
 | csmspwdlog (Coursemos PwdLog · 슬랙 관리자 계정 요청 이력) | [csmspwdlog/README.md](csmspwdlog/README.md) |
 | slackai (WorkHub AI · 테스트베드) | [slackai/README.md](slackai/README.md) |
 | bluecart (BlueCart · 물품 요청) | [bluecart/README.md](bluecart/README.md) |

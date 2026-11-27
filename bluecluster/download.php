@@ -1,6 +1,6 @@
 <?php
 /**
- * 블루 클러스터 에이전트 — 시도 결과 파일 내려받기.
+ * ClusterAgent — 시도 결과 파일 내려받기.
  */
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/db.php';

@@ -1,4 +1,4 @@
-# 블루 클러스터 에이전트 (test)
+# ClusterAgent (test)
 
 사무실 PC(노드)들이 Claude 작업을 나눠 처리하도록 작업을 모으고 나눠 주는 iWorks 모듈이다. 설계 아이디어는 blue-cluster 저장소의 `docs/2026-11-26-blue-cluster-design.md`, 노드와 주고받는 규약은 같은 저장소의 `docs/iworks-api.md` 를 따른다.
 

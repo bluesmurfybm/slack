@@ -15,7 +15,7 @@ return <<<'JSON'
     {"name": "계정"},
     {"name": "EnvHub", "description": "응답에 비밀번호가 평문으로 들어 있습니다."},
     {"name": "TaskSheet"},
-    {"name": "블루 클러스터", "description": "사무실 PC(노드)용. 모든 오류 응답 본문은 `{\"reason\": \"...\"}` 이고, `ok: false` 는 오류가 아니라 거절이라 200 입니다. 필수 본문 필드가 없으면 `400 {\"reason\": \"필수 값 없음: <필드>\"}` 입니다. 규약 원문은 blue-cluster 저장소의 docs/iworks-api.md."}
+    {"name": "ClusterAgent","description": "사무실 PC(노드)용. 모든 오류 응답 본문은 `{\"reason\": \"...\"}` 이고, `ok: false` 는 오류가 아니라 거절이라 200 입니다. 필수 본문 필드가 없으면 `400 {\"reason\": \"필수 값 없음: <필드>\"}` 입니다. 규약 원문은 blue-cluster 저장소의 docs/iworks-api.md."}
   ],
   "paths": {
     "/api/me.php": {
@@ -215,7 +215,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "작업 등록",
         "description": "등록자(submitter)는 본문으로 받지 않고 인증된 사용자(토큰 주인)로 정해집니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -230,7 +230,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/open": {
       "get": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "리더가 필요한 작업",
         "description": "끝나지 않았고 리더가 없거나 리스가 끝난 작업입니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -243,7 +243,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/:id": {
       "get": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "작업 하나",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
         "parameters": [{"name": "p", "in": "query", "required": true, "schema": {"type": "string", "example": "/jobs/job-1"}}],
@@ -256,7 +256,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/:id/claim": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "리더 차지",
         "description": "리더가 없거나 리스가 끝났을 때만 `ok: true` 이고 `epoch` 가 1 늘며 리스가 3초 늘어납니다. 아니면 `ok: false` 와 현재 `leader`, `epoch` 를 돌려줍니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -272,7 +272,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/:id/lease": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "리스 연장",
         "description": "현재 리더이고 `epoch` 가 같을 때만 `ok: true` 입니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -288,7 +288,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/:id/pieces": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "조각 등록",
         "description": "현재 리더·epoch 가 아니면 `ok: false`. 이미 조각이 있으면 바꾸지 않고 `ok: true` 입니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -304,7 +304,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/:id/pieces/:pid/start": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "조각 시도 시작",
         "description": "조각이 `pending` 이 아니거나 작업이 `done` 이거나 서버가 결과 파일을 저장할 수 없으면 `ok: false`, `attempt_no: null` 이고 시도를 만들지 않습니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -320,7 +320,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/:id/pieces/:pid/finish": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "조각 시도 끝",
         "description": "`result`, `patch`, `log` 는 서버 `files_dir` 에 원본 그대로 저장되어 수 MB 일 수 있습니다. 시도를 시작한 토큰 주인이 아니면 403, 이미 끝난 시도이거나 `node_id` 가 시도의 노드가 아니면 `ok: false` 입니다. `status` 는 `done`, `stopped_by_owner`, `lost` 만 받습니다(그 밖은 400).",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -345,7 +345,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/:id/pieces/:pid/close": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "리더가 조각 시도 닫기",
         "description": "조각은 다시 `pending`, 시도는 `lost` 가 됩니다. 현재 리더·epoch 가 아니거나 이미 끝난 시도면 `ok: false` 입니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -361,7 +361,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/jobs/:id/finish": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "작업 끝",
         "description": "현재 리더·epoch 가 아니면 `ok: false`. 성공하면 `state` 가 `done` 이 됩니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -377,7 +377,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/nodes/heartbeat": {
       "post": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "노드 하트비트",
         "description": "`attempts` 는 이 노드가 실행 중인 시도이고 각 항목은 `<job_id>/<piece_id>/<attempt_no>` 입니다. 같은 `node_id` 가 다른 토큰 주인으로 살아 있으면(마지막 하트비트 3초 안) 403 입니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],
@@ -401,7 +401,7 @@ return <<<'JSON'
     },
     "/bluecluster/api.php?p=/nodes/live": {
       "get": {
-        "tags": ["블루 클러스터"],
+        "tags": ["ClusterAgent"],
         "summary": "살아 있는 노드",
         "description": "마지막 하트비트가 3초 안인 노드입니다. 각 항목은 하트비트 본문 필드와 `last_seen` 입니다.",
         "security": [{"bearerAuth": []}, {"sessionCookie": []}],

@@ -1,6 +1,6 @@
 <?php
 /**
- * 블루 클러스터 에이전트 — 작업 목록.
+ * ClusterAgent — 작업 목록.
  */
 require_once __DIR__ . '/inc/bootstrap.php';
 require_once __DIR__ . '/inc/layout.php';
@@ -16,12 +16,12 @@ $tab = bcl_page_tab($_GET['tab'] ?? null);
 $jobs = bcl_page_jobs($pdo, $tab);
 $tabs = ['open' => '진행 중', 'done' => '완료'];
 
-bcl_page_head($me, '블루 클러스터 에이전트');
+bcl_page_head($me, 'ClusterAgent');
 ?>
 <div class="wrap" data-refresh="5">
   <div class="hero">
     <div>
-      <h1>블루 클러스터 에이전트</h1>
+      <h1>ClusterAgent</h1>
       <p>PC 여러 대가 나눠 맡는 코딩 작업. 작업을 올리면 리더 PC 가 조각으로 나누고 각 PC 가 시도합니다.</p>
     </div>
     <div class="hero-links">

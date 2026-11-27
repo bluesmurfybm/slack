@@ -23,7 +23,7 @@ function bcl_connect($db)
 }
 
 /**
- * 블루 클러스터 DB 연결을 얻는다.
+ * ClusterAgent DB 연결을 얻는다.
  * @return PDO
  */
 function bcl_db()
@@ -72,7 +72,7 @@ function bcl_schema()
             UNIQUE KEY `uq_job_key` (`job_key`),
             KEY `ix_state` (`state`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-          COMMENT='블루 클러스터 작업'",
+          COMMENT='ClusterAgent 작업'",
         "CREATE TABLE IF NOT EXISTS `bcl_pieces` (
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `job_id` INT UNSIGNED NOT NULL COMMENT 'bcl_jobs.id',

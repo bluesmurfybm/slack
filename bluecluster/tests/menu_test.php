@@ -17,7 +17,7 @@ final class menu_test extends TestCase
         }));
 
         $this->assertCount(1, $found);
-        $this->assertSame('블루 클러스터 에이전트 (test)', $found[0]['label']);
+        $this->assertSame('ClusterAgent (test)', $found[0]['label']);
     }
 
     /** core/worksystems.json: key bluecluster 의 path 파일 */
