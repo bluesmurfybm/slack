@@ -939,6 +939,13 @@ details.sh-menu > summary::-webkit-details-marker{display:none}
 .sh-rows li.sh-proc-row > .a{grid-column:2;grid-row:1}
 .sh-rows li.sh-proc-row .sh-hist-body{grid-column:1 / -1;min-width:0;overflow-wrap:anywhere}
 .sh-hist-year{height:24px;padding:0 6px;font-size:12px}
+/* 이력 행 — 상태·작업내용 줄만 버튼 옆에 두고, 완료·본문·하위 작업은 버튼 아래까지 폭 전체를 쓴다 */
+.sh-rows li.sh-hist-row{row-gap:0}
+.sh-rows li.sh-hist-row > div:first-child{display:contents}
+.sh-rows li.sh-hist-row > div:first-child > *{grid-column:1 / -1;min-width:0}
+.sh-rows li.sh-hist-row > div:first-child > .t{grid-column:1;grid-row:1}
+.sh-rows li.sh-hist-row > div:first-child > .sh-hist-line{grid-column:1;grid-row:2}
+.sh-rows li.sh-hist-row > .a{grid-column:2;grid-row:1 / span 2}
 .sh-year-bar{display:flex;align-items:center;gap:8px;margin:0 0 10px}
 .sh-year-bar select{height:28px;padding:0 8px;font-size:12.5px}
 .sh-rows li[hidden]{display:none}   /* .sh-rows li 의 display 가 hidden 속성을 이기므로 */

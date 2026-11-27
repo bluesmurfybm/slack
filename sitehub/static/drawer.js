@@ -448,7 +448,7 @@ function historyRow(h, kids = []) {
   const files = (h.attachments || []).length ? `<span><b>첨부</b> ${h.attachments.length}건</span>` : "";
   const kidsBtn = kids.length ? `<button type="button" class="btn-mini ghost sh-kids-btn" onclick="this.closest('li').classList.toggle('open')">하위 작업 ${kids.length}</button>` : "";
   const sub = asg + done + files + histProcChips(h) + kidsBtn;
-  return `<li data-id="${esc(h.id)}">
+  return `<li class="sh-hist-row" data-id="${esc(h.id)}">
     <div>
       <div class="t">${historyStatusBadge(h.status)}${date}${prio}</div>
       <div class="sh-hist-line"><button type="button" class="linkish sh-hist-head" onclick="this.closest('li').classList.toggle('open')" title="${esc(h.title || "")}">${esc(head)}</button></div>

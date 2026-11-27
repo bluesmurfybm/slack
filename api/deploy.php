@@ -1,11 +1,13 @@
 <?php
 /**
- * 서버 일괄 배포 허용 — 내 상태. 본인 것만 다룬다.
+ * 서버 일괄 배포 허용 — 지금 실행할 수 있는지와 내 스위치.
  *
- *   GET                  { member, allowed, until, hours, now }
- *   PUT { enabled }      허용 켜기/끄기. 배포 가능 사용자가 아니면 403
+ *   GET                  { allowed, until, by, member, own, own_until, hours, now }
+ *                        allowed: 배포 가능 사용자 중 누군가 켜 둠 → 로그인한 팀원 누구나 실행할 수 있다
+ *                        member/own: 내가 켜고 끌 수 있는지 / 내가 켜 둔 상태인지
+ *   PUT { enabled }      내 허용 켜기/끄기. 배포 가능 사용자가 아니면 403
  *
- * blue-app 의 deploy-svn-projects 스킬이 실행 직전에 GET 으로 allowed 를 확인한다.
+ * blue-app 의 deploy-svn-projects·deploy-lxp-projects 스킬이 실행 직전에 GET 으로 allowed 를 확인한다.
  * 응답 꼴을 바꾸면 스킬(svndeploy/permission.py)도 같이 고쳐야 한다.
  */
 require_once __DIR__ . '/../core/deploy.php';
